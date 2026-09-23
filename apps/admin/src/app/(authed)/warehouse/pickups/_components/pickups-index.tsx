@@ -2,31 +2,19 @@
 
 import { useState, type ReactElement } from 'react';
 import { AlertTriangle } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Ident,
-  Input,
-  Modal,
-  ModalFooter,
-  Num,
-  PageHeader,
-  Select,
-  SkeletonRows,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  Textarea,
-  THead,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Ident, Num } from '@skydrop/ui/components';
+import { Truck } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import type { StatusKind } from '@skydrop/ui/status';
 import {
   useClosePickup,
@@ -37,6 +25,17 @@ import {
   type PickupRequestView,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  Actions,
+  AreaPage,
+  Callout,
+  FieldGrid,
+  InlineError,
+  Note,
+  Panel,
+  Stack,
+  mutationPhase,
+} from '../../../inventory/_components/stock-kit';
 
 const MIN_RELEASE_REASON = 10;
 
@@ -67,23 +66,27 @@ export function PickupsIndex(): ReactElement {
   const rows = list.data ?? [];
 
   return (
-    <div>
+    <AreaPage>
       <PageHeader
+        breadcrumbs={[{ label: 'Warehouse', href: '/warehouse' }, { label: 'Pickups' }]}
         title="Pickups"
         subtitle="One request per warehouse per day covers the whole handover — not one per parcel. Raise it when the parcels are packed and ready to hand over."
         action={
-          <Button variant="primary" size="md" onClick={() => setRaising(true)}>
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Truck size={16} />}
+            onClick={() => setRaising(true)}
+          >
             Request a pickup
           </Button>
         }
       />
 
       {list.isError ? (
-        <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+        <InlineError message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : list.isLoading ? (
-        <Card>
-          <SkeletonRows rows={4} cols={6} />
-        </Card>
+        <SkeletonRows rows={4} cols={6} />
       ) : rows.length === 0 ? (
         <EmptyState
           title="No pickups requested"
@@ -114,19 +117,16 @@ export function PickupsIndex(): ReactElement {
         </Table>
       )}
 
-      <Card className="mt-4">
-        <CardBody>
-          <p className="text-text-muted text-xs leading-relaxed">
-            The courier accepts only one open request per location per day. A failed attempt keeps
-            the day claimed on purpose — when a call fails we cannot tell whether they registered
-            it, and assuming they did not is how two vans arrive. Free it only after checking their
-            panel.
-          </p>
-        </CardBody>
-      </Card>
+      <Panel>
+        <Note>
+          The courier accepts only one open request per location per day. A failed attempt keeps the
+          day claimed on purpose — when a call fails we cannot tell whether they registered it, and
+          assuming they did not is how two vans arrive. Free it only after checking their panel.
+        </Note>
+      </Panel>
 
       <RaisePickupModal open={raising} onOpenChange={setRaising} />
-    </div>
+    </AreaPage>
   );
 }
 
@@ -164,32 +164,27 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
 
   return (
     <Tr>
-      <Td className="whitespace-nowrap">
+      <Td className="stk-nowrap">
         <Ident value={row.pickupDate} />
       </Td>
       <Td>
         {row.warehouseName ?? <Ident value={row.warehouseId.slice(0, 8)} />}
-        <div className="text-text-faint mt-0.5 text-xs">
-          as &ldquo;{row.pickupLocationName}&rdquo;
-        </div>
+        <span className="stk-sub">as &ldquo;{row.pickupLocationName}&rdquo;</span>
       </Td>
-      <Td className="text-text-muted whitespace-nowrap">{row.pickupTime}</Td>
-      <Td align="right">
+      <Td className="stk-muted stk-nowrap sk-figure">{row.pickupTime}</Td>
+      <Td align="right" className="sk-figure">
         <Num value={row.expectedPackageCount} />
       </Td>
       <Td>
-        <StatusBadge kind={pickupKind(row.status)} label={row.status.toLowerCase()} />
+        <StatusChip size="sm" kind={pickupKind(row.status)} label={row.status.toLowerCase()} />
         {row.courierMessage !== null && row.courierMessage !== '' && (
-          <div
-            className="text-text-faint mt-0.5 max-w-[16rem] truncate text-xs"
-            title={row.courierMessage}
-          >
+          <span className="stk-sub pku-message" title={row.courierMessage}>
             {row.courierMessage}
-          </div>
+          </span>
         )}
       </Td>
       <Td align="right">
-        <div className="flex items-center justify-end gap-1.5">
+        <Actions end>
           {openRequest && (
             <>
               <Button
@@ -215,10 +210,10 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
               Free the day
             </Button>
           )}
-          {!openRequest && !releasable && <span className="text-text-faint text-xs">—</span>}
-        </div>
+          {!openRequest && !releasable && <span className="stk-faint">—</span>}
+        </Actions>
 
-        <Modal
+        <Dialog
           open={releasing}
           onOpenChange={(next) => {
             setReleasing(next);
@@ -228,50 +223,49 @@ function PickupRow({ row }: { readonly row: PickupRequestView }): ReactElement {
           tone="critical"
           title="Free this day for a new request?"
           description="Only after confirming in the courier's panel that no request exists for this warehouse on this date. If one does, freeing the slot books a second van against a live request."
+          footer={
+            <DialogFooter>
+              <Button variant="ghost" size="md" onClick={() => setReleasing(false)}>
+                Cancel
+              </Button>
+              <AsyncButton
+                variant="destructive"
+                size="md"
+                state={mutationPhase(release)}
+                labels={{ idle: 'Free the day', busy: 'Freeing…' }}
+                disabled={reason.trim().length < MIN_RELEASE_REASON || release.isPending}
+                onClick={() => void doRelease()}
+              />
+            </DialogFooter>
+          }
         >
-          <div
-            role="alert"
-            className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] mb-3 flex items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2"
-          >
-            <AlertTriangle
-              size={14}
-              className="text-[var(--color-critical)] mt-0.5 shrink-0"
-              aria-hidden
-            />
-            <p className="text-[var(--color-critical)] text-xs leading-relaxed">
-              This attempt failed without the courier returning an id, so it probably never
-              registered — but &ldquo;probably&rdquo; is why this is a deliberate act and audited.
+          <Stack>
+            <div role="alert">
+              <Callout tone="bad" icon={<AlertTriangle size={14} />}>
+                <p className="pku-callout">
+                  This attempt failed without the courier returning an id, so it probably never
+                  registered — but &ldquo;probably&rdquo; is why this is a deliberate act and
+                  audited.
+                </p>
+              </Callout>
+            </div>
+            <p className="stk-note">
+              <span className="sk-ident">{row.pickupDate}</span> ·{' '}
+              {row.warehouseName ?? row.warehouseId.slice(0, 8)}
             </p>
-          </div>
-          <FormField
-            label="Reason"
-            htmlFor={`release-${row.id}`}
-            hint={`At least ${MIN_RELEASE_REASON} characters. Say what you checked.`}
-            required
-          >
-            <Textarea
+            <TextArea
               id={`release-${row.id}`}
+              label="Reason"
+              requiredMark
+              hint={`At least ${MIN_RELEASE_REASON} characters. Say what you checked.`}
               rows={2}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Checked the One panel — no request listed for this date."
             />
-          </FormField>
-          {error !== null && <ErrorNote className="mt-3" message={error} />}
-          <ModalFooter>
-            <Button variant="ghost" size="md" onClick={() => setReleasing(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              size="md"
-              disabled={reason.trim().length < MIN_RELEASE_REASON || release.isPending}
-              onClick={() => void doRelease()}
-            >
-              {release.isPending ? 'Freeing…' : 'Free the day'}
-            </Button>
-          </ModalFooter>
-        </Modal>
+            {error !== null && <InlineError message={error} />}
+          </Stack>
+        </Dialog>
       </Td>
     </Tr>
   );
@@ -318,7 +312,7 @@ function RaisePickupModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
@@ -327,96 +321,92 @@ function RaisePickupModal({
       size="md"
       title="Request a pickup"
       description="One request covers every parcel leaving this warehouse today. Raise it when they are packed and ready to hand over — not when they are manifested."
-    >
-      <div className="space-y-3">
-        <FormField
-          label="Courier"
-          htmlFor="pu-courier"
-          required
-          hint="One van per courier per building per day — a warehouse handing over to both needs one request each."
-        >
-          <Select
-            id="pu-courier"
-            value={courierCode}
-            onChange={(e) =>
-              setCourierCode(e.target.value === 'shiprocket' ? 'shiprocket' : 'delhivery')
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            icon={<Truck size={16} />}
+            state={mutationPhase(raise)}
+            labels={{ idle: 'Request pickup', busy: 'Requesting…' }}
+            disabled={
+              warehouseId === '' || count.trim() === '' || Number(count) < 1 || raise.isPending
             }
-          >
-            <option value="delhivery">Delhivery</option>
-            <option value="shiprocket">Shiprocket</option>
-          </Select>
-        </FormField>
-
-        <FormField label="Warehouse" htmlFor="pu-warehouse" required>
-          <Select
-            id="pu-warehouse"
-            value={warehouseId}
-            onChange={(e) => setWarehouseId(e.target.value)}
-          >
-            <option value="">Choose a warehouse…</option>
-            {warehouses.data?.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name} ({w.code})
-              </option>
-            ))}
-          </Select>
-        </FormField>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField label="Date" htmlFor="pu-date" required>
-            <Input
-              id="pu-date"
-              type="date"
-              value={pickupDate}
-              onChange={(e) => setPickupDate(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Time" htmlFor="pu-time" required>
-            <Input
-              id="pu-time"
-              type="time"
-              step={1}
-              value={pickupTime}
-              onChange={(e) =>
-                setPickupTime(e.target.value.length === 5 ? `${e.target.value}:00` : e.target.value)
-              }
-            />
-          </FormField>
-        </div>
-
-        <FormField
-          label="Parcels to hand over"
-          htmlFor="pu-count"
-          hint="The whole handover, not one parcel."
-          required
-        >
-          <Input
-            id="pu-count"
-            inputMode="numeric"
-            value={count}
-            onChange={(e) => setCount(e.target.value)}
-            placeholder="20"
+            onClick={() => void submit()}
           />
-        </FormField>
-
-        {error !== null && <ErrorNote message={error} />}
-      </div>
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={
-            warehouseId === '' || count.trim() === '' || Number(count) < 1 || raise.isPending
+        </DialogFooter>
+      }
+    >
+      <Stack>
+        <Select
+          id="pu-courier"
+          label="Courier"
+          requiredMark
+          hint="One van per courier per building per day — a warehouse handing over to both needs one request each."
+          value={courierCode}
+          onChange={(e) =>
+            setCourierCode(e.target.value === 'shiprocket' ? 'shiprocket' : 'delhivery')
           }
-          onClick={() => void submit()}
         >
-          {raise.isPending ? 'Requesting…' : 'Request pickup'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+          <option value="delhivery">Delhivery</option>
+          <option value="shiprocket">Shiprocket</option>
+        </Select>
+
+        <Select
+          id="pu-warehouse"
+          label="Warehouse"
+          requiredMark
+          value={warehouseId}
+          onChange={(e) => setWarehouseId(e.target.value)}
+        >
+          <option value="">Choose a warehouse…</option>
+          {warehouses.data?.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name} ({w.code})
+            </option>
+          ))}
+        </Select>
+
+        <FieldGrid columns={2}>
+          <TextField
+            id="pu-date"
+            label="Date"
+            requiredMark
+            type="date"
+            floatLabel
+            value={pickupDate}
+            onChange={(e) => setPickupDate(e.target.value)}
+          />
+          <TextField
+            id="pu-time"
+            label="Time"
+            requiredMark
+            type="time"
+            floatLabel
+            step={1}
+            value={pickupTime}
+            onChange={(e) =>
+              setPickupTime(e.target.value.length === 5 ? `${e.target.value}:00` : e.target.value)
+            }
+          />
+        </FieldGrid>
+
+        <TextField
+          id="pu-count"
+          label="Parcels to hand over"
+          requiredMark
+          hint="The whole handover, not one parcel."
+          inputMode="numeric"
+          value={count}
+          onChange={(e) => setCount(e.target.value)}
+          placeholder="20"
+        />
+
+        {error !== null && <InlineError message={error} />}
+      </Stack>
+    </Dialog>
   );
 }

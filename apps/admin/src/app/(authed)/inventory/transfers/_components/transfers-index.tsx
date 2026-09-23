@@ -1,21 +1,25 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorNote,
-  FormField,
-  Input,
-  PageHeader,
-  Section,
-  Select,
-} from '@skydrop/ui/components';
+import { ArrowRightLeft } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Select } from '@skydrop/ui/app/select';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { useWarehouseOptions } from '@/lib/ops-hooks';
 import { useCreateTransfer } from '@/lib/inventory-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  Actions,
+  AreaPage,
+  AreaSection,
+  Callout,
+  FieldGrid,
+  InlineError,
+  Panel,
+  mutationPhase,
+} from '../../_components/stock-kit';
 
 /**
  * Move stock between warehouses.
@@ -50,6 +54,9 @@ export function TransfersIndex(): ReactElement {
     description: '',
   });
   const [done, setDone] = useState(false);
+  // A transfer moves real stock between buildings, so it is confirmed
+  // first (owner). The request it sends is unchanged.
+  const [confirming, setConfirming] = useState(false);
 
   function set(key: keyof typeof form, value: string): void {
     setForm((f) => ({ ...f, [key]: value }));
@@ -71,49 +78,74 @@ export function TransfersIndex(): ReactElement {
   const sameWarehouse =
     form.sourceWarehouseId !== '' && form.sourceWarehouseId === form.destWarehouseId;
 
+  function submit(): void {
+    create.mutate(
+      {
+        sellerId: form.sellerId.trim(),
+        variantId: form.variantId.trim(),
+        qty: Number(form.qty),
+        sourceWarehouseId: form.sourceWarehouseId,
+        sourceBinId: form.sourceBinId.trim(),
+        sourceBatchId: form.sourceBatchId.trim(),
+        destWarehouseId: form.destWarehouseId,
+        destBinId: form.destBinId.trim(),
+        destBatchId: form.destBatchId.trim(),
+        // `reason`, not `description` — CreateStockTransferDto declares
+        // reason, so the old key 400'd when filled and was silently
+        // dropped when blank, losing the note either way.
+        ...(form.description.trim() === '' ? {} : { reason: form.description.trim() }),
+      },
+      { onSuccess: () => setDone(true) },
+    );
+  }
+
+  const sourceName =
+    (warehouses.data ?? []).find((w) => w.id === form.sourceWarehouseId)?.name ?? '—';
+  const destName = (warehouses.data ?? []).find((w) => w.id === form.destWarehouseId)?.name ?? '—';
+
   return (
-    <div>
+    <AreaPage>
       <PageHeader
+        breadcrumbs={[{ label: 'Inventory' }, { label: 'Transfers' }]}
         title="Inter-warehouse transfer"
         subtitle="Moves units out of one warehouse and into another as a matched pair of movements."
       />
 
-      <Card>
-        <CardHeader title="What is moving" />
-        <CardBody>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="Seller id" htmlFor="tr-seller">
-              <Input
-                id="tr-seller"
-                value={form.sellerId}
-                onChange={(e) => set('sellerId', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Variant id" htmlFor="tr-variant">
-              <Input
-                id="tr-variant"
-                value={form.variantId}
-                onChange={(e) => set('variantId', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Quantity" htmlFor="tr-qty" hint="Whole units, at least one.">
-              <Input
-                id="tr-qty"
-                type="number"
-                min={1}
-                value={form.qty}
-                onChange={(e) => set('qty', e.target.value)}
-              />
-            </FormField>
-          </div>
-        </CardBody>
-      </Card>
+      <Panel title="What is moving">
+        <FieldGrid columns={3}>
+          <TextField
+            id="tr-seller"
+            label="Seller id"
+            inputClassName="sk-ident"
+            value={form.sellerId}
+            onChange={(e) => set('sellerId', e.target.value)}
+          />
+          <TextField
+            id="tr-variant"
+            label="Variant id"
+            inputClassName="sk-ident"
+            value={form.variantId}
+            onChange={(e) => set('variantId', e.target.value)}
+          />
+          <TextField
+            id="tr-qty"
+            label="Quantity"
+            hint="Whole units, at least one."
+            type="number"
+            min={1}
+            inputClassName="sk-figure"
+            value={form.qty}
+            onChange={(e) => set('qty', e.target.value)}
+          />
+        </FieldGrid>
+      </Panel>
 
-      <Section title="From" subtitle="The exact bin and batch the units leave.">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <FormField label="Warehouse" htmlFor="tr-src-wh">
+      <AreaSection title="From" note="The exact bin and batch the units leave.">
+        <Panel>
+          <FieldGrid columns={3}>
             <Select
               id="tr-src-wh"
+              label="Warehouse"
               value={form.sourceWarehouseId}
               onChange={(e) => set('sourceWarehouseId', e.target.value)}
             >
@@ -124,32 +156,33 @@ export function TransfersIndex(): ReactElement {
                 </option>
               ))}
             </Select>
-          </FormField>
-          <FormField label="Bin id" htmlFor="tr-src-bin">
-            <Input
+            <TextField
               id="tr-src-bin"
+              label="Bin id"
+              inputClassName="sk-ident"
               value={form.sourceBinId}
               onChange={(e) => set('sourceBinId', e.target.value)}
             />
-          </FormField>
-          <FormField label="Batch id" htmlFor="tr-src-batch">
-            <Input
+            <TextField
               id="tr-src-batch"
+              label="Batch id"
+              inputClassName="sk-ident"
               value={form.sourceBatchId}
               onChange={(e) => set('sourceBatchId', e.target.value)}
             />
-          </FormField>
-        </div>
-      </Section>
+          </FieldGrid>
+        </Panel>
+      </AreaSection>
 
-      <Section
+      <AreaSection
         title="To"
-        subtitle="The destination batch is required, not created for you — it carries expiry, unit cost and the goods-receipt link that FEFO and margin depend on."
+        note="The destination batch is required, not created for you — it carries expiry, unit cost and the goods-receipt link that FEFO and margin depend on."
       >
-        <div className="grid gap-3 sm:grid-cols-3">
-          <FormField label="Warehouse" htmlFor="tr-dst-wh">
+        <Panel>
+          <FieldGrid columns={3}>
             <Select
               id="tr-dst-wh"
+              label="Warehouse"
               value={form.destWarehouseId}
               onChange={(e) => set('destWarehouseId', e.target.value)}
             >
@@ -160,69 +193,63 @@ export function TransfersIndex(): ReactElement {
                 </option>
               ))}
             </Select>
-          </FormField>
-          <FormField label="Bin id" htmlFor="tr-dst-bin">
-            <Input
+            <TextField
               id="tr-dst-bin"
+              label="Bin id"
+              inputClassName="sk-ident"
               value={form.destBinId}
               onChange={(e) => set('destBinId', e.target.value)}
             />
-          </FormField>
-          <FormField label="Batch id" htmlFor="tr-dst-batch">
-            <Input
+            <TextField
               id="tr-dst-batch"
+              label="Batch id"
+              inputClassName="sk-ident"
               value={form.destBatchId}
               onChange={(e) => set('destBatchId', e.target.value)}
             />
-          </FormField>
-        </div>
-        <FormField label="Note" htmlFor="tr-desc" hint="Optional. Why this move happened.">
-          <Input
+          </FieldGrid>
+          <TextField
             id="tr-desc"
+            label="Note"
+            hint="Optional. Why this move happened."
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
           />
-        </FormField>
-      </Section>
+        </Panel>
+      </AreaSection>
 
       {sameWarehouse && (
-        <ErrorNote message="Source and destination are the same warehouse — that is a bin move, not a transfer." />
+        <InlineError message="Source and destination are the same warehouse — that is a bin move, not a transfer." />
       )}
-      {create.error !== null && <ErrorNote message={serverVerdict(create.error)} />}
+      {create.error !== null && <InlineError message={serverVerdict(create.error)} />}
       {done && (
-        <p className="text-[var(--color-good)] text-sm">
+        <Callout tone="good">
           Transfer recorded. It appears in the movement ledger as a TRANSFER_OUT and a TRANSFER_IN.
-        </p>
+        </Callout>
       )}
 
-      <div className="mt-4 flex gap-2">
-        <Button
+      <Actions>
+        <AsyncButton
           size="md"
+          icon={<ArrowRightLeft size={16} />}
+          state={mutationPhase(create)}
+          labels={{ idle: 'Transfer stock', busy: 'Transferring…' }}
           disabled={!complete || sameWarehouse || create.isPending}
-          onClick={() =>
-            create.mutate(
-              {
-                sellerId: form.sellerId.trim(),
-                variantId: form.variantId.trim(),
-                qty: Number(form.qty),
-                sourceWarehouseId: form.sourceWarehouseId,
-                sourceBinId: form.sourceBinId.trim(),
-                sourceBatchId: form.sourceBatchId.trim(),
-                destWarehouseId: form.destWarehouseId,
-                destBinId: form.destBinId.trim(),
-                destBatchId: form.destBatchId.trim(),
-                // `reason`, not `description` — CreateStockTransferDto declares
-                // reason, so the old key 400'd when filled and was silently
-                // dropped when blank, losing the note either way.
-                ...(form.description.trim() === '' ? {} : { reason: form.description.trim() }),
-              },
-              { onSuccess: () => setDone(true) },
-            )
-          }
-        >
-          {create.isPending ? 'Transferring…' : 'Transfer stock'}
-        </Button>
-      </div>
-    </div>
+          onClick={() => setConfirming(true)}
+        />
+      </Actions>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="Transfer this stock?"
+        entity={`${form.variantId.trim()} · seller ${form.sellerId.trim()}`}
+        entityIsIdentifier
+        amount={`${form.qty} unit(s) · ${sourceName} → ${destName}`}
+        consequence="The units leave the source bin and batch and arrive in the destination bin and batch as a matched TRANSFER_OUT and TRANSFER_IN — a movement, not something this form can take back."
+        confirmLabel="Transfer stock"
+        onConfirm={submit}
+      />
+    </AreaPage>
   );
 }

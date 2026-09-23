@@ -1,0 +1,41 @@
+/* Bins area — the per-bin card head and the product cell. Tokens only. */
+
+.bin-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  min-width: 0;
+}
+.bin-card__id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.bin-card__code {
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+.bin-card__total {
+  font-size: var(--fs-sm);
+  color: var(--fg-strong);
+}
+.bin-product {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.bin-note {
+  max-width: 72ch;
+}
+.bin-lines-field {
+  min-width: 8rem;
+}
+.stk-pad > .sk-chute + .stk-actions {
+  margin-top: var(--sp-3);
+}

@@ -3,25 +3,19 @@
 import Link from 'next/link';
 import { useMemo, useState, type ReactElement } from 'react';
 import { ConsignmentLeg, ConsignmentRoute, InboundFreightMode, LabellingSite } from '@skydrop/db';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  DescriptionList,
-  ErrorNote,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  Money,
-  PageHeader,
-  Select,
-  StatusBadge,
-  useToast,
-} from '@skydrop/ui/components';
+import { Money, useToast } from '@skydrop/ui/components';
+import { Ban, Plane, Printer, Tag } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Stepper } from '@skydrop/ui/app/stepper';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Timeline } from '@skydrop/ui/app/timeline';
 import {
   consignmentStatusKind,
   freightModeExplainer,
@@ -44,6 +38,20 @@ import {
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { ROUTE_LABEL, SITE_LABEL, STATUS_LABEL } from '../../_components/labels';
+import {
+  Actions,
+  AreaPage,
+  Code,
+  Facts,
+  FieldGrid,
+  InlineError,
+  Note,
+  Panel,
+  Stack,
+  TextLink,
+  mutationPhase,
+} from '../../../../inventory/_components/stock-kit';
+import './consignment.css';
 
 /** A scanner types one serial then Enter; a person pastes a list. Both
  *  shapes land in the same box, so accept either. */
@@ -91,6 +99,10 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
   const [dispatchQty, setDispatchQty] = useState<Record<string, string>>({});
   const [etaAt, setEtaAt] = useState('');
   const [reference, setReference] = useState('');
+  // Dispatch to India cannot be undone (the cancel window closes, CNS-6),
+  // so each of the two dispatch buttons is confirmed first (owner). The
+  // request each one sends is unchanged.
+  const [confirmDispatch, setConfirmDispatch] = useState<'counted' | 'uncounted' | null>(null);
 
   const c = detail.data;
   const bdLeg = useMemo(
@@ -121,7 +133,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
     return out;
   }, [bdLeg, finalLegs]);
 
-  if (detail.isLoading) return <LoadingState rows={8} />;
+  if (detail.isLoading) return <SkeletonRows rows={8} label="Loading consignment" />;
   if (detail.isError || !c) {
     return (
       <ErrorState message="Could not load this consignment." retry={() => void detail.refetch()} />
@@ -257,73 +269,116 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
     }
   }
 
+  // ── Presentation only: where the journey stands, for the stepper. ──
+  const labellingDone =
+    c.labelsPrintedAt !== null ||
+    (labelPreview.data !== undefined && labelPreview.data.strictUnits === 0);
+  const arrivedAll = finalLegs.length > 0 && finalLegs.every((l) => l.status === 'COMPLETED');
+  const journey: ReadonlyArray<{ id: string; label: string; done: boolean }> = [
+    { id: 'cns-announced', label: 'Announced', done: true },
+    ...(viaBd
+      ? [{ id: 'cns-bd', label: 'Bangladesh intake', done: bdLeg?.status === 'COMPLETED' }]
+      : []),
+    { id: 'cns-labelling', label: 'Labelling', done: labellingDone },
+    ...(viaBd
+      ? [{ id: 'cns-dispatch', label: 'Dispatch to India', done: finalLegs.length > 0 }]
+      : []),
+    { id: 'cns-arrival', label: viaBd ? 'Arrival in India' : 'Arrival', done: arrivedAll },
+  ];
+  const firstOpen = journey.findIndex((s) => !s.done);
+  const journeyAt = firstOpen < 0 ? journey.length : firstOpen;
+  const phaseOf = (stepId: string): 'done' | 'current' | 'todo' => {
+    const i = journey.findIndex((s) => s.id === stepId);
+    return i < journeyAt ? 'done' : i === journeyAt ? 'current' : 'todo';
+  };
+
+  // What the dispatch confirm restates — the same sum `onDispatch` sends.
+  const dispatchUnits =
+    bdLeg === null
+      ? 0
+      : bdLeg.lines
+          .map((l) => Number(dispatchQty[l.id] ?? remaining.get(l.id) ?? 0))
+          .filter((q) => Number.isFinite(q) && q > 0)
+          .reduce((n, q) => n + q, 0);
+
+  const eventRows = events.data ?? [];
+
   return (
-    <div>
+    <AreaPage>
       <PageHeader
-        title={c.consignmentNumber}
+        Link={Link}
+        breadcrumbs={[
+          { label: 'Warehouse', href: '/warehouse' },
+          { label: 'Consignments', href: '/warehouse/consignments' },
+          { label: c.consignmentNumber },
+        ]}
+        title={<span className="sk-ident">{c.consignmentNumber}</span>}
         subtitle={`${c.seller.companyName} · ${ROUTE_LABEL[c.route]}`}
+        meta={<StatusChip kind={consignmentStatusKind(c.status)} label={STATUS_LABEL[c.status]} />}
         action={
-          <div className="flex items-center gap-2">
-            <StatusBadge kind={consignmentStatusKind(c.status)} label={STATUS_LABEL[c.status]} />
-            {mayManage && cancellable && (
-              <Button variant="destructive" onClick={() => setCancelOpen(true)}>
-                Cancel consignment
-              </Button>
-            )}
-          </div>
+          mayManage && cancellable ? (
+            <Button
+              variant="destructive"
+              icon={<Ban size={16} />}
+              onClick={() => setCancelOpen(true)}
+            >
+              Cancel consignment
+            </Button>
+          ) : undefined
         }
       />
 
-      {error !== null && (
-        <div className="mb-3">
-          <ErrorNote message={error} />
-        </div>
-      )}
+      {error !== null && <InlineError message={error} />}
 
-      <Card className="mb-4">
-        <CardBody>
-          <DescriptionList
-            items={[
-              { label: 'Seller', value: `${c.seller.companyName} — ${c.seller.emailDisplay}` },
-              { label: 'Route', value: ROUTE_LABEL[c.route] },
-              { label: 'Their reference', value: c.sellerReference ?? '—' },
-              { label: 'Expected arrival', value: dt(c.expectedArrivalAt) },
-              {
-                // One bill per ARRIVAL, so this is a total across however
-                // many shipments have landed — a consignment arriving in
-                // two parts carries two forwarder invoices.
-                label:
-                  c.freightCharges.length > 1
-                    ? `Freight bills (${c.freightCharges.length})`
-                    : 'Freight bill',
-                value:
-                  c.freightCharges.length === 0
-                    ? viaBd
-                      ? 'Not recorded yet'
-                      : 'Not billable — they shipped it themselves'
-                    : c.freightCharges.map((f, i) => (
-                        <span key={f.id}>
-                          {i > 0 ? '  ·  ' : ''}
-                          <Money amount={f.totalInr} currency="INR" convert={false} /> ·{' '}
-                          {f.status.toLowerCase()}
-                        </span>
-                      )),
-              },
-              ...(c.cancelledAt === null
-                ? []
-                : [
-                    { label: 'Cancelled', value: `${dt(c.cancelledAt)} — ${c.cancelReason ?? ''}` },
-                  ]),
-            ]}
-          />
-        </CardBody>
-      </Card>
+      <Panel>
+        <Facts
+          columns={3}
+          items={[
+            { label: 'Seller', value: `${c.seller.companyName} — ${c.seller.emailDisplay}` },
+            { label: 'Route', value: ROUTE_LABEL[c.route] },
+            { label: 'Their reference', value: c.sellerReference ?? '—' },
+            { label: 'Expected arrival', value: dt(c.expectedArrivalAt) },
+            {
+              // One bill per ARRIVAL, so this is a total across however
+              // many shipments have landed — a consignment arriving in
+              // two parts carries two forwarder invoices.
+              label:
+                c.freightCharges.length > 1
+                  ? `Freight bills (${c.freightCharges.length})`
+                  : 'Freight bill',
+              value:
+                c.freightCharges.length === 0
+                  ? viaBd
+                    ? 'Not recorded yet'
+                    : 'Not billable — they shipped it themselves'
+                  : c.freightCharges.map((f, i) => (
+                      <span key={f.id}>
+                        {i > 0 ? '  ·  ' : ''}
+                        <Money amount={f.totalInr} currency="INR" convert={false} /> ·{' '}
+                        {f.status.toLowerCase()}
+                      </span>
+                    )),
+            },
+            ...(c.cancelledAt === null
+              ? []
+              : [{ label: 'Cancelled', value: `${dt(c.cancelledAt)} — ${c.cancelReason ?? ''}` }]),
+          ]}
+        />
+      </Panel>
 
-      <Card className="mb-4">
-        <CardHeader title="The journey" />
-        <CardBody>
+      <Panel title="The journey">
+        <Stepper
+          mode="wizard"
+          navigable="none"
+          label="Consignment journey"
+          current={journeyAt}
+          steps={journey.map((s) => ({ id: `${s.id}-rail`, label: s.label }))}
+        />
+        <div className="cns-steps">
           <Step
             n={1}
+            id="cns-announced"
+            phase={phaseOf('cns-announced')}
             title="Announced"
             state={`${declaredUnits} unit(s) across ${(bdLeg ?? finalLegs[0])?.lines.length ?? 0} product(s), declared ${dt(c.createdAt)}`}
           />
@@ -331,6 +386,8 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
           {viaBd && (
             <Step
               n={2}
+              id="cns-bd"
+              phase={phaseOf('cns-bd')}
               title="Bangladesh intake"
               state={
                 bdLeg === null
@@ -343,30 +400,31 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
               }
             >
               {bdLeg !== null && (
-                <div>
+                <Stack tight>
                   {!bdLeg.forwardedWithoutCount && (
                     <LegLines leg={bdLeg} shortWord="short of declared" overWord="over declared" />
                   )}
                   {bdLeg.status !== 'COMPLETED' && (
-                    <Link
-                      href={`/warehouse/receive/${bdLeg.id}`}
-                      className="text-accent mt-2 inline-block text-sm underline"
-                    >
-                      Count it on the receive station →
-                    </Link>
+                    <p className="stk-note">
+                      <TextLink href={`/warehouse/receive/${bdLeg.id}`}>
+                        Count it on the receive station →
+                      </TextLink>
+                    </p>
                   )}
                   {/* The freight decision sits HERE because this is when
                       it is made: the Dhaka count and weight are what a
                       pay-in-advance bill is priced from, so whoever is
                       standing at this leg is the person who knows. */}
                   <FreightModeControl id={id} />
-                </div>
+                </Stack>
               )}
             </Step>
           )}
 
           <Step
             n={viaBd ? 3 : 2}
+            id="cns-labelling"
+            phase={phaseOf('cns-labelling')}
             title="Labelling"
             state={
               c.labelsPrintedAt !== null
@@ -376,15 +434,15 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                   : `Set to ${SITE_LABEL[c.labellingSite]}, nothing printed yet`
             }
           >
-            <div className="flex flex-col gap-2">
+            <Stack tight>
               {c.labelsPrintedAt !== null ? (
-                <p className="text-text-muted text-sm">
+                <Note>
                   The station cannot be moved now. A consignment half-labelled in one country and
                   half in the other cannot be told apart without opening every carton.
-                </p>
+                </Note>
               ) : (
                 mayManage && (
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="cns-narrow">
                     <Select
                       aria-label="Labelling station"
                       value={c.labellingSite}
@@ -399,7 +457,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                 )
               )}
               {labelPreview.data !== undefined && (
-                <p className="text-text-muted text-sm tabular-nums">
+                <p className="stk-note sk-figure">
                   {labelPreview.data.strictUnits === 0
                     ? 'Nothing to label — no serialised units are waiting at this station.'
                     : `${labelPreview.data.strictUnits} unit(s) across ${labelPreview.data.strictSkus} strict SKU(s) waiting.`}
@@ -409,11 +467,15 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                 c.labelsPrintedAt === null &&
                 c.labellingSite !== LabellingSite.NONE &&
                 (labelPreview.data?.strictUnits ?? 0) > 0 && (
-                  <div>
-                    <Button onClick={() => void onPrint()} disabled={printLabels.isPending}>
-                      {printLabels.isPending ? 'Preparing…' : 'Print labels'}
-                    </Button>
-                  </div>
+                  <Actions>
+                    <AsyncButton
+                      icon={<Printer size={16} />}
+                      state={mutationPhase(printLabels)}
+                      labels={{ idle: 'Print labels', busy: 'Preparing…' }}
+                      onClick={() => void onPrint()}
+                      disabled={printLabels.isPending}
+                    />
+                  </Actions>
                 )}
 
               {/* Printed once, and that is the whole point: a serial
@@ -423,61 +485,67 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                   only, and two people (LBL-5b): one asks, somebody else
                   approves, the one who asked prints it once. */}
               {c.labelsPrintedAt !== null && (
-                <div className="border-border-subtle mt-1 flex flex-col gap-3 border-t pt-3">
+                <div className="cns-reprint">
                   {!mayManage ? null : !reprinting ? (
                     <button
                       type="button"
-                      className="text-text-faint hover:text-text text-xs underline"
+                      className="stk-textbtn"
                       onClick={() => setReprinting(true)}
                     >
                       A label was damaged or lost
                     </button>
                   ) : (
-                    <div className="flex flex-col gap-2">
-                      <p className="text-text-muted text-xs">
+                    <Stack tight>
+                      <Note>
                         Name the units only. Reprinting the sheet would put a second sticker on
                         every unit, and two boxes claiming to be the same one is not something the
                         ledger can hold — one of them just stops existing. Nothing prints yet:
                         somebody else approves the request, then you print it.
-                      </p>
-                      <Input
+                      </Note>
+                      <input
+                        className="stk-input"
+                        data-mono="1"
                         aria-label="Serials to reprint"
                         value={reprintSerials}
                         placeholder="Scan or type the serials, separated by spaces or commas"
                         onChange={(e) => setReprintSerials(e.target.value)}
                       />
-                      <Input
+                      <input
+                        className="stk-input"
                         aria-label="Why"
                         value={reprintReason}
                         placeholder="What happened to the original label?"
                         onChange={(e) => setReprintReason(e.target.value)}
                       />
-                      <div className="flex flex-wrap gap-2">
-                        <Button
+                      <Actions>
+                        <AsyncButton
+                          icon={<Tag size={16} />}
+                          state={mutationPhase(requestReprint)}
+                          labels={{ idle: 'Ask for approval', busy: 'Sending…' }}
                           disabled={
                             requestReprint.isPending ||
                             reprintReason.trim().length === 0 ||
                             parseSerials(reprintSerials).length === 0
                           }
                           onClick={() => void onReprint()}
-                        >
-                          {requestReprint.isPending ? 'Sending…' : 'Ask for approval'}
-                        </Button>
+                        />
                         <Button variant="ghost" onClick={() => setReprinting(false)}>
                           Cancel
                         </Button>
-                      </div>
-                    </div>
+                      </Actions>
+                    </Stack>
                   )}
                   <LabelReprintRequests consignmentId={id} onSheet={setSheet} />
                 </div>
               )}
-            </div>
+            </Stack>
           </Step>
 
           {viaBd && (
             <Step
               n={4}
+              id="cns-dispatch"
+              phase={phaseOf('cns-dispatch')}
               title="Dispatch to India"
               state={
                 finalLegs.length === 0
@@ -486,34 +554,34 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
               }
             >
               {bdLeg !== null && bdLeg.status === 'COMPLETED' && mayDispatch ? (
-                <div className="flex flex-col gap-3">
-                  <p className="text-text-muted text-sm">
+                <Stack>
+                  <Note>
                     Dispatched stock sits in the Indian warehouse&apos;s transit location. It is on
                     hand and cannot be sold until it lands and is counted.
-                  </p>
-                  <div className="flex flex-col gap-2">
+                  </Note>
+                  <div className="cns-lines">
                     {bdLeg.lines.map((l) => {
                       const left = remaining.get(l.id) ?? 0;
                       return (
-                        <div key={l.id} className="flex flex-wrap items-center gap-2">
-                          <span className="min-w-0 flex-1 text-sm">
-                            <span className="font-mono">{l.variant.skuCode}</span>{' '}
-                            <span className="text-text-muted">
+                        <div key={l.id} className="cns-line">
+                          <span className="cns-line__name">
+                            <Code>{l.variant.skuCode}</Code>{' '}
+                            <span className="stk-muted">
                               {l.variant.product.name}
                               {l.variant.variantLabel === null
                                 ? ''
                                 : ` — ${l.variant.variantLabel}`}
                             </span>
                           </span>
-                          <span className="text-text-muted text-sm tabular-nums">
+                          <span className="stk-muted sk-figure cns-line__left">
                             {left} still in Dhaka
                           </span>
-                          <Input
+                          <input
                             type="number"
                             min={0}
                             max={left}
                             aria-label={`Units of ${l.variant.skuCode} leaving`}
-                            className="w-24"
+                            className="stk-input sk-figure cns-line__qty"
                             value={dispatchQty[l.id] ?? String(left)}
                             onChange={(e) =>
                               setDispatchQty((p) => ({ ...p, [l.id]: e.target.value }))
@@ -524,77 +592,80 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       );
                     })}
                   </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <FormField label="Expected arrival in India">
-                      <Input type="date" value={etaAt} onChange={(e) => setEtaAt(e.target.value)} />
-                    </FormField>
-                    <FormField label="Forwarder reference">
-                      <Input
-                        value={reference}
-                        onChange={(e) => setReference(e.target.value)}
-                        placeholder="Optional"
-                      />
-                    </FormField>
-                  </div>
-                  <div>
-                    <Button onClick={() => void onDispatch()} disabled={dispatch.isPending}>
-                      {dispatch.isPending ? 'Sending…' : 'Send to India'}
-                    </Button>
-                  </div>
-                </div>
+                  <FieldGrid columns={2}>
+                    <TextField
+                      label="Expected arrival in India"
+                      type="date"
+                      floatLabel
+                      value={etaAt}
+                      onChange={(e) => setEtaAt(e.target.value)}
+                    />
+                    <TextField
+                      label="Forwarder reference"
+                      value={reference}
+                      onChange={(e) => setReference(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </FieldGrid>
+                  <Actions>
+                    <AsyncButton
+                      icon={<Plane size={16} />}
+                      state={mutationPhase(dispatch)}
+                      labels={{ idle: 'Send to India', busy: 'Sending…' }}
+                      onClick={() => setConfirmDispatch('counted')}
+                      disabled={dispatch.isPending}
+                    />
+                  </Actions>
+                </Stack>
               ) : !mayDispatch ? (
-                <p className="text-text-muted text-sm">
-                  You do not have permission to move stock between warehouses.
-                </p>
+                <Note>You do not have permission to move stock between warehouses.</Note>
               ) : bdLeg !== null && bdLeg.status !== 'COMPLETED' ? (
                 // The uncounted option lives HERE, where somebody is
                 // deciding what to do with a carton in front of them —
                 // not as a checkbox on the counted form, where it would
                 // be an easy misclick with no way back.
-                <div className="flex flex-col gap-3">
-                  <p className="text-text-muted text-sm">
+                <Stack>
+                  <Note>
                     It has not been counted in Bangladesh. Count it first if you want a number from
                     that stop — or send it on unopened, in which case it travels on the
                     seller&apos;s declared quantities and India is the only count.
-                  </p>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <FormField label="Expected arrival in India">
-                      <Input type="date" value={etaAt} onChange={(e) => setEtaAt(e.target.value)} />
-                    </FormField>
-                    <FormField label="Forwarder reference">
-                      <Input
-                        value={reference}
-                        onChange={(e) => setReference(e.target.value)}
-                        placeholder="Optional"
-                      />
-                    </FormField>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href={`/warehouse/receive/${bdLeg.id}`}
-                      className="text-accent text-sm underline"
-                    >
-                      Count it first →
-                    </Link>
-                    <Button
+                  </Note>
+                  <FieldGrid columns={2}>
+                    <TextField
+                      label="Expected arrival in India"
+                      type="date"
+                      floatLabel
+                      value={etaAt}
+                      onChange={(e) => setEtaAt(e.target.value)}
+                    />
+                    <TextField
+                      label="Forwarder reference"
+                      value={reference}
+                      onChange={(e) => setReference(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </FieldGrid>
+                  <Actions>
+                    <TextLink href={`/warehouse/receive/${bdLeg.id}`}>Count it first →</TextLink>
+                    <AsyncButton
                       variant="secondary"
-                      onClick={() => void onForwardUncounted()}
+                      state={mutationPhase(dispatch)}
+                      labels={{ idle: 'Send on without counting', busy: 'Sending…' }}
+                      onClick={() => setConfirmDispatch('uncounted')}
                       disabled={dispatch.isPending}
-                    >
-                      {dispatch.isPending ? 'Sending…' : 'Send on without counting'}
-                    </Button>
-                  </div>
-                </div>
+                    />
+                  </Actions>
+                </Stack>
               ) : (
-                <p className="text-text-muted text-sm">
-                  There is no Bangladesh intake on this consignment.
-                </p>
+                <Note>There is no Bangladesh intake on this consignment.</Note>
               )}
             </Step>
           )}
 
           <Step
             n={viaBd ? 5 : 3}
+            id="cns-arrival"
+            phase={phaseOf('cns-arrival')}
             title={viaBd ? 'Arrival in India' : 'Arrival'}
             state={
               finalLegs.length === 0
@@ -602,15 +673,15 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                 : `${finalLegs.filter((l) => l.status === 'COMPLETED').length} of ${finalLegs.length} shipment(s) counted`
             }
           >
-            <div className="flex flex-col gap-4">
+            <Stack>
               {finalLegs.length === 0 ? (
-                <p className="text-text-muted text-sm">—</p>
+                <Note>—</Note>
               ) : (
                 finalLegs.map((leg) => (
-                  <div key={leg.id} className="border-border-subtle rounded-[8px] border p-3">
-                    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="font-mono text-sm">{leg.receiptNumber}</span>
-                      <span className="text-text-muted text-xs">
+                  <div key={leg.id} className="cns-leg">
+                    <div className="cns-leg__head">
+                      <Code>{leg.receiptNumber}</Code>
+                      <span className="stk-sub">
                         {leg.dispatchedAt === null
                           ? 'shipped direct by the seller'
                           : `left Bangladesh ${dt(leg.dispatchedAt)}`}
@@ -625,77 +696,107 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       overWord={leg.dispatchedAt === null ? 'over declared' : 'more than was sent'}
                     />
                     {leg.status !== 'COMPLETED' && (
-                      <Link
-                        href={`/warehouse/receive/${leg.id}`}
-                        className="text-accent mt-2 inline-block text-sm underline"
-                      >
-                        Count it on the receive station →
-                      </Link>
+                      <p className="stk-note">
+                        <TextLink href={`/warehouse/receive/${leg.id}`}>
+                          Count it on the receive station →
+                        </TextLink>
+                      </p>
                     )}
                   </div>
                 ))
               )}
-            </div>
+            </Stack>
           </Step>
-        </CardBody>
-      </Card>
+        </div>
+      </Panel>
 
-      <Card className="mb-4">
-        <CardHeader title="Timeline" />
-        <CardBody>
-          {events.isLoading ? (
-            <LoadingState rows={3} />
-          ) : (events.data?.length ?? 0) === 0 ? (
-            <p className="text-text-muted text-sm">Nothing recorded yet.</p>
-          ) : (
-            <ol className="flex flex-col gap-3">
-              {(events.data ?? []).map((e) => (
-                <li key={e.id} className="flex gap-3 text-sm">
-                  <span className="text-text-muted w-40 shrink-0 tabular-nums">
-                    {dt(e.createdAt)}
-                  </span>
-                  <span className="min-w-0">{e.description ?? e.type}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </CardBody>
-      </Card>
+      <Panel title="Timeline">
+        {events.isLoading ? (
+          <SkeletonRows rows={3} cols={2} />
+        ) : eventRows.length === 0 ? (
+          <Note>Nothing recorded yet.</Note>
+        ) : (
+          <Timeline
+            label="Consignment history"
+            steps={eventRows.map((e) => ({
+              id: e.id,
+              label: e.description ?? e.type,
+              state: 'done' as const,
+              time: dt(e.createdAt),
+            }))}
+          />
+        )}
+      </Panel>
 
       {sheet !== null && <LabelSheetView sheet={sheet} onClose={() => setSheet(null)} />}
 
-      <Modal
+      <ConfirmDialog
+        open={confirmDispatch !== null}
+        onOpenChange={(next) => {
+          if (!next) setConfirmDispatch(null);
+        }}
+        title={confirmDispatch === 'uncounted' ? 'Send it on without counting?' : 'Send to India?'}
+        entity={c.consignmentNumber}
+        entityIsIdentifier
+        amount={
+          confirmDispatch === 'uncounted'
+            ? `${declaredUnits} declared unit(s) → India`
+            : `${dispatchUnits} unit(s) → India`
+        }
+        consequence={
+          confirmDispatch === 'uncounted'
+            ? 'It leaves Bangladesh unopened on the seller’s declared quantities and India becomes the only count; once dispatched, the consignment can no longer be cancelled.'
+            : 'The units leave the Bangladesh count and sit in the Indian warehouse’s transit location until they land; once dispatched, the consignment can no longer be cancelled.'
+        }
+        confirmLabel={
+          confirmDispatch === 'uncounted' ? 'Send on without counting' : 'Send to India'
+        }
+        onConfirm={async () => {
+          if (confirmDispatch === 'uncounted') await onForwardUncounted();
+          else await onDispatch();
+        }}
+      />
+
+      <Dialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
         tone="critical"
+        icon={<Ban size={18} />}
         title={`Cancel ${c.consignmentNumber}?`}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setCancelOpen(false)}>
+              Keep it
+            </Button>
+            <AsyncButton
+              variant="destructive"
+              state={mutationPhase(cancel)}
+              labels={{ idle: 'Cancel and return the goods', busy: 'Cancelling…' }}
+              onClick={() => void onCancel()}
+              disabled={cancel.isPending || reason.trim().length < 10}
+            />
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          Stock already booked in will be removed from Skydrop and returned to the seller. This is
-          impossible once the goods have left Bangladesh, so it cannot be undone by dispatching
-          later.
-        </p>
-        <FormField label="Why" required>
-          <Input
+        <Stack>
+          <p className="cns-entity">
+            <Code>{c.consignmentNumber}</Code> · {c.seller.companyName}
+          </p>
+          <Note>
+            Stock already booked in will be removed from Skydrop and returned to the seller. This is
+            impossible once the goods have left Bangladesh, so it cannot be undone by dispatching
+            later.
+          </Note>
+          <TextField
+            label="Why"
+            requiredMark
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="At least 10 characters — recorded permanently"
           />
-        </FormField>
-        <ModalFooter>
-          <Button variant="secondary" onClick={() => setCancelOpen(false)}>
-            Keep it
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={() => void onCancel()}
-            disabled={cancel.isPending || reason.trim().length < 10}
-          >
-            {cancel.isPending ? 'Cancelling…' : 'Cancel and return the goods'}
-          </Button>
-        </ModalFooter>
-      </Modal>
-    </div>
+        </Stack>
+      </Dialog>
+    </AreaPage>
   );
 }
 
@@ -709,11 +810,11 @@ function LegLines({
   readonly overWord: string;
 }): ReactElement {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="cns-leglines">
       {leg.lines.map((l) => (
-        <div key={l.id} className="flex flex-wrap items-baseline gap-2 text-sm">
-          <span className="font-mono">{l.variant.skuCode}</span>
-          <span className="text-text-muted min-w-0 flex-1 truncate">
+        <div key={l.id} className="cns-legline">
+          <Code>{l.variant.skuCode}</Code>
+          <span className="stk-muted cns-legline__name">
             {l.variant.product.name}
             {l.variant.variantLabel === null ? '' : ` — ${l.variant.variantLabel}`}
           </span>
@@ -725,9 +826,7 @@ function LegLines({
           />
         </div>
       ))}
-      {leg.discrepancyNotes !== null && (
-        <p className="text-text-muted mt-1 text-xs">{leg.discrepancyNotes}</p>
-      )}
+      {leg.discrepancyNotes !== null && <p className="stk-sub">{leg.discrepancyNotes}</p>}
     </div>
   );
 }
@@ -796,10 +895,10 @@ function FreightModeControl({ id }: { readonly id: string }): ReactElement {
   const { mode, source, locked } = q.data;
 
   return (
-    <div className="border-border-subtle mt-3 flex flex-col gap-2 border-t pt-3">
+    <div className="cns-freight">
       <div>
-        <div className="text-text-secondary text-sm font-medium">Freight</div>
-        <p className="text-text-muted text-xs">
+        <div className="cns-freight__title">Freight</div>
+        <p className="stk-note">
           {freightModeExplainer(mode, 'STAFF')} — {FREIGHT_SOURCE_LABEL[source]}.
           {locked
             ? ' A bill already exists, so this is settled: it is what that bill was raised on.'
@@ -809,7 +908,7 @@ function FreightModeControl({ id }: { readonly id: string }): ReactElement {
       {mayManage && (
         <Select
           aria-label="How this consignment's freight is paid for"
-          className="w-full max-w-md"
+          className="cns-freight__select"
           value={source === 'CONSIGNMENT' ? mode : ''}
           disabled={locked || setMode.isPending}
           onChange={(e) => void onChange(e.target.value)}
@@ -822,7 +921,7 @@ function FreightModeControl({ id }: { readonly id: string }): ReactElement {
           ))}
         </Select>
       )}
-      {error !== null && <ErrorNote message={error} />}
+      {error !== null && <InlineError message={error} />}
     </div>
   );
 }

@@ -2,23 +2,26 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
+import { PackageCheck, Truck } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { useToast } from '@skydrop/ui/app/toast';
+import { shipmentStatusKind, statusLabel } from '@skydrop/ui/status';
 import {
-  Button,
-  Card,
-  CardBody,
-  ConfirmDialog,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+  Actions,
+  AreaPage,
+  AreaSection,
+  Facts,
+  InlineError,
+  Panel,
+  TextLink,
+  mutationPhase,
+} from '../../../inventory/_components/stock-kit';
 import { useCloseManifest, useConfirmHandoff, useManifestDetail } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { MoveShipmentPanel } from './move-shipment-panel';
@@ -48,7 +51,7 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
     return serverVerdict(err, 'Action failed');
   }
 
-  if (detail.isLoading) return <LoadingState label="Loading manifest…" />;
+  if (detail.isLoading) return <SkeletonRows rows={6} label="Loading manifest…" />;
   if (detail.isError)
     return (
       <ErrorState
@@ -103,133 +106,136 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
   }
 
   return (
-    <div>
+    <AreaPage>
       <PageHeader
+        Link={Link}
+        breadcrumbs={[
+          { label: 'Warehouse', href: '/warehouse' },
+          { label: 'Manifests', href: '/warehouse/manifests' },
+          { label: m.manifestNumber },
+        ]}
         title={`Manifest ${m.manifestNumber}`}
         subtitle={`${m.courierCode} · ${m.status} · ${m.shipmentCount} shipment(s)`}
+        meta={<StatusChip kind="neutral" label={m.status.replace(/_/g, ' ')} />}
         action={
-          <div className="flex items-center gap-2">
+          <Actions>
             {isDraft && (
-              <Button
+              <AsyncButton
                 variant="primary"
                 size="md"
+                icon={<PackageCheck size={16} />}
+                state={mutationPhase(close)}
+                labels={{ idle: 'Close manifest', busy: 'Closing…' }}
                 disabled={close.isPending}
                 onClick={() => setShowCloseConfirm(true)}
-              >
-                Close manifest
-              </Button>
+              />
             )}
             {isConfirmed && (
-              <Button
+              <AsyncButton
                 variant="primary"
                 size="md"
+                icon={<Truck size={16} />}
+                state={mutationPhase(handoff)}
+                labels={{ idle: 'Confirm handoff', busy: 'Confirming…' }}
                 disabled={handoff.isPending}
                 onClick={() => setShowHandoffConfirm(true)}
-              >
-                Confirm handoff
-              </Button>
+              />
             )}
-          </div>
+          </Actions>
         }
       />
 
-      {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px] mb-3">
-          {error}
-        </div>
-      )}
+      {error && <InlineError message={error} />}
 
-      <Card>
-        <CardBody>
-          <div className="grid grid-cols-2 gap-3 text-xs">
-            <Field label="Created" value={new Date(m.createdAt).toLocaleString()} />
-            <Field
-              label="Closed"
-              value={m.closedAt ? new Date(m.closedAt).toLocaleString() : '—'}
-            />
-            <Field label="Status" value={m.status} />
-            <Field label="Courier" value={m.courierCode} />
-          </div>
-        </CardBody>
-      </Card>
-
-      <h2 className="text-text-bright text-sm font-medium mt-5 mb-2">Shipments</h2>
-      {m.shipments.length === 0 ? (
-        <EmptyState
-          title="No shipments attached"
-          description="DRAFT manifests are auto-populated as packers complete shipments for this courier + warehouse."
+      <Panel>
+        <Facts
+          columns={4}
+          items={[
+            { label: 'Created', value: new Date(m.createdAt).toLocaleString() },
+            { label: 'Closed', value: m.closedAt ? new Date(m.closedAt).toLocaleString() : '—' },
+            { label: 'Status', value: m.status },
+            { label: 'Courier', value: m.courierCode },
+          ]}
         />
-      ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Shipment</Th>
-              <Th>Status</Th>
-              <Th>Order</Th>
-              <Th>Packed</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {m.shipments.map((s) => (
-              <Tr key={s.id} onActivate={() => router.push(`/orders/${s.orderId}`)}>
-                <Td className="font-mono text-xs">{s.shipmentNumber}</Td>
-                <Td className="text-text-muted text-xs uppercase">{s.status}</Td>
-                <Td>
-                  {s.orderId ? (
-                    <Link href={`/orders/${s.orderId}`} className="text-accent hover:underline">
-                      view order
-                    </Link>
-                  ) : (
-                    <span className="text-text-faint">—</span>
-                  )}
-                </Td>
-                <Td className="text-text-muted text-xs font-mono">
-                  {s.packCompletedAt ? new Date(s.packCompletedAt).toLocaleString() : '—'}
-                </Td>
-              </Tr>
-            ))}
-          </TBody>
-        </Table>
-      )}
+      </Panel>
 
-      <MoveShipmentPanel
-        manifestId={m.id}
-        manifestNumber={m.manifestNumber}
-        status={m.status}
-        courierCode={m.courierCode}
-        originWarehouseId={m.originWarehouseId}
-        shipments={m.shipments}
-      />
+      <AreaSection title="Shipments">
+        {m.shipments.length === 0 ? (
+          <EmptyState
+            title="No shipments attached"
+            description="DRAFT manifests are auto-populated as packers complete shipments for this courier + warehouse."
+          />
+        ) : (
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Shipment</Th>
+                <Th>Status</Th>
+                <Th>Order</Th>
+                <Th>Packed</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {m.shipments.map((s) => (
+                <Tr key={s.id} onActivate={() => router.push(`/orders/${s.orderId}`)}>
+                  <Td className="sk-ident">{s.shipmentNumber}</Td>
+                  <Td>
+                    <StatusChip
+                      size="sm"
+                      kind={shipmentStatusKind(s.status)}
+                      label={statusLabel(s.status)}
+                    />
+                  </Td>
+                  <Td>
+                    {s.orderId ? (
+                      <TextLink href={`/orders/${s.orderId}`}>view order</TextLink>
+                    ) : (
+                      <span className="stk-faint">—</span>
+                    )}
+                  </Td>
+                  <Td className="stk-muted sk-figure stk-nowrap">
+                    {s.packCompletedAt ? new Date(s.packCompletedAt).toLocaleString() : '—'}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        )}
+
+        <MoveShipmentPanel
+          manifestId={m.id}
+          manifestNumber={m.manifestNumber}
+          status={m.status}
+          courierCode={m.courierCode}
+          originWarehouseId={m.originWarehouseId}
+          shipments={m.shipments}
+        />
+      </AreaSection>
 
       <ConfirmDialog
         open={showCloseConfirm}
         onOpenChange={setShowCloseConfirm}
         title={`Close manifest ${m.manifestNumber}?`}
-        description="This transitions the manifest to CLOSED and queues AWB generation for every attached shipment. Cannot be undone."
-        confirmLabel={close.isPending ? 'Closing…' : 'Close manifest'}
-        confirmVariant="primary"
-        disabled={close.isPending}
+        entity={`${m.manifestNumber} · ${m.shipmentCount} shipment(s)`}
+        entityIsIdentifier
+        consequence="This transitions the manifest to CLOSED and queues AWB generation for every attached shipment. Cannot be undone."
+        confirmLabel="Close manifest"
+        closeOnSuccess={false}
+        error={error}
         onConfirm={onClose}
       />
       <ConfirmDialog
         open={showHandoffConfirm}
         onOpenChange={setShowHandoffConfirm}
         title={`Confirm handoff for ${m.manifestNumber}?`}
-        description="This marks every AWB-ready shipment DISPATCHED, stamps the manifest DISPATCHED, and decrements warehouse stock (CUR-3). Run only after the courier driver has accepted the consolidated handoff."
-        confirmLabel={handoff.isPending ? 'Confirming…' : 'Confirm handoff'}
-        confirmVariant="primary"
-        disabled={handoff.isPending}
+        entity={`${m.manifestNumber} · ${m.courierCode}`}
+        entityIsIdentifier
+        consequence="This marks every AWB-ready shipment DISPATCHED, stamps the manifest DISPATCHED, and decrements warehouse stock (CUR-3). Run only after the courier driver has accepted the consolidated handoff."
+        confirmLabel="Confirm handoff"
+        closeOnSuccess={false}
+        error={error}
         onConfirm={onHandoff}
       />
-    </div>
-  );
-}
-
-function Field({ label, value }: { readonly label: string; readonly value: string }): ReactElement {
-  return (
-    <div>
-      <div className="text-text-faint text-xs uppercase tracking-wide">{label}</div>
-      <div className="text-text-body mt-0.5 font-mono">{value}</div>
-    </div>
+    </AreaPage>
   );
 }

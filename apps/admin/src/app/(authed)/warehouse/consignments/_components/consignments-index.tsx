@@ -3,23 +3,16 @@
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
 import { ConsignmentRoute, ConsignmentStatus } from '@skydrop/db';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Select,
-  StatusBadge,
-  Table,
-  TablePaginator,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-} from '@skydrop/ui/components';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { consignmentStatusKind } from '@skydrop/ui/status';
 import { useConsignmentsList, useSellersList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
+import { Stack, Toolbar } from '../../../inventory/_components/stock-kit';
 import { ROUTE_LABEL, STATUS_LABEL } from './labels';
 
 const PAGE_SIZE = 20;
@@ -47,8 +40,8 @@ export function ConsignmentsIndex(): ReactElement {
   });
 
   return (
-    <div>
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+    <Stack>
+      <Toolbar>
         <Select
           aria-label="Status"
           value={status}
@@ -96,10 +89,10 @@ export function ConsignmentsIndex(): ReactElement {
             ))}
           </Select>
         )}
-      </div>
+      </Toolbar>
 
       {list.isLoading ? (
-        <LoadingState rows={6} />
+        <SkeletonRows rows={6} cols={6} />
       ) : list.isError ? (
         <ErrorState message="Could not load consignments." retry={() => void list.refetch()} />
       ) : (list.data?.items.length ?? 0) === 0 ? (
@@ -116,7 +109,7 @@ export function ConsignmentsIndex(): ReactElement {
                 <Th>Seller</Th>
                 <Th>Route</Th>
                 <Th>Status</Th>
-                <Th className="text-right">Legs</Th>
+                <Th align="right">Legs</Th>
                 <Th>Announced</Th>
               </Tr>
             </THead>
@@ -125,24 +118,27 @@ export function ConsignmentsIndex(): ReactElement {
                 <Tr
                   key={c.id}
                   onClick={() => router.push(`/warehouse/consignments/${c.id}`)}
-                  className="cursor-pointer"
+                  interactive
                 >
-                  <Td className="font-mono">{c.consignmentNumber}</Td>
+                  <Td className="sk-ident">{c.consignmentNumber}</Td>
                   <Td>{c.seller.companyName}</Td>
                   <Td>{ROUTE_LABEL[c.route]}</Td>
                   <Td>
-                    <StatusBadge
+                    <StatusChip
+                      size="sm"
                       kind={consignmentStatusKind(c.status)}
                       label={STATUS_LABEL[c.status]}
                     />
                   </Td>
-                  <Td className="text-right">{c.receipts.length}</Td>
+                  <Td align="right" className="sk-figure">
+                    {c.receipts.length}
+                  </Td>
                   <Td>{new Date(c.createdAt).toLocaleDateString('en-IN')}</Td>
                 </Tr>
               ))}
             </TBody>
           </Table>
-          <TablePaginator
+          <Pagination
             page={list.data?.page ?? 1}
             pageSize={list.data?.pageSize ?? PAGE_SIZE}
             total={list.data?.total ?? 0}
@@ -150,6 +146,6 @@ export function ConsignmentsIndex(): ReactElement {
           />
         </>
       )}
-    </div>
+    </Stack>
   );
 }

@@ -1,0 +1,43 @@
+/* Serial units — the trace form and the unit summary strip. Tokens only. */
+
+.unit-trace__form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .unit-trace__form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(7rem, 9rem);
+  }
+}
+.unit-trace__serial {
+  display: block;
+  min-width: 0;
+}
+.unit-trace__unit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-5);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  font-size: var(--fs-sm);
+  min-width: 0;
+}
+.unit-group-title {
+  margin: 0 0 var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.unit-seller {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.unit-note {
+  margin: 0;
+}

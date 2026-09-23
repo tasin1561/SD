@@ -1,33 +1,20 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  DescriptionList,
-  EmptyState,
-  ErrorNote,
-  Ident,
-  Modal,
-  ModalFooter,
-  Money,
-  Num,
-  PageHeader,
-  Section,
-  Select,
-  SkeletonRows,
-  Stat,
-  StatusBadge,
-  TBody,
-  Table,
-  TablePaginator,
-  Td,
-  THead,
-  Th,
-  Textarea,
-  Toolbar,
-  Tr,
-} from '@skydrop/ui/components';
+import { Ident, Money, Num } from '@skydrop/ui/components';
+import { Check, ClipboardList, Hourglass, Scale, X } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TextArea } from '@skydrop/ui/app/text-field';
 import {
   useAdjustmentsList,
   useApproveAdjustment,
@@ -36,6 +23,19 @@ import {
 } from '@/lib/inventory-hooks';
 import type { AdjustmentPrefill } from '@/lib/adjustment-prefill';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  AreaPage,
+  AreaSection,
+  Facts,
+  InlineError,
+  KpiGrid,
+  Note,
+  Panel,
+  PanelPad,
+  Stack,
+  Toolbar,
+  mutationPhase,
+} from '../../_components/stock-kit';
 import { NewAdjustmentPanel } from './new-adjustment-panel';
 
 const PAGE_SIZE = 25;
@@ -79,56 +79,57 @@ export function AdjustmentsIndex({
   );
 
   return (
-    <div>
+    <AreaPage>
       <PageHeader
+        breadcrumbs={[{ label: 'Inventory' }, { label: 'Adjustments' }]}
         title="Stock adjustments"
         subtitle="Corrections to counted stock. Anything above the value threshold waits here for a second pair of eyes before it moves inventory."
         action={<NewAdjustmentPanel prefill={prefill} />}
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Stat label="Rows shown" value={<Num value={items.length} />} />
-        <Stat
+      <KpiGrid>
+        <KpiCard label="Rows shown" icon={<ClipboardList size={14} />} value={items.length} />
+        <KpiCard
           label="Awaiting approval"
-          value={<Num value={pending.length} />}
-          tone={pending.length > 0 ? 'warn' : 'neutral'}
+          icon={<Hourglass size={14} />}
+          value={pending.length}
+          tone={pending.length > 0 ? 'pending' : 'neutral'}
         />
-        <Stat
+        <KpiCard
           label="Value at stake"
+          icon={<Scale size={14} />}
           hint="Absolute impact of the pending rows on this page"
-          value={<Money amount={valueAtStake} decimals={false} />}
+          figure={<Money amount={valueAtStake} decimals={false} />}
         />
-      </div>
+      </KpiGrid>
 
-      <Toolbar>
-        <label className="text-text-muted text-xs" htmlFor="adj-status">
-          Status
-        </label>
-        <Select
-          id="adj-status"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-          className="w-56"
-        >
-          <option value="">All statuses</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s.replace(/_/g, ' ').toLowerCase()}
-            </option>
-          ))}
-        </Select>
-      </Toolbar>
+      <Stack>
+        <Toolbar>
+          <Select
+            id="adj-status"
+            label="Status"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All statuses</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s.replace(/_/g, ' ').toLowerCase()}
+              </option>
+            ))}
+          </Select>
+        </Toolbar>
 
-      <Card>
         {list.isLoading ? (
-          <SkeletonRows rows={6} />
+          <SkeletonRows rows={6} cols={7} />
         ) : list.isError ? (
-          <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <InlineError message={serverVerdict(list.error)} retry={() => void list.refetch()} />
         ) : items.length === 0 ? (
           <EmptyState
+            tone={status === 'PENDING' ? 'positive' : 'neutral'}
             title={status === 'PENDING' ? 'Nothing waiting' : 'No adjustments'}
             description={
               status === 'PENDING'
@@ -153,10 +154,12 @@ export function AdjustmentsIndex({
               <TBody>
                 {items.map((a) => (
                   <Tr key={a.id}>
-                    <Td>{new Date(a.initiatedAt).toLocaleDateString('en-IN')}</Td>
+                    <Td className="sk-figure stk-nowrap">
+                      {new Date(a.initiatedAt).toLocaleDateString('en-IN')}
+                    </Td>
                     <Td>{a.type}</Td>
                     <Td>{a.reasonCode ?? '—'}</Td>
-                    <Td align="right">
+                    <Td align="right" className="sk-figure">
                       <Num value={a.lines.length} />
                     </Td>
                     <Td align="right">
@@ -166,7 +169,11 @@ export function AdjustmentsIndex({
                       />
                     </Td>
                     <Td>
-                      <StatusBadge kind={adjustmentKind(a.status)} label={pretty(a.status)} />
+                      <StatusChip
+                        size="sm"
+                        kind={adjustmentKind(a.status)}
+                        label={pretty(a.status)}
+                      />
                     </Td>
                     <Td align="right">
                       <Button variant="ghost" size="sm" onClick={() => setSelected(a)}>
@@ -177,13 +184,15 @@ export function AdjustmentsIndex({
                 ))}
               </TBody>
             </Table>
-            <TablePaginator page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+            <PanelPad>
+              <Pagination page={page} pageSize={PAGE_SIZE} total={total} onPageChange={setPage} />
+            </PanelPad>
           </>
         )}
-      </Card>
+      </Stack>
 
       <AdjustmentReview adjustment={selected} onClose={() => setSelected(null)} />
-    </div>
+    </AreaPage>
   );
 }
 
@@ -245,7 +254,7 @@ function AdjustmentReview({
   }
 
   return (
-    <Modal
+    <Dialog
       open={adjustment !== null}
       onOpenChange={(next) => {
         if (!next) close();
@@ -254,21 +263,62 @@ function AdjustmentReview({
       title="Stock adjustment"
       description={
         adjustment === null ? undefined : (
-          <span className="flex items-center gap-2">
-            <StatusBadge
+          <span className="adj-sub">
+            <StatusChip
+              size="sm"
               kind={adjustmentKind(adjustment.status)}
               label={pretty(adjustment.status)}
             />
-            <span className="text-text-faint">
+            <span className="stk-faint">
               raised {new Date(adjustment.initiatedAt).toLocaleString()}
             </span>
           </span>
         )
       }
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={close}>
+            Close
+          </Button>
+          {adjustment !== null && !decided && !rejecting && (
+            <>
+              <Button
+                variant="destructive"
+                size="md"
+                icon={<X size={16} />}
+                onClick={() => setRejecting(true)}
+              >
+                Reject
+              </Button>
+              <AsyncButton
+                size="md"
+                icon={<Check size={16} />}
+                state={mutationPhase(approve)}
+                labels={{ idle: 'Approve — this moves stock', busy: 'Approving…' }}
+                disabled={approve.isPending}
+                onClick={() => approve.mutate({ id: adjustment.id }, { onSuccess: close })}
+              />
+            </>
+          )}
+          {adjustment !== null && !decided && rejecting && (
+            <AsyncButton
+              variant="destructive"
+              size="md"
+              state={mutationPhase(reject)}
+              labels={{ idle: 'Confirm reject', busy: 'Rejecting…' }}
+              disabled={reason.trim().length === 0 || reject.isPending}
+              onClick={() =>
+                reject.mutate({ id: adjustment.id, reason: reason.trim() }, { onSuccess: close })
+              }
+            />
+          )}
+        </DialogFooter>
+      }
     >
       {adjustment !== null && (
-        <>
-          <DescriptionList
+        <Stack>
+          <Facts
+            columns={3}
             items={[
               { label: 'Type', value: adjustment.type },
               { label: 'Reason code', value: adjustment.reasonCode ?? '—' },
@@ -296,93 +346,63 @@ function AdjustmentReview({
           />
 
           {adjustment.description !== null && adjustment.description !== '' && (
-            <Section title="Description">
-              <p className="text-text-muted text-sm">{adjustment.description}</p>
-            </Section>
+            <AreaSection title="Description">
+              <Note>{adjustment.description}</Note>
+            </AreaSection>
           )}
 
           {adjustment.rejectedReason !== null && (
-            <Section title="Rejected because">
-              <p className="text-text-muted text-sm">{adjustment.rejectedReason}</p>
-            </Section>
+            <AreaSection title="Rejected because">
+              <Note>{adjustment.rejectedReason}</Note>
+            </AreaSection>
           )}
 
-          <Section title={`Lines (${adjustment.lines.length})`}>
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Variant</Th>
-                  <Th>Bin</Th>
-                  <Th>Batch</Th>
-                  <Th align="right">Qty change</Th>
-                  <Th align="right">Unit cost</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {adjustment.lines.map((l) => (
-                  <Tr key={l.id}>
-                    <Td>
-                      <Ident value={l.variantId} />
-                    </Td>
-                    <Td>{l.binId === null ? '—' : <Ident value={l.binId} />}</Td>
-                    <Td>{l.batchId === null ? '—' : <Ident value={l.batchId} />}</Td>
-                    <Td align="right">
-                      <Num value={l.qtyChange} />
-                    </Td>
-                    <Td align="right">
-                      {l.unitCostInr === null ? '—' : <Money amount={l.unitCostInr} />}
-                    </Td>
+          <AreaSection title={`Lines (${adjustment.lines.length})`}>
+            <Panel flush>
+              <Table>
+                <THead>
+                  <Tr>
+                    <Th>Variant</Th>
+                    <Th>Bin</Th>
+                    <Th>Batch</Th>
+                    <Th align="right">Qty change</Th>
+                    <Th align="right">Unit cost</Th>
                   </Tr>
-                ))}
-              </TBody>
-            </Table>
-          </Section>
+                </THead>
+                <TBody>
+                  {adjustment.lines.map((l) => (
+                    <Tr key={l.id}>
+                      <Td>
+                        <Ident value={l.variantId} />
+                      </Td>
+                      <Td>{l.binId === null ? '—' : <Ident value={l.binId} />}</Td>
+                      <Td>{l.batchId === null ? '—' : <Ident value={l.batchId} />}</Td>
+                      <Td align="right" className="sk-figure">
+                        <Num value={l.qtyChange} />
+                      </Td>
+                      <Td align="right">
+                        {l.unitCostInr === null ? '—' : <Money amount={l.unitCostInr} />}
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </Panel>
+          </AreaSection>
 
           {rejecting && (
-            <Section title="Reason for rejecting" subtitle="Stored on the adjustment permanently.">
-              <Textarea
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="What did you check, and what was actually on the shelf?"
-              />
-            </Section>
+            <TextArea
+              label="Reason for rejecting"
+              hint="Stored on the adjustment permanently."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="What did you check, and what was actually on the shelf?"
+            />
           )}
 
-          {error !== null && error !== undefined && <ErrorNote message={serverVerdict(error)} />}
-        </>
+          {error !== null && error !== undefined && <InlineError message={serverVerdict(error)} />}
+        </Stack>
       )}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close}>
-          Close
-        </Button>
-        {adjustment !== null && !decided && !rejecting && (
-          <>
-            <Button variant="destructive" size="md" onClick={() => setRejecting(true)}>
-              Reject
-            </Button>
-            <Button
-              size="md"
-              disabled={approve.isPending}
-              onClick={() => approve.mutate({ id: adjustment.id }, { onSuccess: close })}
-            >
-              {approve.isPending ? 'Approving…' : 'Approve — this moves stock'}
-            </Button>
-          </>
-        )}
-        {adjustment !== null && !decided && rejecting && (
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={reason.trim().length === 0 || reject.isPending}
-            onClick={() =>
-              reject.mutate({ id: adjustment.id, reason: reason.trim() }, { onSuccess: close })
-            }
-          >
-            {reject.isPending ? 'Rejecting…' : 'Confirm reject'}
-          </Button>
-        )}
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

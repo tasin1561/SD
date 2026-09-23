@@ -1,26 +1,14 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Section,
-  Select,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { useToast } from '@skydrop/ui/components';
+import { ArrowRightLeft, Plus } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { ParachuteProgress } from '@skydrop/ui/app/parachute-progress';
+import { Select } from '@skydrop/ui/app/select';
 import {
   useBulkBinTransfer,
   useMoveWholeBin,
@@ -31,6 +19,16 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { NON_PICKABLE_BIN_TYPES as NON_PICKABLE } from '@/lib/bin-policy';
+import {
+  Actions,
+  AreaSection,
+  FieldGrid,
+  InlineError,
+  Note,
+  Panel,
+  PanelPad,
+  mutationPhase,
+} from '../../../inventory/_components/stock-kit';
 
 /**
  * Re-shelving.
@@ -201,261 +199,255 @@ export function BinOpsPanel({
 
   if (!mayManage) return null;
 
+  const sourceCode = byId.get(sourceBinId)?.code ?? '—';
+  const destCode = byId.get(destBinId)?.code ?? '—';
+
   return (
-    <Section
+    <AreaSection
       title="Move stock between bins"
-      subtitle="Re-shelving. The batch never changes — a move answers where something is, not what it is."
+      note="Re-shelving. The batch never changes — a move answers where something is, not what it is."
     >
       {warehouseId === undefined && (warehouses.data?.length ?? 0) > 1 && (
-        <div className="mb-3 max-w-sm">
-          <FormField label="Warehouse" htmlFor="binops-wh">
-            <Select
-              id="binops-wh"
-              value={resolvedId}
-              onChange={(e) => {
-                setPickedWarehouse(e.target.value);
-                setSourceBinId('');
-                setDestBinId('');
-                setError(null);
-              }}
-            >
-              {(warehouses.data ?? []).map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.code} — {w.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-        </div>
+        <FieldGrid columns={2}>
+          <Select
+            id="binops-wh"
+            label="Warehouse"
+            value={resolvedId}
+            onChange={(e) => {
+              setPickedWarehouse(e.target.value);
+              setSourceBinId('');
+              setDestBinId('');
+              setError(null);
+            }}
+          >
+            {(warehouses.data ?? []).map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.code} — {w.name}
+              </option>
+            ))}
+          </Select>
+        </FieldGrid>
       )}
 
-      {error !== null && <ErrorNote message={error} />}
+      {error !== null && <InlineError message={error} />}
 
       {/* ── Whole bin ─────────────────────────────────────────────── */}
-      <Card>
-        <CardHeader
-          title="Empty one bin into another"
-          subtitle="Everything currently standing in the source bin, in one transaction. You do not list the contents — the server reads them."
-        />
-        <CardBody className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField label="From" htmlFor="binops-src">
-              <Select
-                id="binops-src"
-                value={sourceBinId}
-                onChange={(e) => {
-                  setSourceBinId(e.target.value);
-                  setError(null);
-                }}
-              >
-                <option value="">Choose…</option>
-                {binOptions.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {binLabel(b)}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField label="To" htmlFor="binops-dst">
-              <Select
-                id="binops-dst"
-                value={destBinId}
-                onChange={(e) => {
-                  setDestBinId(e.target.value);
-                  setError(null);
-                }}
-              >
-                <option value="">Choose…</option>
-                {binOptions.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {binLabel(b)}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </div>
+      <Panel
+        title="Empty one bin into another"
+        subtitle="Everything currently standing in the source bin, in one transaction. You do not list the contents — the server reads them."
+      >
+        <FieldGrid columns={2}>
+          <Select
+            id="binops-src"
+            label="From"
+            value={sourceBinId}
+            onChange={(e) => {
+              setSourceBinId(e.target.value);
+              setError(null);
+            }}
+          >
+            <option value="">Choose…</option>
+            {binOptions.map((b) => (
+              <option key={b.id} value={b.id}>
+                {binLabel(b)}
+              </option>
+            ))}
+          </Select>
+          <Select
+            id="binops-dst"
+            label="To"
+            value={destBinId}
+            onChange={(e) => {
+              setDestBinId(e.target.value);
+              setError(null);
+            }}
+          >
+            <option value="">Choose…</option>
+            {binOptions.map((b) => (
+              <option key={b.id} value={b.id}>
+                {binLabel(b)}
+              </option>
+            ))}
+          </Select>
+        </FieldGrid>
 
-          <div className="text-sm" aria-live="polite">
-            {sameBin ? (
-              <span className="text-[var(--status-pending-fg)]">
-                Source and destination are the same bin — nothing to move.
-              </span>
-            ) : destBinId !== '' && NON_PICKABLE.has(byId.get(destBinId)?.type ?? '') ? (
-              <span className="text-[var(--status-rto-fg)]">
-                {byId.get(destBinId)?.code} is not pickable. Stock moved there stays counted but
-                stops being sellable, and orders will not allocate against it.
-              </span>
-            ) : (
-              <span className="text-text-faint">
-                The source bin&rsquo;s FLOOR pile counts too — this is how you shelve stock that was
-                received before tracking was switched on.
-              </span>
-            )}
-          </div>
+        <div aria-live="polite">
+          {sameBin ? (
+            <Note tone="warn">Source and destination are the same bin — nothing to move.</Note>
+          ) : destBinId !== '' && NON_PICKABLE.has(byId.get(destBinId)?.type ?? '') ? (
+            <Note tone="bad">
+              {byId.get(destBinId)?.code} is not pickable. Stock moved there stays counted but stops
+              being sellable, and orders will not allocate against it.
+            </Note>
+          ) : (
+            <Note tone="faint">
+              The source bin&rsquo;s FLOOR pile counts too — this is how you shelve stock that was
+              received before tracking was switched on.
+            </Note>
+          )}
+        </div>
 
-          <Button
+        <Actions>
+          <AsyncButton
             variant="primary"
             size="md"
+            icon={<ArrowRightLeft size={16} />}
+            state={mutationPhase(moveBin)}
+            labels={{ idle: 'Move the whole bin', busy: 'Moving…' }}
             disabled={!canMove || moveBin.isPending}
             onClick={() => setConfirmMove(true)}
-          >
-            {moveBin.isPending ? 'Moving…' : 'Move the whole bin'}
-          </Button>
-        </CardBody>
-      </Card>
+          />
+        </Actions>
+      </Panel>
 
       {/* ── Line list ─────────────────────────────────────────────── */}
-      <Card className="mt-4">
-        <CardHeader
-          title="Apply a list of moves"
-          subtitle="All of it commits or none of it does. A half-applied re-shelving is worse than none, because nobody can tell which half went through."
-        />
-        <CardBody className="space-y-3 p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Seller id</Th>
-                  <Th>Variant id</Th>
-                  <Th>Batch id</Th>
-                  <Th>Qty</Th>
-                  <Th>From</Th>
-                  <Th>To</Th>
-                  <Th> </Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {lines.map((l) => (
-                  <Tr key={l.key}>
-                    <Td>
-                      <Input
-                        value={l.sellerId}
-                        aria-label="Seller id"
-                        onChange={(e) => editLine(l.key, { sellerId: e.target.value })}
-                      />
-                    </Td>
-                    <Td>
-                      <Input
-                        value={l.variantId}
-                        aria-label="Variant id"
-                        onChange={(e) => editLine(l.key, { variantId: e.target.value })}
-                      />
-                    </Td>
-                    <Td>
-                      <Input
-                        value={l.batchId}
-                        aria-label="Batch id"
-                        onChange={(e) => editLine(l.key, { batchId: e.target.value })}
-                      />
-                    </Td>
-                    <Td>
-                      <Input
-                        value={l.qty}
-                        type="number"
-                        min={1}
-                        step={1}
-                        inputMode="numeric"
-                        aria-label="Quantity"
-                        onChange={(e) => editLine(l.key, { qty: e.target.value })}
-                      />
-                    </Td>
-                    <Td>
-                      <Select
-                        value={l.sourceBinId}
-                        aria-label="From bin"
-                        onChange={(e) => editLine(l.key, { sourceBinId: e.target.value })}
-                      >
-                        <option value="">Choose…</option>
-                        {binOptions.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.code}
-                          </option>
-                        ))}
-                      </Select>
-                    </Td>
-                    <Td>
-                      <Select
-                        value={l.destBinId}
-                        aria-label="To bin"
-                        onChange={(e) => editLine(l.key, { destBinId: e.target.value })}
-                      >
-                        <option value="">Choose…</option>
-                        {binOptions.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.code}
-                          </option>
-                        ))}
-                      </Select>
-                    </Td>
-                    <Td>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={lines.length === 1}
-                        onClick={() => removeLine(l.key)}
-                      >
-                        Remove
-                      </Button>
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-          </div>
+      <Panel
+        flush
+        title="Apply a list of moves"
+        subtitle="All of it commits or none of it does. A half-applied re-shelving is worse than none, because nobody can tell which half went through."
+      >
+        <Table responsive={false}>
+          <THead>
+            <Tr>
+              <Th>Seller id</Th>
+              <Th>Variant id</Th>
+              <Th>Batch id</Th>
+              <Th>Qty</Th>
+              <Th>From</Th>
+              <Th>To</Th>
+              <Th> </Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {lines.map((l) => (
+              <Tr key={l.key}>
+                <Td>
+                  <input
+                    className="stk-input bin-lines-field"
+                    data-mono="1"
+                    value={l.sellerId}
+                    aria-label="Seller id"
+                    onChange={(e) => editLine(l.key, { sellerId: e.target.value })}
+                  />
+                </Td>
+                <Td>
+                  <input
+                    className="stk-input bin-lines-field"
+                    data-mono="1"
+                    value={l.variantId}
+                    aria-label="Variant id"
+                    onChange={(e) => editLine(l.key, { variantId: e.target.value })}
+                  />
+                </Td>
+                <Td>
+                  <input
+                    className="stk-input bin-lines-field"
+                    data-mono="1"
+                    value={l.batchId}
+                    aria-label="Batch id"
+                    onChange={(e) => editLine(l.key, { batchId: e.target.value })}
+                  />
+                </Td>
+                <Td>
+                  <input
+                    className="stk-input sk-figure"
+                    value={l.qty}
+                    type="number"
+                    min={1}
+                    step={1}
+                    inputMode="numeric"
+                    aria-label="Quantity"
+                    onChange={(e) => editLine(l.key, { qty: e.target.value })}
+                  />
+                </Td>
+                <Td>
+                  <Select
+                    value={l.sourceBinId}
+                    aria-label="From bin"
+                    onChange={(e) => editLine(l.key, { sourceBinId: e.target.value })}
+                  >
+                    <option value="">Choose…</option>
+                    {binOptions.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.code}
+                      </option>
+                    ))}
+                  </Select>
+                </Td>
+                <Td>
+                  <Select
+                    value={l.destBinId}
+                    aria-label="To bin"
+                    onChange={(e) => editLine(l.key, { destBinId: e.target.value })}
+                  >
+                    <option value="">Choose…</option>
+                    {binOptions.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.code}
+                      </option>
+                    ))}
+                  </Select>
+                </Td>
+                <Td>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={lines.length === 1}
+                    onClick={() => removeLine(l.key)}
+                  >
+                    Remove
+                  </Button>
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
 
-          <div className="flex flex-wrap items-center gap-2 px-4 pb-4">
-            <Button variant="ghost" size="md" onClick={addLine}>
+        <PanelPad>
+          {bulk.isPending && (
+            <ParachuteProgress
+              label={`Applying ${lines.length} line(s)`}
+              detail={`${bulkUnits} unit(s) are moving in one transaction.`}
+            />
+          )}
+          <Actions>
+            <Button variant="ghost" size="md" icon={<Plus size={16} />} onClick={addLine}>
               Add a line
             </Button>
-            <Button
+            <AsyncButton
               variant="primary"
               size="md"
+              state={mutationPhase(bulk)}
+              labels={{ idle: `Apply ${lines.length} line(s)`, busy: 'Applying…' }}
               disabled={!bulkReady || bulk.isPending}
               onClick={() => void onBulkTransfer()}
-            >
-              {bulk.isPending ? 'Applying…' : `Apply ${lines.length} line(s)`}
-            </Button>
-            <span className="text-text-faint text-xs">
+            />
+            <span className="stk-faint stk-note">
               {bulkReady
                 ? `${bulkUnits} unit(s) will move.`
                 : 'Every line needs a seller, variant, batch, a whole quantity of at least one, and two different bins.'}
             </span>
-          </div>
-        </CardBody>
-      </Card>
+          </Actions>
+        </PanelPad>
+      </Panel>
 
-      <Modal
+      <ConfirmDialog
         open={confirmMove}
         onOpenChange={(next) => {
           if (!next) setConfirmMove(false);
         }}
         title={`Move everything in ${byId.get(sourceBinId)?.code ?? 'this bin'}?`}
+        entity={`${sourceCode} → ${destCode}`}
+        entityIsIdentifier
+        consequence="Every unit standing in the source bin is recorded as moved to the destination. Batches, quantities and expiry are untouched, and moving it back is the same action in reverse."
+        confirmLabel="Move it"
+        onConfirm={onMoveWholeBin}
       >
-        <p className="text-text-muted mb-3 text-sm">
-          Every unit standing in{' '}
-          <span className="font-mono">{byId.get(sourceBinId)?.code ?? '—'}</span> is recorded as
-          moved to <span className="font-mono">{byId.get(destBinId)?.code ?? '—'}</span>. Do this
-          once the goods have physically been carried across — the record follows the shelf, and a
-          picker sent to the new bin needs to find them there.
-        </p>
-        <p className="text-text-faint mb-3 text-sm">
-          It is not destructive: batches, quantities and expiry are untouched, and moving it back is
-          the same action in reverse.
-        </p>
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={() => setConfirmMove(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            disabled={moveBin.isPending}
-            onClick={() => void onMoveWholeBin()}
-          >
-            {moveBin.isPending ? 'Moving…' : 'Move it'}
-          </Button>
-        </ModalFooter>
-      </Modal>
-    </Section>
+        <Note>
+          Do this once the goods have physically been carried across — the record follows the shelf,
+          and a picker sent to the new bin needs to find them there.
+        </Note>
+      </ConfirmDialog>
+    </AreaSection>
   );
 }

@@ -1,7 +1,9 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { Barcode128, Button } from '@skydrop/ui/components';
+import { Barcode128 } from '@skydrop/ui/components';
+import { Printer } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
 import type { LabelSheet } from '@skydrop/api-client';
 
 /**
@@ -53,18 +55,21 @@ export function LabelSheetView({
         }
       `}</style>
 
-      <div className="sd-label-sheet__chrome border-border-subtle mb-3 flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+      <div className="sd-label-sheet__chrome cns-sheet-chrome">
         <div>
-          <h3 className="text-text-bright text-sm font-medium">
-            {sheet.labels.length} label(s) — {sheet.consignmentNumber}
+          <h3 className="cns-sheet-chrome__title">
+            {sheet.labels.length} label(s) —{' '}
+            <span className="sk-ident">{sheet.consignmentNumber}</span>
           </h3>
-          <p className="text-text-muted text-sm">
+          <p className="stk-note">
             Printed in {sheet.site === 'BD' ? 'Bangladesh' : 'India'}. The station is now locked for
             this consignment.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => window.print()}>Send to printer</Button>
+        <div className="stk-actions">
+          <Button icon={<Printer size={16} />} onClick={() => window.print()}>
+            Send to printer
+          </Button>
           <Button variant="secondary" onClick={onClose}>
             Done
           </Button>

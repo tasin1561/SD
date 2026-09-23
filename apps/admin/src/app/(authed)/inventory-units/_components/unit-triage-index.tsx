@@ -2,29 +2,29 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorNote,
-  Ident,
-  Num,
-  PageHeader,
-  Section,
-  Skeleton,
-  Stat,
-  StatusBadge,
-  StockUnitStatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Ident, Num } from '@skydrop/ui/components';
+import { Clock, TriangleAlert, Users } from 'lucide-react';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { statusLabel, stockUnitStatusKind } from '@skydrop/ui/status';
 import { useSellerUnitReport, useUnitTriage, type StuckUnitRow } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  AreaPage,
+  AreaSection,
+  Callout,
+  InlineError,
+  KpiGrid,
+  Note,
+  Stack,
+  ToneText,
+} from '../../inventory/_components/stock-kit';
 import { UnitTracePanel } from './unit-trace-panel';
+import './units.css';
 
 /**
  * Serialized-unit discrepancies, from the warehouse's side.
@@ -49,50 +49,54 @@ export function UnitTriageIndex(): ReactElement {
   const data = triage.data;
 
   return (
-    <div>
+    <AreaPage>
       <PageHeader
+        breadcrumbs={[{ label: 'Inventory' }, { label: 'Serial units' }]}
         title="Unit discrepancies"
         subtitle="For SKUs tracked per unit by serial. Which sellers have a scan missing, a parcel unaccounted for, or serials that disagree with the stock count."
       />
 
       {triage.isError ? (
-        <ErrorNote message={serverVerdict(triage.error)} retry={() => void triage.refetch()} />
+        <InlineError message={serverVerdict(triage.error)} retry={() => void triage.refetch()} />
       ) : triage.isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
-        </div>
+        <KpiGrid>
+          <Skeleton height={96} rounded="md" />
+          <Skeleton height={96} rounded="md" />
+          <Skeleton height={96} rounded="md" />
+        </KpiGrid>
       ) : (
         <>
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
-            <Stat
+          <KpiGrid>
+            <KpiCard
               label="Needs attention"
-              value={<Num value={data?.totalNeedsAttention ?? 0} />}
-              tone={(data?.totalNeedsAttention ?? 0) > 0 ? 'warn' : 'good'}
+              icon={<TriangleAlert size={14} />}
+              value={data?.totalNeedsAttention ?? 0}
+              tone={(data?.totalNeedsAttention ?? 0) > 0 ? 'pending' : 'credit'}
               hint="Across every seller holding serialized stock"
             />
-            <Stat
+            <KpiCard
               label="Sellers affected"
-              value={<Num value={data?.sellers.filter((s) => s.needsAttention > 0).length ?? 0} />}
+              icon={<Users size={14} />}
+              value={data?.sellers.filter((s) => s.needsAttention > 0).length ?? 0}
               hint={`of ${data?.examined ?? 0} swept`}
             />
-            <Stat
+            <KpiCard
               label="Report generated"
-              value={data === undefined ? '—' : new Date(data.generatedAt).toLocaleTimeString()}
+              icon={<Clock size={14} />}
+              figure={data === undefined ? '—' : new Date(data.generatedAt).toLocaleTimeString()}
               hint="Recomputed on load"
             />
-          </div>
+          </KpiGrid>
 
           {data?.truncated === true && (
-            <ErrorNote
-              className="mb-4"
+            <InlineError
               message={`Only the first ${data.examined} sellers were swept. More hold serialized stock — the rest are not shown, and are not counted above.`}
             />
           )}
 
           {(data?.sellers.length ?? 0) === 0 ? (
             <EmptyState
+              tone="positive"
               title="No serialized stock anywhere"
               description="Nothing to reconcile — no seller has a SKU set to strict per-unit tracking yet."
             />
@@ -112,51 +116,52 @@ export function UnitTriageIndex(): ReactElement {
                 {data?.sellers.map((s) => (
                   <Tr
                     key={s.sellerId}
+                    selected={selected === s.sellerId}
                     onActivate={() => setSelected(selected === s.sellerId ? null : s.sellerId)}
                   >
                     <Td>
-                      <span className="text-text-strong">{s.companyName ?? 'Unknown seller'}</span>
-                      <div className="mt-0.5">
+                      <span className="unit-seller">{s.companyName ?? 'Unknown seller'}</span>
+                      <span className="stk-sub">
                         <Link
                           href={`/sellers/${s.sellerId}`}
                           onClick={(e) => e.stopPropagation()}
-                          className="text-accent hover:underline"
+                          className="stk-link"
                         >
                           <Ident value={`${s.sellerId.slice(0, 8)}…`} />
                         </Link>
-                      </div>
+                      </span>
                     </Td>
-                    <Td align="right">
+                    <Td align="right" className="sk-figure">
                       <Num value={s.stuckUnits} />
                     </Td>
-                    <Td align="right">
+                    <Td align="right" className="sk-figure">
                       {s.unresolvedDispatched > 0 ? (
-                        <span className="text-[var(--color-critical)]">
+                        <ToneText tone="bad">
                           <Num value={s.unresolvedDispatched} />
-                        </span>
+                        </ToneText>
                       ) : (
                         <Num value={0} />
                       )}
                     </Td>
-                    <Td align="right">
+                    <Td align="right" className="sk-figure">
                       {s.countMismatches > 0 ? (
-                        <span className="text-[var(--color-critical)]">
+                        <ToneText tone="bad">
                           <Num value={s.countMismatches} />
-                        </span>
+                        </ToneText>
                       ) : (
                         <Num value={0} />
                       )}
                     </Td>
-                    <Td align="right">
+                    <Td align="right" className="sk-figure">
                       {s.needsAttention === 0 ? (
-                        <StatusBadge kind="delivered" label="clear" />
+                        <StatusChip size="sm" kind="delivered" label="clear" />
                       ) : (
-                        <span className="text-text-bright font-medium">
+                        <strong className="stk-num">
                           <Num value={s.needsAttention} />
-                        </span>
+                        </strong>
                       )}
                     </Td>
-                    <Td className="text-text-faint whitespace-nowrap text-xs">
+                    <Td className="stk-faint stk-nowrap">
                       stuck &gt;{s.thresholds.stuckSlaHours}h · dispatch &gt;
                       {s.thresholds.dispatchedUnresolvedDays}d
                     </Td>
@@ -168,19 +173,17 @@ export function UnitTriageIndex(): ReactElement {
 
           {selected !== null && <SellerDetail sellerId={selected} />}
 
-          <Card className="mt-4">
-            <CardBody>
-              <p className="text-text-muted text-xs leading-relaxed">
-                Thresholds are per seller and overridable, so &ldquo;stuck&rdquo; means past{' '}
-                <em>that</em> seller&apos;s SLA. Retired units — written off or lost — are
-                deliberately excluded from the totals: they are settled facts rather than work, and
-                counting them would mean the queue never reaches zero.
-              </p>
-            </CardBody>
-          </Card>
+          <Callout tone="info">
+            <p className="unit-note">
+              Thresholds are per seller and overridable, so &ldquo;stuck&rdquo; means past{' '}
+              <em>that</em> seller&apos;s SLA. Retired units — written off or lost — are
+              deliberately excluded from the totals: they are settled facts rather than work, and
+              counting them would mean the queue never reaches zero.
+            </p>
+          </Callout>
         </>
       )}
-    </div>
+    </AreaPage>
   );
 }
 
@@ -189,19 +192,16 @@ function SellerDetail({ sellerId }: { readonly sellerId: string }): ReactElement
   const d = report.data;
 
   return (
-    <Section
-      className="mt-5"
+    <AreaSection
       title="Detail"
-      subtitle="Exactly what this seller sees on their own screen — same computation, so the two cannot disagree."
+      note="Exactly what this seller sees on their own screen — same computation, so the two cannot disagree."
     >
       {report.isError ? (
-        <ErrorNote message={serverVerdict(report.error)} retry={() => void report.refetch()} />
+        <InlineError message={serverVerdict(report.error)} retry={() => void report.refetch()} />
       ) : report.isLoading ? (
-        <Card>
-          <Skeleton className="m-3 h-24" />
-        </Card>
+        <Skeleton height={96} rounded="md" />
       ) : (
-        <div className="space-y-4">
+        <Stack>
           <UnitTable
             title="Stuck mid-lifecycle"
             rows={d?.stuckUnits ?? []}
@@ -214,9 +214,7 @@ function SellerDetail({ sellerId }: { readonly sellerId: string }): ReactElement
           />
           {(d?.countMismatches.length ?? 0) > 0 && (
             <div>
-              <h4 className="text-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
-                Count mismatches
-              </h4>
+              <h4 className="unit-group-title">Count mismatches</h4>
               <Table>
                 <THead>
                   <Tr>
@@ -233,17 +231,19 @@ function SellerDetail({ sellerId }: { readonly sellerId: string }): ReactElement
                       <Td>
                         <Ident value={m.skuCode ?? m.variantId.slice(0, 8)} />
                       </Td>
-                      <Td className="text-text-muted text-xs">
+                      <Td className="stk-muted">
                         <Ident value={m.warehouseId.slice(0, 8)} />
                       </Td>
-                      <Td align="right">
+                      <Td align="right" className="sk-figure">
                         <Num value={m.unitsInStock} />
                       </Td>
-                      <Td align="right">
+                      <Td align="right" className="sk-figure">
                         <Num value={m.qtyOnHand} />
                       </Td>
-                      <Td align="right" className="text-[var(--color-critical)]">
-                        <Num value={m.delta > 0 ? `+${m.delta}` : m.delta} />
+                      <Td align="right" className="sk-figure">
+                        <ToneText tone="bad">
+                          <Num value={m.delta > 0 ? `+${m.delta}` : m.delta} />
+                        </ToneText>
                       </Td>
                     </Tr>
                   ))}
@@ -251,9 +251,9 @@ function SellerDetail({ sellerId }: { readonly sellerId: string }): ReactElement
               </Table>
             </div>
           )}
-        </div>
+        </Stack>
       )}
-    </Section>
+    </AreaSection>
   );
 }
 
@@ -267,10 +267,10 @@ function UnitTable({
   readonly empty: string;
 }): ReactElement {
   return (
-    <div>
-      <h4 className="text-text-muted mb-2 text-xs font-medium tracking-wide uppercase">{title}</h4>
+    <div className="stk-stack stk-stack--tight">
+      <h4 className="unit-group-title">{title}</h4>
       {rows.length === 0 ? (
-        <p className="text-text-faint text-xs">{empty}</p>
+        <Note tone="faint">{empty}</Note>
       ) : (
         <Table>
           <THead>
@@ -288,24 +288,28 @@ function UnitTable({
                 <Td>
                   <Ident value={u.serialBarcode} />
                 </Td>
-                <Td className="text-text-muted text-xs">
+                <Td className="stk-muted">
                   {u.skuCode ?? <Ident value={u.variantId.slice(0, 8)} />}
                 </Td>
                 <Td>
-                  <StockUnitStatusBadge status={u.status} />
+                  <StatusChip
+                    size="sm"
+                    kind={stockUnitStatusKind(u.status)}
+                    label={statusLabel(u.status)}
+                  />
                 </Td>
-                <Td align="right">
+                <Td align="right" className="sk-figure">
                   {u.hoursInStatus >= 48 ? (
-                    <span className="text-[var(--status-pending-fg)]">
+                    <ToneText tone="warn">
                       <Num value={Math.round(u.hoursInStatus / 24)} suffix="d" />
-                    </span>
+                    </ToneText>
                   ) : (
                     <Num value={Math.round(u.hoursInStatus)} suffix="h" />
                   )}
                 </Td>
-                <Td className="text-text-muted whitespace-nowrap text-xs">
+                <Td className="stk-muted stk-nowrap">
                   {u.lastScanAt === null ? (
-                    <StatusBadge kind="failed" label="never scanned" />
+                    <StatusChip size="sm" kind="failed" label="never scanned" />
                   ) : (
                     new Date(u.lastScanAt).toLocaleString()
                   )}
