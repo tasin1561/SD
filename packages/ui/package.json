@@ -7,12 +7,6 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "sideEffects": [
-    "./dist/tokens.css",
-    "./src/tokens.css",
-    "./dist/corridor.css",
-    "./src/corridor.css",
-    "./dist/seller-theme.css",
-    "./src/seller-theme.css",
     "./dist/brand/*.css",
     "./src/brand/*.css",
     "./dist/app/**/*.css",
@@ -40,9 +34,6 @@
       "types": "./dist/components/index.d.ts",
       "default": "./dist/components/index.js"
     },
-    "./tokens.css": "./dist/tokens.css",
-    "./corridor.css": "./dist/corridor.css",
-    "./seller-theme.css": "./dist/seller-theme.css",
     "./brand/scales.css": "./dist/brand/scales.css",
     "./brand/theme.css": "./dist/brand/theme.css",
     "./brand/app.css": "./dist/brand/app.css",
@@ -57,7 +48,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && cp src/tokens.css dist/tokens.css && cp src/corridor.css dist/corridor.css && cp src/seller-theme.css dist/seller-theme.css && node scripts/copy-css.mjs",
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
     "check:brand": "node scripts/check-brand-tokens.mjs",
