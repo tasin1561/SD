@@ -1,7 +1,14 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { Card, CardBody, ErrorState, LoadingState, PageHeader, Stat } from '@skydrop/ui/components';
+import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { AfCard, Meter } from '@/app/(authed)/system/_components/af-parts';
+import './capacity.css';
 import { useCapacityReport, type CapacityMetric, type CapacityStatus } from '@/lib/api-hooks';
 
 /**
@@ -30,41 +37,33 @@ import { useCapacityReport, type CapacityMetric, type CapacityStatus } from '@/l
 
 const REFRESH_MS = 15_000;
 
-const TONE: Record<CapacityStatus, { fg: string; ring: string; label: string }> = {
-  OK: { fg: 'var(--status-delivered-fg)', ring: 'var(--color-border)', label: 'Healthy' },
-  WATCH: { fg: 'var(--status-pending-fg)', ring: 'var(--status-pending-fg)', label: 'Watch' },
-  WARNING: { fg: 'var(--status-rto-fg)', ring: 'var(--status-rto-fg)', label: 'Plan the work' },
-  CRITICAL: {
-    fg: 'var(--color-critical-fg)',
-    ring: 'var(--color-critical-ring)',
-    label: 'Acting soon is not optional',
-  },
-};
+/** Each status's words and the tone its gauge and figure take. */
+const TONE: Record<CapacityStatus, { tone: 'good' | 'warn' | 'bad' | 'critical'; label: string }> =
+  {
+    OK: { tone: 'good', label: 'Healthy' },
+    WATCH: { tone: 'warn', label: 'Watch' },
+    WARNING: { tone: 'bad', label: 'Plan the work' },
+    CRITICAL: { tone: 'critical', label: 'Acting soon is not optional' },
+  };
 
-function Gauge({ percent, status }: { percent: number | null; status: CapacityStatus }) {
-  const tone = TONE[status];
+function Gauge({
+  percent,
+  status,
+}: {
+  percent: number | null;
+  status: CapacityStatus;
+}): ReactElement {
+  const tone = TONE[status].tone;
   // A null percent means we do not know the ceiling. Showing an empty
   // bar would read as "plenty of room", which is the opposite of true.
   if (percent === null) {
-    return (
-      <div className="bg-surface-2 h-1.5 w-full overflow-hidden rounded-full">
-        <div
-          className="h-full w-full opacity-30"
-          style={{
-            background:
-              'repeating-linear-gradient(45deg, var(--color-border) 0 4px, transparent 4px 8px)',
-          }}
-        />
-      </div>
-    );
+    return <span className="cap-unknown" aria-hidden />;
   }
   return (
-    <div className="bg-surface-2 h-1.5 w-full overflow-hidden rounded-full">
-      <div
-        className="h-full rounded-full transition-[width] duration-500"
-        style={{ width: `${Math.min(100, Math.max(2, percent))}%`, background: tone.fg }}
-      />
-    </div>
+    <Meter
+      value={Math.min(100, Math.max(2, percent)) / 100}
+      tone={tone === 'good' ? 'good' : tone === 'warn' ? 'warn' : 'bad'}
+    />
   );
 }
 
@@ -73,60 +72,60 @@ function MetricCard({ m }: { readonly m: CapacityMetric }): ReactElement {
   const [open, setOpen] = useState(m.status === 'WARNING' || m.status === 'CRITICAL');
 
   return (
-    <Card>
-      <CardBody className="space-y-3">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <span className="text-text-bright text-sm font-medium">{m.label}</span>
-          <span className="text-xs font-medium" style={{ color: tone.fg }}>
-            {tone.label}
-          </span>
+    <AfCard
+      tone={m.status === 'CRITICAL' ? 'critical' : m.status === 'WARNING' ? 'warn' : undefined}
+    >
+      <div className="af-row af-row--between">
+        <span className="af-title">{m.label}</span>
+        <span className="cap-status" data-tone={tone.tone}>
+          {tone.label}
+        </span>
+      </div>
+
+      <div className="cap-figure-row">
+        <span className="cap-figure sk-figure" data-tone={tone.tone}>
+          {m.current.toLocaleString('en-IN')}
+        </span>
+        <span className="af-muted">
+          {m.ceiling === null ? m.unit : `of ${m.ceiling.toLocaleString('en-IN')} ${m.unit}`}
+        </span>
+        {m.percent !== null && <span className="af-faint sk-figure cap-pct">{m.percent}%</span>}
+      </div>
+
+      <Gauge percent={m.percent} status={m.status} />
+
+      <p className="af-faint">
+        {m.ceilingSource === 'MEASURED'
+          ? 'Ceiling read from the system itself.'
+          : m.ceilingSource === 'CONFIGURED'
+            ? 'Ceiling from system settings — update it when the plan changes.'
+            : 'Ceiling unknown; record it in system settings to get a real gauge.'}
+        {m.detail && <span className="af-small"> {m.detail}</span>}
+      </p>
+
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="af-disclose"
+      >
+        <ChevronRight size={14} className="af-disclose__chev" aria-hidden />
+        {open ? 'Hide' : 'What happens, and what to do'}
+      </button>
+
+      {open && (
+        <div className="cap-explain">
+          <p className="af-body">
+            <span className="af-small">When it fills: </span>
+            {m.consequence}
+          </p>
+          <p className="af-body">
+            <span className="af-small">To fix: </span>
+            {m.remedy}
+          </p>
         </div>
-
-        <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-semibold tabular-nums" style={{ color: tone.fg }}>
-            {m.current.toLocaleString('en-IN')}
-          </span>
-          <span className="text-text-muted text-sm">
-            {m.ceiling === null ? m.unit : `of ${m.ceiling.toLocaleString('en-IN')} ${m.unit}`}
-          </span>
-          {m.percent !== null && (
-            <span className="text-text-faint ml-auto text-xs tabular-nums">{m.percent}%</span>
-          )}
-        </div>
-
-        <Gauge percent={m.percent} status={m.status} />
-
-        <div className="text-text-faint text-xs">
-          {m.ceilingSource === 'MEASURED'
-            ? 'Ceiling read from the system itself.'
-            : m.ceilingSource === 'CONFIGURED'
-              ? 'Ceiling from system settings — update it when the plan changes.'
-              : 'Ceiling unknown; record it in system settings to get a real gauge.'}
-          {m.detail && <span className="text-text-muted"> {m.detail}</span>}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="text-accent text-xs hover:underline"
-        >
-          {open ? 'Hide' : 'What happens, and what to do'}
-        </button>
-
-        {open && (
-          <div className="border-border space-y-2 border-l-2 pl-3 text-xs">
-            <p className="text-text-body">
-              <span className="text-text-muted">When it fills: </span>
-              {m.consequence}
-            </p>
-            <p className="text-text-body">
-              <span className="text-text-muted">To fix: </span>
-              {m.remedy}
-            </p>
-          </div>
-        )}
-      </CardBody>
-    </Card>
+      )}
+    </AfCard>
   );
 }
 
@@ -140,7 +139,14 @@ export function CapacityMonitor(): ReactElement {
     if (q.dataUpdatedAt) setNow(new Date(q.dataUpdatedAt).toLocaleTimeString());
   }, [q.dataUpdatedAt]);
 
-  if (q.isLoading) return <LoadingState label="Reading system capacity…" />;
+  if (q.isLoading) {
+    return (
+      <div className="af-page">
+        <PageHeader title="System limits" />
+        <SkeletonRows rows={4} cols={3} label="Reading system capacity…" />
+      </div>
+    );
+  }
   if (q.isError || !q.data) {
     return (
       <ErrorState
@@ -154,77 +160,76 @@ export function CapacityMonitor(): ReactElement {
   const tone = TONE[worstStatus];
 
   return (
-    <div className="space-y-5">
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'System' }, { label: 'System limits' }]}
+        Link={Link}
         title="System limits"
         subtitle="What the platform can currently take, how much of it is used, and what to do before it runs out. Refreshes every 15 seconds."
       />
 
-      <Card>
-        <CardBody className="space-y-3">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="text-sm font-medium" style={{ color: tone.fg }}>
-              {worstStatus === 'OK'
-                ? 'Everything has room'
-                : `Tightest constraint: ${tone.label.toLowerCase()}`}
-            </span>
-            <span className="text-text-faint text-xs">{now && `updated ${now}`}</span>
-          </div>
+      <AfCard>
+        <div className="af-row af-row--between">
+          <span className="cap-status cap-status--lead" data-tone={tone.tone}>
+            {worstStatus === 'OK'
+              ? 'Everything has room'
+              : `Tightest constraint: ${tone.label.toLowerCase()}`}
+          </span>
+          <span className="af-faint">{now && `updated ${now}`}</span>
+        </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Stat
-              label="Orders, last 30 days"
-              value={growth.ordersLast30Days.toLocaleString('en-IN')}
-            />
-            <Stat
-              label="Month on month"
-              value={
-                growth.monthlyGrowthPercent === null
-                  ? '—'
-                  : `${growth.monthlyGrowthPercent > 0 ? '+' : ''}${growth.monthlyGrowthPercent}%`
-              }
-            />
-            <Stat
-              label="Storage runway"
-              value={
-                growth.storageMonthsRemaining === null
-                  ? '—'
-                  : `${growth.storageMonthsRemaining} months`
-              }
-            />
-          </div>
+        <div className="af-kpis">
+          <KpiCard
+            label="Orders, last 30 days"
+            value={growth.ordersLast30Days}
+            format={(n) => n.toLocaleString('en-IN')}
+          />
+          <KpiCard
+            label="Month on month"
+            figure={
+              growth.monthlyGrowthPercent === null
+                ? '—'
+                : `${growth.monthlyGrowthPercent > 0 ? '+' : ''}${growth.monthlyGrowthPercent}%`
+            }
+          />
+          <KpiCard
+            label="Storage runway"
+            figure={
+              growth.storageMonthsRemaining === null
+                ? '—'
+                : `${growth.storageMonthsRemaining} months`
+            }
+          />
+        </div>
 
-          <p className="text-text-muted text-xs">
-            Runway is measured: the database's actual size divided by the orders in it, projected at
-            the last 30 days' rate. It is blank until there are enough orders to divide by, and it
-            moves whenever the shape of the data does.
-          </p>
-        </CardBody>
-      </Card>
+        <p className="af-small">
+          Runway is measured: the database's actual size divided by the orders in it, projected at
+          the last 30 days' rate. It is blank until there are enough orders to divide by, and it
+          moves whenever the shape of the data does.
+        </p>
+      </AfCard>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="af-grid-2">
         {metrics.map((m) => (
           <MetricCard key={m.key} m={m} />
         ))}
       </div>
 
-      <Card>
-        <CardBody className="space-y-2">
-          <span className="text-text-bright text-sm font-medium">How requests are served</span>
-          <p className="text-text-muted text-xs">
-            {topology.apiInstancesAssumed === 1
-              ? 'One API process serves every request. Node is single-threaded, so one slow CPU-bound job — a large CSV, image processing, a PDF invoice — delays everyone else, and a restart is downtime for everyone.'
-              : `${topology.apiInstancesAssumed} API processes share the traffic.`}{' '}
-            {topology.note}
-          </p>
-          <p className="text-text-muted text-xs">
-            To add instances: raise <code className="text-text-body">capacity.api_instances</code>{' '}
-            in settings so the connection gauge stays honest, and start every additional process
-            with <code className="text-text-body">WORKERS_ENABLED=false</code> so only one owns the
-            background queues. Two processes running the same crons would double every sweep.
-          </p>
-        </CardBody>
-      </Card>
+      <AfCard>
+        <h2 className="af-card__title">How requests are served</h2>
+        <p className="af-small">
+          {topology.apiInstancesAssumed === 1
+            ? 'One API process serves every request. Node is single-threaded, so one slow CPU-bound job — a large CSV, image processing, a PDF invoice — delays everyone else, and a restart is downtime for everyone.'
+            : `${topology.apiInstancesAssumed} API processes share the traffic.`}{' '}
+          {topology.note}
+        </p>
+        <p className="af-small">
+          To add instances: raise <code className="af-code">capacity.api_instances</code> in
+          settings so the connection gauge stays honest, and start every additional process with{' '}
+          <code className="af-code">WORKERS_ENABLED=false</code> so only one owns the background
+          queues. Two processes running the same crons would double every sweep.
+        </p>
+      </AfCard>
     </div>
   );
 }

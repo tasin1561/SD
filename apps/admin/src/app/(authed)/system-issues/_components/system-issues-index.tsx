@@ -1,24 +1,17 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  SkeletonRows,
-  Stat,
-  Textarea,
-  Toolbar,
-  useToast,
-} from '@skydrop/ui/components';
 import Link from 'next/link';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Clock } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useAcknowledgeIssue,
   useAnnounceUnnotifiedIssues,
@@ -28,6 +21,8 @@ import {
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AfCard, MetaFact, Notice } from '@/app/(authed)/system/_components/af-parts';
+import './system-issues.css';
 
 /** The order an issue is about, when its metadata names one. */
 /** The `source` every `auto-pickup:<courier>:<warehouse>` issue carries
@@ -40,11 +35,12 @@ function orderIdOf(metadata: unknown): string | null {
   return typeof v === 'string' && v !== '' ? v : null;
 }
 
-/** Severity → the colour it deserves. */
-function tone(sev: SystemIssueView['severity']): string {
-  if (sev === 'CRITICAL' || sev === 'HIGH') return 'text-[var(--color-critical)]';
-  if (sev === 'MEDIUM') return 'text-[var(--color-warning)]';
-  return 'text-text-muted';
+/** Severity → the queue card's rule and chip. Colour is never alone: the word is on the chip. */
+function severityOf(sev: SystemIssueView['severity']): 'critical' | 'high' | 'medium' | 'low' {
+  if (sev === 'CRITICAL') return 'critical';
+  if (sev === 'HIGH') return 'high';
+  if (sev === 'MEDIUM') return 'medium';
+  return 'low';
 }
 
 /** How long it has been going on, said the way a person would. */
@@ -92,6 +88,9 @@ export function SystemIssuesIndex(): ReactElement {
   const [resolving, setResolving] = useState<SystemIssueView | null>(null);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Announcing tells people about issues they were never told of, so it
+  // asks first. It sends the same request; a second press sends nothing.
+  const [confirmAnnounce, setConfirmAnnounce] = useState(false);
 
   const rows = list.data ?? [];
   const open = rows.filter((r) => r.resolvedAt === null);
@@ -112,21 +111,23 @@ export function SystemIssuesIndex(): ReactElement {
   }
 
   return (
-    <div>
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Operations' }, { label: 'Needs a person' }]}
+        Link={Link}
         title="Needs a person"
         subtitle="Everything the system could not fix by itself. These do not break a screen — they stop figures moving — so they are collected here rather than left in a log."
         action={
-          <div className="flex items-center gap-2">
+          <div className="af-row">
             {mayResolve && (
               <Button
                 variant="secondary"
                 size="md"
-                disabled={announce.isPending}
-                onClick={() => announce.mutate()}
+                loading={announce.isPending}
+                onClick={() => setConfirmAnnounce(true)}
                 title="Only an issue nobody has been told about is announced. Pressing this twice sends nothing the second time."
               >
-                {announce.isPending ? 'Telling people…' : 'Notify unannounced'}
+                Notify unannounced
               </Button>
             )}
             <Button variant="ghost" size="md" onClick={() => setIncludeResolved((v) => !v)}>
@@ -137,73 +138,73 @@ export function SystemIssuesIndex(): ReactElement {
       />
 
       {announce.data !== undefined && (
-        <Card>
-          <CardBody>
-            <p className="text-sm">
-              {announce.data.announced === 0
-                ? `Nothing to send — all ${announce.data.open} open issue(s) had already been announced.`
-                : `Told people about ${announce.data.announced} of ${announce.data.open} open issue(s); ${announce.data.alreadyAnnounced} had already been announced.`}
-            </p>
-          </CardBody>
-        </Card>
+        <Notice tone="good">
+          <p>
+            {announce.data.announced === 0
+              ? `Nothing to send — all ${announce.data.open} open issue(s) had already been announced.`
+              : `Told people about ${announce.data.announced} of ${announce.data.open} open issue(s); ${announce.data.alreadyAnnounced} had already been announced.`}
+          </p>
+        </Notice>
       )}
 
       {announce.isError && (
-        <Card>
-          <CardBody>
-            <p className="text-status-failed-fg text-sm">{serverVerdict(announce.error)}</p>
-          </CardBody>
-        </Card>
+        <Notice tone="bad" role="alert">
+          <p>{serverVerdict(announce.error)}</p>
+        </Notice>
       )}
 
       {open.length > 0 && (
-        <Toolbar>
-          <Stat label="Open" value={String(open.length)} />
-          <Stat
+        <div className="af-kpis">
+          <KpiCard label="Open" value={open.length} tone="info" />
+          <KpiCard
             label="Nobody on it"
-            value={String(unclaimed)}
-            tone={unclaimed > 0 ? 'warn' : 'neutral'}
+            value={unclaimed}
+            tone={unclaimed > 0 ? 'pending' : 'neutral'}
           />
-          <Stat label="Urgent" value={String(urgent)} tone={urgent > 0 ? 'bad' : 'neutral'} />
-        </Toolbar>
+          <KpiCard label="Urgent" value={urgent} tone={urgent > 0 ? 'debit' : 'neutral'} />
+        </div>
       )}
 
       {list.isLoading ? (
-        <Card>
-          <SkeletonRows rows={3} />
-        </Card>
+        <AfCard flush>
+          <SkeletonRows rows={3} cols={3} label="Loading issues" />
+        </AfCard>
       ) : list.isError ? (
-        <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+        <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
+          tone="positive"
           title="Nothing needs you"
           description="No integration is stuck and no scheduled job is failing. This page fills itself when something breaks quietly — an empty one is the good outcome, not a missing feature."
         />
       ) : (
-        <div className="space-y-3">
-          {rows.map((r) => (
-            <Card key={r.id}>
-              <CardBody>
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle
-                        className={`h-4 w-4 shrink-0 ${tone(r.severity)}`}
-                        aria-hidden
-                      />
-                      <span className={`text-sm font-medium ${tone(r.severity)}`}>{r.title}</span>
+        <ul className="af-queue">
+          {rows.map((r) => {
+            const severity = severityOf(r.severity);
+            return (
+              <li
+                key={r.id}
+                className="af-qcard"
+                data-severity={r.resolvedAt === null ? severity : undefined}
+              >
+                <div className="af-qcard__grid">
+                  <div className="af-stack af-stack--tight">
+                    <div className="si-head">
+                      <span className="si-sev" data-sev={severity}>
+                        <AlertTriangle size={12} aria-hidden />
+                        {r.severity.charAt(0) + r.severity.slice(1).toLowerCase()}
+                      </span>
+                      <span className="si-title">{r.title}</span>
                     </div>
                     {/* The detail is the point of the card: it says what
                         to DO, written where the failure happened. */}
-                    <p className="text-text-body mt-2 max-w-3xl text-xs whitespace-pre-line">
-                      {r.detail}
-                    </p>
+                    <p className="si-detail">{r.detail}</p>
                     {/* An issue about an order says which one; the link
                         saves copying the number into the search box. */}
                     {orderIdOf(r.metadata) !== null && (
                       <Link
                         href={`/orders/${orderIdOf(r.metadata) ?? ''}`}
-                        className="text-accent hover:text-accent-hover mt-2 inline-block text-xs"
+                        className="af-link af-small af-inline-link"
                       >
                         Open the order
                       </Link>
@@ -212,52 +213,52 @@ export function SystemIssuesIndex(): ReactElement {
                         A failed day is not retried by itself — the pickups
                         screen is where it is released and raised again. */}
                     {r.source === AUTO_PICKUP_SOURCE && canManagePickups && (
-                      <Link
-                        href="/warehouse/pickups"
-                        className="text-accent hover:text-accent-hover mt-2 block w-fit text-xs"
-                      >
+                      <Link href="/warehouse/pickups" className="af-link af-small af-inline-link">
                         Open pickups
                       </Link>
                     )}
-                    <div className="text-text-faint mt-2 text-xs">
-                      {r.source} · first seen {since(r.firstSeenAt)} · last {since(r.lastSeenAt)}
+                    <div className="si-meta">
+                      <span className="af-faint sk-ident">{r.source}</span>
+                      <MetaFact>
+                        <Clock size={11} aria-hidden /> first seen {since(r.firstSeenAt)}
+                      </MetaFact>
+                      <span className="af-faint">last {since(r.lastSeenAt)}</span>
                       {/* Seen many times is a different problem from seen
                           once: it means it is not a blip. */}
                       {r.occurrenceCount > 1 && (
-                        <span className="text-[var(--color-warning)]">
-                          {' '}
-                          · {r.occurrenceCount} times
-                        </span>
+                        <MetaFact tone="warn">{r.occurrenceCount} times</MetaFact>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 flex-col items-end gap-2">
+                  <div className="af-qcard__actions si-actions">
                     {r.resolvedAt !== null ? (
-                      <span className="text-text-faint text-xs">
+                      <span className="af-faint">
                         closed {since(r.resolvedAt)}
                         {r.resolutionNote !== null && ` · ${r.resolutionNote}`}
                       </span>
                     ) : (
                       <>
                         {r.acknowledgedAt === null ? (
-                          <Button
+                          <AsyncButton
                             variant="secondary"
                             size="sm"
+                            labels={{ idle: 'I’m on it', busy: 'Noting…', done: 'Noted' }}
                             disabled={ack.isPending}
-                            onClick={() =>
-                              ack.mutate(r.id, {
-                                onSuccess: () => toast.success('Noted as being looked at.'),
-                                onError: (e) => toast.error(serverVerdict(e)),
-                              })
-                            }
-                          >
-                            I&rsquo;m on it
-                          </Button>
+                            onAction={async () => {
+                              try {
+                                await ack.mutateAsync(r.id);
+                                toast.success('Noted as being looked at.');
+                              } catch (e) {
+                                toast.error(serverVerdict(e));
+                                throw e;
+                              }
+                            }}
+                          />
                         ) : (
-                          <span className="text-text-muted text-xs">
+                          <MetaFact tone="accent" dot>
                             being looked at · {since(r.acknowledgedAt)}
-                          </span>
+                          </MetaFact>
                         )}
                         {mayResolve && (
                           <Button
@@ -276,38 +277,63 @@ export function SystemIssuesIndex(): ReactElement {
                     )}
                   </div>
                 </div>
-              </CardBody>
-            </Card>
-          ))}
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
-      <Modal
+      <Dialog
         open={resolving !== null}
         onOpenChange={(o) => {
           if (!o) setResolving(null);
         }}
         title="Close this issue"
         description="Say what was done. Several of these close themselves when the job next works — closing by hand is for the ones that needed you."
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="sm" onClick={() => setResolving(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={resolve.isPending}
+              disabled={note.trim().length < 5 || resolve.isPending}
+              onClick={() => void submitResolve()}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        }
       >
-        <FormField label="What was done" required hint="At least a few words — it is the record.">
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} />
-        </FormField>
-        {error !== null && <ErrorNote message={error} />}
-        <ModalFooter>
-          <Button variant="ghost" size="sm" onClick={() => setResolving(null)}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={note.trim().length < 5 || resolve.isPending}
-            onClick={() => void submitResolve()}
-          >
-            {resolve.isPending ? 'Closing…' : 'Close'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+        <div className="af-form">
+          {resolving !== null && <p className="af-title">{resolving.title}</p>}
+          <TextArea
+            label="What was done"
+            requiredMark
+            hint="At least a few words — it is the record."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+          />
+          {error !== null && <ErrorState title="Not closed" message={error} />}
+        </div>
+      </Dialog>
+
+      <ConfirmDialog
+        open={confirmAnnounce}
+        onOpenChange={setConfirmAnnounce}
+        title="Notify people about unannounced issues?"
+        entity={`${open.length} open issue(s)`}
+        consequence="Everyone the issue's audience names is sent a notification for each open issue nobody has been told about yet; issues already announced are skipped."
+        confirmLabel="Notify unannounced"
+        onConfirm={() => {
+          // The same fire-and-report request as before: the result or the
+          // server's verdict appears under the header.
+          announce.mutate();
+        }}
+      />
     </div>
   );
 }

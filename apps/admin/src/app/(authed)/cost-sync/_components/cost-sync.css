@@ -1,0 +1,38 @@
+/* Courier cost sync. Tokens only; shared pieces in system/_components/af.css. */
+.cs-with-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.cs-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2) var(--sp-4);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .cs-facts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.cs-write {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+  font-size: var(--fs-xs);
+}
+.cs-empty {
+  justify-items: center;
+  padding: var(--sp-2) 0;
+  text-align: center;
+}
+.cs-account {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.cs-block {
+  display: block;
+}

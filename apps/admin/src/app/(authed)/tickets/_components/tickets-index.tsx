@@ -2,31 +2,21 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  TicketHandlingBadge,
-  Card,
-  EmptyState,
-  ErrorNote,
-  Ident,
-  Input,
-  Money,
-  PageHeader,
-  Select,
-  SkeletonRows,
-  Stat,
-  TBody,
-  Table,
-  TablePaginator,
-  Td,
-  THead,
-  Th,
-  TicketStatusBadge,
-  Toolbar,
-  Tr,
-} from '@skydrop/ui/components';
+import { useRouter } from 'next/navigation';
+import { Ident, Money } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { TicketStatus, TicketType } from '@skydrop/db';
 import { useTicketsList } from '@/lib/ops-hooks';
-import { useRouter } from 'next/navigation';
+import { AfCard } from '@/app/(authed)/system/_components/af-parts';
+import { TicketHandlingChip, TicketStatusChip } from './ticket-chips';
+import './tickets.css';
 
 const PAGE_SIZE = 25;
 
@@ -116,6 +106,7 @@ export function TicketsIndex(): ReactElement {
   const refundOnPage = items
     .filter((t) => t.resolutionAmountInr !== null)
     .reduce((sum, t) => sum + Number(t.resolutionAmountInr ?? 0), 0);
+  const autoRaised = items.filter((t) => t.ticketType === TicketType.SCRAP_DAMAGE).length;
 
   function changeFilter(apply: () => void): void {
     apply();
@@ -123,191 +114,190 @@ export function TicketsIndex(): ReactElement {
   }
 
   return (
-    <div>
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Operations' }, { label: 'Tickets' }]}
+        Link={Link}
         title="Tickets"
         subtitle="Scrap/damage raised by RTO inspection, and parcel issues raised by sellers. Resolving with a refund credits the seller's wallet in the same transaction."
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Stat
-          label="Matching this filter"
-          value={list.isLoading ? '—' : total}
-          tone={status === 'OPEN' && total > 0 ? 'warn' : 'neutral'}
-          hint={status === 'OPEN' ? 'Open tickets waiting on a decision' : 'Across all pages'}
-        />
-        <Stat
+      <div className="af-kpis">
+        {list.isLoading ? (
+          <KpiCard label="Matching this filter" figure="—" hint="Loading" />
+        ) : (
+          <KpiCard
+            label="Matching this filter"
+            value={total}
+            tone={status === 'OPEN' && total > 0 ? 'pending' : 'neutral'}
+            hint={status === 'OPEN' ? 'Open tickets waiting on a decision' : 'Across all pages'}
+          />
+        )}
+        <KpiCard
           label="Refunded on this page"
-          value={<Money amount={refundOnPage} decimals={false} />}
+          figure={<Money amount={refundOnPage} decimals={false} />}
+          tone="credit"
           hint="Already credited to seller wallets"
         />
-        <Stat
-          label="Auto-raised"
-          value={
-            list.isLoading
-              ? '—'
-              : items.filter((t) => t.ticketType === TicketType.SCRAP_DAMAGE).length
-          }
-          hint="Opened by RTO inspection, not by a seller"
-        />
+        {list.isLoading ? (
+          <KpiCard label="Auto-raised" figure="—" hint="Loading" />
+        ) : (
+          <KpiCard
+            label="Auto-raised"
+            value={autoRaised}
+            hint="Opened by RTO inspection, not by a seller"
+          />
+        )}
       </div>
 
-      <Toolbar>
-        <label className="text-text-muted text-xs" htmlFor="ticket-status">
-          Status
-        </label>
-        <Select
-          id="ticket-status"
-          value={status}
-          onChange={(e) => changeFilter(() => setStatus(e.target.value))}
-          className="w-56"
-        >
-          <option value="">All</option>
-          <option value="OPEN">Open</option>
-          <option value="REVIEWING">Reviewing</option>
-          <option value="CLOSED">Closed</option>
-        </Select>
+      <AfCard>
+        <div className="tk-filters">
+          <Select
+            id="ticket-status"
+            label="Status"
+            value={status}
+            onChange={(e) => changeFilter(() => setStatus(e.target.value))}
+          >
+            <option value="">All</option>
+            <option value="OPEN">Open</option>
+            <option value="REVIEWING">Reviewing</option>
+            <option value="CLOSED">Closed</option>
+          </Select>
 
-        <label className="text-text-muted ml-2 text-xs" htmlFor="ticket-type">
-          Type
-        </label>
-        <Select
-          id="ticket-type"
-          value={ticketType}
-          onChange={(e) => changeFilter(() => setTicketType(e.target.value))}
-          className="w-56"
-        >
-          <option value="">All types</option>
-          {Object.values(TicketType).map((t) => (
-            <option key={t} value={t}>
-              {humanise(t)}
-            </option>
-          ))}
-        </Select>
+          <Select
+            id="ticket-type"
+            label="Type"
+            value={ticketType}
+            onChange={(e) => changeFilter(() => setTicketType(e.target.value))}
+          >
+            <option value="">All types</option>
+            {Object.values(TicketType).map((t) => (
+              <option key={t} value={t}>
+                {humanise(t)}
+              </option>
+            ))}
+          </Select>
 
-        <label className="text-text-muted ml-2 text-xs" htmlFor="ticket-handling">
-          Handling
-        </label>
-        <Select
-          id="ticket-handling"
-          value={handling}
-          onChange={(e) => changeFilter(() => setHandling(e.target.value))}
-          className="w-48"
-        >
-          {/*
-            NONE is deliberately not offered. A scrap ticket raised by
-            RTO inspection has no courier to be carried to, so it is
-            neither "software has this" nor "somebody must pick this up";
-            offering it as a third answer would invite the reading that
-            it is waiting on someone.
-          */}
-          <option value="">Auto and manual</option>
-          <option value="MANUAL">Manual — needs a person</option>
-          <option value="AUTO">Auto — software is carrying it</option>
-        </Select>
+          <Select
+            id="ticket-handling"
+            label="Handling"
+            value={handling}
+            onChange={(e) => changeFilter(() => setHandling(e.target.value))}
+          >
+            {/*
+              NONE is deliberately not offered. A scrap ticket raised by
+              RTO inspection has no courier to be carried to, so it is
+              neither "software has this" nor "somebody must pick this up";
+              offering it as a third answer would invite the reading that
+              it is waiting on someone.
+            */}
+            <option value="">Auto and manual</option>
+            <option value="MANUAL">Manual — needs a person</option>
+            <option value="AUTO">Auto — software is carrying it</option>
+          </Select>
 
-        <Input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Ticket (TK-…), order, parcel or waybill"
-          aria-label="Search tickets"
-          className="ml-2 w-72"
-        />
-      </Toolbar>
+          <TextField
+            type="search"
+            label="Search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Ticket (TK-…), order, parcel or waybill"
+            aria-label="Search tickets"
+          />
+        </div>
+      </AfCard>
 
       {list.isError ? (
-        <Card className="rounded-t-none border-t-0 p-3">
-          <ErrorNote
-            message={list.error?.message ?? 'Failed to load tickets.'}
-            retry={() => void list.refetch()}
-          />
-        </Card>
+        <ErrorState
+          message={list.error?.message ?? 'Failed to load tickets.'}
+          retry={() => void list.refetch()}
+        />
       ) : list.isLoading ? (
-        <Card className="rounded-t-none border-t-0">
-          <SkeletonRows rows={6} cols={6} />
-        </Card>
+        <AfCard flush>
+          <SkeletonRows rows={6} cols={6} label="Loading tickets" />
+        </AfCard>
       ) : items.length === 0 ? (
-        <Card className="rounded-t-none border-t-0">
-          <EmptyState
-            bare
-            title={
-              status === TicketStatus.OPEN ? 'No open tickets' : 'No tickets match this filter'
-            }
-            description={
-              status === TicketStatus.OPEN
-                ? 'Nothing is waiting on a decision. Damage found during RTO inspection opens a ticket here automatically.'
-                : 'Try widening the status or type filter.'
-            }
-          />
-        </Card>
+        <EmptyState
+          tone={status === TicketStatus.OPEN ? 'positive' : 'neutral'}
+          title={status === TicketStatus.OPEN ? 'No open tickets' : 'No tickets match this filter'}
+          description={
+            status === TicketStatus.OPEN
+              ? 'Nothing is waiting on a decision. Damage found during RTO inspection opens a ticket here automatically.'
+              : 'Try widening the status or type filter.'
+          }
+        />
       ) : (
-        <Table wrapperClassName="rounded-t-none border-t-0">
-          <THead>
-            <Tr>
-              <Th>Ticket</Th>
-              <Th>Type</Th>
-              <Th>Handling</Th>
-              <Th>Subject</Th>
-              <Th>Order</Th>
-              <Th>Status</Th>
-              <Th align="right">Refund</Th>
-              <Th>Raised</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {items.map((t) => (
-              <Tr key={t.id} onActivate={() => router.push(`/tickets/${t.id}`)}>
-                <Td className="whitespace-nowrap font-mono text-xs">{t.ticketNumber}</Td>
-                <Td className="text-text-muted whitespace-nowrap text-xs">
-                  {ticketTypeLabel(t.ticketType)}
-                </Td>
-                <Td className="whitespace-nowrap">
-                  <TicketHandlingBadge handling={t.handling} />
-                </Td>
-                <Td className="max-w-xs truncate">{t.subject}</Td>
-                <Td>
-                  {t.orderId === null ? (
-                    <span className="text-text-faint">—</span>
-                  ) : (
-                    <Link
-                      href={`/orders/${t.orderId}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="text-accent hover:underline"
-                    >
-                      {t.orderNumber ?? <Ident value={`${t.orderId.slice(0, 8)}…`} />}
-                    </Link>
-                  )}
-                </Td>
-                <Td>
-                  <TicketStatusBadge status={t.status} />
-                </Td>
-                <Td align="right">
-                  {t.resolutionAmountInr === null ? (
-                    <span className="text-text-faint">—</span>
-                  ) : (
-                    <Money amount={t.resolutionAmountInr} direction="credit" />
-                  )}
-                </Td>
-                <Td className="text-text-muted whitespace-nowrap">
-                  {new Date(t.createdAt).toLocaleDateString()}
-                </Td>
+        <div className="af-stack">
+          <Table>
+            <THead>
+              <Tr>
+                <Th>Ticket</Th>
+                <Th>Type</Th>
+                <Th>Handling</Th>
+                <Th>Subject</Th>
+                <Th>Order</Th>
+                <Th>Status</Th>
+                <Th align="right">Refund</Th>
+                <Th>Raised</Th>
               </Tr>
-            ))}
-          </TBody>
-          <tfoot>
-            <tr>
-              <td colSpan={8} className="p-0">
-                <TablePaginator
-                  page={list.data?.page ?? page}
-                  pageSize={list.data?.pageSize ?? PAGE_SIZE}
-                  total={total}
-                  onPageChange={setPage}
-                />
-              </td>
-            </tr>
-          </tfoot>
-        </Table>
+            </THead>
+            <TBody>
+              {items.map((t) => (
+                <Tr key={t.id} onActivate={() => router.push(`/tickets/${t.id}`)}>
+                  <Td>
+                    <span className="tk-number sk-ident">{t.ticketNumber}</span>
+                  </Td>
+                  <Td>
+                    <span className="tk-type">{ticketTypeLabel(t.ticketType)}</span>
+                  </Td>
+                  <Td>
+                    <TicketHandlingChip handling={t.handling} />
+                  </Td>
+                  <Td>
+                    <span className="tk-subject" title={t.subject}>
+                      {t.subject}
+                    </span>
+                  </Td>
+                  <Td>
+                    {t.orderId === null ? (
+                      <span className="af-faint">—</span>
+                    ) : (
+                      <Link
+                        href={`/orders/${t.orderId}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="af-link sk-ident"
+                      >
+                        {t.orderNumber ?? <Ident value={`${t.orderId.slice(0, 8)}…`} />}
+                      </Link>
+                    )}
+                  </Td>
+                  <Td>
+                    <TicketStatusChip status={t.status} size="sm" />
+                  </Td>
+                  <Td align="right">
+                    {t.resolutionAmountInr === null ? (
+                      <span className="af-faint">—</span>
+                    ) : (
+                      <Money amount={t.resolutionAmountInr} direction="credit" />
+                    )}
+                  </Td>
+                  <Td>
+                    <span className="af-small af-nowrap">
+                      {new Date(t.createdAt).toLocaleDateString()}
+                    </span>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+          <Pagination
+            page={list.data?.page ?? page}
+            pageSize={list.data?.pageSize ?? PAGE_SIZE}
+            total={total}
+            onPageChange={setPage}
+            label="Ticket pages"
+          />
+        </div>
       )}
     </div>
   );

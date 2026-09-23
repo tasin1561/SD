@@ -1,33 +1,26 @@
 'use client';
 
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, Lock, Unlock } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorNote,
-  Num,
-  PageHeader,
-  Section,
-  Skeleton,
-  Stat,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Lock, Unlock } from 'lucide-react';
+import { Num } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useDelhiveryStatus, useRefillWaybillPool } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AfCard, AfSection, Meter, Notice } from '@/app/(authed)/system/_components/af-parts';
 import { AccountSetupPanel } from './account-setup-panel';
 import { TrackingLookupPanel } from './tracking-lookup-panel';
 import { WalletImportPanel } from './wallet-import-panel';
 import { TrackingPollPanel } from './tracking-poll-panel';
+import './delhivery.css';
 
 /**
  * The Delhivery operations console.
@@ -40,12 +33,17 @@ export function DelhiveryOpsIndex(): ReactElement {
   const toast = useToast();
   const status = useDelhiveryStatus();
   const refill = useRefillWaybillPool();
+  // A refill spends the account's real AWB allocation (and one of five
+  // bulk requests per five minutes), so it asks first.
+  const [confirmRefill, setConfirmRefill] = useState(false);
+  const [refillError, setRefillError] = useState<string | null>(null);
 
   const pool = status.data?.waybillPool;
   const usable = pool?.usableNow ?? 0;
-  const poolTone = usable === 0 ? 'bad' : usable < 50 ? 'warn' : 'good';
+  const poolTone = usable === 0 ? 'debit' : usable < 50 ? 'pending' : 'credit';
 
   async function doRefill(): Promise<void> {
+    setRefillError(null);
     try {
       const result = await refill.mutateAsync();
       toast.success(
@@ -54,23 +52,31 @@ export function DelhiveryOpsIndex(): ReactElement {
           : `Fetched ${result.fetched}. Pool now ${result.poolAfter}.`,
       );
     } catch (err) {
-      toast.error(serverVerdict(err));
+      const verdict = serverVerdict(err);
+      toast.error(verdict);
+      setRefillError(verdict);
+      throw err;
     }
   }
 
   return (
-    <div>
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Network' }, { label: 'Delhivery' }]}
+        Link={Link}
         title="Delhivery"
         subtitle="Waybill pool depth, the live-write guard, and remaining rate budget. Refreshes every 30 seconds."
         action={
           <Button
             variant="secondary"
             size="md"
-            disabled={refill.isPending}
-            onClick={() => void doRefill()}
+            loading={refill.isPending}
+            onClick={() => {
+              setRefillError(null);
+              setConfirmRefill(true);
+            }}
           >
-            {refill.isPending ? 'Refilling…' : 'Refill waybill pool'}
+            Refill waybill pool
           </Button>
         }
       />
@@ -80,119 +86,100 @@ export function DelhiveryOpsIndex(): ReactElement {
       <WalletImportPanel />
 
       {status.isError ? (
-        <ErrorNote
+        <ErrorState
           message={status.error?.message ?? 'Could not read Delhivery status.'}
           retry={() => void status.refetch()}
         />
       ) : status.isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
-          <Skeleton className="h-24" />
+        <div className="af-grid-3">
+          <Skeleton height="6rem" rounded="md" />
+          <Skeleton height="6rem" rounded="md" />
+          <Skeleton height="6rem" rounded="md" />
         </div>
       ) : (
         <>
           {/* ── mode + guard ── */}
-          <Section
+          <AfSection
             title="Connection"
-            subtitle="Stub mode means no network call ever leaves this process. The write guard is a second, independent gate on operations with a physical or billable effect."
+            note="Stub mode means no network call ever leaves this process. The write guard is a second, independent gate on operations with a physical or billable effect."
           >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Card>
-                <CardBody>
-                  <div className="mb-1.5 flex items-center gap-2">
-                    <StatusBadge
-                      kind={status.data?.liveMode === true ? 'in-transit' : 'draft'}
-                      label={status.data?.liveMode === true ? 'Live API' : 'Stub mode'}
-                    />
-                  </div>
-                  <p className="text-text-muted text-xs leading-relaxed">
-                    {status.data?.liveMode === true
-                      ? 'Calls go to the real Delhivery API. There is no sandbox on this account, so every request counts against production.'
-                      : 'No base URL configured, so the adapter answers from deterministic stubs. Safe to exercise any flow.'}
-                  </p>
-                </CardBody>
-              </Card>
+            <div className="af-grid-2">
+              <AfCard>
+                <div>
+                  <StatusChip
+                    kind={status.data?.liveMode === true ? 'in-transit' : 'draft'}
+                    label={status.data?.liveMode === true ? 'Live API' : 'Stub mode'}
+                  />
+                </div>
+                <p className="af-small">
+                  {status.data?.liveMode === true
+                    ? 'Calls go to the real Delhivery API. There is no sandbox on this account, so every request counts against production.'
+                    : 'No base URL configured, so the adapter answers from deterministic stubs. Safe to exercise any flow.'}
+                </p>
+              </AfCard>
 
-              <Card tone={status.data?.liveWritesEnabled === true ? 'critical' : 'default'}>
-                <CardBody>
-                  <div className="mb-1.5 flex items-center gap-2">
-                    {status.data?.liveWritesEnabled === true ? (
-                      <>
-                        <Unlock size={14} className="text-[var(--color-critical)]" aria-hidden />
-                        <span className="text-[var(--color-critical)] text-sm font-medium">
-                          Live writes ENABLED
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Lock size={14} className="text-text-muted" aria-hidden />
-                        <span className="text-text-body text-sm font-medium">
-                          Live writes blocked
-                        </span>
-                      </>
-                    )}
-                  </div>
-                  <p className="text-text-muted text-xs leading-relaxed">
-                    {status.data?.liveWritesEnabled === true
-                      ? 'Manifesting, pickups, cancels and NDR actions will reach the real account. Turn this off again once the intended operation is done.'
-                      : 'Manifesting, pickups, cancels and NDR actions are refused with DELHIVERY_LIVE_WRITES_DISABLED. This is the default and the safe state.'}
-                  </p>
-                  <Link
-                    href="/settings"
-                    className="text-accent mt-2 inline-block text-xs hover:underline"
-                  >
-                    Change in system settings →
-                  </Link>
-                </CardBody>
-              </Card>
+              <AfCard tone={status.data?.liveWritesEnabled === true ? 'critical' : undefined}>
+                <p className="af-title dl-guard">
+                  {status.data?.liveWritesEnabled === true ? (
+                    <>
+                      <Unlock size={14} aria-hidden className="af-bad" />
+                      <span className="af-bad">Live writes enabled</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock size={14} aria-hidden />
+                      <span>Live writes blocked</span>
+                    </>
+                  )}
+                </p>
+                <p className="af-small">
+                  {status.data?.liveWritesEnabled === true
+                    ? 'Manifesting, pickups, cancels and NDR actions will reach the real account. Turn this off again once the intended operation is done.'
+                    : 'Manifesting, pickups, cancels and NDR actions are refused with DELHIVERY_LIVE_WRITES_DISABLED. This is the default and the safe state.'}
+                </p>
+                <Link href="/settings" className="af-link af-small af-inline-link">
+                  Change in system settings →
+                </Link>
+              </AfCard>
             </div>
-          </Section>
+          </AfSection>
 
           {/* ── waybill pool ── */}
-          <Section
+          <AfSection
             title="Waybill pool"
-            subtitle="AWBs are fetched in bulk ahead of time because Delhivery allows only five bulk requests per five minutes. An empty pool stops manifests."
+            note="AWBs are fetched in bulk ahead of time because Delhivery allows only five bulk requests per five minutes. An empty pool stops manifests."
           >
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
-              <Stat
+            <div className="af-kpis">
+              <KpiCard
                 label="Usable now"
-                value={<Num value={usable} />}
+                figure={<Num value={usable} />}
                 tone={poolTone}
                 hint="Past their settle delay"
               />
-              <Stat
+              <KpiCard
                 label="Available"
-                value={<Num value={pool?.available ?? 0} />}
+                figure={<Num value={pool?.available ?? 0} />}
                 hint="Includes not-yet-settled"
               />
-              <Stat label="Assigned" value={<Num value={pool?.assigned ?? 0} />} />
-              <Stat label="Used" value={<Num value={pool?.used ?? 0} />} />
-              <Stat label="Void" value={<Num value={pool?.void ?? 0} />} />
+              <KpiCard label="Assigned" figure={<Num value={pool?.assigned ?? 0} />} />
+              <KpiCard label="Used" figure={<Num value={pool?.used ?? 0} />} />
+              <KpiCard label="Void" figure={<Num value={pool?.void ?? 0} />} />
             </div>
 
             {usable === 0 && (
-              <div
-                role="alert"
-                className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] mt-3 flex items-start gap-2 rounded-[var(--radius-2)] border px-3 py-2"
-              >
-                <AlertTriangle
-                  size={14}
-                  className="text-[var(--color-critical)] mt-0.5 shrink-0"
-                  aria-hidden
-                />
-                <p className="text-[var(--color-critical)] text-xs leading-relaxed">
+              <Notice tone="bad" role="alert">
+                <p>
                   No usable waybills. Manifest closure will fail until the pool is refilled. In live
                   mode the refill itself needs the write guard on.
                 </p>
-              </div>
+              </Notice>
             )}
-          </Section>
+          </AfSection>
 
           {/* ── rate budget ── */}
-          <Section
+          <AfSection
             title="Rate budget"
-            subtitle="Budgeted to 80% of Delhivery's documented limits, per five-minute window, shared across every API instance. Exhausting one returns a WAF 403 that blocks our whole egress IP."
+            note="Budgeted to 80% of Delhivery's documented limits, per five-minute window, shared across every API instance. Exhausting one returns a WAF 403 that blocks our whole egress IP."
           >
             <Table>
               <THead>
@@ -209,47 +196,36 @@ export function DelhiveryOpsIndex(): ReactElement {
                   return (
                     <Tr key={b.endpoint}>
                       <Td>
-                        <span className="text-text-body">{b.endpoint.replaceAll('_', ' ')}</span>
-                        {b.endpoint === 'waybill_bulk' && (
-                          <span className="text-text-faint ml-2 text-xs">
-                            five per five minutes — the tight one
-                          </span>
-                        )}
+                        <span className="af-stack af-stack--tight">
+                          <span>{b.endpoint.replaceAll('_', ' ')}</span>
+                          {b.endpoint === 'waybill_bulk' && (
+                            <span className="af-faint">five per five minutes — the tight one</span>
+                          )}
+                        </span>
                       </Td>
                       <Td align="right">
                         <Num value={b.remaining} />
                       </Td>
-                      <Td align="right" className="text-text-muted">
-                        <Num value={b.budget} />
+                      <Td align="right">
+                        <span className="af-small">
+                          <Num value={b.budget} />
+                        </span>
                       </Td>
                       <Td>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="bg-surface-hover h-1.5 w-24 overflow-hidden rounded-full"
-                            aria-hidden
-                          >
-                            <div
-                              className="h-full"
-                              style={{
-                                width: `${pct}%`,
-                                background:
-                                  pct < 20
-                                    ? 'var(--color-critical)'
-                                    : pct < 50
-                                      ? 'var(--status-pending-fg)'
-                                      : 'var(--status-delivered-fg)',
-                              }}
-                            />
-                          </div>
-                          <span className="text-text-muted skydrop-tabular text-xs">{pct}%</span>
-                        </div>
+                        <span className="dl-headroom">
+                          <Meter
+                            value={pct / 100}
+                            tone={pct < 20 ? 'bad' : pct < 50 ? 'warn' : 'good'}
+                          />
+                          <span className="af-small sk-figure">{pct}%</span>
+                        </span>
                       </Td>
                     </Tr>
                   );
                 })}
               </TBody>
             </Table>
-          </Section>
+          </AfSection>
         </>
       )}
 
@@ -257,6 +233,17 @@ export function DelhiveryOpsIndex(): ReactElement {
           account currently holds; this is what has to be true before any
           of it is spent. */}
       <AccountSetupPanel />
+
+      <ConfirmDialog
+        open={confirmRefill}
+        onOpenChange={setConfirmRefill}
+        title="Refill the waybill pool?"
+        entity="Delhivery waybill pool"
+        consequence="This asks Delhivery for a bulk batch of real AWBs from the account's allocation and uses one of the five bulk requests allowed per five minutes."
+        confirmLabel="Refill waybill pool"
+        error={refillError}
+        onConfirm={doRefill}
+      />
     </div>
   );
 }

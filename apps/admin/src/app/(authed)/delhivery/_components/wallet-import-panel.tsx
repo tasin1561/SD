@@ -1,8 +1,12 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, Card, CardBody, CardHeader, ErrorNote, Money } from '@skydrop/ui/components';
-import { AlertTriangle } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { DropZone } from '@skydrop/ui/app/drop-zone';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { AfCard, AfSection, Notice } from '@/app/(authed)/system/_components/af-parts';
+import './delhivery.css';
 import { useImportWalletLedger, type WalletImportResult } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -59,92 +63,90 @@ export function WalletImportPanel(): ReactElement | null {
   }
 
   return (
-    <Card>
-      <CardHeader
-        title="What Delhivery charged"
-        subtitle="Finances → Download Ledger, then drop the .xlsx here. Export a month at a time."
-      />
-      <CardBody>
-        <div className="space-y-3">
-          <input
-            type="file"
-            accept=".xlsx"
-            className="sd-field text-xs"
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void pick(f);
-            }}
-          />
+    <AfSection
+      title="What Delhivery charged"
+      note="Finances → Download Ledger, then drop the .xlsx here. Export a month at a time."
+    >
+      <AfCard>
+        <DropZone
+          accept=".xlsx"
+          label="Drop the ledger export here"
+          buttonText="Choose the .xlsx"
+          hint="The wallet ledger, as Delhivery exports it."
+          onFiles={(files) => {
+            const f = files[0];
+            if (f) void pick(f);
+          }}
+        />
 
-          {fileName !== null && (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={base64 === null || run.isPending}
-                onClick={() => go(true)}
-              >
-                {run.isPending ? 'Reading…' : 'Check first'}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={base64 === null || run.isPending}
-                onClick={() => go(false)}
-              >
-                Import
-              </Button>
-            </div>
-          )}
+        {fileName !== null && (
+          <div className="af-row">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={base64 === null || run.isPending}
+              loading={run.isPending}
+              onClick={() => go(true)}
+            >
+              Check first
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={base64 === null || run.isPending}
+              onClick={() => go(false)}
+            >
+              Import
+            </Button>
+          </div>
+        )}
 
-          {error !== null && <ErrorNote message={error} />}
+        {error !== null && <ErrorState title="Not imported" message={error} />}
 
-          {result !== null && (
-            <div className="border-border rounded-lg border p-3 text-xs space-y-2">
-              <div className="text-text-bright">
-                {result.dryRun ? 'Nothing was written — this is what would change.' : 'Imported.'}
-              </div>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
-                <dt className="text-text-faint">Rows</dt>
-                <dd>
-                  {result.rowsRead} read
-                  {result.rowsSkipped > 0 && `, ${result.rowsSkipped} skipped`}
-                </dd>
-                <dt className="text-text-faint">Costs set</dt>
-                <dd>
-                  {result.forwardWritten} delivery, {result.rtoWritten} return
-                </dd>
-                {/* The number that deserves a second look: a figure that
-                    was already recorded has MOVED. */}
-                <dt className="text-text-faint">Revised</dt>
-                <dd className={result.revised > 0 ? 'text-[var(--color-warning)]' : ''}>
-                  {result.revised}
-                </dd>
-                <dt className="text-text-faint">Unchanged</dt>
-                <dd>{result.unchanged}</dd>
-                <dt className="text-text-faint">Not ours</dt>
-                <dd>{result.unknownAwbs} AWBs in the file we have no shipment for</dd>
-                <dt className="text-text-faint">Total</dt>
-                <dd>
-                  <Money amount={result.sumInr} currency="INR" convert={false} />
-                  {result.totalsAgree === true && (
-                    <span className="text-text-faint"> · matches the file&rsquo;s own total</span>
-                  )}
-                </dd>
-              </dl>
-              {result.totalsAgree === false && (
-                <div className="text-[var(--color-warning)] flex gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                  <p>
-                    The rows do not add up to the total the file states. Something was mis-read —
-                    re-download the export rather than trusting these figures.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </CardBody>
-    </Card>
+        {result !== null && (
+          <div className="af-inner">
+            <p className="af-title">
+              {result.dryRun ? 'Nothing was written — this is what would change.' : 'Imported.'}
+            </p>
+            <dl className="dl-result">
+              <dt>Rows</dt>
+              <dd>
+                {result.rowsRead} read
+                {result.rowsSkipped > 0 && `, ${result.rowsSkipped} skipped`}
+              </dd>
+              <dt>Costs set</dt>
+              <dd>
+                {result.forwardWritten} delivery, {result.rtoWritten} return
+              </dd>
+              {/* The number that deserves a second look: a figure that
+                  was already recorded has MOVED. */}
+              <dt>Revised</dt>
+              <dd className={result.revised > 0 ? 'af-warn af-strong' : undefined}>
+                {result.revised}
+              </dd>
+              <dt>Unchanged</dt>
+              <dd>{result.unchanged}</dd>
+              <dt>Not ours</dt>
+              <dd>{result.unknownAwbs} AWBs in the file we have no shipment for</dd>
+              <dt>Total</dt>
+              <dd>
+                <Money amount={result.sumInr} currency="INR" convert={false} />
+                {result.totalsAgree === true && (
+                  <span className="af-faint"> · matches the file&rsquo;s own total</span>
+                )}
+              </dd>
+            </dl>
+            {result.totalsAgree === false && (
+              <Notice tone="warn">
+                <p>
+                  The rows do not add up to the total the file states. Something was mis-read —
+                  re-download the export rather than trusting these figures.
+                </p>
+              </Notice>
+            )}
+          </div>
+        )}
+      </AfCard>
+    </AfSection>
   );
 }

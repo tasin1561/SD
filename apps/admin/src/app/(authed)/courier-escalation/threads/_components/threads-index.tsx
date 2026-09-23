@@ -3,26 +3,16 @@
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { AlertTriangle, Send } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Ident,
-  PageHeader,
-  SkeletonRows,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Textarea,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Ident } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useCourierEscalations,
   useCourierThread,
@@ -32,7 +22,9 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import { EscalationTabs } from '../../_components/escalation-tabs';
+import '../../_components/escalation.css';
 
 /**
  * Every courier conversation, and the operator's side of one.
@@ -62,24 +54,26 @@ export function CourierThreadsIndex(): ReactElement {
   const rows = list.data ?? [];
 
   return (
-    <div>
+    <div className="af-page">
       <PageHeader
+        breadcrumbs={[{ label: 'Network' }, { label: 'Courier escalation' }]}
+        Link={Link}
         title="Courier conversations"
         subtitle="What each courier has told us, per parcel, in their words. Replies you send here queue for a person to send — no courier has a reply API."
       />
       <EscalationTabs />
 
       {list.isLoading ? (
-        <SkeletonRows rows={5} cols={6} />
+        <AfCard flush>
+          <SkeletonRows rows={5} cols={6} label="Loading conversations" />
+        </AfCard>
       ) : list.isError ? (
-        <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+        <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : rows.length === 0 ? (
-        <Card>
-          <EmptyState
-            title="No conversations yet"
-            description="One opens when a ticket needs the courier — either a seller raises an issue, or a failed re-attempt request escalates one automatically."
-          />
-        </Card>
+        <EmptyState
+          title="No conversations yet"
+          description="One opens when a ticket needs the courier — either a seller raises an issue, or a failed re-attempt request escalates one automatically."
+        />
       ) : (
         <Table>
           <THead>
@@ -95,14 +89,16 @@ export function CourierThreadsIndex(): ReactElement {
           </THead>
           <TBody>
             {rows.map((r) => (
-              <Tr key={r.id}>
+              <Tr key={r.id} selected={selected === r.id}>
                 <Td>
-                  {r.sellerName ?? <span className="text-text-faint">—</span>}
-                  <div className="text-text-muted text-xs">{r.courierName}</div>
+                  <div className="af-stack af-stack--tight">
+                    <span>{r.sellerName ?? <span className="af-faint">—</span>}</span>
+                    <span className="af-small">{r.courierName}</span>
+                  </div>
                 </Td>
                 <Td>
                   {r.awbNumber === null ? (
-                    <span className="text-text-faint">—</span>
+                    <span className="af-faint">—</span>
                   ) : (
                     <Ident value={r.awbNumber} />
                   )}
@@ -112,38 +108,43 @@ export function CourierThreadsIndex(): ReactElement {
                     // No courier ticket id means nothing has been
                     // delivered to them yet, or the operator marked an
                     // item sent without pasting one back.
-                    <span className="text-text-faint">not yet raised</span>
+                    <span className="af-faint">not yet raised</span>
                   ) : (
                     <Ident value={r.externalTicketId} />
                   )}
                 </Td>
                 <Td>
-                  <div className="flex items-center gap-2">
+                  <div className="af-row">
                     {r.state === null ? (
-                      <span className="text-text-faint">—</span>
+                      <span className="af-faint">—</span>
                     ) : (
-                      <StatusBadge kind={stateKind(r.state)} label={humanise(r.state)} />
+                      <StatusChip size="sm" kind={stateKind(r.state)} label={humanise(r.state)} />
                     )}
                     {r.needsReviewAt !== null ? (
                       <span
-                        className="text-warning inline-flex items-center gap-1 text-xs"
+                        className="ce-review"
                         title="A message here was classified with low confidence."
                       >
-                        <AlertTriangle size={12} /> review
+                        <AlertTriangle size={12} aria-hidden /> review
                       </span>
                     ) : null}
                   </div>
                 </Td>
-                <Td align="right">{r.messageCount}</Td>
-                <Td className="text-text-muted whitespace-nowrap">
-                  {r.lastMessageAt === null
-                    ? '—'
-                    : new Date(r.lastMessageAt).toLocaleString('en-IN')}
+                <Td align="right">
+                  <span className="sk-figure">{r.messageCount}</span>
+                </Td>
+                <Td>
+                  <span className="af-small af-nowrap">
+                    {r.lastMessageAt === null
+                      ? '—'
+                      : new Date(r.lastMessageAt).toLocaleString('en-IN')}
+                  </span>
                 </Td>
                 <Td>
                   <Button
                     variant="ghost"
                     size="sm"
+                    aria-expanded={selected === r.id}
                     onClick={() => setSelected(selected === r.id ? null : r.id)}
                   >
                     {selected === r.id ? 'Close' : 'Open'}
@@ -170,170 +171,155 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
   const canWrite = usePermission('courier.ops.write');
   const [draft, setDraft] = useState('');
 
-  if (thread.isLoading) return <SkeletonRows rows={4} cols={1} />;
+  if (thread.isLoading) return <SkeletonRows rows={4} cols={1} label="Loading the thread" />;
   if (thread.isError) {
-    return (
-      <div className="mt-4">
-        <ErrorNote message={serverVerdict(thread.error)} retry={() => void thread.refetch()} />
-      </div>
-    );
+    return <ErrorState message={serverVerdict(thread.error)} retry={() => void thread.refetch()} />;
   }
 
   const data = thread.data;
   if (data === undefined) return <div />;
 
-  const send = (): void => {
+  const send = async (): Promise<void> => {
     const body = draft.trim();
     if (body === '') return;
-    void (async () => {
-      try {
-        await reply.mutateAsync({ escalationId, body });
-        setDraft('');
-        // Queued, not sent: it lands in the outbox and a human or the
-        // portal worker delivers it. Saying "sent" here would be a lie
-        // the operator finds out about on the next reconciliation.
-        toast.success('Queued in the send queue');
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      }
-    })();
+    try {
+      await reply.mutateAsync({ escalationId, body });
+      setDraft('');
+      // Queued, not sent: it lands in the outbox and a human or the
+      // portal worker delivers it. Saying "sent" here would be a lie
+      // the operator finds out about on the next reconciliation.
+      toast.success('Queued in the send queue');
+    } catch (err) {
+      toast.error(serverVerdict(err));
+      throw err;
+    }
   };
 
-  const saveInbound = (): void => {
+  const saveInbound = async (): Promise<void> => {
     const body = inbound.trim();
     if (body === '') return;
-    void (async () => {
-      try {
-        await recordInbound.mutateAsync({ escalationId, body });
-        setInbound('');
-        toast.success('Recorded — the seller can see it now');
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      }
-    })();
+    try {
+      await recordInbound.mutateAsync({ escalationId, body });
+      setInbound('');
+      toast.success('Recorded — the seller can see it now');
+    } catch (err) {
+      toast.error(serverVerdict(err));
+      throw err;
+    }
   };
 
   return (
-    <Card className="mt-4">
-      <CardBody>
-        <div className="mb-3 flex flex-wrap items-center gap-3">
-          <h3 className="text-sm font-medium">Thread</h3>
-          {data.awbNumber !== null ? (
-            <span className="text-text-muted text-xs">
-              AWB <Ident value={data.awbNumber} />
-            </span>
-          ) : null}
-          <Link
-            href={`/tickets?ticketId=${data.ticketId}`}
-            className="text-accent text-xs hover:underline"
-          >
-            the ticket this hangs off
-          </Link>
-          {data.pendingOutbound > 0 ? (
-            <span className="text-text-muted text-xs">
-              {data.pendingOutbound} awaiting delivery to the courier
-            </span>
-          ) : null}
-        </div>
-
-        <div className="flex flex-col gap-3">
-          {data.messages.length === 0 ? (
-            <p className="text-text-muted text-sm">Open, nothing said yet.</p>
-          ) : (
-            data.messages.map((m) => <Message key={m.id} message={m} />)
-          )}
-        </div>
-
-        {canWrite ? (
-          <div className="border-border mt-4 flex flex-col gap-2 border-t pt-3">
-            <FormField
-              label="Reply to the courier"
-              htmlFor={`reply-${escalationId}`}
-              hint="Stored and sent exactly as typed — never rewritten or translated."
-            >
-              <Textarea
-                id={`reply-${escalationId}`}
-                rows={3}
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-              />
-            </FormField>
-            <div className="flex items-center gap-3">
-              <Button variant="primary" size="sm" onClick={send} disabled={draft.trim() === ''}>
-                <Send size={14} /> Queue reply
-              </Button>
-              <span className="text-text-muted text-xs">
-                Goes to the send queue. Nothing reaches Delhivery until it is delivered from there.
-              </span>
-            </div>
-
-            {/*
-              The other half of the manual channel. Outbound is drafted
-              above and sent by hand in Delhivery's own portal; their
-              answer has to be typed back in here or the seller never
-              hears it — the conversation would be one-way, and they
-              would be left asking into silence.
-            */}
-            <FormField
-              label="Record what the courier told us"
-              htmlFor={`inbound-${escalationId}`}
-              hint="Paste their reply rather than paraphrasing — the seller reads this as the courier's own words."
-            >
-              <Textarea
-                id={`inbound-${escalationId}`}
-                rows={3}
-                value={inbound}
-                onChange={(e) => setInbound(e.target.value)}
-              />
-            </FormField>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={saveInbound}
-                disabled={inbound.trim() === ''}
-              >
-                Save their reply
-              </Button>
-              <span className="text-text-muted text-xs">
-                Shown to the seller on their ticket. Sends nothing.
-              </span>
-            </div>
-          </div>
+    <AfCard>
+      <div className="af-row">
+        <h3 className="af-card__title">Thread</h3>
+        {data.awbNumber !== null ? (
+          <span className="af-small">
+            AWB <Ident value={data.awbNumber} />
+          </span>
         ) : null}
-      </CardBody>
-    </Card>
+        <Link href={`/tickets?ticketId=${data.ticketId}`} className="af-link af-small">
+          the ticket this hangs off
+        </Link>
+        {data.pendingOutbound > 0 ? (
+          <span className="af-small">{data.pendingOutbound} awaiting delivery to the courier</span>
+        ) : null}
+      </div>
+
+      <div className="af-stack">
+        {data.messages.length === 0 ? (
+          <p className="af-muted">Open, nothing said yet.</p>
+        ) : (
+          data.messages.map((m) => <Message key={m.id} message={m} />)
+        )}
+      </div>
+
+      {canWrite ? (
+        <div className="af-divider af-form">
+          <TextArea
+            id={`reply-${escalationId}`}
+            label="Reply to the courier"
+            hint="Stored and sent exactly as typed — never rewritten or translated."
+            rows={3}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+          />
+          <div className="af-row">
+            <AsyncButton
+              variant="primary"
+              size="sm"
+              icon={<Send size={14} />}
+              labels={{
+                idle: 'Queue reply',
+                busy: 'Queueing…',
+                done: 'Queued',
+                error: 'Not queued',
+              }}
+              disabled={draft.trim() === ''}
+              onAction={send}
+            />
+            <span className="af-small">
+              Goes to the send queue. Nothing reaches Delhivery until it is delivered from there.
+            </span>
+          </div>
+
+          {/*
+            The other half of the manual channel. Outbound is drafted
+            above and sent by hand in Delhivery's own portal; their
+            answer has to be typed back in here or the seller never
+            hears it — the conversation would be one-way, and they
+            would be left asking into silence.
+          */}
+          <TextArea
+            id={`inbound-${escalationId}`}
+            label="Record what the courier told us"
+            hint="Paste their reply rather than paraphrasing — the seller reads this as the courier's own words."
+            rows={3}
+            value={inbound}
+            onChange={(e) => setInbound(e.target.value)}
+          />
+          <div className="af-row">
+            <AsyncButton
+              variant="secondary"
+              size="sm"
+              labels={{
+                idle: 'Save their reply',
+                busy: 'Saving…',
+                done: 'Recorded',
+                error: 'Not saved',
+              }}
+              disabled={inbound.trim() === ''}
+              onAction={saveInbound}
+            />
+            <span className="af-small">Shown to the seller on their ticket. Sends nothing.</span>
+          </div>
+        </div>
+      ) : null}
+    </AfCard>
   );
 }
 
 function Message({ message }: { readonly message: CourierThreadMessage }): ReactElement {
   const fromCourier = message.direction === 'INBOUND';
   return (
-    <div className={fromCourier ? '' : 'sm:pl-8'}>
-      <div className="mb-1 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium">{fromCourier ? 'Delhivery' : 'Skydrop'}</span>
-        <span className="text-text-muted text-xs">
-          {new Date(message.occurredAt).toLocaleString('en-IN')}
-        </span>
-        <span className="text-text-faint text-xs">{message.channel.toLowerCase()}</span>
+    <div className="ce-msg" data-side={fromCourier ? 'in' : 'out'}>
+      <div className="ce-msg__meta">
+        <span className="ce-msg__who">{fromCourier ? 'Delhivery' : 'Skydrop'}</span>
+        <span className="af-small">{new Date(message.occurredAt).toLocaleString('en-IN')}</span>
+        <span className="af-faint">{message.channel.toLowerCase()}</span>
         {message.state !== null ? (
-          <StatusBadge kind={stateKind(message.state)} label={humanise(message.state)} />
+          <StatusChip size="sm" kind={stateKind(message.state)} label={humanise(message.state)} />
         ) : null}
         {message.templateCode !== null ? (
-          <span className="text-text-faint text-xs">{message.templateCode}</span>
+          <span className="af-faint sk-ident">{message.templateCode}</span>
         ) : null}
         {message.needsReview ? (
-          <span className="text-warning inline-flex items-center gap-1 text-xs">
-            <AlertTriangle size={12} /> low confidence
+          <span className="ce-review">
+            <AlertTriangle size={12} aria-hidden /> low confidence
           </span>
         ) : null}
       </div>
       {/* VERBATIM. No truncation, no tidying, no translation. */}
-      <pre
-        className={`whitespace-pre-wrap rounded p-3 text-sm ${
-          fromCourier ? 'bg-surface-2' : 'bg-surface-3'
-        }`}
-      >
+      <pre className="af-pre" data-side={fromCourier ? 'in' : undefined}>
         {message.body}
       </pre>
     </div>

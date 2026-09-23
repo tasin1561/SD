@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  SkeletonRows,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
+import '@/app/(authed)/system/_components/af.css';
 import {
   useCourierThread,
   useCourierThreadForTicket,
@@ -69,45 +67,46 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
   // After every hook, never before: an early return above a useState
   // changes the hook order between renders.
   if (!canSeeCourier) {
-    return (
-      <p className="text-text-muted text-sm">
-        Courier conversations are handled by the courier-ops team.
-      </p>
-    );
+    return <p className="af-muted">Courier conversations are handled by the courier-ops team.</p>;
   }
 
-  if (link.isLoading) return <SkeletonRows rows={2} cols={1} />;
+  if (link.isLoading)
+    return <SkeletonRows rows={2} cols={1} label="Loading the courier conversation" />;
   if (link.isError) {
-    return <ErrorNote message={serverVerdict(link.error)} retry={() => void link.refetch()} />;
+    return <ErrorState message={serverVerdict(link.error)} retry={() => void link.refetch()} />;
   }
 
   if (escalationId === null) {
     return (
-      <div className="border-border rounded-lg border p-3">
-        <p className="text-text-body text-sm">No courier conversation on this ticket yet.</p>
-        <p className="text-text-muted mt-1 text-xs">
+      <div className="af-inner">
+        <p className="af-body">No courier conversation on this ticket yet.</p>
+        <p className="af-small">
           Start one when this needs taking up with the courier. Nothing is sent by opening it — a
           message you write is queued for someone to send from the courier’s own portal.
         </p>
         {canWrite ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            className="mt-2"
-            disabled={open.isPending}
-            onClick={() => {
-              void (async () => {
+          <div>
+            <AsyncButton
+              variant="secondary"
+              size="sm"
+              labels={{
+                idle: 'Start a courier conversation',
+                busy: 'Starting…',
+                done: 'Started',
+                error: 'Not started',
+              }}
+              disabled={open.isPending}
+              onAction={async () => {
                 try {
                   await open.mutateAsync({ ticketId });
                   toast.success('Courier conversation started');
                 } catch (err) {
                   toast.error(serverVerdict(err));
+                  throw err;
                 }
-              })();
-            }}
-          >
-            {open.isPending ? 'Starting…' : 'Start a courier conversation'}
-          </Button>
+              }}
+            />
+          </div>
         ) : null}
       </div>
     );
@@ -149,21 +148,21 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
   };
 
   return (
-    <div className="border-border space-y-3 rounded-lg border p-3">
+    <div className="af-inner">
       {desk !== null ? (
-        <div className="text-xs">
-          <p className="text-text-bright font-semibold">
+        <div className="af-stack--tight af-stack">
+          <p className="af-title">
             {desk.courierName} support
             {desk.canSendAutomatically ? '' : ' — sent by hand'}
           </p>
-          <p className="text-text-muted mt-0.5">{desk.howTo}</p>
-          <p className="text-text-muted mt-0.5">
+          <p className="af-small">{desk.howTo}</p>
+          <p className="af-small">
             {desk.ticketUrl !== null || desk.panelUrl !== null ? (
               <a
                 href={desk.ticketUrl ?? desk.panelUrl ?? undefined}
                 target="_blank"
                 rel="noreferrer"
-                className="text-accent"
+                className="af-link"
               >
                 {desk.ticketUrl !== null ? 'Open their ticket' : `Open ${desk.courierName}`}
               </a>
@@ -174,27 +173,22 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
         </div>
       ) : null}
       {thread.isLoading ? (
-        <SkeletonRows rows={2} cols={1} />
+        <SkeletonRows rows={2} cols={1} label="Loading messages" />
       ) : messages.length === 0 ? (
-        <p className="text-text-muted text-xs">Nothing said either way yet.</p>
+        <p className="af-small">Nothing said either way yet.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="af-list">
           {messages.map((m) => {
             const fromCourier = m.direction === 'INBOUND';
             return (
-              <li
-                key={m.id}
-                className={
-                  fromCourier
-                    ? 'border-accent bg-accent/5 rounded border-l-2 py-1.5 pl-2.5 text-sm'
-                    : 'border-border rounded border-l-2 py-1.5 pl-2.5 text-sm'
-                }
-              >
-                <p className="text-text-muted text-xs">
+              <li key={m.id} className="af-stack--tight af-stack">
+                <p className="af-small">
                   {fromCourier ? 'Courier' : 'Us'} ·{' '}
                   {new Date(m.occurredAt).toLocaleString('en-IN')}
                 </p>
-                <p className="text-text-body whitespace-pre-wrap">{m.body}</p>
+                <p className="af-pre" data-dense="1" data-side={fromCourier ? 'in' : undefined}>
+                  {m.body}
+                </p>
               </li>
             );
           })}
@@ -208,51 +202,54 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
         in a list, and nothing else on the screen would say so.
       */}
       {waiting.length > 0 ? (
-        <div className="border-warning/40 bg-warning/5 space-y-2 rounded border p-2.5">
-          <p className="text-text-bright text-xs font-semibold">
+        <div className="af-inner" data-tone="warn">
+          <p className="af-title">
             {waiting.length === 1 ? 'One message' : `${waiting.length} messages`} waiting to be sent
             to the courier
           </p>
           {waiting.map((i) => (
-            <div key={i.id} className="border-border rounded border p-2">
-              <p className="text-text-body text-sm whitespace-pre-wrap">{i.body}</p>
+            <div key={i.id} className="af-stack">
+              <p className="af-pre" data-dense="1">
+                {i.body}
+              </p>
               {canWrite ? (
-                <div className="mt-2 flex flex-wrap items-end gap-2">
-                  <FormField
-                    label="Their ticket number"
-                    htmlFor={`ext-${i.id}`}
-                    hint="Optional, but it is what binds their replies to this conversation."
-                  >
-                    <Input
+                <div className="af-row af-row--bottom">
+                  <div className="af-grow">
+                    <TextField
                       id={`ext-${i.id}`}
+                      label="Their ticket number"
+                      hint="Optional, but it is what binds their replies to this conversation."
                       value={theirTicketId}
                       onChange={(e) => setTheirTicketId(e.target.value)}
                       placeholder="e.g. 1234567"
                     />
-                  </FormField>
-                  <Button
+                  </div>
+                  <AsyncButton
                     variant="primary"
                     size="sm"
-                    disabled={markSent.isPending}
-                    onClick={() => {
-                      void (async () => {
-                        try {
-                          await markSent.mutateAsync({
-                            itemId: i.id,
-                            ...(theirTicketId.trim() === ''
-                              ? {}
-                              : { externalTicketId: theirTicketId.trim() }),
-                          });
-                          setTheirTicketId('');
-                          toast.success('Marked as sent to the courier');
-                        } catch (err) {
-                          toast.error(serverVerdict(err));
-                        }
-                      })();
+                    labels={{
+                      idle: 'I have sent this',
+                      busy: 'Saving…',
+                      done: 'Marked sent',
+                      error: 'Not saved',
                     }}
-                  >
-                    {markSent.isPending ? 'Saving…' : 'I have sent this'}
-                  </Button>
+                    disabled={markSent.isPending}
+                    onAction={async () => {
+                      try {
+                        await markSent.mutateAsync({
+                          itemId: i.id,
+                          ...(theirTicketId.trim() === ''
+                            ? {}
+                            : { externalTicketId: theirTicketId.trim() }),
+                        });
+                        setTheirTicketId('');
+                        toast.success('Marked as sent to the courier');
+                      } catch (err) {
+                        toast.error(serverVerdict(err));
+                        throw err;
+                      }
+                    }}
+                  />
                 </div>
               ) : null}
             </div>
@@ -267,47 +264,45 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
             own portal, so their answer only reaches the seller if
             somebody types it back in here.
           */}
-          <FormField
+          <TextArea
+            id={`inbound-${ticketId}`}
             label="What the courier told us"
-            htmlFor={`inbound-${ticketId}`}
             hint="Paste their reply rather than paraphrasing — the seller reads this as the courier’s own words."
-          >
-            <Textarea
-              id={`inbound-${ticketId}`}
-              rows={3}
-              value={inbound}
-              onChange={(e) => setInbound(e.target.value)}
-            />
-          </FormField>
-          <Button
-            variant="primary"
-            size="sm"
-            disabled={inbound.trim() === '' || record.isPending}
-            onClick={saveReply}
-          >
-            {record.isPending ? 'Saving…' : 'Save their reply'}
-          </Button>
+            rows={3}
+            value={inbound}
+            onChange={(e) => setInbound(e.target.value)}
+          />
+          <div>
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={inbound.trim() === '' || record.isPending}
+              loading={record.isPending}
+              onClick={saveReply}
+            >
+              Save their reply
+            </Button>
+          </div>
 
-          <FormField
+          <TextArea
+            id={`outbound-${ticketId}`}
             label="Ask the courier something"
-            htmlFor={`outbound-${ticketId}`}
             hint="Queued for someone to send from the courier’s portal. Stored and sent exactly as typed."
-          >
-            <Textarea
-              id={`outbound-${ticketId}`}
-              rows={2}
-              value={outbound}
-              onChange={(e) => setOutbound(e.target.value)}
-            />
-          </FormField>
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={outbound.trim() === '' || reply.isPending}
-            onClick={send}
-          >
-            {reply.isPending ? 'Queueing…' : 'Queue for sending'}
-          </Button>
+            rows={2}
+            value={outbound}
+            onChange={(e) => setOutbound(e.target.value)}
+          />
+          <div>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={outbound.trim() === '' || reply.isPending}
+              loading={reply.isPending}
+              onClick={send}
+            >
+              Queue for sending
+            </Button>
+          </div>
         </>
       ) : null}
     </div>

@@ -1,17 +1,13 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Notice } from '@/app/(authed)/system/_components/af-parts';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -91,49 +87,62 @@ export function EditCourierAccountModal({
   const pickupChanged = (account.pickupLocationName ?? '') !== pickup;
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={onOpenChange}
       title="Edit courier account"
       description="The API credential cannot be edited — it is never readable once saved. To change a token, add an account and deactivate this one."
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="md"
+            loading={update.isPending}
+            disabled={label.trim() === '' || update.isPending}
+            onClick={() => void save()}
+          >
+            Save changes
+          </Button>
+        </DialogFooter>
+      }
     >
-      <FormField label="Label" htmlFor="ea-label" hint="How an operator tells this account apart.">
-        <Input id="ea-label" value={label} onChange={(e) => setLabel(e.target.value)} />
-      </FormField>
+      <div className="af-form">
+        <TextField
+          id="ea-label"
+          label="Label"
+          hint="How an operator tells this account apart."
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+        />
 
-      <FormField
-        label="Pickup location name"
-        htmlFor="ea-pickup"
-        hint="The warehouse name registered with THIS account at Delhivery, matched byte-for-byte. Leave blank to use the global setting — right for a single account, wrong as soon as there are two."
-      >
-        <Input
+        <TextField
           id="ea-pickup"
+          label="Pickup location name"
+          hint="The warehouse name registered with THIS account at Delhivery, matched byte-for-byte. Leave blank to use the global setting — right for a single account, wrong as soon as there are two."
           value={pickup}
           onChange={(e) => setPickup(e.target.value)}
           placeholder="Blank = global setting"
         />
-      </FormField>
 
-      {/*
-       * Where this courier's COD payouts land. TRE-3 resolves a
-       * settlement's receiving account through it and refuses without
-       * one, since cash we never recorded reads on the coverage page
-       * as money we hold and do not.
-       *
-       * It lives HERE, on the courier, because a courier pays into one
-       * account of ours while one account of ours receives from every
-       * courier. It was on the bank account first, which had that
-       * backwards: a single current account could be linked to
-       * Delhivery OR Shiprocket, never both.
-       */}
-      {canMoney && (
-        <FormField
-          label="COD payouts land in"
-          htmlFor="ea-payout-bank"
-          hint="One of our bank accounts. Required before a settlement for this courier can be recorded. Several couriers can share one account."
-        >
+        {/*
+         * Where this courier's COD payouts land. TRE-3 resolves a
+         * settlement's receiving account through it and refuses without
+         * one, since cash we never recorded reads on the coverage page
+         * as money we hold and do not.
+         *
+         * It lives HERE, on the courier, because a courier pays into one
+         * account of ours while one account of ours receives from every
+         * courier. It was on the bank account first, which had that
+         * backwards: a single current account could be linked to
+         * Delhivery OR Shiprocket, never both.
+         */}
+        {canMoney && (
           <Select
             id="ea-payout-bank"
+            label="COD payouts land in"
+            hint="One of our bank accounts. Required before a settlement for this courier can be recorded. Several couriers can share one account."
             value={payoutBank}
             onChange={(e) => setPayoutBank(e.target.value)}
           >
@@ -146,34 +155,32 @@ export function EditCourierAccountModal({
                 </option>
               ))}
           </Select>
-        </FormField>
-      )}
+        )}
 
-      {pickupChanged && pickup.trim() !== pickup && (
-        // Not trimmed on save, deliberately: Delhivery matches this
-        // string exactly, so silently "fixing" whitespace would produce
-        // a name that does not match the registration. Say it instead.
-        <ErrorNote message="This name has leading or trailing spaces. Delhivery matches it exactly — that will not match your registration unless the spaces are really there." />
-      )}
+        {pickupChanged && pickup.trim() !== pickup && (
+          // Not trimmed on save, deliberately: Delhivery matches this
+          // string exactly, so silently "fixing" whitespace would produce
+          // a name that does not match the registration. Say it instead.
+          <Notice tone="warn">
+            <p>
+              This name has leading or trailing spaces. Delhivery matches it exactly — that will not
+              match your registration unless the spaces are really there.
+            </p>
+          </Notice>
+        )}
 
-      <FormField label="Notes" htmlFor="ea-notes">
-        <Textarea id="ea-notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
-      </FormField>
+        <TextArea
+          id="ea-notes"
+          label="Notes"
+          rows={3}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+        />
 
-      {update.error !== null && <ErrorNote message={serverVerdict(update.error)} />}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          size="md"
-          disabled={label.trim() === '' || update.isPending}
-          onClick={() => void save()}
-        >
-          {update.isPending ? 'Saving…' : 'Save changes'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+        {update.error !== null && (
+          <ErrorState title="Not saved" message={serverVerdict(update.error)} />
+        )}
+      </div>
+    </Dialog>
   );
 }

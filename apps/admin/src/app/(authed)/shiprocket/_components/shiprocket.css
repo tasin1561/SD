@@ -1,0 +1,21 @@
+/* Shiprocket console. Tokens only; shared pieces in system/_components/af.css. */
+.sr-guard {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.sr-inline-code {
+  margin: 0 4px;
+}
+.sr-lane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  align-items: end;
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .sr-lane {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, max-content);
+  }
+}

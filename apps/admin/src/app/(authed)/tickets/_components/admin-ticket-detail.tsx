@@ -3,22 +3,18 @@
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  DescriptionList,
-  ErrorNote,
-  FormField,
-  Ident,
-  IssueCategoryLine,
-  PageHeader,
-  Select,
-  SkeletonRows,
-  Textarea,
-  TicketStatusBadge,
-  useToast,
-} from '@skydrop/ui/components';
+import { Ident, IssueCategoryLine, Money } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { useToast } from '@skydrop/ui/app/toast';
+import { AfCard, AfSection, Facts } from '@/app/(authed)/system/_components/af-parts';
+import { TicketStatusChip } from './ticket-chips';
+import './tickets.css';
 import { TicketStatus, TicketType } from '@skydrop/db';
 import { useAdminTicket, useTicketEvents, useTransitionTicket } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -76,10 +72,13 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
   const [to, setTo] = useState<TicketStatus | ''>('');
   const [notes, setNotes] = useState('');
   const [refund, setRefund] = useState('');
+  // A refund credits a seller's wallet in the same transaction, so Apply
+  // asks first when that is the outcome chosen; the request is unchanged.
+  const [confirmRefund, setConfirmRefund] = useState(false);
 
-  if (ticket.isLoading) return <SkeletonRows rows={6} cols={1} />;
+  if (ticket.isLoading) return <SkeletonRows rows={6} cols={1} label="Loading the ticket" />;
   if (ticket.isError) {
-    return <ErrorNote message={serverVerdict(ticket.error)} retry={() => void ticket.refetch()} />;
+    return <ErrorState message={serverVerdict(ticket.error)} retry={() => void ticket.refetch()} />;
   }
   const t = ticket.data;
   if (t === undefined) return <div />;
@@ -91,145 +90,146 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
     ? OUTCOMES.filter((o) => o.value !== TicketStatus.RESOLVED_REFUND)
     : OUTCOMES;
 
-  const apply = (): void => {
+  /*
+    The request itself. It resolves on success and rejects on a refusal
+    (after toasting the server's verdict verbatim), so the Apply button's
+    state and the refund confirm both follow the REAL outcome.
+  */
+  const send = async (): Promise<void> => {
     if (to === '') return;
-    void (async () => {
-      try {
-        await transition.mutateAsync({
-          ticketId,
-          to,
-          ...(notes.trim() === '' ? {} : { notes: notes.trim() }),
-          ...(to === TicketStatus.RESOLVED_REFUND && refund.trim() !== ''
-            ? { refundAmountInr: refund.trim() }
-            : {}),
-        });
-        setStage('');
-        setTo('');
-        setNotes('');
-        setRefund('');
-        toast.success('Ticket moved');
-      } catch (err) {
-        toast.error(serverVerdict(err));
-      }
-    })();
+    try {
+      await transition.mutateAsync({
+        ticketId,
+        to,
+        ...(notes.trim() === '' ? {} : { notes: notes.trim() }),
+        ...(to === TicketStatus.RESOLVED_REFUND && refund.trim() !== ''
+          ? { refundAmountInr: refund.trim() }
+          : {}),
+      });
+      setStage('');
+      setTo('');
+      setNotes('');
+      setRefund('');
+      toast.success('Ticket moved');
+    } catch (err) {
+      toast.error(serverVerdict(err));
+      throw err;
+    }
   };
 
+  const openedBy =
+    t.openedBy === 'SELLER'
+      ? 'the seller'
+      : t.openedBy === 'STORE'
+        ? (t.storeName ?? 'a reseller store')
+        : 'Skydrop';
+
   return (
-    <div>
-      <Link
-        href="/tickets"
-        className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs"
-      >
-        <ArrowLeft size={13} /> All tickets
+    <div className="af-page">
+      <Link href="/tickets" className="af-back">
+        <ArrowLeft size={14} aria-hidden /> All tickets
       </Link>
 
       <PageHeader
         // The number leads — it is what the seller quotes to us.
-        title={`${t.ticketNumber} · ${t.subject}`}
-        subtitle={`Raised ${new Date(t.createdAt).toLocaleString()} by ${
-          t.openedBy === 'SELLER'
-            ? 'the seller'
-            : t.openedBy === 'STORE'
-              ? (t.storeName ?? 'a reseller store')
-              : 'Skydrop'
-        }`}
+        title={
+          <>
+            <span className="sk-ident">{t.ticketNumber}</span> · {t.subject}
+          </>
+        }
+        meta={<TicketStatusChip status={t.status} />}
+        subtitle={`Raised ${new Date(t.createdAt).toLocaleString()} by ${openedBy}`}
       />
 
-      <Card className="mt-3">
-        <CardBody>
-          <div className="mb-3">
-            <TicketStatusBadge status={t.status} />
-          </div>
-          <DescriptionList
-            items={[
-              {
-                label: 'Type',
-                // Who is asking, then what about — in the COURIER's own
-                // words, so an operator taking it to them is already
-                // speaking their vocabulary.
-                value: (
-                  <span className="block">
-                    {t.ticketType.toLowerCase().replaceAll('_', ' ')}
-                    <IssueCategoryLine
-                      categoryLabel={t.issueCategoryLabel}
-                      subcategoryLabel={t.issueSubcategoryLabel}
-                    />
-                  </span>
+      <AfCard>
+        <Facts
+          items={[
+            {
+              label: 'Type',
+              // Who is asking, then what about — in the COURIER's own
+              // words, so an operator taking it to them is already
+              // speaking their vocabulary.
+              value: (
+                <span className="tk-type-cell">
+                  <span>{t.ticketType.toLowerCase().replaceAll('_', ' ')}</span>
+                  <IssueCategoryLine
+                    categoryLabel={t.issueCategoryLabel}
+                    subcategoryLabel={t.issueSubcategoryLabel}
+                  />
+                </span>
+              ),
+            },
+            ...(t.receiptNumber == null
+              ? []
+              : [
+                  {
+                    // A short-count ticket (TKT-3) is about a count,
+                    // not a parcel: name the receipt and its journey.
+                    label: 'Goods receipt',
+                    value: (
+                      <span className="sk-ident">
+                        {t.receiptNumber}
+                        {t.consignmentNumber == null ? '' : ` · ${t.consignmentNumber}`}
+                      </span>
+                    ),
+                  },
+                ]),
+            {
+              label: 'Order',
+              // The NUMBER. An operator quoting a ticket to a seller
+              // or a courier needs the name they both use.
+              value:
+                t.orderId === null ? (
+                  '—'
+                ) : t.orderNumber !== null ? (
+                  <span className="sk-ident">{t.orderNumber}</span>
+                ) : (
+                  <Ident value={t.orderId} />
                 ),
-              },
-              ...(t.receiptNumber == null
-                ? []
-                : [
-                    {
-                      // A short-count ticket (TKT-3) is about a count,
-                      // not a parcel: name the receipt and its journey.
-                      label: 'Goods receipt',
-                      value: (
-                        <span className="font-mono text-xs">
-                          {t.receiptNumber}
-                          {t.consignmentNumber == null ? '' : ` · ${t.consignmentNumber}`}
-                        </span>
-                      ),
-                    },
-                  ]),
-              {
-                label: 'Order',
-                // The NUMBER. An operator quoting a ticket to a seller
-                // or a courier needs the name they both use.
-                value:
-                  t.orderId === null ? (
-                    '—'
-                  ) : t.orderNumber !== null ? (
-                    <span className="font-mono text-xs">{t.orderNumber}</span>
-                  ) : (
-                    <Ident value={t.orderId} />
-                  ),
-              },
-              {
-                label: 'Parcel',
-                value:
-                  t.shipmentId === null ? (
-                    '—'
-                  ) : t.shipmentNumber !== null ? (
-                    <span className="font-mono text-xs">{t.shipmentNumber}</span>
-                  ) : (
-                    <Ident value={t.shipmentId} />
-                  ),
-              },
-              { label: 'Courier', value: t.courierCode ?? '—' },
-              ...(t.storeName == null ? [] : [{ label: 'Reseller store', value: t.storeName }]),
-              ...(t.disputePayer == null
-                ? []
-                : [
-                    {
-                      label: 'Settled',
-                      value:
-                        t.disputePayer === 'STORE'
-                          ? 'The store paid the seller'
-                          : 'The seller paid the store',
-                    },
-                  ]),
-            ]}
-          />
-          {/*
-            The description is NOT repeated here — the conversation
-            below opens with exactly this message, so printing it in the
-            facts card too showed the same sentence twice a few
-            centimetres apart. Facts about the ticket here; what was
-            said belongs in the thread, in order, with a time on it.
-            Same change as the seller page.
-          */}
-        </CardBody>
-      </Card>
+            },
+            {
+              label: 'Parcel',
+              value:
+                t.shipmentId === null ? (
+                  '—'
+                ) : t.shipmentNumber !== null ? (
+                  <span className="sk-ident">{t.shipmentNumber}</span>
+                ) : (
+                  <Ident value={t.shipmentId} />
+                ),
+            },
+            { label: 'Courier', value: t.courierCode ?? '—' },
+            ...(t.storeName == null ? [] : [{ label: 'Reseller store', value: t.storeName }]),
+            ...(t.disputePayer == null
+              ? []
+              : [
+                  {
+                    label: 'Settled',
+                    value:
+                      t.disputePayer === 'STORE'
+                        ? 'The store paid the seller'
+                        : 'The seller paid the store',
+                  },
+                ]),
+          ]}
+        />
+        {/*
+          The description is NOT repeated here — the conversation
+          below opens with exactly this message, so printing it in the
+          facts card too showed the same sentence twice a few
+          centimetres apart. Facts about the ticket here; what was
+          said belongs in the thread, in order, with a time on it.
+          Same change as the seller page.
+        */}
+      </AfCard>
 
       {/* The conversation FIRST — it is what the ticket is. The courier
           exchange and the status machinery are how we act on it. */}
-      <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">Conversation</h2>
-      <Card>
-        <CardBody>
+      <AfSection title="Conversation">
+        <AfCard>
           <AdminTicketConversation ticket={t} />
-        </CardBody>
-      </Card>
+        </AfCard>
+      </AfSection>
 
       {/*
         The courier conversation is NOT on this page any more.
@@ -248,32 +248,29 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         seller's ticket page.
       */}
 
-      <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">History</h2>
-      <Card>
-        <CardBody>
+      <AfSection title="History">
+        <AfCard>
           {events.isLoading ? (
-            <SkeletonRows rows={3} cols={1} />
+            <SkeletonRows rows={3} cols={1} label="Loading the history" />
           ) : (events.data ?? []).length === 0 ? (
-            <p className="text-text-muted text-sm">Nothing yet.</p>
+            <p className="af-muted">Nothing yet.</p>
           ) : (
-            <ol className="space-y-2">
+            <ol className="tk-history">
               {(events.data ?? []).map((e) => (
-                <li key={e.id} className="text-sm">
-                  <span className="text-text-muted mr-2 text-xs tabular-nums">
+                <li key={e.id} className="tk-history__item">
+                  <span className="tk-history__when sk-figure">
                     {new Date(e.createdAt).toLocaleString()}
                   </span>
-                  <span className="font-medium">
+                  <span className="tk-history__what">
                     {e.fromStatus === null ? 'Opened' : `${e.fromStatus} → ${e.toStatus}`}
                   </span>
-                  {e.note !== null && e.note !== '' && (
-                    <p className="text-text-body mt-0.5">{e.note}</p>
-                  )}
+                  {e.note !== null && e.note !== '' && <p className="tk-history__note">{e.note}</p>}
                 </li>
               ))}
             </ol>
           )}
-        </CardBody>
-      </Card>
+        </AfCard>
+      </AfSection>
 
       {/*
         RS-7 (2026-09-19) — a figure correction shows the money AS IT
@@ -282,51 +279,43 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
         question from the one being argued.
       */}
       {t.disputeKind === 'FIGURE_CORRECTION' && t.disputedFigures != null ? (
-        <>
-          <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">
-            The figures when this was raised
-          </h2>
-          <Card>
-            <CardBody>
-              <p className="text-text-muted text-xs">
-                As at {new Date(t.disputedFigures.capturedAt).toLocaleString()} · order{' '}
-                {t.disputedFigures.orderNumber} · {t.disputedFigures.paymentMode}
-                {t.disputedFigures.codInr === null ? null : ` · COD ₹${t.disputedFigures.codInr}`} ·
-                transfer ₹{t.disputedFigures.transferTotalInr} · retail ₹
-                {t.disputedFigures.retailTotalInr}
-              </p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {t.disputedFigures.parties.map((p) => (
-                  <li key={p.party}>
-                    <span className="font-medium">{p.party === 'STORE' ? 'Store' : 'Seller'}</span>{' '}
-                    net ₹{p.netInr}{' '}
-                    <span className="text-text-muted">
-                      (gross ₹{p.grossInr}, transfer ₹{p.transferInr}, tax ₹{p.taxShareInr}, COD fee
-                      ₹{p.codFeeShareInr}, instant ₹{p.instantFeeShareInr} —{' '}
-                      {p.status.toLowerCase()})
-                    </span>
+        <AfSection title="The figures when this was raised">
+          <AfCard>
+            <p className="af-small">
+              As at {new Date(t.disputedFigures.capturedAt).toLocaleString()} · order{' '}
+              <span className="sk-ident">{t.disputedFigures.orderNumber}</span> ·{' '}
+              {t.disputedFigures.paymentMode}
+              {t.disputedFigures.codInr === null ? null : ` · COD ₹${t.disputedFigures.codInr}`} ·
+              transfer ₹{t.disputedFigures.transferTotalInr} · retail ₹
+              {t.disputedFigures.retailTotalInr}
+            </p>
+            <ul className="tk-figures">
+              {t.disputedFigures.parties.map((p) => (
+                <li key={p.party}>
+                  <span className="af-strong">{p.party === 'STORE' ? 'Store' : 'Seller'}</span> net
+                  ₹{p.netInr}{' '}
+                  <span className="af-small">
+                    (gross ₹{p.grossInr}, transfer ₹{p.transferInr}, tax ₹{p.taxShareInr}, COD fee ₹
+                    {p.codFeeShareInr}, instant ₹{p.instantFeeShareInr} — {p.status.toLowerCase()})
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {t.disputedFigures.fees.length > 0 ? (
+              <ul className="tk-figures af-small">
+                {t.disputedFigures.fees.map((f) => (
+                  <li key={f.fee}>
+                    {f.fee}: store ₹{f.storeInr} · seller ₹{f.sellerInr} · total ₹{f.totalInr}
                   </li>
                 ))}
               </ul>
-              {t.disputedFigures.fees.length > 0 ? (
-                <ul className="text-text-muted mt-2 space-y-0.5 text-xs">
-                  {t.disputedFigures.fees.map((f) => (
-                    <li key={f.fee}>
-                      {f.fee}: store ₹{f.storeInr} · seller ₹{f.sellerInr} · total ₹{f.totalInr}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </CardBody>
-          </Card>
-        </>
+            ) : null}
+          </AfCard>
+        </AfSection>
       ) : null}
 
       {canResolve && t.resolvedAt === null && isStoreDispute ? (
-        <>
-          <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">
-            Settle between store and seller
-          </h2>
+        <AfSection title="Settle between store and seller">
           <StoreDisputeSettle
             ticketId={ticketId}
             storeName={t.storeName ?? null}
@@ -336,13 +325,12 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
             claimAmountInr={t.disputeClaimAmountInr ?? null}
             claimPayer={t.disputeClaimPayer ?? null}
           />
-        </>
+        </AfSection>
       ) : null}
 
       {canResolve && t.resolvedAt === null ? (
-        <>
-          <h2 className="text-text-bright mt-5 mb-2 text-sm font-medium">Move this on</h2>
-          <Card>
+        <AfSection title="Move this on">
+          <AfCard>
             {/*
               ONE ROW. Stage, outcome, refund, note, Apply.
 
@@ -350,102 +338,100 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               it, so choosing "Closed" widens the line instead of
               starting a new block — the form grows sideways as the
               decision narrows.
-
-              Notes stays a <Textarea> at one row rather than becoming
-              an <Input>: it is still somewhere a person may want two
-              sentences, and swapping it would have bought the same
-              height by taking that away. Its hint moved into the
-              placeholder, which says the same thing without costing a
-              line.
             */}
-            <CardBody>
-              <div className="flex flex-wrap items-end gap-2.5">
-                <FormField label="Move to" htmlFor="admin-ticket-stage" className="w-[140px]">
-                  <Select
-                    id="admin-ticket-stage"
-                    value={stage}
-                    onChange={(e) => {
-                      const next = e.target.value as '' | 'REVIEWING' | 'CLOSED';
-                      setStage(next);
-                      // Reviewing IS a status; Closed is four of them,
-                      // so it waits for the second question.
-                      setTo(next === 'REVIEWING' ? TicketStatus.NEGOTIATING : '');
-                    }}
-                  >
-                    <option value="">Choose…</option>
-                    {STAGES.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
+            <div className="tk-move">
+              <Select
+                id="admin-ticket-stage"
+                label="Move to"
+                value={stage}
+                onChange={(e) => {
+                  const next = e.target.value as '' | 'REVIEWING' | 'CLOSED';
+                  setStage(next);
+                  // Reviewing IS a status; Closed is four of them,
+                  // so it waits for the second question.
+                  setTo(next === 'REVIEWING' ? TicketStatus.NEGOTIATING : '');
+                }}
+              >
+                <option value="">Choose…</option>
+                {STAGES.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
 
-                {stage === 'CLOSED' ? (
-                  <FormField label="How" htmlFor="admin-ticket-to" className="w-[200px]">
-                    <Select
-                      id="admin-ticket-to"
-                      value={to}
-                      onChange={(e) => setTo(e.target.value as TicketStatus | '')}
-                    >
-                      <option value="">Outcome…</option>
-                      {outcomes.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                ) : null}
+              {stage === 'CLOSED' ? (
+                <Select
+                  id="admin-ticket-to"
+                  label="How"
+                  value={to}
+                  onChange={(e) => setTo(e.target.value as TicketStatus | '')}
+                >
+                  <option value="">Outcome…</option>
+                  {outcomes.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              ) : null}
 
-                {to === TicketStatus.RESOLVED_REFUND ? (
-                  <FormField
-                    label="Refund (INR)"
-                    htmlFor="admin-ticket-refund"
-                    className="w-[130px]"
-                  >
-                    <input
-                      id="admin-ticket-refund"
-                      className="sd-field"
-                      value={refund}
-                      onChange={(e) => setRefund(e.target.value)}
-                      inputMode="decimal"
-                      // The hint is gone from under the field but the
-                      // fact is not: this credits a seller's wallet in
-                      // the same transaction, so it says so where it
-                      // cannot be missed.
-                      title="Credited to the seller's wallet in the same transaction."
-                    />
-                  </FormField>
-                ) : null}
+              {to === TicketStatus.RESOLVED_REFUND ? (
+                <TextField
+                  id="admin-ticket-refund"
+                  label="Refund (INR)"
+                  value={refund}
+                  onChange={(e) => setRefund(e.target.value)}
+                  inputMode="decimal"
+                  // This credits a seller's wallet in the same
+                  // transaction, so it says so where it cannot be missed.
+                  title="Credited to the seller's wallet in the same transaction."
+                />
+              ) : null}
 
-                <FormField
+              <div className="tk-move__notes">
+                <TextArea
+                  id="admin-ticket-notes"
                   label="Notes"
-                  htmlFor="admin-ticket-notes"
-                  className="min-w-[200px] flex-1"
-                >
-                  <Textarea
-                    id="admin-ticket-notes"
-                    rows={1}
-                    placeholder="The seller reads this on their ticket."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                  />
-                </FormField>
-
-                <Button
-                  variant="primary"
-                  size="md"
-                  className="shrink-0"
-                  disabled={to === '' || transition.isPending}
-                  onClick={apply}
-                >
-                  {transition.isPending ? 'Applying…' : 'Apply'}
-                </Button>
+                  rows={1}
+                  placeholder="The seller reads this on their ticket."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  // Display only: TransitionTicketDto allows 2000.
+                  countMax={2000}
+                />
               </div>
-            </CardBody>
-          </Card>
-        </>
+
+              <AsyncButton
+                variant="primary"
+                size="md"
+                labels={{ idle: 'Apply', busy: 'Applying…', done: 'Moved', error: 'Not moved' }}
+                disabled={to === '' || transition.isPending}
+                onClick={(e) => {
+                  // A refund goes through the confirm first; the confirm
+                  // then sends the same request.
+                  if (to === TicketStatus.RESOLVED_REFUND) {
+                    e.preventDefault();
+                    setConfirmRefund(true);
+                  }
+                }}
+                onAction={send}
+              />
+            </div>
+          </AfCard>
+
+          <ConfirmDialog
+            open={confirmRefund}
+            onOpenChange={setConfirmRefund}
+            title="Refund the seller?"
+            entity={t.ticketNumber}
+            entityIsIdentifier
+            amount={refund.trim() === '' ? undefined : <Money amount={refund.trim()} />}
+            consequence="The seller's wallet is credited the amount typed, in the same transaction, and the ticket closes as refunded."
+            confirmLabel="Refund and close"
+            onConfirm={send}
+          />
+        </AfSection>
       ) : null}
     </div>
   );

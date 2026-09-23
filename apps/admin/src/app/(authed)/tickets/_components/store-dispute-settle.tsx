@@ -1,16 +1,15 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ConfirmDialog,
-  FormField,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+// The legacy `useToast` stays: the FE-2 test mounts this under the legacy
+// Toaster only.
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { AfCard } from '@/app/(authed)/system/_components/af-parts';
+import './tickets.css';
 import { useSettleStoreDispute } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -78,79 +77,76 @@ export function StoreDisputeSettle({
   };
 
   return (
-    <Card>
-      <CardBody>
-        <p className="text-text-muted mb-3 text-sm">
-          The money moves between {store}&apos;s wallet and the seller&apos;s — never from ours.
-          Both read your note.
-          {claimAmountInr != null && claimPayer != null ? (
-            <>
-              {' '}
-              Filled in from what was claimed (₹{claimAmountInr},{' '}
-              {claimPayer === 'STORE' ? `${store} owes the seller` : `the seller owes ${store}`}) —
-              change it if that is not what you have decided.
-            </>
-          ) : null}
-        </p>
-        <div className="flex flex-wrap items-end gap-2.5">
-          <FormField label="Who pays" htmlFor="dispute-payer" className="w-[220px]">
-            <Select
-              id="dispute-payer"
-              value={payer}
-              onChange={(e) => setPayer(e.target.value as Payer | '')}
-            >
-              <option value="">Choose…</option>
-              <option value="STORE">The store pays the seller</option>
-              <option value="SELLER">The seller pays the store</option>
-            </Select>
-          </FormField>
-          <FormField label="Amount (INR)" htmlFor="dispute-amount" className="w-[140px]">
-            <input
-              id="dispute-amount"
-              className="sd-field"
-              inputMode="decimal"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Note" htmlFor="dispute-notes" className="min-w-[200px] flex-1">
-            <Textarea
-              id="dispute-notes"
-              rows={1}
-              placeholder="The seller and the store both read this."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </FormField>
-          <Button
-            variant="primary"
-            size="md"
-            className="shrink-0"
-            disabled={payer === '' || amount.trim() === '' || settle.isPending}
-            onClick={() => setConfirming(true)}
-          >
-            Settle
-          </Button>
-        </div>
-        {error !== null ? (
-          <p role="alert" className="text-critical mt-3 text-sm">
-            {error}
-          </p>
+    <AfCard>
+      <p className="af-muted">
+        The money moves between {store}&apos;s wallet and the seller&apos;s — never from ours. Both
+        read your note.
+        {claimAmountInr != null && claimPayer != null ? (
+          <>
+            {' '}
+            Filled in from what was claimed (₹{claimAmountInr},{' '}
+            {claimPayer === 'STORE' ? `${store} owes the seller` : `the seller owes ${store}`}) —
+            change it if that is not what you have decided.
+          </>
         ) : null}
-      </CardBody>
+      </p>
+      <div className="tk-move">
+        <Select
+          id="dispute-payer"
+          label="Who pays"
+          value={payer}
+          onChange={(e) => setPayer(e.target.value as Payer | '')}
+        >
+          <option value="">Choose…</option>
+          <option value="STORE">The store pays the seller</option>
+          <option value="SELLER">The seller pays the store</option>
+        </Select>
+        <TextField
+          id="dispute-amount"
+          label="Amount (INR)"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <div className="tk-move__notes">
+          <TextArea
+            id="dispute-notes"
+            label="Note"
+            rows={1}
+            placeholder="The seller and the store both read this."
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            // Display only: SettleStoreDisputeDto allows 2000; never enforced here.
+            countMax={2000}
+          />
+        </div>
+        <Button
+          variant="primary"
+          size="md"
+          disabled={payer === '' || amount.trim() === '' || settle.isPending}
+          onClick={() => setConfirming(true)}
+        >
+          Settle
+        </Button>
+      </div>
+      {error !== null ? (
+        <p role="alert" className="af-error">
+          {error}
+        </p>
+      ) : null}
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
         title="Settle this dispute?"
-        description={
+        entity={storeName ?? 'Reseller store'}
+        consequence={
           payer === 'STORE'
             ? `${store} pays the seller ₹${amount.trim()}. Both wallets move now and the ticket closes.`
             : `The seller pays ${store} ₹${amount.trim()}. Both wallets move now and the ticket closes.`
         }
-        confirmLabel={settle.isPending ? 'Settling…' : 'Settle'}
-        disabled={settle.isPending}
+        confirmLabel="Settle"
         onConfirm={submit}
       />
-    </Card>
+    </AfCard>
   );
 }

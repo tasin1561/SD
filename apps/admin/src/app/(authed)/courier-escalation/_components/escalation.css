@@ -1,0 +1,92 @@
+/* Courier escalation (send queue, conversations, patterns, portal). Tokens
+   only; shared pieces live in system/_components/af.css. */
+
+.ce-channel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .ce-channel {
+    grid-template-columns: minmax(0, 140px) minmax(0, 170px) minmax(0, 1fr) minmax(0, max-content);
+  }
+}
+.ce-channel__wide {
+  min-width: 0;
+}
+.ce-lock {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+.ce-lock svg {
+  flex: none;
+  margin-top: 2px;
+}
+.ce-ext {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+}
+.ce-message {
+  max-width: 28rem;
+}
+.ce-error-text {
+  max-width: 18rem;
+  overflow-wrap: anywhere;
+}
+.ce-actions {
+  min-width: 11rem;
+}
+.ce-review {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--saffron-text);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.ce-msg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-1);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .ce-msg[data-side='out'] {
+    padding-left: var(--sp-8);
+  }
+}
+.ce-msg__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+}
+.ce-msg__who {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.ce-candidate__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  font-size: var(--fs-xs);
+}
+.ce-lock-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--saffron-text);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.ce-reason {
+  flex: 1 1 14rem;
+  min-width: 0;
+}

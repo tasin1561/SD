@@ -1,0 +1,11 @@
+/* Webhook deliveries. Tokens only. */
+.wh-filter {
+  max-width: 18rem;
+}
+.wh-url {
+  display: block;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
