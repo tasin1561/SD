@@ -13,7 +13,6 @@
  *   import { OrderStatusBadge } from '@skydrop/ui/components';
  *   import { kindTokens, orderStatusKind } from '@skydrop/ui/status';
  */
-export * from './app-shell';
 export * from './barcode';
 export * from './button';
 export * from './card';
@@ -27,15 +26,12 @@ export * from './open-external';
 export * from './order-journey';
 export * from './form';
 export * from './help-disclosure';
-export * from './modal';
 export * from './issue-category-line';
 export * from './menu-button';
 export * from './message-relay-status';
 export * from './page';
 export * from './product-thumb';
 export * from './status-badge';
-export * from './switch';
-export * from './ticket-handling-badge';
 export * from './theme-init';
 export * from './theme-toggle';
 export * from './toast';

@@ -59,14 +59,9 @@ describe('apps/seller wears the brand skin', () => {
     // Kept from seller-theme-scope.test.ts: an `@import` from INSIDE a
     // shared sheet reaches every consumer while each app's own globals
     // still read clean. Now covers the brand sheets as well.
-    const shared = [
-      'tokens.css',
-      'corridor.css',
-      'brand/scales.css',
-      'brand/theme.css',
-      'brand/app.css',
-      'brand/legacy.css',
-    ];
+    // tokens.css and corridor.css were DELETED in Phase 7 (nothing imported
+    // them any more); the brand sheets are what remains to guard.
+    const shared = ['brand/scales.css', 'brand/theme.css', 'brand/app.css', 'brand/legacy.css'];
     for (const file of shared) {
       const css = readFileSync(join(REPO, 'packages', 'ui', 'src', file), 'utf8');
       // An IMPORT is what would leak it; a comment naming it is history.

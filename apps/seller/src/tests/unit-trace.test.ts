@@ -92,7 +92,14 @@ describe('what it shows', () => {
   });
 
   it('uses the shared status badge rather than a local colour map', () => {
-    for (const src of [SELLER, ADMIN]) expect(src).toContain('<StockUnitStatusBadge');
+    // Either the legacy badge or the app StatusChip fed by the shared
+    // `stockUnitStatusKind` mapper (admin moved to the chip in the apps
+    // restyle, Phase 5). What is ruled out is a colour map of its own.
+    for (const src of [SELLER, ADMIN]) {
+      expect(
+        src.includes('<StockUnitStatusBadge') || src.includes('stockUnitStatusKind(unit.status)'),
+      ).toBe(true);
+    }
   });
 
   it('the server returns events oldest-first, so the table reads as a story', () => {
