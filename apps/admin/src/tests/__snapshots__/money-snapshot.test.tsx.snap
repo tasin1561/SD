@@ -1,0 +1,47 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`admin money strings > seller wallet detail and ledger 1`] = `
+{
+  "shown": [
+    "−₹3,600.00",
+    "₹0.00",
+    "₹1,200.00",
+    "₹2,500.00",
+    "₹500.00",
+    "−₹162.60",
+    "−₹3,600.00",
+    "+₹1,180.00",
+    "−₹3,437.40",
+    "−₹3,658.54",
+    "−₹4,617.40",
+    "+₹12,34,567.89",
+    "−₹958.86",
+    "+₹0.05",
+    "−₹12,35,526.75",
+  ],
+  "spoken": [
+    "debit 3,600.00 INR",
+    "debit 162.60 INR",
+    "debit 3,600.00 INR",
+    "credit 1,180.00 INR",
+    "debit 3,437.40 INR",
+    "debit 3,658.54 INR",
+    "debit 4,617.40 INR",
+    "credit 12,34,567.89 INR",
+    "debit 958.86 INR",
+    "credit 0.05 INR",
+    "debit 12,35,526.75 INR",
+  ],
+}
+`;
+
+exports[`admin money strings > top-up review queue 1`] = `
+{
+  "shown": [
+    "INR 5000.00",
+    "BDT 12300.50",
+    "INR 1234567.89",
+  ],
+  "spoken": [],
+}
+`;

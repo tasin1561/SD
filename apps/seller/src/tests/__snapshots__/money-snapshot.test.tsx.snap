@@ -1,0 +1,129 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`seller money strings — 'rupees' display > dashboard money cards 1`] = `
+{
+  "shown": [
+    "₹12,345.67",
+    "৳15,185.17",
+    "₹1",
+    "৳1.23",
+    "₹8,450.00",
+    "₹12,34,567.89",
+  ],
+  "spoken": [],
+}
+`;
+
+exports[`seller money strings — 'rupees' display > order charges band 1`] = `
+{
+  "shown": [
+    "₹162.60",
+    "₹11.80",
+    "₹0.00",
+    "−₹25.00",
+    "₹149.40",
+  ],
+  "spoken": [
+    "debit 25.00 INR",
+  ],
+}
+`;
+
+exports[`seller money strings — 'rupees' display > wallet ledger 1`] = `
+{
+  "shown": [
+    "₹12,345.67",
+    "৳15,185.17",
+    "₹1",
+    "৳1.23",
+    "+₹1,180.00",
+    "₹12,345.67",
+    "−₹180.00",
+    "₹11,165.67",
+    "−₹162.60",
+    "₹11,345.67",
+    "+₹5,000.00",
+    "₹11,508.27",
+    "−₹3,658.54",
+    "₹6,508.27",
+    "−₹24.39",
+    "₹10,166.81",
+    "−₹0.05",
+    "₹10,191.20",
+    "₹12,345.67",
+  ],
+  "spoken": [
+    "credit 1,180.00 INR",
+    "debit 180.00 INR",
+    "debit 162.60 INR",
+    "credit 5,000.00 INR",
+    "debit 3,658.54 INR",
+    "debit 24.39 INR",
+    "debit 0.05 INR",
+  ],
+}
+`;
+
+exports[`seller money strings — 'taka' display > dashboard money cards 1`] = `
+{
+  "shown": [
+    "₹12,345.67",
+    "৳15,185.17",
+    "₹1",
+    "৳1.23",
+    "৳10,393.50",
+    "৳15,18,518.50",
+  ],
+  "spoken": [],
+}
+`;
+
+exports[`seller money strings — 'taka' display > order charges band 1`] = `
+{
+  "shown": [
+    "৳200.00",
+    "৳14.51",
+    "৳0.00",
+    "−৳30.75",
+    "৳183.76",
+  ],
+  "spoken": [
+    "debit 30.75 BDT",
+  ],
+}
+`;
+
+exports[`seller money strings — 'taka' display > wallet ledger 1`] = `
+{
+  "shown": [
+    "₹12,345.67",
+    "৳15,185.17",
+    "₹1",
+    "৳1.23",
+    "+৳1,451.40",
+    "৳15,185.17",
+    "−৳221.40",
+    "৳13,733.77",
+    "−৳200.00",
+    "৳13,955.17",
+    "+৳6,150.00",
+    "৳14,155.17",
+    "−৳4,500.00",
+    "৳8,005.17",
+    "−৳30.00",
+    "৳12,505.18",
+    "−৳0.06",
+    "৳12,535.18",
+    "₹12,345.67",
+  ],
+  "spoken": [
+    "credit 1,451.40 BDT",
+    "debit 221.40 BDT",
+    "debit 200.00 BDT",
+    "credit 6,150.00 BDT",
+    "debit 4,500.00 BDT",
+    "debit 30.00 BDT",
+    "debit 0.06 BDT",
+  ],
+}
+`;
