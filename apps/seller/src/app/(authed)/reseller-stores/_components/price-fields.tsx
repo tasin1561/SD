@@ -1,7 +1,8 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { FormField, Input } from '@skydrop/ui/components';
+import { TextField } from '@skydrop/ui/app/text-field';
+import './reseller-stores.css';
 
 /** The four figures of a reseller price, as the form edits them (rupees, text). */
 export interface PriceDraft {
@@ -64,18 +65,19 @@ export function PriceFields({
   disabled?: boolean;
 }): ReactElement {
   const field = (key: keyof PriceDraft, label: string, hint?: string): ReactElement => (
-    <FormField label={label} htmlFor={`${idPrefix}-${key}`} {...(hint ? { hint } : {})}>
-      <Input
-        id={`${idPrefix}-${key}`}
-        inputMode="decimal"
-        disabled={disabled}
-        value={value[key]}
-        onChange={(e) => onChange({ ...value, [key]: e.target.value })}
-      />
-    </FormField>
+    <TextField
+      id={`${idPrefix}-${key}`}
+      label={label}
+      {...(hint ? { hint } : {})}
+      inputMode="decimal"
+      inputClassName="sk-figure"
+      disabled={disabled}
+      value={value[key]}
+      onChange={(e) => onChange({ ...value, [key]: e.target.value })}
+    />
   );
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="rs-grid-2">
       {field('transferPriceInr', 'Transfer price (₹)', 'What the store pays you per unit.')}
       {field('suggestedRetailInr', 'Suggested retail (₹)')}
       {field('minRetailInr', 'Lowest retail (₹)')}

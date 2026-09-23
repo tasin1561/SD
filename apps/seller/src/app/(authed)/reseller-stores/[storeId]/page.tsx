@@ -3,39 +3,31 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { ArrowLeft, CalendarClock, CircleDot, Users, Wallet } from 'lucide-react';
 import {
-  BandBody,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ConfirmDialog,
-  Crumbs,
-  DescriptionList,
-  EmptyState,
-  ErrorState,
-  FilterChip,
-  FormField,
-  Input,
-  LoadingState,
-  MetaChip,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  ResellerStoreStatusBadge,
-  SectionBand,
-  Select,
-  Stat,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Textarea,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+  CalendarClock,
+  CircleDot,
+  CirclePause,
+  CirclePlay,
+  Mail,
+  Store,
+  UserPlus,
+  Users,
+  Wallet,
+} from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Tabs } from '@skydrop/ui/app/tabs';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
+import { resellerStoreStatusKind, resellerStoreStatusLabel } from '@skydrop/ui/status';
 import type { ResellerStoreStatusValue } from '@skydrop/api-client';
 import { serverVerdict } from '@/lib/server-verdict';
 import { StoreActionsSection } from './_components/store-actions-section';
@@ -57,8 +49,21 @@ import {
   type WalletManager,
 } from '@/lib/reseller-store-hooks';
 import { TermsSection } from './_components/terms-section';
+import {
+  RsBack,
+  RsError,
+  RsFact,
+  RsFacts,
+  RsLink,
+  RsSection,
+  pendingPhase,
+} from '../_components/rs-parts';
 
 type StoreTab = 'overview' | 'catalogue' | 'terms' | 'actions';
+
+function isStoreTab(id: string): id is StoreTab {
+  return id === 'overview' || id === 'catalogue' || id === 'terms' || id === 'actions';
+}
 
 function when(iso: string | null): string {
   return iso === null
@@ -96,27 +101,28 @@ const ACTOR_WORDS: Record<string, string> = {
 };
 
 /**
- * The tone of the STATUS tile.
+ * The tone of the STATUS card.
  *
  * EXHAUSTIVE over `ResellerStoreStatusValue` (the F2 discipline): the
  * `never` assignment means a new state fails to COMPILE until somebody
  * decides whether it reads as open, waiting or finished.
  *
- * Deliberately NOT a reach into the badge's own kind mapping, which
- * answers a different question — what colour a CHIP is. A tile has four
- * tones, and the distinction worth drawing here is "selling" versus
- * "not selling", which is what a seller is scanning the page for.
+ * Deliberately NOT a reach into the chip's own kind mapping, which
+ * answers a different question — what colour a CHIP is. The distinction
+ * worth drawing here is "selling" versus "not selling", which is what a
+ * seller is scanning the page for. The four tones are the ones the tile
+ * always had (good / warn / bad / neutral), drawn in the KPI card's hues.
  */
-function statusTone(status: ResellerStoreStatusValue): 'neutral' | 'warn' | 'bad' | 'good' {
+function statusTone(status: ResellerStoreStatusValue): KpiTone {
   switch (status) {
     case 'ACTIVE':
-      return 'good';
+      return 'credit';
     case 'PENDING_SELLER_APPROVAL':
     case 'PAUSED':
-      return 'warn';
+      return 'pending';
     case 'REJECTED':
     case 'CLOSED':
-      return 'bad';
+      return 'debit';
     default: {
       const exhaustive: never = status;
       return exhaustive;
@@ -165,24 +171,29 @@ export default function ResellerStorePage(): ReactElement {
     // The way back and the page's name stay put while it loads or fails —
     // an error with nothing around it reads as a broken app, not a store.
     return (
-      <div>
-        <BackLink />
-        <PageHeader
-          breadcrumb={
-            <Crumbs
-              items={[
-                { label: 'Seller console' },
-                { label: 'Reselling' },
-                { label: 'Stores', href: '/reseller-stores' },
-                { label: 'Store' },
-              ]}
-              Link={Link}
-            />
-          }
-          title="Reseller store"
-        />
+      <div className="rs-page">
+        <div className="rs-head">
+          <RsBack href="/reseller-stores">All reseller stores</RsBack>
+          <PageHeader
+            breadcrumbs={[
+              { label: 'Seller console' },
+              { label: 'Reselling' },
+              { label: 'Stores', href: '/reseller-stores' },
+              { label: 'Store' },
+            ]}
+            Link={Link}
+            title="Reseller store"
+          />
+        </div>
         {store.isPending ? (
-          <LoadingState label="Loading the store" rows={5} />
+          <>
+            <div className="rs-kpis">
+              {[0, 1, 2, 3].map((i) => (
+                <Skeleton key={i} className="rs-kpi-skel" height={104} rounded="md" />
+              ))}
+            </div>
+            <SkeletonRows rows={5} cols={4} label="Loading the store" />
+          </>
         ) : (
           <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />
         )}
@@ -195,73 +206,67 @@ export default function ResellerStorePage(): ReactElement {
   const invited = s.team.invitations.length;
 
   return (
-    <div>
-      <BackLink />
-
-      <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Reselling' },
-              { label: 'Stores', href: '/reseller-stores' },
-              { label: s.name },
-            ]}
-            Link={Link}
-          />
-        }
-        title={s.name}
-        subtitle={
-          s.displayName === null
-            ? 'Customers see this name on their parcel and on the tracking page.'
-            : `Customers see “${s.displayName}”.`
-        }
-        meta={
-          <>
-            <MetaChip tone={s.origin === 'ADMIN' ? 'accent' : 'neutral'}>
-              Opened by {s.origin === 'ADMIN' ? 'Skydrop' : 'you'}
-            </MetaChip>
-            <MetaChip>Wallet run by {s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'you'}</MetaChip>
-            {invited > 0 && (
-              <MetaChip tone="warn" dot>
-                {invited} invitation{invited === 1 ? '' : 's'} outstanding
-              </MetaChip>
-            )}
-          </>
-        }
-        action={
-          <div className="flex flex-wrap items-center gap-3">
-            <ResellerStoreStatusBadge status={s.status} />
-            <Link
-              href={`/orders?storeId=${encodeURIComponent(s.id)}`}
-              className="text-accent text-sm hover:underline"
-            >
-              Its orders →
-            </Link>
-            <Link href="/reseller-stores/reports" className="text-accent text-sm hover:underline">
-              Reports →
-            </Link>
-          </div>
-        }
-      />
+    <div className="rs-page">
+      <div className="rs-head">
+        <RsBack href="/reseller-stores">All reseller stores</RsBack>
+        <PageHeader
+          breadcrumbs={[
+            { label: 'Seller console' },
+            { label: 'Reselling' },
+            { label: 'Stores', href: '/reseller-stores' },
+            { label: s.name },
+          ]}
+          Link={Link}
+          title={s.name}
+          subtitle={
+            s.displayName === null
+              ? 'Customers see this name on their parcel and on the tracking page.'
+              : `Customers see “${s.displayName}”.`
+          }
+          meta={
+            <RsFacts>
+              <RsFact tone={s.origin === 'ADMIN' ? 'accent' : undefined}>
+                Opened by {s.origin === 'ADMIN' ? 'Skydrop' : 'you'}
+              </RsFact>
+              <RsFact>Wallet run by {s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'you'}</RsFact>
+              {invited > 0 && (
+                <RsFact tone="warn" dot>
+                  {invited} invitation{invited === 1 ? '' : 's'} outstanding
+                </RsFact>
+              )}
+            </RsFacts>
+          }
+          action={
+            <div className="rs-actions">
+              <StatusChip
+                kind={resellerStoreStatusKind(s.status)}
+                label={resellerStoreStatusLabel(s.status)}
+              />
+              <RsLink href={`/orders?storeId=${encodeURIComponent(s.id)}`}>Its orders</RsLink>
+              <RsLink href="/reseller-stores/reports">Reports</RsLink>
+            </div>
+          }
+        />
+      </div>
 
       {/* ── Standing facts about this store ─────────────────────────
-             Four tiles, every one a column on the store row — nothing
+             Four cards, every one a column on the store row — nothing
              derived and nothing summed from another endpoint. What it
-             has EARNED needs a window and lives on the reports page. */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
+             has EARNED needs a window and lives on the reports page. Only
+             the team count is a plain number, so only it rolls up. */}
+      <div className="rs-kpis">
+        <KpiCard
           label="Status"
-          icon={<CircleDot size={13} aria-hidden />}
-          value={<span className="text-base">{statusWords(s.status)}</span>}
+          icon={<CircleDot size={14} />}
+          figure={statusWords(s.status)}
           tone={statusTone(s.status)}
           hint={
             s.statusChangedAt === null ? 'Since it was opened.' : `Since ${day(s.statusChangedAt)}.`
           }
         />
-        <Stat
+        <KpiCard
           label="Team"
-          icon={<Users size={13} aria-hidden />}
+          icon={<Users size={14} />}
           value={s.memberCount}
           unit={s.memberCount === 1 ? 'person' : 'people'}
           tone="neutral"
@@ -271,12 +276,10 @@ export default function ResellerStorePage(): ReactElement {
               : `${invited} more invited and not yet signed in.`
           }
         />
-        <Stat
+        <KpiCard
           label="Wallet managed by"
-          icon={<Wallet size={13} aria-hidden />}
-          value={
-            <span className="text-base">{s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'You'}</span>
-          }
+          icon={<Wallet size={14} />}
+          figure={s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'You'}
           tone="neutral"
           hint={
             s.walletManagedBy === 'SKYDROP'
@@ -284,60 +287,50 @@ export default function ResellerStorePage(): ReactElement {
               : 'You top it up from your wallet and pay it yourself.'
           }
         />
-        <Stat
+        <KpiCard
           label="Opened"
-          icon={<CalendarClock size={13} aria-hidden />}
-          value={<span className="text-base">{day(s.createdAt)}</span>}
+          icon={<CalendarClock size={14} />}
+          figure={day(s.createdAt)}
           tone="neutral"
           hint={`${s.events.length} ${s.events.length === 1 ? 'entry' : 'entries'} in its history.`}
         />
       </div>
 
-      {/*
-        A GROUP, not a `tablist`.
-
-        These were `<Button role="tab" aria-selected>`; as console filter
-        chips they carry `aria-pressed`, which is the right thing for a
-        toggle and the wrong thing inside a `tablist` — a tablist whose
-        children are not tabs is announced as a tablist with no tabs, and
-        the browser's own tab semantics (arrow-key roving focus, an
-        associated tabpanel) are claimed and not provided. The wallet
-        page's three views are the same control and never claimed it.
-      */}
-      <div
-        role="group"
-        aria-label="Store sections"
-        className="border-border bg-surface mb-4 flex flex-wrap items-center gap-1.5 rounded-[var(--radius-3)] border px-3 py-2.5"
-      >
-        {(
-          [
-            ['overview', 'Overview'],
-            ['catalogue', 'Catalogue & stock'],
-            ['terms', 'Terms'],
-            ['actions', 'What they can do'],
-          ] as const
-        ).map(([key, label]) => (
-          <FilterChip key={key} label={label} active={tab === key} onClick={() => setTab(key)} />
-        ))}
-      </div>
-
-      {tab === 'catalogue' ? <StoreCatalogue storeId={s.id} final={final} /> : null}
-      {tab === 'terms' ? <TermsSection storeId={s.id} final={final} /> : null}
-      {tab === 'actions' ? <StoreActionsSection storeId={s.id} final={final} /> : null}
-      {tab === 'overview' ? <OverviewTab store={s} open={open} final={final} /> : null}
+      {/* A real tablist now: the primitive provides what the old chips
+          only claimed — roving focus, arrow keys, and a `tabpanel`
+          labelled by its tab. Only the chosen panel is mounted, exactly
+          as before, so a tab's data is asked for when it is opened. */}
+      <Tabs
+        label="Store sections"
+        panelClassName="rs-panel"
+        value={tab}
+        onChange={(id) => {
+          if (isStoreTab(id)) setTab(id);
+        }}
+        items={[
+          {
+            id: 'overview',
+            label: 'Overview',
+            panel: <OverviewTab store={s} open={open} final={final} />,
+          },
+          {
+            id: 'catalogue',
+            label: 'Catalogue & stock',
+            panel: <StoreCatalogue storeId={s.id} storeName={s.name} final={final} />,
+          },
+          {
+            id: 'terms',
+            label: 'Terms',
+            panel: <TermsSection storeId={s.id} final={final} />,
+          },
+          {
+            id: 'actions',
+            label: 'What they can do',
+            panel: <StoreActionsSection storeId={s.id} storeName={s.name} final={final} />,
+          },
+        ]}
+      />
     </div>
-  );
-}
-
-function BackLink(): ReactElement {
-  return (
-    <Link
-      href="/reseller-stores"
-      className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs"
-    >
-      <ArrowLeft size={13} aria-hidden />
-      All reseller stores
-    </Link>
   );
 }
 
@@ -350,42 +343,43 @@ function OverviewTab({
   open: boolean;
   final: boolean;
 }): ReactElement {
+  const details: ReadonlyArray<{ label: string; value: string }> = [
+    { label: 'Customers see', value: s.displayName ?? s.name },
+    { label: 'Opened by', value: s.origin === 'ADMIN' ? 'Skydrop' : 'You' },
+    { label: 'Contact email', value: s.contactEmail ?? '—' },
+    { label: 'Contact phone', value: s.contactPhone ?? '—' },
+    { label: 'Note', value: s.note ?? '—' },
+    { label: 'Status since', value: when(s.statusChangedAt) },
+  ];
   return (
-    <div>
+    <>
       {s.status === 'PENDING_SELLER_APPROVAL' ? <DecisionCard store={s} /> : null}
       {open ? <LifecycleCard store={s} /> : null}
 
-      <SectionBand index="01" title="Details" note="How we hold this store." />
-      {/* No <Card> inside: `BandBody` IS the bordered surface the band
-          caps, and nesting one draws a second border a hair inside. */}
-      <BandBody className="mb-4">
-        <DescriptionList
-          columns={3}
-          items={[
-            { label: 'Customers see', value: s.displayName ?? s.name },
-            { label: 'Opened by', value: s.origin === 'ADMIN' ? 'Skydrop' : 'You' },
-            { label: 'Contact email', value: s.contactEmail ?? '—' },
-            { label: 'Contact phone', value: s.contactPhone ?? '—' },
-            { label: 'Note', value: s.note ?? '—' },
-            { label: 'Status since', value: when(s.statusChangedAt) },
-          ]}
-        />
-      </BandBody>
+      <RsSection title="Details" note="How we hold this store.">
+        <dl className="rs-facts-list">
+          {details.map((d) => (
+            <div key={d.label} className="rs-facts-list__item">
+              <dt>{d.label}</dt>
+              <dd>{d.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </RsSection>
 
       <WalletCard store={s} disabled={final} />
       <StoreWalletSection store={s} />
       <TeamSection store={s} canInvite={open} />
 
-      <SectionBand
-        index="05"
+      <RsSection
         title="History"
         note="Every change to this store, oldest last. Never edited."
-      />
-      <BandBody flush>
+        flush
+      >
         {s.events.length === 0 ? (
           <EmptyState bare title="No history yet" />
         ) : (
-          <Table>
+          <Table caption="Store history">
             <THead>
               <Tr>
                 <Th>When</Th>
@@ -397,21 +391,17 @@ function OverviewTab({
             <TBody>
               {s.events.map((e) => (
                 <Tr key={e.id}>
-                  <Td className="text-text-muted font-mono text-xs whitespace-nowrap">
-                    {when(e.createdAt)}
-                  </Td>
-                  <Td>{EVENT_WORDS[e.kind] ?? e.kind}</Td>
-                  <Td className="text-text-muted text-xs">
-                    {ACTOR_WORDS[e.actorType] ?? e.actorType}
-                  </Td>
-                  <Td className="text-text-muted text-xs">{e.note ?? '—'}</Td>
+                  <Td className="rs-when sk-figure">{when(e.createdAt)}</Td>
+                  <Td className="rs-strong">{EVENT_WORDS[e.kind] ?? e.kind}</Td>
+                  <Td className="rs-small">{ACTOR_WORDS[e.actorType] ?? e.actorType}</Td>
+                  <Td className="rs-small">{e.note ?? '—'}</Td>
                 </Tr>
               ))}
             </TBody>
           </Table>
         )}
-      </BandBody>
-    </div>
+      </RsSection>
+    </>
   );
 }
 
@@ -458,16 +448,22 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
   }
 
   return (
-    // A CARD, not a band: this is a decision waiting on the reader, not
-    // a region of the record. The same shape the ticket detail uses for
-    // its refund banner.
-    <Card className="mb-4">
-      <CardHeader
-        title="Skydrop opened this store for you"
-        subtitle="Nothing can be ordered through it until you approve it. Rejecting it is final."
-      />
-      <CardBody>
-        <div className="flex flex-wrap gap-2">
+    // A CARD with a saffron rule, not a plain section: this is a decision
+    // waiting on the reader, not a region of the record.
+    <div className="rs-card" data-tone="decision">
+      <div className="rs-decision">
+        <div className="rs-decision__text">
+          <span className="rs-decision__chip" aria-hidden>
+            <Store size={18} />
+          </span>
+          <div>
+            <h2 className="rs-decision__title">Skydrop opened this store for you</h2>
+            <p className="rs-decision__body">
+              Nothing can be ordered through it until you approve it. Rejecting it is final.
+            </p>
+          </div>
+        </div>
+        <div className="rs-actions">
           <Button variant="primary" size="md" onClick={() => setApproving(true)}>
             Approve
           </Button>
@@ -475,83 +471,84 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
             Reject
           </Button>
         </div>
-      </CardBody>
-      <Modal
+      </div>
+      <Dialog
         open={approving}
         onOpenChange={setApproving}
         title={`Approve “${store.name}”?`}
         description="It opens at once, with its first user invited — they get the email that gives the store a login."
-      >
-        <form onSubmit={doApprove} className="space-y-4">
-          <FormField label="First user’s email" htmlFor="ap-email" required>
-            <Input
-              id="ap-email"
-              type="email"
-              required
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-            />
-          </FormField>
-          <FormField
-            label="Their name"
-            htmlFor="ap-name"
-            hint="They become the store’s owner."
-            required
-          >
-            <Input
-              id="ap-name"
-              required
-              value={inviteName}
-              onChange={(e) => setInviteName(e.target.value)}
-            />
-          </FormField>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {error}
-            </p>
-          ) : null}
-          <ModalFooter>
-            <Button type="button" variant="secondary" size="md" onClick={() => setApproving(false)}>
+        icon={<UserPlus size={18} />}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={() => setApproving(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="md" disabled={approve.isPending}>
-              {approve.isPending ? 'Approving…' : 'Approve'}
-            </Button>
-          </ModalFooter>
+            <AsyncButton
+              type="submit"
+              form="rs-approve-form"
+              variant="primary"
+              size="md"
+              state={pendingPhase(approve.isPending)}
+              labels={{ idle: 'Approve', busy: 'Approving…' }}
+            />
+          </DialogFooter>
+        }
+      >
+        <form id="rs-approve-form" onSubmit={doApprove} className="rs-form">
+          <TextField
+            id="ap-email"
+            label="First user’s email"
+            type="email"
+            required
+            value={inviteEmail}
+            onChange={(e) => setInviteEmail(e.target.value)}
+          />
+          <TextField
+            id="ap-name"
+            label="Their name"
+            hint="They become the store’s owner."
+            required
+            value={inviteName}
+            onChange={(e) => setInviteName(e.target.value)}
+          />
+          {error !== null ? <RsError>{error}</RsError> : null}
         </form>
-      </Modal>
-      <Modal
+      </Dialog>
+      <Dialog
         open={rejecting}
         onOpenChange={setRejecting}
         title={`Reject “${store.name}”?`}
         description="This is final. Say why — Skydrop reads it."
         tone="critical"
-      >
-        <form onSubmit={doReject} className="space-y-4">
-          <FormField label="Why" htmlFor="rj-reason" hint="At least 10 characters." required>
-            <Textarea
-              id="rj-reason"
-              required
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </FormField>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {error}
-            </p>
-          ) : null}
-          <ModalFooter>
-            <Button type="button" variant="secondary" size="md" onClick={() => setRejecting(false)}>
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={() => setRejecting(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="destructive" size="md" disabled={reject.isPending}>
-              {reject.isPending ? 'Rejecting…' : 'Reject for good'}
-            </Button>
-          </ModalFooter>
+            <AsyncButton
+              type="submit"
+              form="rs-reject-form"
+              variant="destructive"
+              size="md"
+              state={pendingPhase(reject.isPending)}
+              labels={{ idle: 'Reject for good', busy: 'Rejecting…' }}
+            />
+          </DialogFooter>
+        }
+      >
+        <form id="rs-reject-form" onSubmit={doReject} className="rs-form">
+          <TextArea
+            id="rj-reason"
+            label="Why"
+            hint="At least 10 characters."
+            required
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          {error !== null ? <RsError>{error}</RsError> : null}
         </form>
-      </Modal>
-    </Card>
+      </Dialog>
+    </div>
   );
 }
 
@@ -561,6 +558,7 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
   const resume = useResumeResellerStore();
   const close = useCloseResellerStore();
   const [pausing, setPausing] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const [closing, setClosing] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -579,54 +577,60 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
     }
   }
 
+  const paused = store.status === 'PAUSED';
+
   return (
-    <Card className="mb-4">
-      <CardHeader
-        title={store.status === 'PAUSED' ? 'Paused' : 'Open'}
-        subtitle={
-          store.status === 'PAUSED'
-            ? 'It takes no new orders; anything already placed carries on. Close it for good once every parcel is delivered or back with us, every credit has run and its wallet is ₹0.'
-            : 'Pausing stops new orders. To close it for good, pause it first.'
-        }
-      />
-      <CardBody>
-        <div className="flex flex-wrap gap-2">
+    <div className="rs-card" data-tone="open">
+      <div className="rs-decision">
+        <div className="rs-decision__text">
+          <span className="rs-decision__chip" aria-hidden>
+            {paused ? <CirclePause size={18} /> : <CirclePlay size={18} />}
+          </span>
+          <div>
+            <h2 className="rs-decision__title">{paused ? 'Paused' : 'Open'}</h2>
+            <p className="rs-decision__body">
+              {paused
+                ? 'It takes no new orders; anything already placed carries on. Close it for good once every parcel is delivered or back with us, every credit has run and its wallet is ₹0.'
+                : 'Pausing stops new orders. To close it for good, pause it first.'}
+            </p>
+          </div>
+        </div>
+        <div className="rs-actions">
           {store.status === 'ACTIVE' ? (
-            <Button variant="secondary" size="md" onClick={() => setPausing(true)}>
+            <Button
+              variant="secondary"
+              size="md"
+              icon={<CirclePause size={15} />}
+              onClick={() => setPausing(true)}
+            >
               Pause
             </Button>
           ) : (
             <Button
               variant="primary"
               size="md"
+              icon={<CirclePlay size={15} />}
               disabled={resume.isPending}
-              onClick={() =>
-                resume.mutate(
-                  { storeId: store.id },
-                  {
-                    onSuccess: () => toast.success(`“${store.name}” takes orders again.`),
-                    onError: (err) => toast.error(serverVerdict(err)),
-                  },
-                )
-              }
+              onClick={() => setResuming(true)}
             >
               Resume
             </Button>
           )}
-          {store.status === 'PAUSED' ? (
+          {paused ? (
             <Button variant="destructive" size="md" onClick={() => setClosing(true)}>
               Close for good
             </Button>
           ) : null}
         </div>
-      </CardBody>
+      </div>
       <ConfirmDialog
         open={pausing}
         onOpenChange={setPausing}
         title={`Pause “${store.name}”?`}
-        description="It stops taking new orders until you resume it."
+        entity={store.name}
+        consequence="It stops taking new orders until you resume it."
         confirmLabel="Pause"
-        disabled={pause.isPending}
+        closeOnSuccess={false}
         onConfirm={async () => {
           try {
             await pause.mutateAsync({ storeId: store.id, body: {} });
@@ -637,38 +641,61 @@ function LifecycleCard({ store }: { store: ResellerStoreDetail }): ReactElement 
           }
         }}
       />
-      <Modal
+      {/* Resume asks first (owner's decision): it puts the store back in
+          front of customers. The SAME request as before fires on confirm. */}
+      <ConfirmDialog
+        open={resuming}
+        onOpenChange={setResuming}
+        title={`Resume “${store.name}”?`}
+        entity={store.name}
+        consequence="It takes new orders again straight away."
+        confirmLabel="Resume"
+        closeOnSuccess={false}
+        onConfirm={async () => {
+          try {
+            await resume.mutateAsync({ storeId: store.id });
+            toast.success(`“${store.name}” takes orders again.`);
+            setResuming(false);
+          } catch (err) {
+            toast.error(serverVerdict(err));
+          }
+        }}
+      />
+      <Dialog
         open={closing}
         onOpenChange={setClosing}
         title={`Close “${store.name}” for good?`}
         description="Its team loses access, and it can never reopen."
         tone="critical"
-      >
-        <form onSubmit={doClose} className="space-y-4">
-          <FormField label="Why" htmlFor="cl-reason" hint="At least 10 characters." required>
-            <Textarea
-              id="cl-reason"
-              required
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </FormField>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {error}
-            </p>
-          ) : null}
-          <ModalFooter>
-            <Button type="button" variant="secondary" size="md" onClick={() => setClosing(false)}>
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={() => setClosing(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="destructive" size="md" disabled={close.isPending}>
-              {close.isPending ? 'Closing…' : 'Close for good'}
-            </Button>
-          </ModalFooter>
+            <AsyncButton
+              type="submit"
+              form="rs-close-form"
+              variant="destructive"
+              size="md"
+              state={pendingPhase(close.isPending)}
+              labels={{ idle: 'Close for good', busy: 'Closing…' }}
+            />
+          </DialogFooter>
+        }
+      >
+        <form id="rs-close-form" onSubmit={doClose} className="rs-form">
+          <TextArea
+            id="cl-reason"
+            label="Why"
+            hint="At least 10 characters."
+            required
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          {error !== null ? <RsError>{error}</RsError> : null}
         </form>
-      </Modal>
-    </Card>
+      </Dialog>
+    </div>
   );
 }
 
@@ -684,41 +711,44 @@ function WalletCard({
   const [value, setValue] = useState<WalletManager>(store.walletManagedBy);
   const [confirming, setConfirming] = useState(false);
   return (
-    <div>
-      <SectionBand
-        index="02"
-        title="Who manages the store’s wallet"
-        note="It cannot change while a top-up or withdrawal is waiting on Skydrop."
-      />
-      <BandBody className="mb-4">
-        <p className="text-text-muted mb-3 text-xs leading-relaxed">
-          <strong className="text-text-body font-medium">You:</strong> you top the store up from
-          your wallet and pay it yourself.{' '}
-          <strong className="text-text-body font-medium">Skydrop:</strong> the store tops up to
-          Skydrop’s bank and withdraws through Skydrop.
-        </p>
-        <div className="flex flex-wrap items-end gap-2">
-          <FormField label="Managed by" htmlFor="wallet-manager">
-            <Select
-              id="wallet-manager"
-              value={value}
-              disabled={disabled}
-              onChange={(e) => setValue(e.target.value as WalletManager)}
-            >
-              <option value="SELLER">You</option>
-              <option value="SKYDROP">Skydrop</option>
-            </Select>
-          </FormField>
-          <Button
-            variant="secondary"
-            size="md"
-            disabled={disabled || set.isPending || value === store.walletManagedBy}
-            onClick={() => setConfirming(true)}
+    <RsSection
+      title="Who manages the store’s wallet"
+      note="It cannot change while a top-up or withdrawal is waiting on Skydrop."
+    >
+      <ul className="rs-who">
+        <li>
+          <span>
+            <b>You:</b> you top the store up from your wallet and pay it yourself.
+          </span>
+        </li>
+        <li>
+          <span>
+            <b>Skydrop:</b> the store tops up to Skydrop’s bank and withdraws through Skydrop.
+          </span>
+        </li>
+      </ul>
+      <div className="rs-row rs-row--end">
+        <div className="rs-inline-field">
+          <Select
+            id="wallet-manager"
+            label="Managed by"
+            value={value}
+            disabled={disabled}
+            onChange={(e) => setValue(e.target.value as WalletManager)}
           >
-            Save
-          </Button>
+            <option value="SELLER">You</option>
+            <option value="SKYDROP">Skydrop</option>
+          </Select>
         </div>
-      </BandBody>
+        <Button
+          variant="secondary"
+          size="md"
+          disabled={disabled || set.isPending || value === store.walletManagedBy}
+          onClick={() => setConfirming(true)}
+        >
+          Save
+        </Button>
+      </div>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
@@ -727,13 +757,14 @@ function WalletCard({
             ? `Let Skydrop manage “${store.name}”’s wallet?`
             : `Manage “${store.name}”’s wallet yourself?`
         }
-        description={
+        entity={store.name}
+        consequence={
           value === 'SKYDROP'
             ? 'From now on the store tops up to Skydrop’s bank and withdraws through Skydrop. You stop topping it up and paying it yourself.'
             : 'From now on you top the store up from your own wallet and pay it yourself. It stops topping up to Skydrop’s bank and withdrawing through Skydrop.'
         }
         confirmLabel="Change who manages it"
-        disabled={set.isPending}
+        closeOnSuccess={false}
         onConfirm={async () => {
           try {
             await set.mutateAsync({ storeId: store.id, body: { walletManagedBy: value } });
@@ -744,7 +775,7 @@ function WalletCard({
           setConfirming(false);
         }}
       />
-    </div>
+    </RsSection>
   );
 }
 
@@ -783,84 +814,92 @@ function TeamSection({
   }
 
   return (
-    <>
-      <SectionBand
-        index="04"
-        title="The store’s team"
-        note="People with a login for this store on the reseller portal."
-        action={
-          canInvite ? (
-            <Button variant="ghost" size="sm" onClick={() => setInviting(true)}>
-              Invite someone
-            </Button>
-          ) : undefined
-        }
-      />
-      <BandBody flush className="mb-4">
-        {store.team.members.length === 0 && store.team.invitations.length === 0 ? (
-          <EmptyState
-            bare
-            title="Nobody on the team yet"
-            description={
-              canInvite ? 'Invite the store’s first user — they become its owner.' : undefined
-            }
-          />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Name</Th>
-                <Th>Email</Th>
-                <Th>Role</Th>
-                <Th>State</Th>
-                {/* Only an invitation can be acted on here: there is no seller
-                    endpoint to change a store member's role or remove them —
-                    the store's own admins do that on the reseller portal. */}
-                {store.team.invitations.length > 0 ? <Th>Actions</Th> : null}
+    <RsSection
+      title="The store’s team"
+      note="People with a login for this store on the reseller portal."
+      action={
+        canInvite ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<UserPlus size={14} />}
+            onClick={() => setInviting(true)}
+          >
+            Invite someone
+          </Button>
+        ) : undefined
+      }
+      flush
+    >
+      {store.team.members.length === 0 && store.team.invitations.length === 0 ? (
+        <EmptyState
+          bare
+          title="Nobody on the team yet"
+          description={
+            canInvite ? 'Invite the store’s first user — they become its owner.' : undefined
+          }
+        />
+      ) : (
+        <Table caption="The store’s team">
+          <THead>
+            <Tr>
+              <Th>Name</Th>
+              <Th>Email</Th>
+              <Th>Role</Th>
+              <Th>State</Th>
+              {/* Only an invitation can be acted on here: there is no seller
+                  endpoint to change a store member's role or remove them —
+                  the store's own admins do that on the reseller portal. */}
+              {store.team.invitations.length > 0 ? <Th>Actions</Th> : null}
+            </Tr>
+          </THead>
+          <TBody>
+            {store.team.members.map((m) => (
+              <Tr key={m.id}>
+                <Td className="rs-strong">{m.fullName}</Td>
+                <Td className="rs-small">{m.email}</Td>
+                <Td className="rs-small">{m.roleName}</Td>
+                <Td className="rs-small">Last signed in {when(m.lastLoginAt)}</Td>
+                {store.team.invitations.length > 0 ? <Td /> : null}
               </Tr>
-            </THead>
-            <TBody>
-              {store.team.members.map((m) => (
-                <Tr key={m.id}>
-                  <Td className="text-text-bright font-medium">{m.fullName}</Td>
-                  <Td className="text-text-muted font-mono text-xs">{m.email}</Td>
-                  <Td className="text-text-muted text-xs">{m.roleName}</Td>
-                  <Td className="text-text-muted text-xs">Last signed in {when(m.lastLoginAt)}</Td>
-                  {store.team.invitations.length > 0 ? <Td /> : null}
-                </Tr>
-              ))}
-              {store.team.invitations.map((i) => (
-                <Tr key={i.id}>
-                  <Td className="text-text-bright font-medium">{i.fullName}</Td>
-                  <Td className="text-text-muted font-mono text-xs">{i.email}</Td>
-                  <Td className="text-text-muted text-xs">{i.roleName}</Td>
-                  <Td className="text-text-muted text-xs">Invited — expires {when(i.expiresAt)}</Td>
-                  <Td>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={revoke.isPending}
-                      onClick={() => setWithdrawing({ id: i.id, email: i.email })}
-                    >
-                      Withdraw
-                    </Button>
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </BandBody>
+            ))}
+            {store.team.invitations.map((i) => (
+              <Tr key={i.id}>
+                <Td className="rs-strong">{i.fullName}</Td>
+                <Td className="rs-small">{i.email}</Td>
+                <Td className="rs-small">{i.roleName}</Td>
+                <Td className="rs-small">
+                  <span className="rs-row">
+                    <Mail size={13} aria-hidden />
+                    Invited — expires {when(i.expiresAt)}
+                  </span>
+                </Td>
+                <Td>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={revoke.isPending}
+                    onClick={() => setWithdrawing({ id: i.id, email: i.email })}
+                  >
+                    Withdraw
+                  </Button>
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      )}
       <ConfirmDialog
         open={withdrawing !== null}
         onOpenChange={(o) => {
           if (!o) setWithdrawing(null);
         }}
         title={`Withdraw the invitation to ${withdrawing?.email ?? ''}?`}
-        description="The link in their email stops working. You can invite them again later."
+        entity={withdrawing?.email ?? ''}
+        consequence="The link in their email stops working. You can invite them again later."
         confirmLabel="Withdraw it"
-        confirmVariant="destructive"
-        disabled={revoke.isPending}
+        destructive
+        closeOnSuccess={false}
         onConfirm={async () => {
           if (withdrawing === null) return;
           try {
@@ -872,58 +911,59 @@ function TeamSection({
           setWithdrawing(null);
         }}
       />
-      <Modal
+      <Dialog
         open={inviting}
         onOpenChange={setInviting}
         title="Invite someone to the store"
         description="They get an email with a link to set up their login. It works for 7 days."
-      >
-        <form onSubmit={doInvite} className="space-y-4">
-          <FormField label="Name" htmlFor="ti-name" required>
-            <Input
-              id="ti-name"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Email" htmlFor="ti-email" required>
-            <Input
-              id="ti-email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Role" htmlFor="ti-role">
-            <Select
-              id="ti-role"
-              value={roleKey}
-              onChange={(e) => setRoleKey(e.target.value as StoreRoleKey)}
-            >
-              {store.team.roles.map((r) => (
-                <option key={r.key} value={r.key}>
-                  {r.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {error}
-            </p>
-          ) : null}
-          <ModalFooter>
-            <Button type="button" variant="secondary" size="md" onClick={() => setInviting(false)}>
+        icon={<UserPlus size={18} />}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={() => setInviting(false)}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" size="md" disabled={invite.isPending}>
-              {invite.isPending ? 'Sending…' : 'Send invitation'}
-            </Button>
-          </ModalFooter>
+            <AsyncButton
+              type="submit"
+              form="rs-invite-form"
+              variant="primary"
+              size="md"
+              state={pendingPhase(invite.isPending)}
+              labels={{ idle: 'Send invitation', busy: 'Sending…' }}
+            />
+          </DialogFooter>
+        }
+      >
+        <form id="rs-invite-form" onSubmit={doInvite} className="rs-form">
+          <TextField
+            id="ti-name"
+            label="Name"
+            required
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+          />
+          <TextField
+            id="ti-email"
+            label="Email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <Select
+            id="ti-role"
+            label="Role"
+            value={roleKey}
+            onChange={(e) => setRoleKey(e.target.value as StoreRoleKey)}
+          >
+            {store.team.roles.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.name}
+              </option>
+            ))}
+          </Select>
+          {error !== null ? <RsError>{error}</RsError> : null}
         </form>
-      </Modal>
-    </>
+      </Dialog>
+    </RsSection>
   );
 }
