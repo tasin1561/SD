@@ -44,6 +44,16 @@
     align-items: start;
   }
 }
+/* From lg the two halves are equal: the wider frame column was what made
+   the frame outgrow the checklist (owner, 2026-09-23). */
+@media (min-width: 1024px) {
+  .vg {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    /* The checklist is shorter than the frame on every tab; centred, the
+       difference splits above and below instead of pooling underneath. */
+    align-items: center;
+  }
+}
 .tour__skeleton {
   min-height: 22rem;
   border-radius: 1rem;

@@ -2,13 +2,19 @@
 
    Below lg the box is the stage (the mocks lay themselves out responsively,
    as they always did). From lg the seven mocks are drawn into ONE design box,
-   480 × 360 (4:3, like the stage), and that box is scaled as a whole — a
-   container query on the stage, no JS — so the tallest beat fills ~85% of
-   the frame's width and ~80% of its height, and every beat is centred at the
-   same scale (owner, final pass: "the mock content is the point of the
-   section"). `tan(atan2(length, length))` is how a length ratio becomes the
-   unitless number `scale()` needs. The stage's height is 75cqi (4:3), so 80%
-   of it is 60cqi. */
+   480 × 360 (4:3), and that box is scaled as a whole — a container query on
+   the stage, no JS — so the tallest beat fills ~85% of the frame's width and
+   ~88% of its height, and every beat is centred at the same scale (owner,
+   final pass: "the mock content is the point of the section").
+   `tan(atan2(length, length))` is how a length ratio becomes the unitless
+   number `scale()` needs.
+
+   The stage is 4:3 below lg and 16:10 from lg (owner, 2026-09-23): at 4:3 a
+   desktop frame stood ~620 px tall beside a ~360 px checklist, and the
+   difference read as an empty corner under the list. 16:10 puts the frame
+   and the list at about the same height; the height budget for the mock is
+   88% of 62.5cqi = 55cqi, so the mock loses ~15% of its size rather than
+   the frame keeping 250 px of empty tint. */
 .vg-stage {
   container-type: inline-size;
 }
@@ -19,7 +25,7 @@
 @media (min-width: 1024px) {
   @supports (width: tan(atan2(1px, 1px))) {
     .vg-fit {
-      --vg-k: min(tan(atan2(85cqi, 480px)), tan(atan2(60cqi, 360px)));
+      --vg-k: min(tan(atan2(85cqi, 480px)), tan(atan2(55cqi, 360px)));
       inset: auto;
       left: 50%;
       top: 50%;

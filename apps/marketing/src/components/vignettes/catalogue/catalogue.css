@@ -18,6 +18,13 @@
     align-items: center;
   }
 }
+/* Equal halves from lg, as `.vg` in platform-tour.css — restated here
+   because this rule wins over that one on chunk order alone. */
+@media (min-width: 1024px) {
+  .vg-cat {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
 
 /* ── The mock ─────────────────────────────────────────────────────────
    One container query drives every size: the whole picture is laid out in

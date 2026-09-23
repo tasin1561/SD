@@ -30,7 +30,7 @@ export function VignetteFrame({
     >
       <div
         aria-hidden
-        className="vg-stage relative aspect-[4/3] w-full overflow-hidden"
+        className="vg-stage relative aspect-[4/3] w-full overflow-hidden lg:aspect-[16/10]"
         style={{ background: `var(--${hue}-surface)` }}
       >
         <div className="vg-fit">{children}</div>
