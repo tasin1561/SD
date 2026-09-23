@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
+import { Button, ButtonLink } from '@skydrop/ui/app/button';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -51,7 +53,7 @@ export function ForgotPasswordForm(): ReactElement {
   if (sent) {
     return (
       <div className="space-y-3">
-        <div className="rounded-[5px] border border-[var(--color-accent-ring)] bg-[var(--color-accent-tint)] px-3 py-2.5 text-xs text-text-bright">
+        <div className="rounded-[var(--radius-2)] border border-[var(--color-accent-ring)] bg-[var(--color-accent-tint)] px-3 py-2.5 text-xs text-text-bright">
           If that address belongs to a staff account, a reset link is on its way. It expires in 30
           minutes.
         </div>
@@ -59,43 +61,32 @@ export function ForgotPasswordForm(): ReactElement {
           Nothing arrived? Check spam, then try again — the link is only sent to the address on the
           account.
         </p>
-        <a
-          href="/login"
-          className="mt-2 block w-full rounded-[5px] bg-accent-fill px-3 py-1.5 text-center text-sm font-medium text-accent-fg transition-colors hover:bg-accent-fill-hover"
-        >
+        <ButtonLink href="/login" variant="primary" fullWidth>
           Back to sign in
-        </a>
+        </ButtonLink>
       </div>
     );
   }
 
-  const fieldClass =
-    'w-full px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm focus:border-accent focus:outline-none transition-colors disabled:opacity-50';
-
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div>
-        <label htmlFor="email" className="text-text-muted mb-1 block text-xs">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          required
-          autoComplete="email"
-          autoFocus
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={submitting}
-          className={fieldClass}
-          placeholder="you@skydrop.online"
-        />
-      </div>
+      <TextField
+        id="email"
+        type="email"
+        label="Email"
+        required
+        autoComplete="email"
+        autoFocus
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        disabled={submitting}
+        placeholder="you@skydrop.online"
+      />
 
       {error !== null && (
         <div
           role="alert"
-          className="text-critical rounded-[5px] border px-3 py-2 text-xs"
+          className="text-critical rounded-[var(--radius-2)] border px-3 py-2 text-xs"
           style={{
             background: 'var(--color-critical-tint)',
             borderColor: 'var(--color-critical-ring)',
@@ -105,13 +96,9 @@ export function ForgotPasswordForm(): ReactElement {
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="mt-1 w-full rounded-[5px] bg-accent-fill px-3 py-1.5 text-sm font-medium text-accent-fg transition-colors hover:bg-accent-fill-hover disabled:opacity-50"
-      >
+      <Button type="submit" fullWidth loading={submitting}>
         {submitting ? 'Sending…' : 'Send reset link'}
-      </button>
+      </Button>
 
       <a
         href="/login"

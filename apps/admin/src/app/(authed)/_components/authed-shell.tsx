@@ -6,7 +6,10 @@ import { useState, type ReactNode, type ReactElement } from 'react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { StaffMe } from '@skydrop/api-client';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
-import { AppShell, Toaster, type NavGroup } from '@skydrop/ui/components';
+import { Toaster } from '@skydrop/ui/components';
+import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
+import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { ToastProvider } from '@skydrop/ui/app/toast';
 import {
   AlertTriangle,
   ShieldAlert,
@@ -57,8 +60,8 @@ import { OrderOmnisearch } from './order-omnisearch';
  * The admin shell.
  *
  * The chrome — sidebar, off-canvas drawer, top bar, safe areas — lives
- * in `@skydrop/ui`'s AppShell so apps/admin and apps/seller cannot
- * drift apart again. What stays here is what is genuinely admin: the
+ * in `@skydrop/ui`'s Shell (apps restyle) so apps/admin, apps/seller and
+ * apps/reseller cannot drift apart again. What stays here is what is genuinely admin: the
  * nav, the brand line, and which two identity fields to show.
  */
 export function AuthedShell({
@@ -221,35 +224,38 @@ export function AuthedShell({
 
   return (
     <Toaster>
-      <AppShell
-        subtitle="Admin"
-        sectionLabel="Staff console"
-        navGroups={navGroups}
-        identityPrimary={identity.emailDisplay}
-        identitySecondary={identity.roleName}
-        // Clicking who you are signed in as is where a person looks for
-        // their own account — the page has no nav entry because it is
-        // not a section of the product, it is about them.
-        identityHref="/account"
-        // Reachable from EVERY page, because the moment somebody needs a
-        // parcel is rarely the moment they are on the orders list. In its
-        // OWN slot: sharing the right-hand one squeezed the identity and
-        // the sign-out button until both wrapped.
-        headerCenter={<OrderOmnisearch />}
-        // The bell, and ONLY the bell, survives below `lg`: it is the
-        // one control that says something needs you, and the inbox has
-        // no other route on a phone.
-        headerAlways={<NotificationBellContainer />}
-        footerNote="Phase 1A"
-        pathname={pathname}
-        Link={Link}
-        onSignOut={() => {
-          void handleLogout();
-        }}
-        signingOut={loggingOut}
-      >
-        <PermissionBoundary permissions={identity.permissions}>{children}</PermissionBoundary>
-      </AppShell>
+      <ToastProvider>
+        <Shell
+          subtitle="Admin"
+          sectionLabel="Staff console"
+          navGroups={navGroups}
+          identityPrimary={identity.emailDisplay}
+          identitySecondary={identity.roleName}
+          // Clicking who you are signed in as is where a person looks for
+          // their own account — the page has no nav entry because it is
+          // not a section of the product, it is about them.
+          identityHref="/account"
+          // Reachable from EVERY page, because the moment somebody needs a
+          // parcel is rarely the moment they are on the orders list. In its
+          // OWN slot: sharing the right-hand one squeezed the identity and
+          // the sign-out button until both wrapped.
+          headerCenter={<OrderOmnisearch />}
+          // The bell, and ONLY the bell, survives below `lg`: it is the
+          // one control that says something needs you, and the inbox has
+          // no other route on a phone.
+          headerAlways={<NotificationBellContainer />}
+          footerNote="Phase 1A"
+          pathname={pathname}
+          Link={Link}
+          onSignOut={() => {
+            void handleLogout();
+          }}
+          signingOut={loggingOut}
+          themeControl={<ThemeSwitch />}
+        >
+          <PermissionBoundary permissions={identity.permissions}>{children}</PermissionBoundary>
+        </Shell>
+      </ToastProvider>
     </Toaster>
   );
 }

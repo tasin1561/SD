@@ -1,5 +1,10 @@
 /**
- * The sign-in screen is moving from three copies to ONE shared component.
+ * The sign-in screen is ONE shared component, in every console.
+ *
+ * UPDATED 2026-09-24 (Phase 5): apps/admin has moved too, so all three
+ * consoles now render `SignInFrame` / `SignInCard` and none carries a copy.
+ * This spec is the "every console uses the shared frame" check; its name is
+ * kept for history.
  *
  * UPDATED 2026-09-24 (Phase 4): apps/reseller has moved too. Only
  * apps/admin still carries its own console (until Phase 5), so there are no
@@ -105,5 +110,24 @@ describe('apps/reseller uses the ONE shared sign-in frame', () => {
       false,
     );
     expect(existsSync(join(REPO, 'apps', 'reseller', 'src', 'lib', 'tilt.tsx'))).toBe(false);
+  });
+});
+
+describe('apps/admin uses the ONE shared sign-in frame', () => {
+  const LAYOUTS = ['src/app/login/layout.tsx', 'src/app/auth/layout.tsx'];
+
+  it.each(LAYOUTS)('%s renders SignInFrame from @skydrop/ui/app/sign-in', (relative) => {
+    const src = readFileSync(join(REPO, 'apps', 'admin', relative), 'utf8');
+    expect(src).toContain("from '@skydrop/ui/app/sign-in'");
+    expect(src).toContain('<SignInFrame');
+    expect(src).toContain('operations console');
+    expect(src).not.toContain('auth-console');
+  });
+
+  it('carries no local copy of the old console', () => {
+    expect(existsSync(join(REPO, 'apps', 'admin', 'src', 'components', 'auth-console'))).toBe(
+      false,
+    );
+    expect(existsSync(join(REPO, 'apps', 'admin', 'src', 'lib', 'tilt.tsx'))).toBe(false);
   });
 });
