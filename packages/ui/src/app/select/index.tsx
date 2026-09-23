@@ -17,6 +17,8 @@ import './select.css';
 export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> &
   FieldMessages & {
     readonly selectClassName?: string | undefined;
+    /** The required asterisk without the native `required` (see TextField). */
+    readonly requiredMark?: boolean | undefined;
   };
 
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select(
@@ -31,6 +33,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
     className,
     selectClassName,
     required,
+    requiredMark = false,
     disabled,
     children,
     'aria-describedby': describedByProp,
@@ -50,7 +53,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       notice={notice}
       error={error}
       icon={icon}
-      required={required}
+      required={required === true || requiredMark}
       disabled={disabled}
       float
       variant="sk-select"
