@@ -1,21 +1,19 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-  Table,
-  useToast,
-} from '@skydrop/ui/components';
+import { History, PencilLine } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Button } from '@skydrop/ui/app/button';
+import { useToast } from '@skydrop/ui/app/toast';
 import type { FxRateView } from '@skydrop/api-client';
 import { useFxRatesList } from '@/lib/api-hooks';
 import { FxOverrideModal } from './fx-override-modal';
 import { FxHistoryDrawer } from './fx-history-drawer';
 import { usePermission } from '@/lib/use-permission';
+import { MkCard } from '../../seller-wallets/_components/money-parts';
 
 export function FxRatesIndex(): ReactElement {
   const canWrite = usePermission('fx.manage');
@@ -28,47 +26,43 @@ export function FxRatesIndex(): ReactElement {
   const toast = useToast();
 
   return (
-    <div>
+    <div className="mk-page">
       <PageHeader
         title="FX rates"
         subtitle="Current rate per (from, to) pair. Override sets isManualOverride=true. Every change is recorded in the append-only history (Timeline)."
       />
 
       {list.isLoading ? (
-        <LoadingState label="Loading rates…" />
+        <SkeletonRows rows={3} cols={5} label="Loading rates…" />
       ) : list.isError ? (
         <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
       ) : !list.data || list.data.length === 0 ? (
-        <Card>
-          <CardBody>
-            <div className="text-text-bright text-sm mb-1">No rates yet.</div>
-            <p className="text-text-muted text-xs">
-              Use Override to set the first rate for a currency pair.
-            </p>
-          </CardBody>
-        </Card>
+        <EmptyState
+          title="No rates yet."
+          description="Use Override to set the first rate for a currency pair."
+        />
       ) : (
-        <Card>
-          <Table wrapperClassName="rounded-none border-0 bg-transparent">
-            <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Pair</th>
-                <th className="text-right px-3 py-2 font-medium">Rate</th>
-                <th className="text-left px-3 py-2 font-medium">Source</th>
-                <th className="text-left px-3 py-2 font-medium">Fetched</th>
-                <th className="text-right px-3 py-2 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
+        <MkCard flush>
+          <Table caption="Exchange rates">
+            <THead>
+              <Tr>
+                <Th>Pair</Th>
+                <Th align="right">Rate</Th>
+                <Th>Source</Th>
+                <Th>Fetched</Th>
+                <Th align="right">Actions</Th>
+              </Tr>
+            </THead>
+            <TBody>
               {list.data.map((r) => (
-                <tr key={`${r.fromCurrency}-${r.toCurrency}`}>
-                  <td className="px-3 py-2 text-text-body font-mono">
+                <Tr key={`${r.fromCurrency}-${r.toCurrency}`}>
+                  <Td className="mk-strong">
                     {r.fromCurrency} → {r.toCurrency}
-                  </td>
-                  <td className="px-3 py-2 text-right text-text-bright font-mono">
+                  </Td>
+                  <Td align="right" className="mk-strong sk-figure">
                     {Number(r.rate).toFixed(6)}
-                  </td>
-                  <td className="px-3 py-2 text-text-body text-xs">
+                  </Td>
+                  <Td className="mk-small mk-body">
                     {/* A rate OUT of INR is set by hand; the way back is
                         generated from it. Saying so here is what stops
                         someone treating the pair as two numbers to keep
@@ -76,22 +70,19 @@ export function FxRatesIndex(): ReactElement {
                     {r.fromCurrency === 'INR' ? (
                       <>
                         {r.source}
-                        {r.isManualOverride && (
-                          <span className="text-pending text-xs ml-2 uppercase">Manual</span>
-                        )}
+                        {r.isManualOverride && <span className="mk-tag">Manual</span>}
                       </>
                     ) : (
-                      <span className="text-text-muted">Derived — exact inverse</span>
+                      <span className="mk-small">Derived — exact inverse</span>
                     )}
-                  </td>
-                  <td className="px-3 py-2 text-text-muted font-mono text-xs">
-                    {new Date(r.fetchedAt).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  </Td>
+                  <Td className="mk-when sk-figure">{new Date(r.fetchedAt).toLocaleString()}</Td>
+                  <Td align="right">
+                    <div className="mk-actions">
                       <Button
                         variant="ghost"
                         size="sm"
+                        icon={<History size={14} />}
                         onClick={() =>
                           setHistoryOf({
                             from: r.fromCurrency,
@@ -103,7 +94,12 @@ export function FxRatesIndex(): ReactElement {
                       </Button>
                       {canWrite &&
                         (r.fromCurrency === 'INR' ? (
-                          <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<PencilLine size={14} />}
+                            onClick={() => setEditing(r)}
+                          >
                             Override
                           </Button>
                         ) : (
@@ -111,17 +107,17 @@ export function FxRatesIndex(): ReactElement {
                           // (FX_DERIVED_DIRECTION). One number decides
                           // both directions; a second one typed by hand
                           // is how a round trip starts losing a paisa.
-                          <span className="text-text-faint px-2 text-xs">
+                          <span className="mk-faint">
                             Set {r.toCurrency} → {r.fromCurrency}
                           </span>
                         ))}
                     </div>
-                  </td>
-                </tr>
+                  </Td>
+                </Tr>
               ))}
-            </tbody>
+            </TBody>
           </Table>
-        </Card>
+        </MkCard>
       )}
 
       {editing && (

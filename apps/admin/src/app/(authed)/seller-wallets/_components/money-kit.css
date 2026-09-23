@@ -1,0 +1,754 @@
+/* Admin "sellers' money" area (seller wallets, top-ups, withdrawals,
+   remittances, courier settlements, bank changes, wallet transfers,
+   inbound freight, FX, reseller store wallets) — layout and the few
+   area-only pieces. Tokens only. The primitives (KpiCard, Table, Dialog,
+   TextField …) carry their own CSS; this file arranges them. Every grid
+   declares its columns with minmax(0, …) so nothing sizes to its content
+   and no page scrolls sideways at 320–390 px. */
+
+.mk-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.mk-page > .sk-ph {
+  margin-bottom: 0;
+}
+.mk-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.mk-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.mk-stack--tight {
+  gap: var(--sp-2);
+}
+
+/* ── KPI rows ─────────────────────────────────────────────────────────── */
+.mk-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────── */
+.mk-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.mk-card--flush {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.mk-card--flush > .mk-card__head {
+  padding: var(--sp-4);
+}
+.mk-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.mk-card__chip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--accent-fg);
+}
+.mk-card__titles {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.mk-card__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+.mk-card__sub {
+  margin: 2px 0 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.mk-card__aside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.mk-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 1px solid var(--line);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+
+/* ── Forms ────────────────────────────────────────────────────────────── */
+.mk-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .mk-form--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .mk-form--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.mk-form__full {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.mk-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.mk-form__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  margin: 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* Filters above a list. */
+.mk-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 260px));
+  align-items: end;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* One editable line: an id, an amount and a remove control. */
+.mk-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 9rem) auto;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.mk-line--2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 9rem);
+}
+.mk-icon-btn {
+  display: grid;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--fg-faint);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.mk-icon-btn:hover:not(:disabled) {
+  background: var(--red-tint);
+  color: var(--red-text);
+}
+.mk-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+.mk-icon-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* A radio pair, styled as pills around the native input. */
+.mk-radios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.mk-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap);
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-pill);
+  background: var(--surface-input);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.mk-radio:has(input:checked) {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+  color: var(--fg-strong);
+}
+.mk-radio input {
+  accent-color: var(--accent-fill);
+}
+
+/* ── Text ─────────────────────────────────────────────────────────────── */
+.mk-muted {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.mk-faint {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.mk-small {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.mk-when {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.mk-strong {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.mk-body {
+  color: var(--fg-body);
+}
+.mk-wrap {
+  overflow-wrap: anywhere;
+}
+.mk-clip {
+  display: block;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mk-text[data-tone='critical'] {
+  color: var(--red-text);
+}
+.mk-text[data-tone='warn'] {
+  color: var(--saffron-text);
+}
+.mk-text[data-tone='good'] {
+  color: var(--green-text);
+}
+.mk-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap);
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.mk-link:hover {
+  text-decoration: underline;
+}
+.mk-name {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+a.mk-name:hover {
+  color: var(--sky);
+  text-decoration: underline;
+}
+.mk-inline-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--sky);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: inherit;
+}
+.mk-inline-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.mk-inline-link:disabled {
+  color: var(--fg-muted);
+  cursor: default;
+}
+.mk-inline-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.mk-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  margin-left: var(--sp-2);
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--saffron-line);
+  border-radius: var(--r-pill);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  vertical-align: middle;
+}
+.mk-tag[data-tone='neutral'] {
+  border-color: var(--line);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.mk-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+
+/* ── Row pieces ───────────────────────────────────────────────────────── */
+.mk-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.mk-cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.mk-cell--end {
+  justify-items: end;
+}
+.mk-seller {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.mk-initials {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.mk-initials[data-debt='1'] {
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.mk-seller__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.mk-seller__mark[data-tone='bad'] {
+  color: var(--red-text);
+}
+.mk-seller__mark[data-tone='good'] {
+  color: var(--green-text);
+}
+
+/* Progress under a figure — the same fact as the number beside it. */
+.mk-bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  margin-top: var(--sp-1);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+}
+.mk-bar__fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--st-delivered-fg);
+  transform: scaleX(var(--mk-pct, 0));
+  transform-origin: left center;
+}
+
+/* The disclosure toggle in a freight row. */
+.mk-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.mk-toggle:hover {
+  color: var(--fg-strong);
+}
+.mk-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.mk-toggle__chev {
+  transition: transform var(--dur) var(--ease-out);
+}
+.mk-toggle[aria-expanded='true'] .mk-toggle__chev {
+  transform: rotate(90deg);
+}
+.mk-well {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5);
+  min-width: 0;
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--surface-band);
+}
+@media (min-width: 1024px) {
+  .mk-well--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.mk-well__title {
+  margin: 0 0 var(--sp-2);
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+
+/* ── Callouts and alerts ──────────────────────────────────────────────── */
+.mk-callout {
+  display: flex;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.mk-callout[data-tone='critical'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.mk-callout[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.mk-callout[data-tone='info'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.mk-callout[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.mk-callout__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+.mk-callout__body {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.mk-callout__body p {
+  margin: 0;
+}
+.mk-callout__title {
+  font-weight: var(--fw-semibold);
+}
+
+/* ── Label / value lists ──────────────────────────────────────────────── */
+.mk-dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  margin: 0;
+  min-width: 0;
+}
+.mk-dl__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+.mk-dl__row > dt {
+  color: var(--fg-muted);
+}
+.mk-dl__row > dd {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--fg-body);
+  overflow-wrap: anywhere;
+}
+.mk-dl--grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  column-gap: var(--sp-6);
+}
+/* A two-column key/value grid (payout instructions). */
+.mk-kv {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 2px var(--sp-3);
+  margin: 0;
+  font-size: var(--fs-sm);
+}
+.mk-kv > dt {
+  color: var(--fg-faint);
+}
+.mk-kv > dd {
+  margin: 0;
+  color: var(--fg-strong);
+  overflow-wrap: anywhere;
+}
+
+/* The block a dialog restates before a money act. */
+.mk-subject {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.mk-subject__label {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.mk-subject__main {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+
+/* A panel of facts inside a form (balances, destination). */
+.mk-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  font-size: var(--fs-sm);
+}
+.mk-panel__part + .mk-panel__part {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.mk-panel__title {
+  margin: 0 0 var(--sp-1);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+}
+.mk-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.mk-list__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+  min-width: 0;
+}
+.mk-bullets {
+  display: grid;
+  gap: 2px;
+  margin: var(--sp-1) 0 0;
+  padding-left: var(--sp-4);
+  color: var(--fg-muted);
+}
+.mk-balances {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+}
+
+/* ── Seller picker (wallet transfers) ─────────────────────────────────── */
+.mk-picks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  list-style: none;
+}
+.mk-picks > li + li {
+  border-top: 1px solid var(--line);
+}
+.mk-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  border: 0;
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.mk-pick:hover {
+  background: var(--surface-3);
+}
+.mk-pick:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* ── Scroll wrap for a wide inner table ───────────────────────────────── */
+.mk-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.mk-grid-table {
+  width: 100%;
+  min-width: 42rem;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.mk-grid-table th {
+  padding: var(--sp-2);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  text-align: left;
+  white-space: nowrap;
+}
+.mk-grid-table td {
+  padding: var(--sp-2);
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.mk-grid-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.mk-grid-table tfoot td {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+.mk-grid-table [data-align='right'] {
+  text-align: right;
+}
+
+/* ── Bank change diff ─────────────────────────────────────────────────── */
+.mk-diff-row[data-changed='0'] > td {
+  color: var(--fg-faint);
+}
+.mk-diff-row[data-changed='1'] > td:first-child {
+  color: var(--fg-body);
+  font-weight: var(--fw-medium);
+}
+.mk-diff-row[data-changed='1'] > td:last-child {
+  color: var(--fg-strong);
+}
+
+/* The file picker in a payout form: a real <label> round a hidden input. */
+.mk-drop {
+  min-height: var(--tap);
+  border-style: dashed;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.mk-drop:hover {
+  border-color: var(--accent-line);
+}
+.mk-drop:focus-within {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.mk-panel p,
+.mk-stack > p {
+  margin: 0;
+}

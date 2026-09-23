@@ -1,19 +1,16 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import { Plus, Trash2, Upload } from 'lucide-react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { CircleCheck, Plus, Trash2, TriangleAlert, Upload } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { ParachuteProgress } from '@skydrop/ui/app/parachute-progress';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useCourierAccounts,
   usePreviewRemittance,
@@ -22,6 +19,7 @@ import {
   type RemittanceRow,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { MkAlert, MkCallout } from '../../seller-wallets/_components/money-parts';
 
 interface DraftLine {
   readonly key: number;
@@ -189,6 +187,7 @@ export function RecordSettlementModal({
 
   const filled = lines.filter((l) => l.orderId.trim() !== '' && l.settledInr.trim() !== '');
 
+  /** Rejects on a refusal (after setting the verdict) so the button shows it. */
   async function submit(): Promise<void> {
     setError(null);
     try {
@@ -229,369 +228,355 @@ export function RecordSettlementModal({
       onOpenChange(false);
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
+  const lineAction = (label: string, onClick: () => void): ReactElement => (
+    <Button variant="ghost" size="sm" icon={<Plus size={14} />} onClick={onClick}>
+      {label}
+    </Button>
+  );
+
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
         if (!next) reset();
       }}
       size="lg"
+      locked={record.isPending}
       title="Record a courier payout"
       description="The bank credit that landed, and the orders it covers. The reference must be the courier's own UTR — it is what makes recording the same credit twice a refusal."
+      footer={
+        <DialogFooter>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={() => onOpenChange(false)}
+            disabled={record.isPending}
+          >
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            disabled={
+              courierAccountId === '' ||
+              reference.trim() === '' ||
+              amountInr.trim() === '' ||
+              filled.length === 0
+            }
+            labels={{
+              idle: 'Record payout',
+              busy: 'Recording…',
+              done: 'Recorded',
+              error: 'Refused',
+            }}
+            onAction={submit}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField label="Courier account" htmlFor="settle-account" required>
-            <Select
-              id="settle-account"
-              value={courierAccountId}
-              onChange={(e) => setCourierAccountId(e.target.value)}
-            >
-              <option value="">Choose an account…</option>
-              {accounts.data?.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.label} · {a.courierCode} ({a.environment.toLowerCase()})
-                </option>
-              ))}
-            </Select>
-          </FormField>
+      <div className="mk-stack">
+        <div className="mk-form mk-form--2">
+          <Select
+            id="settle-account"
+            label="Courier account"
+            requiredMark
+            value={courierAccountId}
+            onChange={(e) => setCourierAccountId(e.target.value)}
+          >
+            <option value="">Choose an account…</option>
+            {accounts.data?.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label} · {a.courierCode} ({a.environment.toLowerCase()})
+              </option>
+            ))}
+          </Select>
 
-          <FormField label="Received on" htmlFor="settle-date" required>
-            <Input
-              id="settle-date"
-              type="date"
-              value={receivedAt}
-              onChange={(e) => setReceivedAt(e.target.value)}
-            />
-          </FormField>
+          <DateField
+            id="settle-date"
+            label="Received on"
+            requiredMark
+            value={receivedAt}
+            onChange={(e) => setReceivedAt(e.target.value)}
+          />
 
-          <FormField
+          <TextField
+            id="settle-ref"
             label="Payout reference (UTR)"
-            htmlFor="settle-ref"
             hint="Unique per account."
-            required
-          >
-            <Input
-              id="settle-ref"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder="DLV-PAYOUT-2026-07-21"
-              autoComplete="off"
-            />
-          </FormField>
+            requiredMark
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            placeholder="DLV-PAYOUT-2026-07-21"
+            autoComplete="off"
+            inputClassName="sk-ident"
+          />
 
-          <FormField
+          <TextField
+            id="settle-amount"
             label="Amount received (INR)"
-            htmlFor="settle-amount"
             hint="Exactly what landed in the bank."
-            required
-          >
-            <Input
-              id="settle-amount"
-              inputMode="decimal"
-              value={amountInr}
-              onChange={(e) => setAmountInr(e.target.value)}
-              placeholder="145320.00"
-            />
-          </FormField>
+            requiredMark
+            inputMode="decimal"
+            value={amountInr}
+            onChange={(e) => setAmountInr(e.target.value)}
+            placeholder="145320.00"
+          />
         </div>
 
         {/* ── allocation ── */}
-        <div className="border-border border-t pt-3">
-          <div className="mb-2 flex items-center justify-between">
-            <h3 className="text-text-muted text-xs font-medium tracking-wide uppercase">
-              Allocation
-            </h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() =>
-                setLines((prev) => [
-                  ...prev,
-                  { key: (prev.at(-1)?.key ?? 0) + 1, orderId: '', settledInr: '' },
-                ])
-              }
-            >
-              <Plus size={13} aria-hidden /> Add order
-            </Button>
-          </div>
-
-          <label className="border-border mb-3 flex cursor-pointer items-center gap-2 rounded-[10px] border border-dashed px-3 py-2 text-xs">
-            <Upload size={14} aria-hidden className="text-text-muted" />
-            <span className="text-text-muted">
-              {preview.isPending
-                ? 'Reading the file…'
-                : 'Upload the courier’s remittance export — matched on waybill'}
-            </span>
-            <input
-              type="file"
-              accept=".csv,text/csv,.xls,application/vnd.ms-excel,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className="sr-only"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f !== undefined) void loadFile(f);
-                e.target.value = '';
-              }}
-            />
-          </label>
-
-          {fileNotes !== null && (fileNotes.summary !== null || fileNotes.warnings.length > 0) && (
-            <div className="border-border mb-3 rounded-[10px] border p-2 text-xs">
-              {fileNotes.summary !== null && (
-                // Shown, never filled in: the file is the courier's claim,
-                // the bank statement is the fact, and the operator types
-                // the reference and amount from the latter.
-                <div className="text-text-body">
-                  The file says: UTR{' '}
-                  <span className="font-mono">
-                    {fileNotes.summary.references.join(', ') || '—'}
-                  </span>{' '}
-                  · collected <Money amount={fileNotes.summary.codInr} /> · kept back{' '}
-                  <Money amount={fileNotes.summary.deductedInr} /> · remitted{' '}
-                  <Money amount={fileNotes.summary.remittedInr} />
-                </div>
-              )}
-              {fileNotes.warnings.length > 0 && (
-                <ul className="text-text-muted mt-1 list-disc space-y-0.5 pl-4">
-                  {fileNotes.warnings.map((w) => (
-                    <li key={w}>{w}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
+        <h3 className="mk-form__heading">
+          Allocation
+          {lineAction('Add order', () =>
+            setLines((prev) => [
+              ...prev,
+              { key: (prev.at(-1)?.key ?? 0) + 1, orderId: '', settledInr: '' },
+            ]),
           )}
+        </h3>
 
-          {skipped.length > 0 && (
-            <div className="border-border mb-3 rounded-[10px] border p-2 text-xs">
-              <div className="text-text-body mb-1 font-medium">
-                {skipped.length} row(s) in the file were not allocated
-              </div>
-              {/* Named, not counted. "8 of 10 matched" tells an operator
-                  there is a problem; naming the waybills tells them
-                  which one to chase. */}
-              <ul className="text-text-muted space-y-0.5">
-                {skipped.slice(0, 8).map((r) => (
-                  <li key={r.line}>
-                    <span className="font-mono">{r.awbNumber}</span> — {r.problem}
-                  </li>
+        <label className="mk-callout mk-drop" data-tone="info">
+          <span className="mk-callout__icon" aria-hidden>
+            <Upload size={16} />
+          </span>
+          <span className="mk-callout__body">
+            {preview.isPending
+              ? 'Reading the file…'
+              : 'Upload the courier’s remittance export — matched on waybill'}
+          </span>
+          <input
+            type="file"
+            accept=".csv,text/csv,.xls,application/vnd.ms-excel,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="sr-only"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f !== undefined) void loadFile(f);
+              e.target.value = '';
+            }}
+          />
+        </label>
+
+        {preview.isPending && (
+          <ParachuteProgress
+            label="Reading the courier’s remittance file"
+            detail="Every row is matched on its waybill; rows that cannot be placed are listed, never dropped."
+          />
+        )}
+
+        {fileNotes !== null && (fileNotes.summary !== null || fileNotes.warnings.length > 0) && (
+          <div className="mk-panel">
+            {fileNotes.summary !== null && (
+              // Shown, never filled in: the file is the courier's claim,
+              // the bank statement is the fact, and the operator types
+              // the reference and amount from the latter.
+              <p className="mk-body">
+                The file says: UTR{' '}
+                <span className="sk-ident">{fileNotes.summary.references.join(', ') || '—'}</span> ·
+                collected <Money amount={fileNotes.summary.codInr} /> · kept back{' '}
+                <Money amount={fileNotes.summary.deductedInr} /> · remitted{' '}
+                <Money amount={fileNotes.summary.remittedInr} />
+              </p>
+            )}
+            {fileNotes.warnings.length > 0 && (
+              <ul className="mk-bullets">
+                {fileNotes.warnings.map((w) => (
+                  <li key={w}>{w}</li>
                 ))}
-                {skipped.length > 8 && <li>…and {skipped.length - 8} more</li>}
               </ul>
-            </div>
-          )}
+            )}
+          </div>
+        )}
 
-          <div className="space-y-2">
-            {lines.map((line) => (
-              <div key={line.key} className="flex items-center gap-2">
-                <Input
-                  aria-label="Order ID"
-                  value={line.orderId}
-                  onChange={(e) => updateLine(line.key, { orderId: e.target.value })}
-                  placeholder="Order ID"
+        {skipped.length > 0 && (
+          <MkCallout
+            tone="warn"
+            icon={<TriangleAlert size={16} />}
+            title={`${skipped.length} row(s) in the file were not allocated`}
+          >
+            {/* Named, not counted. "8 of 10 matched" tells an operator
+                there is a problem; naming the waybills tells them
+                which one to chase. */}
+            <ul className="mk-bullets">
+              {skipped.slice(0, 8).map((r) => (
+                <li key={r.line}>
+                  <span className="sk-ident">{r.awbNumber}</span> — {r.problem}
+                </li>
+              ))}
+              {skipped.length > 8 && <li>…and {skipped.length - 8} more</li>}
+            </ul>
+          </MkCallout>
+        )}
+
+        <div className="mk-stack mk-stack--tight">
+          {lines.map((line) => (
+            <div key={line.key} className="mk-line">
+              <TextField
+                aria-label="Order ID"
+                label="Order ID"
+                value={line.orderId}
+                onChange={(e) => updateLine(line.key, { orderId: e.target.value })}
+                autoComplete="off"
+                inputClassName="sk-ident"
+              />
+              <TextField
+                aria-label="Amount attributed to this order"
+                label="Amount"
+                inputMode="decimal"
+                value={line.settledInr}
+                onChange={(e) => updateLine(line.key, { settledInr: e.target.value })}
+                placeholder="0.00"
+              />
+              <button
+                type="button"
+                aria-label="Remove this line"
+                onClick={() =>
+                  setLines((prev) =>
+                    prev.length === 1 ? prev : prev.filter((l) => l.key !== line.key),
+                  )
+                }
+                disabled={lines.length === 1}
+                className="mk-icon-btn"
+              >
+                <Trash2 size={15} aria-hidden />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* What the courier kept back before paying. */}
+        <h3 className="mk-form__heading">Kept back by the courier</h3>
+        <div className="mk-form mk-form--3">
+          <TextField
+            id="settle-kept-fee"
+            label="Early-COD fee"
+            hint="Booked as an expense (Courier COD fees)."
+            inputMode="decimal"
+            value={kept.earlyCodFeeInr}
+            onChange={(e) => setKept((k) => ({ ...k, earlyCodFeeInr: e.target.value }))}
+            placeholder="0.00"
+          />
+          <TextField
+            id="settle-kept-freight"
+            label="Freight from COD"
+            hint="Booked as a courier wallet top-up."
+            inputMode="decimal"
+            value={kept.freightInr}
+            onChange={(e) => setKept((k) => ({ ...k, freightInr: e.target.value }))}
+            placeholder="0.00"
+          />
+          <TextField
+            id="settle-kept-rto"
+            label="RTO reversal"
+            hint="The file's total — name the orders below."
+            inputMode="decimal"
+            value={kept.rtoReversalInr}
+            onChange={(e) => setKept((k) => ({ ...k, rtoReversalInr: e.target.value }))}
+            placeholder="0.00"
+          />
+        </div>
+
+        {/* Each reversed order: its seller's COD credit is taken back
+            and our tax and fee on it returned, so it must be exact. */}
+        <div className="mk-card__head">
+          <span className="mk-small mk-card__titles">
+            Orders whose COD was reversed
+            {namedReversals.length > 0 && (
+              <>
+                {' '}
+                · <Money amount={reversedTotal} />
+              </>
+            )}
+          </span>
+          {lineAction('Add reversed order', () =>
+            setReversals((prev) => [
+              ...prev,
+              { key: (prev.at(-1)?.key ?? 0) + 1, orderId: '', settledInr: '' },
+            ]),
+          )}
+        </div>
+        {reversals.length > 0 && (
+          <div className="mk-stack mk-stack--tight">
+            {reversals.map((r) => (
+              <div key={r.key} className="mk-line">
+                <TextField
+                  aria-label="Reversed order ID"
+                  label="Reversed order ID"
+                  value={r.orderId}
+                  onChange={(e) =>
+                    setReversals((prev) =>
+                      prev.map((x) => (x.key === r.key ? { ...x, orderId: e.target.value } : x)),
+                    )
+                  }
                   autoComplete="off"
-                  className="flex-1"
+                  inputClassName="sk-ident"
                 />
-                <Input
-                  aria-label="Amount attributed to this order"
+                <TextField
+                  aria-label="COD reversed for this order"
+                  label="COD reversed"
                   inputMode="decimal"
-                  value={line.settledInr}
-                  onChange={(e) => updateLine(line.key, { settledInr: e.target.value })}
+                  value={r.settledInr}
+                  onChange={(e) =>
+                    setReversals((prev) =>
+                      prev.map((x) => (x.key === r.key ? { ...x, settledInr: e.target.value } : x)),
+                    )
+                  }
                   placeholder="0.00"
-                  className="w-32 text-right"
                 />
                 <button
                   type="button"
-                  aria-label="Remove this line"
-                  onClick={() =>
-                    setLines((prev) =>
-                      prev.length === 1 ? prev : prev.filter((l) => l.key !== line.key),
-                    )
-                  }
-                  disabled={lines.length === 1}
-                  className="text-text-faint hover:text-[var(--color-critical)] disabled:opacity-30 shrink-0 rounded-[4px] p-1.5 transition-colors"
+                  aria-label="Remove this reversed order"
+                  onClick={() => setReversals((prev) => prev.filter((x) => x.key !== r.key))}
+                  className="mk-icon-btn"
                 >
-                  <Trash2 size={14} aria-hidden />
+                  <Trash2 size={15} aria-hidden />
                 </button>
               </div>
             ))}
           </div>
+        )}
 
-          {/* What the courier kept back before paying. */}
-          <div className="border-border mt-3 border-t pt-3">
-            <h3 className="text-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
-              Kept back by the courier
-            </h3>
-            <div className="grid gap-3 sm:grid-cols-3">
-              <FormField
-                label="Early-COD fee"
-                htmlFor="settle-kept-fee"
-                hint="Booked as an expense (Courier COD fees)."
-              >
-                <Input
-                  id="settle-kept-fee"
-                  inputMode="decimal"
-                  value={kept.earlyCodFeeInr}
-                  onChange={(e) => setKept((k) => ({ ...k, earlyCodFeeInr: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </FormField>
-              <FormField
-                label="Freight from COD"
-                htmlFor="settle-kept-freight"
-                hint="Booked as a courier wallet top-up."
-              >
-                <Input
-                  id="settle-kept-freight"
-                  inputMode="decimal"
-                  value={kept.freightInr}
-                  onChange={(e) => setKept((k) => ({ ...k, freightInr: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </FormField>
-              <FormField
-                label="RTO reversal"
-                htmlFor="settle-kept-rto"
-                hint="The file's total — name the orders below."
-              >
-                <Input
-                  id="settle-kept-rto"
-                  inputMode="decimal"
-                  value={kept.rtoReversalInr}
-                  onChange={(e) => setKept((k) => ({ ...k, rtoReversalInr: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </FormField>
-            </div>
-
-            {/* Each reversed order: its seller's COD credit is taken back
-                and our tax and fee on it returned, so it must be exact. */}
-            <div className="mt-3">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-text-muted text-xs">
-                  Orders whose COD was reversed
-                  {namedReversals.length > 0 && (
-                    <>
-                      {' '}
-                      · <Money amount={reversedTotal} />
-                    </>
-                  )}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() =>
-                    setReversals((prev) => [
-                      ...prev,
-                      { key: (prev.at(-1)?.key ?? 0) + 1, orderId: '', settledInr: '' },
-                    ])
-                  }
-                >
-                  <Plus size={13} aria-hidden /> Add reversed order
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {reversals.map((r) => (
-                  <div key={r.key} className="flex items-center gap-2">
-                    <Input
-                      aria-label="Reversed order ID"
-                      value={r.orderId}
-                      onChange={(e) =>
-                        setReversals((prev) =>
-                          prev.map((x) =>
-                            x.key === r.key ? { ...x, orderId: e.target.value } : x,
-                          ),
-                        )
-                      }
-                      placeholder="Order ID"
-                      autoComplete="off"
-                      className="flex-1"
-                    />
-                    <Input
-                      aria-label="COD reversed for this order"
-                      inputMode="decimal"
-                      value={r.settledInr}
-                      onChange={(e) =>
-                        setReversals((prev) =>
-                          prev.map((x) =>
-                            x.key === r.key ? { ...x, settledInr: e.target.value } : x,
-                          ),
-                        )
-                      }
-                      placeholder="0.00"
-                      className="w-32 text-right"
-                    />
-                    <button
-                      type="button"
-                      aria-label="Remove this reversed order"
-                      onClick={() => setReversals((prev) => prev.filter((x) => x.key !== r.key))}
-                      className="text-text-faint hover:text-[var(--color-critical)] shrink-0 rounded-[4px] p-1.5 transition-colors"
-                    >
-                      <Trash2 size={14} aria-hidden />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* The reconciliation line. Reads as arithmetic, on purpose. */}
-          <div className="border-border mt-3 flex items-center justify-between border-t pt-2 text-xs">
-            <span className="text-text-muted">
-              Allocated <Money amount={allocated} /> of <Money amount={received} /> received
-              {keptTotal > 0 && (
-                <>
-                  {' '}
-                  + <Money amount={keptTotal} /> kept back
-                </>
-              )}
-            </span>
-            {Math.abs(remainder) < 0.005 ? (
-              <span className="text-[var(--status-delivered-fg)]">Fully allocated</span>
-            ) : (
-              <span className="text-[var(--status-pending-fg)]">
-                {remainder > 0 ? 'Unexplained: ' : 'Over-allocated by: '}
-                <Money amount={Math.abs(remainder)} />
-              </span>
-            )}
-          </div>
-        </div>
-
-        <FormField label="Note" htmlFor="settle-note" hint="Optional.">
-          <Textarea
-            id="settle-note"
-            rows={2}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </FormField>
-
-        {error !== null && <ErrorNote message={error} />}
-      </div>
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={
-            courierAccountId === '' ||
-            reference.trim() === '' ||
-            amountInr.trim() === '' ||
-            filled.length === 0 ||
-            record.isPending
+        {/* The reconciliation line. Reads as arithmetic, on purpose. */}
+        <MkCallout
+          tone={Math.abs(remainder) < 0.005 ? 'good' : 'warn'}
+          icon={
+            Math.abs(remainder) < 0.005 ? <CircleCheck size={16} /> : <TriangleAlert size={16} />
           }
-          onClick={() => void submit()}
         >
-          {record.isPending ? 'Recording…' : 'Record payout'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+          <p>
+            Allocated <Money amount={allocated} /> of <Money amount={received} /> received
+            {keptTotal > 0 && (
+              <>
+                {' '}
+                + <Money amount={keptTotal} /> kept back
+              </>
+            )}
+          </p>
+          {Math.abs(remainder) < 0.005 ? (
+            <p className="mk-strong">Fully allocated</p>
+          ) : (
+            <p className="mk-strong">
+              {remainder > 0 ? 'Unexplained: ' : 'Over-allocated by: '}
+              <Money amount={Math.abs(remainder)} />
+            </p>
+          )}
+        </MkCallout>
+
+        <TextArea
+          id="settle-note"
+          label="Note"
+          hint="Optional."
+          rows={2}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+
+        {error !== null && <MkAlert>{error}</MkAlert>}
+      </div>
+    </Dialog>
   );
 }
 

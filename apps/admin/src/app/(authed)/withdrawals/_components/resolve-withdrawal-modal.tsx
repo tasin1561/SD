@@ -2,20 +2,13 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  Button,
-  DescriptionList,
-  ErrorNote,
-  FormField,
-  Ident,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  Textarea,
-  useToast,
-  WithdrawalStatusBadge,
-} from '@skydrop/ui/components';
+import { Ident, Money } from '@skydrop/ui/components';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
+import { MkAlert, MkDl, WithdrawalChip } from '../../seller-wallets/_components/money-parts';
 import {
   useMarkWithdrawalPaid,
   useRejectWithdrawal,
@@ -69,6 +62,7 @@ export function ResolveWithdrawalModal({
     setError(null);
   }, [request?.id]);
 
+  /** Rejects on a refusal (after setting the verdict) so the button shows it. */
   async function submit(): Promise<void> {
     if (request === null) return;
     setError(null);
@@ -89,6 +83,7 @@ export function ResolveWithdrawalModal({
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -96,27 +91,46 @@ export function ResolveWithdrawalModal({
   const canSubmit = mode === 'paid' ? remittanceId.trim() !== '' : reason.trim() !== '';
 
   return (
-    <Modal
+    <Dialog
       open={request !== null}
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
       size="md"
+      tone={mode === 'reject' ? 'critical' : 'default'}
+      locked={busy}
       title="Resolve withdrawal request"
       description={
         request === null ? undefined : (
-          <span className="flex items-center gap-2">
-            <WithdrawalStatusBadge status={request.status} />
-            <span className="text-text-faint">
-              raised {new Date(request.createdAt).toLocaleString()}
-            </span>
+          <span className="mk-balances">
+            <WithdrawalChip status={request.status} />
+            <span className="mk-faint">raised {new Date(request.createdAt).toLocaleString()}</span>
           </span>
         )
       }
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="md" onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant={mode === 'reject' ? 'destructive' : 'primary'}
+            size="md"
+            disabled={!canSubmit || !canResolve}
+            labels={{
+              idle: mode === 'paid' ? 'Mark paid' : 'Reject request',
+              busy: 'Saving…',
+              done: 'Saved',
+              error: 'Refused',
+            }}
+            onAction={submit}
+          />
+        </DialogFooter>
+      }
     >
       {request !== null && (
-        <div className="space-y-4">
-          <DescriptionList
+        <div className="mk-stack">
+          <MkDl
             items={[
               {
                 label: 'Amount',
@@ -127,10 +141,7 @@ export function ResolveWithdrawalModal({
               {
                 label: 'Seller',
                 value: (
-                  <Link
-                    href={`/sellers/${request.sellerId}`}
-                    className="text-accent hover:underline"
-                  >
+                  <Link href={`/sellers/${request.sellerId}`} className="mk-inline-link">
                     <Ident value={request.sellerId} />
                   </Link>
                 ),
@@ -144,7 +155,7 @@ export function ResolveWithdrawalModal({
                 label: 'Note',
                 value:
                   request.note === null || request.note === '' ? (
-                    <span className="text-text-faint">—</span>
+                    <span className="mk-faint">—</span>
                   ) : (
                     request.note
                   ),
@@ -152,73 +163,50 @@ export function ResolveWithdrawalModal({
             ]}
           />
 
-          <fieldset className="border-border border-t pt-3">
+          <fieldset className="mk-radios">
             <legend className="sr-only">Outcome</legend>
-            <div className="flex gap-4 text-sm">
-              {(payable ? (['paid', 'reject'] as const) : (['reject'] as const)).map((m) => (
-                <label key={m} className="flex items-center gap-1.5">
-                  <input
-                    type="radio"
-                    name="withdrawal-mode"
-                    value={m}
-                    checked={mode === m}
-                    onChange={() => setMode(m)}
-                  />
-                  <span className="text-text-body">{m === 'paid' ? 'Mark paid' : 'Reject'}</span>
-                </label>
-              ))}
-            </div>
+            {(payable ? (['paid', 'reject'] as const) : (['reject'] as const)).map((m) => (
+              <label key={m} className="mk-radio">
+                <input
+                  type="radio"
+                  name="withdrawal-mode"
+                  value={m}
+                  checked={mode === m}
+                  onChange={() => setMode(m)}
+                />
+                <span>{m === 'paid' ? 'Mark paid' : 'Reject'}</span>
+              </label>
+            ))}
           </fieldset>
 
           {mode === 'paid' ? (
-            <FormField
+            <TextField
+              id="wd-remittance"
               label="Remittance ID"
-              htmlFor="wd-remittance"
               hint="The remittance that actually paid this out. Record it under Remittances first — this only links the two."
-              required
-            >
-              <Input
-                id="wd-remittance"
-                value={remittanceId}
-                onChange={(e) => setRemittanceId(e.target.value)}
-                placeholder="0198f3c2-…"
-                autoComplete="off"
-              />
-            </FormField>
+              requiredMark
+              value={remittanceId}
+              onChange={(e) => setRemittanceId(e.target.value)}
+              placeholder="0198f3c2-…"
+              autoComplete="off"
+              inputClassName="sk-ident"
+            />
           ) : (
-            <FormField
+            <TextArea
+              id="wd-reason"
               label="Reason"
-              htmlFor="wd-reason"
               hint="Shown to the seller. Say what would make a resubmission succeed."
-              required
-            >
-              <Textarea
-                id="wd-reason"
-                rows={3}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Balance is below the minimum withdrawal threshold this cycle."
-              />
-            </FormField>
+              requiredMark
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Balance is below the minimum withdrawal threshold this cycle."
+            />
           )}
 
-          {error !== null && <ErrorNote message={error} />}
+          {error !== null && <MkAlert>{error}</MkAlert>}
         </div>
       )}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant={mode === 'reject' ? 'destructive' : 'primary'}
-          size="md"
-          disabled={!canSubmit || busy || !canResolve}
-          onClick={() => void submit()}
-        >
-          {busy ? 'Saving…' : mode === 'paid' ? 'Mark paid' : 'Reject request'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

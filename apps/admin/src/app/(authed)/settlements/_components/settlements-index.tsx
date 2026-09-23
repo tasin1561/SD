@@ -2,31 +2,21 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorNote,
-  Ident,
-  Money,
-  Num,
-  PageHeader,
-  Section,
-  Select,
-  SkeletonRows,
-  Stat,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-} from '@skydrop/ui/components';
+import { Plus } from 'lucide-react';
+import { Ident, Money, Num } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Button } from '@skydrop/ui/app/button';
+import { Select } from '@skydrop/ui/app/select';
 import { useReconciliation, useSettlementsList, type SettlementView } from '@/lib/ops-hooks';
 import { RecordSettlementModal } from './record-settlement-modal';
 import { AllocateSettlementModal } from './allocate-settlement-modal';
 import { usePermission } from '@/lib/use-permission';
 import { useRouter } from 'next/navigation';
+import { MkCard, MkSection } from '../../seller-wallets/_components/money-parts';
 
 /**
  * Courier settlements + float reconciliation (R2c).
@@ -53,13 +43,18 @@ export function SettlementsIndex(): ReactElement {
   const shortPaid = recon.data?.shortPaidOrders ?? [];
 
   return (
-    <div>
+    <div className="mk-page">
       <PageHeader
         title="Courier settlements"
         subtitle="Every rupee the courier pays us, matched to the orders it covers. What is not matched is float we are carrying on the sellers' behalf."
         action={
           canWrite ? (
-            <Button variant="primary" size="md" onClick={() => setRecording(true)}>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Plus size={15} />}
+              onClick={() => setRecording(true)}
+            >
               Record payout
             </Button>
           ) : null
@@ -67,10 +62,10 @@ export function SettlementsIndex(): ReactElement {
       />
 
       {/* ── the alarm ── */}
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Stat
+      <div className="mk-kpis">
+        <KpiCard
           label="Outstanding float"
-          value={
+          figure={
             recon.isLoading ? (
               '—'
             ) : (
@@ -80,31 +75,29 @@ export function SettlementsIndex(): ReactElement {
           tone="neutral"
           hint="Delivered COD no payout covers yet"
         />
-        <Stat
+        <KpiCard
           label={`Overdue past ${overdueAfterDays}d`}
-          value={recon.isLoading ? '—' : <Money amount={overdue} decimals={false} />}
-          tone={overdue > 0 ? 'bad' : 'good'}
+          figure={recon.isLoading ? '—' : <Money amount={overdue} decimals={false} />}
+          tone={overdue > 0 ? 'debit' : 'credit'}
           hint={`${recon.data?.overdueOrders.length ?? 0} order${
             (recon.data?.overdueOrders.length ?? 0) === 1 ? '' : 's'
           } past the settlement window`}
         />
-        <Stat
+        <KpiCard
           label="Short-paid orders"
-          value={recon.isLoading ? '—' : shortPaid.length}
-          tone={shortPaid.length > 0 ? 'warn' : 'neutral'}
+          figure={recon.isLoading ? '—' : shortPaid.length}
+          tone={shortPaid.length > 0 ? 'pending' : 'neutral'}
           hint="A payout touched these but under-paid"
         />
       </div>
 
-      <div className="mb-4 flex items-center gap-2">
-        <label className="text-text-muted text-xs" htmlFor="overdue-days">
-          Treat unsettled as overdue after
-        </label>
+      <div className="mk-filters">
         <Select
           id="overdue-days"
+          label="Treat unsettled as overdue after"
+          hint="Delhivery states 5–10 days; 10 is the top of that window."
           value={overdueAfterDays}
           onChange={(e) => setOverdueAfterDays(Number(e.target.value))}
-          className="w-auto text-xs"
         >
           {[5, 7, 10, 14, 21, 30].map((d) => (
             <option key={d} value={d}>
@@ -112,62 +105,58 @@ export function SettlementsIndex(): ReactElement {
             </option>
           ))}
         </Select>
-        <span className="text-text-faint text-xs">
-          Delhivery states 5–10 days; 10 is the top of that window.
-        </span>
       </div>
 
       {recon.isError && (
-        <ErrorNote
-          className="mb-4"
+        <ErrorState
           message={recon.error?.message ?? 'Could not load the reconciliation.'}
           retry={() => void recon.refetch()}
         />
       )}
 
       {/* ── overdue orders ── */}
-      <Section
-        title="Overdue"
-        subtitle="Delivered, COD collected by the courier, no payout has covered it inside the window."
-      >
+      <MkSection>
+        <SectionHeading
+          title="Overdue"
+          note="Delivered, COD collected by the courier, no payout has covered it inside the window."
+        />
         {recon.isLoading ? (
-          <Card>
-            <SkeletonRows rows={4} cols={5} />
-          </Card>
+          <SkeletonRows rows={4} cols={6} label="Loading overdue orders…" />
         ) : (recon.data?.overdueOrders.length ?? 0) === 0 ? (
           <EmptyState
+            tone="positive"
             title="Nothing overdue"
             description="Every delivered COD order is either settled or still inside the expected window."
           />
         ) : (
-          <UnsettledTable rows={recon.data?.overdueOrders ?? []} />
+          <UnsettledTable caption="Overdue orders" rows={recon.data?.overdueOrders ?? []} />
         )}
-      </Section>
+      </MkSection>
 
       {/* ── short-paid ── */}
       {shortPaid.length > 0 && (
-        <Section
-          title="Short-paid"
-          subtitle="A payout allocated less than the order was expected to yield. Each of these is a conversation with the courier."
-        >
-          <UnsettledTable rows={shortPaid} />
-        </Section>
+        <MkSection>
+          <SectionHeading
+            title="Short-paid"
+            note="A payout allocated less than the order was expected to yield. Each of these is a conversation with the courier."
+          />
+          <UnsettledTable caption="Short-paid orders" rows={shortPaid} />
+        </MkSection>
       )}
 
       {/* ── the payout log ── */}
-      <Section
-        title="Recorded payouts"
-        subtitle="Each bank credit, and the orders it was allocated against."
-      >
+      <MkSection>
+        <SectionHeading
+          title="Recorded payouts"
+          note="Each bank credit, and the orders it was allocated against."
+        />
         {list.isError ? (
-          <ErrorNote
+          <ErrorState
             message={list.error?.message ?? 'Could not load payouts.'}
             retry={() => void list.refetch()}
           />
         ) : list.isLoading ? (
-          <Card>
-            <SkeletonRows rows={4} cols={5} />
-          </Card>
+          <SkeletonRows rows={4} cols={7} label="Loading payouts…" />
         ) : (list.data?.length ?? 0) === 0 ? (
           <EmptyState
             title="No payouts recorded"
@@ -181,71 +170,76 @@ export function SettlementsIndex(): ReactElement {
             }
           />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Reference</Th>
-                <Th>Received</Th>
-                <Th align="right">Amount</Th>
-                <Th align="right">Allocated</Th>
-                <Th align="right">Unallocated</Th>
-                <Th align="right">Orders</Th>
-                <Th />
-              </Tr>
-            </THead>
-            <TBody>
-              {list.data?.map((s) => {
-                const unallocated = Number(s.unallocatedInr);
-                return (
-                  <Tr key={s.id}>
-                    <Td>
-                      <Ident value={s.reference} />
-                      {s.note !== null && s.note !== '' && (
-                        <div className="text-text-faint mt-0.5 text-xs">{s.note}</div>
-                      )}
-                    </Td>
-                    <Td className="text-text-muted whitespace-nowrap">
-                      {new Date(s.receivedAt).toLocaleDateString()}
-                    </Td>
-                    <Td align="right">
-                      <Money amount={s.amountInr} />
-                    </Td>
-                    <Td align="right">
-                      <Money amount={s.allocatedInr} />
-                    </Td>
-                    <Td align="right">
-                      {unallocated === 0 ? (
-                        <span className="text-text-faint">—</span>
-                      ) : (
-                        <span
-                          className="text-[var(--color-critical)]"
-                          title="This part of the payout is not explained by any order"
-                        >
-                          <Money amount={s.unallocatedInr} />
-                        </span>
-                      )}
-                    </Td>
-                    <Td align="right">
-                      <Num value={s.lines.length} />
-                    </Td>
-                    <Td align="right">
-                      {/* Only where there is money left to explain. An
-                          always-on action would invite allocating a
-                          fully-explained payout, which the server
-                          refuses anyway. */}
-                      {unallocated !== 0 && canWrite && (
-                        <Button variant="ghost" onClick={() => setAllocating(s)}>
-                          Allocate more
-                        </Button>
-                      )}
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
-          </Table>
+          <MkCard flush>
+            <Table caption="Recorded payouts">
+              <THead>
+                <Tr>
+                  <Th>Reference</Th>
+                  <Th>Received</Th>
+                  <Th align="right">Amount</Th>
+                  <Th align="right">Allocated</Th>
+                  <Th align="right">Unallocated</Th>
+                  <Th align="right">Orders</Th>
+                  <Th />
+                </Tr>
+              </THead>
+              <TBody>
+                {list.data?.map((s) => {
+                  const unallocated = Number(s.unallocatedInr);
+                  return (
+                    <Tr key={s.id}>
+                      <Td>
+                        <div className="mk-cell">
+                          <Ident value={s.reference} />
+                          {s.note !== null && s.note !== '' && (
+                            <span className="mk-faint">{s.note}</span>
+                          )}
+                        </div>
+                      </Td>
+                      <Td className="mk-when sk-figure">
+                        {new Date(s.receivedAt).toLocaleDateString()}
+                      </Td>
+                      <Td align="right">
+                        <Money amount={s.amountInr} />
+                      </Td>
+                      <Td align="right">
+                        <Money amount={s.allocatedInr} />
+                      </Td>
+                      <Td align="right">
+                        {unallocated === 0 ? (
+                          <span className="mk-faint">—</span>
+                        ) : (
+                          <span
+                            className="mk-text"
+                            data-tone="critical"
+                            title="This part of the payout is not explained by any order"
+                          >
+                            <Money amount={s.unallocatedInr} />
+                          </span>
+                        )}
+                      </Td>
+                      <Td align="right">
+                        <Num value={s.lines.length} />
+                      </Td>
+                      <Td align="right">
+                        {/* Only where there is money left to explain. An
+                            always-on action would invite allocating a
+                            fully-explained payout, which the server
+                            refuses anyway. */}
+                        {unallocated !== 0 && canWrite && (
+                          <Button variant="ghost" size="sm" onClick={() => setAllocating(s)}>
+                            Allocate more
+                          </Button>
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            </Table>
+          </MkCard>
         )}
-      </Section>
+      </MkSection>
 
       <RecordSettlementModal open={recording} onOpenChange={setRecording} />
       {allocating !== null && (
@@ -265,7 +259,9 @@ export function SettlementsIndex(): ReactElement {
 
 function UnsettledTable({
   rows,
+  caption,
 }: {
+  readonly caption: string;
   readonly rows: ReadonlyArray<{
     orderId: string;
     orderNumber: string;
@@ -278,43 +274,45 @@ function UnsettledTable({
 }): ReactElement {
   const router = useRouter();
   return (
-    <Table>
-      <THead>
-        <Tr>
-          <Th>Order</Th>
-          <Th>Delivered</Th>
-          <Th align="right">Age</Th>
-          <Th align="right">Expected</Th>
-          <Th align="right">Settled</Th>
-          <Th align="right">Shortfall</Th>
-        </Tr>
-      </THead>
-      <TBody>
-        {rows.map((r) => (
-          <Tr key={r.orderId} onActivate={() => router.push(`/orders/${r.orderId}`)}>
-            <Td>
-              <Link href={`/orders/${r.orderId}`} className="text-accent hover:underline">
-                <Ident value={r.orderNumber} />
-              </Link>
-            </Td>
-            <Td className="text-text-muted whitespace-nowrap">
-              {r.deliveredAt === null ? '—' : new Date(r.deliveredAt).toLocaleDateString()}
-            </Td>
-            <Td align="right">
-              <Num value={r.ageDays} suffix="d" />
-            </Td>
-            <Td align="right">
-              <Money amount={r.expectedInr} />
-            </Td>
-            <Td align="right">
-              <Money amount={r.settledInr} />
-            </Td>
-            <Td align="right">
-              <Money amount={r.shortfallInr} direction="debit" />
-            </Td>
+    <MkCard flush>
+      <Table caption={caption}>
+        <THead>
+          <Tr>
+            <Th>Order</Th>
+            <Th>Delivered</Th>
+            <Th align="right">Age</Th>
+            <Th align="right">Expected</Th>
+            <Th align="right">Settled</Th>
+            <Th align="right">Shortfall</Th>
           </Tr>
-        ))}
-      </TBody>
-    </Table>
+        </THead>
+        <TBody>
+          {rows.map((r) => (
+            <Tr key={r.orderId} onActivate={() => router.push(`/orders/${r.orderId}`)}>
+              <Td>
+                <Link href={`/orders/${r.orderId}`} className="mk-inline-link">
+                  <Ident value={r.orderNumber} />
+                </Link>
+              </Td>
+              <Td className="mk-when sk-figure">
+                {r.deliveredAt === null ? '—' : new Date(r.deliveredAt).toLocaleDateString()}
+              </Td>
+              <Td align="right">
+                <Num value={r.ageDays} suffix="d" />
+              </Td>
+              <Td align="right">
+                <Money amount={r.expectedInr} />
+              </Td>
+              <Td align="right">
+                <Money amount={r.settledInr} />
+              </Td>
+              <Td align="right">
+                <Money amount={r.shortfallInr} direction="debit" />
+              </Td>
+            </Tr>
+          ))}
+        </TBody>
+      </Table>
+    </MkCard>
   );
 }

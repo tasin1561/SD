@@ -1,22 +1,20 @@
 'use client';
 
-import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  Select,
-  Skeleton,
-  Textarea,
-} from '@skydrop/ui/components';
+import { useEffect, useId, useMemo, useState, type FormEvent, type ReactElement } from 'react';
+import { Info } from 'lucide-react';
+import { Ident, Money } from '@skydrop/ui/components';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Button } from '@skydrop/ui/app/button';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
 import type { CreateRemittanceRequest } from '@skydrop/api-client';
 import { useCreateRemittance, useSellersList, useSellerWalletBalance } from '@/lib/api-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { PayoutInstructionPanel } from './payout-instruction-panel';
 import { serverVerdict } from '@/lib/server-verdict';
+import { MkAlert, MkCallout, MkDl } from '../../seller-wallets/_components/money-parts';
 
 /**
  * Record a remittance. Two-currency model:
@@ -147,6 +145,10 @@ export function RemittanceFormModal({
   // across retries: a retried save is answered with the remittance
   // already recorded, so the seller's wallet is never debited twice.
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+  // The checked request, waiting on the restating confirm. The SAME body
+  // (and so the same idempotency key) is what the confirm sends.
+  const [confirming, setConfirming] = useState<CreateRemittanceRequest | null>(null);
+  const formId = useId();
 
   // Same-currency → force fxRate=1.
   useEffect(() => {
@@ -226,45 +228,73 @@ export function RemittanceFormModal({
       setError('Bank fee must be a number');
       return;
     }
+    const body: CreateRemittanceRequest = {
+      sellerId,
+      currency,
+      amount: dst,
+      sourceCurrency,
+      sourceAmount: src,
+      fxRateSnapshot: fx,
+      bankReference: bankReference.trim(),
+      paidFromAccountId,
+      paidAt: new Date(paidAt).toISOString(),
+      ...(note.trim() ? { note: note.trim() } : {}),
+      // Sent as typed: the server decides what a valid fee is (FE-2).
+      ...(fee !== null ? { bankFee: fee } : {}),
+      idempotencyKey,
+    };
+    // Checked; now restated before it is sent (a remittance debits the
+    // seller's wallet and records cash leaving our account).
+    setConfirming(body);
+  }
+
+  /** The confirmed request, exactly as checked. Rejects on a refusal. */
+  async function post(): Promise<void> {
+    if (confirming === null) return;
+    setError(null);
     setBusy(true);
     try {
-      const body: CreateRemittanceRequest = {
-        sellerId,
-        currency,
-        amount: dst,
-        sourceCurrency,
-        sourceAmount: src,
-        fxRateSnapshot: fx,
-        bankReference: bankReference.trim(),
-        paidFromAccountId,
-        paidAt: new Date(paidAt).toISOString(),
-        ...(note.trim() ? { note: note.trim() } : {}),
-        // Sent as typed: the server decides what a valid fee is (FE-2).
-        ...(fee !== null ? { bankFee: fee } : {}),
-        idempotencyKey,
-      };
-      const created = await create.mutateAsync(body);
+      const created = await create.mutateAsync(confirming);
+      setConfirming(null);
       onSuccess(created);
     } catch (err) {
       setError(fmtError(err));
+      throw err;
     } finally {
       setBusy(false);
     }
   }
 
+  const sellerName =
+    sellers.data?.items.find((x) => x.id === (confirming?.sellerId ?? sellerId))?.companyName ??
+    null;
+  const paidFrom = (bankAccounts.data ?? []).find((a) => a.id === confirming?.paidFromAccountId);
+
   return (
-    <Modal
-      open
-      onOpenChange={(o) => {
-        if (!o) onClose();
-      }}
-      title="Record remittance"
-      description="Debits the seller's wallet by the source amount and records the cash leaving the account you paid from. A bank fee is booked as our expense."
-      size="lg"
-    >
-      <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
-        <FormField label="Seller" required>
+    <>
+      <Dialog
+        open
+        onOpenChange={(o) => {
+          if (!o) onClose();
+        }}
+        locked={busy}
+        title="Record remittance"
+        description="Debits the seller's wallet by the source amount and records the cash leaving the account you paid from. A bank fee is booked as our expense."
+        size="lg"
+        footer={
+          <DialogFooter>
+            <Button type="button" variant="secondary" size="md" disabled={busy} onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" form={formId} variant="primary" size="md" disabled={busy}>
+              {busy ? 'Recording…' : 'Record remittance'}
+            </Button>
+          </DialogFooter>
+        }
+      >
+        <form id={formId} onSubmit={(e) => void onSubmit(e)} className="mk-stack">
           <Select
+            label="Seller"
             value={sellerId}
             onChange={(e) => setSellerId(e.target.value)}
             required
@@ -277,83 +307,86 @@ export function RemittanceFormModal({
               </option>
             ))}
           </Select>
-        </FormField>
 
-        {sellerId && (
-          <div className="rounded-[6px] border border-border bg-surface-raised px-3 py-2 text-xs">
-            <div className="text-text-faint uppercase tracking-wide mb-1">
-              Current wallet balance
+          {sellerId && (
+            <div className="mk-panel">
+              <div className="mk-panel__part">
+                <p className="mk-panel__title">Current wallet balance</p>
+                {balance.isLoading ? (
+                  <Skeleton height={16} width="50%" />
+                ) : balance.isError ? (
+                  <div className="mk-text" data-tone="critical">
+                    {serverVerdict(balance.error, 'Failed to load balance')}
+                  </div>
+                ) : (
+                  <div className="mk-balances">
+                    {(balance.data?.balances ?? []).map((b) => {
+                      const amt = Number(b.balance);
+                      const money = (
+                        <Money
+                          amount={b.balance}
+                          currency={b.currency === 'BDT' ? 'BDT' : 'INR'}
+                          convert={false}
+                        />
+                      );
+                      // A converted figure is the same money in another
+                      // currency, so it cannot be clicked to fill a wallet
+                      // debit — there is no taka pot to debit from.
+                      return (
+                        <div key={b.currency} className="mk-balances">
+                          <span className="mk-small">
+                            {b.currency}
+                            {b.isConverted ? ' (≈)' : ''}:
+                          </span>
+                          {b.isConverted ? (
+                            <span
+                              className="mk-small"
+                              title={b.fxRate === null ? '' : `Converted at ₹1 = ৳${b.fxRate}`}
+                            >
+                              {money}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSourceAmount(b.balance)}
+                              disabled={amt <= 0}
+                              className="mk-inline-link"
+                              title={amt > 0 ? 'Click to fill source amount' : ''}
+                            >
+                              {money}
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
-            {balance.isLoading ? (
-              <Skeleton className="h-4 w-1/2" />
-            ) : balance.isError ? (
-              <div className="text-critical">
-                {serverVerdict(balance.error, 'Failed to load balance')}
-              </div>
-            ) : (
-              <div className="flex items-center gap-4 font-mono">
-                {(balance.data?.balances ?? []).map((b) => {
-                  const amt = Number(b.balance);
-                  const money = (
-                    <Money
-                      amount={b.balance}
-                      currency={b.currency === 'BDT' ? 'BDT' : 'INR'}
-                      convert={false}
-                    />
-                  );
-                  // A converted figure is the same money in another
-                  // currency, so it cannot be clicked to fill a wallet
-                  // debit — there is no taka pot to debit from.
-                  return (
-                    <div key={b.currency} className="flex items-baseline gap-1">
-                      <span className="text-text-muted">
-                        {b.currency}
-                        {b.isConverted ? ' (≈)' : ''}:
-                      </span>
-                      {b.isConverted ? (
-                        <span
-                          className="text-text-muted"
-                          title={b.fxRate === null ? '' : `Converted at ₹1 = ৳${b.fxRate}`}
-                        >
-                          {money}
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setSourceAmount(b.balance)}
-                          disabled={amt <= 0}
-                          className={amt > 0 ? 'text-accent hover:underline' : 'text-text-muted'}
-                          title={amt > 0 ? 'Click to fill source amount' : ''}
-                        >
-                          {money}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        )}
+          )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField
-            label="Wallet currency (debit)"
-            hint="The wallet is kept in rupees; taka is a conversion of it, not a second pot."
-          >
-            <Input value="INR" disabled readOnly />
-          </FormField>
-          <FormField label="Bank currency (credit hit account)" required>
-            <Select value={currency} onChange={(e) => setCurrency(e.target.value as 'INR' | 'BDT')}>
+          <div className="mk-form mk-form--2">
+            <TextField
+              label="Wallet currency (debit)"
+              hint="The wallet is kept in rupees; taka is a conversion of it, not a second pot."
+              value="INR"
+              disabled
+              readOnly
+            />
+            <Select
+              label="Bank currency (credit hit account)"
+              requiredMark
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value as 'INR' | 'BDT')}
+            >
               <option value="INR">INR</option>
               <option value="BDT">BDT</option>
             </Select>
-          </FormField>
-        </div>
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label={`Source amount (${sourceCurrency})`} required>
-            <Input
+          <div className="mk-form mk-form--2">
+            <TextField
+              label={`Source amount (${sourceCurrency})`}
               type="number"
               min={0.01}
               step="0.01"
@@ -361,21 +394,17 @@ export function RemittanceFormModal({
               onChange={(e) => setSourceAmount(e.target.value)}
               required
             />
-          </FormField>
-          <FormField
-            label="FX rate"
-            hint={
-              sourceCurrency === currency
-                ? 'Same currency — locked at 1'
-                : systemFxRate === null
-                  ? `1 ${sourceCurrency} = X ${currency} — no system rate is set for this pair, so type the one the bank gave you`
-                  : fxTouched && fxRate !== String(systemFxRate)
-                    ? `1 ${sourceCurrency} = X ${currency} · system rate is ${systemFxRate} — recorded as an FX spread`
-                    : `1 ${sourceCurrency} = X ${currency} · from the system rate (${systemFxRate})`
-            }
-            required
-          >
-            <Input
+            <TextField
+              label="FX rate"
+              hint={
+                sourceCurrency === currency
+                  ? 'Same currency — locked at 1'
+                  : systemFxRate === null
+                    ? `1 ${sourceCurrency} = X ${currency} — no system rate is set for this pair, so type the one the bank gave you`
+                    : fxTouched && fxRate !== String(systemFxRate)
+                      ? `1 ${sourceCurrency} = X ${currency} · system rate is ${systemFxRate} — recorded as an FX spread`
+                      : `1 ${sourceCurrency} = X ${currency} · from the system rate (${systemFxRate})`
+              }
               type="number"
               min={0.000001}
               step="0.000001"
@@ -387,34 +416,35 @@ export function RemittanceFormModal({
               disabled={sourceCurrency === currency}
               required
             />
-          </FormField>
-        </div>
+          </div>
 
-        <FormField label={`Destination amount (${currency})`} hint="Derived = source × FX">
-          <Input value={destAmount} readOnly disabled />
-        </FormField>
+          <TextField
+            label={`Destination amount (${currency})`}
+            hint="Derived = source × FX"
+            value={destAmount}
+            readOnly
+            disabled
+            floatLabel
+          />
 
-        {/* Where it goes, and whether any one of our accounts can send
-            it. Both were absent from the screen that records the
-            payment, so the operator had to leave to find the first and
-            could only discover the second by failing. */}
-        {sellerId !== '' && (
-          <PayoutInstructionPanel sellerId={sellerId} currency={currency} amount={destAmount} />
-        )}
+          {/* Where it goes, and whether any one of our accounts can send
+              it. Both were absent from the screen that records the
+              payment, so the operator had to leave to find the first and
+              could only discover the second by failing. */}
+          {sellerId !== '' && (
+            <PayoutInstructionPanel sellerId={sellerId} currency={currency} amount={destAmount} />
+          )}
 
-        <FormField
-          label="Paid from"
-          required
-          hint={
-            matchingAccounts.length === 0
-              ? `No ${currency} account is set up yet — add one under Bank accounts.`
-              : 'Which of our accounts the money physically left'
-          }
-        >
           <Select
+            label="Paid from"
+            required
+            hint={
+              matchingAccounts.length === 0
+                ? `No ${currency} account is set up yet — add one under Bank accounts.`
+                : 'Which of our accounts the money physically left'
+            }
             value={paidFromAccountId}
             onChange={(e) => setPaidFromAccountId(e.target.value)}
-            required
           >
             <option value="">Select an account…</option>
             {matchingAccounts.map((a) => (
@@ -423,13 +453,10 @@ export function RemittanceFormModal({
               </option>
             ))}
           </Select>
-        </FormField>
 
-        <FormField
-          label={`Bank fee (optional, ${currency})`}
-          hint="What the bank charged to send it. Booked as our bank charge — the seller still receives the full amount."
-        >
-          <Input
+          <TextField
+            label={`Bank fee (optional, ${currency})`}
+            hint="What the bank charged to send it. Booked as our bank charge — the seller still receives the full amount."
             type="number"
             min={0}
             step="0.01"
@@ -437,89 +464,148 @@ export function RemittanceFormModal({
             onChange={(e) => setBankFee(e.target.value)}
             placeholder="0.00"
           />
-        </FormField>
-        {leavesAccount !== null && (
-          <div className="text-text-muted text-xs">
-            Leaves our account in all:{' '}
-            <Money amount={leavesAccount} currency={currency} convert={false} /> — the payout plus
-            the fee.
-          </div>
-        )}
+          {leavesAccount !== null && (
+            <div className="mk-small">
+              Leaves our account in all:{' '}
+              <Money amount={leavesAccount} currency={currency} convert={false} /> — the payout plus
+              the fee.
+            </div>
+          )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label="Bank reference" required>
-            <Input
+          <div className="mk-form mk-form--2">
+            <TextField
+              label="Bank reference"
               value={bankReference}
               onChange={(e) => setBankReference(e.target.value)}
               maxLength={120}
+              showCount
               placeholder="e.g. TRF-2026-06-03-12345"
               required
+              inputClassName="sk-ident"
             />
-          </FormField>
-          <FormField label="Paid at" required>
-            <Input
+            <DateField
+              label="Paid at"
               type="datetime-local"
               value={paidAt}
               onChange={(e) => setPaidAt(e.target.value)}
               required
             />
-          </FormField>
-        </div>
+          </div>
 
-        <FormField label="Note">
-          <Textarea
+          <TextArea
+            label="Note"
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={2000}
+            showCount
             placeholder="Anything ops should know about this withdrawal"
           />
-        </FormField>
 
-        {/*
-          Paying something other than what was asked for is allowed — a
-          part payment is a real thing — but it will NOT close the
-          request, and finding that out afterwards is how a partly-paid
-          request sits in the queue looking untouched. Said before
-          recording, not after.
-        */}
-        {overBalance !== null && (
-          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-            The wallet holds{' '}
-            <Money amount={overBalance.have} currency={sourceCurrency} convert={false} />, so{' '}
-            <Money amount={overBalance.asked} currency={sourceCurrency} convert={false} /> is more
-            than we owe this seller. The server will refuse it (INSUFFICIENT_WALLET_BALANCE). Note
-            this is capped by the WALLET, not by what we hold for them in the paying account —
-            paying beyond that draws on our own capital, which is normal.
-          </div>
+          {/*
+            Paying something other than what was asked for is allowed — a
+            part payment is a real thing — but it will NOT close the
+            request, and finding that out afterwards is how a partly-paid
+            request sits in the queue looking untouched. Said before
+            recording, not after.
+          */}
+          {overBalance !== null && (
+            <MkAlert>
+              The wallet holds{' '}
+              <Money amount={overBalance.have} currency={sourceCurrency} convert={false} />, so{' '}
+              <Money amount={overBalance.asked} currency={sourceCurrency} convert={false} /> is more
+              than we owe this seller. The server will refuse it (INSUFFICIENT_WALLET_BALANCE). Note
+              this is capped by the WALLET, not by what we hold for them in the paying account —
+              paying beyond that draws on our own capital, which is normal.
+            </MkAlert>
+          )}
+
+          {mismatch !== null && (
+            <MkCallout tone="warn" icon={<Info size={16} />}>
+              <p>
+                This request asked for{' '}
+                <Money amount={settling?.amountInr ?? '0'} currency="INR" convert={false} />. Paying{' '}
+                <Money amount={mismatch} currency="INR" convert={false} /> will{' '}
+                <span className="mk-strong">not close it</span> — it stays in the queue for whoever
+                settles the rest.
+              </p>
+            </MkCallout>
+          )}
+
+          {error && <MkAlert>{error}</MkAlert>}
+        </form>
+      </Dialog>
+
+      <ConfirmDialog
+        open={confirming !== null}
+        onOpenChange={(next) => {
+          if (!next) setConfirming(null);
+        }}
+        title="Record this remittance?"
+        entity={sellerName ?? confirming?.sellerId ?? ''}
+        amount={
+          confirming === null ? undefined : (
+            <Money
+              amount={String(confirming.sourceAmount)}
+              currency={confirming.sourceCurrency === 'BDT' ? 'BDT' : 'INR'}
+              convert={false}
+            />
+          )
+        }
+        consequence="Debits this seller's wallet by the amount above and records the cash leaving the account you paid from."
+        confirmLabel="Record remittance"
+        onConfirm={post}
+        error={error}
+      >
+        {confirming !== null && (
+          <MkDl
+            items={[
+              {
+                label: 'They receive',
+                value: (
+                  <Money
+                    amount={String(confirming.amount)}
+                    currency={confirming.currency === 'BDT' ? 'BDT' : 'INR'}
+                    convert={false}
+                  />
+                ),
+              },
+              {
+                label: 'Rate',
+                value: (
+                  <span className="sk-figure">
+                    1 {confirming.sourceCurrency} = {confirming.fxRateSnapshot}{' '}
+                    {confirming.currency}
+                  </span>
+                ),
+              },
+              { label: 'Bank reference', value: <Ident value={confirming.bankReference} /> },
+              {
+                label: 'Paid from',
+                value:
+                  paidFrom === undefined
+                    ? confirming.paidFromAccountId
+                    : `${paidFrom.label} · ${paidFrom.bankName} · ${paidFrom.currency}`,
+              },
+              ...(confirming.bankFee !== undefined
+                ? [
+                    {
+                      label: 'Bank fee',
+                      value: (
+                        <Money
+                          amount={String(confirming.bankFee)}
+                          currency={confirming.currency === 'BDT' ? 'BDT' : 'INR'}
+                          convert={false}
+                        />
+                      ),
+                    },
+                  ]
+                : []),
+            ]}
+          />
         )}
-
-        {mismatch !== null && (
-          <div className="border-border text-text-body rounded-[5px] border border-dashed px-3 py-2 text-xs">
-            This request asked for{' '}
-            <Money amount={settling?.amountInr ?? '0'} currency="INR" convert={false} />. Paying{' '}
-            <Money amount={mismatch} currency="INR" convert={false} /> will{' '}
-            <span className="text-text-bright">not close it</span> — it stays in the queue for
-            whoever settles the rest.
-          </div>
-        )}
-
-        {error && (
-          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-            {error}
-          </div>
-        )}
-
-        <ModalFooter>
-          <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" size="md" disabled={busy}>
-            {busy ? 'Recording…' : 'Record remittance'}
-          </Button>
-        </ModalFooter>
-      </form>
-    </Modal>
+      </ConfirmDialog>
+    </>
   );
 }
 

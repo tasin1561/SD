@@ -1,17 +1,13 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  ConfirmDialog,
-  ErrorNote,
-  FormField,
-  Modal,
-  ModalFooter,
-  Money,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
+import { MkAlert } from '../../seller-wallets/_components/money-parts';
 import { InboundFreightStatus } from '@skydrop/db';
 import {
   useSettleFreight,
@@ -59,6 +55,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
   const [voiding, setVoiding] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [settleError, setSettleError] = useState<string | null>(null);
 
   const open =
     row.status === InboundFreightStatus.PENDING ||
@@ -66,7 +63,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
 
   if (!open) {
     return (
-      <span className="text-text-faint text-xs">
+      <span className="mk-faint">
         {row.voidedAt !== null
           ? 'Withdrawn'
           : row.status === InboundFreightStatus.WAIVED
@@ -76,15 +73,16 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
     );
   }
 
+  /** Rejects on a refusal (the verdict shown verbatim inside the confirm). */
   async function doSettle(): Promise<void> {
-    setError(null);
+    setSettleError(null);
     try {
       await settle.mutateAsync({ freightChargeId: row.id });
       toast.success('Freight bill settled against the wallet.');
       setConfirmSettle(false);
     } catch (err) {
-      toast.error(serverVerdict(err));
-      setConfirmSettle(false);
+      setSettleError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -97,6 +95,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
       setReason('');
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -109,6 +108,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
       setVoidReason('');
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -116,12 +116,17 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
   // row simply has no actions rather than three buttons that 403.
   if (!canWrite) return <></>;
 
+  const arrival = row.receiptNumber ?? row.consignmentNumber ?? row.consignmentId.slice(0, 8);
+
   return (
-    <div className="flex items-center justify-end gap-1.5">
+    <div className="mk-actions">
       <Button
         variant="secondary"
         size="sm"
-        onClick={() => setConfirmSettle(true)}
+        onClick={() => {
+          setSettleError(null);
+          setConfirmSettle(true);
+        }}
         disabled={settle.isPending}
       >
         Settle
@@ -137,27 +142,23 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         open={confirmSettle}
         onOpenChange={setConfirmSettle}
         title="Settle this freight bill?"
-        description={
-          <>
-            Debits the seller&apos;s wallet by the outstanding <Money amount={row.outstandingInr} />{' '}
-            for arrival{' '}
-            {row.receiptNumber ?? row.consignmentNumber ?? row.consignmentId.slice(0, 8)}. The
-            ledger entry is permanent.
-          </>
-        }
-        confirmLabel={settle.isPending ? 'Settling…' : 'Settle'}
-        confirmVariant="primary"
-        disabled={settle.isPending}
-        onConfirm={() => void doSettle()}
+        entity={`Arrival ${arrival}${row.sellerCompanyName !== null ? ` · ${row.sellerCompanyName}` : ''}`}
+        amount={<Money amount={row.outstandingInr} />}
+        consequence={`Debits the seller's wallet by the outstanding amount for arrival ${arrival}. The ledger entry is permanent.`}
+        confirmLabel="Settle"
+        onConfirm={doSettle}
+        error={settleError}
       />
 
-      <Modal
+      <Dialog
         open={waiving}
         onOpenChange={(next) => {
           setWaiving(next);
           if (!next) setError(null);
         }}
         size="md"
+        tone="critical"
+        locked={waive.isPending}
         title="Waive this freight bill"
         description={
           <>
@@ -165,91 +166,106 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
             countable as a waiver rather than disappearing. Audited at HIGH severity.
           </>
         }
+        footer={
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setWaiving(false)}
+              disabled={waive.isPending}
+            >
+              Cancel
+            </Button>
+            <AsyncButton
+              variant="destructive"
+              size="md"
+              disabled={reason.trim().length < MIN_WAIVE_REASON}
+              labels={{ idle: 'Waive bill', busy: 'Waiving…', done: 'Waived', error: 'Refused' }}
+              onAction={doWaive}
+            />
+          </DialogFooter>
+        }
       >
-        <FormField
-          label="Reason"
-          htmlFor="waive-reason"
-          hint={`At least ${MIN_WAIVE_REASON} characters. This is what explains the write-off at audit time.`}
-          required
-        >
-          <Textarea
+        <div className="mk-stack">
+          <TextArea
             id="waive-reason"
+            label="Reason"
+            hint={`At least ${MIN_WAIVE_REASON} characters. This is what explains the write-off at audit time.`}
+            requiredMark
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Consignment mis-handled at our warehouse; goodwill on the freight."
           />
-        </FormField>
+          {error !== null && <MkAlert>{error}</MkAlert>}
+        </div>
+      </Dialog>
 
-        {error !== null && <ErrorNote className="mt-3" message={error} />}
-
-        <ModalFooter>
-          <Button variant="ghost" size="md" onClick={() => setWaiving(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={reason.trim().length < MIN_WAIVE_REASON || waive.isPending}
-            onClick={() => void doWaive()}
-          >
-            {waive.isPending ? 'Waiving…' : 'Waive bill'}
-          </Button>
-        </ModalFooter>
-      </Modal>
-
-      <Modal
+      <Dialog
         open={voiding}
         onOpenChange={(next) => {
           setVoiding(next);
           if (!next) setError(null);
         }}
         size="md"
+        tone="critical"
+        locked={voidBill.isPending}
         title="Withdraw this freight bill"
         description={
           <>
             For a bill that was WRONG — a mistyped rate, a recount. It is withdrawn and whatever it
             charged (<Money amount={row.amountSettledInr} />) goes back to the seller&apos;s wallet.
             Raise the corrected bill for this stop afterwards; until you do, this arrival has no
-            freight against it. Audited at HIGH severity.
-            <br />
-            <span className="text-text-muted">
-              Not the same as a waiver: waive is for a bill that was right and we chose to forgive.
-            </span>
+            freight against it. Audited at HIGH severity. Not the same as a waiver: waive is for a
+            bill that was right and we chose to forgive.
           </>
         }
+        footer={
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => setVoiding(false)}
+              disabled={voidBill.isPending}
+            >
+              Cancel
+            </Button>
+            <AsyncButton
+              variant="destructive"
+              size="md"
+              disabled={voidReason.trim().length < MIN_VOID_REASON}
+              labels={{
+                idle: 'Withdraw bill',
+                busy: 'Withdrawing…',
+                done: 'Withdrawn',
+                error: 'Refused',
+              }}
+              onAction={doVoid}
+            />
+          </DialogFooter>
+        }
       >
-        <FormField
-          label="What was wrong with it"
-          htmlFor="void-reason"
-          hint={`At least ${MIN_VOID_REASON} characters. The seller sees this on their consignment, so write what actually happened.`}
-          required
-        >
-          <Textarea
+        <div className="mk-stack">
+          <div className="mk-subject">
+            <span className="mk-subject__label">Bill for arrival</span>
+            <span className="mk-subject__main sk-ident">{arrival}</span>
+            {row.sellerCompanyName !== null && (
+              <span className="mk-small">{row.sellerCompanyName}</span>
+            )}
+          </div>
+          <TextArea
             id="void-reason"
+            label="What was wrong with it"
+            hint={`At least ${MIN_VOID_REASON} characters. The seller sees this on their consignment, so write what actually happened.`}
+            requiredMark
             rows={3}
             value={voidReason}
             onChange={(e) => setVoidReason(e.target.value)}
             placeholder="Rate typed as 300/kg; the forwarder's invoice says 30/kg."
           />
-        </FormField>
-
-        {error !== null && <ErrorNote className="mt-3" message={error} />}
-
-        <ModalFooter>
-          <Button variant="ghost" size="md" onClick={() => setVoiding(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={voidReason.trim().length < MIN_VOID_REASON || voidBill.isPending}
-            onClick={() => void doVoid()}
-          >
-            {voidBill.isPending ? 'Withdrawing…' : 'Withdraw bill'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+          {error !== null && <MkAlert>{error}</MkAlert>}
+        </div>
+      </Dialog>
     </div>
   );
 }

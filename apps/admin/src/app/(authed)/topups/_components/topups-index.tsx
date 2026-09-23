@@ -3,28 +3,19 @@
 import Link from 'next/link';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorState,
-  FormField,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  Select,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  Textarea,
-  useToast,
-  openExternalWhenReady,
-} from '@skydrop/ui/components';
+import { ArrowRight, Check, ReceiptText, X } from 'lucide-react';
+import { TopupRequestStatus } from '@skydrop/db';
+import { openExternalWhenReady, useToast } from '@skydrop/ui/components';
+import { topupStatusLabel } from '@skydrop/ui/status';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import {
@@ -34,6 +25,7 @@ import {
   useTopupProofUrl,
   type AdminTopupView,
 } from '@/lib/ops-hooks';
+import { MkAlert, MkCard, TopupChip } from '../../seller-wallets/_components/money-parts';
 
 /**
  * The queue where money enters a seller's wallet.
@@ -87,6 +79,7 @@ export function TopupsIndex(): ReactElement {
     }
   }
 
+  /** Rejects on a refusal, so the button shows it; the verdict is set first. */
   async function onConfirm(): Promise<void> {
     if (reviewing === null || intent === null) return;
     setError(null);
@@ -104,6 +97,7 @@ export function TopupsIndex(): ReactElement {
       close();
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -111,9 +105,10 @@ export function TopupsIndex(): ReactElement {
   // operator is told before submitting rather than after.
   const rejectTooShort = intent === 'REJECT' && note.trim().length < 5;
   const busy = accept.isPending || reject.isPending;
+  const rows = list.data ?? [];
 
   return (
-    <div>
+    <div className="mk-page">
       <PageHeader
         title="Wallet top-ups"
         subtitle="Sellers telling us they have sent money. Accepting one credits their wallet — check it against the statement first."
@@ -122,146 +117,155 @@ export function TopupsIndex(): ReactElement {
           // because with none configured nothing can ever arrive here,
           // and an empty queue would otherwise look like quiet demand
           // rather than a missing setup step.
-          <Link href="/bank-accounts" className="text-accent text-sm hover:underline">
-            Bank accounts →
+          <Link href="/bank-accounts" className="mk-link">
+            Bank accounts <ArrowRight size={14} aria-hidden />
           </Link>
         }
       />
 
-      <div className="mb-3">
-        <Select value={status} onChange={(e) => setStatus(e.target.value)} className="w-[200px]">
+      <div className="mk-filters">
+        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUSES.map((s) => (
             <option key={s} value={s}>
-              {s}
+              {topupStatusLabel(s as TopupRequestStatus)}
             </option>
           ))}
         </Select>
       </div>
 
       {list.isLoading ? (
-        <LoadingState label="Loading top-ups…" />
+        <SkeletonRows rows={4} cols={7} label="Loading top-ups…" />
       ) : list.isError ? (
         <ErrorState
           message={list.error?.message ?? 'Failed to load top-ups.'}
           retry={() => void list.refetch()}
         />
-      ) : (list.data ?? []).length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState
+          tone={status === 'PENDING' ? 'positive' : 'neutral'}
           title={status === 'PENDING' ? 'Nothing waiting' : `No ${status.toLowerCase()} top-ups`}
           description="Claims appear here when a seller records a transfer."
         />
       ) : (
-        <Card>
-          <CardBody className="p-0">
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>Claimed</Th>
-                  <Th>Seller</Th>
-                  <Th>Paid into</Th>
-                  <Th align="right">Amount</Th>
-                  <Th>Evidence</Th>
-                  <Th>Status</Th>
-                  <Th align="right">Review</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {(list.data ?? []).map((t) => (
-                  <Tr key={t.id}>
-                    <Td className="text-text-muted text-xs">
-                      {new Date(t.createdAt).toISOString().slice(0, 10)}
-                    </Td>
-                    {/* The company, not the uuid. An operator matching
-                        this against a bank statement needs the name the
-                        money came from. */}
-                    <Td className="text-text-body">
+        <MkCard flush>
+          <Table caption="Top-up claims">
+            <THead>
+              <Tr>
+                <Th>Claimed</Th>
+                <Th>Seller</Th>
+                <Th>Paid into</Th>
+                <Th align="right">Amount</Th>
+                <Th>Evidence</Th>
+                <Th>Status</Th>
+                <Th align="right">Review</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {rows.map((t) => (
+                <Tr key={t.id}>
+                  <Td className="mk-when sk-figure">
+                    {new Date(t.createdAt).toISOString().slice(0, 10)}
+                  </Td>
+                  {/* The company, not the uuid. An operator matching
+                      this against a bank statement needs the name the
+                      money came from. */}
+                  <Td>
+                    <span className="mk-name">
                       {t.sellerCompanyName ?? t.sellerName ?? t.sellerId.slice(0, 8)}
-                    </Td>
-                    <Td className="text-text-muted text-xs">
-                      {/* The label is our filing name; the account is what
-                          appears on the statement being checked. Both,
-                          because the label is how the account is chosen
-                          and the number is how it is verified. */}
-                      <div className="text-text-body">{t.bankLabel}</div>
-                      <div>{t.bankName}</div>
-                      <div className="text-text-faint">{t.bankAccountName}</div>
-                      <div className="text-text-faint font-mono">{t.bankAccountNumber}</div>
+                    </span>
+                  </Td>
+                  <Td>
+                    {/* The label is our filing name; the account is what
+                        appears on the statement being checked. Both,
+                        because the label is how the account is chosen
+                        and the number is how it is verified. */}
+                    <div className="mk-cell mk-small">
+                      <span className="mk-body">{t.bankLabel}</span>
+                      <span>{t.bankName}</span>
+                      <span className="mk-faint">{t.bankAccountName}</span>
+                      <span className="mk-faint sk-ident">{t.bankAccountNumber}</span>
                       {t.bankBranchName !== null && (
-                        <div className="text-text-faint">{t.bankBranchName}</div>
+                        <span className="mk-faint">{t.bankBranchName}</span>
                       )}
-                    </Td>
-                    <Td align="right" className="font-mono">
-                      {t.currency} {t.amount}
-                    </Td>
-                    <Td className="text-xs">
+                    </div>
+                  </Td>
+                  <Td align="right" className="sk-figure">
+                    {t.currency} {t.amount}
+                  </Td>
+                  <Td>
+                    <div className="mk-cell mk-small">
                       {t.transactionRef !== null && (
-                        <div className="text-text-body font-mono">{t.transactionRef}</div>
+                        <span className="mk-body sk-ident">{t.transactionRef}</span>
                       )}
                       {t.hasProof && (
                         <button
                           type="button"
-                          className="text-accent hover:underline"
+                          className="mk-inline-link"
                           onClick={() => void onViewProof(t.id)}
                         >
-                          View receipt
+                          <ReceiptText size={13} aria-hidden /> View receipt
                         </button>
                       )}
                       {t.transactionRef === null && !t.hasProof && (
-                        <span className="text-text-faint">—</span>
+                        <span className="mk-faint">—</span>
                       )}
-                    </Td>
-                    <Td className="text-text-body text-xs">
-                      {t.status}
+                    </div>
+                  </Td>
+                  <Td>
+                    <div className="mk-cell">
+                      <TopupChip status={t.status} />
                       {t.reviewNote !== null && t.reviewNote !== '' && (
-                        <div className="text-text-faint mt-0.5">{t.reviewNote}</div>
+                        <span className="mk-faint">{t.reviewNote}</span>
                       )}
                       {/* WHO and WHEN. A decision about somebody's money
                           with no name against it is one nobody can be
                           asked about later. */}
                       {t.reviewedAt !== null && (
-                        <div className="text-text-faint mt-0.5">
+                        <span className="mk-faint">
                           {new Date(t.reviewedAt).toLocaleString()}
                           {t.reviewedByEmail !== null ? ` · ${t.reviewedByEmail}` : ''}
-                        </div>
+                        </span>
                       )}
-                    </Td>
-                    <Td align="right">
-                      {t.status === 'PENDING' && mayReview ? (
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => {
-                              setReviewing(t);
-                              setIntent('ACCEPT');
-                            }}
-                          >
-                            Accept
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => {
-                              setReviewing(t);
-                              setIntent('REJECT');
-                            }}
-                          >
-                            Reject
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-text-faint text-xs">—</span>
-                      )}
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-          </CardBody>
-        </Card>
+                    </div>
+                  </Td>
+                  <Td align="right">
+                    {t.status === 'PENDING' && mayReview ? (
+                      <div className="mk-actions">
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          icon={<Check size={14} />}
+                          onClick={() => {
+                            setReviewing(t);
+                            setIntent('ACCEPT');
+                          }}
+                        >
+                          Accept
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          icon={<X size={14} />}
+                          onClick={() => {
+                            setReviewing(t);
+                            setIntent('REJECT');
+                          }}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="mk-faint">—</span>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </MkCard>
       )}
 
-      <Modal
+      <Dialog
         open={reviewing !== null}
         onOpenChange={(next) => {
           if (!next) close();
@@ -272,45 +276,65 @@ export function TopupsIndex(): ReactElement {
             : 'Reject this claim?'
         }
         tone={intent === 'REJECT' ? 'critical' : 'default'}
+        locked={busy}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={close} disabled={busy}>
+              Cancel
+            </Button>
+            <AsyncButton
+              variant={intent === 'REJECT' ? 'destructive' : 'primary'}
+              size="md"
+              disabled={busy || rejectTooShort}
+              labels={{
+                idle: intent === 'ACCEPT' ? 'Credit the wallet' : 'Reject',
+                busy: 'Working…',
+                done: intent === 'ACCEPT' ? 'Credited' : 'Rejected',
+                error: 'Refused',
+              }}
+              onAction={onConfirm}
+            />
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          {intent === 'ACCEPT'
-            ? 'This adds the money to the seller’s wallet immediately. Only do it once you have seen the payment on our statement — it is not reversible without an adjusting entry.'
-            : 'The seller sees this reason, so write something they can act on: what did not match, or what you need from them.'}
-        </p>
+        <div className="mk-stack">
+          {reviewing !== null && (
+            <div className="mk-subject">
+              <span className="mk-subject__label">Claimed by</span>
+              <span className="mk-subject__main">
+                {reviewing.sellerCompanyName ?? reviewing.sellerName ?? reviewing.sellerId}
+              </span>
+              <span className="mk-small">
+                {reviewing.bankLabel} ·{' '}
+                <span className="sk-ident">{reviewing.bankAccountNumber}</span>
+                {reviewing.transactionRef !== null ? (
+                  <>
+                    {' '}
+                    · ref <span className="sk-ident">{reviewing.transactionRef}</span>
+                  </>
+                ) : null}
+              </span>
+            </div>
+          )}
+          <p className="mk-muted">
+            {intent === 'ACCEPT'
+              ? 'This adds the money to the seller’s wallet immediately. Only do it once you have seen the payment on our statement — it is not reversible without an adjusting entry.'
+              : 'The seller sees this reason, so write something they can act on: what did not match, or what you need from them.'}
+          </p>
 
-        {error !== null && (
-          <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical mb-3 rounded-md border px-3 py-2 text-sm">
-            {error}
-          </div>
-        )}
+          {error !== null && <MkAlert>{error}</MkAlert>}
 
-        <FormField
-          label={intent === 'ACCEPT' ? 'Note (optional)' : 'Reason'}
-          required={intent === 'REJECT'}
-        >
-          <Textarea
+          <TextArea
+            label={intent === 'ACCEPT' ? 'Note (optional)' : 'Reason'}
+            requiredMark={intent === 'REJECT'}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             rows={3}
             maxLength={500}
+            showCount
           />
-        </FormField>
-
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={close}>
-            Cancel
-          </Button>
-          <Button
-            variant={intent === 'REJECT' ? 'destructive' : 'primary'}
-            size="md"
-            disabled={busy || rejectTooShort}
-            onClick={() => void onConfirm()}
-          >
-            {busy ? 'Working…' : intent === 'ACCEPT' ? 'Credit the wallet' : 'Reject'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+        </div>
+      </Dialog>
     </div>
   );
 }

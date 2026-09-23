@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, type FormEvent, type ReactElement } from 'react';
-import { Button, FormField, Input, Modal, ModalFooter, Textarea } from '@skydrop/ui/components';
+import { useId, useState, type FormEvent, type ReactElement } from 'react';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Button } from '@skydrop/ui/app/button';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { MkAlert } from '../../seller-wallets/_components/money-parts';
 import type { FxRateView } from '@skydrop/api-client';
 import { useSetFxRate } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -20,6 +23,7 @@ export function FxOverrideModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const set = useSetFxRate();
+  const formId = useId();
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
@@ -45,53 +49,57 @@ export function FxOverrideModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
+      locked={busy}
       title={`Override ${rate.fromCurrency} → ${rate.toCurrency}`}
       description="Sets source=MANUAL + isManualOverride=true; recorded in history with the reason."
       size="md"
-    >
-      <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
-        <FormField label="Current rate">
-          <Input value={Number(rate.rate).toFixed(6)} readOnly disabled />
-        </FormField>
-        <FormField label="New rate" required>
-          <Input
-            type="number"
-            step="0.000001"
-            min="0.000001"
-            value={newRate}
-            onChange={(e) => setNewRate(e.target.value)}
-            required
-          />
-        </FormField>
-        <FormField label="Reason (≥ 10 chars)" required hint="Goes into audit log + history row">
-          <Textarea
-            rows={3}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            minLength={10}
-            maxLength={2000}
-            required
-          />
-        </FormField>
-        {error && (
-          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-            {error}
-          </div>
-        )}
-        <ModalFooter>
-          <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
+      footer={
+        <DialogFooter>
+          <Button type="button" variant="secondary" size="md" disabled={busy} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" size="md" disabled={busy}>
+          <Button type="submit" form={formId} variant="primary" size="md" loading={busy}>
             {busy ? 'Saving…' : 'Save override'}
           </Button>
-        </ModalFooter>
+        </DialogFooter>
+      }
+    >
+      <form id={formId} onSubmit={(e) => void onSubmit(e)} className="mk-stack">
+        <TextField
+          label="Current rate"
+          value={Number(rate.rate).toFixed(6)}
+          readOnly
+          disabled
+          inputClassName="sk-figure"
+        />
+        <TextField
+          label="New rate"
+          type="number"
+          step="0.000001"
+          min="0.000001"
+          value={newRate}
+          onChange={(e) => setNewRate(e.target.value)}
+          required
+          inputClassName="sk-figure"
+        />
+        <TextArea
+          label="Reason (≥ 10 chars)"
+          hint="Goes into audit log + history row"
+          rows={3}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          minLength={10}
+          maxLength={2000}
+          showCount
+          required
+        />
+        {error && <MkAlert>{error}</MkAlert>}
       </form>
-    </Modal>
+    </Dialog>
   );
 }

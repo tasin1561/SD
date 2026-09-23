@@ -2,15 +2,14 @@
 
 import { useState, type ReactElement } from 'react';
 import { Banknote } from 'lucide-react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  Select,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { MkAlert, MkDl } from '../../seller-wallets/_components/money-parts';
 import { usePayForwarder, useSetFreightOurCost, type FreightChargeView } from '@/lib/ops-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -52,36 +51,39 @@ export function OurCostCell({ row }: { readonly row: FreightChargeView }): React
     <>
       {row.ourCostInr === null ? (
         canWrite ? (
-          <div className="flex flex-col items-end gap-1">
+          <div className="mk-cell mk-cell--end">
             {/* Loud on purpose. An unrecorded forwarder cost makes this
                 consignment read as pure profit, and nothing else on the
                 page says so. */}
-            <Button size="sm" onClick={() => setPayOpen(true)}>
-              <Banknote className="size-3.5" /> Record payment
+            <Button size="sm" icon={<Banknote size={14} />} onClick={() => setPayOpen(true)}>
+              Record payment
             </Button>
             <button
               type="button"
-              className="text-text-muted hover:text-text text-xs underline underline-offset-2"
+              className="mk-inline-link mk-small"
               onClick={() => setCostOpen(true)}
             >
               cost only, not paid yet
             </button>
           </div>
         ) : (
-          <span className="text-status-pending-fg text-xs">Not recorded</span>
+          <span className="mk-text mk-small" data-tone="warn">
+            Not recorded
+          </span>
         )
       ) : (
-        <div className="flex flex-col items-end gap-0.5">
+        <div className="mk-cell mk-cell--end">
           <button
             type="button"
-            className="text-right disabled:cursor-default"
+            className="mk-inline-link mk-cell mk-cell--end"
             onClick={() => canWrite && setCostOpen(true)}
             disabled={!canWrite}
           >
             <Money amount={row.ourCostInr} />
             {margin !== null && (
-              <div
-                className={`text-xs ${margin < 0 ? 'text-danger' : 'text-text-muted'}`}
+              <span
+                className="mk-text mk-small"
+                data-tone={margin < 0 ? 'critical' : undefined}
                 title="What we billed the seller, less what the forwarder charged us"
               >
                 <Money
@@ -91,13 +93,13 @@ export function OurCostCell({ row }: { readonly row: FreightChargeView }): React
                   direction={margin < 0 ? 'debit' : 'credit'}
                 />{' '}
                 margin
-              </div>
+              </span>
             )}
           </button>
           {canWrite && (
             <button
               type="button"
-              className="text-text-muted hover:text-text text-xs underline underline-offset-2"
+              className="mk-inline-link mk-small"
               onClick={() => setPayOpen(true)}
             >
               record a payment
@@ -128,47 +130,56 @@ function CostOnlyModal({
     setError(null);
     if (value.trim() === '' || Number.isNaN(Number(value))) {
       setError('Enter what the forwarder charged, in INR');
-      return;
+      // Rejected, so the button says it did not save.
+      throw new Error('invalid');
     }
     try {
       await set.mutateAsync({ freightChargeId: row.id, ourCostInr: Number(value).toFixed(2) });
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
   return (
-    <Modal
+    <Dialog
       open
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
+      locked={set.isPending}
       title="What did the forwarder charge us?"
       description="The cost only — no money is recorded as leaving any account. Use this when their invoice has arrived but has not been paid; record the payment itself when it goes out, so the cash and the cost stay together."
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose} disabled={set.isPending}>
+            Cancel
+          </Button>
+          <AsyncButton
+            labels={{ idle: 'Save', busy: 'Saving…', done: 'Saved', error: 'Refused' }}
+            onAction={save}
+          />
+        </DialogFooter>
+      }
     >
-      <Input
-        type="number"
-        step="0.01"
-        min="0"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="e.g. 8500.00"
-        autoFocus
-      />
-      <p className="text-text-muted mt-2 text-xs">
-        Billed to the seller: <Money amount={row.totalInr} />
-      </p>
-      {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
-      <ModalFooter>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={() => void save()} disabled={set.isPending}>
-          {set.isPending ? 'Saving…' : 'Save'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+      <div className="mk-stack">
+        <TextField
+          label="Forwarder's charge (INR)"
+          type="number"
+          step="0.01"
+          min="0"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="e.g. 8500.00"
+          autoFocus
+        />
+        <p className="mk-small">
+          Billed to the seller: <Money amount={row.totalInr} />
+        </p>
+        {error !== null && <MkAlert>{error}</MkAlert>}
+      </div>
+    </Dialog>
   );
 }
 
@@ -202,7 +213,8 @@ function PayForwarderModal({
     setError(null);
     if (bankAccountId === '' || amountPaid.trim() === '' || Number.isNaN(Number(amountPaid))) {
       setError('Choose the account and enter what was paid');
-      return;
+      // Rejected, so the button says it did not save.
+      throw new Error('invalid');
     }
     try {
       await pay.mutateAsync({
@@ -216,75 +228,99 @@ function PayForwarderModal({
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
   return (
-    <Modal
+    <Dialog
       open
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
+      locked={pay.isPending}
       title="Pay the forwarder"
       description="Records the money leaving the account AND attributes it to this consignment, in one step. Our cost for the consignment becomes the sum of every payment against it. Recording it as a loose expense instead would count the same cost twice in the P&L."
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose} disabled={pay.isPending}>
+            Cancel
+          </Button>
+          <AsyncButton
+            labels={{
+              idle: 'Record the payment',
+              busy: 'Recording…',
+              done: 'Recorded',
+              error: 'Refused',
+            }}
+            onAction={save}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="space-y-4">
-        <FormField label="Paid from" required>
-          <Select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
-            <option value="">Choose an account…</option>
-            {accounts.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.label} · {b.bankName} · {b.currency}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField
+      <div className="mk-stack">
+        <Select
+          label="Paid from"
+          requiredMark
+          value={bankAccountId}
+          onChange={(e) => setBankAccountId(e.target.value)}
+        >
+          <option value="">Choose an account…</option>
+          {accounts.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.label} · {b.bankName} · {b.currency}
+            </option>
+          ))}
+        </Select>
+        <div className="mk-form mk-form--2">
+          <TextField
             label={`Amount paid${account === undefined ? '' : ` (${account.currency})`}`}
-            required
+            requiredMark
             hint={
               crossCurrency
                 ? 'What actually left that account, in its own currency. It is priced in rupees at the rate recorded for the payment date.'
                 : 'What left the account'
             }
-          >
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={amountPaid}
-              onChange={(e) => setAmountPaid(e.target.value)}
-              placeholder="e.g. 8500.00"
-              autoFocus
-            />
-          </FormField>
-          <FormField label="Date paid" required>
-            <Input type="date" value={occurredAt} onChange={(e) => setOccurredAt(e.target.value)} />
-          </FormField>
+            type="number"
+            step="0.01"
+            min="0"
+            value={amountPaid}
+            onChange={(e) => setAmountPaid(e.target.value)}
+            placeholder="e.g. 8500.00"
+            autoFocus
+          />
+          <DateField
+            label="Date paid"
+            requiredMark
+            value={occurredAt}
+            onChange={(e) => setOccurredAt(e.target.value)}
+          />
         </div>
-        <FormField label="Reference" hint="Their invoice number or the bank's transaction id">
-          <Input value={reference} onChange={(e) => setReference(e.target.value)} />
-        </FormField>
-        <p className="text-text-muted text-xs">
-          Billed to the seller for this consignment: <Money amount={row.totalInr} />
-          {row.ourCostInr === null ? null : (
-            <>
-              {' '}
-              · paid to the forwarder so far: <Money amount={row.ourCostInr} />
-            </>
-          )}
-        </p>
-        {error !== null && <p className="text-danger text-sm">{error}</p>}
+        <TextField
+          label="Reference"
+          hint="Their invoice number or the bank's transaction id"
+          value={reference}
+          onChange={(e) => setReference(e.target.value)}
+          inputClassName="sk-ident"
+        />
+        <MkDl
+          items={[
+            {
+              label: 'Billed to the seller for this consignment',
+              value: <Money amount={row.totalInr} />,
+            },
+            ...(row.ourCostInr === null
+              ? []
+              : [
+                  {
+                    label: 'Paid to the forwarder so far',
+                    value: <Money amount={row.ourCostInr} />,
+                  },
+                ]),
+          ]}
+        />
+        {error !== null && <MkAlert>{error}</MkAlert>}
       </div>
-      <ModalFooter>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={() => void save()} disabled={pay.isPending}>
-          {pay.isPending ? 'Recording…' : 'Record the payment'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

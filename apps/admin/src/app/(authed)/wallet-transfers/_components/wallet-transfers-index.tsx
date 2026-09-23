@@ -1,29 +1,17 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  DescriptionList,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  PageHeader,
-  Section,
-  Select,
-  SkeletonRows,
-  Table,
-  TBody,
-  Td,
-  Textarea,
-  Th,
-  THead,
-  Tr,
-} from '@skydrop/ui/components';
+import { ArrowLeftRight, CircleCheck, Search, Send, Wallet } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import {
   usePostWalletTransfer,
   usePreviewWalletTransfer,
@@ -35,6 +23,13 @@ import {
   type WalletTransferPreviewView,
 } from '@/lib/wallet-transfer-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  MkCallout,
+  MkCard,
+  MkDl,
+  MkSection,
+  MkAlert,
+} from '../../seller-wallets/_components/money-parts';
 
 /**
  * Debit a seller's wallet into our bank, or credit it from our bank, with a
@@ -51,15 +46,16 @@ export function WalletTransfersIndex({
 }): ReactElement {
   const [sellerId, setSellerId] = useState<string | null>(initialSellerId);
   return (
-    <div className="space-y-6">
+    <div className="mk-page">
       <PageHeader
         title="Wallet transfers"
         subtitle="Take money out of a seller's wallet into our bank, or put ours into theirs. The cash moves with it, and the seller reads your reason on their wallet history."
       />
-      <Section
-        title="New transfer"
-        subtitle="Not a correction: this moves real money between the seller and us."
-      >
+      <MkSection>
+        <SectionHeading
+          title="New transfer"
+          note="Not a correction: this moves real money between the seller and us."
+        />
         {sellerId === null ? (
           <SellerPicker onPick={setSellerId} />
         ) : (
@@ -69,13 +65,14 @@ export function WalletTransfersIndex({
             onChangeSeller={() => setSellerId(null)}
           />
         )}
-      </Section>
-      <Section
-        title="History"
-        subtitle={sellerId === null ? 'Every staff transfer.' : 'This seller’s staff transfers.'}
-      >
+      </MkSection>
+      <MkSection>
+        <SectionHeading
+          title="History"
+          note={sellerId === null ? 'Every staff transfer.' : 'This seller’s staff transfers.'}
+        />
         <TransferHistory sellerId={sellerId} />
-      </Section>
+      </MkSection>
     </div>
   );
 }
@@ -85,41 +82,37 @@ function SellerPicker({ onPick }: { readonly onPick: (id: string) => void }): Re
   const found = useWalletTransferSellers(q);
   const items = found.data?.items ?? [];
   return (
-    <div className="space-y-3">
-      <FormField label="Find a seller" htmlFor="wt-seller-q">
-        <Input
-          id="wt-seller-q"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Company name or email"
-          autoComplete="off"
-        />
-      </FormField>
+    <MkCard>
+      <TextField
+        id="wt-seller-q"
+        label="Find a seller"
+        icon={<Search />}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Company name or email"
+        autoComplete="off"
+      />
       {found.isLoading ? (
-        <SkeletonRows rows={3} cols={2} />
+        <SkeletonRows rows={3} cols={2} label="Looking for sellers…" />
       ) : found.isError ? (
-        <ErrorNote message={serverVerdict(found.error)} retry={() => void found.refetch()} />
+        <ErrorState message={serverVerdict(found.error)} retry={() => void found.refetch()} />
       ) : items.length === 0 ? (
-        <p className="text-text-muted text-sm">
+        <p className="mk-muted">
           No approved or suspended seller matches. Try part of the company name or email.
         </p>
       ) : (
-        <ul className="divide-border border-border divide-y rounded-[var(--radius-2)] border">
+        <ul className="mk-picks">
           {items.map((s) => (
             <li key={s.id}>
-              <button
-                type="button"
-                onClick={() => onPick(s.id)}
-                className="hover:bg-surface-raised flex w-full flex-wrap items-baseline gap-x-2 px-3 py-2 text-left"
-              >
-                <span className="text-text-body text-sm">{s.companyName}</span>
-                <span className="text-text-faint text-xs">{s.email}</span>
+              <button type="button" onClick={() => onPick(s.id)} className="mk-pick">
+                <span className="mk-strong">{s.companyName}</span>
+                <span className="mk-faint">{s.email}</span>
               </button>
             </li>
           ))}
         </ul>
       )}
-    </div>
+    </MkCard>
   );
 }
 
@@ -179,6 +172,7 @@ function TransferForm({
     } catch (err) {
       setShown(null);
       setError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -199,13 +193,14 @@ function TransferForm({
       );
     } catch (err) {
       setConfirmError(serverVerdict(err));
+      throw err;
     }
   }
 
-  if (context.isLoading) return <SkeletonRows rows={4} cols={2} />;
+  if (context.isLoading) return <SkeletonRows rows={4} cols={2} label="Reading this seller…" />;
   if (context.isError || context.data === undefined) {
     return (
-      <ErrorNote
+      <ErrorState
         message={serverVerdict(context.error, 'Could not read this seller.')}
         retry={() => void context.refetch()}
       />
@@ -215,19 +210,19 @@ function TransferForm({
   const chosen = ctx.accounts.find((a) => a.accountId === accountId) ?? null;
 
   return (
-    <div className="space-y-4">
-      <Card className="p-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-text-body text-sm font-medium">{ctx.seller.companyName}</div>
-            <div className="text-text-faint text-xs">{ctx.seller.status.toLowerCase()}</div>
-          </div>
-          <Button variant="ghost" onClick={onChangeSeller}>
+    <div className="mk-stack">
+      <MkCard
+        icon={<Wallet size={18} />}
+        title={ctx.seller.companyName}
+        subtitle={ctx.seller.status.toLowerCase()}
+        aside={
+          <Button variant="ghost" size="sm" onClick={onChangeSeller}>
             Change seller
           </Button>
-        </div>
-        <DescriptionList
-          className="mt-3"
+        }
+      >
+        <MkDl
+          grid
           items={[
             {
               label: 'Wallet',
@@ -239,12 +234,15 @@ function TransferForm({
             },
           ]}
         />
-      </Card>
+      </MkCard>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <FormField label="Which way" htmlFor="wt-direction" required>
+      <MkCard>
+        <div className="mk-form mk-form--2">
           <Select
             id="wt-direction"
+            label="Which way"
+            requiredMark
+            icon={<ArrowLeftRight />}
             value={direction}
             onChange={(e) => {
               setDirection(e.target.value === 'CREDIT' ? 'CREDIT' : 'DEBIT');
@@ -254,10 +252,10 @@ function TransferForm({
             <option value="DEBIT">Debit — take from the seller’s wallet into our bank</option>
             <option value="CREDIT">Credit — give from our bank into the seller’s wallet</option>
           </Select>
-        </FormField>
-        <FormField label="Amount (₹)" htmlFor="wt-amount" required>
-          <Input
+          <TextField
             id="wt-amount"
+            label="Amount (₹)"
+            requiredMark
             inputMode="decimal"
             value={amount}
             onChange={(e) => {
@@ -267,14 +265,14 @@ function TransferForm({
             placeholder="0.00"
             autoComplete="off"
           />
-        </FormField>
-      </div>
+        </div>
 
-      {direction === 'CREDIT' ? (
-        <div className="space-y-2">
-          <FormField label="From which of our rupee accounts" htmlFor="wt-account" required>
+        {direction === 'CREDIT' ? (
+          <div className="mk-stack mk-stack--tight">
             <Select
               id="wt-account"
+              label="From which of our rupee accounts"
+              requiredMark
               value={accountId}
               onChange={(e) => {
                 setAccountId(e.target.value);
@@ -288,38 +286,34 @@ function TransferForm({
                 </option>
               ))}
             </Select>
-          </FormField>
-          {chosen !== null && (
-            <DescriptionList
-              items={[
-                {
-                  label: 'Ours there',
-                  value: <Money amount={chosen.capitalInr} convert={false} />,
-                },
-                {
-                  label: `${ctx.seller.companyName}’s there`,
-                  value: <Money amount={chosen.sellerInr} convert={false} />,
-                },
-              ]}
-            />
-          )}
-        </div>
-      ) : (
-        <p className="text-text-muted text-sm">
-          A debit takes the seller’s money where it already sits with us — rupees first, then any
-          taka at the rate it was credited. The preview shows which account. Anything beyond what
-          they hold is not in any bank: their wallet goes negative and they owe it to us.
-        </p>
-      )}
+            {chosen !== null && (
+              <MkDl
+                items={[
+                  {
+                    label: 'Ours there',
+                    value: <Money amount={chosen.capitalInr} convert={false} />,
+                  },
+                  {
+                    label: `${ctx.seller.companyName}’s there`,
+                    value: <Money amount={chosen.sellerInr} convert={false} />,
+                  },
+                ]}
+              />
+            )}
+          </div>
+        ) : (
+          <p className="mk-muted">
+            A debit takes the seller’s money where it already sits with us — rupees first, then any
+            taka at the rate it was credited. The preview shows which account. Anything beyond what
+            they hold is not in any bank: their wallet goes negative and they owe it to us.
+          </p>
+        )}
 
-      <FormField
-        label="Reason"
-        htmlFor="wt-reason"
-        hint="The seller sees this on their wallet history, word for word."
-        required
-      >
-        <Textarea
+        <TextArea
           id="wt-reason"
+          label="Reason"
+          hint="The seller sees this on their wallet history, word for word."
+          requiredMark
           value={reason}
           onChange={(e) => {
             setReason(e.target.value);
@@ -327,67 +321,79 @@ function TransferForm({
           }}
           rows={3}
           maxLength={500}
+          showCount
           placeholder="e.g. Carton 3 of CN-2026-08-000003 was lost by your forwarder before it reached us"
         />
-      </FormField>
-      <FormField
-        label="Internal note"
-        htmlFor="wt-note"
-        hint="Only staff see this. It is kept with the audit record."
-      >
-        <Textarea
+        <TextArea
           id="wt-note"
+          label="Internal note"
+          hint="Only staff see this. It is kept with the audit record."
           value={internalNote}
           onChange={(e) => setInternalNote(e.target.value)}
           rows={2}
           maxLength={2000}
+          showCount
         />
-      </FormField>
 
-      {error !== null && <ErrorNote message={error} />}
-      {done !== null && <p className="text-success text-sm">{done}</p>}
-
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="secondary"
-          onClick={() => void runPreview()}
-          disabled={preview.isPending || amount.trim() === ''}
-        >
-          {preview.isPending ? 'Working it out…' : 'Preview'}
-        </Button>
-        {shown !== null && (
-          <Button
-            onClick={() => {
-              setConfirmError(null);
-              setConfirming(true);
-            }}
-          >
-            Post transfer
-          </Button>
+        {error !== null && <MkAlert>{error}</MkAlert>}
+        {done !== null && (
+          <MkCallout tone="good" icon={<CircleCheck size={16} />} role="status">
+            <p>{done}</p>
+          </MkCallout>
         )}
-      </div>
+
+        <div className="mk-form__actions">
+          <AsyncButton
+            variant="secondary"
+            disabled={amount.trim() === ''}
+            labels={{
+              idle: 'Preview',
+              busy: 'Working it out…',
+              done: 'Worked out',
+              error: 'Refused',
+            }}
+            onAction={runPreview}
+          />
+          {shown !== null && (
+            <Button
+              icon={<Send size={15} />}
+              onClick={() => {
+                setConfirmError(null);
+                setConfirming(true);
+              }}
+            >
+              Post transfer
+            </Button>
+          )}
+        </div>
+      </MkCard>
 
       {shown !== null && <PreviewCard preview={shown} />}
 
-      <Modal
+      <ConfirmDialog
         open={confirming && shown !== null}
         onOpenChange={(next) => {
           if (!next) setConfirming(false);
         }}
         title="Post this transfer?"
-        description="It moves real money and cannot be undone — a mistake is put right with a transfer the other way."
+        entity={ctx.seller.companyName}
+        amount={
+          shown === null ? undefined : (
+            <Money
+              amount={shown.amountInr}
+              direction={shown.direction === 'DEBIT' ? 'debit' : 'credit'}
+              convert={false}
+            />
+          )
+        }
+        consequence="It moves real money and cannot be undone — a mistake is put right with a transfer the other way."
+        confirmLabel="Yes, post it"
+        closeOnSuccess={false}
+        onConfirm={confirm}
+        error={confirmError}
       >
-        {shown !== null && <p className="text-text-body text-sm">{shown.sentence}</p>}
-        {confirmError !== null && <ErrorNote className="mt-3" message={confirmError} />}
-        <ModalFooter>
-          <Button variant="ghost" onClick={() => setConfirming(false)}>
-            Cancel
-          </Button>
-          <Button onClick={() => void confirm()} disabled={post.isPending}>
-            {post.isPending ? 'Posting…' : 'Yes, post it'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+        {shown !== null && <p className="mk-body">{shown.sentence}</p>}
+      </ConfirmDialog>
     </div>
   );
 }
@@ -395,16 +401,16 @@ function TransferForm({
 function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView }): ReactElement {
   const debit = preview.direction === 'DEBIT';
   return (
-    <Card className="space-y-3 p-3">
-      <p className="text-text-body text-sm" data-testid="wallet-transfer-sentence">
+    <MkCard title="Preview" subtitle="Nothing has moved yet. Check it, then post it.">
+      <p className="mk-body" data-testid="wallet-transfer-sentence">
         {preview.sentence}
       </p>
-      <DescriptionList
+      <MkDl
         items={[
           {
             label: 'Wallet',
             value: (
-              <span className="inline-flex flex-wrap items-baseline gap-1">
+              <span className="mk-balances">
                 <Money amount={preview.walletBeforeInr} convert={false} /> →{' '}
                 <Money amount={preview.walletAfterInr} convert={false} />
               </span>
@@ -413,7 +419,7 @@ function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView 
           {
             label: 'Their cash held with us',
             value: (
-              <span className="inline-flex flex-wrap items-baseline gap-1">
+              <span className="mk-balances">
                 <Money amount={preview.heldBeforeInr} convert={false} /> →{' '}
                 <Money amount={preview.heldAfterInr} convert={false} />
               </span>
@@ -436,8 +442,8 @@ function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView 
         ]}
       />
       {preview.accounts.length > 0 && (
-        <div className="overflow-x-auto">
-          <Table>
+        <div className="mk-scroll">
+          <Table caption="Where the cash moves">
             <THead>
               <Tr>
                 <Th>Account</Th>
@@ -467,16 +473,16 @@ function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView 
           </Table>
         </div>
       )}
-    </Card>
+    </MkCard>
   );
 }
 
 function TransferHistory({ sellerId }: { readonly sellerId: string | null }): ReactElement {
   const list = useWalletTransfers(sellerId);
-  if (list.isLoading) return <SkeletonRows rows={4} cols={6} />;
+  if (list.isLoading) return <SkeletonRows rows={4} cols={8} label="Loading past transfers…" />;
   if (list.isError || list.data === undefined) {
     return (
-      <ErrorNote
+      <ErrorState
         message={serverVerdict(list.error, 'Could not read past transfers.')}
         retry={() => void list.refetch()}
       />
@@ -486,15 +492,14 @@ function TransferHistory({ sellerId }: { readonly sellerId: string | null }): Re
   if (items.length === 0) {
     return (
       <EmptyState
-        bare
         title="No staff transfers yet"
         description="A transfer you post above appears here, with its reason and who posted it."
       />
     );
   }
   return (
-    <div className="overflow-x-auto">
-      <Table>
+    <MkCard flush>
+      <Table caption="Staff wallet transfers">
         <THead>
           <Tr>
             <Th>When</Th>
@@ -510,8 +515,8 @@ function TransferHistory({ sellerId }: { readonly sellerId: string | null }): Re
         <TBody>
           {items.map((r) => (
             <Tr key={r.id}>
-              <Td className="text-xs">{new Date(r.createdAt).toLocaleString()}</Td>
-              <Td>{r.companyName}</Td>
+              <Td className="mk-when sk-figure">{new Date(r.createdAt).toLocaleString()}</Td>
+              <Td className="mk-strong">{r.companyName}</Td>
               <Td>
                 <Money
                   amount={r.direction === 'DEBIT' ? `-${r.amountInr}` : r.amountInr}
@@ -522,10 +527,10 @@ function TransferHistory({ sellerId }: { readonly sellerId: string | null }): Re
               <Td>
                 <Money amount={r.walletAfterInr} convert={false} />
               </Td>
-              <Td className="text-xs">{r.reason ?? '—'}</Td>
-              <Td className="text-text-muted text-xs">{r.internalNote ?? '—'}</Td>
-              <Td className="text-xs">{r.staff ?? '—'}</Td>
-              <Td className="text-xs">
+              <Td className="mk-small mk-body">{r.reason ?? '—'}</Td>
+              <Td className="mk-small">{r.internalNote ?? '—'}</Td>
+              <Td className="mk-small">{r.staff ?? '—'}</Td>
+              <Td className="mk-small">
                 {r.accounts.length === 0
                   ? 'No cash moved'
                   : r.accounts.map((a) => `${a.label} ${a.amount}`).join(', ')}
@@ -534,6 +539,6 @@ function TransferHistory({ sellerId }: { readonly sellerId: string | null }): Re
           ))}
         </TBody>
       </Table>
-    </div>
+    </MkCard>
   );
 }
