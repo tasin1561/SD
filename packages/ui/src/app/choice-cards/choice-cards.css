@@ -1,0 +1,172 @@
+/* Choice cards (u10). The chosen card takes the accent line, a tint and a
+   lift; its mark fills with a dot that springs in. All from :has(:checked),
+   so the native radio stays the only state. */
+.sk-choices {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.sk-choices__legend {
+  padding: 0;
+  margin-bottom: var(--sp-2);
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.sk-choices__req {
+  margin-left: 2px;
+  color: var(--red-text);
+}
+.sk-choices__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.sk-choices__grid {
+  display: grid;
+  gap: var(--sp-3);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 640px) {
+  .sk-choices[data-columns='2'] .sk-choices__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sk-choices[data-columns='3'] .sk-choices__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.sk-choice {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-height: var(--tap);
+  padding: var(--sp-3) var(--sp-4);
+  padding-right: calc(var(--sp-4) + 22px);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  cursor: pointer;
+  transition:
+    border-color var(--dur) var(--ease-out),
+    background-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+}
+.sk-choice:hover:not([data-disabled]) {
+  border-color: var(--border-control);
+  transform: translateY(-1px);
+  box-shadow: var(--elev-1);
+}
+.sk-choice:has(.sk-choice__input:checked) {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+  box-shadow:
+    0 0 0 1px var(--accent-line),
+    0 10px 24px -16px var(--blue-glow);
+}
+.sk-choice:has(.sk-choice__input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-choices[data-invalid] .sk-choice {
+  border-color: var(--red-line);
+}
+.sk-choice[data-disabled],
+.sk-choices:disabled .sk-choice {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sk-choice__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.sk-choice__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-spring);
+}
+.sk-choice__icon svg {
+  width: 18px;
+  height: 18px;
+}
+.sk-choice:has(.sk-choice__input:checked) .sk-choice__icon {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  transform: scale(1.06);
+}
+.sk-choice__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.sk-choice__title {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.sk-choice__desc {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: 1.4;
+}
+.sk-choice__mark {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-control);
+  border-radius: 50%;
+  transition: border-color var(--dur) var(--ease-out);
+}
+.sk-choice__mark::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--accent-fill);
+  transform: scale(0);
+  transition: transform var(--dur) var(--ease-spring);
+}
+.sk-choice:has(.sk-choice__input:checked) .sk-choice__mark {
+  border-color: var(--accent-fill);
+}
+.sk-choice:has(.sk-choice__input:checked) .sk-choice__mark::after {
+  transform: scale(1);
+}
+.sk-choices__msg {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.sk-choices__msg[data-kind='error'] {
+  color: var(--red-text);
+  font-weight: var(--fw-medium);
+}
+.sk-choices__msg svg {
+  flex: none;
+  margin-top: 1px;
+}

@@ -153,7 +153,7 @@ export function Stat({
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-text-muted min-w-0 text-xs font-medium tracking-wide uppercase">
+        <p className="sd-stat-label text-text-muted min-w-0 text-xs font-medium tracking-wide uppercase">
           {label}
         </p>
         {icon !== undefined && (
@@ -166,7 +166,7 @@ export function Stat({
         <span
           data-stat-value
           className={clsx(
-            'text-xl font-semibold',
+            'sd-stat-value text-xl font-semibold',
             tone === 'neutral' && 'text-text-bright',
             tone === 'warn' && 'text-[var(--status-pending-fg)]',
             tone === 'bad' && 'text-[var(--color-critical)]',

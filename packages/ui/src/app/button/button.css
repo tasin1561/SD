@@ -1,0 +1,158 @@
+/* Button (u28 sweep). Each variant sets the six --b-* roles; the rules
+   below read only those, so a variant is one block of custom properties. */
+.sk-btn {
+  --b-fill: var(--accent-fill);
+  --b-on: var(--accent-fg);
+  --b-line: transparent;
+  --b-sweep: linear-gradient(100deg, var(--accent-fill-hover), var(--violet-fill));
+  --b-on-sweep: var(--accent-fg);
+  --b-glow: var(--blue-glow);
+  --b-h: var(--ctl-h);
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: var(--b-h);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--b-line);
+  border-radius: var(--r-pill);
+  background: var(--b-fill);
+  color: var(--b-on);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+/* The hit area: never smaller than --tap, whatever the drawn height. */
+.sk-btn::after {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc((var(--b-h) - var(--tap)) / 2)) 0;
+}
+.sk-btn--sm {
+  --b-h: var(--ctl-h-sm);
+  gap: var(--sp-1);
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-sm);
+}
+.sk-btn--lg {
+  --b-h: var(--ctl-h-lg);
+  padding: 0 var(--sp-5);
+}
+.sk-btn--full {
+  display: flex;
+  width: 100%;
+}
+.sk-btn--secondary {
+  --b-fill: var(--surface-2);
+  --b-on: var(--fg-strong);
+  --b-line: var(--border-control);
+  --b-sweep: linear-gradient(100deg, var(--accent-tint), var(--blue-surface));
+  --b-on-sweep: var(--fg-strong);
+  box-shadow: var(--elev-1);
+}
+.sk-btn--ghost {
+  --b-fill: transparent;
+  --b-on: var(--fg-body);
+  --b-sweep: linear-gradient(100deg, var(--surface-3), var(--surface-3));
+  --b-on-sweep: var(--fg-strong);
+  --b-glow: transparent;
+}
+.sk-btn--destructive {
+  --b-fill: var(--red-fill);
+  --b-on: var(--red-on-fill);
+  --b-sweep: linear-gradient(100deg, var(--red-fill-hover), var(--magenta-fill));
+  --b-on-sweep: var(--red-on-fill);
+  --b-glow: var(--red-glow);
+}
+
+/* The sweep layer, clipped to the pill. */
+.sk-btn__fx {
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sk-btn__fx::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--b-sweep);
+  transform: translateX(-101%);
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.sk-btn__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+.sk-btn__icon svg {
+  width: 1.1em;
+  height: 1.1em;
+}
+.sk-btn__icon--right {
+  transition: transform var(--dur) var(--ease-out);
+}
+.sk-btn__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The button sets line-height 1; a clipped box that short cuts off
+     descenders (the g in "Saving"), so the label keeps its own. */
+  line-height: 1.35;
+}
+
+.sk-btn:where(:not(:disabled, [aria-disabled='true'])):is(:hover, :focus-visible) {
+  color: var(--b-on-sweep);
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 24px -12px var(--b-glow),
+    0 0 0 3px var(--b-glow);
+}
+.sk-btn:where(:not(:disabled, [aria-disabled='true'])):is(:hover, :focus-visible)
+  .sk-btn__fx::before {
+  transform: translateX(0);
+}
+.sk-btn:where(:not(:disabled, [aria-disabled='true'])):is(:hover, :focus-visible)
+  .sk-btn__icon--right {
+  transform: translateX(3px);
+}
+.sk-btn:where(:not(:disabled, [aria-disabled='true'])):active {
+  transform: translateY(0) scale(0.98);
+}
+.sk-btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-btn:disabled,
+.sk-btn[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+}
+.sk-btn[data-loading] {
+  cursor: progress;
+  opacity: 0.85;
+}
+.sk-btn__spin {
+  animation: sk-btn-spin calc(900ms * var(--motion-slow, 1)) linear infinite;
+}
+@keyframes sk-btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

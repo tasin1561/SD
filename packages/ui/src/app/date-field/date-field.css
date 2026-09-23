@@ -1,0 +1,23 @@
+/* Date field: the native control keeps its own picker; its segments take
+   the field's type, and the browser's calendar button is tinted to match. */
+.sk-date .sk-field__input {
+  font-variant-numeric: tabular-nums;
+}
+.sk-date .sk-field__input::-webkit-datetime-edit {
+  padding: 0;
+}
+.sk-date .sk-field__input::-webkit-datetime-edit-fields-wrapper {
+  padding: 0;
+}
+.sk-date .sk-field__input::-webkit-calendar-picker-indicator {
+  min-width: 24px;
+  min-height: 24px;
+  margin-left: var(--sp-1);
+  border-radius: var(--r-xs);
+  opacity: 0.7;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.sk-date .sk-field__input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}

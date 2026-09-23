@@ -1,0 +1,139 @@
+/* SignInScreen. */
+.sk-signin {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: calc(env(safe-area-inset-top) + var(--sp-12)) var(--sp-4)
+    calc(env(safe-area-inset-bottom) + var(--sp-8));
+  overflow: hidden;
+  background: var(--page);
+  color: var(--fg-body);
+  font-family: var(--app-font);
+}
+.sk-signin__backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.sk-signin__map {
+  position: absolute;
+  inset: 0;
+  opacity: 0.6;
+}
+/* A soft clearing behind the card so the map never fights the form. */
+.sk-signin__veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(closest-side at 50% 48%, var(--page) 38%, transparent 100%);
+  opacity: 0.9;
+}
+.sk-signin__glow {
+  position: absolute;
+  top: -12rem;
+  left: 50%;
+  width: 44rem;
+  height: 30rem;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--glow), transparent);
+  transform: translateX(-50%);
+}
+.sk-signin__theme {
+  position: absolute;
+  z-index: 2;
+  top: calc(env(safe-area-inset-top) + var(--sp-4));
+  right: calc(env(safe-area-inset-right) + var(--sp-4));
+}
+.sk-signin__main {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 400px;
+  animation: sk-signin-rise var(--dur-slow) var(--ease-out) both;
+}
+@keyframes sk-signin-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.sk-signin__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-6);
+}
+.sk-signin__mark {
+  width: auto;
+  height: 36px;
+  flex: none;
+  user-select: none;
+}
+.sk-signin__names {
+  display: grid;
+  line-height: var(--lh-tight);
+}
+.sk-signin__name {
+  color: var(--fg-strong);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-heavy);
+  letter-spacing: -0.02em;
+}
+.sk-signin__portal {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.sk-signin__card {
+  position: relative;
+  padding: var(--sp-6);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-3);
+}
+/* The corridor gradient, as a thin accent along the top. */
+.sk-signin__edge {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: var(--corridor-gradient);
+}
+.sk-signin__title {
+  margin: 0 0 var(--sp-1);
+  color: var(--fg-strong);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.01em;
+}
+.sk-signin__note {
+  margin-bottom: var(--sp-5);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}
+.sk-signin__title + .sk-signin__form {
+  margin-top: var(--sp-4);
+}
+.sk-signin__footer {
+  margin-top: var(--sp-5);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+.sk-signin__footer a {
+  color: var(--sky);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+}
+.sk-signin__footer a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-width: 479.98px) {
+  .sk-signin__card {
+    padding: var(--sp-5) var(--sp-4);
+  }
+}

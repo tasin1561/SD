@@ -24,7 +24,10 @@ function visibleText(root: HTMLElement): string {
   const walker = doc.createTreeWalker(root, 4 /* NodeFilter.SHOW_TEXT */);
   const parts: string[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) parts.push(n.nodeValue ?? '');
-  return parts.join(' ').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
+  return parts
+    .join(' ')
+    .replace(/\u00a0/g, ' ')
+    .replace(/\s+/g, ' ');
 }
 
 export function moneyStrings(root: HTMLElement): { shown: string[]; spoken: string[] } {

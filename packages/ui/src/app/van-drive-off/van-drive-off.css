@@ -1,0 +1,129 @@
+/* Van drive-off (storytelling 02). 0–15 % the van pulls out, 15–75 % it
+   drives right with spinning wheels and speed lines, the pill rises at
+   40 % and stays. `forwards` fills make the reduced-motion collapse land
+   on the right end state: van gone, pill shown. */
+.sk-van {
+  --van-t: calc(1100ms * var(--motion-slow, 1));
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+.sk-van__stage {
+  position: relative;
+  display: inline-grid;
+  pointer-events: none;
+  /* The van leaves through the stage's edge instead of widening the page. */
+  overflow: clip;
+  overflow-clip-margin: var(--sp-4);
+}
+.sk-van__run {
+  display: grid;
+  align-items: center;
+  justify-items: start;
+}
+.sk-van__run > * {
+  grid-area: 1 / 1;
+}
+.sk-van__truck {
+  width: 56px;
+  height: 28px;
+  overflow: visible;
+  opacity: 0;
+  animation: sk-van-drive var(--van-t) var(--ease-in) forwards;
+}
+.sk-van__cargo {
+  fill: var(--accent-fill);
+}
+.sk-van__cab {
+  fill: var(--accent-fill-hover);
+}
+.sk-van__glass {
+  fill: var(--blue-tint);
+}
+.sk-van__mark {
+  fill: var(--saffron-fill);
+}
+.sk-van__wheel {
+  fill: var(--fg-strong);
+  stroke: var(--surface-2);
+  stroke-width: 1.5;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: sk-van-wheel calc(var(--van-t) / 4) linear 4;
+}
+.sk-van__lines {
+  fill: none;
+  stroke: var(--fg-faint);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  opacity: 0;
+  animation: sk-van-lines var(--van-t) var(--ease-out) forwards;
+}
+.sk-van__done {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--ctl-h);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--green-line);
+  border-radius: var(--r-pill);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  box-shadow: 0 8px 22px -14px var(--green-glow);
+  opacity: 0;
+  transform: translateX(-8px) scale(0.96);
+  animation: sk-van-done calc(var(--van-t) * 0.35) var(--ease-spring) calc(var(--van-t) * 0.4)
+    forwards;
+}
+@keyframes sk-van-drive {
+  0% {
+    opacity: 0;
+    transform: translateX(-12px) scale(0.9);
+  }
+  15% {
+    opacity: 1;
+    transform: none;
+  }
+  30% {
+    opacity: 1;
+    transform: translateX(6px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(260px);
+  }
+}
+@keyframes sk-van-wheel {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes sk-van-lines {
+  0%,
+  25% {
+    opacity: 0;
+  }
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes sk-van-done {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.sk-van__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

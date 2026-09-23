@@ -62,7 +62,7 @@ export function Crumbs({
     // landmark, and "Breadcrumb" is what a screen reader user is
     // listening for when they ask where they are.
     <nav aria-label="Breadcrumb" className={clsx('min-w-0', className)}>
-      <ol className="text-text-faint flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-[11px] tracking-[0.08em] uppercase">
+      <ol className="sd-crumbs text-text-faint flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-[11px] tracking-[0.08em] uppercase">
         {items.map((crumb, i) => {
           const last = i === items.length - 1;
           return (
@@ -130,7 +130,7 @@ export function MetaChip({
   return (
     <span
       className={clsx(
-        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-[0.06em] uppercase',
+        'sd-meta-chip inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-semibold tracking-[0.06em] uppercase',
         META_TONE[tone],
       )}
     >
@@ -168,14 +168,14 @@ export function SectionBand({
   return (
     <div
       className={clsx(
-        'border-border bg-[var(--console-band-bg)] flex flex-wrap items-center gap-x-3 gap-y-2 rounded-t-[var(--radius-3)] border border-b-0 px-3 py-2.5',
+        'sd-band border-border bg-[var(--console-band-bg)] flex flex-wrap items-center gap-x-3 gap-y-2 rounded-t-[var(--radius-3)] border border-b-0 px-3 py-2.5',
         className,
       )}
     >
-      <h2 className="text-text-strong flex min-w-0 items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.1em] uppercase">
-        <span aria-hidden className="bg-accent h-1.5 w-1.5 shrink-0 rounded-full" />
+      <h2 className="sd-band-title text-text-strong flex min-w-0 items-center gap-2 font-mono text-[11px] font-semibold tracking-[0.1em] uppercase">
+        <span aria-hidden className="sd-band-dot bg-accent h-1.5 w-1.5 shrink-0 rounded-full" />
         {index !== undefined && (
-          <span aria-hidden className="text-accent">
+          <span aria-hidden className="sd-band-index text-accent">
             {index} //
           </span>
         )}
@@ -298,7 +298,7 @@ export function StripFact({
           tone === 'neutral' && 'bg-[var(--color-text-faint)]',
         )}
       />
-      <span className="tracking-[0.06em] uppercase">{label}:</span>
+      <span className="sd-strip-label tracking-[0.06em] uppercase">{label}:</span>
       <span className="text-text-body min-w-0 truncate">{value}</span>
     </span>
   );

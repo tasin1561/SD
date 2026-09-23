@@ -1,0 +1,146 @@
+/* Accordion (u19). The panel animates grid-template-rows 0fr → 1fr; the
+   plus is two bars and the vertical one scales to 0 to make the minus. */
+.sk-acc {
+  display: grid;
+  gap: var(--sp-3);
+}
+.sk-acc__item {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  transition:
+    box-shadow var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+.sk-acc__item[data-open] {
+  border-color: var(--accent-line);
+  box-shadow:
+    var(--elev-2),
+    0 12px 28px -20px var(--blue-glow);
+}
+.sk-acc__heading {
+  margin: 0;
+  font: inherit;
+}
+.sk-acc__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: calc(var(--tap) + var(--sp-4));
+  padding: var(--sp-2) var(--sp-3) var(--sp-2) var(--sp-4);
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+.sk-acc__trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.sk-acc__trigger:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-acc__chip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--sky);
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-spring);
+}
+.sk-acc__item[data-open] .sk-acc__chip {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  transform: scale(1.04);
+}
+.sk-acc__title {
+  flex: 1;
+  min-width: 0;
+  transition: color var(--dur) var(--ease-out);
+}
+.sk-acc__item[data-open] .sk-acc__title {
+  color: var(--sky);
+}
+.sk-acc__meta {
+  flex: none;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.sk-acc__pm {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--sky);
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    transform var(--dur-slow) var(--ease-spring);
+}
+.sk-acc__trigger:hover .sk-acc__pm {
+  transform: scale(1.08);
+}
+.sk-acc__item[data-open] .sk-acc__pm {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  transform: rotate(180deg);
+}
+.sk-acc__bar {
+  grid-area: 1 / 1;
+  width: 12px;
+  height: 2px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.sk-acc__bar--v {
+  transform: rotate(90deg);
+}
+.sk-acc__item[data-open] .sk-acc__bar--v {
+  transform: rotate(90deg) scaleX(0);
+}
+.sk-acc__panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition:
+    grid-template-rows var(--dur-slow) var(--ease-out),
+    opacity var(--dur) var(--ease-out);
+}
+.sk-acc__item[data-open] .sk-acc__panel {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.sk-acc__clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.sk-acc__well {
+  margin: 0 var(--sp-3) var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--surface-band);
+  box-shadow: inset 0 1px 3px var(--line);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}

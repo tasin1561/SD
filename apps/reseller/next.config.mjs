@@ -14,6 +14,13 @@ import { staticSecurityHeaders, allRoutes } from '../../packages/config/security
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Dev-only routes (the /dev/ui gallery) are `page.dev.tsx` and are
+  // compiled ONLY when APPS_DEV_ROUTES=1 — a plain `next build` never sees
+  // them, so nothing of theirs can reach a production chunk.
+  pageExtensions:
+    process.env.APPS_DEV_ROUTES === '1'
+      ? ['dev.tsx', 'tsx', 'ts', 'jsx', 'js']
+      : ['tsx', 'ts', 'jsx', 'js'],
   reactStrictMode: true,
   async headers() {
     return allRoutes(staticSecurityHeaders);

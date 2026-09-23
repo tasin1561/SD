@@ -1,0 +1,331 @@
+/* Dialog. Radix keeps the node mounted while a data-state='closed'
+   animation runs, so enter AND exit are CSS. Centring uses the `translate`
+   property so the `transform` animation (scale) never fights it. */
+.sk-dialog__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: var(--scrim);
+}
+.sk-dialog__scrim[data-state='open'] {
+  animation: sk-dlg-fade var(--dur) var(--ease-out);
+}
+.sk-dialog__scrim[data-state='closed'] {
+  animation: sk-dlg-fade var(--dur-fast) var(--ease-in) reverse forwards;
+}
+.sk-dialog {
+  --dlg-w: 30rem;
+  position: fixed;
+  z-index: 61;
+  inset: auto 0 0 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 92dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--surface-2);
+  color: var(--fg-body);
+  box-shadow: var(--elev-3);
+  outline: none;
+}
+.sk-dialog[data-size='sm'] {
+  --dlg-w: 26rem;
+}
+.sk-dialog[data-size='lg'] {
+  --dlg-w: 42rem;
+}
+.sk-dialog[data-size='xl'] {
+  --dlg-w: 64rem;
+}
+.sk-dialog[data-state='open'] {
+  animation: sk-dlg-sheet-in var(--dur-slow) var(--ease-out);
+}
+.sk-dialog[data-state='closed'] {
+  animation: sk-dlg-sheet-in var(--dur) var(--ease-in) reverse forwards;
+}
+@media (min-width: 640px) {
+  .sk-dialog {
+    inset: 50% auto auto 50%;
+    translate: -50% -50%;
+    width: min(var(--dlg-w), calc(100vw - 2rem));
+    max-height: calc(100dvh - 4rem);
+    padding-bottom: 0;
+    border-radius: var(--r-lg);
+  }
+  .sk-dialog[data-state='open'] {
+    animation: sk-dlg-pop var(--dur-slow) var(--ease-spring);
+  }
+  .sk-dialog[data-state='closed'] {
+    animation: sk-dlg-pop var(--dur-fast) var(--ease-in) reverse forwards;
+  }
+}
+@keyframes sk-dlg-fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sk-dlg-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+@keyframes sk-dlg-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+.sk-dialog[data-tone='critical'] {
+  border-color: var(--red-line);
+  box-shadow:
+    var(--elev-3),
+    0 0 0 3px var(--red-glow);
+}
+.sk-dialog__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  flex: none;
+  padding: var(--sp-4) var(--sp-3) var(--sp-3) var(--sp-5);
+  border-bottom: 1px solid var(--line);
+}
+.sk-dialog[data-tone='critical'] .sk-dialog__head {
+  border-bottom-color: var(--red-line);
+}
+.sk-dialog__chip {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--sky);
+}
+.sk-dialog[data-tone='critical'] .sk-dialog__chip {
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.sk-dialog__titles {
+  flex: 1;
+  min-width: 0;
+  padding-top: 6px;
+}
+.sk-dialog__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+}
+.sk-dialog[data-tone='critical'] .sk-dialog__title {
+  color: var(--red-text);
+}
+.sk-dialog__desc {
+  margin: var(--sp-1) 0 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.sk-dialog__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.sk-dialog__close:hover {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.sk-dialog__close:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.sk-dialog__close:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--sp-4) var(--sp-5);
+}
+.sk-dialog__foot {
+  flex: none;
+  padding: var(--sp-3) var(--sp-5) var(--sp-4);
+  border-top: 1px solid var(--line);
+}
+.sk-dialog__actions {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--sp-2);
+}
+.sk-dialog__actions > * {
+  width: 100%;
+}
+@media (min-width: 640px) {
+  .sk-dialog__actions {
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+  .sk-dialog__actions > * {
+    width: auto;
+  }
+}
+
+/* ConfirmDialog restatement. */
+.sk-confirm {
+  display: grid;
+  gap: var(--sp-3);
+}
+.sk-confirm__subject {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-band);
+}
+.sk-confirm__entity {
+  min-width: 0;
+  color: var(--fg-strong);
+  font-weight: var(--fw-bold);
+  overflow-wrap: anywhere;
+}
+.sk-confirm__amount {
+  color: var(--fg-strong);
+  font-size: var(--fs-xl);
+  font-weight: var(--fw-bold);
+}
+.sk-confirm__consequence {
+  margin: 0;
+  color: var(--fg-body);
+}
+.sk-confirm__error {
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-md);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: var(--fs-sm);
+}
+.sk-confirm__error > svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+/* SuccessDialog (u11). White on the 700-level fills clears 4.5:1. */
+.sk-okdlg {
+  position: fixed;
+  z-index: 61;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  width: min(22rem, calc(100vw - 2rem));
+  overflow: hidden;
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-8) var(--sp-6) var(--sp-6);
+  border-radius: var(--r-lg);
+  background: linear-gradient(140deg, var(--teal-fill), var(--green-fill));
+  color: var(--green-on-fill);
+  text-align: center;
+  box-shadow:
+    var(--elev-3),
+    0 24px 48px -24px var(--green-glow);
+  outline: none;
+}
+.sk-okdlg[data-state='open'] {
+  animation: sk-dlg-pop var(--dur-slow) var(--ease-spring);
+}
+.sk-okdlg[data-state='closed'] {
+  animation: sk-dlg-pop var(--dur-fast) var(--ease-in) reverse forwards;
+}
+.sk-okdlg__arc {
+  position: absolute;
+  right: -28%;
+  top: -48%;
+  width: 72%;
+  aspect-ratio: 1;
+  border-radius: var(--r-pill);
+  background: var(--green-on-fill);
+  opacity: 0.12;
+  pointer-events: none;
+}
+.sk-okdlg__badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: var(--sp-1);
+}
+.sk-okdlg__scallop {
+  position: absolute;
+  inset: 0;
+  fill: var(--green-on-fill);
+}
+.sk-okdlg__check {
+  position: relative;
+  color: var(--green-fill);
+  stroke-dasharray: 30;
+  stroke-dashoffset: 0;
+  animation: sk-okdlg-draw calc(420ms * var(--motion-slow, 1)) var(--ease-out)
+    calc(180ms * var(--motion-slow, 1)) backwards;
+}
+@keyframes sk-okdlg-draw {
+  from {
+    stroke-dashoffset: 30;
+  }
+}
+.sk-okdlg__title {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-heavy);
+  line-height: var(--lh-tight);
+}
+.sk-okdlg__body {
+  margin: 0;
+  max-width: 34ch;
+  font-size: var(--fs-md);
+  line-height: var(--lh-body);
+}
+.sk-okdlg__continue {
+  margin-top: var(--sp-3);
+  min-height: var(--ctl-h);
+  min-width: 9rem;
+  padding: 0 var(--sp-6);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--green-on-fill);
+  color: var(--green-fill);
+  font: inherit;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  box-shadow: var(--elev-2);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.sk-okdlg__continue:hover {
+  transform: translateY(-1px);
+}
+.sk-okdlg__continue:focus-visible {
+  outline: 2px solid var(--green-on-fill);
+  outline-offset: 3px;
+}

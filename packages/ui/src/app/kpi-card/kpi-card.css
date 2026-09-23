@@ -1,0 +1,203 @@
+/* KpiCard + Odometer. */
+.sk-kpi {
+  --kpi-glow: var(--blue-glow);
+  --kpi-chip-bg: var(--surface-3);
+  --kpi-chip-fg: var(--fg-muted);
+  --kpi-edge: var(--line-strong);
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+  padding: var(--sp-4) var(--sp-4) var(--sp-4);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.sk-kpi[data-tone='credit'] {
+  --kpi-glow: var(--green-glow);
+  --kpi-chip-bg: var(--green-tint);
+  --kpi-chip-fg: var(--green-on-tint);
+  --kpi-edge: var(--green-fill);
+}
+.sk-kpi[data-tone='debit'] {
+  --kpi-glow: var(--red-glow);
+  --kpi-chip-bg: var(--red-tint);
+  --kpi-chip-fg: var(--red-on-tint);
+  --kpi-edge: var(--red-fill);
+}
+.sk-kpi[data-tone='pending'] {
+  --kpi-glow: var(--saffron-glow);
+  --kpi-chip-bg: var(--saffron-tint);
+  --kpi-chip-fg: var(--saffron-on-tint);
+  --kpi-edge: var(--saffron-fill);
+}
+.sk-kpi[data-tone='info'] {
+  --kpi-glow: var(--blue-glow);
+  --kpi-chip-bg: var(--blue-tint);
+  --kpi-chip-fg: var(--blue-on-tint);
+  --kpi-edge: var(--blue-fill);
+}
+/* A thin edge in the tone along the top, and a soft glow in its corner. */
+.sk-kpi::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--kpi-edge);
+  opacity: 0.9;
+}
+.sk-kpi[data-tone='neutral']::before {
+  opacity: 0;
+}
+.sk-kpi__glow {
+  position: absolute;
+  z-index: -1;
+  top: -60%;
+  right: -30%;
+  width: 90%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--kpi-glow), transparent);
+  pointer-events: none;
+}
+.sk-kpi[data-tone='neutral'] .sk-kpi__glow {
+  opacity: 0.5;
+}
+.sk-kpi__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+.sk-kpi__label {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+}
+.sk-kpi__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  background: var(--kpi-chip-bg);
+  color: var(--kpi-chip-fg);
+}
+.sk-kpi__chip {
+  flex: none;
+}
+.sk-kpi__figure-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+}
+.sk-kpi__figure {
+  color: var(--fg-strong);
+  font-size: var(--fs-kpi);
+  font-weight: var(--fw-bold);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.sk-kpi__unit {
+  color: var(--fg-faint);
+  font-size: var(--fs-sm);
+}
+.sk-kpi__sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-xs);
+}
+.sk-kpi__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-weight: var(--fw-semibold);
+}
+.sk-kpi__trend[data-good='1'] {
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.sk-kpi__trend[data-good='0'] {
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.sk-kpi__secondary {
+  color: var(--fg-muted);
+}
+.sk-kpi__hint {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-snug);
+}
+.sk-kpi__foot {
+  display: grid;
+  gap: 4px;
+  margin: var(--sp-2) 0 0;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+}
+.sk-kpi__foot-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-size: var(--fs-xs);
+}
+.sk-kpi__foot-row dt {
+  min-width: 0;
+  color: var(--fg-faint);
+}
+.sk-kpi__foot-row dd {
+  flex: none;
+  margin: 0;
+  color: var(--fg-body);
+  font-weight: var(--fw-medium);
+}
+
+/* Odometer. */
+.sk-odo {
+  --odo-lh: 1.15em;
+  position: relative;
+  display: inline-block;
+  line-height: var(--odo-lh);
+  white-space: nowrap;
+}
+.sk-odo[data-rolling='1'] .sk-odo__value {
+  color: transparent;
+}
+.sk-odo__roll {
+  position: absolute;
+  inset: 0;
+  display: inline-flex;
+  pointer-events: none;
+}
+.sk-odo__col {
+  display: inline-block;
+  height: var(--odo-lh);
+  overflow: hidden;
+}
+.sk-odo__strip {
+  display: grid;
+  transform: translateY(calc(var(--n) * var(--odo-lh) * -1));
+  transition: transform calc(900ms * var(--motion-slow)) cubic-bezier(0.2, 0.9, 0.2, 1);
+  transition-delay: calc(var(--i) * 60ms * var(--motion-slow));
+}
+.sk-odo__strip > span {
+  display: block;
+  height: var(--odo-lh);
+}

@@ -132,6 +132,18 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      # packages/ui/src/brand/{scales,theme}.css are byte-identical copies
+      # of apps/marketing's token files (apps restyle, decision 1): the
+      # five apps read one palette while marketing stays untouched. A copy
+      # is only safe while it is identical; this fails on any drift.
+      - name: Brand tokens match marketing
+        run: node packages/ui/scripts/check-brand-tokens.mjs
+
+      # Every text/surface and chip pairing of the apps' brand skin, in
+      # both themes, computed from the real tokens (4.5:1 text, 3:1 UI).
+      - name: Brand contrast
+        run: node packages/ui/scripts/contrast.mjs
+
       # The seam between the two halves. Each side's own tests pass while
       # the path joining them is wrong — three bugs in one day were this
       # exact shape, and none of them were caught by a unit test.

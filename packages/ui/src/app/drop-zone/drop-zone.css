@@ -1,0 +1,192 @@
+/* Drop zone (u15). A dashed card; while a file hovers over it the border
+   turns accent, the surface tints and the cloud lifts. */
+.sk-drop {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.sk-drop__zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 9rem;
+  padding: var(--sp-5) var(--sp-4);
+  border: 1.5px dashed var(--border-control);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  text-align: center;
+  transition:
+    border-color var(--dur) var(--ease-out),
+    background-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.sk-drop__zone[data-over] {
+  border-style: solid;
+  border-color: var(--accent-fill);
+  background: var(--accent-tint);
+  box-shadow: 0 0 0 4px var(--blue-glow);
+}
+.sk-drop[data-invalid] .sk-drop__zone {
+  border-color: var(--red-text);
+}
+.sk-drop__zone[data-disabled] {
+  opacity: 0.55;
+}
+.sk-drop__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  transition:
+    transform var(--dur-slow) var(--ease-spring),
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+.sk-drop__zone[data-over] .sk-drop__icon {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  transform: translateY(-4px) scale(1.08);
+}
+.sk-drop__label {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.sk-drop__or {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.sk-drop__btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ctl-h-sm);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--border-control);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.sk-drop__btn::after {
+  content: '';
+  position: absolute;
+  inset: calc((var(--ctl-h-sm) - var(--tap)) / 2) 0;
+}
+.sk-drop__btn:hover:not(:disabled) {
+  border-color: var(--accent-fill);
+  transform: translateY(-1px);
+}
+.sk-drop__btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.sk-drop__btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.sk-drop__btn:disabled {
+  cursor: not-allowed;
+}
+.sk-drop__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+  pointer-events: none;
+}
+.sk-drop__msg {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.sk-drop__msg[data-kind='error'] {
+  color: var(--red-text);
+  font-weight: var(--fw-medium);
+}
+.sk-drop__msg[data-kind='notice'] {
+  color: var(--saffron-text);
+}
+.sk-drop__msg:empty {
+  display: none;
+}
+.sk-drop__msg svg {
+  flex: none;
+  margin-top: 1px;
+}
+.sk-drop__files {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sk-drop__file {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap);
+  padding: 0 var(--sp-1) 0 var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  font-size: var(--fs-sm);
+  animation: sk-drop-in var(--dur) var(--ease-out) both;
+}
+@keyframes sk-drop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.sk-drop__file-icon {
+  flex: none;
+  color: var(--fg-muted);
+}
+.sk-drop__file-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-strong);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sk-drop__file-size {
+  flex: none;
+  color: var(--fg-muted);
+}
+.sk-drop__remove {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--tap);
+  height: var(--tap);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+.sk-drop__remove:hover:not(:disabled) {
+  color: var(--red-text);
+}
+.sk-drop__remove:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}

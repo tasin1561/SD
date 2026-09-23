@@ -1,0 +1,29 @@
+/* Select (native, u05). The <select> runs to the field's right edge so the
+   whole row opens it; the chevron is drawn over it and ignores the pointer. */
+.sk-select__native {
+  margin-right: calc(-1 * var(--f-pad));
+  padding-right: calc(var(--f-pad) + 26px);
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+.sk-select__native:disabled {
+  cursor: not-allowed;
+}
+.sk-select__native option {
+  background: var(--surface-2);
+  color: var(--fg-strong);
+}
+.sk-select__chev {
+  position: absolute;
+  top: 0;
+  right: var(--f-pad);
+  height: calc(var(--f-h) - 2px);
+  pointer-events: none;
+  transition:
+    transform var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+.sk-select .sk-field__control:focus-within .sk-select__chev {
+  color: var(--blue-text);
+  transform: rotate(180deg);
+}

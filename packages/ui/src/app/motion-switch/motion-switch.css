@@ -1,0 +1,5 @@
+/* Motion switch: the Switch owns the look; this only sets the row width. */
+.sk-motionsw {
+  display: grid;
+  max-width: 34rem;
+}

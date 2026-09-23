@@ -1,0 +1,63 @@
+/* Phone field (u02): the country prefix as a chip at the field's start. The
+   native select is laid invisibly over the chip so it stays the real
+   control. */
+.sk-phone__cc {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  flex: none;
+  gap: 2px;
+  height: 30px;
+  padding: 0 var(--sp-2);
+  margin-right: var(--sp-1);
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+  font-size: var(--fs-sm);
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+.sk-phone__cc::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: calc(-1 * var(--sp-1));
+  bottom: 3px;
+  width: 1px;
+  background: var(--line);
+}
+.sk-phone__chev {
+  color: var(--fg-muted);
+  transition: transform var(--dur) var(--ease-out);
+}
+.sk-phone__select {
+  position: absolute;
+  inset: calc((30px - var(--tap)) / 2) 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--fs-md);
+}
+.sk-phone__select:disabled {
+  cursor: not-allowed;
+}
+.sk-phone__cc:hover:not([data-disabled]) {
+  background: var(--accent-tint);
+  color: var(--blue-on-tint);
+}
+.sk-phone__cc:hover:not([data-disabled]) .sk-phone__chev {
+  transform: translateY(1px);
+}
+.sk-phone__cc:has(.sk-phone__select:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+@media (pointer: coarse) {
+  .sk-phone__select {
+    font-size: var(--fs-lg);
+  }
+}

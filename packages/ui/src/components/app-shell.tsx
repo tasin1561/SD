@@ -154,7 +154,7 @@ function NavLinks({
       {groups.map((group, gi) => (
         <div key={group.heading ?? `group-${gi}`} className="mb-1">
           {group.heading !== undefined && (
-            <div className="text-text-faint flex items-center gap-2 px-4 pt-3 pb-1 text-xs font-semibold tracking-[0.09em] uppercase">
+            <div className="sd-nav-heading text-text-faint flex items-center gap-2 px-4 pt-3 pb-1 text-xs font-semibold tracking-[0.09em] uppercase">
               <span className="min-w-0 truncate">{group.heading}</span>
               {/* Pushed right and `aria-hidden`: it orders the sections
                   for the eye and says nothing a screen reader needs,
@@ -252,7 +252,9 @@ function BrandBlock({
         <div className="text-text-bright text-sm leading-tight font-semibold tracking-tight">
           {brand}
         </div>
-        <div className="text-text-faint mt-0.5 text-xs tracking-wide uppercase">{subtitle}</div>
+        <div className="sd-shell-subtitle text-text-faint mt-0.5 text-xs tracking-wide uppercase">
+          {subtitle}
+        </div>
       </div>
     </div>
   );
@@ -483,7 +485,7 @@ export function AppShell({
                     <BrandMark src={logoSrc} height={26} />
                     <Dialog.Title className="text-text-bright text-sm leading-tight font-semibold tracking-tight">
                       {brand}
-                      <span className="text-text-faint mt-0.5 block text-xs font-normal tracking-wide uppercase">
+                      <span className="sd-shell-subtitle text-text-faint mt-0.5 block text-xs font-normal tracking-wide uppercase">
                         {subtitle}
                       </span>
                     </Dialog.Title>
@@ -553,7 +555,7 @@ export function AppShell({
             <span className="text-text-bright truncate text-sm font-semibold tracking-tight">
               {brand}
             </span>
-            <span className="text-text-faint ml-1.5 text-xs tracking-wide uppercase">
+            <span className="sd-shell-subtitle text-text-faint ml-1.5 text-xs tracking-wide uppercase">
               {subtitle}
             </span>
           </div>
@@ -571,7 +573,7 @@ export function AppShell({
             own width: a search box that narrows to nothing on a laptop
             is worse than one that pushes a label out of the way.
           */}
-          <div className="text-text-faint hidden min-w-0 flex-1 basis-0 truncate text-xs tracking-[0.08em] uppercase lg:block">
+          <div className="sd-shell-subtitle text-text-faint hidden min-w-0 flex-1 basis-0 truncate text-xs tracking-[0.08em] uppercase lg:block">
             {sectionLabel}
           </div>
           {headerCenter !== undefined && (

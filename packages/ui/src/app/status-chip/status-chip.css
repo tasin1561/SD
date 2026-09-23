@@ -1,0 +1,56 @@
+/* StatusChip — colour + icon + word. The three --chip-* roles are set
+   inline from the kind (`var(--st-{kind}-*)`), so this file names no
+   colour of its own. */
+.sk-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 2px 10px 2px 7px;
+  border: 1px solid var(--chip-line);
+  border-radius: var(--r-pill);
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  font-family: var(--app-font);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.2;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.sk-chip--sm {
+  min-height: 20px;
+  gap: 4px;
+  padding: 1px 8px 1px 5px;
+  font-size: var(--fs-2xs);
+}
+.sk-chip__icon {
+  flex: none;
+}
+.sk-chip__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* One ring on mount — scale + opacity on a pseudo-element. */
+.sk-chip[data-pulse='1']::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 2px solid var(--chip-fg);
+  opacity: 0;
+  pointer-events: none;
+  animation: sk-chip-ring calc(700ms * var(--motion-slow)) var(--ease-out) 1 both;
+}
+@keyframes sk-chip-ring {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}

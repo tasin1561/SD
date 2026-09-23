@@ -1,0 +1,186 @@
+/* Parachute progress (storytelling 01). --p (0–100) drives BOTH the fill
+   (scaleX) and the rider (translateX of a track-wide layer, so its % is a
+   % of the track); the drop sinks toward the line as --p rises. */
+.sk-chute {
+  --chute-sky: 36px;
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.sk-chute__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.sk-chute__label {
+  min-width: 0;
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sk-chute__status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex: none;
+  color: var(--fg-muted);
+  font-weight: var(--fw-semibold);
+}
+.sk-chute[data-state='done'] .sk-chute__status {
+  color: var(--green-text);
+}
+.sk-chute[data-state='failed'] .sk-chute__status {
+  color: var(--red-text);
+}
+.sk-chute__track {
+  position: relative;
+  padding-top: var(--chute-sky);
+  /* The rider moves by translateX(% of its own box), so its box runs past
+     the track's right edge as it travels: clip sideways, never upward. */
+  overflow-x: clip;
+}
+.sk-chute__rider {
+  position: absolute;
+  top: 0;
+  left: 14px;
+  /* 14px + the drop's 26px, so at 100% the parcel lands inside the track. */
+  right: 40px;
+  height: var(--chute-sky);
+  transform: translateX(calc(var(--p) * 1%));
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.sk-chute__drop {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 26px;
+  height: 30px;
+  transform: translate(-50%, calc((var(--p) - 100) * 0.12px));
+  transform-origin: 50% 0;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.sk-chute__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.sk-chute__canopy {
+  fill: var(--accent-fill);
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition:
+    transform var(--dur) var(--ease-in),
+    opacity var(--dur) var(--ease-in);
+}
+.sk-chute__lines {
+  fill: none;
+  stroke: var(--fg-muted);
+  stroke-width: 1.1;
+}
+.sk-chute__parcel {
+  fill: var(--saffron-fill);
+}
+.sk-chute__tape {
+  fill: var(--saffron-on-fill);
+  opacity: 0.3;
+}
+.sk-chute__parcel,
+.sk-chute__tape {
+  transition: opacity var(--dur) var(--ease-out);
+}
+.sk-chute__check {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  color: var(--green-text);
+  opacity: 0;
+  transform: translate(-50%, 4px) scale(0.6);
+  transition:
+    opacity var(--dur) var(--ease-out) var(--dur-fast),
+    transform var(--dur) var(--ease-spring) var(--dur-fast);
+}
+.sk-chute__bar {
+  position: relative;
+  display: block;
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--line-strong);
+  overflow: hidden;
+}
+.sk-chute__fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--corridor-gradient);
+  transform-origin: 0 50%;
+  transform: scaleX(calc(var(--p) / 100));
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+.sk-chute__detail {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+/* Done: the canopy folds, the parcel lands and turns into a check. */
+.sk-chute[data-state='done'] .sk-chute__canopy {
+  transform: scaleY(0);
+  opacity: 0;
+}
+.sk-chute[data-state='done'] :is(.sk-chute__parcel, .sk-chute__tape) {
+  opacity: 0;
+}
+.sk-chute[data-state='done'] .sk-chute__check {
+  opacity: 1;
+  transform: translate(-50%, 2px);
+}
+.sk-chute[data-state='failed'] .sk-chute__fill {
+  background: var(--red-fill);
+}
+.sk-chute[data-state='failed'] .sk-chute__canopy {
+  opacity: 0.35;
+}
+
+/* Indeterminate: no number, a swaying parcel and a travelling segment. */
+.sk-chute[data-indeterminate] .sk-chute__drop {
+  animation: sk-chute-sway calc(1600ms * var(--motion-slow, 1)) ease-in-out infinite alternate;
+}
+.sk-chute[data-indeterminate] .sk-chute__fill {
+  right: auto;
+  width: 30%;
+  /* At rest (reduced motion) the segment sits in the middle. */
+  transform: translateX(117%);
+  animation: sk-chute-travel calc(1400ms * var(--motion-slow, 1)) var(--ease-out) infinite;
+}
+.sk-chute[data-paused] :is(.sk-chute__drop, .sk-chute__fill) {
+  animation-play-state: paused;
+}
+@keyframes sk-chute-sway {
+  from {
+    transform: translate(-50%, -6px) rotate(-7deg);
+  }
+  to {
+    transform: translate(-50%, -2px) rotate(7deg);
+  }
+}
+@keyframes sk-chute-travel {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+.sk-chute__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

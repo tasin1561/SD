@@ -1,0 +1,302 @@
+/* Text field (u33): floating label notched into the border, a leading icon
+   chip, helper text, an error with its icon, a counter and an inline status
+   icon. The shell every text-like field in the app shares. */
+.sk-field {
+  --f-h: var(--ctl-h-lg);
+  --f-pad: var(--sp-3);
+  --f-chip: 28px;
+  --f-lx: var(--f-pad);
+  --f-edge: var(--border-control);
+  --f-ring: var(--blue-glow);
+  --f-label: var(--fg-muted);
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+  font-size: var(--fs-md);
+}
+.sk-field[data-icon] {
+  --f-lx: calc(var(--f-pad) + var(--f-chip) + var(--sp-2));
+}
+.sk-field__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--f-h);
+  padding: 0 var(--f-pad);
+  border: 1px solid var(--f-edge);
+  border-radius: var(--r-sm);
+  background: var(--surface-input);
+  transition:
+    border-color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out);
+}
+.sk-field[data-multiline] .sk-field__control {
+  align-items: flex-start;
+}
+.sk-field__control:hover {
+  --f-edge: var(--fg-muted);
+}
+.sk-field__control:focus-within {
+  --f-edge: var(--focus-ring);
+  --f-label: var(--blue-text);
+  box-shadow:
+    0 0 0 1px var(--focus-ring),
+    0 0 0 4px var(--f-ring);
+}
+.sk-field[data-invalid] {
+  --f-edge: var(--red-text);
+  --f-ring: var(--red-glow);
+  --f-label: var(--red-text);
+}
+.sk-field[data-invalid] .sk-field__control:focus-within {
+  --f-edge: var(--red-text);
+  box-shadow:
+    0 0 0 1px var(--red-text),
+    0 0 0 4px var(--red-glow);
+}
+.sk-field[data-disabled] .sk-field__control {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* The native control: it fills the row and draws nothing of its own. */
+.sk-field__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  min-height: calc(var(--f-h) - 2px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-md);
+  outline: none;
+  appearance: none;
+}
+.sk-field__input::placeholder {
+  color: var(--fg-faint);
+  opacity: 1;
+}
+.sk-field__input:disabled {
+  cursor: not-allowed;
+}
+textarea.sk-field__input {
+  padding: var(--sp-3) 0;
+  line-height: var(--lh-body, 1.5);
+  resize: vertical;
+}
+@media (pointer: coarse) {
+  .sk-field__input {
+    font-size: var(--fs-lg);
+  }
+}
+
+/* The icon chip. */
+.sk-field__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  align-self: center;
+  width: var(--f-chip);
+  height: var(--f-chip);
+  border-radius: var(--r-xs);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+.sk-field[data-multiline] .sk-field__icon {
+  margin-top: calc((var(--f-h) - 2px - var(--f-chip)) / 2);
+}
+.sk-field__icon svg {
+  width: 16px;
+  height: 16px;
+}
+.sk-field__control:focus-within .sk-field__icon {
+  background: var(--accent-tint);
+  color: var(--blue-on-tint);
+}
+.sk-field[data-invalid] .sk-field__icon {
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+
+/* The label: at rest it reads like a placeholder; floated it shrinks onto
+   the top border, its two-tone background making the notch. */
+.sk-field__label {
+  position: absolute;
+  top: 0;
+  left: var(--f-lx);
+  display: flex;
+  align-items: center;
+  max-width: calc(100% - var(--f-lx) - var(--f-pad));
+  height: calc(var(--f-h) - 2px);
+  color: var(--f-label);
+  pointer-events: none;
+  transform-origin: left center;
+  transition:
+    transform var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+.sk-field__label-text {
+  overflow: hidden;
+  padding: 0 var(--sp-1);
+  margin-left: calc(-1 * var(--sp-1));
+  border-radius: var(--r-xs);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.sk-field__req {
+  margin-left: 2px;
+  color: var(--red-text);
+}
+.sk-field[data-float] .sk-field__label,
+.sk-field__control:focus-within .sk-field__label,
+.sk-field__control:has(.sk-field__input:not(:placeholder-shown)) .sk-field__label {
+  transform: translate(calc(var(--f-pad) - var(--f-lx)), calc(-50% - 0.5px)) scale(0.82);
+}
+.sk-field__control:has(.sk-field__input:autofill) .sk-field__label {
+  transform: translate(calc(var(--f-pad) - var(--f-lx)), calc(-50% - 0.5px)) scale(0.82);
+}
+.sk-field[data-float] .sk-field__label-text,
+.sk-field__control:focus-within .sk-field__label-text,
+.sk-field__control:has(.sk-field__input:not(:placeholder-shown)) .sk-field__label-text {
+  background: linear-gradient(
+    to bottom,
+    transparent calc(50% - 1px),
+    var(--surface-input) calc(50% - 1px)
+  );
+  font-weight: var(--fw-semibold);
+}
+/* A resting label covers the placeholder slot; hide a placeholder under it. */
+.sk-field:not([data-float]) .sk-field__control:not(:focus-within) .sk-field__input::placeholder {
+  color: transparent;
+}
+
+/* The inline status icon pops in. */
+.sk-field__status {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  align-self: center;
+  animation: sk-field-pop var(--dur-slow) var(--ease-spring) both;
+}
+.sk-field__status[data-kind='valid'] {
+  color: var(--green-text);
+}
+.sk-field__status[data-kind='invalid'] {
+  color: var(--red-text);
+}
+@keyframes sk-field-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+/* A trailing control inside the field (toggle, chevron). */
+.sk-field__trail {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  align-self: center;
+  color: var(--fg-muted);
+}
+.sk-field__btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  align-self: center;
+  width: 32px;
+  height: 32px;
+  margin-right: calc(-1 * var(--sp-1));
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+.sk-field__btn::after {
+  content: '';
+  position: absolute;
+  inset: calc((32px - var(--tap)) / 2);
+}
+.sk-field__btn:hover {
+  color: var(--fg-strong);
+}
+.sk-field__btn:active {
+  transform: scale(0.92);
+}
+.sk-field__btn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.sk-field__btn:disabled {
+  cursor: not-allowed;
+}
+
+/* Helper line: messages on the left, the counter on the right. */
+.sk-field__foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 0 var(--sp-1);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+  color: var(--fg-muted);
+}
+.sk-field__msgs {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.sk-field__msg {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  margin: 0;
+}
+.sk-field__msg svg {
+  flex: none;
+  margin-top: 1px;
+}
+.sk-field__msg[data-kind='error'] {
+  color: var(--red-text);
+  font-weight: var(--fw-medium);
+  animation: sk-field-in var(--dur) var(--ease-out) both;
+}
+.sk-field__msg[data-kind='notice'] {
+  color: var(--saffron-text);
+}
+@keyframes sk-field-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+.sk-field__count {
+  flex: none;
+  margin-left: auto;
+  color: var(--fg-faint);
+}
+.sk-field__count[data-near] {
+  color: var(--saffron-text);
+  font-weight: var(--fw-semibold);
+}
+.sk-field__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

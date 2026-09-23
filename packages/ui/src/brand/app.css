@@ -1,0 +1,393 @@
+/*
+ * The APP layer of the brand skin — what the four product apps need on top
+ * of the marketing brand (apps restyle, feat/apps-premium-restyle).
+ * ═════════════════════════════════════════════════════════════════════
+ *
+ * Load order in an app's globals.css:
+ *   @import '@skydrop/ui/brand/scales.css';   raw hue steps (copy of marketing's)
+ *   @import '@skydrop/ui/brand/theme.css';    four-block semantic theme (copy of marketing's)
+ *   @import '@skydrop/ui/brand/app.css';      this file
+ *   @import 'tailwindcss';
+ *
+ * `scales.css` and `theme.css` are byte-identical copies of apps/marketing's
+ * files; `scripts/check-brand-tokens.mjs` fails CI when they drift. The
+ * theme follows the OS when nothing is pinned and honours `data-theme` when
+ * something is — the marketing mechanism, in every app.
+ *
+ * This file adds, and ONLY adds:
+ *   1. the app scales — density is tighter than marketing: a 4px spacing
+ *      base, 13/14px body, 8/12/16 radii, tabular figures in Plus Jakarta;
+ *   2. status roles — one fg/bg/line triple per status kind, derived from
+ *      the semantic hue tokens so both themes follow automatically;
+ *   3. the LEGACY ALIAS LAYER — every variable name the pre-restyle CSS and
+ *      the legacy `@skydrop/ui/components` read (`--color-*`, `--status-*`,
+ *      `--console-*`, `--space-*`, `--radius-1..3` …), mapped onto the brand
+ *      semantics. This is what lets an app switch skins in one commit: every
+ *      screen not yet rebuilt still resolves every variable it reads, now in
+ *      brand colours;
+ *   4. base element rules (in the `base` layer so utilities still win);
+ *   5. the reduced-motion path: the OS preference OR `data-reduced="1"` on
+ *      <html>, which the per-user "Motion: reduced" setting writes;
+ *   6. the class hooks that restyle legacy components on the brand skin
+ *      (unlayered, so they beat the utility classes those components carry).
+ *
+ * Every value below reads a token — there is no raw colour in this file.
+ */
+@import './legacy.css';
+
+:root {
+  /* ── 1. App scales ─────────────────────────────────────────────────── */
+  /* The face variables are set by each app's next/font/local call. */
+  --app-font: var(--font-sans-face, ui-sans-serif), ui-sans-serif, system-ui, sans-serif;
+  --app-mono:
+    var(--font-mono-face, ui-monospace), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 18px;
+  --fs-2xl: 22px;
+  --fs-3xl: 28px;
+  --fs-kpi: 30px;
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.35;
+  --lh-body: 1.5;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fw-heavy: 800;
+
+  --sp-0: 0;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-pill: 999px;
+
+  /* Control heights. Dense UI keeps a 40px target; a coarse pointer gets
+     44px (below). */
+  --ctl-h-sm: 32px;
+  --ctl-h: 40px;
+  --ctl-h-lg: 44px;
+  --tap: 40px;
+
+  /* Motion. `--motion-slow` is the gallery's slow-mo factor (1 = real
+     time); every duration is scaled by it so one switch slows the lot. */
+  --motion-slow: 1;
+  --dur-fast: calc(150ms * var(--motion-slow));
+  --dur: calc(220ms * var(--motion-slow));
+  --dur-slow: calc(350ms * var(--motion-slow));
+  --ease-out: cubic-bezier(0.22, 0.68, 0.34, 1);
+  --ease-in: cubic-bezier(0.55, 0, 0.7, 0.2);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Elevation: the theme owns the shadows (dark uses deeper, softer ones). */
+  --elev-1: var(--shadow-1);
+  --elev-2: var(--shadow-2);
+  --elev-3: var(--shadow-hud);
+
+  /* ── 2. Status roles ───────────────────────────────────────────────── */
+  /* Colour + icon + word, never colour alone: the chip component supplies
+     the icon; these supply the colour. Kinds come from @skydrop/ui/status. */
+  --st-neutral-fg: var(--fg-muted);
+  --st-neutral-bg: var(--surface-3);
+  --st-neutral-line: var(--line-strong);
+  --st-draft-fg: var(--st-neutral-fg);
+  --st-draft-bg: var(--st-neutral-bg);
+  --st-draft-line: var(--st-neutral-line);
+  --st-pending-fg: var(--saffron-on-tint);
+  --st-pending-bg: var(--saffron-tint);
+  --st-pending-line: var(--saffron-line);
+  --st-confirmed-fg: var(--teal-on-tint);
+  --st-confirmed-bg: var(--teal-tint);
+  --st-confirmed-line: var(--teal-line);
+  --st-in-transit-fg: var(--blue-on-tint);
+  --st-in-transit-bg: var(--blue-tint);
+  --st-in-transit-line: var(--blue-line);
+  --st-delivered-fg: var(--green-on-tint);
+  --st-delivered-bg: var(--green-tint);
+  --st-delivered-line: var(--green-line);
+  --st-rto-fg: var(--red-on-tint);
+  --st-rto-bg: var(--red-tint);
+  --st-rto-line: var(--red-line);
+  --st-failed-fg: var(--red-on-tint);
+  --st-failed-bg: var(--red-tint);
+  --st-failed-line: var(--red-line);
+  --st-cancelled-fg: var(--st-neutral-fg);
+  --st-cancelled-bg: var(--st-neutral-bg);
+  --st-cancelled-line: var(--st-neutral-line);
+  --st-held-fg: var(--violet-on-tint);
+  --st-held-bg: var(--violet-tint);
+  --st-held-line: var(--violet-line);
+
+  /* Text on the corridor gradient: slate-950 in BOTH themes (7.95:1 at
+     its worst point); white fails over the gold (marketing MKT-1). */
+  --on-corridor: var(--slate-950);
+
+  /* Money direction. */
+  --money-credit: var(--green-text);
+  --money-debit: var(--red-text);
+
+  /* ── 3. Legacy alias layer ─────────────────────────────────────────── */
+  /* tokens.css + seller-theme.css names → brand semantics. */
+  --color-bg: var(--page);
+  --color-surface: var(--surface-2);
+  --color-surface-raised: var(--surface-3);
+  --color-surface-hover: var(--surface-3);
+  --color-border: var(--line);
+  --color-border-strong: var(--line-strong);
+  --color-text-faint: var(--fg-faint);
+  --color-text-muted: var(--fg-muted);
+  --color-text-body: var(--fg-body);
+  --color-text-strong: var(--fg-strong);
+  --color-text-bright: var(--fg-strong);
+  --color-accent: var(--sky);
+  --color-accent-hover: var(--sky-deep);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-fill-hover: var(--accent-fill-hover);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-tint: var(--accent-tint);
+  --color-accent-ring: var(--focus-ring);
+  --color-critical: var(--red-text);
+  --color-critical-tint: var(--red-tint);
+  --color-critical-ring: var(--red-line);
+  --color-credit: var(--money-credit);
+  --color-debit: var(--money-debit);
+
+  --status-draft-bg: var(--st-draft-bg);
+  --status-draft-fg: var(--st-draft-fg);
+  --status-draft-ring: var(--st-draft-line);
+  --status-pending-bg: var(--st-pending-bg);
+  --status-pending-fg: var(--st-pending-fg);
+  --status-pending-ring: var(--st-pending-line);
+  --status-confirmed-bg: var(--st-confirmed-bg);
+  --status-confirmed-fg: var(--st-confirmed-fg);
+  --status-confirmed-ring: var(--st-confirmed-line);
+  --status-in-transit-bg: var(--st-in-transit-bg);
+  --status-in-transit-fg: var(--st-in-transit-fg);
+  --status-in-transit-ring: var(--st-in-transit-line);
+  --status-delivered-bg: var(--st-delivered-bg);
+  --status-delivered-fg: var(--st-delivered-fg);
+  --status-delivered-ring: var(--st-delivered-line);
+  --status-rto-bg: var(--st-rto-bg);
+  --status-rto-fg: var(--st-rto-fg);
+  --status-rto-ring: var(--st-rto-line);
+  --status-failed-bg: var(--st-failed-bg);
+  --status-failed-fg: var(--st-failed-fg);
+  --status-failed-ring: var(--st-failed-line);
+  --status-cancelled-bg: var(--st-cancelled-bg);
+  --status-cancelled-fg: var(--st-cancelled-fg);
+  --status-cancelled-ring: var(--st-cancelled-line);
+
+  --console-band-bg: var(--surface-3);
+  --console-strip-bg: var(--surface-band);
+  --console-grid: var(--grid);
+  --console-rail-bg: var(--surface);
+  --console-rail-border: var(--line);
+  --console-rail-active-bg: var(--accent-tint);
+  --console-rail-active-fg: var(--sky);
+  --console-rail-active-bar: var(--accent-fill);
+
+  --font-sans: var(--app-font);
+  --font-mono: var(--app-mono);
+  --numeric-tabular: tabular-nums;
+
+  --text-xs: var(--fs-xs);
+  --text-sm: var(--fs-sm);
+  --text-base: var(--fs-md);
+  --text-md: var(--fs-md);
+  --text-lg: var(--fs-lg);
+  --text-xl: var(--fs-2xl);
+  --text-2xl: var(--fs-3xl);
+  --leading-tight: var(--lh-tight);
+  --leading-snug: var(--lh-snug);
+  --leading-normal: var(--lh-body);
+  --weight-regular: var(--fw-regular);
+  --weight-medium: var(--fw-medium);
+  --weight-semibold: var(--fw-semibold);
+
+  --space-0: var(--sp-0);
+  --space-1: var(--sp-1);
+  --space-2: var(--sp-2);
+  --space-3: var(--sp-3);
+  --space-4: var(--sp-4);
+  --space-5: var(--sp-5);
+  --space-6: var(--sp-6);
+  --space-8: var(--sp-8);
+  --space-10: var(--sp-10);
+  --space-12: var(--sp-12);
+  --space-16: 64px;
+
+  --radius-1: var(--r-xs);
+  --radius-2: var(--r-sm);
+  --radius-3: var(--r-md);
+  --radius-pill: var(--r-pill);
+  --shadow-3: var(--shadow-hud);
+
+  --duration-fast: var(--dur-fast);
+  --duration-base: var(--dur);
+  --easing-out: var(--ease-out);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --tap: 44px;
+  }
+}
+
+/* ── 4. Base element rules ─────────────────────────────────────────── */
+@layer base {
+  body {
+    background: var(--page);
+    color: var(--fg-body);
+    font-family: var(--app-font);
+    font-size: var(--fs-md);
+    line-height: var(--lh-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--app-font);
+    color: var(--fg-strong);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--accent-fill);
+    color: var(--accent-fg);
+  }
+}
+
+/* Figures line up; identifiers are mono. These two classes are the whole
+   typography rule for numbers: tabular Plus Jakarta for every figure,
+   JetBrains Mono ONLY for an AWB, order ID, serial or SKU. */
+.sk-figure,
+.skydrop-tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+.sk-ident {
+  /* An ID is one token: it never breaks at its hyphens. */
+  white-space: nowrap;
+  font-family: var(--app-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Theme switch cross-fade, where the browser has View Transitions. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+}
+
+/* ── 5. Reduced motion ─────────────────────────────────────────────── */
+/* The OS preference and the per-user setting take the SAME path: every
+   animation and transition collapses to its end state. Near-instant rather
+   than removed, because a state change with no transition at all reads as
+   a glitch. A component that must still show a state change (a scanned
+   unit ticking) does so without motion, never by opting out of this. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+:root[data-reduced='1'] *,
+:root[data-reduced='1'] *::before,
+:root[data-reduced='1'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  transition-delay: 0ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ── 6. Legacy component hooks ─────────────────────────────────────── */
+/* The legacy `@skydrop/ui/components` carry these classes. Under the old
+   CSS they style nothing; under the brand skin they undo the "console"
+   look the restyle retires — the "NN //" section index, mono uppercase
+   breadcrumbs, uppercase tracked table headers, chips and labels — without
+   editing a single page. Unlayered on purpose: they have to beat the
+   utility classes the same elements carry. */
+.sd-band {
+  background: transparent;
+  border: 0;
+  padding: 0 0 var(--sp-2);
+}
+.sd-band-title {
+  font-family: var(--app-font);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-bold);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--fg-strong);
+}
+.sd-band-index,
+.sd-band-dot {
+  display: none;
+}
+.sd-crumbs,
+.sd-crumbs ol {
+  font-family: var(--app-font);
+  font-size: var(--fs-sm);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.sd-thead,
+.sd-thead th {
+  font-family: var(--app-font);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--fg-muted);
+}
+.sd-badge {
+  font-family: var(--app-font);
+  letter-spacing: 0;
+  text-transform: none;
+  border-radius: var(--r-pill);
+  padding: 2px 8px;
+}
+.sd-stat-label,
+.sd-meta-chip,
+.sd-strip-label,
+.sd-nav-heading,
+.sd-shell-subtitle {
+  font-family: var(--app-font);
+  letter-spacing: 0;
+  text-transform: none;
+}
+.sd-stat-value {
+  font-variant-numeric: tabular-nums;
+}
