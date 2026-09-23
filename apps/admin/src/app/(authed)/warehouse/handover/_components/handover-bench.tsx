@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { AlertTriangle, Check, ScanLine } from 'lucide-react';
 import {
   Button,
@@ -41,6 +41,23 @@ export function HandoverBench(): ReactElement {
   const [code, setCode] = useState('');
   const [camera, setCamera] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+
+  // After a refusal is acknowledged the field re-enables in the same render
+  // that closes the dialog, so focus() at the click finds it still disabled
+  // and the dialog's own focus-return then lands on <body>. Give the field
+  // focus on the next frame instead, once both have settled — the next
+  // scan must go straight in (fixed 2026-09-23, owner).
+  const hadRefusal = useRef(false);
+  useEffect(() => {
+    if (refusal !== null) {
+      hadRefusal.current = true;
+      return;
+    }
+    if (!hadRefusal.current) return;
+    hadRefusal.current = false;
+    const id = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(id);
+  }, [refusal]);
   const [done, setDone] = useState<
     Array<{
       shipmentNumber: string;

@@ -141,14 +141,10 @@ describe('handover bench — focus and locking', () => {
       ).not.toBeInTheDocument(),
     );
     expect(field()).not.toBeDisabled();
-    // KNOWN BUG, pinned as it is today (verified in Chromium against the
-    // local stack on 2026-09-23): the button clears the refusal and calls
-    // focus() in the same tick, while the field is still disabled, so the
-    // call does nothing and focus ends on <body>. The operator has to click
-    // back into the field. Fixing it is an owner decision (a behaviour
-    // change), not something the restyle may do quietly — when it is fixed,
-    // this assertion flips to the field in the same commit.
-    expect(document.activeElement).toBe(document.body);
+    // FIXED 2026-09-23 (owner): focus comes back to the scan field once the
+    // refusal is acknowledged, so the next scan lands without a click. It
+    // used to end on <body>: focus() ran while the field was still disabled.
+    await waitFor(() => expect(document.activeElement).toBe(field()));
     // A refused parcel is not added to the session.
     expect(screen.getByText('Nothing scanned yet.')).toBeInTheDocument();
   });
