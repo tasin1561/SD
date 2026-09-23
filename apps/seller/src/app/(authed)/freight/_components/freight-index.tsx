@@ -3,33 +3,22 @@
 import Link from 'next/link';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import {
-  BandBody,
-  Crumbs,
-  EmptyState,
-  ErrorNote,
-  FilterChip,
-  FreightStatusBadge,
-  Ident,
-  MetaChip,
-  Money,
-  Num,
-  PageHeader,
-  SectionBand,
-  SkeletonRows,
-  Stat,
-  StripFact,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
-import { Boxes, PlaneTakeoff, ReceiptText, Wallet } from 'lucide-react';
+import { Ident, Money, Num } from '@skydrop/ui/components';
+import { Boxes, Info, PlaneTakeoff, ReceiptText, Wallet } from 'lucide-react';
 import { InboundFreightStatus } from '@skydrop/db';
-import { freightModeWords } from '@skydrop/ui/status';
+import { freightModeWords, inboundFreightStatusKind, statusLabel } from '@skydrop/ui/status';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Tabs } from '@skydrop/ui/app/tabs';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useSellerFreight } from '@/lib/ops-hooks';
+import './freight.css';
+
+/** The filter tab that means "no status filter". */
+const ALL = 'all';
 
 /**
  * What it cost to get each consignment into India, and how much of that
@@ -92,69 +81,62 @@ export function SellerFreightIndex(): ReactElement {
   const filtered = status !== '';
   const loaded = !list.isLoading && !list.isError;
 
+  const dash = <span className="frt-dash">—</span>;
+
   return (
-    <div>
+    <div className="frt-page">
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[{ label: 'Seller console' }, { label: 'Money' }, { label: 'Inbound freight' }]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Money' },
+          { label: 'Inbound freight' },
+        ]}
+        Link={Link}
         title="Inbound freight"
         subtitle="The shipping cost of getting your stock from Bangladesh into our Indian warehouse. WHEN it is charged depends on the terms agreed for each consignment — see Terms on each row."
         meta={
           !loaded ? undefined : (
-            <>
-              <MetaChip tone="accent">
+            <span className="frt-meta">
+              <span className="frt-fact" data-tone="accent">
                 {rows.length} {rows.length === 1 ? 'bill' : 'bills'}
-              </MetaChip>
+              </span>
               {Number(outstanding) > 0 && (
-                <MetaChip tone="warn" dot>
+                <span className="frt-fact" data-tone="warn">
+                  <span className="frt-fact__dot" aria-hidden />
                   Still owed
-                </MetaChip>
+                </span>
               )}
               {totals.unitsTotal > 0 && (
-                <MetaChip>
+                <span className="frt-fact">
                   {totals.unitsSettled} of {totals.unitsTotal} units charged
-                </MetaChip>
+                </span>
               )}
-            </>
+            </span>
           )
         }
       />
 
       {/* ── What the freight has cost, and how much of it has landed ──
-             Four tiles, every one summed from the rows below or handed
+             Four cards, every one summed from the rows below or handed
              over by the server. Nothing here is an estimate: a bill is
              what a forwarder invoiced, and "charged so far" is what has
              actually come out of the wallet. A figure is ABSENT rather
              than 0 while loading — "₹0 still owed" that then becomes
-             ₹40,000 has said something false in the meantime. */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
+             ₹40,000 has said something false in the meantime. The money
+             figures are the same `<Money>` nodes, handed over as
+             `figure`; the two counts roll up once when they first land. */}
+      <div className="frt-kpis">
+        <KpiCard
           label="Still owed"
-          icon={<Wallet size={13} aria-hidden />}
-          value={
-            loaded ? (
-              <Money amount={outstanding} decimals={false} />
-            ) : (
-              <span className="text-text-faint">—</span>
-            )
-          }
-          tone={loaded && Number(outstanding) > 0 ? 'warn' : 'neutral'}
+          icon={<Wallet size={14} />}
+          figure={loaded ? <Money amount={outstanding} decimals={false} /> : dash}
+          tone={loaded && Number(outstanding) > 0 ? 'pending' : 'neutral'}
           hint="What is still to be taken from your wallet"
         />
-        <Stat
+        <KpiCard
           label="Billed to you"
-          icon={<ReceiptText size={13} aria-hidden />}
-          value={
-            loaded ? (
-              <Money amount={totals.billed} decimals={false} />
-            ) : (
-              <span className="text-text-faint">—</span>
-            )
-          }
+          icon={<ReceiptText size={14} />}
+          figure={loaded ? <Money amount={totals.billed} decimals={false} /> : dash}
           tone="neutral"
           {...(loaded
             ? {
@@ -167,84 +149,87 @@ export function SellerFreightIndex(): ReactElement {
               }
             : {})}
         />
-        <Stat
-          label="Consignments billed"
-          icon={<PlaneTakeoff size={13} aria-hidden />}
-          value={loaded ? rows.length : <span className="text-text-faint">—</span>}
-          unit={loaded ? (rows.length === 1 ? 'bill' : 'bills') : undefined}
-          tone="neutral"
-          hint={filtered ? humanise(status) : 'Every status.'}
-        />
-        <Stat
-          label="Units charged"
-          icon={<Boxes size={13} aria-hidden />}
-          value={
-            loaded ? (
-              <Num value={totals.unitsSettled} />
-            ) : (
-              <span className="text-text-faint">—</span>
-            )
-          }
-          unit={
-            loaded ? (
+        {loaded ? (
+          <KpiCard
+            label="Consignments billed"
+            icon={<PlaneTakeoff size={14} />}
+            value={rows.length}
+            unit={rows.length === 1 ? 'bill' : 'bills'}
+            tone="neutral"
+            hint={filtered ? humanise(status) : 'Every status.'}
+          />
+        ) : (
+          <KpiCard
+            label="Consignments billed"
+            icon={<PlaneTakeoff size={14} />}
+            figure={dash}
+            tone="neutral"
+            hint={filtered ? humanise(status) : 'Every status.'}
+          />
+        )}
+        {loaded ? (
+          <KpiCard
+            label="Units charged"
+            icon={<Boxes size={14} />}
+            value={totals.unitsSettled}
+            unit={
               <>
                 of <Num value={totals.unitsTotal} />
               </>
-            ) : undefined
-          }
-          tone="neutral"
-          hint="A unit is charged its share when it is delivered."
-        />
+            }
+            tone="neutral"
+            hint="A unit is charged its share when it is delivered."
+          />
+        ) : (
+          <KpiCard
+            label="Units charged"
+            icon={<Boxes size={14} />}
+            figure={dash}
+            tone="neutral"
+            hint="A unit is charged its share when it is delivered."
+          />
+        )}
       </div>
 
-      <SectionBand
-        index="01"
-        title="Freight bills"
-        note={
-          loaded
-            ? `${rows.length} ${rows.length === 1 ? 'bill' : 'bills'}${filtered ? ' matching' : ''}`
-            : undefined
-        }
-        action={
-          filtered && (
-            <button
-              type="button"
-              onClick={() => setStatus('')}
-              className="text-text-faint hover:text-text-body px-1 text-xs transition-colors"
-            >
-              Reset
-            </button>
-          )
-        }
-      />
+      <section className="frt-section">
+        <SectionHeading
+          title="Freight bills"
+          note={
+            loaded
+              ? `${rows.length} ${rows.length === 1 ? 'bill' : 'bills'}${filtered ? ' matching' : ''}`
+              : undefined
+          }
+          action={
+            filtered ? (
+              <button type="button" onClick={() => setStatus('')} className="frt-reset">
+                Reset
+              </button>
+            ) : undefined
+          }
+        />
 
-      <BandBody flush>
-        {/* Four statuses, all worth seeing at once — a chip row says what
+        {/* Four statuses, all worth seeing at once — a tab row says what
             the possibilities ARE, which a closed dropdown does not. */}
-        <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-3 py-2.5">
-          <FilterChip label="All bills" active={status === ''} onClick={() => setStatus('')} />
-          {Object.values(InboundFreightStatus).map((s) => (
-            <FilterChip
-              key={s}
-              label={humanise(s)}
-              active={status === s}
-              onClick={() => setStatus(s)}
-            />
-          ))}
-        </div>
+        <Tabs
+          label="Filter by status"
+          size="sm"
+          value={status === '' ? ALL : status}
+          onChange={(id) => setStatus(id === ALL ? '' : id)}
+          items={[
+            { id: ALL, label: 'All bills' },
+            ...Object.values(InboundFreightStatus).map((s) => ({ id: s, label: humanise(s) })),
+          ]}
+        />
 
         {list.isError ? (
-          <div className="p-3">
-            <ErrorNote
-              message={list.error?.message ?? 'Failed to load freight bills.'}
-              retry={() => void list.refetch()}
-            />
-          </div>
+          <ErrorState
+            message={list.error?.message ?? 'Failed to load freight bills.'}
+            retry={() => void list.refetch()}
+          />
         ) : list.isLoading ? (
-          <SkeletonRows rows={4} cols={6} />
+          <SkeletonRows rows={4} cols={6} label="Loading freight bills…" />
         ) : rows.length === 0 ? (
           <EmptyState
-            bare
             title={filtered ? 'No bills with that status' : 'No freight bills yet'}
             description={
               filtered
@@ -253,7 +238,7 @@ export function SellerFreightIndex(): ReactElement {
             }
           />
         ) : (
-          <Table>
+          <Table caption="Freight bills">
             <THead>
               <Tr>
                 <Th>Consignment</Th>
@@ -273,28 +258,32 @@ export function SellerFreightIndex(): ReactElement {
                       wants — what was declared, what was counted, where it
                       is — live on the consignment, so that is where this
                       goes. */}
-                    <Link href={`/inbound/${r.consignmentId}`} className="hover:underline">
-                      <Ident value={r.receiptNumber ?? `${r.goodsReceiptId.slice(0, 8)}…`} />
-                    </Link>
-                    <div className="text-text-faint mt-0.5 text-xs">
-                      {new Date(r.createdAt).toLocaleDateString()}
+                    <div className="frt-cons">
+                      <Link href={`/inbound/${r.consignmentId}`} className="frt-cons__link">
+                        <Ident value={r.receiptNumber ?? `${r.goodsReceiptId.slice(0, 8)}…`} />
+                      </Link>
+                      <span className="frt-faint sk-figure">
+                        {new Date(r.createdAt).toLocaleDateString()}
+                      </span>
+                      {r.voidedAt !== null && (
+                        <span className="frt-muted">
+                          Withdrawn {new Date(r.voidedAt).toLocaleDateString()} — this bill was
+                          wrong and anything it charged has gone back to your wallet.
+                          {r.voidReason === null ? '' : ` ${r.voidReason}`}
+                        </span>
+                      )}
                     </div>
-                    {r.voidedAt !== null && (
-                      <div className="text-text-muted mt-1 text-xs">
-                        Withdrawn {new Date(r.voidedAt).toLocaleDateString()} — this bill was wrong
-                        and anything it charged has gone back to your wallet.
-                        {r.voidReason === null ? '' : ` ${r.voidReason}`}
-                      </div>
-                    )}
                   </Td>
-                  <Td className="text-text-muted whitespace-nowrap text-xs">
-                    {freightModeWords(r.mode, 'SELLER')}
-                    {r.serviceChargeInr !== null && Number(r.serviceChargeInr) > 0 && (
-                      <div className="text-text-faint">
-                        includes <Money amount={r.serviceChargeInr} decimals={false} /> service
-                        charge
-                      </div>
-                    )}
+                  <Td>
+                    <div className="frt-terms">
+                      <span>{freightModeWords(r.mode, 'SELLER')}</span>
+                      {r.serviceChargeInr !== null && Number(r.serviceChargeInr) > 0 && (
+                        <span className="frt-faint">
+                          includes <Money amount={r.serviceChargeInr} decimals={false} /> service
+                          charge
+                        </span>
+                      )}
+                    </div>
                   </Td>
                   <Td align="right">
                     <Money amount={r.totalInr} />
@@ -303,7 +292,7 @@ export function SellerFreightIndex(): ReactElement {
                       and the rate is the thing the seller actually
                       negotiated. */}
                     {r.agreedCurrency !== 'INR' && (
-                      <div className="text-text-faint text-xs">
+                      <div className="frt-faint">
                         <Money
                           amount={r.agreedAmount}
                           currency={r.agreedCurrency}
@@ -321,44 +310,51 @@ export function SellerFreightIndex(): ReactElement {
                       settled; it is not a debt. Showing the arithmetic
                       would tell a seller they owe money we took back. */}
                     {r.voidedAt !== null ? (
-                      <span className="text-text-faint text-xs">Nothing — withdrawn</span>
+                      <span className="frt-faint">Nothing — withdrawn</span>
                     ) : Number(r.outstandingInr) === 0 ? (
-                      <span className="text-text-faint">—</span>
+                      <span className="frt-faint">—</span>
                     ) : (
                       <Money amount={r.outstandingInr} direction="debit" />
                     )}
                   </Td>
-                  <Td className="text-text-muted whitespace-nowrap text-xs">
+                  <Td className="frt-units sk-figure">
                     <Num value={r.unitsSettled} /> / <Num value={r.totalUnits} />
                   </Td>
                   <Td>
-                    <FreightStatusBadge status={r.status} />
+                    <StatusChip
+                      kind={inboundFreightStatusKind(r.status)}
+                      label={statusLabel(r.status)}
+                      size="sm"
+                    />
                   </Td>
                 </Tr>
               ))}
             </TBody>
           </Table>
         )}
-      </BandBody>
+      </section>
 
       {rows.some((r) => r.mode === 'PAY_LATER') && (
-        <>
-          <SectionBand index="02" title="How a bill is charged" className="mt-4" />
-          <BandBody>
-            <p className="text-text-muted text-xs leading-relaxed">
+        <section className="frt-section">
+          <SectionHeading title="How a bill is charged" />
+          <div className="frt-note">
+            <span className="frt-note__icon" aria-hidden>
+              <Info size={16} />
+            </span>
+            <p>
               On pay-as-it-sells terms, each unit carries its share of the consignment&apos;s
               freight, and that share is deducted from your wallet when the unit is delivered. Stock
               still sitting in the warehouse has not been charged for yet — which is why a bill can
               stay partly owed for a long time without anything being wrong.
             </p>
-          </BandBody>
-        </>
+          </div>
+        </section>
       )}
 
       {/* The bottom strip: the figures somebody came to this page for,
           still readable after scrolling past the table. */}
       {loaded && (
-        <div className="text-text-faint border-border mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t pt-3 font-mono text-[11px]">
+        <div className="frt-strip">
           <StripFact
             label="Still owed"
             value={<Money amount={outstanding} decimals={false} />}
@@ -372,6 +368,26 @@ export function SellerFreightIndex(): ReactElement {
         </div>
       )}
     </div>
+  );
+}
+
+/** One label/value pair in the bottom strip. */
+function StripFact({
+  label,
+  value,
+  tone,
+}: {
+  readonly label: string;
+  readonly value: ReactElement | string;
+  readonly tone?: 'good' | 'warn' | undefined;
+}): ReactElement {
+  return (
+    <span className="frt-strip__fact">
+      <span className="frt-strip__label">{label}</span>
+      <span className="frt-strip__value sk-figure" data-tone={tone}>
+        {value}
+      </span>
+    </span>
   );
 }
 

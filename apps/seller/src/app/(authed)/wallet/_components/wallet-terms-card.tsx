@@ -1,8 +1,11 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import { BandBody, Money, SectionBand } from '@skydrop/ui/components';
+import { Info } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
 import { useWalletTerms, type WalletTerm } from '@/lib/ops-hooks';
+import './wallet.css';
 
 /**
  * The rules this wallet runs on.
@@ -32,30 +35,36 @@ export function WalletTermsCard(): ReactElement | null {
   const items = (terms.data?.items ?? []).filter((t) => !OWNED_BY_SELLER.has(t.key));
   if (items.length === 0) return null;
 
+  /*
+    Each rule is an INFO row — an info chip, what it is, why it exists
+    and the figure — never a KPI card: these are thresholds, not
+    positions, and a card here would put a rule where the console puts
+    a balance.
+  */
   return (
-    <div className="mt-4">
-      <SectionBand
-        index="02"
+    <section className="wal-section">
+      <SectionHeading
         title="Your limits"
         note="Set by Skydrop — shown so a limit is never a surprise."
       />
-      <BandBody>
-        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
+      <div className="wal-card">
+        <ul className="wal-terms">
           {items.map((t) => (
-            <div key={t.key} className="flex items-baseline justify-between gap-3 text-sm">
-              <div className="min-w-0">
-                <dt className="text-text-body">{t.label}</dt>
-                {t.hint !== '' && <dd className="text-text-faint text-xs">{t.hint}</dd>}
+            <li key={t.key} className="wal-term">
+              <span className="wal-term__chip" aria-hidden>
+                <Info size={13} />
+              </span>
+              <div className="wal-term__text">
+                <div className="wal-term__label">{t.label}</div>
+                {t.hint !== '' && <p className="wal-term__hint">{t.hint}</p>}
               </div>
-              <dd className="text-text-bright shrink-0 text-right">{format(t)}</dd>
-            </div>
+              <div className="wal-term__value sk-figure">{format(t)}</div>
+            </li>
           ))}
-        </dl>
-        <p className="text-text-faint mt-3 text-xs">
-          Ask us if one of these looks wrong for your account.
-        </p>
-      </BandBody>
-    </div>
+        </ul>
+        <p className="wal-setting__desc">Ask us if one of these looks wrong for your account.</p>
+      </div>
+    </section>
   );
 }
 

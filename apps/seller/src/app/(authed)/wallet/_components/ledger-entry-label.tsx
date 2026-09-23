@@ -21,7 +21,7 @@ export function LedgerEntryLabel({
   return (
     <>
       {walletDirectionLabel(direction)}
-      {note && <div className="text-text-faint text-xs mt-0.5 italic">{note}</div>}
+      {note && <div className="wal-type__note">{note}</div>}
     </>
   );
 }
