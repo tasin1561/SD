@@ -1,16 +1,13 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  Select,
-  Textarea,
-} from '@skydrop/ui/components';
+import { Landmark } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { DateField } from '@skydrop/ui/app/date-field';
 import { useRecordOwnerMoney } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -47,6 +44,8 @@ export function OwnerMoneyModal({
     if (accountId !== null) setIdempotencyKey(crypto.randomUUID());
   }, [accountId]);
 
+  const [confirming, setConfirming] = useState(false);
+
   function reset(): void {
     setDirection('IN');
     setAmount('');
@@ -54,6 +53,14 @@ export function OwnerMoneyModal({
     setReason('');
     setReference('');
     setError(null);
+    setConfirming(false);
+  }
+
+  // No client-side checks were ever run here (FE-2) — review only opens
+  // the confirm, which restates the account, the amount and the date.
+  function review(): void {
+    setError(null);
+    setConfirming(true);
   }
 
   async function save(): Promise<void> {
@@ -75,102 +82,139 @@ export function OwnerMoneyModal({
       // FE-2: the server's verdict, verbatim — no client-side mirror of
       // its rules (amount, reason length) to pre-empt it.
       setError(serverVerdict(err));
+      // Keeps the confirm open with the verdict on it, to read and retry.
+      throw err;
     }
   }
 
   const preview = amount.trim() !== '' && !Number.isNaN(Number(amount)) ? amount.trim() : null;
 
+  const onLabel =
+    occurredOn === ''
+      ? ''
+      : new Date(occurredOn).toLocaleDateString('en-IN', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+        });
+
   return (
-    <Modal
-      open={accountId !== null}
-      onOpenChange={(next) => {
-        if (!next) {
-          reset();
-          onClose();
+    <>
+      <Dialog
+        open={accountId !== null && !confirming}
+        onOpenChange={(next) => {
+          if (!next) {
+            reset();
+            onClose();
+          }
+        }}
+        icon={<Landmark size={18} />}
+        title={`Owner money — ${accountLabel}`}
+        description="Money you put into the business or took out of it. Recorded as equity: it is never counted as income or as an expense."
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={review}
+              disabled={record.isPending || amount.trim() === ''}
+            >
+              Review
+            </Button>
+          </DialogFooter>
         }
-      }}
-      title={`Owner money — ${accountLabel}`}
-      description="Money you put into the business or took out of it. Recorded as equity: it is never counted as income or as an expense."
-    >
-      <div className="space-y-3">
-        <FormField label="Which way" htmlFor="owner-money-direction" required>
+      >
+        <div className="mo-fields">
           <Select
             id="owner-money-direction"
+            label="Which way"
+            requiredMark
             value={direction}
             onChange={(e) => setDirection(e.target.value === 'OUT' ? 'OUT' : 'IN')}
           >
             <option value="IN">Put in — money into the business</option>
             <option value="OUT">Taken out — money out of the business</option>
           </Select>
-        </FormField>
-        <FormField
-          label={`Amount (${currency})`}
-          htmlFor="owner-money-amount"
-          hint="As a positive figure — the direction above says which way."
-          required
-        >
-          <Input
+          <TextField
             id="owner-money-amount"
+            label={`Amount (${currency})`}
+            hint="As a positive figure — the direction above says which way."
+            requiredMark
             inputMode="decimal"
+            inputClassName="sk-figure"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="0.00"
             autoFocus
           />
-        </FormField>
-        {preview !== null && (
-          <p className="text-text-muted text-sm">
-            {direction === 'IN' ? 'Adds' : 'Takes'}{' '}
+          {preview !== null && (
+            <p className="mo-p">
+              {direction === 'IN' ? 'Adds' : 'Takes'}{' '}
+              <Money
+                amount={direction === 'IN' ? preview : `-${preview}`}
+                currency={currency}
+                convert={false}
+                direction={direction === 'IN' ? 'credit' : 'debit'}
+              />{' '}
+              {direction === 'IN' ? 'to' : 'from'} our own money in this account.
+            </p>
+          )}
+          <DateField
+            id="owner-money-date"
+            label="On"
+            requiredMark
+            value={occurredOn}
+            onChange={(e) => setOccurredOn(e.target.value)}
+          />
+          <TextArea
+            id="owner-money-reason"
+            label="What it was for"
+            hint="At least a sentence; it is kept with the entry."
+            requiredMark
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            showCount
+            placeholder="e.g. Founder's capital for the October stock purchase"
+          />
+          <TextField
+            id="owner-money-ref"
+            label="Bank reference"
+            hint="Optional."
+            inputClassName="sk-ident"
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+      </Dialog>
+
+      <ConfirmDialog
+        open={accountId !== null && confirming}
+        onOpenChange={(next) => {
+          setConfirming(next);
+          if (!next) setError(null);
+        }}
+        title={direction === 'IN' ? 'Record money put in?' : 'Record money taken out?'}
+        entity={accountLabel}
+        amount={
+          preview === null ? undefined : (
             <Money
               amount={direction === 'IN' ? preview : `-${preview}`}
               currency={currency}
               convert={false}
               direction={direction === 'IN' ? 'credit' : 'debit'}
-            />{' '}
-            {direction === 'IN' ? 'to' : 'from'} our own money in this account.
-          </p>
-        )}
-        <FormField label="On" htmlFor="owner-money-date" required>
-          <Input
-            id="owner-money-date"
-            type="date"
-            value={occurredOn}
-            onChange={(e) => setOccurredOn(e.target.value)}
-          />
-        </FormField>
-        <FormField
-          label="What it was for"
-          htmlFor="owner-money-reason"
-          hint="At least a sentence; it is kept with the entry."
-          required
-        >
-          <Textarea
-            id="owner-money-reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            rows={3}
-            maxLength={2000}
-            placeholder="e.g. Founder's capital for the October stock purchase"
-          />
-        </FormField>
-        <FormField label="Bank reference" htmlFor="owner-money-ref" hint="Optional.">
-          <Input
-            id="owner-money-ref"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            autoComplete="off"
-          />
-        </FormField>
-      </div>
-      {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
-      <ModalFooter>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={() => void save()} disabled={record.isPending || amount.trim() === ''}>
-          {record.isPending ? 'Recording…' : 'Record'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+            />
+          )
+        }
+        consequence={`${direction === 'IN' ? 'Adds this to' : 'Takes this from'} our own ${currency} money in ${accountLabel} on ${onLabel}, as owner equity — never counted as income or an expense.`}
+        confirmLabel="Record"
+        onConfirm={save}
+        error={confirming ? (error ?? undefined) : undefined}
+      />
+    </>
   );
 }

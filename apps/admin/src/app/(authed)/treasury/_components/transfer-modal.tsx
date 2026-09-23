@@ -1,22 +1,20 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  Select,
-  Textarea,
-} from '@skydrop/ui/components';
+import { ArrowLeftRight } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { DateField } from '@skydrop/ui/app/date-field';
 import { useRecordTransfer, useTreasuryOverview } from '@/lib/ops-hooks';
 import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { useFxRatesList, useSellersList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { localNow } from '@/lib/datetime-local';
+import { Notice } from './money-parts';
 
 /**
  * Money moving between two of our own accounts.
@@ -124,7 +122,10 @@ export function TransferModal({
     return (i / o).toFixed(6);
   }, [amountOut, amountIn]);
 
-  async function save(): Promise<void> {
+  const [confirming, setConfirming] = useState(false);
+
+  // The form's checks, unchanged, run before the confirm step opens.
+  function review(): void {
     setError(null);
     if (fromAccountId === '' || toAccountId === '') {
       setError('Pick both accounts');
@@ -140,6 +141,13 @@ export function TransferModal({
       setError('Enter what left and what arrived');
       return;
     }
+    setConfirming(true);
+  }
+
+  async function save(): Promise<void> {
+    setError(null);
+    const o = Number(amountOut);
+    const i = Number(amountIn);
     try {
       await transfer.mutateAsync({
         fromAccountId,
@@ -160,26 +168,53 @@ export function TransferModal({
       setQuoted('');
       setReference('');
       setNote('');
+      setConfirming(false);
       onOpenChange(false);
     } catch (err) {
       setError(serverVerdict(err));
+      // Keeps the confirm open with the verdict on it, to read and retry
+      // (the same idempotency key goes with the retry).
+      throw err;
     }
   }
 
+  const sellerName =
+    sellerId === ''
+      ? null
+      : ((sellers.data?.items ?? []).find((x) => x.id === sellerId)?.companyName ?? 'a seller');
+  const whenLabel = movedAt === '' ? '' : new Date(movedAt).toLocaleString('en-IN');
+
   return (
-    <Modal
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) setError(null);
-      }}
-      title="Move money between accounts"
-      description="Both sides are entered from the two statements — nothing is derived from a rate."
-    >
-      <div className="space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label="From" required>
-            <Select value={fromAccountId} onChange={(e) => setFrom(e.target.value)}>
+    <>
+      <Dialog
+        open={open && !confirming}
+        onOpenChange={(next) => {
+          onOpenChange(next);
+          if (!next) setError(null);
+        }}
+        icon={<ArrowLeftRight size={18} />}
+        size="lg"
+        title="Move money between accounts"
+        description="Both sides are entered from the two statements — nothing is derived from a rate."
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={review} disabled={transfer.isPending}>
+              Review transfer
+            </Button>
+          </DialogFooter>
+        }
+      >
+        <div className="mo-fields">
+          <div className="mo-fields" data-cols="2">
+            <Select
+              label="From"
+              requiredMark
+              value={fromAccountId}
+              onChange={(e) => setFrom(e.target.value)}
+            >
               <option value="">Select…</option>
               {list
                 .filter((a) => a.isActive)
@@ -189,9 +224,12 @@ export function TransferModal({
                   </option>
                 ))}
             </Select>
-          </FormField>
-          <FormField label="To" required>
-            <Select value={toAccountId} onChange={(e) => setTo(e.target.value)}>
+            <Select
+              label="To"
+              requiredMark
+              value={toAccountId}
+              onChange={(e) => setTo(e.target.value)}
+            >
               <option value="">Select…</option>
               {list
                 .filter((a) => a.isActive && a.id !== fromAccountId)
@@ -201,55 +239,56 @@ export function TransferModal({
                   </option>
                 ))}
             </Select>
-          </FormField>
-        </div>
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label={`Left${from ? ` (${from.currency})` : ''}`} required>
-            <Input
+          <div className="mo-fields" data-cols="2">
+            <TextField
+              label={`Left${from ? ` (${from.currency})` : ''}`}
+              requiredMark
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0"
+              inputClassName="sk-figure"
               value={amountOut}
               onChange={(e) => setOut(e.target.value)}
             />
-          </FormField>
-          <FormField
-            label={`Arrived${to ? ` (${to.currency})` : ''}`}
-            required
-            hint={achieved !== null && crossCurrency ? `Achieved rate ${achieved}` : undefined}
-          >
-            <Input
+            <TextField
+              label={`Arrived${to ? ` (${to.currency})` : ''}`}
+              requiredMark
+              hint={achieved !== null && crossCurrency ? `Achieved rate ${achieved}` : undefined}
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0"
+              inputClassName="sk-figure"
               value={amountIn}
               onChange={(e) => setIn(e.target.value)}
             />
-          </FormField>
-        </div>
+          </div>
 
-        <FormField
-          label="Whose money"
-          hint="Leave as ours unless this is moving a seller's balance between our accounts"
-          /*
-            WHAT THEY ACTUALLY HOLD IN THE SENDING ACCOUNT.
+          <Select
+            label="Whose money"
+            hint="Leave as ours unless this is moving a seller's balance between our accounts"
+            /*
+              WHAT THEY ACTUALLY HOLD IN THE SENDING ACCOUNT.
 
-            Informational, never a gate — the server refuses an
-            over-attributed transfer with TRANSFER_EXCEEDS_SELLER_HOLDING
-            and stays the boundary (FE-2). But "whose money" is a choice
-            somebody makes from a dropdown, and choosing a seller who has
-            nothing in this account is an easy mistake to make silently.
-            Showing the figure beside the choice is how it stops being
-            silent.
-          */
-          notice={
-            heldHere === null
-              ? undefined
-              : `${from?.label ?? 'This account'} holds ${heldHere} ${from?.currency ?? ''} for them. A transfer cannot move more than that.`
-          }
-        >
-          <Select value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
+              Informational, never a gate — the server refuses an
+              over-attributed transfer with TRANSFER_EXCEEDS_SELLER_HOLDING
+              and stays the boundary (FE-2). But "whose money" is a choice
+              somebody makes from a dropdown, and choosing a seller who has
+              nothing in this account is an easy mistake to make silently.
+              Showing the figure beside the choice is how it stops being
+              silent.
+            */
+            notice={
+              heldHere === null
+                ? undefined
+                : `${from?.label ?? 'This account'} holds ${heldHere} ${from?.currency ?? ''} for them. A transfer cannot move more than that.`
+            }
+            value={sellerId}
+            onChange={(e) => setSellerId(e.target.value)}
+          >
             <option value="">Ours</option>
             {(sellers.data?.items ?? []).map((s) => (
               <option key={s.id} value={s.id}>
@@ -257,29 +296,28 @@ export function TransferModal({
               </option>
             ))}
           </Select>
-        </FormField>
 
-        {intoWalletCurrency && (
-          <p className="text-text-muted text-xs">
-            Into rupees there is no quote: the seller is credited what this money was worth to their
-            wallet (their average rate in {from?.label ?? 'the sending account'}), and the
-            difference against what arrived is booked as ours.
-          </p>
-        )}
+          {intoWalletCurrency && (
+            <p className="mo-p">
+              Into rupees there is no quote: the seller is credited what this money was worth to
+              their wallet (their average rate in {from?.label ?? 'the sending account'}), and the
+              difference against what arrived is booked as ours.
+            </p>
+          )}
 
-        {quoteApplies && (
-          <FormField
-            label="Rate quoted to the seller"
-            hint={
-              systemRate === null
-                ? 'They are credited at this rate; the gap against what we achieved is booked as ours, either way.'
-                : `From the system rate (${systemRate}). They are credited at this rate; the gap against the ${achieved ?? '—'} we achieved is booked as ours, either way.`
-            }
-          >
-            <Input
+          {quoteApplies && (
+            <TextField
+              label="Rate quoted to the seller"
+              hint={
+                systemRate === null
+                  ? 'They are credited at this rate; the gap against what we achieved is booked as ours, either way.'
+                  : `From the system rate (${systemRate}). They are credited at this rate; the gap against the ${achieved ?? '—'} we achieved is booked as ours, either way.`
+              }
               type="number"
+              inputMode="decimal"
               step="0.000001"
               min="0"
+              inputClassName="sk-figure"
               value={quotedRate}
               onChange={(e) => {
                 setQuotedTouched(true);
@@ -287,70 +325,94 @@ export function TransferModal({
               }}
               placeholder={systemRate ?? achieved ?? '0.000000'}
             />
-          </FormField>
-        )}
+          )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label="When" required>
-            <Input
+          <div className="mo-fields" data-cols="2">
+            <DateField
               type="datetime-local"
+              label="When"
+              requiredMark
               value={movedAt}
               onChange={(e) => setMovedAt(e.target.value)}
             />
-          </FormField>
-          <FormField label="Reference">
-            <Input
+            <TextField
+              label="Reference"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
               maxLength={200}
+              inputClassName="sk-ident"
             />
-          </FormField>
+          </div>
+          <TextArea label="Note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+
+          {quoteApplies && quotedRate.trim() !== '' && amountOut !== '' && (
+            <Notice tone={Number(quotedRate) > 0 ? 'neutral' : 'warn'}>
+              <p>
+                {Number(quotedRate) > 0 ? (
+                  <>
+                    The seller would be credited{' '}
+                    <Money
+                      amount={(Number(amountOut) * Number(quotedRate)).toFixed(2)}
+                      currency={to?.currency === 'BDT' ? 'BDT' : 'INR'}
+                      convert={false}
+                    />{' '}
+                    and the remainder booked to us.
+                  </>
+                ) : (
+                  /* A zero rate is not a quote, it is an unfilled field. Stated
+                     calmly it reads as arithmetic; what it actually does is
+                     move the seller's whole balance to us. */
+                  <>
+                    A rate of zero credits the seller NOTHING and books the entire amount to us.
+                    That is almost certainly not what you mean — use the system rate, or whatever
+                    you actually quoted them.
+                  </>
+                )}
+              </p>
+            </Notice>
+          )}
+
+          {error !== null && !confirming && (
+            <p className="mo-error" role="alert">
+              {error}
+            </p>
+          )}
         </div>
-        <FormField label="Note">
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
-        </FormField>
+      </Dialog>
 
-        {quoteApplies && quotedRate.trim() !== '' && amountOut !== '' && (
-          <p
-            className={
-              Number(quotedRate) > 0
-                ? 'text-text-muted text-xs'
-                : 'text-[var(--color-warning)] text-xs'
-            }
-          >
-            {Number(quotedRate) > 0 ? (
-              <>
-                The seller would be credited{' '}
-                <Money
-                  amount={(Number(amountOut) * Number(quotedRate)).toFixed(2)}
-                  currency={to?.currency === 'BDT' ? 'BDT' : 'INR'}
-                  convert={false}
-                />{' '}
-                and the remainder booked to us.
-              </>
-            ) : (
-              /* A zero rate is not a quote, it is an unfilled field. Stated
-                 calmly it reads as arithmetic; what it actually does is
-                 move the seller's whole balance to us. */
-              <>
-                A rate of zero credits the seller NOTHING and books the entire amount to us. That is
-                almost certainly not what you mean — use the system rate, or whatever you actually
-                quoted them.
-              </>
-            )}
-          </p>
-        )}
-      </div>
-
-      {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
-      <ModalFooter>
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button onClick={() => void save()} disabled={transfer.isPending}>
-          {transfer.isPending ? 'Moving…' : 'Record transfer'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+      <ConfirmDialog
+        open={open && confirming}
+        onOpenChange={(next) => {
+          setConfirming(next);
+          if (!next) setError(null);
+        }}
+        title="Record this transfer?"
+        entity={`${from?.label ?? 'From'} → ${to?.label ?? 'To'}`}
+        amount={
+          <span className="mo-stack mo-stack--tight">
+            <span>
+              Left{' '}
+              <Money
+                amount={Number(amountOut).toFixed(2)}
+                currency={from?.currency === 'BDT' ? 'BDT' : 'INR'}
+                convert={false}
+              />
+            </span>
+            <span>
+              Arrived{' '}
+              <Money
+                amount={Number(amountIn).toFixed(2)}
+                currency={to?.currency === 'BDT' ? 'BDT' : 'INR'}
+                convert={false}
+              />
+            </span>
+          </span>
+        }
+        consequence={`Records ${from?.currency ?? ''} leaving ${from?.label ?? 'the sending account'} and ${to?.currency ?? ''} arriving in ${to?.label ?? 'the receiving account'} on ${whenLabel}, as ${sellerName === null ? 'our own money' : `money held for ${sellerName}`}; both balances change at once.`}
+        confirmLabel="Record transfer"
+        onConfirm={save}
+        error={confirming ? (error ?? undefined) : undefined}
+      />
+    </>
   );
 }

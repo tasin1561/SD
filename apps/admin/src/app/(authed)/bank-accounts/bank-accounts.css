@@ -1,0 +1,18 @@
+/* /bank-accounts (prefix `ba-`). Tokens only; shared pieces in
+   treasury/_components/money.css. */
+.ba-grid-3 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .ba-grid-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.ba-code {
+  margin-left: var(--sp-2);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}

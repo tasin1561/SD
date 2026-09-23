@@ -1,0 +1,98 @@
+/* /treasury only (prefix `tr-`). Tokens only; the shared area pieces live
+   in money.css. Every grid declares minmax columns. */
+
+.tr-kpi-link {
+  display: block;
+  min-width: 0;
+  border-radius: var(--r-lg);
+  color: inherit;
+  text-decoration: none;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.tr-kpi-link:hover {
+  transform: translateY(-1px);
+}
+.tr-kpi-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* An account row opens to show whose money is inside it. */
+.tr-account {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tr-account:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.tr-account__chev {
+  flex: none;
+  margin-top: 3px;
+  color: var(--fg-muted);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.tr-account[aria-expanded='true'] .tr-account__chev {
+  transform: rotate(90deg);
+}
+.tr-account__name {
+  display: block;
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.tr-account__sub {
+  display: block;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.tr-holders {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-1);
+  margin: var(--sp-2) 0 0;
+  padding-left: calc(14px + var(--sp-2));
+}
+.tr-holders__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, max-content);
+  gap: var(--sp-3);
+  font-size: var(--fs-xs);
+}
+.tr-holders__row dt {
+  color: var(--fg-muted);
+  overflow-wrap: anywhere;
+}
+.tr-holders__row dd {
+  margin: 0;
+  color: var(--fg-body);
+}
+.tr-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-1);
+}
+.tr-covered {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green-text);
+  font-size: var(--fs-sm);
+}
+.tr-kpi-skel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--sp-3);
+}
+.tr-kpi-skel > .sk-skel {
+  height: 112px;
+}

@@ -1,17 +1,16 @@
 'use client';
 
-import { useState, type ReactElement, type ReactNode } from 'react';
-import {
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorState,
-  Money,
-  Skeleton,
-  PageHeader,
-} from '@skydrop/ui/components';
+import { useState, type ReactElement } from 'react';
+import { Money } from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { KpiCard, type KpiTone } from '@skydrop/ui/app/kpi-card';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
 import type { ReportSummary } from '@skydrop/api-client';
 import { useReportSummary } from '@/lib/api-hooks';
+import { MoCard } from '../../treasury/_components/money-parts';
+import './reports.css';
 
 /**
  * Operational summary — 3 cards (orders / shipments / wallet) +
@@ -31,44 +30,36 @@ export function ReportsDashboard(): ReactElement {
   });
 
   return (
-    <div className="space-y-4">
+    <div className="mo-page">
       <PageHeader
         title="Reports"
         subtitle="Operational metrics across the date range. Confirm + NDR + RTO + delivery rates; dispatch times; wallet flows."
       />
 
-      <Card>
-        <CardBody>
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-0 flex-1 sm:flex-none">
-              <div className="text-text-muted text-xs mb-1">From</div>
-              <input
-                type="date"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-                className="sd-field w-full rounded-[5px] border border-border bg-bg px-3 py-1.5 text-sm text-text-bright transition-colors focus:border-accent focus:outline-none"
-              />
-            </div>
-            <div className="min-w-0 flex-1 sm:flex-none">
-              <div className="text-text-muted text-xs mb-1">To (exclusive)</div>
-              <input
-                type="date"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                className="sd-field w-full rounded-[5px] border border-border bg-bg px-3 py-1.5 text-sm text-text-bright transition-colors focus:border-accent focus:outline-none"
-              />
-            </div>
-            <div className="text-text-faint text-xs ml-2">UTC</div>
-          </div>
-        </CardBody>
-      </Card>
+      <MoCard>
+        <div className="rp-range">
+          <DateField
+            id="reports-from"
+            label="From"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+          />
+          <DateField
+            id="reports-to"
+            label="To (exclusive)"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+          />
+          <span className="mo-faint rp-utc">UTC</span>
+        </div>
+      </MoCard>
 
       {summary.isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Skeleton className="h-56" />
-          <Skeleton className="h-56" />
-          <Skeleton className="h-56" />
-          <Skeleton className="h-56" />
+        <div className="rp-skeletons">
+          <Skeleton rounded="md" height={224} />
+          <Skeleton rounded="md" height={224} />
+          <Skeleton rounded="md" height={224} />
+          <Skeleton rounded="md" height={224} />
         </div>
       ) : summary.isError ? (
         <ErrorState
@@ -78,141 +69,119 @@ export function ReportsDashboard(): ReactElement {
       ) : !summary.data ? (
         <ErrorState message="No data." />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <OrdersCard data={summary.data.orders} />
-          <ShipmentsCard data={summary.data.shipments} />
-          <WalletCard data={summary.data.wallet} />
+        <div className="mo-stack rp-groups">
+          <OrdersGroup data={summary.data.orders} />
+          <ShipmentsGroup data={summary.data.shipments} />
+          <WalletGroup data={summary.data.wallet} />
         </div>
       )}
     </div>
   );
 }
 
-function OrdersCard({ data }: { readonly data: ReportSummary['orders'] }): ReactElement {
+function OrdersGroup({ data }: { readonly data: ReportSummary['orders'] }): ReactElement {
   return (
-    <Card>
-      <CardHeader title="Orders" />
-      <CardBody>
-        <Stat label="Created" value={data.created} />
-        <Stat label="Confirmed" value={data.confirmed} />
-        <Stat label="Delivered" value={data.delivered} />
-        <Stat label="RTO initiated" value={data.rtoInitiated} />
-        <Stat label="Cancelled" value={data.cancelled} />
-        <Stat label="Rejected (NDR)" value={data.rejectedNdr} />
-        <div className="border-t border-border my-3" />
-        <Stat
+    <section className="rp-group">
+      <SectionHeading title="Orders" />
+      <div className="mo-kpis">
+        <KpiCard label="Created" value={data.created} />
+        <KpiCard label="Confirmed" value={data.confirmed} />
+        <KpiCard label="Delivered" value={data.delivered} />
+        <KpiCard label="RTO initiated" value={data.rtoInitiated} />
+        <KpiCard label="Cancelled" value={data.cancelled} />
+        <KpiCard label="Rejected (NDR)" value={data.rejectedNdr} />
+      </div>
+      <div className="mo-kpis">
+        <KpiCard
           label="Confirm rate"
-          value={pct(data.confirmRate)}
-          tone={data.confirmRate >= 0.6 ? 'accent' : 'pending'}
+          figure={pct(data.confirmRate)}
+          tone={rateTone(data.confirmRate >= 0.6 ? 'accent' : 'pending')}
         />
-        <Stat
+        <KpiCard
           label="Delivery rate"
-          value={pct(data.deliveryRate)}
-          tone={data.deliveryRate >= 0.85 ? 'accent' : 'pending'}
+          figure={pct(data.deliveryRate)}
+          tone={rateTone(data.deliveryRate >= 0.85 ? 'accent' : 'pending')}
         />
-        <Stat
+        <KpiCard
           label="NDR rate"
-          value={pct(data.ndrRate)}
-          tone={data.ndrRate <= 0.1 ? 'accent' : 'critical'}
+          figure={pct(data.ndrRate)}
+          tone={rateTone(data.ndrRate <= 0.1 ? 'accent' : 'critical')}
         />
-        <Stat
+        <KpiCard
           label="RTO rate"
-          value={pct(data.rtoRate)}
-          tone={data.rtoRate <= 0.15 ? 'accent' : 'critical'}
+          figure={pct(data.rtoRate)}
+          tone={rateTone(data.rtoRate <= 0.15 ? 'accent' : 'critical')}
         />
-      </CardBody>
-    </Card>
+      </div>
+    </section>
   );
 }
 
-function ShipmentsCard({ data }: { readonly data: ReportSummary['shipments'] }): ReactElement {
+function ShipmentsGroup({ data }: { readonly data: ReportSummary['shipments'] }): ReactElement {
   return (
-    <Card>
-      <CardHeader title="Shipments" />
-      <CardBody>
-        <Stat label="Dispatched" value={data.dispatched} />
-        <Stat
+    <section className="rp-group">
+      <SectionHeading title="Shipments" />
+      <div className="mo-kpis">
+        <KpiCard label="Dispatched" value={data.dispatched} />
+        <KpiCard
           label="Avg hours to dispatch"
           hint="From CONFIRMED → DISPATCHED"
-          value={
+          figure={
             data.avgDispatchHoursFromConfirm === null
               ? '—'
               : `${data.avgDispatchHoursFromConfirm} h`
           }
         />
-        <Stat
+        <KpiCard
           label="Avg days to delivery"
           hint="From DISPATCHED → DELIVERED"
-          value={
+          figure={
             data.avgDeliveryDaysFromDispatch === null
               ? '—'
               : `${data.avgDeliveryDaysFromDispatch} d`
           }
         />
-      </CardBody>
-    </Card>
+      </div>
+    </section>
   );
 }
 
-function WalletCard({ data }: { readonly data: ReportSummary['wallet'] }): ReactElement {
+function WalletGroup({ data }: { readonly data: ReportSummary['wallet'] }): ReactElement {
   return (
-    <Card>
-      <CardHeader title="Wallet flows (INR)" />
-      <CardBody>
-        {/* Direction is the whole point of this card: money in, money
-            out, what is left. Money encodes it with a sign AND a colour,
-            and groups the figure the Indian way. */}
-        <Stat
+    <section className="rp-group">
+      <SectionHeading title="Wallet flows (INR)" />
+      {/* Direction is the whole point of this group: money in, money
+          out, what is left. Money encodes it with a sign AND a colour,
+          and groups the figure the Indian way. */}
+      <div className="mo-kpis">
+        <KpiCard
           label="COD collected"
-          value={<Money amount={data.codCollected} direction="credit" />}
+          tone="credit"
+          figure={<Money amount={data.codCollected} direction="credit" />}
         />
-        <Stat
+        <KpiCard
           label="Charges debited"
-          value={<Money amount={data.chargesDebited} direction="debit" />}
+          tone="debit"
+          figure={<Money amount={data.chargesDebited} direction="debit" />}
         />
-        <Stat
+        <KpiCard
           label="Remittances paid"
-          value={<Money amount={data.remittancesPaid} direction="debit" />}
+          tone="debit"
+          figure={<Money amount={data.remittancesPaid} direction="debit" />}
         />
-        <div className="border-t border-border my-3" />
-        <Stat
+        <KpiCard
           label="Net outstanding"
           hint="Owed to sellers across all wallets"
-          value={<Money amount={data.netOutstanding} />}
+          figure={<Money amount={data.netOutstanding} />}
         />
-      </CardBody>
-    </Card>
+      </div>
+    </section>
   );
 }
 
-function Stat({
-  label,
-  value,
-  hint,
-  tone = 'body',
-}: {
-  readonly label: string;
-  readonly value: ReactNode;
-  readonly hint?: string;
-  readonly tone?: 'body' | 'accent' | 'pending' | 'critical';
-}): ReactElement {
-  const colorClass =
-    tone === 'accent'
-      ? 'text-accent'
-      : tone === 'pending'
-        ? 'text-pending'
-        : tone === 'critical'
-          ? 'text-critical'
-          : 'text-text-bright';
-  return (
-    <div className="flex items-baseline justify-between py-1.5">
-      <div>
-        <div className="text-text-muted text-xs">{label}</div>
-        {hint && <div className="text-text-faint text-xs mt-0.5">{hint}</div>}
-      </div>
-      <div className={`skydrop-tabular ${colorClass}`}>{value}</div>
-    </div>
-  );
+/** The old stat tones, mapped onto the KPI card's: good, watch, bad. */
+function rateTone(tone: 'accent' | 'pending' | 'critical'): KpiTone {
+  return tone === 'accent' ? 'credit' : tone === 'pending' ? 'pending' : 'debit';
 }
 
 function pct(v: number): string {

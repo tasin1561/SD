@@ -1,13 +1,19 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { Button, FormField, Input, Modal, ModalFooter, Textarea } from '@skydrop/ui/components';
+import { Tags } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useCreateExpenseCategory,
   useUpdateExpenseCategory,
   type ExpenseCategoryView,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import '../../treasury/_components/money.css';
 
 /**
  * Add a category, or — given `category` — rename it / change its hint.
@@ -33,6 +39,7 @@ export function CategoryModal({
   const [name, setName] = useState('');
   const [hint, setHint] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
 
   // Load the row being edited each time the modal opens on it.
   useEffect(() => {
@@ -47,13 +54,14 @@ export function CategoryModal({
 
   const pending = create.isPending || update.isPending;
 
-  async function save(): Promise<void> {
+  /** Resolves true once saved; false when a check or the server refused. */
+  async function save(): Promise<boolean> {
     setError(null);
     try {
       if (category) {
         if (name.trim() === '') {
           setError('A name is needed');
-          return;
+          return false;
         }
         await update.mutateAsync({
           categoryId: category.id,
@@ -63,7 +71,7 @@ export function CategoryModal({
       } else {
         if (code.trim() === '' || name.trim() === '') {
           setError('A code and a name, both');
-          return;
+          return false;
         }
         await create.mutateAsync({
           code: code.trim(),
@@ -75,67 +83,88 @@ export function CategoryModal({
       setName('');
       setHint('');
       onOpenChange(false);
+      toast.success(category ? 'Category saved' : 'Category added');
+      return true;
     } catch (err) {
       setError(serverVerdict(err));
+      return false;
     }
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         onOpenChange(next);
         if (!next) setError(null);
       }}
+      icon={<Tags size={18} />}
       title={editing ? 'Edit expense category' : 'New expense category'}
       description={
         editing
           ? 'The code cannot change — past entries are read back through it. The name and hint can.'
           : 'The code is permanent — past entries are read back through it. The name can change.'
       }
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <AsyncButton
+            disabled={pending}
+            labels={{
+              idle: editing ? 'Save changes' : 'Add category',
+              busy: 'Saving…',
+              done: 'Saved',
+              error: 'Not saved',
+            }}
+            onAction={async () => {
+              // The busy/failed phase follows the real outcome: a refusal
+              // (the form's own check or the server's) is shown as failed.
+              if (!(await save())) throw new Error('not saved');
+            }}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="space-y-3">
-        <FormField
+      <div className="mo-fields">
+        <TextField
           label="Code"
-          required={!editing}
+          requiredMark={!editing}
           hint={editing ? 'Permanent' : 'Upper-cased and underscored automatically'}
-        >
-          <Input
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            placeholder="e.g. OFFICE_RENT"
-            maxLength={60}
-            readOnly={editing}
-            disabled={editing}
-          />
-        </FormField>
-        <FormField label="Name" required>
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Office rent"
-            maxLength={120}
-          />
-        </FormField>
-        <FormField label="What goes here" hint="For whoever records the next one">
-          <Textarea
-            value={hint}
-            onChange={(e) => setHint(e.target.value)}
-            rows={2}
-            maxLength={500}
-            placeholder="e.g. Warehouse and office rent, excluding utilities"
-          />
-        </FormField>
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="e.g. OFFICE_RENT"
+          maxLength={60}
+          readOnly={editing}
+          disabled={editing}
+          inputClassName="sk-ident"
+        />
+        <TextField
+          label="Name"
+          requiredMark
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Office rent"
+          maxLength={120}
+          showCount
+        />
+        <TextArea
+          label="What goes here"
+          hint="For whoever records the next one"
+          value={hint}
+          onChange={(e) => setHint(e.target.value)}
+          rows={2}
+          maxLength={500}
+          showCount
+          placeholder="e.g. Warehouse and office rent, excluding utilities"
+        />
+        {error !== null && (
+          <p className="mo-error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
-      {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
-      <ModalFooter>
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button onClick={() => void save()} disabled={pending}>
-          {pending ? 'Saving…' : editing ? 'Save changes' : 'Add category'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

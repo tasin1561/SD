@@ -3,31 +3,20 @@
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Play } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  ErrorNote,
-  Ident,
-  Money,
-  Num,
-  PageHeader,
-  Section,
-  Select,
-  SkeletonRows,
-  Stat,
-  StatusBadge,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-} from '@skydrop/ui/components';
+import { Ident, Money, Num } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Select } from '@skydrop/ui/app/select';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
 import { useMarginReport, useStoredMarginReport } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useRouter } from 'next/navigation';
+import { MoCard, MoSection } from '../../treasury/_components/money-parts';
+import './margin.css';
 
 /**
  * What our lanes actually earn.
@@ -70,16 +59,17 @@ export function MarginIndex(): ReactElement {
   const unpriced = stored.data?.skipped.length ?? 0;
 
   return (
-    <div>
+    <div className="mo-page">
       <PageHeader
         title="Lane margin"
         subtitle="What we billed against what the courier actually charged. Measured from Delhivery's own figures, not the rate card's assumption."
         action={
-          <div className="flex items-center gap-2">
+          <div className="mg-actions">
             <Select
+              label="Sample size"
               value={limit}
               onChange={(e) => setLimit(Number(e.target.value))}
-              className="w-auto text-xs"
+              className="mg-sample"
               aria-label="Sample size"
             >
               {[10, 25, 50, 100].map((n) => (
@@ -88,29 +78,29 @@ export function MarginIndex(): ReactElement {
                 </option>
               ))}
             </Select>
-            <Button
+            <AsyncButton
               variant="primary"
               size="md"
+              icon={<Play size={14} />}
+              state={live.isFetching ? 'busy' : 'idle'}
+              labels={{ idle: 'Quote against the rate card', busy: 'Quoting…' }}
               disabled={live.isFetching}
               onClick={() => {
                 setRun(true);
                 void live.refetch();
               }}
               title="Asks the courier's rate calculator what each parcel WOULD cost. An estimate — it writes nothing, and never replaces the invoiced figure."
-            >
-              <Play size={13} aria-hidden />
-              {live.isFetching ? 'Quoting…' : 'Quote against the rate card'}
-            </Button>
+            />
           </div>
         }
       />
 
       {report.isError ? (
-        <ErrorNote message={serverVerdict(report.error)} retry={() => void report.refetch()} />
+        <ErrorState message={serverVerdict(report.error)} retry={() => void report.refetch()} />
       ) : report.isFetching || data === undefined ? (
-        <Card>
+        <MoCard flush>
           <SkeletonRows rows={6} cols={6} />
-        </Card>
+        </MoCard>
       ) : data.rows.length === 0 ? (
         <EmptyState
           title="Not invoiced yet"
@@ -119,8 +109,8 @@ export function MarginIndex(): ReactElement {
       ) : (
         <>
           {!run && (
-            <Card className="mb-4">
-              <CardBody className="text-text-muted text-xs">
+            <MoCard>
+              <p className="mo-p">
                 What the courier actually BILLED, from their own ledger — imported nightly and
                 overwritten whenever a charge is re-cut.
                 {unpriced > 0 && (
@@ -132,32 +122,32 @@ export function MarginIndex(): ReactElement {
                     zero.
                   </>
                 )}
-              </CardBody>
-            </Card>
+              </p>
+            </MoCard>
           )}
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat
+          <div className="mo-kpis">
+            <KpiCard
               label="Billed to sellers"
-              value={<Money amount={data.totalBilledInr} decimals={false} />}
+              figure={<Money amount={data.totalBilledInr} decimals={false} />}
               hint={`Across ${data.sampledShipments} priced shipment${
                 data.sampledShipments === 1 ? '' : 's'
               }`}
             />
-            <Stat
+            <KpiCard
               label="Courier charged us"
-              value={<Money amount={data.totalActualCostInr} decimals={false} />}
+              figure={<Money amount={data.totalActualCostInr} decimals={false} />}
               hint="Delhivery's own figures"
             />
-            <Stat
+            <KpiCard
               label="Margin"
-              value={<Money amount={data.totalMarginInr} decimals={false} />}
-              tone={Number(data.totalMarginInr) < 0 ? 'bad' : 'good'}
+              figure={<Money amount={data.totalMarginInr} decimals={false} />}
+              tone={Number(data.totalMarginInr) < 0 ? 'debit' : 'credit'}
               hint="Billed minus actual, pre-tax on both sides"
             />
-            <Stat
+            <KpiCard
               label="Loss-making lanes"
               value={data.lossMakingCount}
-              tone={data.lossMakingCount > 0 ? 'bad' : 'neutral'}
+              tone={data.lossMakingCount > 0 ? 'debit' : 'neutral'}
               hint="Shipped for less than they cost"
             />
           </div>
@@ -168,7 +158,7 @@ export function MarginIndex(): ReactElement {
               description="Every shipment in the window was skipped. The reasons are listed below."
             />
           ) : (
-            <Table>
+            <Table caption="Lane margin by shipment">
               <THead>
                 <Tr>
                   <Th>Shipment</Th>
@@ -183,16 +173,18 @@ export function MarginIndex(): ReactElement {
                 {data.rows.map((r) => (
                   <Tr key={r.shipmentId} onActivate={() => router.push(`/orders/${r.orderId}`)}>
                     <Td>
-                      {r.orderId === null ? (
-                        <Ident value={r.shipmentNumber} />
-                      ) : (
-                        <Link href={`/orders/${r.orderId}`} className="text-accent hover:underline">
+                      <span className="mg-ship">
+                        {r.orderId === null ? (
                           <Ident value={r.shipmentNumber} />
-                        </Link>
-                      )}
-                      {r.lossMaking && <StatusBadge kind="failed" label="loss" />}
+                        ) : (
+                          <Link href={`/orders/${r.orderId}`} className="mo-link">
+                            <Ident value={r.shipmentNumber} />
+                          </Link>
+                        )}
+                        {r.lossMaking && <StatusChip kind="failed" label="loss" size="sm" />}
+                      </span>
                     </Td>
-                    <Td className="text-text-muted whitespace-nowrap text-xs">{r.lane}</Td>
+                    <Td className="mo-muted mo-nowrap">{r.lane}</Td>
                     <Td align="right">
                       <Money amount={r.billedToSellerInr} />
                     </Td>
@@ -205,9 +197,9 @@ export function MarginIndex(): ReactElement {
                         direction={Number(r.marginInr) < 0 ? 'debit' : 'credit'}
                       />
                     </Td>
-                    <Td align="right" className="text-text-muted text-xs">
+                    <Td align="right" className="mo-muted">
                       {r.assumptionDriftInr === null ? (
-                        <span className="text-text-faint">—</span>
+                        <span className="mo-faint">—</span>
                       ) : (
                         <Num value={r.assumptionDriftInr} />
                       )}
@@ -219,29 +211,24 @@ export function MarginIndex(): ReactElement {
           )}
 
           {data.skipped.length > 0 && (
-            <Section
-              className="mt-5"
+            <MoSection
               title={`Skipped (${data.skipped.length})`}
-              subtitle="Named rather than dropped — a total over an unstated sample reads as the whole business."
+              note="Named rather than dropped — a total over an unstated sample reads as the whole business."
             >
-              <Card>
-                <CardBody>
-                  <ul className="text-text-muted space-y-1 text-xs">
-                    {data.skipped.slice(0, 20).map((s) => (
-                      <li key={s.shipmentId}>
-                        <Ident value={s.shipmentId.slice(0, 8)} /> — {s.reason}
-                      </li>
-                    ))}
-                    {data.skipped.length > 20 && (
-                      <li className="text-text-faint">…and {data.skipped.length - 20} more.</li>
-                    )}
-                  </ul>
-                </CardBody>
-              </Card>
-            </Section>
+              <ul className="mg-skipped">
+                {data.skipped.slice(0, 20).map((s) => (
+                  <li key={s.shipmentId}>
+                    <Ident value={s.shipmentId.slice(0, 8)} /> — {s.reason}
+                  </li>
+                ))}
+                {data.skipped.length > 20 && (
+                  <li className="mo-faint">…and {data.skipped.length - 20} more.</li>
+                )}
+              </ul>
+            </MoSection>
           )}
 
-          <p className="text-text-faint mt-4 text-xs leading-relaxed">
+          <p className="mo-faint mg-foot">
             Generated {new Date(data.generatedAt).toLocaleString()}. This report never changes a
             rate card, a charge or a wallet — repricing off a single lane&apos;s reading would be a
             bad decision.

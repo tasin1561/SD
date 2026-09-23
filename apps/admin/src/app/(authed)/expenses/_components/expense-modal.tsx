@@ -1,15 +1,14 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-  Textarea,
-} from '@skydrop/ui/components';
+import { Receipt } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useExpenseCategories,
   useFreightSearch,
@@ -21,6 +20,8 @@ import { usePlatformBankAccounts } from '@/lib/bank-account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { localNow } from '@/lib/datetime-local';
+import '../../treasury/_components/money.css';
+import './expenses.css';
 
 /**
  * Money leaving for something we bought.
@@ -51,6 +52,10 @@ export function ExpenseModal({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [linked, setLinked] = useState<FreightChargeView | null>(null);
+  // The checked form waits here for a confirm that restates it; the
+  // confirm then sends exactly the request the form always sent.
+  const [confirming, setConfirming] = useState(false);
+  const toast = useToast();
   // One key per opening of the form, reused on every retry of it: the
   // expense (or the freight payment) it sends is then recorded once
   // however many times the button is pressed.
@@ -71,7 +76,8 @@ export function ExpenseModal({
   // fill it in, and the whole form 403s on the last click.
   const canAttribute = usePermission('money.freight.manage');
 
-  async function save(): Promise<void> {
+  /** The form's own checks, unchanged; passing them opens the confirm. */
+  function review(): void {
     setError(null);
     if (account === undefined) {
       setError('Which account did it leave?');
@@ -88,6 +94,13 @@ export function ExpenseModal({
       setError('Choose what this was spent on');
       return;
     }
+    setConfirming(true);
+  }
+
+  async function save(): Promise<void> {
+    setError(null);
+    const n = Number(amount);
+    if (account === undefined) return;
     try {
       /*
         A payment ATTACHED to a consignment goes through the freight
@@ -118,6 +131,7 @@ export function ExpenseModal({
         setNote('');
         setLinked(null);
         onOpenChange(false);
+        toast.success('Payment recorded and attributed');
         return;
       }
 
@@ -137,24 +151,46 @@ export function ExpenseModal({
       setReference('');
       setNote('');
       onOpenChange(false);
+      toast.success('Expense recorded');
     } catch (err) {
       setError(serverVerdict(err));
+      // Keeps the confirm open with the verdict on it, to read and retry.
+      throw err;
     }
   }
 
+  const pending = record.isPending || payForwarder.isPending;
+  const actionLabel = linked === null ? 'Record expense' : 'Record & attribute';
+
   return (
-    <Modal
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) setError(null);
-      }}
-      title="Record an expense"
-      description="Money leaving one of our accounts for something we bought. Always ours — never a seller's."
-    >
-      <div className="space-y-3">
-        <FormField label="Paid from" required>
-          <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+    <>
+      <Dialog
+        open={open && !confirming}
+        onOpenChange={(next) => {
+          onOpenChange(next);
+          if (!next) setError(null);
+        }}
+        icon={<Receipt size={18} />}
+        title="Record an expense"
+        description="Money leaving one of our accounts for something we bought. Always ours — never a seller's."
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={review} disabled={pending}>
+              {pending ? 'Recording…' : actionLabel}
+            </Button>
+          </DialogFooter>
+        }
+      >
+        <div className="mo-fields">
+          <Select
+            label="Paid from"
+            requiredMark
+            value={accountId}
+            onChange={(e) => setAccountId(e.target.value)}
+          >
             <option value="">Select an account…</option>
             {(accounts.data ?? [])
               .filter((a) => a.isActive)
@@ -164,17 +200,17 @@ export function ExpenseModal({
                 </option>
               ))}
           </Select>
-        </FormField>
-        <FormField
-          label="Category"
-          required={linked === null}
-          hint={
-            (categories.data ?? []).length === 0
-              ? 'No categories yet — add one first so this spend can be told apart later.'
-              : undefined
-          }
-        >
-          <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+          <Select
+            label="Category"
+            requiredMark={linked === null}
+            hint={
+              (categories.data ?? []).length === 0
+                ? 'No categories yet — add one first so this spend can be told apart later.'
+                : undefined
+            }
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+          >
             <option value="">Select a category…</option>
             {(categories.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>
@@ -182,61 +218,103 @@ export function ExpenseModal({
               </option>
             ))}
           </Select>
-        </FormField>
-        {canAttribute && (
-          <FreightLinkField
-            value={linked}
-            onChange={setLinked}
-            prompt={wantsLink}
-            currency={account?.currency ?? 'INR'}
-          />
-        )}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label={`Amount${account ? ` (${account.currency})` : ''}`} required>
-            <Input
+          {canAttribute && (
+            <FreightLinkField
+              value={linked}
+              onChange={setLinked}
+              prompt={wantsLink}
+              currency={account?.currency ?? 'INR'}
+            />
+          )}
+          <div className="mo-fields" data-cols="2">
+            <TextField
+              label={`Amount${account ? ` (${account.currency})` : ''}`}
+              requiredMark
               type="number"
+              inputMode="decimal"
               step="0.01"
               min="0"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
             />
-          </FormField>
-          <FormField label="When" required>
-            <Input
+            <DateField
+              label="When"
+              requiredMark
               type="datetime-local"
               value={occurredAt}
               onChange={(e) => setOccurredAt(e.target.value)}
             />
-          </FormField>
+          </div>
+          {linked !== null && account !== undefined && account.currency !== 'INR' && (
+            <p className="mo-faint">
+              Paid in {account.currency}. The consignment&apos;s cost is kept in rupees, priced at
+              the rate recorded for the moment this payment moved.
+            </p>
+          )}
+          <TextField
+            label="Reference"
+            hint="Invoice or transaction id, so it can be matched later"
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            maxLength={200}
+          />
+          <TextArea label="Note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+          {error !== null && !confirming && (
+            <p className="mo-error" role="alert">
+              {error}
+            </p>
+          )}
         </div>
-        {linked !== null && account !== undefined && account.currency !== 'INR' && (
-          <p className="text-text-muted text-xs">
-            Paid in {account.currency}. The consignment&apos;s cost is kept in rupees, priced at the
-            rate recorded for the moment this payment moved.
-          </p>
-        )}
-        <FormField label="Reference" hint="Invoice or transaction id, so it can be matched later">
-          <Input value={reference} onChange={(e) => setReference(e.target.value)} maxLength={200} />
-        </FormField>
-        <FormField label="Note">
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
-        </FormField>
-      </div>
-      {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
-      <ModalFooter>
-        <Button variant="ghost" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button onClick={() => void save()} disabled={record.isPending || payForwarder.isPending}>
-          {record.isPending || payForwarder.isPending
-            ? 'Recording…'
-            : linked === null
-              ? 'Record expense'
-              : 'Record & attribute'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+      </Dialog>
+
+      <ConfirmDialog
+        open={open && confirming}
+        onOpenChange={(next) => {
+          setConfirming(next);
+          if (!next) setError(null);
+        }}
+        title={linked === null ? 'Record this expense?' : 'Record and attribute this payment?'}
+        entity={account === undefined ? 'Paid from' : `${account.label} · ${account.bankName}`}
+        amount={
+          account === undefined ? undefined : (
+            <Money
+              amount={Number(amount).toFixed(2)}
+              currency={account.currency as 'INR' | 'BDT'}
+              convert={false}
+              direction="debit"
+            />
+          )
+        }
+        consequence={
+          linked === null
+            ? 'This money leaves our account as an operating expense, filed under the category below.'
+            : "This money leaves our account and becomes this consignment's forwarder cost, not an operating expense."
+        }
+        confirmLabel={actionLabel}
+        onConfirm={save}
+        error={confirming ? (error ?? undefined) : undefined}
+      >
+        <div className="ex-confirm-lines">
+          {linked === null ? (
+            <span>Category: {category?.name ?? '—'}</span>
+          ) : (
+            <span>
+              Consignment:{' '}
+              <span className="sk-ident">{linked.consignmentNumber ?? 'Consignment'}</span>
+            </span>
+          )}
+          <span>
+            When: {occurredAt === '' ? '—' : new Date(occurredAt).toLocaleString('en-IN')}
+          </span>
+          {reference.trim() !== '' && (
+            <span>
+              Reference: <span className="sk-ident">{reference.trim()}</span>
+            </span>
+          )}
+        </div>
+      </ConfirmDialog>
+    </>
   );
 }
 
@@ -270,75 +348,73 @@ function FreightLinkField({
 
   if (value !== null) {
     return (
-      <FormField label="Attributed to">
-        <div className="border-border bg-surface-raised flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-medium">
+      <div>
+        <p className="ex-picked__label">Attributed to</p>
+        <div className="ex-picked">
+          <div className="mo-wrap">
+            <div className="ex-picked__title sk-ident">
               {value.consignmentNumber ?? 'Consignment'}
             </div>
-            <div className="text-text-muted truncate text-xs">
+            <div className="ex-picked__sub">
               {value.receiptNumber ?? 'no receipt number'} · billed {currency} {value.totalInr}
               {value.ourCostInr === null ? ' · our cost not yet recorded' : ''}
             </div>
           </div>
-          <button
-            type="button"
-            className="text-text-muted hover:text-text shrink-0 text-xs underline underline-offset-2"
-            onClick={() => onChange(null)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onChange(null)}>
             Remove
-          </button>
+          </Button>
         </div>
-      </FormField>
+      </div>
     );
   }
 
   return (
-    <FormField
+    <TextField
       label="Link to a consignment"
       hint={
         prompt
           ? 'A forwarder payment with no consignment behind it is counted twice in the profit report — once as that leg’s cost, once here. Search by consignment number, receipt or seller.'
           : 'Optional. Search by consignment number, receipt or seller.'
       }
-    >
-      <Input
-        value={term}
-        onChange={(e) => setTerm(e.target.value)}
-        placeholder="e.g. CN-2026-08 or the seller’s name"
-        // Loud only where leaving it empty is an actual error.
-        className={prompt && term === '' ? 'border-status-pending-fg' : undefined}
-      />
-      {term.trim().length >= 2 && (
-        <div className="border-border mt-1 max-h-44 overflow-y-auto rounded-md border">
-          {results.isLoading ? (
-            <p className="text-text-muted px-3 py-2 text-xs">Searching…</p>
-          ) : (results.data ?? []).length === 0 ? (
-            <p className="text-text-muted px-3 py-2 text-xs">
-              No freight bill matches that. Leave it unlinked if this spend belongs to no
-              consignment.
-            </p>
-          ) : (
-            (results.data ?? []).map((f) => (
-              <button
-                key={f.id}
-                type="button"
-                className="hover:bg-surface-raised block w-full px-3 py-2 text-left"
-                onClick={() => {
-                  onChange(f);
-                  setTerm('');
-                }}
-              >
-                <div className="text-sm">{f.consignmentNumber ?? 'Consignment'}</div>
-                <div className="text-text-muted text-xs">
-                  {f.receiptNumber ?? 'no receipt number'} · billed {f.totalInr}
-                  {f.ourCostInr === null ? ' · no cost recorded' : ` · cost ${f.ourCostInr}`}
-                </div>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </FormField>
+      value={term}
+      onChange={(e) => setTerm(e.target.value)}
+      placeholder="e.g. CN-2026-08 or the seller’s name"
+      // Loud only where leaving it empty is an actual error.
+      className={prompt && term === '' ? 'ex-prompt' : undefined}
+      after={
+        term.trim().length >= 2 ? (
+          <div className="ex-results">
+            {results.isLoading ? (
+              <p className="ex-results__note">Searching…</p>
+            ) : (results.data ?? []).length === 0 ? (
+              <p className="ex-results__note">
+                No freight bill matches that. Leave it unlinked if this spend belongs to no
+                consignment.
+              </p>
+            ) : (
+              (results.data ?? []).map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  className="ex-result"
+                  onClick={() => {
+                    onChange(f);
+                    setTerm('');
+                  }}
+                >
+                  <span className="ex-result__title sk-ident">
+                    {f.consignmentNumber ?? 'Consignment'}
+                  </span>
+                  <span className="ex-result__sub">
+                    {f.receiptNumber ?? 'no receipt number'} · billed {f.totalInr}
+                    {f.ourCostInr === null ? ' · no cost recorded' : ` · cost ${f.ourCostInr}`}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+        ) : undefined
+      }
+    />
   );
 }

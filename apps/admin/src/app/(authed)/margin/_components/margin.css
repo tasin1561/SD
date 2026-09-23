@@ -1,0 +1,31 @@
+/* /margin — layout bits on top of the area's money.css. Tokens only. */
+.mg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.mg-sample {
+  min-width: 9rem;
+}
+.mg-ship {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.mg-skipped {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.mg-foot {
+  margin: 0;
+  line-height: 1.55;
+}

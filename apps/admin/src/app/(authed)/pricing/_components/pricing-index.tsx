@@ -4,27 +4,16 @@ import { BillUnbilledCard, ChargesBackfillCard } from './charges-backfill-card';
 import { useState, type ReactElement } from 'react';
 import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  DescriptionList,
-  ErrorNote,
-  FormField,
-  Input,
-  Money,
-  Num,
-  PageHeader,
-  Section,
-  Select,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money, Num } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { TriangleAlert } from 'lucide-react';
+import { Facts, MoSection, Notice } from '../../treasury/_components/money-parts';
+import './pricing.css';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -133,7 +122,7 @@ export function PricingIndex(): ReactElement {
   const r = preview.data;
 
   return (
-    <div>
+    <div className="mo-page">
       <PageHeader
         title="Pricing preview"
         subtitle="What the engine would charge for a shipment, without creating an order to find out."
@@ -141,144 +130,120 @@ export function PricingIndex(): ReactElement {
 
       {/* Above the calculator: a shipment nobody priced is worth more
           than a price nobody asked for. */}
-      <div className="mb-4 flex flex-col gap-4">
+      <div className="mo-stack">
         <ChargesBackfillCard />
         <BillUnbilledCard />
       </div>
 
-      <Card>
-        <CardHeader title="The shipment" />
-        <CardBody>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField
-              label="Seller id"
-              htmlFor="pp-seller"
-              hint="Their rate card and discounts apply."
-            >
-              <Input
-                id="pp-seller"
-                value={form.sellerId}
-                onChange={(e) => set('sellerId', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Destination pincode" htmlFor="pp-pin">
-              <Input
-                id="pp-pin"
-                value={form.recipientPostalCode}
-                onChange={(e) => set('recipientPostalCode', e.target.value)}
-                placeholder="560001"
-              />
-            </FormField>
-            <FormField label="Weight (grams)" htmlFor="pp-weight">
-              <Input
-                id="pp-weight"
-                type="number"
-                min={1}
-                value={form.totalWeightGrams}
-                onChange={(e) => set('totalWeightGrams', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Declared value (₹)" htmlFor="pp-value">
-              <Input
-                id="pp-value"
-                type="number"
-                min={0}
-                value={form.declaredValueInr}
-                onChange={(e) => set('declaredValueInr', e.target.value)}
-              />
-            </FormField>
-            <FormField label="Payment" htmlFor="pp-mode">
-              <Select
-                id="pp-mode"
-                value={form.paymentMode}
-                onChange={(e) => set('paymentMode', e.target.value)}
-              >
-                <option value="PREPAID">Prepaid</option>
-                <option value="COD">Cash on delivery</option>
-              </Select>
-            </FormField>
-            {form.paymentMode === 'COD' && (
-              <FormField
-                label="COD amount (₹)"
-                htmlFor="pp-cod"
-                hint="What the customer pays the courier."
-              >
-                <Input
-                  id="pp-cod"
-                  type="number"
-                  min={0}
-                  value={form.codAmountInr}
-                  onChange={(e) => set('codAmountInr', e.target.value)}
-                />
-              </FormField>
-            )}
-            <FormField
-              label="Courier"
-              htmlFor="pp-courier"
-              hint="Optional — defaults to the system courier."
-            >
-              <Input
-                id="pp-courier"
-                value={form.courierCode}
-                onChange={(e) => set('courierCode', e.target.value)}
-                placeholder="delhivery"
-              />
-            </FormField>
-          </div>
+      <MoSection title="The shipment">
+        <div className="mo-fields" data-cols="2">
+          <TextField
+            id="pp-seller"
+            label="Seller id"
+            hint="Their rate card and discounts apply."
+            value={form.sellerId}
+            onChange={(e) => set('sellerId', e.target.value)}
+          />
+          <TextField
+            id="pp-pin"
+            label="Destination pincode"
+            value={form.recipientPostalCode}
+            onChange={(e) => set('recipientPostalCode', e.target.value)}
+            placeholder="560001"
+          />
+          <TextField
+            id="pp-weight"
+            label="Weight (grams)"
+            type="number"
+            min={1}
+            value={form.totalWeightGrams}
+            onChange={(e) => set('totalWeightGrams', e.target.value)}
+          />
+          <TextField
+            id="pp-value"
+            label="Declared value (₹)"
+            type="number"
+            min={0}
+            value={form.declaredValueInr}
+            onChange={(e) => set('declaredValueInr', e.target.value)}
+          />
+          <Select
+            id="pp-mode"
+            label="Payment"
+            value={form.paymentMode}
+            onChange={(e) => set('paymentMode', e.target.value)}
+          >
+            <option value="PREPAID">Prepaid</option>
+            <option value="COD">Cash on delivery</option>
+          </Select>
+          {form.paymentMode === 'COD' && (
+            <TextField
+              id="pp-cod"
+              label="COD amount (₹)"
+              hint="What the customer pays the courier."
+              type="number"
+              min={0}
+              value={form.codAmountInr}
+              onChange={(e) => set('codAmountInr', e.target.value)}
+            />
+          )}
+          <TextField
+            id="pp-courier"
+            label="Courier"
+            hint="Optional — defaults to the system courier."
+            value={form.courierCode}
+            onChange={(e) => set('courierCode', e.target.value)}
+            placeholder="delhivery"
+          />
+        </div>
 
-          <div className="mt-4">
-            <Button
-              size="md"
-              disabled={!complete || preview.isPending}
-              onClick={() =>
-                preview.mutate({
-                  sellerId: form.sellerId.trim(),
-                  recipientPostalCode: form.recipientPostalCode.trim(),
-                  paymentMode: form.paymentMode,
-                  codAmountInr: Number(form.codAmountInr || 0),
-                  declaredValueInr: Number(form.declaredValueInr),
-                  totalWeightGrams: Number(form.totalWeightGrams),
-                  ...(form.courierCode.trim() === ''
-                    ? {}
-                    : { courierCode: form.courierCode.trim() }),
-                  ...(form.serviceType.trim() === ''
-                    ? {}
-                    : { serviceType: form.serviceType.trim() }),
-                })
-              }
-            >
-              {preview.isPending ? 'Calculating…' : 'Calculate'}
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
+        <div className="mo-row">
+          <AsyncButton
+            size="md"
+            labels={{ idle: 'Calculate', busy: 'Calculating…', done: 'Calculated' }}
+            disabled={!complete || preview.isPending}
+            onAction={() =>
+              preview.mutateAsync({
+                sellerId: form.sellerId.trim(),
+                recipientPostalCode: form.recipientPostalCode.trim(),
+                paymentMode: form.paymentMode,
+                codAmountInr: Number(form.codAmountInr || 0),
+                declaredValueInr: Number(form.declaredValueInr),
+                totalWeightGrams: Number(form.totalWeightGrams),
+                ...(form.courierCode.trim() === '' ? {} : { courierCode: form.courierCode.trim() }),
+                ...(form.serviceType.trim() === '' ? {} : { serviceType: form.serviceType.trim() }),
+              })
+            }
+          />
+        </div>
+      </MoSection>
 
-      {preview.error !== null && <ErrorNote message={serverVerdict(preview.error)} />}
+      {preview.error !== null && <ErrorState message={serverVerdict(preview.error)} />}
 
       {r !== undefined && (
         <>
           {r.unresolved.length > 0 && (
-            <Section
+            <Notice
+              tone="warn"
+              icon={<TriangleAlert size={16} />}
               title="Read this before quoting the number"
-              subtitle="The engine answered, but some of what it needed was missing and it fell back."
             >
-              <ul className="space-y-2">
+              <p>The engine answered, but some of what it needed was missing and it fell back.</p>
+              <ul className="pr-fallbacks">
                 {r.unresolved.map((u) => (
-                  <li key={u.reason} className="text-sm">
-                    <span className="text-[var(--color-warn)]">
+                  <li key={u.reason}>
+                    <span className="mo-warn">
                       {FALLBACK_TEXT[u.reason] ?? u.reason.replace(/_/g, ' ').toLowerCase()}
                     </span>
-                    {u.detail !== undefined && (
-                      <span className="text-text-faint"> ({u.detail})</span>
-                    )}
+                    {u.detail !== undefined && <span className="mo-faint"> ({u.detail})</span>}
                   </li>
                 ))}
               </ul>
-            </Section>
+            </Notice>
           )}
 
-          <Section title="How it resolved">
-            <DescriptionList
+          <MoSection title="How it resolved">
+            <Facts
               items={[
                 { label: 'Rate card', value: r.rateCardCode ?? '—' },
                 { label: 'Courier', value: r.courierCode ?? '—' },
@@ -294,10 +259,10 @@ export function PricingIndex(): ReactElement {
                 },
               ]}
             />
-          </Section>
+          </MoSection>
 
-          <Section title="The charge">
-            <Table>
+          <MoSection title="The charge" flush>
+            <Table caption="The charge">
               <THead>
                 <Tr>
                   <Th>Line</Th>
@@ -325,7 +290,7 @@ export function PricingIndex(): ReactElement {
                     <Money amount={r.gstAmountInr} />
                   </Td>
                 </Tr>
-                <Tr>
+                <Tr className="mo-total-row">
                   <Td>
                     <strong>Total</strong>
                   </Td>
@@ -337,20 +302,20 @@ export function PricingIndex(): ReactElement {
                 </Tr>
               </TBody>
             </Table>
-          </Section>
+          </MoSection>
 
-          <Section
+          <MoSection
             title="Margin"
-            subtitle="Internal only — never shown to a seller and never touches their wallet."
+            note="Internal only — never shown to a seller and never touches their wallet."
           >
-            <DescriptionList
+            <Facts
               items={[
                 { label: 'We charge', value: <Money amount={r.margin.baseChargeInr} /> },
                 {
                   label: 'Courier costs us',
                   value:
                     r.margin.costToSkydropInr === null ? (
-                      <span className="text-text-faint">Not recorded on the rate card</span>
+                      <span className="mo-faint">Not recorded on the rate card</span>
                     ) : (
                       <Money amount={r.margin.costToSkydropInr} />
                     ),
@@ -359,7 +324,7 @@ export function PricingIndex(): ReactElement {
                   label: 'Margin',
                   value:
                     r.margin.marginInr === null ? (
-                      <span className="text-text-faint">Unknown without a recorded cost</span>
+                      <span className="mo-faint">Unknown without a recorded cost</span>
                     ) : (
                       <Money
                         amount={r.margin.marginInr}
@@ -369,7 +334,7 @@ export function PricingIndex(): ReactElement {
                 },
               ]}
             />
-          </Section>
+          </MoSection>
         </>
       )}
     </div>

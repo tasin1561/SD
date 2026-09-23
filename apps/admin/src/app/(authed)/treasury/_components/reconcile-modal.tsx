@@ -1,19 +1,16 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { AlertTriangle } from 'lucide-react';
-import {
-  Button,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  Select,
-  Textarea,
-} from '@skydrop/ui/components';
+import { AlertTriangle, Scale } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { useReconcileAccount } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { Notice } from './money-parts';
 
 /**
  * The book disagreed with the bank. Say so, in writing.
@@ -68,7 +65,10 @@ export function ReconcileModal({
       ? null
       : Number(statedBalance) - Number(currentBook);
 
-  async function save(): Promise<void> {
+  const [confirming, setConfirming] = useState(false);
+
+  // The form's checks, unchanged, run before the confirm step opens.
+  function review(): void {
     setError(null);
     if (statedBalance.trim() === '' || Number.isNaN(Number(statedBalance))) {
       setError('What does the statement actually say?');
@@ -78,6 +78,12 @@ export function ReconcileModal({
       setError('Say what was wrong — at least a sentence');
       return;
     }
+    if (accountId === null) return;
+    setConfirming(true);
+  }
+
+  async function save(): Promise<void> {
+    setError(null);
     if (accountId === null) return;
     try {
       await reconcile.mutateAsync({
@@ -94,31 +100,52 @@ export function ReconcileModal({
       setReason('');
       setOpening(false);
       setInrValue('');
+      setConfirming(false);
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
+      // Keeps the confirm open with the verdict on it, to read and retry.
+      throw err;
     }
   }
 
+  const ownerWords =
+    sellerId === ''
+      ? 'our own money'
+      : `the holding for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'the seller'}`;
+
   return (
-    <Modal
-      open={accountId !== null}
-      onOpenChange={(next) => {
-        if (!next) {
-          setError(null);
-          onClose();
+    <>
+      <Dialog
+        open={accountId !== null && !confirming}
+        onOpenChange={(next) => {
+          if (!next) {
+            setError(null);
+            onClose();
+          }
+        }}
+        icon={<Scale size={18} />}
+        title={`Reconcile ${accountLabel}`}
+        description="Posts the difference as a visible entry. It does not overwrite anything."
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={review} disabled={reconcile.isPending}>
+              Review adjustment
+            </Button>
+          </DialogFooter>
         }
-      }}
-      title={`Reconcile ${accountLabel}`}
-      description="Posts the difference as a visible entry. It does not overwrite anything."
-    >
-      <div className="space-y-3">
-        {bySeller.length > 0 && (
-          <FormField
-            label="Whose balance"
-            hint="Each owner is a separate running sum in this account — correct the one the statement is about."
-          >
-            <Select value={sellerId} onChange={(e) => setSellerId(e.target.value)}>
+      >
+        <div className="mo-fields">
+          {bySeller.length > 0 && (
+            <Select
+              label="Whose balance"
+              hint="Each owner is a separate running sum in this account — correct the one the statement is about."
+              value={sellerId}
+              onChange={(e) => setSellerId(e.target.value)}
+            >
               <option value="">Ours (capital)</option>
               {bySeller.map((b) => (
                 <option key={b.sellerId} value={b.sellerId}>
@@ -126,89 +153,122 @@ export function ReconcileModal({
                 </option>
               ))}
             </Select>
-          </FormField>
-        )}
-        <p className="text-text-muted text-sm">
-          Our book says <Money amount={currentBook} currency={currency} convert={false} /> is{' '}
-          {sellerId === ''
-            ? 'ours'
-            : `held for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'them'}`}{' '}
-          in this account.
-        </p>
-        <FormField label="What the statement says" required>
-          <Input
+          )}
+          <p className="mo-p">
+            Our book says <Money amount={currentBook} currency={currency} convert={false} /> is{' '}
+            {sellerId === ''
+              ? 'ours'
+              : `held for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'them'}`}{' '}
+            in this account.
+          </p>
+          <TextField
+            label="What the statement says"
+            requiredMark
             type="number"
+            inputMode="decimal"
             step="0.01"
+            inputClassName="sk-figure"
             value={statedBalance}
             onChange={(e) => setStated(e.target.value)}
             placeholder="0.00"
             autoFocus
           />
-        </FormField>
-        {delta !== null && delta !== 0 && (
-          <div className="flex gap-2 text-sm">
-            <AlertTriangle className="text-warning mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-            <p>
-              An adjustment of{' '}
-              <Money
-                amount={delta.toFixed(2)}
-                currency={currency}
-                convert={false}
-                direction={delta < 0 ? 'debit' : 'credit'}
-              />{' '}
-              will be posted against {sellerId === '' ? 'our own money' : 'their holding'}.
-            </p>
-          </div>
-        )}
-        {needsInrValue && (
-          <FormField
-            label="Worth to their wallet (INR)"
-            required
-            hint="The rupees this difference is worth to the seller's wallet — the book keeps a taka holding at what it was credited for, not at today's rate."
-          >
-            <Input
+          {delta !== null && delta !== 0 && (
+            <Notice tone="warn" icon={<AlertTriangle size={16} />}>
+              <p>
+                An adjustment of{' '}
+                <Money
+                  amount={delta.toFixed(2)}
+                  currency={currency}
+                  convert={false}
+                  direction={delta < 0 ? 'debit' : 'credit'}
+                />{' '}
+                will be posted against {sellerId === '' ? 'our own money' : 'their holding'}.
+              </p>
+            </Notice>
+          )}
+          {needsInrValue && (
+            <TextField
+              label="Worth to their wallet (INR)"
+              requiredMark
+              hint="The rupees this difference is worth to the seller's wallet — the book keeps a taka holding at what it was credited for, not at today's rate."
               type="number"
+              inputMode="decimal"
               step="0.01"
+              inputClassName="sk-figure"
               value={inrValue}
               onChange={(e) => setInrValue(e.target.value)}
               placeholder="0.00"
             />
-          </FormField>
-        )}
-        {sellerId === '' && (
-          <label className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
+          )}
+          {sellerId === '' && (
+            <Checkbox
               checked={opening}
               onChange={(e) => setOpening(e.target.checked)}
+              label={
+                <span>
+                  This is the account&apos;s <strong>opening balance</strong>
+                </span>
+              }
+              description="Money the business already had when the book started. It is left off the P&L instead of reading as income. Once per account."
             />
-            <span>
-              This is the account&apos;s <strong>opening balance</strong> — money the business
-              already had when the book started. It is left off the P&amp;L instead of reading as
-              income. Once per account.
-            </span>
-          </label>
-        )}
-        <FormField label="Why the book was wrong" required hint="At least a sentence; it is kept">
-          <Textarea
+          )}
+          <TextArea
+            label="Why the book was wrong"
+            requiredMark
+            hint="At least a sentence; it is kept"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             maxLength={2000}
+            showCount
             placeholder="e.g. Bank charged a wire fee we had not recorded"
           />
-        </FormField>
-      </div>
-      {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
-      <ModalFooter>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button onClick={() => void save()} disabled={reconcile.isPending}>
-          {reconcile.isPending ? 'Posting…' : 'Post adjustment'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+          {error !== null && !confirming && (
+            <p className="mo-error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
+      </Dialog>
+
+      <ConfirmDialog
+        open={accountId !== null && confirming}
+        onOpenChange={(next) => {
+          setConfirming(next);
+          if (!next) setError(null);
+        }}
+        title="Post this adjustment?"
+        entity={accountLabel}
+        amount={
+          <span className="mo-stack mo-stack--tight">
+            <span>
+              Statement{' '}
+              <Money
+                amount={Number(statedBalance).toFixed(2)}
+                currency={currency}
+                convert={false}
+              />
+            </span>
+            {delta !== null && (
+              <span>
+                Adjustment{' '}
+                <Money
+                  amount={delta.toFixed(2)}
+                  currency={currency}
+                  convert={false}
+                  direction={delta < 0 ? 'debit' : 'credit'}
+                />
+              </span>
+            )}
+          </span>
+        }
+        consequence={`Posts the ${currency} difference as a new entry against ${ownerWords} in ${accountLabel}${sellerId === '' && opening ? ', marked as the opening balance' : ''}; nothing is overwritten.`}
+        confirmLabel="Post adjustment"
+        destructive={false}
+        onConfirm={save}
+        error={confirming ? (error ?? undefined) : undefined}
+      />
+    </>
   );
 }
