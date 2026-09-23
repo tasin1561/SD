@@ -3,28 +3,22 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
-import {
-  EmptyState,
-  ErrorState,
-  Input,
-  LoadingState,
-  PageHeader,
-  Section,
-  TBody,
-  THead,
-  Table,
-  TablePaginator,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { Table, TableToolbar, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useStoreCustomers } from '@/lib/order-hooks';
+import './_components/customers.css';
 
 /**
  * RS-5 (ORD-7 generalised) — the people THIS store has sold to. They are
  * the store's customers: the seller whose stock you sell never sees their
  * names or numbers, and no other store does either.
+ *
+ * The search still COMMITS on Enter (the form's submit), exactly as it
+ * did: the box holds what is being typed, the list reads what was asked.
  */
 export default function CustomersPage(): ReactElement {
   const router = useRouter();
@@ -34,33 +28,32 @@ export default function CustomersPage(): ReactElement {
   const list = useStoreCustomers({ ...(search === '' ? {} : { search }), page });
 
   return (
-    <div className="space-y-6">
+    <div className="rc-cst-page">
       <PageHeader
         title="Customers"
         subtitle="Everyone your store has sold to. They are your customers — the seller does not see them."
       />
-      <Section
-        title="Your customers"
-        action={
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setSearch(input.trim());
-              setPage(1);
+      <section className="rc-cst-section">
+        <SectionHeading title="Your customers" />
+        <form
+          className="rc-cst-search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSearch(input.trim());
+            setPage(1);
+          }}
+        >
+          <TableToolbar
+            search={{
+              value: input,
+              onChange: setInput,
+              label: 'Search customers',
+              placeholder: 'Name, phone or email',
             }}
-          >
-            <Input
-              aria-label="Search customers"
-              placeholder="Name, phone or email"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              className="w-[240px]"
-            />
-          </form>
-        }
-      >
+          />
+        </form>
         {list.isPending ? (
-          <LoadingState label="Loading customers" rows={5} />
+          <SkeletonRows rows={5} cols={5} label="Loading customers" />
         ) : list.isError ? (
           <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
         ) : list.data.items.length === 0 ? (
@@ -74,7 +67,7 @@ export default function CustomersPage(): ReactElement {
           />
         ) : (
           <>
-            <Table>
+            <Table caption="Your customers">
               <THead>
                 <Tr>
                   <Th>Name</Th>
@@ -88,35 +81,42 @@ export default function CustomersPage(): ReactElement {
                 {list.data.items.map((c) => (
                   <Tr key={c.id} onActivate={() => router.push(`/customers/${c.id}`)}>
                     <Td>
-                      <Link href={`/customers/${c.id}`} className="text-accent hover:underline">
+                      <Link href={`/customers/${c.id}`} className="rc-cst-name">
                         {c.name ?? 'No name given'}
                       </Link>
                     </Td>
-                    <Td className="font-mono text-xs">{c.phoneE164}</Td>
-                    <Td className="text-xs">{c.email ?? '—'}</Td>
-                    <Td align="right">{c.totalOrdersCount}</Td>
-                    <Td className="text-text-muted text-xs">
-                      {c.lastOrderAt === null
-                        ? '—'
-                        : new Date(c.lastOrderAt).toLocaleDateString('en-IN', {
-                            dateStyle: 'medium',
-                          })}
+                    <Td>
+                      <span className="rc-cst-phone sk-ident">{c.phoneE164}</span>
+                    </Td>
+                    <Td>
+                      <span className="rc-cst-muted">{c.email ?? '—'}</span>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure">{c.totalOrdersCount}</span>
+                    </Td>
+                    <Td>
+                      <span className="rc-cst-muted sk-figure">
+                        {c.lastOrderAt === null
+                          ? '—'
+                          : new Date(c.lastOrderAt).toLocaleDateString('en-IN', {
+                              dateStyle: 'medium',
+                            })}
+                      </span>
                     </Td>
                   </Tr>
                 ))}
               </TBody>
             </Table>
-            <div className="mt-2">
-              <TablePaginator
-                page={page}
-                pageSize={20}
-                total={list.data.total}
-                onPageChange={setPage}
-              />
-            </div>
+            <Pagination
+              page={page}
+              pageSize={20}
+              total={list.data.total}
+              onPageChange={setPage}
+              label="Customer pages"
+            />
           </>
         )}
-      </Section>
+      </section>
     </div>
   );
 }

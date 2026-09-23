@@ -1,0 +1,229 @@
+/* Tickets (reseller) — layout and the page-only pieces: the register cells,
+   the outcome and figures cards, the thread, the reply box, the raise
+   form. Tokens only; the primitives carry their own CSS. Every grid
+   declares its columns so nothing sizes to its content. */
+
+.rc-tkt-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.rc-tkt-page > .sk-ph {
+  margin-bottom: 0;
+}
+.rc-tkt-page[data-narrow] {
+  max-width: 42rem;
+}
+
+.rc-tkt-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rc-tkt-section > .sk-toolbar {
+  margin-bottom: 0;
+}
+.rc-tkt-section > .sk-tabs {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* ── Register ─────────────────────────────────────────────────────────── */
+.rc-tkt-cell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  min-width: 0;
+  text-decoration: none;
+  color: inherit;
+}
+.rc-tkt-number {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.rc-tkt-subject {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+.rc-tkt-cell:hover .rc-tkt-subject {
+  color: var(--sky);
+}
+.rc-tkt-muted {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.rc-tkt-order {
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+
+/* ── Detail: header line ──────────────────────────────────────────────── */
+.rc-tkt-sub {
+  overflow-wrap: anywhere;
+}
+.rc-tkt-sub a {
+  color: var(--sky);
+  text-decoration: none;
+}
+.rc-tkt-sub a:hover {
+  text-decoration: underline;
+}
+
+/* ── Detail: outcome + figures ────────────────────────────────────────── */
+.rc-tkt-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  min-width: 0;
+}
+.rc-tkt-card[data-tone='settled'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  box-shadow:
+    0 0 0 1px var(--green-line),
+    0 8px 24px -12px var(--green-glow);
+}
+.rc-tkt-card p {
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+.rc-tkt-card[data-tone='settled'] p {
+  color: var(--green-on-tint);
+}
+.rc-tkt-card p.rc-tkt-card__note {
+  color: var(--fg-muted);
+}
+.rc-tkt-card[data-tone='settled'] p.rc-tkt-card__note {
+  color: var(--fg-body);
+}
+.rc-tkt-card__as-at {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.rc-tkt-card__aside {
+  color: var(--fg-muted);
+}
+
+/* ── Conversation ─────────────────────────────────────────────────────── */
+.rc-tkt-opening {
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rc-tkt-thread {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rc-tkt-thread__row {
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+}
+.rc-tkt-thread__row[data-mine] {
+  justify-content: flex-end;
+}
+.rc-tkt-bubble {
+  max-width: 85%;
+  min-width: 0;
+}
+.rc-tkt-bubble__who {
+  margin: 0 0 4px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.rc-tkt-thread__row[data-mine] .rc-tkt-bubble__who {
+  text-align: right;
+}
+.rc-tkt-bubble__text {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  border-top-left-radius: var(--r-xs);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.rc-tkt-thread__row[data-mine] .rc-tkt-bubble__text {
+  border-color: var(--accent-line);
+  border-top-left-radius: var(--r-md);
+  border-top-right-radius: var(--r-xs);
+  background: var(--accent-tint);
+  color: var(--fg-strong);
+}
+
+.rc-tkt-reply {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+}
+.rc-tkt-reply__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Raise form ───────────────────────────────────────────────────────── */
+.rc-tkt-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.rc-tkt-correction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  min-width: 0;
+}
+.rc-tkt-claim {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 520px) {
+  .rc-tkt-claim {
+    grid-template-columns: minmax(0, 10rem) minmax(0, 12rem);
+    align-items: start;
+  }
+}
+.rc-tkt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.rc-tkt-error {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-sm);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}

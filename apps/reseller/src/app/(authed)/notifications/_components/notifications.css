@@ -1,0 +1,417 @@
+/* Notifications (reseller) — the inbox rows and the settings page's own
+   pieces. Tokens only. A row's kind colours arrive as `--rc-ntf-fg/-bg/-line`,
+   set from the status tokens by name (`var(--st-<kind>-fg)`), never a hex.
+   Every grid declares its columns so nothing sizes to its content. */
+
+.rc-ntf-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.rc-ntf-page > .sk-ph {
+  margin-bottom: 0;
+}
+.rc-ntf-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rc-ntf-section > .sk-toolbar {
+  margin-bottom: 0;
+}
+
+.rc-ntf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.rc-ntf-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-4);
+  min-width: 0;
+}
+.rc-ntf-filters > .sk-tabs {
+  max-width: 100%;
+  min-width: 0;
+}
+.rc-ntf-filters > .sk-check {
+  margin-left: auto;
+}
+
+/* ── Inbox rows ───────────────────────────────────────────────────────── */
+.rc-ntf-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.rc-ntf-item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) var(--sp-5);
+  border-top: 1px solid var(--line);
+  scroll-margin-top: 96px;
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.rc-ntf-item:first-child {
+  border-top: 0;
+}
+.rc-ntf-item[data-unread] {
+  background: var(--accent-tint);
+}
+@media (hover: hover) {
+  .rc-ntf-item:hover {
+    background: var(--surface-3);
+  }
+}
+.rc-ntf-item:target {
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+.rc-ntf-item__edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--rc-ntf-fg);
+}
+.rc-ntf-item__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-top: 2px;
+  border: 1px solid var(--rc-ntf-line);
+  border-radius: var(--r-sm);
+  background: var(--rc-ntf-bg);
+  color: var(--rc-ntf-fg);
+}
+.rc-ntf-item__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.rc-ntf-item__open {
+  display: block;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.rc-ntf-item__open:focus-visible {
+  border-radius: var(--r-xs);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.rc-ntf-item__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--sp-2);
+}
+.rc-ntf-item__title {
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+.rc-ntf-item__title[data-unread] {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.rc-ntf-item__new {
+  flex: none;
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-pill);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+}
+.rc-ntf-item__when {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.rc-ntf-item__text {
+  display: -webkit-box;
+  margin-top: var(--sp-1);
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.rc-ntf-item__text[data-open] {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+.rc-ntf-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-1) var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.rc-ntf-item__order {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap);
+  color: var(--sky);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.rc-ntf-item__order:hover {
+  text-decoration: underline;
+}
+.rc-ntf-item__topic {
+  margin-left: auto;
+  color: var(--fg-faint);
+  font-size: var(--fs-2xs);
+  overflow-wrap: anywhere;
+}
+.rc-ntf-more {
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Settings ─────────────────────────────────────────────────────────── */
+.rc-ntf-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rc-ntf-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  align-items: start;
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .rc-ntf-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 20rem);
+  }
+}
+.rc-ntf-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.rc-ntf-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  min-width: 0;
+}
+.rc-ntf-card__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+.rc-ntf-card__title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.rc-ntf-card__chip {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+  color: var(--accent-fg);
+}
+.rc-ntf-card__sub {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+}
+.rc-ntf-error {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-sm);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.rc-ntf-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.rc-ntf-group + .rc-ntf-group {
+  margin-top: var(--sp-4);
+}
+.rc-ntf-group__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--line);
+}
+.rc-ntf-group__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.rc-ntf-group__count {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+
+.rc-ntf-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rc-ntf-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+.rc-ntf-row:first-child {
+  border-top: 0;
+}
+.rc-ntf-row__text {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.rc-ntf-row__name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--sp-2);
+}
+.rc-ntf-row__label {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.rc-ntf-row__key {
+  color: var(--fg-faint);
+  font-size: var(--fs-2xs);
+  overflow-wrap: anywhere;
+}
+.rc-ntf-row__desc {
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.rc-ntf-row__lock {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: var(--sp-1);
+  color: var(--saffron-text);
+  font-size: var(--fs-xs);
+}
+.rc-ntf-row__lock svg {
+  flex: none;
+  margin-top: 2px;
+}
+.rc-ntf-row__switches {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.rc-ntf-foot {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+
+/* ── Settings: the "cannot be switched off" rail ──────────────────────── */
+.rc-ntf-always {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rc-ntf-always__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rc-ntf-always__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.rc-ntf-always__title {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.rc-ntf-always__body {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+}

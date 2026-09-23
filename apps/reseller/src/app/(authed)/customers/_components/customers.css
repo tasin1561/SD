@@ -1,0 +1,141 @@
+/* Customers (reseller) — layout and the few page-only pieces. Tokens only.
+   The primitives (PageHeader, Table, Pagination, Dialog …) carry their own
+   CSS; this file arranges them. Every grid declares its columns so nothing
+   sizes to its content and the page never scrolls sideways at 320px. */
+
+.rc-cst-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.rc-cst-page > .sk-ph {
+  margin-bottom: 0;
+}
+
+.rc-cst-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rc-cst-section .sk-toolbar {
+  margin-bottom: 0;
+}
+.rc-cst-search {
+  min-width: 0;
+}
+
+/* ── Register cells ───────────────────────────────────────────────────── */
+.rc-cst-name {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.rc-cst-name:hover {
+  color: var(--sky);
+}
+.rc-cst-phone {
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.rc-cst-muted {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.rc-cst-faint {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.rc-cst-link {
+  color: var(--sky);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+.rc-cst-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Detail: the record ───────────────────────────────────────────────── */
+.rc-cst-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  min-width: 0;
+}
+.rc-cst-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3) var(--sp-4);
+  margin: 0;
+}
+@media (min-width: 640px) {
+  .rc-cst-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.rc-cst-facts__item {
+  min-width: 0;
+}
+.rc-cst-facts__item dt {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.rc-cst-facts__item dd {
+  margin: 4px 0 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.rc-cst-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap);
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.rc-cst-open:hover {
+  text-decoration: underline;
+}
+.rc-cst-more {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.rc-cst-more a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
+  color: var(--sky);
+  text-decoration: none;
+}
+.rc-cst-more a:hover {
+  text-decoration: underline;
+}
+
+/* ── Edit dialog ──────────────────────────────────────────────────────── */
+.rc-cst-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+}
+.rc-cst-error {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-sm);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+  font-size: var(--fs-sm);
+}

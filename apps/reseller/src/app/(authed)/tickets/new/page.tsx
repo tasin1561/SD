@@ -1,13 +1,17 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, type ReactElement } from 'react';
-import { LoadingState, PageHeader, useToast } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import { useStoreActionPolicy } from '@/lib/order-hooks';
 import { useRaiseStoreDispute, useRaiseStoreSkydropIssue } from '@/lib/ticket-hooks';
 import { NewTicketForm, type TicketAudience } from './_components/new-ticket-form';
+import '../_components/tickets.css';
 
 /**
  * RS-7 + the 2026-09-16 Skydrop issue — raising something about one of
@@ -16,7 +20,7 @@ import { NewTicketForm, type TicketAudience } from './_components/new-ticket-for
  */
 export default function NewTicketPage(): ReactElement {
   return (
-    <Suspense fallback={<LoadingState label="Loading" rows={2} />}>
+    <Suspense fallback={<SkeletonRows rows={2} cols={1} label="Loading" />}>
       <NewTicket />
     </Suspense>
   );
@@ -36,8 +40,10 @@ function NewTicket(): ReactElement {
   // Only to decide what to OFFER; the server refuses by name regardless.
   const policy = useStoreActionPolicy({ enabled: can(me, 'orders.view') });
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="rc-tkt-page" data-narrow>
       <PageHeader
+        breadcrumbs={[{ label: 'Tickets', href: '/tickets' }, { label: 'Raise a ticket' }]}
+        Link={Link}
         title="Raise a ticket"
         subtitle="About one of your orders — with your seller, or with Skydrop. Choose below; they go to different people."
       />
