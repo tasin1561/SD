@@ -1,5 +1,6 @@
 import type { ReactNode, ReactElement } from 'react';
-import { AuthConsoleShell } from '@/components/auth-console/console-shell';
+import { SignInFrame } from '@skydrop/ui/app/sign-in';
+import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
 
 /**
  * Everything under /auth — reset password, verify email, accept
@@ -8,5 +9,9 @@ import { AuthConsoleShell } from '@/components/auth-console/console-shell';
  * product's front door.
  */
 export default function AuthLayout({ children }: { children: ReactNode }): ReactElement {
-  return <AuthConsoleShell>{children}</AuthConsoleShell>;
+  return (
+    <SignInFrame portal="operations console" themeControl={<ThemeSwitch />}>
+      {children}
+    </SignInFrame>
+  );
 }

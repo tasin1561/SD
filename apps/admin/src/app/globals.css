@@ -1,31 +1,32 @@
 /*
- * apps/admin global stylesheet.
+ * apps/admin global stylesheet — the brand skin (apps restyle, Phase 5).
  *
  * Layer order:
- *   1. @skydrop/ui tokens.css — every CSS variable (color, type,
- *      spacing, radii) lives here. Dark theme primary; light theme
- *      under [data-theme='light'].
- *   2. Tailwind v4 — utilities layered on top, configured to use
- *      our tokens via @theme.
- *   3. A small set of base resets / element styles.
+ *   1. the brand: raw scales + the four-block marketing theme (byte copies,
+ *      CI-checked) + the app layer (scales, status roles, the legacy alias
+ *      layer, base rules, reduced motion) from @skydrop/ui;
+ *   2. legacy.css — ONLY while screens still render the legacy
+ *      `@skydrop/ui/components`; delete the import when the last one goes;
+ *   3. Tailwind v4 — utilities mapped to the (aliased) tokens via @theme;
+ *   4. a small set of base resets.
  *
- * The token .css import is side-effectful (declared in the @skydrop/ui
- * package.json sideEffects). It's the ONLY route to body-color etc.
- * Apps NEVER hardcode hex.
+ * `tokens.css` (the DAY DECK console palette) is no longer loaded here:
+ * admin wears the same brand as every other app.
  */
 
-@import '@skydrop/ui/tokens.css';
+@import '@skydrop/ui/brand/scales.css';
+@import '@skydrop/ui/brand/theme.css';
+@import '@skydrop/ui/brand/app.css';
+@import '@skydrop/ui/brand/legacy.css';
 @import 'tailwindcss';
 
 /*
  * Scan @skydrop/ui sources so Tailwind picks up classes used in
- * the shared component primitives (Modal, etc.). Tailwind v4
- * auto-scans only the current app's directory; without this,
- * utilities used ONLY in packages/ui (e.g. the Modal's
- * `fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50`)
- * never make it into the production CSS, and Radix Dialog.Content
- * renders unstyled at the bottom of the document instead of as a
- * centered fixed overlay.
+ * the shared component primitives. Tailwind v4 auto-scans only
+ * the current app's directory; without this, utilities used ONLY
+ * in packages/ui (e.g. Modal's centering / overlay) never reach
+ * the production CSS (Radix Dialog.Content rendered unstyled at the
+ * bottom of the document before this was added).
  */
 @source '../../../../packages/ui/src';
 
