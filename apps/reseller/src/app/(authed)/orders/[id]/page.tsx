@@ -3,61 +3,58 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import {
+  ArrowLeft,
+  Flag,
+  OctagonX,
+  PhoneMissed,
+  Route,
+  TriangleAlert,
+  Truck,
+  XCircle,
+} from 'lucide-react';
 import { OrderStatus, type ShipmentStatus } from '@skydrop/db';
 import { useStoreIdentity } from '@skydrop/auth/client';
+// The layout mounts the legacy <Toaster>; the app `useToast` would throw
+// outside its own provider, so this keeps the legacy hook (same API).
+import { Money, ProductThumb, useToast } from '@skydrop/ui/components';
 import {
-  Button,
-  Card,
-  CardBody,
-  ConfirmDialog,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  Money,
-  OrderStatusBadge,
-  PageHeader,
-  ProductThumb,
-  Section,
-  DeliveryActionStatusBadge,
-  ShipmentStatusBadge,
-  StoreAddressChangeStatusBadge,
-  StoreOrderRequestStatusBadge,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Textarea,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
-import { statusLabel } from '@skydrop/ui/status';
+  orderStatusKind,
+  shipmentStatusKind,
+  statusLabel,
+  storeOrderRequestStatusKind,
+  storeOrderRequestStatusLabel,
+  type StatusKind,
+} from '@skydrop/ui/status';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
+import { Timeline, type TimelineStep, type TimelineTone } from '@skydrop/ui/app/timeline';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useCancelStoreOrder,
-  useEditStoreRecipient,
-  useRequestStoreAction,
-  useStoreAddressChanges,
   useStoreOrder,
-  useStoreOrderActions,
   useStoreOrderEvents,
   useStoreActionPolicy,
   useStoreOrderRequests,
   type StoreActionMode,
-  type AddressChangeFields,
-  type AddressField,
-  type StoreActionKind,
+  type StoreOrderEvent,
   type StoreOrderView,
 } from '@/lib/order-hooks';
 import { useStoreCallReviews } from '@/lib/review-hooks';
 import { CallReviewDecision } from '@/components/call-review-decision';
 import { OrderMoney } from './_components/order-money';
 import { StoreConsigneePanel } from './_components/store-consignee-panel';
+import { OrderActions } from './_components/order-actions';
+import { AddressCorrection } from './_components/address-correction';
+import { BackLink, ConfirmSubject, Facts, Notice, RoSection } from '../_components/orders-parts';
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -76,15 +73,12 @@ export default function StoreOrderPage(): ReactElement {
   const order = useStoreOrder(id);
 
   return (
-    <div className="space-y-6">
-      <Link
-        href="/orders"
-        className="text-text-muted hover:text-text-body inline-flex items-center gap-1.5 text-xs"
-      >
-        <ArrowLeft size={12} /> Orders
-      </Link>
+    <div className="ro-page">
+      <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
+        Orders
+      </BackLink>
       {order.isPending ? (
-        <LoadingState label="Loading the order" rows={6} />
+        <SkeletonRows rows={6} cols={3} label="Loading the order" />
       ) : order.isError ? (
         <ErrorState message={serverVerdict(order.error)} retry={() => void order.refetch()} />
       ) : (
@@ -124,106 +118,120 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
     }
   }
 
+  const cancelLabel = cancelNeedsSeller ? 'Send to your seller' : 'Cancel the order';
+  const parcels = o.shipments.filter((s) => s.awbNumber !== null);
+
   return (
     <>
       <PageHeader
-        title={<span className="font-mono">{o.orderNumber}</span>}
+        title={<span className="sk-ident">{o.orderNumber}</span>}
         subtitle={
           o.sellerOrderRef === null ? (
             `Placed ${when(o.placedAt)}`
           ) : (
             <span>
-              Your reference <span className="font-mono">{o.sellerOrderRef}</span> · placed{' '}
+              Your reference <span className="sk-ident">{o.sellerOrderRef}</span> · placed{' '}
               {when(o.placedAt)}
             </span>
           )
         }
+        meta={<StatusChip kind={orderStatusKind(o.status)} label={statusLabel(o.status)} />}
         action={
-          <div className="flex items-center gap-2">
-            <OrderStatusBadge status={o.status} />
-            {/* Only while the order's stage still allows a cancel (until it is
-                packed) — past that the button could only ever be refused. */}
-            {!o.terminal && o.stages.cancel && can(me, 'orders.cancel') && cancelMode !== 'OFF' ? (
-              <Button variant="ghost" size="md" onClick={() => setConfirming(true)}>
-                {cancelNeedsSeller ? 'Ask the seller to cancel' : 'Cancel order'}
-              </Button>
-            ) : null}
-          </div>
+          // Only while the order's stage still allows a cancel (until it is
+          // packed) — past that the button could only ever be refused.
+          !o.terminal && o.stages.cancel && can(me, 'orders.cancel') && cancelMode !== 'OFF' ? (
+            <Button
+              variant="ghost"
+              icon={<XCircle size={15} />}
+              onClick={() => setConfirming(true)}
+            >
+              {cancelNeedsSeller ? 'Ask the seller to cancel' : 'Cancel order'}
+            </Button>
+          ) : undefined
         }
       />
       {error !== null ? (
-        <p role="alert" className="text-critical text-sm">
-          {error}
-        </p>
+        <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
+          <span>{error}</span>
+        </Notice>
       ) : null}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Section title="Customer">
-          <Card>
-            <CardBody>
-              <dl className="grid grid-cols-[minmax(84px,36%)_1fr] gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[140px_1fr]">
-                <dt className="text-text-muted">Name</dt>
-                <dd>{o.recipient.name}</dd>
-                <dt className="text-text-muted">Phone</dt>
-                <dd className="font-mono text-xs">
-                  {o.recipient.phoneE164}
-                  {o.recipient.altPhoneE164 !== null ? ` / ${o.recipient.altPhoneE164}` : ''}
-                </dd>
-                {o.recipient.email !== null ? (
+      <div className="ro-split">
+        <RoSection title="Customer">
+          <Facts
+            items={[
+              { label: 'Name', value: o.recipient.name },
+              {
+                label: 'Phone',
+                value: (
+                  <span className="sk-figure">
+                    {o.recipient.phoneE164}
+                    {o.recipient.altPhoneE164 !== null ? ` / ${o.recipient.altPhoneE164}` : ''}
+                  </span>
+                ),
+              },
+              ...(o.recipient.email !== null
+                ? [{ label: 'Email', value: <span>{o.recipient.email}</span> }]
+                : []),
+              {
+                label: 'Address',
+                value: (
                   <>
-                    <dt className="text-text-muted">Email</dt>
-                    <dd className="font-mono text-xs">{o.recipient.email}</dd>
+                    <div>{o.recipient.addressLine1}</div>
+                    {o.recipient.addressLine2 !== null ? (
+                      <div>{o.recipient.addressLine2}</div>
+                    ) : null}
+                    <div>
+                      {[o.recipient.city, o.recipient.stateProvince].filter(Boolean).join(', ')}{' '}
+                      <span className="sk-figure">{o.recipient.postalCode}</span>
+                    </div>
                   </>
-                ) : null}
-                <dt className="text-text-muted">Address</dt>
-                <dd>
-                  <div>{o.recipient.addressLine1}</div>
-                  {o.recipient.addressLine2 !== null ? <div>{o.recipient.addressLine2}</div> : null}
-                  <div className="mt-0.5">
-                    {[o.recipient.city, o.recipient.stateProvince].filter(Boolean).join(', ')}{' '}
-                    <span className="font-mono">{o.recipient.postalCode}</span>
-                  </div>
-                </dd>
-              </dl>
-            </CardBody>
-          </Card>
-        </Section>
+                ),
+              },
+            ]}
+          />
+        </RoSection>
 
-        <Section title="Money">
-          <Card>
-            <CardBody>
-              <dl className="grid grid-cols-[minmax(84px,40%)_1fr] gap-x-3 gap-y-1.5 text-sm">
-                <dt className="text-text-muted">Payment</dt>
-                <dd>{o.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid'}</dd>
-                <dt className="text-text-muted">To collect</dt>
-                <dd>
-                  {o.codAmountInr === null ? (
-                    '—'
-                  ) : (
-                    <Money amount={o.codAmountInr} convert={false} />
-                  )}
-                </dd>
-                <dt className="text-text-muted">You sold it for</dt>
-                <dd>
-                  <Money amount={o.totals.retailInr} convert={false} />
-                </dd>
-                <dt className="text-text-muted">You pay the seller</dt>
-                <dd>
-                  <Money amount={o.totals.transferInr} convert={false} />
-                </dd>
-                <dt className="text-text-muted">Terms</dt>
-                <dd>{o.termsVersion === null ? '—' : `Version ${o.termsVersion}`}</dd>
-              </dl>
-              <p className="text-text-faint mt-3 text-xs">
-                Prices and terms are fixed as they were when the order was placed.
-              </p>
-            </CardBody>
-          </Card>
-        </Section>
+        <RoSection title="Money">
+          <div className="ro-stack ro-stack--tight">
+            <Facts
+              items={[
+                {
+                  label: 'Payment',
+                  value: o.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid',
+                },
+                {
+                  label: 'To collect',
+                  value:
+                    o.codAmountInr === null ? (
+                      '—'
+                    ) : (
+                      <Money amount={o.codAmountInr} convert={false} />
+                    ),
+                },
+                {
+                  label: 'You sold it for',
+                  value: <Money amount={o.totals.retailInr} convert={false} />,
+                },
+                {
+                  label: 'You pay the seller',
+                  value: <Money amount={o.totals.transferInr} convert={false} />,
+                },
+                {
+                  label: 'Terms',
+                  value: o.termsVersion === null ? '—' : `Version ${o.termsVersion}`,
+                },
+              ]}
+            />
+            <p className="ro-faint">
+              Prices and terms are fixed as they were when the order was placed.
+            </p>
+          </div>
+        </RoSection>
       </div>
 
-      <Section title="Products">
-        <Table>
+      <RoSection title="Products" flush>
+        <Table caption="Products">
           <THead>
             <Tr>
               <Th>Product</Th>
@@ -236,18 +244,20 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
             {o.lines.map((l) => (
               <Tr key={l.id}>
                 <Td>
-                  <div className="flex items-start gap-3">
+                  <div className="ro-thumb-cell">
                     <ProductThumb src={l.imageUrl} size={40} alt={l.productName} />
                     <div>
                       <div>{l.productName}</div>
-                      <div className="text-text-faint font-mono text-xs">
-                        {l.skuCode}
+                      <span className="ro-sub">
+                        <span className="sk-ident">{l.skuCode}</span>
                         {l.variantLabel !== null ? ` · ${l.variantLabel}` : ''}
-                      </div>
+                      </span>
                     </div>
                   </div>
                 </Td>
-                <Td align="right">{l.quantity}</Td>
+                <Td align="right">
+                  <span className="sk-figure">{l.quantity}</span>
+                </Td>
                 <Td align="right">
                   {l.retailUnitInr === null ? (
                     '—'
@@ -266,28 +276,26 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
             ))}
           </TBody>
         </Table>
-      </Section>
+      </RoSection>
 
-      {o.shipments.some((s) => s.awbNumber !== null) ? (
-        <Section title="Parcel">
-          <Card>
-            <CardBody>
-              {o.shipments
-                .filter((s) => s.awbNumber !== null)
-                .map((s) => (
-                  <div
-                    key={s.awbNumber ?? s.courierCode}
-                    className="flex flex-wrap items-center gap-2 text-sm"
-                  >
-                    <span>
-                      Waybill <span className="font-mono">{s.awbNumber}</span> · {s.courierCode}
-                    </span>
-                    <ShipmentStatusBadge status={s.status as ShipmentStatus} />
-                  </div>
-                ))}
-            </CardBody>
-          </Card>
-        </Section>
+      {parcels.length > 0 ? (
+        <RoSection title="Parcel">
+          <ul className="ro-offers">
+            {parcels.map((s) => (
+              <li key={s.awbNumber ?? s.courierCode} className="ro-offer">
+                <Truck size={15} aria-hidden />
+                <span>
+                  Waybill <span className="sk-ident">{s.awbNumber}</span> · {s.courierCode}
+                </span>
+                <StatusChip
+                  kind={shipmentStatusKind(s.status as ShipmentStatus)}
+                  label={statusLabel(s.status as ShipmentStatus)}
+                  size="sm"
+                />
+              </li>
+            ))}
+          </ul>
+        </RoSection>
       ) : null}
 
       {/* Only while the parcel is still live, and only for somebody who
@@ -314,9 +322,14 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
               other stages the history still shows, with a plain sentence
               saying when the task opens — cosmetic, the server still refuses
               by name (FE-2). */}
-          <OrderActions orderId={o.id} stageOpen={o.stages.deliveryActions} />
+          <OrderActions
+            orderId={o.id}
+            orderNumber={o.orderNumber}
+            stageOpen={o.stages.deliveryActions}
+          />
           <AddressCorrection
             orderId={o.id}
+            orderNumber={o.orderNumber}
             recipient={o.recipient}
             stageOpen={o.stages.addressCorrection}
           />
@@ -324,7 +337,9 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
               they can change it (owner, 2026-09-18). This renders
               nothing until a parcel exists, and greys itself out once
               the courier's own window has closed. */}
-          {!o.stages.addressCorrection ? <StoreConsigneePanel orderId={o.id} /> : null}
+          {!o.stages.addressCorrection ? (
+            <StoreConsigneePanel orderId={o.id} orderNumber={o.orderNumber} />
+          ) : null}
         </>
       ) : null}
 
@@ -336,9 +351,9 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         <RaiseTicketLinks orderId={o.id} chase={policy.data?.chaseSkydrop} />
       ) : null}
 
-      <Timeline orderId={o.id} />
+      <OrderTimeline orderId={o.id} orderNumber={o.orderNumber} status={o.status} />
 
-      <ConfirmDialog
+      <Dialog
         open={confirming}
         onOpenChange={setConfirming}
         title={
@@ -346,270 +361,55 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
             ? `Ask the seller to cancel ${o.orderNumber}?`
             : `Cancel ${o.orderNumber}?`
         }
-        description={
-          <div className="space-y-2">
-            <p>
-              {cancelNeedsSeller
-                ? 'Your seller approves cancels for this store. Seller staff read your reason and decide; the order is cancelled only if they say yes, and only until it is packed.'
-                : 'An order can be cancelled until it is packed.'}{' '}
-              The customer is not told by us — let them know yourself.
-            </p>
-            <Textarea
-              aria-label={cancelNeedsSeller ? 'Why (required)' : 'Why (optional)'}
-              placeholder={cancelNeedsSeller ? 'Why (required)' : 'Why (optional)'}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={500}
+        tone="critical"
+        icon={<TriangleAlert size={18} />}
+        size="sm"
+        locked={cancel.isPending}
+        footer={
+          <DialogFooter>
+            <Button
+              variant="secondary"
+              onClick={() => setConfirming(false)}
+              disabled={cancel.isPending}
+            >
+              Keep it
+            </Button>
+            <AsyncButton
+              variant="destructive"
+              state={cancel.isPending ? 'busy' : undefined}
+              labels={{ idle: cancelLabel, busy: 'Sending…' }}
+              disabled={cancel.isPending || (cancelNeedsSeller && note.trim() === '')}
+              onClick={() => void doCancel()}
             />
-          </div>
-        }
-        confirmLabel={cancelNeedsSeller ? 'Send to your seller' : 'Cancel the order'}
-        confirmVariant="destructive"
-        disabled={cancel.isPending || (cancelNeedsSeller && note.trim() === '')}
-        onConfirm={() => void doCancel()}
-      />
-    </>
-  );
-}
-
-/**
- * The three things a store can ask for about a live parcel, and what it
- * has asked for before.
- *
- * WHICH ones are offered is the SELLER's policy for this store, read
- * from the server with the requests (`allowed`). A capability they
- * switched off is not rendered at all — an offered button that always
- * refuses teaches people to ignore refusals. One set to "ask the seller"
- * is offered and says so, because the difference matters to whoever has
- * a customer waiting on the answer.
- */
-const ACTIONS: ReadonlyArray<{
-  readonly kind: StoreActionKind;
-  /** The policy column that governs it. */
-  readonly capability: string;
-  readonly label: string;
-  readonly ask: string;
-}> = [
-  {
-    kind: 'RECALL',
-    capability: 'recall',
-    label: 'Call the customer again',
-    ask: 'Our call centre will ring them. Say what they should be asked.',
-  },
-  {
-    kind: 'REATTEMPT',
-    capability: 'reattempt',
-    label: 'Try delivering again',
-    ask: 'The courier is asked to attempt the delivery again. Say what changed — a corrected landmark, a time they will be in.',
-  },
-  {
-    kind: 'RTO',
-    capability: 'sendBack',
-    label: 'Send it back',
-    ask: 'The parcel stops going to the customer and comes back to the warehouse. Say why.',
-  },
-];
-
-function actionLabel(kind: StoreActionKind): string {
-  return ACTIONS.find((a) => a.kind === kind)?.label ?? kind;
-}
-
-function OrderActions({
-  orderId,
-  stageOpen,
-}: {
-  orderId: string;
-  /** The order is out for delivery or has just failed — the only time these apply. */
-  stageOpen: boolean;
-}): ReactElement {
-  const actions = useStoreOrderActions(orderId);
-  const submit = useRequestStoreAction();
-  const toast = useToast();
-  const [asking, setAsking] = useState<(typeof ACTIONS)[number] | null>(null);
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  async function send(): Promise<void> {
-    if (asking === null) return;
-    setError(null);
-    try {
-      const out = await submit.mutateAsync({
-        orderId,
-        action: asking.kind,
-        reason: reason.trim(),
-      });
-      // The REPLY says what actually happened (2026-09-17): waiting on
-      // Seller staff, done, or refused — a send-back the courier turns
-      // down comes back FAILED with the reason.
-      if (out.request.status === 'FAILED') {
-        setError(out.request.executionError ?? 'It could not be carried out.');
-        return;
-      }
-      toast.success(
-        out.awaitingSeller
-          ? 'Sent to Seller staff to approve. Nothing happens until they answer.'
-          : 'Done.',
-      );
-      setAsking(null);
-      setReason('');
-    } catch (err) {
-      // Verbatim (FE-2): DELIVERY_ACTION_REASON_TOO_SHORT,
-      // DELIVERY_ACTION_ALREADY_OPEN, STORE_ACTION_NOT_ALLOWED…
-      setError(serverVerdict(err));
-    }
-  }
-
-  if (actions.isPending) return <LoadingState label="Loading what you can ask for" rows={2} />;
-  if (actions.isError) {
-    return (
-      <ErrorState message={serverVerdict(actions.error)} retry={() => void actions.refetch()} />
-    );
-  }
-
-  const offered = ACTIONS.filter((a) => actions.data.allowed[a.capability] !== 'OFF');
-  const history = actions.data.items;
-  if (offered.length === 0 && history.length === 0) return <></>;
-
-  return (
-    <Section
-      title="Something wrong with the delivery?"
-      subtitle="What you can ask for is set by the seller. Some of it happens straight away; some goes to them first."
-    >
-      <Card>
-        <CardBody>
-          {offered.length === 0 ? (
-            <p className="text-text-muted text-sm">
-              The seller has not enabled any of these for your store.
-            </p>
-          ) : !stageOpen ? (
-            <p className="text-text-muted text-sm">
-              Calling the customer again, another delivery attempt and sending the parcel back are
-              available only while the parcel is out for delivery or has just failed to deliver.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {offered.map((a) => {
-                const waits = actions.data.allowed[a.capability] === 'ASK_SELLER';
-                return (
-                  <div key={a.kind} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <Button
-                      variant="secondary"
-                      size="md"
-                      onClick={() => {
-                        setError(null);
-                        setReason('');
-                        setAsking(a);
-                      }}
-                    >
-                      {a.label}
-                    </Button>
-                    <span className="text-text-muted text-xs">
-                      {waits
-                        ? 'The seller approves this one before anything happens'
-                        : 'Happens as soon as you ask'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {history.length > 0 ? (
-            <div className="mt-4">
-              <Table>
-                <THead>
-                  <Tr>
-                    <Th>What you asked</Th>
-                    <Th>When</Th>
-                    <Th>Where it got to</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {history.map((r) => (
-                    <Tr key={r.id}>
-                      <Td>
-                        <div>{actionLabel(r.action)}</div>
-                        <div className="text-text-faint text-xs">{r.reason}</div>
-                      </Td>
-                      <Td className="text-text-muted text-xs">{when(r.createdAt)}</Td>
-                      <Td>
-                        <DeliveryActionStatusBadge status={r.status} />
-                        {r.decisionNote !== null ? (
-                          <div className="text-text-muted mt-1 text-xs">
-                            They said: “{r.decisionNote}”
-                          </div>
-                        ) : null}
-                        {r.executionError !== null ? (
-                          <div className="text-critical mt-1 text-xs">{r.executionError}</div>
-                        ) : null}
-                      </Td>
-                    </Tr>
-                  ))}
-                </TBody>
-              </Table>
-            </div>
-          ) : null}
-        </CardBody>
-      </Card>
-
-      <Modal
-        open={asking !== null}
-        onOpenChange={(open) => {
-          if (!open) setAsking(null);
-        }}
-        title={asking?.label ?? ''}
-        description={
-          asking === null
-            ? undefined
-            : actions.data.allowed[asking.capability] === 'ASK_SELLER'
-              ? 'The seller sees this and decides. Nothing happens to the parcel until they answer.'
-              : 'This is carried out as soon as you send it.'
+          </DialogFooter>
         }
       >
-        <div className="space-y-4">
-          <FormField
-            label="What happened"
-            htmlFor="action-reason"
-            hint="At least a sentence — a person reads this before acting on it."
-            required
-          >
-            <Textarea
-              id="action-reason"
-              rows={4}
-              maxLength={2000}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={asking?.ask ?? ''}
-            />
-          </FormField>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {error}
-            </p>
-          ) : null}
-          <ModalFooter>
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={() => setAsking(null)}
-              disabled={submit.isPending}
-            >
-              Never mind
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={() => void send()}
-              disabled={submit.isPending}
-            >
-              {submit.isPending ? 'Sending…' : 'Send it'}
-            </Button>
-          </ModalFooter>
-        </div>
-      </Modal>
-    </Section>
+        <ConfirmSubject
+          entity={o.orderNumber}
+          entityIsIdentifier
+          amount={
+            o.codAmountInr === null ? undefined : (
+              <>
+                <Money amount={o.codAmountInr} convert={false} /> to collect
+              </>
+            )
+          }
+          consequence={`${
+            cancelNeedsSeller
+              ? 'Your seller approves cancels for this store. Seller staff read your reason and decide; the order is cancelled only if they say yes, and only until it is packed.'
+              : 'An order can be cancelled until it is packed.'
+          } The customer is not told by us — let them know yourself.`}
+        >
+          <TextArea
+            label={cancelNeedsSeller ? 'Why (required)' : 'Why (optional)'}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={500}
+            showCount
+          />
+        </ConfirmSubject>
+      </Dialog>
+    </>
   );
 }
 
@@ -641,64 +441,56 @@ function CallCapPanel({
 
   if (mode === 'OFF') {
     return (
-      <Section
+      <RoSection
         title="We could not reach your customer"
-        subtitle="Nothing happens on this order until it is answered. The stock stays held in the meantime."
+        note="Nothing happens on this order until it is answered. The stock stays held in the meantime."
       >
-        <Card>
-          <CardBody>
-            <p className="text-text-muted text-sm">
-              Seller staff answer this question for your store. Ask your seller whether to keep
-              trying.
-            </p>
-          </CardBody>
-        </Card>
-      </Section>
+        <p className="ro-p">
+          Seller staff answer this question for your store. Ask your seller whether to keep trying.
+        </p>
+      </RoSection>
     );
   }
 
   return (
-    <Section
+    <RoSection
       title="We could not reach your customer"
-      subtitle="Nothing happens on this order until you answer. The stock stays held in the meantime."
+      note="Nothing happens on this order until you answer. The stock stays held in the meantime."
+      bare
     >
       {reviews.isPending ? (
-        <LoadingState label="Loading the question" rows={1} />
+        <SkeletonRows rows={1} cols={2} label="Loading the question" />
       ) : reviews.isError ? (
         <ErrorState message={serverVerdict(reviews.error)} retry={() => void reviews.refetch()} />
       ) : review === undefined ? (
-        <Card>
-          <CardBody>
-            <p className="text-text-muted text-sm">
-              This order is waiting on an answer about further call attempts.{' '}
-              <Link href="/orders/call-reviews" className="text-accent hover:underline">
-                See everything waiting on you
-              </Link>
-            </p>
-          </CardBody>
-        </Card>
+        <Notice tone="warn" icon={<PhoneMissed size={16} />}>
+          <span>
+            This order is waiting on an answer about further call attempts.{' '}
+            <Link href="/orders/call-reviews" className="ro-link">
+              See everything waiting on you
+            </Link>
+          </span>
+        </Notice>
       ) : (
-        <Card>
-          <CardBody>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm">
-                We have rung them {review.attemptCount} time
-                {review.attemptCount === 1 ? '' : 's'} without an answer, and {review.heldQty} unit
-                {review.heldQty === 1 ? '' : 's'} of your seller’s stock{' '}
-                {review.heldQty === 1 ? 'is' : 'are'} held for this order.
-              </p>
-              <CallReviewDecision
-                review={review}
-                orderNumber={orderNumber}
-                triggerLabel={mode === 'ASK_SELLER' ? 'Propose an answer' : 'Answer this'}
-                triggerVariant="primary"
-                mode={mode}
-              />
-            </div>
-          </CardBody>
-        </Card>
+        <Notice tone="warn" icon={<PhoneMissed size={16} />}>
+          <div className="ro-row ro-row--between">
+            <span>
+              We have rung them {review.attemptCount} time
+              {review.attemptCount === 1 ? '' : 's'} without an answer, and {review.heldQty} unit
+              {review.heldQty === 1 ? '' : 's'} of your seller’s stock{' '}
+              {review.heldQty === 1 ? 'is' : 'are'} held for this order.
+            </span>
+            <CallReviewDecision
+              review={review}
+              orderNumber={orderNumber}
+              triggerLabel={mode === 'ASK_SELLER' ? 'Propose an answer' : 'Answer this'}
+              triggerVariant="primary"
+              mode={mode}
+            />
+          </div>
+        </Notice>
       )}
-    </Section>
+    </RoSection>
   );
 }
 
@@ -724,33 +516,27 @@ function RaiseTicketLinks({
   chase: StoreActionMode | undefined;
 }): ReactElement {
   return (
-    <div className="space-y-1 text-sm">
-      <p>
+    <Notice tone="neutral" icon={<Flag size={16} />}>
+      <p className="ro-body">
         Something wrong with this order that the seller should put right?{' '}
-        <Link
-          href={`/tickets/new?orderId=${orderId}&with=seller`}
-          className="text-accent hover:underline"
-        >
+        <Link href={`/tickets/new?orderId=${orderId}&with=seller`} className="ro-link">
           Raise it with your seller
         </Link>
       </p>
       {chase === 'OFF' ? null : (
-        <p>
+        <p className="ro-body">
           Damaged, lost or stuck with Skydrop?{' '}
-          <Link
-            href={`/tickets/new?orderId=${orderId}&with=skydrop`}
-            className="text-accent hover:underline"
-          >
+          <Link href={`/tickets/new?orderId=${orderId}&with=skydrop`} className="ro-link">
             Raise it with Skydrop
           </Link>
-          <span className="text-text-faint">
+          <span className="ro-faint">
             {chase === 'ASK_SELLER'
               ? ' — Seller staff approve it first; it reaches Skydrop once they say yes.'
               : ' — your seller is not told.'}
           </span>
         </p>
       )}
-    </div>
+    </Notice>
   );
 }
 
@@ -762,8 +548,9 @@ function RaiseTicketLinks({
  */
 function HeldRequests({ orderId }: { orderId: string }): ReactElement {
   const requests = useStoreOrderRequests(orderId);
-  if (requests.isPending)
-    return <LoadingState label="Loading what you asked the seller" rows={1} />;
+  if (requests.isPending) {
+    return <SkeletonRows rows={1} cols={3} label="Loading what you asked the seller" />;
+  }
   if (requests.isError) {
     return (
       <ErrorState message={serverVerdict(requests.error)} retry={() => void requests.refetch()} />
@@ -771,11 +558,12 @@ function HeldRequests({ orderId }: { orderId: string }): ReactElement {
   }
   if (requests.data.length === 0) return <></>;
   return (
-    <Section
+    <RoSection
       title="Sent to your seller to approve"
-      subtitle="Nothing on these happens until Seller staff answer. A request nobody answers closes after a few days — follow up with your seller if that happens."
+      note="Nothing on these happens until Seller staff answer. A request nobody answers closes after a few days — follow up with your seller if that happens."
+      flush
     >
-      <Table>
+      <Table caption="Sent to your seller to approve">
         <THead>
           <Tr>
             <Th>What you asked</Th>
@@ -788,400 +576,104 @@ function HeldRequests({ orderId }: { orderId: string }): ReactElement {
             <Tr key={r.id}>
               <Td>
                 <div>{r.label.charAt(0).toUpperCase() + r.label.slice(1)}</div>
-                {r.note !== null ? <div className="text-text-faint text-xs">{r.note}</div> : null}
+                {r.note !== null ? <span className="ro-sub">{r.note}</span> : null}
               </Td>
-              <Td className="text-text-muted text-xs">{when(r.createdAt)}</Td>
               <Td>
-                <StoreOrderRequestStatusBadge status={r.status} />
+                <span className="ro-muted sk-figure">{when(r.createdAt)}</span>
+              </Td>
+              <Td>
+                <StatusChip
+                  kind={storeOrderRequestStatusKind(r.status)}
+                  label={storeOrderRequestStatusLabel(r.status)}
+                  size="sm"
+                />
                 {r.decisionNote !== null ? (
-                  <div className="text-text-muted mt-1 text-xs">They said: “{r.decisionNote}”</div>
+                  <p className="ro-quote">They said: “{r.decisionNote}”</p>
                 ) : null}
                 {r.failureReason !== null ? (
-                  <div className="text-critical mt-1 text-xs">Not done — {r.failureReason}</div>
+                  <span className="ro-sub ro-tone-bad">Not done — {r.failureReason}</span>
                 ) : null}
               </Td>
             </Tr>
           ))}
         </TBody>
       </Table>
-    </Section>
+    </RoSection>
   );
 }
 
-function Timeline({ orderId }: { orderId: string }): ReactElement {
+/** A returning or failed status colours its step (and the fill, when current). */
+function toneOf(kind: StatusKind): TimelineTone {
+  switch (kind) {
+    case 'failed':
+    case 'cancelled':
+      return 'failed';
+    case 'rto':
+      return 'returning';
+    default:
+      return 'default';
+  }
+}
+
+/**
+ * The order's history as the u17 timeline. The events arrive oldest
+ * first (the API orders them so); every one has happened, so each is a
+ * completed step and the latest is the current one. Words and times are
+ * exactly what the plain list printed: the status (or the event's own
+ * description), the description beside a status, and `when()`.
+ */
+function eventSteps(events: readonly StoreOrderEvent[]): TimelineStep[] {
+  return events.map((e, i): TimelineStep => {
+    const current = i === events.length - 1;
+    return {
+      id: e.id,
+      label: e.toStatus !== null ? chipWords(statusLabel(e.toStatus)) : (e.description ?? e.type),
+      state: current ? 'current' : 'done',
+      ...(e.toStatus !== null && e.description !== null ? { description: e.description } : {}),
+      time: when(e.createdAt),
+      ...(e.toStatus !== null ? { tone: toneOf(orderStatusKind(e.toStatus)) } : {}),
+    };
+  });
+}
+
+function OrderTimeline({
+  orderId,
+  orderNumber,
+  status,
+}: {
+  orderId: string;
+  orderNumber: string;
+  status: OrderStatus;
+}): ReactElement {
   const events = useStoreOrderEvents(orderId);
   return (
-    <Section title="Timeline">
+    <RoSection title="Timeline" bare>
       {events.isPending ? (
-        <LoadingState label="Loading the timeline" rows={3} />
+        <SkeletonRows rows={3} cols={2} label="Loading the timeline" />
       ) : events.isError ? (
         <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />
       ) : events.data.length === 0 ? (
-        <p className="text-text-muted text-sm">Nothing has happened to this order yet.</p>
+        <EmptyState
+          bare
+          icon={<Route size={20} />}
+          title="Nothing has happened to this order yet."
+        />
       ) : (
-        <ol className="space-y-2">
-          {events.data.map((e) => (
-            <li key={e.id} className="text-sm">
-              <span className="text-text-muted text-xs">{when(e.createdAt)}</span>{' '}
-              <span className="text-text-body">
-                {e.toStatus !== null ? statusLabel(e.toStatus) : (e.description ?? e.type)}
-              </span>
-              {e.toStatus !== null && e.description !== null ? (
-                <span className="text-text-faint"> — {e.description}</span>
-              ) : null}
-            </li>
-          ))}
-        </ol>
-      )}
-    </Section>
-  );
-}
-
-/**
- * What a person calls each delivery detail.
- *
- * All ten, not just the ones the form below offers: a correction made
- * through the API or a CSV may carry one the form does not, and the
- * history has to be able to name it.
- */
-const FIELD_LABEL: Readonly<Record<AddressField, string>> = {
-  recipientName: 'Name',
-  recipientPhoneE164: 'Phone',
-  recipientAltPhoneE164: 'Second phone',
-  recipientEmail: 'Email',
-  recipientAddressLine1: 'Address',
-  recipientAddressLine2: 'Landmark line',
-  recipientLandmark: 'Landmark (old field)',
-  recipientCity: 'City',
-  recipientStateProvince: 'State',
-  recipientPostalCode: 'PIN code',
-};
-
-/** The same ten in reading order, for listing what a correction proposed. */
-const ALL_FIELDS: readonly AddressField[] = [
-  'recipientName',
-  'recipientPhoneE164',
-  'recipientAltPhoneE164',
-  'recipientEmail',
-  'recipientAddressLine1',
-  'recipientAddressLine2',
-  'recipientLandmark',
-  'recipientCity',
-  'recipientStateProvince',
-  'recipientPostalCode',
-];
-
-/**
- * The nine the form offers, in the order somebody reads an address.
- *
- * `recipientLandmark` is deliberately NOT one of them: nothing sends it
- * to the courier — a landmark reaches a driver on the second address
- * line — so asking for it here would collect something that changes
- * nothing on the parcel.
- */
-const FORM_FIELDS: ReadonlyArray<{
-  readonly key: AddressField;
-  readonly hint?: string;
-  readonly current: (r: StoreOrderView['recipient']) => string;
-}> = [
-  { key: 'recipientName', current: (r) => r.name },
-  {
-    key: 'recipientPhoneE164',
-    hint: 'With the country code, e.g. +919876543210',
-    current: (r) => r.phoneE164,
-  },
-  { key: 'recipientAltPhoneE164', current: (r) => r.altPhoneE164 ?? '' },
-  { key: 'recipientEmail', current: (r) => r.email ?? '' },
-  { key: 'recipientAddressLine1', current: (r) => r.addressLine1 },
-  {
-    key: 'recipientAddressLine2',
-    hint: 'The landmark goes here — it is what a driver finds a rural address by.',
-    current: (r) => r.addressLine2 ?? '',
-  },
-  { key: 'recipientCity', current: (r) => r.city },
-  { key: 'recipientStateProvince', current: (r) => r.stateProvince },
-  { key: 'recipientPostalCode', current: (r) => r.postalCode },
-];
-
-/**
- * Only what actually changed.
- *
- * A box left BLANK is left alone rather than cleared — somebody emptying
- * a field they did not mean to touch should not wipe a phone number off
- * a live parcel, and there is nothing the courier needs that is better
- * absent than wrong.
- */
-function proposedChanges(
-  draft: Partial<Record<AddressField, string>>,
-  recipient: StoreOrderView['recipient'],
-): AddressChangeFields {
-  const out: AddressChangeFields = {};
-  for (const f of FORM_FIELDS) {
-    const next = (draft[f.key] ?? '').trim();
-    if (next !== '' && next !== f.current(recipient).trim()) out[f.key] = next;
-  }
-  return out;
-}
-
-/**
- * Correcting where this parcel is going.
- *
- * WHICH of the three things happens is the seller's `orderChange` policy
- * for this store, read from the server with the history (`mode`): OFF is
- * not offered at all — an offered button that always refuses teaches
- * people to ignore refusals, the same reasoning as `OrderActions` above;
- * DIRECT is written onto the order as you send it; ASK_SELLER is held
- * until seller staff answer, and the parcel keeps the OLD address in the
- * meantime.
- *
- * The one case where OFF still renders is a store that HAS corrected
- * this order before. Switching the capability off afterwards should not
- * erase what was already asked and answered — nothing is being offered
- * there, only remembered.
- */
-function AddressCorrection({
-  orderId,
-  recipient,
-  stageOpen,
-}: {
-  orderId: string;
-  recipient: StoreOrderView['recipient'];
-  /** Before the call confirms the order — the only time the details can change. */
-  stageOpen: boolean;
-}): ReactElement {
-  const changes = useStoreAddressChanges(orderId);
-  const submit = useEditStoreRecipient();
-  const toast = useToast();
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<Partial<Record<AddressField, string>>>({});
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  const mode = changes.data?.mode ?? 'OFF';
-  const waits = mode === 'ASK_SELLER';
-  const proposed = proposedChanges(draft, recipient);
-  const changedCount = Object.keys(proposed).length;
-
-  function start(): void {
-    // Pre-filled with what the parcel says NOW, so the person edits the
-    // address in front of them instead of retyping one from memory.
-    const seeded: Partial<Record<AddressField, string>> = {};
-    for (const f of FORM_FIELDS) seeded[f.key] = f.current(recipient);
-    setDraft(seeded);
-    setReason('');
-    setError(null);
-    setOpen(true);
-  }
-
-  async function send(): Promise<void> {
-    setError(null);
-    try {
-      const out = await submit.mutateAsync({
-        orderId,
-        fields: proposed,
-        ...(waits ? { reason: reason.trim() } : {}),
-      });
-      // The REPLY says which of the two happened — never the mode read
-      // when the page loaded, because seller staff may have changed the
-      // policy since.
-      toast.success(
-        out.applied
-          ? 'Corrected. The parcel now goes to the new address.'
-          : 'Sent to seller staff. The parcel keeps the old address until they answer.',
-      );
-      setOpen(false);
-    } catch (err) {
-      // Verbatim (FE-2): ADDRESS_CHANGE_REASON_REQUIRED,
-      // ADDRESS_CHANGE_ALREADY_OPEN, STORE_ACTION_NOT_ALLOWED,
-      // NOT_EDITABLE, COURIER_MUST_ACCEPT_ADDRESS_CHANGE, RETAIL_OUT_OF_RANGE…
-      setError(serverVerdict(err));
-    }
-  }
-
-  if (changes.isPending) return <LoadingState label="Loading the delivery details" rows={2} />;
-  if (changes.isError) {
-    return (
-      <ErrorState message={serverVerdict(changes.error)} retry={() => void changes.refetch()} />
-    );
-  }
-
-  const history = changes.data.items;
-  // Open means PENDING or APPROVED (still being applied) — the server
-  // refuses a second correction while either exists.
-  const pending = history.find((r) => r.status === 'PENDING' || r.status === 'APPROVED') ?? null;
-  if (mode === 'OFF' && history.length === 0) return <></>;
-
-  return (
-    <Section
-      title="Something wrong with this order?"
-      subtitle={
-        mode === 'OFF'
-          ? 'Your seller does not allow this store to change its orders.'
-          : !stageOpen
-            ? 'What is in the parcel can only change until the customer confirms it on our call. The customer’s details can still be corrected — while the parcel is with the courier, only if they accept it.'
-            : waits
-              ? 'Seller staff read the change and decide. Nothing on the order changes until they answer.'
-              : 'A change here is written onto the order straight away.'
-      }
-    >
-      <Card>
-        <CardBody>
-          {mode === 'OFF' ? (
-            <p className="text-text-muted text-sm">
-              Ask the seller if anything on this order needs to change.
-            </p>
-          ) : !stageOpen ? (
-            <p className="text-text-muted text-sm">
-              This order is past that stage, so what is in the parcel stands. The customer’s details
-              can still be corrected — ask your seller, and once it is with the courier the change
-              only sticks if the courier accepts it. Once it is out for delivery you can also ask
-              for another attempt or for it to be sent back.
-            </p>
-          ) : (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <Button variant="secondary" size="md" disabled={pending !== null} onClick={start}>
-                Change this order
-              </Button>
-              <span className="text-text-muted text-xs">
-                {pending !== null
-                  ? 'A change on this order is still open with seller staff — it has to be finished before you can send another.'
-                  : waits
-                    ? 'Seller staff approve this one before anything changes'
-                    : 'Happens as soon as you send it'}
-              </span>
-            </div>
-          )}
-
-          {history.length > 0 ? (
-            <div className="mt-4">
-              <Table>
-                <THead>
-                  <Tr>
-                    <Th>What you asked to change</Th>
-                    <Th>Why</Th>
-                    <Th>When</Th>
-                    <Th>Where it got to</Th>
-                  </Tr>
-                </THead>
-                <TBody>
-                  {history.map((r) => (
-                    <Tr key={r.id}>
-                      <Td>
-                        <ul className="space-y-0.5">
-                          {ALL_FIELDS.filter((k) => r.fields[k] !== undefined).map((k) => (
-                            <li key={k} className="text-xs">
-                              <span className="text-text-muted">{FIELD_LABEL[k]}: </span>
-                              <span className="text-text-body">{r.fields[k] ?? ''}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </Td>
-                      <Td className="max-w-xs">
-                        <span className="text-text-faint text-xs">{r.reason}</span>
-                      </Td>
-                      <Td className="text-text-muted text-xs">{when(r.createdAt)}</Td>
-                      <Td>
-                        <StoreAddressChangeStatusBadge status={r.status} />
-                        {r.decisionNote !== null ? (
-                          <div className="text-text-muted mt-1 text-xs">
-                            They said: “{r.decisionNote}”
-                          </div>
-                        ) : null}
-                        {/* Seller staff said yes and the order had already
-                            moved on. Loud, because somebody here has to
-                            tell a customer the address did NOT change. */}
-                        {r.failureReason !== null ? (
-                          <div className="text-critical mt-1 text-xs">
-                            Not applied — {r.failureReason}
-                          </div>
-                        ) : null}
-                      </Td>
-                    </Tr>
-                  ))}
-                </TBody>
-              </Table>
-            </div>
-          ) : null}
-        </CardBody>
-      </Card>
-
-      <Modal
-        open={open}
-        onOpenChange={(next) => {
-          if (!next) setOpen(false);
-        }}
-        title="Correct the delivery address"
-        description={
-          waits
-            ? 'Seller staff decide this one. The parcel keeps the OLD address until they answer.'
-            : 'This is written onto the order as soon as you send it.'
-        }
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {FORM_FIELDS.map((f) => (
-              <FormField
-                key={f.key}
-                label={FIELD_LABEL[f.key]}
-                htmlFor={`fix-${f.key}`}
-                {...(f.hint === undefined ? {} : { hint: f.hint })}
-              >
-                <Input
-                  id={`fix-${f.key}`}
-                  value={draft[f.key] ?? ''}
-                  onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
-                />
-              </FormField>
-            ))}
-          </div>
-          {waits ? (
-            <FormField
-              label="Why the details are wrong"
-              htmlFor="fix-reason"
-              hint="At least a sentence — seller staff read this before deciding."
-              required
-            >
-              <Textarea
-                id="fix-reason"
-                rows={3}
-                maxLength={2000}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </FormField>
-          ) : null}
-          <p className="text-text-faint text-xs">
-            {changedCount === 0
-              ? 'Nothing has changed yet — edit a detail above.'
-              : `Sending ${changedCount} change${changedCount === 1 ? '' : 's'}. A box left as it is stays as it is.`}
-          </p>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {error}
-            </p>
-          ) : null}
-          <ModalFooter>
-            <Button
-              type="button"
-              variant="secondary"
-              size="md"
-              onClick={() => setOpen(false)}
-              disabled={submit.isPending}
-            >
-              Never mind
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="md"
-              onClick={() => void send()}
-              disabled={submit.isPending || changedCount === 0}
-            >
-              {submit.isPending ? 'Sending…' : waits ? 'Send it to seller staff' : 'Correct it'}
-            </Button>
-          </ModalFooter>
+        <div className="ro-card">
+          <Timeline
+            label="Order timeline"
+            steps={eventSteps(events.data)}
+            header={{
+              icon: <Route size={16} />,
+              title: 'Order',
+              id: orderNumber,
+              status: (
+                <StatusChip kind={orderStatusKind(status)} label={statusLabel(status)} size="sm" />
+              ),
+            }}
+          />
         </div>
-      </Modal>
-    </Section>
+      )}
+    </RoSection>
   );
 }
