@@ -10,6 +10,7 @@
   --f-ring: var(--blue-glow);
   --f-label: var(--fg-muted);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-1);
   min-width: 0;
   font-size: var(--fs-md);
@@ -20,6 +21,7 @@
 .sk-field__control {
   position: relative;
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--sp-2);
   min-height: var(--f-h);

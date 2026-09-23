@@ -6,6 +6,7 @@
 
 .wal-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-6);
   min-width: 0;
 }
@@ -14,6 +15,7 @@
 }
 .wal-section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   min-width: 0;
 }
@@ -111,6 +113,7 @@
 /* ── The three views: the tab bar, then its panel ───────────────────── */
 .wal-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   min-width: 0;
   padding-top: var(--sp-3);
@@ -286,6 +289,7 @@
 /* ── Withdrawal availability breakdown ───────────────────────────────── */
 .wal-avail {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2);
   padding: var(--sp-3);
   border: 1px solid var(--line);
@@ -307,6 +311,7 @@
 }
 .wal-avail__rows {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
   margin: 0;
   color: var(--fg-faint);
@@ -322,6 +327,7 @@
 }
 .wal-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
 }
 .wal-tag {
@@ -337,12 +343,14 @@
 }
 .wal-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
 }
 
 /* ── Top-up wizard ────────────────────────────────────────────────────── */
 .wal-wizard {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
 }
 .wal-banks {
@@ -581,6 +589,7 @@
 /* ── /wallet/limits ───────────────────────────────────────────────────── */
 .wal-settings {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
 }
 .wal-setting {
   display: flex;

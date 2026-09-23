@@ -3,6 +3,7 @@
 
 .frt-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-6);
   min-width: 0;
 }
@@ -11,6 +12,7 @@
 }
 .frt-section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   min-width: 0;
 }

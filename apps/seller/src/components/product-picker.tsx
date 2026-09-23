@@ -249,9 +249,12 @@ export function OrderedProducts({
         const short = Number.isFinite(qty) && qty > (s?.available ?? 0);
         return (
           <li key={l.key} className="border-border-subtle border-b px-4 py-3 last:border-b-0">
-            <div className="flex items-center gap-3">
+            {/* Wraps on the narrowest phones: the stepper, line total and
+                remove button move under the product name rather than
+                pushing the page sideways. */}
+            <div className="flex flex-wrap items-center gap-3">
               <ProductThumb src={l.imageUrl} size={40} />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 basis-40">
                 <p className="text-text-body truncate text-sm leading-snug">
                   {l.productName}
                   {l.variantLabel === null ? '' : ` — ${l.variantLabel}`}

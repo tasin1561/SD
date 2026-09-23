@@ -6,6 +6,7 @@
 
 .ord-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-6);
   min-width: 0;
 }
@@ -14,6 +15,7 @@
 }
 .ord-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
   min-width: 0;
 }
@@ -87,6 +89,7 @@
 /* ── Section: heading + one bordered card ─────────────────────────────── */
 .ord-section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   min-width: 0;
   scroll-margin-top: calc(var(--sk-sticky-top, 0px) + 72px);
@@ -387,6 +390,7 @@
 /* ── Collectable panel (create form) ──────────────────────────────────── */
 .ord-collect {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2);
   margin-top: var(--sp-4);
   padding: var(--sp-4);
@@ -512,6 +516,7 @@
 /* ── Call history / request cards (delivery trouble) ──────────────────── */
 .ord-cards {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2);
   margin: 0;
   padding: 0;
@@ -560,6 +565,7 @@
 /* ── Change log (consignee) ───────────────────────────────────────────── */
 .ord-log {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2);
   margin: var(--sp-4) 0 0;
   padding: var(--sp-3) 0 0;
@@ -598,6 +604,7 @@
 /* ── Customer history (create form) ───────────────────────────────────── */
 .ord-history {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   padding: var(--sp-4);
   border: 1px solid var(--accent-line);
@@ -644,6 +651,7 @@
 }
 .ord-mini-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
   padding: 0;
   list-style: none;
