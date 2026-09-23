@@ -17,19 +17,11 @@ export function LocaleSwitcher({ active }: { readonly active: Locale }): ReactEl
   }
 
   return (
-    <div
-      data-slot="locale-switcher"
-      className="inline-flex items-center rounded-lg border border-line overflow-hidden text-xs"
-    >
+    <div data-slot="locale-switcher" className="tr-lang" role="group" aria-label="Language">
       <button
         type="button"
         onClick={() => set('en')}
-        className={
-          'inline-flex min-h-[36px] items-center px-3 transition-colors ' +
-          (active === 'en'
-            ? 'text-accent-fg bg-sky font-medium'
-            : 'text-fg-muted hover:text-fg-strong hover:bg-surface-3')
-        }
+        className="tr-lang__opt"
         aria-pressed={active === 'en'}
       >
         {t('en', 'switchToEn')}
@@ -37,13 +29,9 @@ export function LocaleSwitcher({ active }: { readonly active: Locale }): ReactEl
       <button
         type="button"
         onClick={() => set('hi')}
-        className={
-          'inline-flex min-h-[36px] items-center border-l border-line px-3 transition-colors ' +
-          (active === 'hi'
-            ? 'text-accent-fg bg-sky font-medium'
-            : 'text-fg-muted hover:text-fg-strong hover:bg-surface-3')
-        }
+        className="tr-lang__opt"
         aria-pressed={active === 'hi'}
+        lang="hi"
       >
         {t('hi', 'switchToHi')}
       </button>

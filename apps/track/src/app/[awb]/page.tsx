@@ -1,18 +1,22 @@
 import type { ReactElement, ReactNode } from 'react';
 import Link from 'next/link';
+import { Package, RefreshCw } from 'lucide-react';
+import { buttonClassName } from '@skydrop/ui/app/button';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Timeline } from '@skydrop/ui/app/timeline';
+import { LazyCorridorMap } from '@skydrop/ui/app/sign-in-map';
+import { publicTrackingStatusKind } from '@skydrop/ui/status/public-tracking';
 import { apiOrigin } from '@/lib/api-origin';
 import type { PublicShipmentDisplayStatus, PublicTrackingResponse } from '@/lib/types';
-import { TimelineView } from './_components/timeline-view';
-import { LocaleSwitcher } from '../_components/locale-switcher';
-import { ThemeToggle } from '../_components/theme-toggle';
 import { getActiveLocale } from '@/lib/locale';
-import { TiltPanel } from '@/lib/tilt';
-import { CorridorConsole } from '../_components/corridor-console';
 import { type Locale, statusKey, t } from '@/lib/i18n';
+import { TopBar } from '../_components/top-bar';
+import { isTerminal, journeyProgress, journeySteps } from './_components/journey';
 
 /**
- * Public AWB detail — MISSION CONTROL skin. Status card as an
- * instrument panel; scan history as a console event log.
+ * Public AWB detail — the brand skin (apps restyle). A status summary,
+ * then the parcel's journey as the u17 timeline: that timeline IS the page.
  *
  * Three outcomes, kept apart on purpose:
  *   - FOUND: the parcel.
@@ -56,93 +60,15 @@ async function fetchTracking(awb: string): Promise<TrackingLookup> {
   }
 }
 
-const STATUS_TONE: Record<string, string> = {
-  delivered: 'var(--tone-delivered)',
-  out_for_delivery: 'var(--tone-out-for-delivery)',
-  in_transit: 'var(--tone-in-transit)',
-  dispatched: 'var(--tone-dispatched)',
-  delivery_attempted: 'var(--tone-attempted)',
-  processing: 'var(--tone-processing)',
-  return_initiated: 'var(--tone-returning)',
-  returning: 'var(--tone-returning)',
-  returned: 'var(--tone-returned)',
-  lost: 'var(--tone-lost)',
-  damaged: 'var(--tone-lost)',
-  cancelled: 'var(--tone-cancelled)',
-};
-
-function Header({ locale }: { locale: Locale }): ReactElement {
-  return (
-    <div className="mb-6 flex items-center justify-between gap-3">
-      <Link href="/" className="flex items-center gap-3">
-        <img
-          src="/brand/skydrop-icon.svg"
-          alt=""
-          aria-hidden="true"
-          width={57}
-          height={28}
-          className="h-7 w-auto shrink-0 select-none"
-          draggable={false}
-        />
-        <span className="font-display font-semibold text-lg tracking-tight text-fg-strong">
-          {t(locale, 'brand')}
-        </span>
-        <span className="telemetry hidden sm:inline-flex items-center gap-1.5 text-fg-muted">
-          <span aria-hidden className="status-dot inline-block h-1 w-1 rounded-full bg-green" />
-          sys online
-        </span>
-      </Link>
-      <div className="flex items-center gap-2 sm:gap-3">
-        <ThemeToggle />
-        <LocaleSwitcher active={locale} />
-        <Link
-          href="/"
-          className="hidden sm:inline text-fg-muted hover:text-fg-strong text-xs transition-colors"
-        >
-          {t(locale, 'trackAnother')}
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-/** The centred console frame shared by the two "no parcel to show"
- *  states — not found, and could-not-ask. */
+/** The frame shared by the two "no parcel to show" states. */
 function MissShell({ locale, children }: { locale: Locale; children: ReactNode }): ReactElement {
   return (
-    <div className="relative min-h-screen grid place-items-center bg-surface text-fg-body p-6 overflow-hidden">
-      <div aria-hidden className="console-grid absolute inset-0" />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{ opacity: 'var(--map-veil)' }}
-      >
-        <CorridorConsole />
-      </div>
-      <div className="absolute top-4 right-4 sm:top-5 sm:right-6 z-20 flex items-center gap-2">
-        <ThemeToggle />
-        <LocaleSwitcher active={locale} />
-      </div>
-      <div className="relative w-full max-w-md">
-        <div className="mb-8 text-center">
-          <Link
-            href="/"
-            className="font-display inline-flex items-center gap-3 text-2xl font-semibold tracking-tight text-fg-strong"
-          >
-            <img
-              src="/brand/skydrop-icon.svg"
-              alt=""
-              aria-hidden="true"
-              width={74}
-              height={36}
-              className="h-9 w-auto shrink-0 select-none"
-              draggable={false}
-            />
-            {t(locale, 'brand')}
-          </Link>
-          <div className="telemetry text-fg-muted mt-2">{t(locale, 'tagline')}</div>
-        </div>
-        <div className="panel ticks p-6 sm:p-7">{children}</div>
+    <div className="tr-page">
+      <LazyCorridorMap className="tr-map" />
+      <div aria-hidden className="tr-veil" />
+      <div className="tr-wrap tr-wrap--narrow">
+        <TopBar locale={locale} />
+        <main className="tr-miss">{children}</main>
       </div>
     </div>
   );
@@ -161,16 +87,20 @@ export default async function AwbPage({
   if (lookup.kind === 'not_found') {
     return (
       <MissShell locale={locale}>
-        <div className="telemetry text-saffron mb-3">no signal</div>
-        <h1 className="text-fg-strong text-lg font-semibold mb-2">{t(locale, 'notFoundTitle')}</h1>
-        <p className="font-mono text-sm text-fg-strong mb-2">{decoded}</p>
-        <p className="text-fg-muted text-sm mb-5">{t(locale, 'notFoundBody')}</p>
-        <Link
-          href="/"
-          className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-sky text-accent-fg text-sm font-medium hover:bg-sky-deep transition-colors"
-        >
-          {t(locale, 'tryAnother')}
-        </Link>
+        <EmptyState
+          title={<h1 className="tr-miss__title">{t(locale, 'notFoundTitle')}</h1>}
+          description={
+            <>
+              <span className="tr-miss__awb sk-ident">{decoded}</span>
+              <span className="tr-miss__body">{t(locale, 'notFoundBody')}</span>
+            </>
+          }
+          action={
+            <Link href="/" className={buttonClassName('primary', 'lg')}>
+              {t(locale, 'tryAnother')}
+            </Link>
+          }
+        />
       </MissShell>
     );
   }
@@ -178,135 +108,135 @@ export default async function AwbPage({
   if (lookup.kind === 'unavailable') {
     return (
       <MissShell locale={locale}>
-        <div className="telemetry text-saffron mb-3" data-tracking-unavailable>
-          link degraded
-        </div>
-        <h1 className="text-fg-strong text-lg font-semibold mb-2">
-          {t(locale, 'unavailableTitle')}
-        </h1>
-        <p className="font-mono text-sm text-fg-strong mb-2">{decoded}</p>
-        <p className="text-fg-muted text-sm mb-5">{t(locale, 'unavailableBody')}</p>
-        <div className="flex flex-wrap items-center gap-3">
-          {/* A plain anchor to the same path is a full reload, which
-              re-runs the no-store lookup — no client script needed, so
-              nothing here has to carry the CSP nonce. */}
-          <a
-            href={`/${encodeURIComponent(decoded)}`}
-            className="inline-flex items-center justify-center h-11 px-5 rounded-xl bg-sky text-accent-fg text-sm font-medium hover:bg-sky-deep transition-colors"
-          >
-            {t(locale, 'retry')}
-          </a>
-          <Link
-            href="/"
-            className="inline-flex items-center justify-center h-11 px-3 text-fg-muted hover:text-fg-strong text-sm transition-colors"
-          >
-            {t(locale, 'tryAnother')}
-          </Link>
+        <div data-tracking-unavailable>
+          <EmptyState
+            icon={<RefreshCw size={28} />}
+            title={<h1 className="tr-miss__title">{t(locale, 'unavailableTitle')}</h1>}
+            description={
+              <>
+                <span className="tr-miss__awb sk-ident">{decoded}</span>
+                <span className="tr-miss__body">{t(locale, 'unavailableBody')}</span>
+              </>
+            }
+            action={
+              <span className="tr-miss__actions">
+                {/* A plain anchor to the same path is a full reload, which
+                    re-runs the no-store lookup — no client script needed. */}
+                <a
+                  href={`/${encodeURIComponent(decoded)}`}
+                  className={buttonClassName('primary', 'lg')}
+                >
+                  {t(locale, 'retry')}
+                </a>
+                <Link href="/" className={buttonClassName('ghost', 'lg')}>
+                  {t(locale, 'tryAnother')}
+                </Link>
+              </span>
+            }
+          />
         </div>
       </MissShell>
     );
   }
 
   const data = lookup.data;
-  const tone = STATUS_TONE[data.currentStatus] ?? 'var(--sky)';
+  const kind = publicTrackingStatusKind(data.currentStatus);
+  const statusWords = humanizeStatus(data.currentStatus, locale);
+  const bcp = localeBcp47(locale);
+  const progress = journeyProgress(data.currentStatus);
+  const eta =
+    data.estimatedDeliveryAt && !isTerminal(data.currentStatus)
+      ? new Date(data.estimatedDeliveryAt).toLocaleDateString(bcp)
+      : null;
 
   return (
-    <div className="relative min-h-screen bg-surface text-fg-body p-5 sm:p-6 overflow-hidden">
-      <div aria-hidden className="console-grid absolute inset-0 opacity-60" />
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0"
-        style={{ opacity: 'var(--map-veil-soft)' }}
-      >
-        <CorridorConsole />
-      </div>
-      <div className="relative max-w-2xl mx-auto pt-2">
-        <Header locale={locale} />
+    <div className="tr-page">
+      <LazyCorridorMap className="tr-map tr-map--soft" />
+      <div aria-hidden className="tr-veil" />
+      <div className="tr-wrap">
+        <TopBar locale={locale} trackAnother />
 
-        {/* Status instrument */}
-        <TiltPanel max={2.5} className="boot-rise mb-5">
-          {/* `--tone` rides on the panel so the light theme can wash
-              the whole instrument in the parcel's own colour. In dark
-              the variable is simply unused. */}
-          <div
-            className="panel ticks relative overflow-hidden p-6 sm:p-7"
-            data-status-panel
-            style={{ ['--tone' as string]: tone }}
-          >
-            <div className="flex items-baseline justify-between gap-3 mb-4">
-              <span className="telemetry text-fg-muted">{data.courierDisplayName}</span>
-              <span className="telemetry text-sky">{data.awbNumber}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span
-                aria-hidden
-                className={`status-dot relative inline-block h-2.5 w-2.5 rounded-full shrink-0${
-                  data.currentStatus === 'delivered' ? ' delivered-ring' : ''
-                }`}
-                style={{ background: tone }}
-              />
-              <h1
-                className="font-display text-2xl sm:text-3xl font-semibold tracking-tight"
-                style={{ color: tone }}
-              >
-                {humanizeStatus(data.currentStatus, locale)}
-              </h1>
-            </div>
-            <div className="telemetry text-fg-muted mt-2">
-              {t(locale, 'updated')}{' '}
-              {new Date(data.currentStatusAt).toLocaleString(localeBcp47(locale))}
-            </div>
-
-            <dl className="mt-5 pt-5 border-t border-line grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-              {/* RS-10: only a reseller store's order carries soldBy —
-                  the customer bought from THAT business, so that is the
-                  name they see. Every other order renders as before. */}
-              {data.soldBy && (
-                <div data-sold-by>
-                  <dt className="telemetry text-fg-muted mb-1">{t(locale, 'soldBy')}</dt>
-                  <dd className="text-fg-strong m-0 flex items-center gap-2">
-                    {data.soldBy.logoUrl && (
-                      // A 15-minute presigned Spaces URL: next/image would
-                      // need the bucket as a remote pattern and would cache
-                      // an expiring signature, so a plain <img> is correct.
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={data.soldBy.logoUrl}
-                        alt=""
-                        aria-hidden="true"
-                        width={28}
-                        height={28}
-                        className="h-7 w-7 shrink-0 rounded-md object-contain bg-surface"
-                        referrerPolicy="no-referrer"
-                      />
-                    )}
-                    <span>{data.soldBy.name}</span>
-                  </dd>
-                </div>
-              )}
-              <div>
-                <dt className="telemetry text-fg-muted mb-1">{t(locale, 'destination')}</dt>
-                <dd className="text-fg-strong m-0">{data.destinationCity}</dd>
-              </div>
-              {data.estimatedDeliveryAt && (
-                <div>
-                  <dt className="telemetry text-fg-muted mb-1">{t(locale, 'estimatedDelivery')}</dt>
-                  <dd className="text-fg-strong m-0 font-mono">
-                    {new Date(data.estimatedDeliveryAt).toLocaleDateString(localeBcp47(locale))}
-                  </dd>
-                </div>
-              )}
-            </dl>
-            <div aria-hidden className="glow-follow" />
+        <section className="tr-card tr-summary" data-status-panel data-kind={kind}>
+          <div className="tr-summary__meta">
+            <span className="tr-summary__courier">
+              <Package size={15} aria-hidden />
+              {data.courierDisplayName}
+            </span>
+            <span className="sk-ident tr-summary__awb">{data.awbNumber}</span>
           </div>
-        </TiltPanel>
+          <StatusChip kind={kind} label={statusWords} size="md" />
+          <h1 className="tr-summary__title">{statusWords}</h1>
+          <p className="tr-summary__updated">
+            {t(locale, 'updated')} {new Date(data.currentStatusAt).toLocaleString(bcp)}
+          </p>
 
-        {/* Event log */}
-        <div className="boot-rise boot-rise-2 telemetry text-fg-muted mb-3 flex items-center gap-3">
-          <span className="text-sky">{t(locale, 'timelineHeading')}</span>
-          <span aria-hidden className="inline-block h-px flex-1 bg-line-strong" />
-        </div>
-        <TimelineView events={data.timeline} locale={locale} />
+          <dl className="tr-facts">
+            {/* RS-10: only a reseller store's order carries soldBy —
+                the customer bought from THAT business, so that is the
+                name they see. Every other order renders as before. */}
+            {data.soldBy && (
+              <div data-sold-by className="tr-facts__row">
+                <dt>{t(locale, 'soldBy')}</dt>
+                <dd className="tr-facts__sold">
+                  {data.soldBy.logoUrl && (
+                    // A 15-minute presigned Spaces URL: next/image would
+                    // need the bucket as a remote pattern and would cache
+                    // an expiring signature, so a plain <img> is correct.
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={data.soldBy.logoUrl}
+                      alt=""
+                      aria-hidden="true"
+                      width={28}
+                      height={28}
+                      className="tr-facts__logo"
+                      referrerPolicy="no-referrer"
+                    />
+                  )}
+                  <span>{data.soldBy.name}</span>
+                </dd>
+              </div>
+            )}
+            <div className="tr-facts__row">
+              <dt>{t(locale, 'destination')}</dt>
+              <dd>{data.destinationCity}</dd>
+            </div>
+            {data.estimatedDeliveryAt && (
+              <div className="tr-facts__row">
+                <dt>{t(locale, 'estimatedDelivery')}</dt>
+                <dd className="sk-figure">
+                  {new Date(data.estimatedDeliveryAt).toLocaleDateString(bcp)}
+                </dd>
+              </div>
+            )}
+          </dl>
+        </section>
+
+        <section className="tr-card tr-journey" aria-labelledby="tr-journey-h">
+          <h2 id="tr-journey-h" className="tr-journey__title">
+            {t(locale, 'timelineHeading')}
+          </h2>
+          {data.timeline.length === 0 ? (
+            <p className="tr-journey__empty">{t(locale, 'noScansYet')}</p>
+          ) : (
+            <Timeline
+              label={t(locale, 'journey')}
+              steps={journeySteps(data.timeline, data.currentStatus, locale)}
+              {...(progress !== null
+                ? { progress: { value: progress, label: t(locale, 'onTheWay') } }
+                : {})}
+              {...(eta !== null
+                ? { expected: { label: t(locale, 'estimatedDelivery'), day: eta } }
+                : {})}
+              stateWords={{
+                done: t(locale, 'stepDone'),
+                current: t(locale, 'stepCurrent'),
+                todo: t(locale, 'stepTodo'),
+                skipped: t(locale, 'stepSkipped'),
+              }}
+            />
+          )}
+        </section>
       </div>
     </div>
   );

@@ -19,6 +19,15 @@ const nextConfig = {
   },
   // Do not advertise the framework.
   poweredByHeader: false,
+  // Every track screen is built from @skydrop/ui/app primitives, and each
+  // primitive's stylesheet would otherwise ship as its own render-blocking
+  // <link> — six of them on the parcel page, which doubled first paint on
+  // Slow 4G. The whole app's CSS is small (≈17 KB gz), so it is inlined
+  // into the HTML instead: one request, nothing blocking. The CSP already
+  // allows inline styles (style-src 'unsafe-inline').
+  experimental: {
+    inlineCss: true,
+  },
 };
 
 export default nextConfig;

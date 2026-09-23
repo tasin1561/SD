@@ -17,6 +17,7 @@
       "@skydrop/ui": ["../../packages/ui/src/index.ts"],
       "@skydrop/ui/tokens": ["../../packages/ui/src/tokens/index.ts"],
       "@skydrop/ui/status": ["../../packages/ui/src/status/index.ts"],
+      "@skydrop/ui/status/public-tracking": ["../../packages/ui/src/status/public-tracking.ts"],
       "@skydrop/ui/components": ["../../packages/ui/src/components/index.ts"],
       "@skydrop/ui/app/*": [
         "../../packages/ui/src/app/*/index.tsx",
