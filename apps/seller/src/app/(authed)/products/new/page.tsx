@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react';
-import Link from 'next/link';
-import { Crumbs, PageHeader } from '@skydrop/ui/components';
+import { AreaPage, StockPageHeader } from '@/app/(authed)/inventory/_components/stock-ui';
 import { NewProductForm } from './_components/new-product-form';
 
 /**
@@ -12,23 +11,18 @@ import { NewProductForm } from './_components/new-product-form';
  */
 export default function NewProductPage(): ReactElement {
   return (
-    <div>
-      <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Stock & WMS' },
-              { label: 'Products', href: '/products' },
-              { label: 'New' },
-            ]}
-            Link={Link}
-          />
-        }
+    <AreaPage>
+      <StockPageHeader
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Stock & WMS' },
+          { label: 'Products', href: '/products' },
+          { label: 'New' },
+        ]}
         title="New product"
         subtitle="One product and every variant it ships in. Reusing an existing product reference adds to that product instead. Bringing in a whole catalogue? Use the CSV import."
       />
       <NewProductForm />
-    </div>
+    </AreaPage>
   );
 }

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import { Input } from '@skydrop/ui/components';
+import { Search } from 'lucide-react';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import type { SellerVariantSearchHit } from '@skydrop/api-client';
@@ -25,11 +26,14 @@ import { useVariantSearch } from '@/lib/api-hooks';
  */
 export function VariantPicker({
   id,
+  fieldLabel,
   value,
   label,
   onPick,
 }: {
   readonly id: string;
+  /** The field's own floating label ("Item"). */
+  readonly fieldLabel?: string | undefined;
   /** The selected variant id, or '' for nothing yet. */
   readonly value: string;
   /** What to show once picked; null while nothing is. */
@@ -72,9 +76,11 @@ export function VariantPicker({
   const picked = value !== '' && label !== null;
 
   return (
-    <div ref={boxRef} className="relative">
-      <Input
+    <div ref={boxRef} className="inv-combo">
+      <TextField
         id={id}
+        label={fieldLabel}
+        icon={<Search size={16} />}
         value={picked && !open ? label : query}
         placeholder="Search by product or SKU"
         autoComplete="off"
@@ -96,19 +102,19 @@ export function VariantPicker({
           // Sung…", so four variants of one product were four identical
           // rows and the SKU was the only thing telling them apart —
           // which is exactly the choice this control exists to make easy.
-          className="border-border bg-surface absolute z-20 mt-1 max-h-72 w-full min-w-0 overflow-auto rounded-[6px] border shadow-[var(--shadow-2)] sm:w-max sm:min-w-[22rem] sm:max-w-[32rem]"
+          className="inv-combo__list"
         >
           {!maySearch ? (
-            <p className="text-text-muted px-3 py-2 text-xs">
+            <p className="inv-combo__msg">
               Searching the catalogue needs catalogue access, which this account does not have. Ask
               a colleague who has it to add the products, or paste the SKU they give you.
             </p>
           ) : query.trim() === '' ? (
-            <p className="text-text-muted px-3 py-2 text-xs">Type a product name or SKU.</p>
+            <p className="inv-combo__msg">Type a product name or SKU.</p>
           ) : results.isLoading ? (
-            <p className="text-text-muted px-3 py-2 text-xs">Searching…</p>
+            <p className="inv-combo__msg">Searching…</p>
           ) : hits.length === 0 ? (
-            <p className="text-text-muted px-3 py-2 text-xs">
+            <p className="inv-combo__msg">
               Nothing matches “{query.trim()}”. Only active variants appear here.
             </p>
           ) : (
@@ -123,7 +129,7 @@ export function VariantPicker({
                   type="button"
                   role="option"
                   aria-selected={h.id === value}
-                  className="hover:bg-surface-hover flex w-full items-start gap-2.5 px-3 py-2 text-left"
+                  className="inv-combo__opt"
                   onClick={() => {
                     onPick(h, shown);
                     setQuery('');
@@ -132,22 +138,17 @@ export function VariantPicker({
                 >
                   {h.primaryImageUrl !== null ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={h.primaryImageUrl}
-                      alt=""
-                      className="border-border h-8 w-8 shrink-0 rounded-[4px] border object-cover"
-                    />
+                    <img src={h.primaryImageUrl} alt="" className="prd-thumb" />
                   ) : (
-                    <div
-                      className="border-border bg-surface-raised h-8 w-8 shrink-0 rounded-[4px] border"
-                      aria-hidden
-                    />
+                    <div className="prd-thumb" aria-hidden />
                   )}
-                  <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="inv-combo__text">
                     {/* Wraps rather than truncates — the variant label is
                         the end of the string and the whole point of it. */}
-                    <span className="text-text-body text-sm leading-snug">{shown}</span>
-                    <span className="text-text-muted font-mono text-xs break-all">{h.skuCode}</span>
+                    <span className="inv-combo__name">{shown}</span>
+                    <span className="sk-ident inv-muted" style={{ overflowWrap: 'anywhere' }}>
+                      {h.skuCode}
+                    </span>
                   </span>
                 </button>
               );

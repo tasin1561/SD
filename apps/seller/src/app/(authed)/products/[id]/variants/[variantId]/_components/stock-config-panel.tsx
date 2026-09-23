@@ -1,16 +1,17 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Switch } from '@skydrop/ui/app/switch';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
-  BandBody,
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  SectionBand,
-  SkeletonRows,
-  useToast,
-} from '@skydrop/ui/components';
+  AreaSection,
+  InlineError,
+  Panel,
+  mutationPhase,
+} from '@/app/(authed)/inventory/_components/stock-ui';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -93,53 +94,52 @@ export function StockConfigPanel({
   const thresholdValid =
     trimmed === '' || (Number.isInteger(parsed) && parsed >= 0 && parsed <= 1_000_000);
 
-  // A band and its body, not a card: this sits between two other
-  // banded sections on the variant page and a card in the middle of
-  // them reads as a panel that belongs somewhere else.
+  // One section of the variant page, drawn as a card like its siblings.
   return (
-    <div className="mb-4">
-      <SectionBand index="02" title="Stock handling" note="When we warn you it is running out." />
-      <BandBody>
-        {error !== null && <ErrorNote message={error} />}
+    <AreaSection title="Stock handling" note="When we warn you it is running out.">
+      <Panel>
+        <div className="inv-stack">
+          {error !== null && <InlineError message={error} />}
 
-        {mode.isLoading ? (
-          <SkeletonRows rows={2} />
-        ) : mode.isError ? (
-          <ErrorNote message={serverVerdict(mode.error)} retry={() => void mode.refetch()} />
-        ) : (
-          <div className="grid gap-4">
-            <FormField
-              label="Low-stock alert at"
-              hint="Units. Leave blank to use your default; 0 warns only when it is empty."
-              error={thresholdValid ? undefined : 'Whole number between 0 and 1,000,000.'}
-            >
-              <div className="flex items-center gap-2">
-                <Input
-                  inputMode="numeric"
-                  value={threshold}
-                  onChange={(e) => setTyped(e.target.value)}
-                />
-                <Button
-                  variant="secondary"
-                  size="md"
-                  disabled={!thresholdValid || setThreshold.isPending}
-                  onClick={() => void onSaveThreshold()}
-                >
-                  {setThreshold.isPending ? 'Saving…' : 'Save'}
-                </Button>
-              </div>
-            </FormField>
-          </div>
-        )}
+          {mode.isLoading ? (
+            <SkeletonRows rows={2} />
+          ) : mode.isError ? (
+            <InlineError message={serverVerdict(mode.error)} retry={() => void mode.refetch()} />
+          ) : (
+            <div className="inv-lookup">
+              <TextField
+                label="Low-stock alert at"
+                hint="Units. Leave blank to use your default; 0 warns only when it is empty."
+                error={thresholdValid ? undefined : 'Whole number between 0 and 1,000,000.'}
+                inputMode="numeric"
+                value={threshold}
+                onChange={(e) => setTyped(e.target.value)}
+              />
+              <AsyncButton
+                variant="secondary"
+                size="lg"
+                labels={{ idle: 'Save', busy: 'Saving…' }}
+                state={mutationPhase(setThreshold)}
+                disabled={!thresholdValid || setThreshold.isPending}
+                onClick={() => void onSaveThreshold()}
+              />
+            </div>
+          )}
 
-        {mode.data?.effectiveInventoryMode === 'STRICT' && (
-          <p className="text-text-muted mt-3 text-sm">
-            This SKU is on strict unit tracking: the warehouse cannot receive, pick or pack a unit
-            without scanning its serial, so every unit needs one on the item itself before the next
-            consignment arrives. We set this — talk to us if it looks wrong for this SKU.
-          </p>
-        )}
-      </BandBody>
-    </div>
+          {mode.data?.effectiveInventoryMode === 'STRICT' && (
+            // Shown, never offered: the mode is ours to set (see above),
+            // so the switch is read-only and states the fact in words.
+            <Switch
+              checked
+              disabled
+              onText="On"
+              offText="Off"
+              label="Strict unit tracking"
+              description="This SKU is on strict unit tracking: the warehouse cannot receive, pick or pack a unit without scanning its serial, so every unit needs one on the item itself before the next consignment arrives. We set this — talk to us if it looks wrong for this SKU."
+            />
+          )}
+        </div>
+      </Panel>
+    </AreaSection>
   );
 }

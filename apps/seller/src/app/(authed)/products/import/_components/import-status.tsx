@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { StatusBadge } from '@skydrop/ui/components';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
 import type { StatusKind } from '@skydrop/ui/status';
 import { BulkUploadStatus } from '@skydrop/db';
 
@@ -7,7 +7,7 @@ import { BulkUploadStatus } from '@skydrop/db';
  * The import's status as a pill.
  *
  * FE-6: no colour is chosen here — the kind maps onto the eight
- * semantic buckets and `StatusBadge` reads their tokens. The switch is
+ * semantic buckets and `StatusChip` reads their tokens (icon + word). The switch is
  * F2-exhaustive over `BulkUploadStatus` so a new value fails to compile
  * until somebody decides what it should look like.
  *
@@ -37,7 +37,7 @@ function importStatusKind(status: BulkUploadStatus): StatusKind {
 }
 
 export function ImportStatusBadge({ status }: { readonly status: BulkUploadStatus }): ReactElement {
-  return <StatusBadge kind={importStatusKind(status)} label={humaniseStatus(status)} />;
+  return <StatusChip kind={importStatusKind(status)} label={humaniseStatus(status)} size="sm" />;
 }
 
 /** `statusLabel` in @skydrop/ui/status takes a fixed union of enums that

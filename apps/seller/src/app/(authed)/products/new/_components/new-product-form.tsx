@@ -2,23 +2,20 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
-import { ImagePlus, Plus, X } from 'lucide-react';
+import { ImagePlus, PackagePlus, Plus, X } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
-  BandBody,
-  Button,
-  FormField,
-  Input,
-  Label,
-  SectionBand,
-  TBody,
-  Table,
-  Td,
-  Th,
-  THead,
-  Textarea,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+  AreaSection,
+  FieldGrid,
+  InlineError,
+  Note,
+  Panel,
+  busyPhase,
+} from '@/app/(authed)/inventory/_components/stock-ui';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useCreateProduct,
@@ -247,12 +244,9 @@ function ValueChips({
   readonly onRemove: (index: number) => void;
 }): ReactElement {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="prd-values">
       {values.map((v, vi) => (
-        <span
-          key={vi}
-          className="border-border bg-surface focus-within:ring-accent inline-flex items-center gap-1 rounded-full border py-0.5 pr-1 pl-2 focus-within:ring-2"
-        >
+        <span key={vi} className="prd-chip">
           <input
             value={v}
             onChange={(e) => onChange(vi, e.target.value)}
@@ -260,20 +254,19 @@ function ValueChips({
             aria-label={`${axisLabel} value ${vi + 1}`}
             maxLength={40}
             size={Math.max(4, Math.min(14, v.length || 6))}
-            className="text-text-body min-w-0 bg-transparent py-1 text-sm outline-none"
+            className="prd-chip__input"
           />
           <button
             type="button"
             onClick={() => onRemove(vi)}
             aria-label={`Remove ${v.trim() === '' ? `${axisLabel} value ${vi + 1}` : v.trim()}`}
-            className="text-text-muted hover:bg-surface-hover hover:text-text-bright inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors"
+            className="prd-chip__x"
           >
             <X size={12} aria-hidden />
           </button>
         </span>
       ))}
-      <Button type="button" variant="ghost" size="sm" onClick={onAdd}>
-        <Plus size={12} aria-hidden />
+      <Button type="button" variant="ghost" size="sm" icon={<Plus size={13} />} onClick={onAdd}>
         Add value
       </Button>
     </div>
@@ -306,22 +299,18 @@ function VariantImagePicker({
   useEffect(() => () => previews.forEach((url) => URL.revokeObjectURL(url)), [previews]);
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="prd-picks">
       {previews.map((url, i) => (
-        <span key={url} className="relative inline-flex">
+        <span key={url} className="prd-pick">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={url}
-            alt=""
-            className="border-border h-8 w-8 rounded-[4px] border object-cover"
-          />
+          <img src={url} alt="" className="prd-pick__img" />
           <button
             type="button"
             onClick={() => onRemove(i)}
             aria-label={`Remove image ${i + 1} for ${label}`}
-            className="bg-surface border-border text-text-muted hover:text-text-bright absolute -top-1.5 -right-1.5 inline-flex h-4 w-4 items-center justify-center rounded-full border"
+            className="prd-pick__x"
           >
-            <X size={9} aria-hidden />
+            <X size={10} aria-hidden />
           </button>
         </span>
       ))}
@@ -331,10 +320,10 @@ function VariantImagePicker({
             type="button"
             variant="ghost"
             size="sm"
+            icon={<ImagePlus size={14} />}
             onClick={() => inputRef.current?.click()}
             aria-label={`Add images for ${label}`}
           >
-            <ImagePlus size={13} aria-hidden />
             {files.length === 0 ? 'Add' : ''}
           </Button>
           <input
@@ -342,7 +331,7 @@ function VariantImagePicker({
             type="file"
             accept={ACCEPTED_IMAGE_TYPES.join(',')}
             multiple
-            className="hidden"
+            hidden
             onChange={(e) => {
               onAdd(e.target.files);
               // Clear it, so picking the same file twice still fires.
@@ -735,39 +724,43 @@ export function NewProductForm(): ReactElement {
     setOptions((p) => p.filter((_, idx) => idx !== i));
   }
 
+  // The save button's words and phase, kept together so its element fits
+  // on one line (the attributes above are pinned by new-product.test.tsx).
+  const saveLook = {
+    icon: <PackagePlus size={16} />,
+    labels: {
+      idle: createdProductId === null ? 'Create product' : 'Add the missing variants',
+      busy: 'Creating…',
+    },
+    state: busyPhase(busy),
+  };
+
   return (
-    <form onSubmit={(e) => void onSubmit(e)} className="space-y-4">
+    <form onSubmit={(e) => void onSubmit(e)} className="inv-page prd-form">
       {error !== null && (
-        <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical rounded-md border px-3 py-2 text-sm whitespace-pre-line">
-          {error}
+        <div style={{ whiteSpace: 'pre-line' }}>
+          <InlineError message={error} />
         </div>
       )}
 
-      <div>
-        <SectionBand index="01" title="Product" note="What the thing is called." />
-        <BandBody>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField
+      <AreaSection title="Product" note="What the thing is called.">
+        <Panel>
+          <FieldGrid columns={2}>
+            <TextField
               label="Product name"
               required={matched === null}
-              className="col-span-2 sm:col-span-1"
               hint={
                 matched === null
                   ? undefined
                   : 'Set by the product this code belongs to — edit it on the product itself.'
               }
-            >
-              <Input
-                value={matched === null ? form.name : matched.name}
-                onChange={(e) => set('name', e.target.value)}
-                maxLength={200}
-                required={matched === null}
-                disabled={matched !== null}
-              />
-            </FormField>
-            <FormField
+              value={matched === null ? form.name : matched.name}
+              onChange={(e) => set('name', e.target.value)}
+              maxLength={200}
+              disabled={matched !== null}
+            />
+            <TextField
               label="Your product ID"
-              className="col-span-2 sm:col-span-1"
               hint={
                 matched !== null
                   ? `This code belongs to "${matched.name}". The variants below will be ADDED to it — no second product is created, and they inherit its weight and dimensions.`
@@ -775,52 +768,45 @@ export function NewProductForm(): ReactElement {
                     ? 'No product has this code yet, so a new one will be created.'
                     : 'Optional. Your own reference — reuse the code of an existing product to add variants to it instead of creating another, and a CSV re-upload matches on it too.'
               }
-            >
-              <Input
-                value={form.externalRef}
-                onChange={(e) => set('externalRef', e.target.value)}
-                maxLength={120}
-              />
-            </FormField>
-            <FormField
-              label="Description"
-              className="col-span-2"
-              hint="Optional. Shown on your invoice line."
-            >
-              <Textarea
+              value={form.externalRef}
+              onChange={(e) => set('externalRef', e.target.value)}
+              maxLength={120}
+              inputClassName="sk-ident"
+            />
+            <div className="inv-span-all">
+              <TextArea
+                label="Description"
+                hint="Optional. Shown on your invoice line."
                 value={form.description}
                 onChange={(e) => set('description', e.target.value)}
                 rows={2}
                 maxLength={2000}
               />
-            </FormField>
-          </div>
-        </BandBody>
-      </div>
+            </div>
+          </FieldGrid>
+        </Panel>
+      </AreaSection>
 
-      <div>
-        <SectionBand
-          index="02"
-          title="Applies to every variant"
-          note="Asked once, inherited by each SKU."
-        />
-        <BandBody>
-          <p className="text-text-muted mb-3 text-xs">
-            {inherited === null
-              ? 'Asked once. A variant that differs — a size that weighs more, say — can override its own value on the variant page.'
-              : `Already set on ${inherited.name}, and shown here so you can see what these variants inherit. Change them on the product itself — editing one product from two screens is how the two come to disagree.`}
-          </p>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <FormField label="Weight (g)" hint="What the courier bills on.">
-              <Input
+      <AreaSection title="Applies to every variant" note="Asked once, inherited by each SKU.">
+        <Panel>
+          <div className="inv-stack">
+            <Note>
+              {inherited === null
+                ? 'Asked once. A variant that differs — a size that weighs more, say — can override its own value on the variant page.'
+                : `Already set on ${inherited.name}, and shown here so you can see what these variants inherit. Change them on the product itself — editing one product from two screens is how the two come to disagree.`}
+            </Note>
+            <FieldGrid columns={3}>
+              <TextField
+                label="Weight (g)"
+                hint="What the courier bills on."
                 value={inherited === null ? form.weightGrams : (inherited.defaultWeightGrams ?? '')}
                 onChange={(e) => set('weightGrams', e.target.value)}
                 inputMode="decimal"
                 disabled={inherited !== null}
               />
-            </FormField>
-            <FormField label="Declared value (₹)" hint="Customs and RTO write-offs.">
-              <Input
+              <TextField
+                label="Declared value (₹)"
+                hint="Customs and RTO write-offs."
                 value={
                   inherited === null
                     ? form.declaredValueInr
@@ -830,99 +816,88 @@ export function NewProductForm(): ReactElement {
                 inputMode="decimal"
                 disabled={inherited !== null}
               />
-            </FormField>
-            <FormField label="Length (cm)">
-              <Input
+              <TextField
+                label="Length (cm)"
                 value={inherited === null ? form.lengthCm : (inherited.defaultLengthCm ?? '')}
                 onChange={(e) => set('lengthCm', e.target.value)}
                 inputMode="decimal"
                 disabled={inherited !== null}
               />
-            </FormField>
-            <FormField label="Width (cm)">
-              <Input
+              <TextField
+                label="Width (cm)"
                 value={inherited === null ? form.widthCm : (inherited.defaultWidthCm ?? '')}
                 onChange={(e) => set('widthCm', e.target.value)}
                 inputMode="decimal"
                 disabled={inherited !== null}
               />
-            </FormField>
-            <FormField label="Height (cm)">
-              <Input
+              <TextField
+                label="Height (cm)"
                 value={inherited === null ? form.heightCm : (inherited.defaultHeightCm ?? '')}
                 onChange={(e) => set('heightCm', e.target.value)}
                 inputMode="decimal"
                 disabled={inherited !== null}
               />
-            </FormField>
+            </FieldGrid>
           </div>
-        </BandBody>
-      </div>
+        </Panel>
+      </AreaSection>
 
       {/* ── STEP 1 — Options ───────────────────────────────────────── */}
-      <div>
-        <SectionBand
-          index="03"
-          title="Options"
-          note="What it varies by — names and values, never a quantity."
-        />
-        <BandBody className="space-y-3">
-          {options.length === 0 && (
-            <p className="text-text-muted text-sm">
-              A single item needs no options — it gets one SKU below. Add one for a product that
-              comes in more than one colour, size or pack.
-            </p>
-          )}
+      <AreaSection title="Options" note="What it varies by — names and values, never a quantity.">
+        <Panel>
+          <div className="inv-stack">
+            {options.length === 0 && (
+              <Note>
+                A single item needs no options — it gets one SKU below. Add one for a product that
+                comes in more than one colour, size or pack.
+              </Note>
+            )}
 
-          {options.map((o, i) => {
-            // An option only multiplies the variants once it has a name
-            // AND at least one value. Until then it is ignored, and
-            // saying so is the whole point: a grey placeholder reads as
-            // a filled-in field, so an empty option looks exactly like a
-            // declared one and the seller is left wondering why they got
-            // a single variant.
-            const named = o.name.trim() !== '';
-            const filled =
-              o.perParent === null
-                ? o.values.some((v) => v.trim() !== '')
-                : Object.values(o.perParent).some((vs) => vs.some((v) => v.trim() !== ''));
-            const incomplete = !named || !filled;
-            const axisLabel = named ? o.name.trim() : `Option ${i + 1}`;
+            {options.map((o, i) => {
+              // An option only multiplies the variants once it has a name
+              // AND at least one value. Until then it is ignored, and
+              // saying so is the whole point: a grey placeholder reads as
+              // a filled-in field, so an empty option looks exactly like a
+              // declared one and the seller is left wondering why they got
+              // a single variant.
+              const named = o.name.trim() !== '';
+              const filled =
+                o.perParent === null
+                  ? o.values.some((v) => v.trim() !== '')
+                  : Object.values(o.perParent).some((vs) => vs.some((v) => v.trim() !== ''));
+              const incomplete = !named || !filled;
+              const axisLabel = named ? o.name.trim() : `Option ${i + 1}`;
 
-            return (
-              <section
-                key={i}
-                className="border-border bg-surface-raised/40 rounded-[6px] border"
-                aria-label={axisLabel}
-              >
-                <header className="border-border flex items-center justify-between gap-3 border-b px-3 py-2">
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <Label htmlFor={`option-${i}-name`} className="shrink-0">
-                      Option
-                    </Label>
-                    <Input
+              return (
+                <section
+                  key={i}
+                  className="prd-option"
+                  data-incomplete={incomplete ? '1' : undefined}
+                  aria-label={axisLabel}
+                >
+                  <div className="prd-option__head">
+                    <TextField
+                      label="Option"
                       id={`option-${i}-name`}
                       value={o.name}
                       onChange={(e) => setOptionName(i, e.target.value)}
                       placeholder="e.g. Colour"
                       maxLength={40}
-                      className="w-44"
+                      className="prd-option__name"
                     />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      icon={<X size={14} />}
+                      aria-label={`Remove ${axisLabel}`}
+                      title={`Remove ${axisLabel}`}
+                      onClick={() => removeOption(i)}
+                    >
+                      <span className="prd-hide-sm">Remove</span>
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Remove ${axisLabel}`}
-                    title={`Remove ${axisLabel}`}
-                    onClick={() => removeOption(i)}
-                  >
-                    <X size={14} aria-hidden />
-                    <span className="sr-only sm:not-sr-only">Remove</span>
-                  </Button>
-                </header>
 
-                <div className="p-3">
                   {o.perParent === null ? (
                     <ValueChips
                       values={o.values}
@@ -933,24 +908,21 @@ export function NewProductForm(): ReactElement {
                       onRemove={(vi) => removeOptionValue(i, vi)}
                     />
                   ) : parentValues.length === 0 ? (
-                    <p className="text-text-muted text-xs">
+                    <Note>
                       Fill in{' '}
                       {options[0]?.name.trim() === ''
                         ? 'the first option'
                         : options[0]?.name.trim()}{' '}
                       first — these lists are one per value of it.
-                    </p>
+                    </Note>
                   ) : (
-                    <div className="space-y-2.5">
+                    <div className="inv-stack inv-stack--tight">
                       {parentValues.map((pv) => {
                         const list = o.perParent?.[pv] ?? [];
                         const any = list.some((v) => v.trim() !== '');
                         return (
-                          <div
-                            key={pv}
-                            className="grid grid-cols-[minmax(4rem,6rem)_1fr] items-start gap-x-3 gap-y-1"
-                          >
-                            <span className="text-text-body pt-1.5 text-xs font-medium">{pv}</span>
+                          <div key={pv} className="prd-parent">
+                            <span className="prd-parent__name">{pv}</span>
                             <div>
                               <ValueChips
                                 values={list}
@@ -961,7 +933,7 @@ export function NewProductForm(): ReactElement {
                                 onRemove={(vi) => removeParentValue(i, pv, vi)}
                               />
                               {!any && (
-                                <p className="text-text-muted mt-1 text-xs">
+                                <p className="inv-sub">
                                   Nothing listed — {pv} will make no variant.
                                 </p>
                               )}
@@ -973,7 +945,7 @@ export function NewProductForm(): ReactElement {
                   )}
 
                   {incomplete && (
-                    <p className="text-text-muted mt-3 text-xs">
+                    <p className="prd-incomplete">
                       Not counted yet —{' '}
                       {!named && !filled
                         ? 'type a name and at least one value.'
@@ -983,46 +955,52 @@ export function NewProductForm(): ReactElement {
                       The greyed-out text is an example, not something you have entered.
                     </p>
                   )}
-                </div>
-              </section>
-            );
-          })}
+                </section>
+              );
+            })}
 
-          {options.length < MAX_OPTIONS ? (
-            <Button type="button" variant="secondary" size="md" onClick={addOption}>
-              <Plus size={14} aria-hidden />
-              Add an option
-            </Button>
-          ) : (
-            <p className="text-text-muted text-xs">
-              Two options is the limit. A third would multiply the rows again — and only the second
-              can hold a list per value of the first, so a third has no unambiguous place to sit.
-            </p>
-          )}
-        </BandBody>
-      </div>
+            {options.length < MAX_OPTIONS ? (
+              <div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  icon={<Plus size={15} />}
+                  onClick={addOption}
+                >
+                  Add an option
+                </Button>
+              </div>
+            ) : (
+              <Note>
+                Two options is the limit. A third would multiply the rows again — and only the
+                second can hold a list per value of the first, so a third has no unambiguous place
+                to sit.
+              </Note>
+            )}
+          </div>
+        </Panel>
+      </AreaSection>
 
       {/* ── STEP 2 — the variants those options produce ─────────────── */}
-      <div>
-        <SectionBand
-          index="04"
-          title="Variants"
-          note="One row per orderable item — stock is counted against these, never the product."
-          action={
-            <span className="border-border text-text-muted rounded-[var(--radius-2)] border px-2 py-0.5 font-mono text-xs">
-              {rows.length === 1 ? '1 variant' : `${rows.length} variants`}
-            </span>
-          }
-        />
-        <BandBody>
+      <AreaSection
+        title="Variants"
+        note="One row per orderable item — stock is counted against these, never the product."
+        action={
+          <span className="inv-fact sk-figure">
+            {rows.length === 1 ? '1 variant' : `${rows.length} variants`}
+          </span>
+        }
+      >
+        <div className="inv-stack">
           {options.length > 0 && rows.length === 1 && rows[0]?.label === '' && (
-            <p className="text-text-muted mb-3 text-xs">
+            <Note>
               No option is complete yet, so nothing is being multiplied — this is the single variant
               the product would ship as.
-            </p>
+            </Note>
           )}
 
-          <Table>
+          <Table caption="Variants to create">
             <THead>
               <Tr>
                 <Th>Variant</Th>
@@ -1036,22 +1014,23 @@ export function NewProductForm(): ReactElement {
                 <Tr key={r.key}>
                   <Td>
                     {r.label === '' ? (
-                      <span className="text-text-muted">Single variant</span>
+                      <span className="inv-muted">Single variant</span>
                     ) : (
-                      <span className="text-text-body">{r.label}</span>
+                      <span>{r.label}</span>
                     )}
                   </Td>
                   <Td>
-                    <Input
+                    <TextField
                       value={skuFor(r)}
                       onChange={(e) => setSkuEdits((p) => ({ ...p, [r.key]: e.target.value }))}
                       aria-label={r.label === '' ? 'SKU' : `SKU for ${r.label}`}
                       maxLength={80}
-                      className="w-full max-w-[18rem] font-mono text-xs"
+                      className="prd-cell-field"
+                      inputClassName="sk-ident"
                     />
                   </Td>
                   <Td align="right">
-                    <Input
+                    <TextField
                       value={rowDeclared[r.key] ?? ''}
                       onChange={(e) => setRowDeclared((p) => ({ ...p, [r.key]: e.target.value }))}
                       aria-label={
@@ -1059,7 +1038,8 @@ export function NewProductForm(): ReactElement {
                       }
                       inputMode="decimal"
                       placeholder={form.declaredValueInr === '' ? '—' : form.declaredValueInr}
-                      className="w-24 text-right font-mono text-xs"
+                      className="prd-cell-field prd-cell-field--num"
+                      inputClassName="sk-figure"
                     />
                   </Td>
                   <Td>
@@ -1075,12 +1055,12 @@ export function NewProductForm(): ReactElement {
             </TBody>
           </Table>
 
-          <p className="text-text-muted mt-2 text-xs">
+          <Note>
             SKUs are suggested from the product name — edit any of them. A SKU is permanent once
             saved, because every order, pick and stock count refers to it.
-          </p>
-        </BandBody>
-      </div>
+          </Note>
+        </div>
+      </AreaSection>
 
       {/*
         The save action is the point of the page, and it was rendering as
@@ -1090,21 +1070,16 @@ export function NewProductForm(): ReactElement {
 
         Sticky, because the form is long: once options generate a dozen
         rows the actions sit well below the fold, and a seller who has
-        filled everything in should never have to hunt for Save. The bar
-        spans the card gutter with negative margins so it reads as page
-        chrome rather than one more panel, and its bottom padding folds in
-        the safe-area inset as a single declaration — a separate inline
-        `env()` style would silently erase the padding utility beside it
-        (FE-7).
+        filled everything in should never have to hunt for Save. Its
+        bottom padding folds in the safe-area inset as a single
+        declaration — a separate inline `env()` style would silently erase
+        the padding utility beside it (FE-7).
+
+        The primary is the rolling-label button, wired to the SAME submit:
+        busy exactly while the N calls run.
       */}
-      <div className="border-border bg-surface/95 sticky bottom-0 -mx-3 mt-2 flex flex-wrap items-center gap-2 border-t px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:-mx-5 sm:px-5">
-        <Button type="submit" variant="primary" size="md" disabled={busy}>
-          {busy
-            ? 'Creating…'
-            : createdProductId === null
-              ? 'Create product'
-              : 'Add the missing variants'}
-        </Button>
+      <div className="prd-savebar sticky bottom-0 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        <AsyncButton type="submit" variant="primary" size="md" {...saveLook} />
         <Button
           type="button"
           variant="secondary"
@@ -1114,7 +1089,7 @@ export function NewProductForm(): ReactElement {
         >
           Cancel
         </Button>
-        <span className="text-text-muted ml-auto hidden text-xs sm:inline">
+        <span className="prd-savebar__count">
           {rows.length === 1 ? 'Creates 1 variant' : `Creates ${rows.length} variants`}
         </span>
       </div>

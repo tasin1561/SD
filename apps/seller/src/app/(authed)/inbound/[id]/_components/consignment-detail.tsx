@@ -1,52 +1,59 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Boxes, PackageCheck, Plane, Wallet, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  Boxes,
+  ClipboardPen,
+  PackageCheck,
+  Plane,
+  Receipt,
+  TriangleAlert,
+  Wallet,
+  XCircle,
+} from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import type {
   ConsignmentEventView,
   ConsignmentLegView,
   ConsignmentView,
 } from '@skydrop/api-client';
+import { ConsignmentStatus } from '@skydrop/db';
+import { Money, Num } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Table, TableEmpty, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { Timeline, type TimelineStep } from '@skydrop/ui/app/timeline';
+import { useToast } from '@skydrop/ui/app/toast';
+import { GlossaryTerm } from '@skydrop/ui/app/tooltip-card';
 import {
-  BandBody,
-  Button,
-  // The page's own sections are bands now, but `ConsignmentFreight`
-  // renders inside a <Section> and lists one Card per bill — a repeated
-  // item, not a page section, so the two idioms are not in conflict.
-  // The redesign dropped these imports because the sections IT converted
-  // stopped needing them; this consumer still does, and the merge of the
-  // two changes compiled nowhere until they came back.
-  Card,
-  CardBody,
-  CardHeader,
-  Crumbs,
-  DescriptionList,
-  ErrorNote,
-  ErrorState,
-  FormField,
-  FreightStatusBadge,
-  LoadingState,
-  MetaChip,
-  Modal,
-  ModalFooter,
-  Money,
-  Num,
-  PageHeader,
-  SectionBand,
-  Stat,
-  StatusBadge,
-  TBody,
-  Table,
-  TableEmpty,
-  Td,
-  THead,
-  Th,
-  Textarea,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
-import { consignmentStatusKind, freightModeExplainer } from '@skydrop/ui/status';
+  AreaPage,
+  AreaSection,
+  BackLink,
+  Dash,
+  Facts,
+  InlineError,
+  KpiGrid,
+  MetaFact,
+  MetaFacts,
+  Note,
+  Panel,
+  mutationPhase,
+  rawCount,
+} from '@/app/(authed)/inventory/_components/stock-ui';
+import {
+  consignmentStatusKind,
+  freightModeExplainer,
+  inboundFreightStatusKind,
+  statusLabel,
+} from '@skydrop/ui/status';
 import { useCancelConsignment, useConsignment, useConsignmentEvents } from '@/lib/account-hooks';
 import { useSellerFreight } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -92,16 +99,13 @@ export function ConsignmentDetailView({ id }: { id: string }): ReactElement {
   const detail = useConsignment(id);
 
   return (
-    <div>
-      <Link
-        href="/inbound"
-        className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs transition-colors"
-      >
-        <ArrowLeft size={13} /> Add stock
-      </Link>
+    <AreaPage>
+      <BackLink href="/inbound">
+        <ArrowLeft size={14} /> Add stock
+      </BackLink>
 
       {detail.isLoading ? (
-        <LoadingState label="Loading consignment…" />
+        <SkeletonRows rows={6} label="Loading consignment…" />
       ) : detail.isError ? (
         <ErrorState message={serverVerdict(detail.error)} retry={() => void detail.refetch()} />
       ) : detail.data === undefined ? (
@@ -109,7 +113,7 @@ export function ConsignmentDetailView({ id }: { id: string }): ReactElement {
       ) : (
         <ConsignmentBody consignment={detail.data} />
       )}
-    </div>
+    </AreaPage>
   );
 }
 
@@ -130,35 +134,38 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
   const [correcting, setCorrecting] = useState<ConsignmentLegView | null>(null);
   const progress = indiaProgress(consignment);
 
+  const billed = consignment.freightCharges.length > 0;
+
   return (
     <>
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Stock' },
-              { label: 'Add stock', href: '/inbound' },
-              { label: consignment.consignmentNumber },
-            ]}
-            Link={Link}
-          />
-        }
-        title={<span className="font-mono">{consignment.consignmentNumber}</span>}
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Stock' },
+          { label: 'Add stock', href: '/inbound' },
+          { label: consignment.consignmentNumber },
+        ]}
+        Link={Link}
+        title={<span className="sk-ident">{consignment.consignmentNumber}</span>}
         subtitle={routeWords(consignment.route).blurb}
         meta={
-          <>
-            <MetaChip tone="accent">{routeWords(consignment.route).title}</MetaChip>
-            <MetaChip dot>{statusWords(consignment.status)}</MetaChip>
+          <MetaFacts>
+            <MetaFact tone="accent">{routeWords(consignment.route).title}</MetaFact>
+            <MetaFact dot>{statusWords(consignment.status)}</MetaFact>
             {consignment.sellerReference !== null && (
-              <MetaChip>Your ref {consignment.sellerReference}</MetaChip>
+              <MetaFact>Your ref {consignment.sellerReference}</MetaFact>
             )}
-          </>
+          </MetaFacts>
         }
         action={
           canManage && cancellable(consignment) ? (
-            <Button variant="ghost" size="sm" onClick={() => setCancelOpen(true)}>
-              <XCircle size={12} /> Cancel consignment
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={<XCircle size={14} />}
+              onClick={() => setCancelOpen(true)}
+            >
+              Cancel consignment
             </Button>
           ) : undefined
         }
@@ -170,11 +177,12 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
           identical to one nobody has touched. `progress` is null until
           there is an India leg to measure against, and a tile is left
           out rather than shown as zero. */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
+      <KpiGrid>
+        <KpiCard
           label="Products declared"
-          icon={<Boxes size={13} aria-hidden />}
+          icon={<Boxes size={14} />}
           value={productCount(consignment)}
+          format={rawCount}
           unit="SKUs"
           tone="neutral"
           // `shortDate(null)` is an em dash, so the unguarded form read
@@ -185,12 +193,15 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
         />
         {progress !== null && (
           <>
-            <Stat
+            <KpiCard
               label="Received in India"
-              icon={<PackageCheck size={13} aria-hidden />}
+              icon={<PackageCheck size={14} />}
               value={progress.receivedInIndia}
+              format={rawCount}
               unit="units"
-              tone={progress.receivedInIndia > 0 && progress.stillToCome === 0 ? 'good' : 'neutral'}
+              tone={
+                progress.receivedInIndia > 0 && progress.stillToCome === 0 ? 'credit' : 'neutral'
+              }
               // Nothing counted yet is NOT "all of it has landed", and
               // it is not "on the shelf and sellable" either — a
               // cancelled or still-announced consignment reads 0 here.
@@ -202,22 +213,31 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
                     : 'On the shelf and sellable.'
               }
             />
-            <Stat
-              label="Still to come"
-              icon={<Plane size={13} aria-hidden />}
+            <KpiCard
+              label={
+                <GlossaryTerm
+                  title="Still to come"
+                  icon={<Plane size={16} />}
+                  description="Units declared on this consignment that have not been counted in India yet — waiting in Dhaka or in the air. They are not sellable until they land."
+                >
+                  Still to come
+                </GlossaryTerm>
+              }
+              icon={<Plane size={14} />}
               value={progress.stillToCome}
+              format={rawCount}
               unit="units"
-              tone={progress.stillToCome > 0 ? 'warn' : 'neutral'}
+              tone={progress.stillToCome > 0 ? 'pending' : 'neutral'}
               hint="In Dhaka or in the air — not sellable yet."
             />
           </>
         )}
-        <Stat
+        <KpiCard
           label="Inbound freight"
-          icon={<Wallet size={13} aria-hidden />}
-          value={
-            consignment.freightCharges.length === 0 ? (
-              <span className="text-text-faint text-base">Not billed</span>
+          icon={<Wallet size={14} />}
+          figure={
+            !billed ? (
+              <span className="inv-faint">Not billed</span>
             ) : (
               <Money
                 amount={consignment.freightCharges
@@ -238,94 +258,89 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
                 : `${consignment.freightCharges.length} bills, one per arrival`
           }
         />
-      </div>
+      </KpiGrid>
 
-      <div className="mb-4">
-        <SectionBand index="01" title="Consignment" note="The facts we hold about it." />
-        <BandBody>
-          <DescriptionList
-            columns={3}
-            items={[
-              {
-                label: 'Where it is',
-                value: (
-                  <StatusBadge
-                    kind={consignmentStatusKind(consignment.status)}
-                    label={statusWords(consignment.status)}
-                  />
-                ),
-              },
-              { label: 'Route', value: routeWords(consignment.route).title },
-              { label: 'Expected arrival', value: shortDate(consignment.expectedArrivalAt) },
-              {
-                label: 'Your reference',
-                value: consignment.sellerReference ?? <span className="text-text-faint">—</span>,
-              },
-              { label: 'Products', value: <Num value={productCount(consignment)} /> },
-              ...(progress === null
-                ? []
-                : [
-                    {
-                      label: 'Received in India',
-                      value: <Num value={progress.receivedInIndia} />,
-                    },
-                    {
-                      label: 'Still to come',
-                      value: (
-                        <span className="flex items-baseline gap-2">
-                          <Num value={progress.stillToCome} />
-                          <span className="text-text-muted text-xs">in Dhaka or in the air</span>
-                        </span>
-                      ),
-                    },
-                  ]),
-            ]}
-          />
-          {consignment.cancelReason !== null && (
-            <p className="text-text-muted border-border mt-3 border-t pt-3 text-sm">
-              Cancelled {shortDate(consignment.cancelledAt)} — {consignment.cancelReason}
-            </p>
-          )}
-        </BandBody>
-      </div>
+      <AreaSection title="Consignment" note="The facts we hold about it.">
+        <Panel>
+          <div className="inv-stack">
+            <Facts
+              columns={3}
+              items={[
+                {
+                  label: 'Where it is',
+                  value: (
+                    <StatusChip
+                      kind={consignmentStatusKind(consignment.status)}
+                      label={statusWords(consignment.status)}
+                      size="sm"
+                    />
+                  ),
+                },
+                { label: 'Route', value: routeWords(consignment.route).title },
+                { label: 'Expected arrival', value: shortDate(consignment.expectedArrivalAt) },
+                {
+                  label: 'Your reference',
+                  value: consignment.sellerReference ?? <Dash />,
+                },
+                { label: 'Products', value: <Num value={productCount(consignment)} /> },
+                ...(progress === null
+                  ? []
+                  : [
+                      {
+                        label: 'Received in India',
+                        value: <Num value={progress.receivedInIndia} />,
+                      },
+                      {
+                        label: 'Still to come',
+                        value: (
+                          <span className="inv-baseline">
+                            <Num value={progress.stillToCome} />
+                            <span className="inv-sub">in Dhaka or in the air</span>
+                          </span>
+                        ),
+                      },
+                    ]),
+              ]}
+            />
+            {consignment.cancelReason !== null && (
+              <div className="inv-callout" data-tone="warn">
+                <XCircle size={16} aria-hidden className="inv-callout__icon" />
+                <span>
+                  Cancelled {shortDate(consignment.cancelledAt)} — {consignment.cancelReason}
+                </span>
+              </div>
+            )}
+          </div>
+        </Panel>
+      </AreaSection>
 
-      <div className="mb-4">
-        <SectionBand
-          index="02"
-          title="What has happened"
-          note="Oldest first. Added as it happens — you do not need to ask."
-        />
-        <BandBody flush={!events.isLoading && !events.isError && (events.data ?? []).length > 0}>
+      <AreaSection
+        title="What has happened"
+        note="Oldest first. Added as it happens — you do not need to ask."
+      >
+        <Panel>
           {events.isLoading ? (
-            <LoadingState label="Loading timeline…" rows={3} />
+            <SkeletonRows rows={3} label="Loading timeline…" />
           ) : events.isError ? (
             <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />
           ) : (
-            <Timeline events={events.data ?? []} />
+            <EventTimeline events={events.data ?? []} consignment={consignment} />
           )}
-        </BandBody>
-      </div>
+        </Panel>
+      </AreaSection>
 
       {consignment.receipts.length === 0 ? (
-        <div>
-          <SectionBand
-            index="03"
-            title="Each stop"
-            note="What was declared, and what the warehouse counted."
-          />
-          <BandBody>
-            <p className="text-text-muted text-sm">Nothing has been set up to receive this yet.</p>
-          </BandBody>
-        </div>
+        <AreaSection title="Each stop" note="What was declared, and what the warehouse counted.">
+          <Panel>
+            <Note>Nothing has been set up to receive this yet.</Note>
+          </Panel>
+        </AreaSection>
       ) : (
-        // Each stop is its own NUMBERED region rather than a card inside
-        // one — the stops are read in order and the numbers are what say
-        // so, and a bordered card nested inside a bordered band body
-        // draws two lines a hair apart.
-        consignment.receipts.map((leg, i) => (
+        // Each stop is its own section, read in order — the journey's
+        // stops ARE its order, so no numbering is needed to say so.
+        consignment.receipts.map((leg) => (
           <LegCard
             key={leg.id}
-            index={String(i + 3).padStart(2, '0')}
             leg={leg}
             consignment={consignment}
             canManage={canManage}
@@ -334,23 +349,12 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
         ))
       )}
 
-      {/* PAY_ADVANCE added this as a <Section>, which is how every
-          section on this page looked before the console redesign. The
-          redesign converted the other three to bands and dropped the
-          import, so the two changes met in a file that compiled on
-          neither side alone. A band, to match: 01-03 above all render
-          unconditionally (03 appears in both arms of its ternary), so a
-          fourth leaves no gap in the numbering. */}
-      <div className="mb-4">
-        <SectionBand
-          index="04"
-          title="Inbound freight"
-          note="What it cost to move this consignment, and how much of that has been charged so far."
-        />
-        <BandBody>
-          <ConsignmentFreight consignmentId={consignment.id} />
-        </BandBody>
-      </div>
+      <AreaSection
+        title="Inbound freight"
+        note="What it cost to move this consignment, and how much of that has been charged so far."
+      >
+        <ConsignmentFreight consignmentId={consignment.id} />
+      </AreaSection>
 
       <CancelConsignmentModal
         open={cancelOpen}
@@ -367,34 +371,50 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
  * ordering is the server's fact, and re-sorting here is how the page
  * ends up disagreeing with the email that announced the same event.
  */
-function Timeline({ events }: { events: readonly ConsignmentEventView[] }): ReactElement {
+function EventTimeline({
+  events,
+  consignment,
+}: {
+  events: readonly ConsignmentEventView[];
+  consignment: ConsignmentView;
+}): ReactElement {
   if (events.length === 0) {
     return (
-      <p className="text-text-muted text-sm">
+      <Note>
         Nothing has happened yet beyond announcing it. Steps appear here as the warehouse counts,
         labels, ships and receives.
-      </p>
+      </Note>
     );
   }
+  // Every event HAS happened, so each is done; the latest is the current
+  // step while the consignment is still moving, and done once it has
+  // finished or been called off. The words are the event's own.
+  const ended =
+    consignment.status === ConsignmentStatus.COMPLETED ||
+    consignment.status === ConsignmentStatus.CANCELLED;
+  const steps = events.map((evt, i): TimelineStep => {
+    const last = i === events.length - 1;
+    return {
+      id: evt.id,
+      label: eventWords(evt.type),
+      state: last && !ended ? 'current' : 'done',
+      ...(last && consignment.status === ConsignmentStatus.CANCELLED
+        ? { tone: 'failed' as const }
+        : {}),
+      description: evt.description ?? undefined,
+      time: <span className="sk-figure">{stamp(evt.createdAt)}</span>,
+    };
+  });
   return (
-    <ol className="divide-border divide-y">
-      {events.map((evt) => (
-        // The stamp stacks ABOVE the wording on a phone rather than
-        // taking a fixed 10rem column out of a 360px screen, which left
-        // the description a word wide.
-        <li key={evt.id} className="flex flex-col gap-0.5 px-3 py-3 sm:flex-row sm:gap-4">
-          <div className="text-text-faint shrink-0 font-mono text-xs sm:w-40 sm:pt-0.5">
-            {stamp(evt.createdAt)}
-          </div>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <div className="text-text-strong text-sm font-medium">{eventWords(evt.type)}</div>
-            {evt.description !== null && (
-              <div className="text-text-muted text-sm">{evt.description}</div>
-            )}
-          </div>
-        </li>
-      ))}
-    </ol>
+    <Timeline
+      label={`What has happened to ${consignment.consignmentNumber}`}
+      steps={steps}
+      collapseEarlier={{
+        keep: 4,
+        showLabel: 'Show {n} earlier steps',
+        hideLabel: 'Hide the earlier steps',
+      }}
+    />
   );
 }
 
@@ -406,14 +426,11 @@ function Timeline({ events }: { events: readonly ConsignmentEventView[] }): Reac
  * moment cancelling stops being possible.
  */
 function LegCard({
-  index,
   leg,
   consignment,
   canManage,
   onCorrect,
 }: {
-  /** Its place in the journey — "03", "04". The stops are read in order. */
-  readonly index: string;
   readonly leg: ConsignmentLegView;
   readonly consignment: ConsignmentView;
   readonly canManage: boolean;
@@ -435,137 +452,143 @@ function LegCard({
   const anyVariance = isCounted && leg.lines.some((l) => (l.receivedQty ?? 0) !== l.expectedQty);
 
   return (
-    <div className="mb-4">
-      <SectionBand
-        index={index}
-        title={
-          <span className="flex flex-wrap items-center gap-2">
-            {legTitle(leg, consignment.route, indiaLegs(consignment))}
-            <span className="text-text-muted font-mono text-[11px] normal-case">
-              {leg.receiptNumber}
-            </span>
-          </span>
-        }
-        // What is happening here, said plainly. `ARRIVING` means "we
-        // have it" and nobody outside a warehouse reads it that way.
-        note={
-          <>
-            {leg.warehouse.name} · {leg.warehouse.countryCode} —{' '}
-            <span className="text-text-body">{legProgress(leg).headline}</span>
-          </>
-        }
-        action={
-          canManage && leg.status === 'PENDING' ? (
-            <Button variant="secondary" size="sm" onClick={onCorrect}>
-              Correct contents
-            </Button>
-          ) : undefined
-        }
-      />
-      <BandBody>
-        <p className="text-text-faint mb-3 text-xs">{legProgress(leg).detail}</p>
-        <DescriptionList
-          columns={3}
-          items={[
-            { label: 'Declared', value: <Num value={declared} suffix="units" /> },
-            {
-              label: 'Counted',
-              value:
-                counted === null ? (
-                  <span className="text-text-muted">{legProgress(leg).headline}</span>
-                ) : (
-                  <Num value={counted} suffix="units" />
-                ),
-            },
-            {
-              label: leg.dispatchedAt !== null ? 'Left Bangladesh' : 'Received',
-              value:
-                leg.dispatchedAt !== null ? shortDate(leg.dispatchedAt) : shortDate(leg.receivedAt),
-            },
-          ]}
-        />
+    <AreaSection
+      title={
+        <span className="inv-leg-heading">
+          {legTitle(leg, consignment.route, indiaLegs(consignment))}
+          <span className="sk-ident inv-muted">{leg.receiptNumber}</span>
+        </span>
+      }
+      // What is happening here, said plainly. `ARRIVING` means "we
+      // have it" and nobody outside a warehouse reads it that way.
+      note={
+        <>
+          {leg.warehouse.name} · {leg.warehouse.countryCode} —{' '}
+          <span style={{ color: 'var(--fg-body)' }}>{legProgress(leg).headline}</span>
+        </>
+      }
+      action={
+        canManage && leg.status === 'PENDING' ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<ClipboardPen size={14} />}
+            onClick={onCorrect}
+          >
+            Correct contents
+          </Button>
+        ) : undefined
+      }
+    >
+      <Panel>
+        <div className="inv-stack">
+          <Note>{legProgress(leg).detail}</Note>
+          <Facts
+            columns={3}
+            items={[
+              { label: 'Declared', value: <Num value={declared} suffix="units" /> },
+              {
+                label: 'Counted',
+                value:
+                  counted === null ? (
+                    <span className="inv-muted">{legProgress(leg).headline}</span>
+                  ) : (
+                    <Num value={counted} suffix="units" />
+                  ),
+              },
+              {
+                label: leg.dispatchedAt !== null ? 'Left Bangladesh' : 'Received',
+                value:
+                  leg.dispatchedAt !== null
+                    ? shortDate(leg.dispatchedAt)
+                    : shortDate(leg.receivedAt),
+              },
+            ]}
+          />
 
-        {anyVariance && (
-          // Deliberately does NOT print `discrepancyNotes`. That is a
-          // stored string written at completion — so a note written
-          // before a wording fix keeps its old wording forever, which is
-          // how raw variant uuids were still on this page hours after
-          // they stopped being generated. The table below already says
-          // every line, by name, with the difference; the banner only has
-          // to say what it MEANS.
-          <p className="text-critical mt-3 rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-3 py-2 text-xs">
-            Some lines were counted differently — the per-product figures are below. Nothing is
-            blocked by it: your stock is what was counted. Raise an issue if the difference is not
-            yours.
-          </p>
-        )}
-
-        <Table wrapperClassName="mt-3">
-          <THead>
-            <Tr>
-              <Th>Product</Th>
-              <Th align="right">Declared</Th>
-              <Th align="right">Counted</Th>
-              <Th align="right">Difference</Th>
-            </Tr>
-          </THead>
-          {leg.lines.length === 0 ? (
-            <TBody>
-              <TableEmpty colSpan={4}>Nothing has been listed against this stop yet.</TableEmpty>
-            </TBody>
-          ) : (
-            <TBody>
-              {leg.lines.map((l) => {
-                const diff = isCounted ? (l.receivedQty ?? 0) - l.expectedQty : null;
-                return (
-                  <Tr key={l.id}>
-                    <Td>
-                      <span className="flex min-w-0 flex-col">
-                        <span className="text-text-body truncate text-sm">{lineLabel(l)}</span>
-                        <span className="text-text-muted font-mono text-xs">
-                          {l.variant.skuCode}
-                        </span>
-                      </span>
-                    </Td>
-                    <Td align="right">
-                      <Num value={l.expectedQty} />
-                    </Td>
-                    <Td align="right">
-                      {isCounted ? (
-                        <Num value={l.receivedQty ?? 0} />
-                      ) : counting ? (
-                        // Provisional. Shown so a seller can see the
-                        // warehouse is working, italic so it does not read
-                        // as the final answer, and with no difference
-                        // beside it — a variance against a half-finished
-                        // count is a shortfall that mostly is not real.
-                        <span className="text-text-muted italic">
-                          <Num value={l.receivedQty ?? 0} /> so far
-                        </span>
-                      ) : (
-                        <span className="text-text-muted">—</span>
-                      )}
-                    </Td>
-                    <Td align="right">
-                      {diff === null || diff === 0 ? (
-                        <span className="text-text-muted">—</span>
-                      ) : (
-                        // Signed on purpose: a surplus and a shortfall are
-                        // different events, and an unsigned "3" hides which.
-                        <span className={diff < 0 ? 'text-critical' : 'text-text-strong'}>
-                          {diff > 0 && '+'}
-                          <Num value={diff} />
-                        </span>
-                      )}
-                    </Td>
-                  </Tr>
-                );
-              })}
-            </TBody>
+          {anyVariance && (
+            // Deliberately does NOT print `discrepancyNotes`. That is a
+            // stored string written at completion — so a note written
+            // before a wording fix keeps its old wording forever, which is
+            // how raw variant uuids were still on this page hours after
+            // they stopped being generated. The table below already says
+            // every line, by name, with the difference; the banner only has
+            // to say what it MEANS.
+            <div className="inv-callout" data-tone="warn">
+              <TriangleAlert size={16} aria-hidden className="inv-callout__icon" />
+              <span>
+                Some lines were counted differently — the per-product figures are below. Nothing is
+                blocked by it: your stock is what was counted. Raise an issue if the difference is
+                not yours.
+              </span>
+            </div>
           )}
-        </Table>
-      </BandBody>
-    </div>
+
+          <Table caption={`Counts at ${leg.receiptNumber}`}>
+            <THead>
+              <Tr>
+                <Th>Product</Th>
+                <Th align="right">Declared</Th>
+                <Th align="right">Counted</Th>
+                <Th align="right">Difference</Th>
+              </Tr>
+            </THead>
+            {leg.lines.length === 0 ? (
+              <TBody>
+                <TableEmpty colSpan={4}>Nothing has been listed against this stop yet.</TableEmpty>
+              </TBody>
+            ) : (
+              <TBody>
+                {leg.lines.map((l) => {
+                  const diff = isCounted ? (l.receivedQty ?? 0) - l.expectedQty : null;
+                  return (
+                    <Tr key={l.id}>
+                      <Td>
+                        <span className="inv-combo__text">
+                          <span className="inv-combo__name">{lineLabel(l)}</span>
+                          <span className="sk-ident inv-muted">{l.variant.skuCode}</span>
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <Num value={l.expectedQty} />
+                      </Td>
+                      <Td align="right">
+                        {isCounted ? (
+                          <Num value={l.receivedQty ?? 0} />
+                        ) : counting ? (
+                          // Provisional. Shown so a seller can see the
+                          // warehouse is working, italic so it does not read
+                          // as the final answer, and with no difference
+                          // beside it — a variance against a half-finished
+                          // count is a shortfall that mostly is not real.
+                          <span className="inv-muted" style={{ fontStyle: 'italic' }}>
+                            <Num value={l.receivedQty ?? 0} /> so far
+                          </span>
+                        ) : (
+                          <span className="inv-muted">—</span>
+                        )}
+                      </Td>
+                      <Td align="right">
+                        {diff === null || diff === 0 ? (
+                          <span className="inv-muted">—</span>
+                        ) : (
+                          // Signed on purpose: a surplus and a shortfall are
+                          // different events, and an unsigned "3" hides which.
+                          <span className="inv-num" data-tone={diff < 0 ? 'bad' : undefined}>
+                            {diff > 0 && '+'}
+                            <Num value={diff} />
+                          </span>
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
+              </TBody>
+            )}
+          </Table>
+        </div>
+      </Panel>
+    </AreaSection>
   );
 }
 
@@ -597,56 +620,73 @@ function CancelConsignmentModal({
     onClose();
   }
 
+  function submitCancel(): void {
+    cancel.mutate(
+      { id: consignment.id, reason: reason.trim() },
+      {
+        onSuccess: (res) => {
+          toast.success(
+            `${consignment.consignmentNumber} cancelled — ${res.unitsReturned} units returned to you`,
+          );
+          close();
+        },
+      },
+    );
+  }
+
+  // It already asked; it now RESTATES what it acts on — the consignment
+  // number, its route and how many products — above the consequence, so
+  // nobody confirms without seeing which shipment they are calling off.
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) close();
       }}
+      tone="critical"
+      icon={<TriangleAlert size={18} />}
+      size="sm"
+      locked={cancel.isPending}
       title={`Cancel ${consignment.consignmentNumber}?`}
       description="The goods come back to you and anything already counted is taken off your stock. Only possible before the consignment leaves for India."
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="md" onClick={close} disabled={cancel.isPending}>
+            Keep it
+          </Button>
+          <AsyncButton
+            variant="destructive"
+            size="md"
+            labels={{ idle: 'Cancel consignment', busy: 'Cancelling…' }}
+            state={mutationPhase(cancel)}
+            disabled={reason.trim().length < MIN_REASON || cancel.isPending}
+            onClick={submitCancel}
+          />
+        </DialogFooter>
+      }
     >
-      <FormField
-        label="Why it is coming back"
-        htmlFor="cn-cancel-reason"
-        hint="At least ten characters. Kept on the record permanently."
-      >
-        <Textarea
+      <div className="inv-stack">
+        <div className="inv-callout">
+          <span className="sk-ident" style={{ color: 'var(--fg-strong)' }}>
+            {consignment.consignmentNumber}
+          </span>
+          <span>
+            {routeWords(consignment.route).title} · {productCount(consignment)}{' '}
+            {productCount(consignment) === 1 ? 'product' : 'products'}
+          </span>
+        </div>
+        <TextArea
+          label="Why it is coming back"
           id="cn-cancel-reason"
+          hint="At least ten characters. Kept on the record permanently."
           rows={3}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
-      </FormField>
 
-      {cancel.error !== null && <ErrorNote message={serverVerdict(cancel.error)} />}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close}>
-          Keep it
-        </Button>
-        <Button
-          variant="destructive"
-          size="md"
-          disabled={reason.trim().length < MIN_REASON || cancel.isPending}
-          onClick={() =>
-            cancel.mutate(
-              { id: consignment.id, reason: reason.trim() },
-              {
-                onSuccess: (res) => {
-                  toast.success(
-                    `${consignment.consignmentNumber} cancelled — ${res.unitsReturned} units returned to you`,
-                  );
-                  close();
-                },
-              },
-            )
-          }
-        >
-          {cancel.isPending ? 'Cancelling…' : 'Cancel consignment'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+        {cancel.error !== null && <InlineError message={serverVerdict(cancel.error)} />}
+      </div>
+    </Dialog>
   );
 }
 
@@ -667,7 +707,7 @@ function CancelConsignmentModal({
 function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string }): ReactElement {
   const q = useSellerFreight({});
 
-  if (q.isLoading) return <LoadingState label="Loading freight…" rows={2} />;
+  if (q.isLoading) return <SkeletonRows rows={2} label="Loading freight…" />;
   if (q.isError) {
     return <ErrorState message={serverVerdict(q.error)} retry={() => void q.refetch()} />;
   }
@@ -676,41 +716,46 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
 
   if (bills.length === 0) {
     return (
-      <Card>
-        <CardBody>
-          <p className="text-text-muted text-sm">
-            Nothing billed yet. A freight bill appears here once we have the forwarder&apos;s figure
-            for this consignment — on pay-in-advance terms that is after the Dhaka count, otherwise
-            after it lands in India.
-          </p>
-        </CardBody>
-      </Card>
+      <Panel>
+        <Note>
+          Nothing billed yet. A freight bill appears here once we have the forwarder&apos;s figure
+          for this consignment — on pay-in-advance terms that is after the Dhaka count, otherwise
+          after it lands in India.
+        </Note>
+      </Panel>
     );
   }
 
   return (
-    <div className="grid gap-3">
+    <div className="inv-stack">
       {bills.map((f) => (
-        <Card key={f.id}>
-          <CardHeader
-            title={f.receiptNumber ?? 'Freight bill'}
-            action={<FreightStatusBadge status={f.status} />}
-          />
-          <CardBody>
-            <DescriptionList
+        <Panel key={f.id}>
+          <div className="inv-stack">
+            <div className="inv-leg-head">
+              <h3 className="inv-leg-title">
+                <Receipt size={15} aria-hidden style={{ verticalAlign: '-2px', marginRight: 6 }} />
+                {f.receiptNumber ?? 'Freight bill'}
+              </h3>
+              <StatusChip
+                kind={inboundFreightStatusKind(f.status)}
+                label={statusLabel(f.status)}
+                size="sm"
+              />
+            </div>
+            <Facts
               columns={3}
               items={[
                 {
                   label: 'Total',
                   value: (
-                    <span className="flex flex-col">
+                    <span className="inv-combo__text">
                       <Money amount={f.totalInr} />
                       {/* The figure agreed with us, when that was not in
                           rupees. The rupees are what leaves the wallet;
                           this is what the conversation was about, and
                           without it the total cannot be checked. */}
                       {f.agreedCurrency !== 'INR' && (
-                        <span className="text-text-muted text-xs">
+                        <span className="inv-sub">
                           <Money
                             amount={f.agreedAmount}
                             currency={f.agreedCurrency}
@@ -727,7 +772,7 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
                   label: 'Still to come',
                   value:
                     Number(f.outstandingInr) === 0 ? (
-                      <span className="text-text-muted">Nothing</span>
+                      <span className="inv-muted">Nothing</span>
                     ) : (
                       <Money amount={f.outstandingInr} direction="debit" />
                     ),
@@ -736,7 +781,7 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
                 {
                   label: 'Units charged',
                   value: (
-                    <span className="flex items-baseline gap-1">
+                    <span className="inv-baseline">
                       <Num value={f.unitsSettled} /> <span>of</span> <Num value={f.totalUnits} />
                     </span>
                   ),
@@ -745,16 +790,16 @@ function ConsignmentFreight({ consignmentId }: { readonly consignmentId: string 
                   label: 'Service charge',
                   value:
                     f.serviceChargeInr === null || Number(f.serviceChargeInr) === 0 ? (
-                      <span className="text-text-muted">None</span>
+                      <span className="inv-muted">None</span>
                     ) : (
                       <Money amount={f.serviceChargeInr} />
                     ),
                 },
               ]}
             />
-            {f.note !== null && <p className="text-text-muted mt-3 text-sm">{f.note}</p>}
-          </CardBody>
-        </Card>
+            {f.note !== null && <Note>{f.note}</Note>}
+          </div>
+        </Panel>
       ))}
     </div>
   );

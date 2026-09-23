@@ -1,26 +1,23 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { Pencil, Plus, Star, Trash2 } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import {
-  BandBody,
-  Button,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  SectionBand,
-  SkeletonRows,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Textarea,
-  Tr,
-} from '@skydrop/ui/components';
+  AreaSection,
+  InlineError,
+  Note,
+  Panel,
+  PanelPad,
+  mutationPhase,
+} from '@/app/(authed)/inventory/_components/stock-ui';
 import {
   useCreateCsvMapping,
   useCsvMappings,
@@ -52,86 +49,117 @@ export function SavedMappings(): ReactElement {
   const [creating, setCreating] = useState(false);
 
   const items = list.data ?? [];
+  // Removing a mapping ASKS first, naming it; the request is the same one.
+  const [removing, setRemoving] = useState<CsvMappingView | null>(null);
 
   return (
-    <div className="mt-4">
-      <SectionBand
-        index="04"
-        title="Saved column mappings"
-        note="Your spreadsheet's headers, translated to ours."
-        action={
-          <Button variant="secondary" size="sm" onClick={() => setCreating(true)}>
-            Save a mapping
-          </Button>
-        }
-      />
-      <BandBody flush>
+    <AreaSection
+      title="Saved column mappings"
+      note="Your spreadsheet's headers, translated to ours."
+      action={
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Plus size={14} />}
+          onClick={() => setCreating(true)}
+        >
+          Save a mapping
+        </Button>
+      }
+    >
+      <Panel flush>
         {list.isLoading ? (
-          <div className="p-3">
+          <PanelPad>
             <SkeletonRows rows={2} />
-          </div>
+          </PanelPad>
         ) : list.isError ? (
-          <div className="p-3">
-            <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
-          </div>
+          <PanelPad>
+            <InlineError message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          </PanelPad>
         ) : items.length === 0 ? (
-          <div className="p-3">
+          <PanelPad>
             <EmptyState
               bare
               title="No saved mappings"
               description="Only worth it if your export headers differ from the template. If you use our template as-is, you do not need one."
+              action={
+                <Button
+                  variant="secondary"
+                  size="md"
+                  icon={<Plus size={15} />}
+                  onClick={() => setCreating(true)}
+                >
+                  Save a mapping
+                </Button>
+              }
             />
-          </div>
+          </PanelPad>
         ) : (
-          <Table>
+          <Table caption="Saved column mappings">
             <THead>
               <Tr>
                 <Th>Name</Th>
                 <Th align="right">Columns</Th>
                 <Th>Last used</Th>
                 <Th>Default</Th>
-                <Th align="right" />
+                <Th align="right" aria-label="Actions" />
               </Tr>
             </THead>
             <TBody>
               {items.map((m) => (
                 <Tr key={m.id}>
-                  <Td>{m.name}</Td>
-                  <Td align="right">{Object.keys(m.columnMap).length}</Td>
+                  <Td>
+                    <span className="inv-strong-link">{m.name}</span>
+                  </Td>
+                  <Td align="right">
+                    <span className="sk-figure">{Object.keys(m.columnMap).length}</span>
+                  </Td>
                   <Td>
                     {m.lastUsedAt === null ? (
-                      <span className="text-text-faint">never</span>
+                      <span className="inv-faint">never</span>
                     ) : (
-                      new Date(m.lastUsedAt).toLocaleDateString('en-IN')
+                      <span className="sk-figure">
+                        {new Date(m.lastUsedAt).toLocaleDateString('en-IN')}
+                      </span>
                     )}
                   </Td>
                   <Td>
                     {m.isDefault ? (
-                      <StatusBadge kind="confirmed" label="default" />
+                      <StatusChip kind="confirmed" label="default" size="sm" />
                     ) : (
-                      <span className="text-text-faint">—</span>
+                      <span className="inv-faint">—</span>
                     )}
                   </Td>
                   <Td align="right">
-                    <span className="flex justify-end gap-1">
+                    <span className="inv-actions" style={{ justifyContent: 'flex-end' }}>
                       {!m.isDefault && (
                         <Button
                           variant="ghost"
                           size="sm"
+                          icon={<Star size={14} />}
                           disabled={update.isPending}
                           onClick={() => update.mutate({ id: m.id, body: { isDefault: true } })}
                         >
                           Make default
                         </Button>
                       )}
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(m)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Pencil size={14} />}
+                        onClick={() => setEditing(m)}
+                      >
                         Edit
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
+                        icon={<Trash2 size={14} />}
                         disabled={remove.isPending}
-                        onClick={() => remove.mutate({ id: m.id })}
+                        onClick={() => {
+                          remove.reset();
+                          setRemoving(m);
+                        }}
                       >
                         Remove
                       </Button>
@@ -142,11 +170,32 @@ export function SavedMappings(): ReactElement {
             </TBody>
           </Table>
         )}
-      </BandBody>
+      </Panel>
 
-      {(remove.error !== null || update.error !== null) && (
-        <ErrorNote message={serverVerdict(remove.error ?? update.error)} />
+      {(remove.error !== null || update.error !== null) && removing === null && (
+        <InlineError message={serverVerdict(remove.error ?? update.error)} />
       )}
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoving(null);
+        }}
+        title="Remove this mapping?"
+        entity={removing === null ? '' : removing.name}
+        consequence={
+          removing !== null && removing.isDefault
+            ? 'It is your default, so future uploads use the template headers until you pick another. Uploads already done are not touched.'
+            : 'Future uploads can no longer use it. Uploads already done are not touched.'
+        }
+        confirmLabel="Remove mapping"
+        destructive
+        error={remove.error === null ? undefined : serverVerdict(remove.error)}
+        onConfirm={async () => {
+          if (removing === null) return;
+          await remove.mutateAsync({ id: removing.id });
+        }}
+      />
 
       <MappingDialog
         mapping={editing}
@@ -156,7 +205,7 @@ export function SavedMappings(): ReactElement {
           setCreating(false);
         }}
       />
-    </div>
+    </AreaSection>
   );
 }
 
@@ -230,21 +279,35 @@ function MappingDialog({
   const serverError = create.error ?? update.error;
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) close();
       }}
       title={mapping === null ? 'Save a column mapping' : 'Edit mapping'}
       description="Keys are our field names; values are the headers as they appear in your file."
+      size="md"
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={close}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            labels={{ idle: 'Save mapping', busy: 'Saving…' }}
+            state={busy ? 'busy' : mutationPhase(mapping === null ? create : update)}
+            disabled={effectiveName.trim() === '' || effectiveJson.trim() === '' || busy}
+            onClick={save}
+          />
+        </DialogFooter>
+      }
     >
-      <FormField
-        label="Name"
-        htmlFor="cm-name"
-        hint="How you will recognise it. e.g. Shopify export"
-      >
-        <Input
+      <div className="inv-stack">
+        <TextField
+          label="Name"
           id="cm-name"
+          hint="How you will recognise it. e.g. Shopify export"
           value={effectiveName}
           onChange={(e) => {
             setTouched(true);
@@ -252,13 +315,12 @@ function MappingDialog({
             if (!touched && mapping !== null) setJson(JSON.stringify(mapping.columnMap, null, 2));
           }}
         />
-      </FormField>
 
-      <FormField label="Mapping" htmlFor="cm-json">
-        <Textarea
+        <TextArea
+          label="Mapping"
           id="cm-json"
           rows={8}
-          className="font-mono text-xs"
+          inputClassName="sk-ident"
           value={effectiveJson}
           onChange={(e) => {
             setTouched(true);
@@ -267,30 +329,17 @@ function MappingDialog({
           }}
           placeholder={EXAMPLE}
         />
-      </FormField>
 
-      <p className="text-text-faint text-xs">
-        Download the template to see every field name we accept — anything you do not map keeps its
-        template header.
-      </p>
+        <Note>
+          Download the template to see every field name we accept — anything you do not map keeps
+          its template header.
+        </Note>
 
-      {parseError !== null && <ErrorNote message={parseError} />}
-      {serverError !== null && serverError !== undefined && (
-        <ErrorNote message={serverVerdict(serverError)} />
-      )}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close}>
-          Cancel
-        </Button>
-        <Button
-          size="md"
-          disabled={effectiveName.trim() === '' || effectiveJson.trim() === '' || busy}
-          onClick={save}
-        >
-          {busy ? 'Saving…' : 'Save mapping'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+        {parseError !== null && <InlineError message={parseError} />}
+        {serverError !== null && serverError !== undefined && (
+          <InlineError message={serverVerdict(serverError)} />
+        )}
+      </div>
+    </Dialog>
   );
 }

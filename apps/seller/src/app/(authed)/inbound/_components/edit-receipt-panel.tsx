@@ -1,17 +1,22 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
+import { ClipboardPen, Plus, Trash2 } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { NumberStepper } from '@skydrop/ui/app/number-stepper';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Section,
-  SkeletonRows,
-  useToast,
-} from '@skydrop/ui/components';
+  FieldGrid,
+  InlineError,
+  Note,
+  mutationPhase,
+} from '@/app/(authed)/inventory/_components/stock-ui';
 import {
   useGoodsReceipt,
   useUpdateGoodsReceipt,
@@ -161,118 +166,133 @@ function EditReceiptForm({
     );
   }
 
+  const ready = !(detail.isLoading || form === null) && !detail.isError;
+
   return (
-    <Modal
+    <Dialog
       open
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
       size="lg"
+      icon={<ClipboardPen size={18} />}
       title={`Correct ${receipt.receiptNumber}`}
       description="Only possible while the consignment is still pending. Once the warehouse starts receiving it, what you declared is what they count against."
+      footer={
+        ready ? (
+          <DialogFooter>
+            <Button variant="ghost" size="md" onClick={onClose}>
+              Discard changes
+            </Button>
+            <AsyncButton
+              variant="primary"
+              size="md"
+              labels={{ idle: 'Save corrections', busy: 'Saving…' }}
+              state={mutationPhase(update)}
+              disabled={!dirty || problem !== null || update.isPending}
+              onClick={save}
+            />
+          </DialogFooter>
+        ) : undefined
+      }
     >
       {detail.isLoading || form === null ? (
         <SkeletonRows rows={4} />
       ) : detail.isError ? (
-        <ErrorNote message={serverVerdict(detail.error)} retry={() => void detail.refetch()} />
+        <InlineError message={serverVerdict(detail.error)} retry={() => void detail.refetch()} />
       ) : (
-        <>
-          <Section>
-            <p className="text-text-muted mb-3 text-xs">
-              Replacing a product replaces the whole list, so leave the ones that are right alone.
-            </p>
-            {form.lines.map((line) => (
-              <div key={line.key} className="border-border mb-3 rounded-[7px] border p-3">
-                <div className="mb-2 flex items-start justify-between gap-3">
-                  {/* Every line gets the picker, including ones that came
-                      from the server: this panel exists to CORRECT a
-                      consignment, and a line naming the wrong item could
-                      previously only be deleted and retyped. */}
-                  <FormField label="Item" htmlFor={`v-${line.key}`}>
-                    <VariantPicker
-                      id={`v-${line.key}`}
-                      value={line.variantId}
-                      label={line.label}
-                      onPick={(hit, shown) =>
-                        patchLine(line.key, { variantId: hit.id, label: shown })
-                      }
-                    />
-                  </FormField>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => patch({ lines: form.lines.filter((l) => l.key !== line.key) })}
-                  >
-                    Remove
-                  </Button>
+        <div className="inv-stack">
+          <Note>
+            Replacing a product replaces the whole list, so leave the ones that are right alone.
+          </Note>
+          {form.lines.map((line) => (
+            <div key={line.key} className="prd-option">
+              <div className="prd-option__head">
+                {/* Every line gets the picker, including ones that came
+                    from the server: this panel exists to CORRECT a
+                    consignment, and a line naming the wrong item could
+                    previously only be deleted and retyped. */}
+                <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+                  <VariantPicker
+                    id={`v-${line.key}`}
+                    fieldLabel="Item"
+                    value={line.variantId}
+                    label={line.label}
+                    onPick={(hit, shown) =>
+                      patchLine(line.key, { variantId: hit.id, label: shown })
+                    }
+                  />
                 </div>
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <FormField label="Quantity" htmlFor={`q-${line.key}`}>
-                    <Input
-                      id={`q-${line.key}`}
-                      type="number"
-                      min={QTY_MIN}
-                      max={QTY_MAX}
-                      value={line.expectedQty}
-                      onChange={(e) => patchLine(line.key, { expectedQty: e.target.value })}
-                    />
-                  </FormField>
-                  <FormField label="Unit cost (₹)" htmlFor={`c-${line.key}`} hint="Optional">
-                    <Input
-                      id={`c-${line.key}`}
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={line.unitCostInr}
-                      onChange={(e) => patchLine(line.key, { unitCostInr: e.target.value })}
-                    />
-                  </FormField>
-                  <label className="text-text-body col-span-2 mt-1 flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={line.hasDates}
-                      onChange={(e) =>
-                        patchLine(line.key, {
-                          hasDates: e.target.checked,
-                          // Clear on untick: a hidden date must not travel
-                          // with the correction it is no longer shown on.
-                          ...(e.target.checked ? {} : { manufacturedAt: '', expiresAt: '' }),
-                        })
-                      }
-                      className="h-4 w-4"
-                    />
-                    This product has manufacture and expiry dates
-                  </label>
-                  {line.hasDates && (
-                    <>
-                      <FormField label="Manufactured" htmlFor={`m-${line.key}`} hint="Optional">
-                        <Input
-                          id={`m-${line.key}`}
-                          type="date"
-                          value={line.manufacturedAt}
-                          onChange={(e) => patchLine(line.key, { manufacturedAt: e.target.value })}
-                        />
-                      </FormField>
-                      {/* Carried even when unedited: a line sent back without
-                        its expiry loses it, and FEFO picking is decided on
-                        exactly this date. */}
-                      <FormField label="Expires" htmlFor={`e-${line.key}`} hint="Optional">
-                        <Input
-                          id={`e-${line.key}`}
-                          type="date"
-                          value={line.expiresAt}
-                          onChange={(e) => patchLine(line.key, { expiresAt: e.target.value })}
-                        />
-                      </FormField>
-                    </>
-                  )}
-                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Trash2 size={14} />}
+                  onClick={() => patch({ lines: form.lines.filter((l) => l.key !== line.key) })}
+                >
+                  Remove
+                </Button>
               </div>
-            ))}
+              <FieldGrid columns={2}>
+                <NumberStepper
+                  label="Quantity"
+                  id={`q-${line.key}`}
+                  min={QTY_MIN}
+                  max={QTY_MAX}
+                  value={line.expectedQty}
+                  onChange={(e) => patchLine(line.key, { expectedQty: e.target.value })}
+                />
+                <TextField
+                  label="Unit cost (₹)"
+                  id={`c-${line.key}`}
+                  hint="Optional"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={line.unitCostInr}
+                  onChange={(e) => patchLine(line.key, { unitCostInr: e.target.value })}
+                />
+              </FieldGrid>
+              <Checkbox
+                label="This product has manufacture and expiry dates"
+                checked={line.hasDates}
+                onChange={(e) =>
+                  patchLine(line.key, {
+                    hasDates: e.target.checked,
+                    // Clear on untick: a hidden date must not travel
+                    // with the correction it is no longer shown on.
+                    ...(e.target.checked ? {} : { manufacturedAt: '', expiresAt: '' }),
+                  })
+                }
+              />
+              {line.hasDates && (
+                <FieldGrid columns={2}>
+                  <DateField
+                    label="Manufactured"
+                    id={`m-${line.key}`}
+                    hint="Optional"
+                    value={line.manufacturedAt}
+                    onChange={(e) => patchLine(line.key, { manufacturedAt: e.target.value })}
+                  />
+                  {/* Carried even when unedited: a line sent back without
+                    its expiry loses it, and FEFO picking is decided on
+                    exactly this date. */}
+                  <DateField
+                    label="Expires"
+                    id={`e-${line.key}`}
+                    hint="Optional"
+                    value={line.expiresAt}
+                    onChange={(e) => patchLine(line.key, { expiresAt: e.target.value })}
+                  />
+                </FieldGrid>
+              )}
+            </div>
+          ))}
 
+          <div>
             <Button
               variant="secondary"
               size="sm"
+              icon={<Plus size={14} />}
               onClick={() =>
                 patch({
                   lines: [
@@ -293,55 +313,35 @@ function EditReceiptForm({
             >
               Add a product
             </Button>
-          </Section>
+          </div>
 
-          <Section>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <FormField
-                label="Expected arrival"
-                htmlFor="gr-edit-eta"
-                hint="Clear it if you no longer know."
-              >
-                <Input
-                  id="gr-edit-eta"
-                  type="date"
-                  value={form.expectedArrivalAt}
-                  onChange={(e) => patch({ expectedArrivalAt: e.target.value })}
-                />
-              </FormField>
-              <FormField
-                label="Your reference"
-                htmlFor="gr-edit-ref"
-                hint={`Optional. Up to ${REFERENCE_MAX} characters.`}
-              >
-                <Input
-                  id="gr-edit-ref"
-                  maxLength={REFERENCE_MAX}
-                  value={form.sellerReference}
-                  onChange={(e) => patch({ sellerReference: e.target.value })}
-                />
-              </FormField>
-            </div>
-          </Section>
+          <FieldGrid columns={2}>
+            <DateField
+              label="Expected arrival"
+              id="gr-edit-eta"
+              hint="Clear it if you no longer know."
+              value={form.expectedArrivalAt}
+              onChange={(e) => patch({ expectedArrivalAt: e.target.value })}
+            />
+            <TextField
+              label="Your reference"
+              id="gr-edit-ref"
+              hint={`Optional. Up to ${REFERENCE_MAX} characters.`}
+              maxLength={REFERENCE_MAX}
+              value={form.sellerReference}
+              onChange={(e) => patch({ sellerReference: e.target.value })}
+            />
+          </FieldGrid>
 
-          {problem !== null && <p className="text-[var(--color-critical)] text-xs">{problem}</p>}
-          {update.error !== null && <ErrorNote message={serverVerdict(update.error)} />}
-
-          <ModalFooter>
-            <Button variant="ghost" size="md" onClick={onClose}>
-              Discard changes
-            </Button>
-            <Button
-              size="md"
-              disabled={!dirty || problem !== null || update.isPending}
-              onClick={save}
-            >
-              {update.isPending ? 'Saving…' : 'Save corrections'}
-            </Button>
-          </ModalFooter>
-        </>
+          {problem !== null && (
+            <p className="inv-num" data-tone="bad" style={{ fontSize: 'var(--fs-xs)', margin: 0 }}>
+              {problem}
+            </p>
+          )}
+          {update.error !== null && <InlineError message={serverVerdict(update.error)} />}
+        </div>
       )}
-    </Modal>
+    </Dialog>
   );
 }
 

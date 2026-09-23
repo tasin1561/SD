@@ -1,7 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Boxes, Layers, Ruler, Wallet } from 'lucide-react';
+import {
+  ArrowLeft,
+  Archive,
+  ArchiveRestore,
+  Boxes,
+  Layers,
+  Pencil,
+  Plus,
+  Ruler,
+  Wallet,
+} from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { ProductStatus } from '@skydrop/db';
 import { AddVariantPanel } from './add-variant-panel';
@@ -14,32 +24,35 @@ import {
   useUpdateProduct,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { Money } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
-  BandBody,
-  Button,
-  Crumbs,
-  DescriptionList,
-  EmptyState,
-  ErrorState,
-  FormActions,
-  FormField,
-  Input,
-  LoadingState,
-  MetaChip,
-  Money,
-  PageHeader,
-  SectionBand,
-  Stat,
-  StatusBadge,
-  Table,
-  TBody,
-  Td,
-  Textarea,
-  Th,
-  THead,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+  Actions,
+  AreaPage,
+  AreaSection,
+  BackLink,
+  Dash,
+  FieldGrid,
+  Facts,
+  InlineError,
+  KpiGrid,
+  MetaFact,
+  MetaFacts,
+  Panel,
+  PanelPad,
+  mutationPhase,
+  rawCount,
+} from '@/app/(authed)/inventory/_components/stock-ui';
 import { useRouter } from 'next/navigation';
 
 /**
@@ -64,7 +77,14 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
 
   const isArchived = detail.data?.status === ProductStatus.ARCHIVED;
 
+  // Archive and restore both ASK first, restating the product and what
+  // follows. The request is the same one the button always sent; a
+  // refusal stays in the dialog, verbatim (FE-2), so it can be retried.
+  const [confirmArchive, setConfirmArchive] = useState(false);
+  const [archiveError, setArchiveError] = useState<string | null>(null);
+
   async function onToggleArchive(): Promise<void> {
+    setArchiveError(null);
     try {
       await archive.mutateAsync({ archived: !isArchived });
       toast.success(
@@ -73,21 +93,27 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
           : 'Archived. It and its variants can no longer be ordered or received.',
       );
     } catch (err) {
-      toast.error(serverVerdict(err));
+      setArchiveError(serverVerdict(err));
+      throw err;
     }
   }
 
+  const statusChip = (status: string): ReactElement => (
+    <StatusChip
+      kind={status === 'ACTIVE' ? 'confirmed' : status === 'ARCHIVED' ? 'cancelled' : 'pending'}
+      label={status.toLowerCase()}
+      size="sm"
+    />
+  );
+
   return (
-    <div>
-      <Link
-        href="/products"
-        className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
-      >
-        <ArrowLeft size={12} /> Products
-      </Link>
+    <AreaPage>
+      <BackLink href="/products">
+        <ArrowLeft size={14} /> Products
+      </BackLink>
 
       {detail.isLoading ? (
-        <LoadingState label="Loading product…" />
+        <SkeletonRows rows={6} label="Loading product…" />
       ) : detail.isError ? (
         <ErrorState
           message={detail.error?.message ?? 'Failed to load product.'}
@@ -98,21 +124,17 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
       ) : (
         <>
           <PageHeader
-            breadcrumb={
-              <Crumbs
-                items={[
-                  { label: 'Seller console' },
-                  { label: 'Products', href: '/products' },
-                  { label: detail.data.name },
-                ]}
-                Link={Link}
-              />
-            }
+            breadcrumbs={[
+              { label: 'Seller console' },
+              { label: 'Products', href: '/products' },
+              { label: detail.data.name },
+            ]}
+            Link={Link}
             title={detail.data.name}
             subtitle={
               detail.data.externalRef ? (
                 <span>
-                  Your ref: <span className="font-mono">{detail.data.externalRef}</span>
+                  Your ref: <span className="sk-ident">{detail.data.externalRef}</span>
                 </span>
               ) : undefined
             }
@@ -124,30 +146,19 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
             */
             meta={
               variants.data === undefined ? undefined : (
-                <>
-                  <MetaChip tone="accent">
+                <MetaFacts>
+                  <MetaFact tone="accent">
                     {variants.data.length} {variants.data.length === 1 ? 'variant' : 'variants'}
-                  </MetaChip>
+                  </MetaFact>
                   {variants.data.some((v) => v.status === 'ARCHIVED') && (
-                    <MetaChip dot>
+                    <MetaFact dot>
                       {variants.data.filter((v) => v.status === 'ARCHIVED').length} archived
-                    </MetaChip>
+                    </MetaFact>
                   )}
-                </>
+                </MetaFacts>
               )
             }
-            action={
-              <StatusBadge
-                kind={
-                  detail.data.status === ProductStatus.ACTIVE
-                    ? 'confirmed'
-                    : detail.data.status === ProductStatus.ARCHIVED
-                      ? 'cancelled'
-                      : 'pending'
-                }
-                label={detail.data.status.toLowerCase()}
-              />
-            }
+            action={statusChip(detail.data.status)}
           />
 
           {/* ── The product's standing facts ──────────────────────────
@@ -156,68 +167,75 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                  no cost anywhere, so there is no "units on hand" tile
                  and no margin — the catalogue LIST carries the stock
                  summary, which is the one place that number is real. */}
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat
-              label="Variants"
-              icon={<Layers size={13} aria-hidden />}
-              value={variants.data?.length ?? <span className="text-text-faint">—</span>}
-              unit={variants.data === undefined ? undefined : 'SKUs'}
-              tone="neutral"
-              {...(variants.data === undefined
-                ? {}
-                : {
-                    foot: [
-                      {
-                        label: 'Sellable',
-                        value: variants.data.filter((v) => v.status === 'ACTIVE').length,
-                      },
-                      {
-                        label: 'Archived',
-                        value: variants.data.filter((v) => v.status === 'ARCHIVED').length,
-                      },
-                    ],
-                  })}
-            />
-            <Stat
-              label="Default weight"
-              icon={<Boxes size={13} aria-hidden />}
-              value={
-                detail.data.defaultWeightGrams === null ? (
-                  <span className="text-text-faint text-base">Not set</span>
-                ) : (
-                  detail.data.defaultWeightGrams
-                )
-              }
-              unit={detail.data.defaultWeightGrams === null ? undefined : 'g'}
-              tone={detail.data.defaultWeightGrams === null ? 'warn' : 'neutral'}
-              hint={
-                detail.data.defaultWeightGrams === null
-                  ? 'A variant that sets none then has none at all.'
-                  : 'Used by any variant that sets none.'
-              }
-            />
-            <Stat
+          <KpiGrid>
+            {variants.data === undefined ? (
+              <KpiCard
+                label="Variants"
+                icon={<Layers size={14} />}
+                figure={<Dash />}
+                tone="neutral"
+              />
+            ) : (
+              <KpiCard
+                label="Variants"
+                icon={<Layers size={14} />}
+                value={variants.data.length}
+                format={rawCount}
+                unit="SKUs"
+                tone="neutral"
+                foot={[
+                  {
+                    label: 'Sellable',
+                    value: variants.data.filter((v) => v.status === 'ACTIVE').length,
+                  },
+                  {
+                    label: 'Archived',
+                    value: variants.data.filter((v) => v.status === 'ARCHIVED').length,
+                  },
+                ]}
+              />
+            )}
+            {detail.data.defaultWeightGrams === null ? (
+              <KpiCard
+                label="Default weight"
+                icon={<Boxes size={14} />}
+                figure={<span className="inv-faint">Not set</span>}
+                tone="pending"
+                hint="A variant that sets none then has none at all."
+              />
+            ) : (
+              <KpiCard
+                label="Default weight"
+                icon={<Boxes size={14} />}
+                value={detail.data.defaultWeightGrams}
+                format={rawCount}
+                unit="g"
+                tone="neutral"
+                hint="Used by any variant that sets none."
+              />
+            )}
+            <KpiCard
               label="Default box"
-              icon={<Ruler size={13} aria-hidden />}
-              value={
+              icon={<Ruler size={14} />}
+              figure={
                 detail.data.defaultLengthCm === null ? (
-                  <span className="text-text-faint text-base">Not set</span>
+                  <span className="inv-faint">Not set</span>
                 ) : (
-                  <span className="font-mono text-base">
+                  <span>
                     {detail.data.defaultLengthCm} × {detail.data.defaultWidthCm ?? '—'} ×{' '}
                     {detail.data.defaultHeightCm ?? '—'}
                   </span>
                 )
               }
-              unit={detail.data.defaultLengthCm === null ? undefined : 'cm'}
+              {...(detail.data.defaultLengthCm === null ? {} : { unit: 'cm' })}
               tone="neutral"
             />
-            <Stat
+            <KpiCard
               label="Declared value"
-              icon={<Wallet size={13} aria-hidden />}
-              value={
+              icon={<Wallet size={14} />}
+              figure={
                 detail.data.defaultDeclaredValueInr === null ? (
-                  <span className="text-text-faint text-base">Not set</span>
+                  <span className="inv-faint">Not set</span>
                 ) : (
                   <Money amount={detail.data.defaultDeclaredValueInr} />
                 )
@@ -225,41 +243,47 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
               tone="neutral"
               hint="What a parcel of this is worth for customs."
             />
-          </div>
+          </KpiGrid>
 
-          <div>
-            <SectionBand
-              index="01"
-              title="Details"
-              note="The defaults every variant inherits."
-              action={
-                !editing && (
-                  <>
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-                      Edit product
-                    </Button>
-                    {/* ARCHIVED blocks new orders and stock receiving while
-                        leaving history intact — the normal way to stop
-                        selling something. Delete is deliberately not
-                        offered: it hides the row from read paths, which is
-                        a bigger hammer and staff-recoverable only. */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={archive.isPending}
-                      onClick={() => void onToggleArchive()}
-                    >
-                      {archive.isPending
-                        ? 'Saving…'
-                        : isArchived
-                          ? 'Restore product'
-                          : 'Archive product'}
-                    </Button>
-                  </>
-                )
-              }
-            />
-            <BandBody className="mb-4">
+          <AreaSection
+            title="Details"
+            note="The defaults every variant inherits."
+            action={
+              !editing && (
+                <Actions>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<Pencil size={14} />}
+                    onClick={() => setEditing(true)}
+                  >
+                    Edit product
+                  </Button>
+                  {/* ARCHIVED blocks new orders and stock receiving while
+                      leaving history intact — the normal way to stop
+                      selling something. Delete is deliberately not
+                      offered: it hides the row from read paths, which is
+                      a bigger hammer and staff-recoverable only. */}
+                  <AsyncButton
+                    variant="ghost"
+                    size="sm"
+                    icon={isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                    labels={{
+                      idle: isArchived ? 'Restore product' : 'Archive product',
+                      busy: 'Saving…',
+                    }}
+                    state={mutationPhase(archive)}
+                    disabled={archive.isPending}
+                    onClick={() => {
+                      setArchiveError(null);
+                      setConfirmArchive(true);
+                    }}
+                  />
+                </Actions>
+              )
+            }
+          >
+            <Panel>
               {editing ? (
                 <ProductEditForm
                   product={detail.data}
@@ -269,60 +293,89 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
               ) : (
                 <ProductReadCard product={detail.data} />
               )}
-            </BandBody>
-          </div>
+            </Panel>
+          </AreaSection>
 
-          <div>
-            <SectionBand
-              index="02"
-              title="Variants"
-              note={
-                variants.data === undefined
-                  ? undefined
-                  : `${variants.data.length} ${variants.data.length === 1 ? 'SKU' : 'SKUs'}`
-              }
-              action={
-                addingVariant ? undefined : (
-                  <Button variant="secondary" size="sm" onClick={() => setAddingVariant(true)}>
-                    Add variant
-                  </Button>
-                )
-              }
-            />
-            <BandBody flush>
+          <ConfirmDialog
+            open={confirmArchive}
+            onOpenChange={setConfirmArchive}
+            title={isArchived ? 'Restore this product?' : 'Archive this product?'}
+            entity={
+              detail.data.externalRef
+                ? `${detail.data.name} · ${detail.data.externalRef}`
+                : detail.data.name
+            }
+            consequence={
+              isArchived
+                ? 'It can be ordered and received again. Its variants stay archived — restore the ones you want back.'
+                : 'It and its variants can no longer be ordered or received. History stays, and you can restore it later.'
+            }
+            confirmLabel={isArchived ? 'Restore product' : 'Archive product'}
+            destructive={!isArchived}
+            error={archiveError ?? undefined}
+            onConfirm={onToggleArchive}
+          />
+
+          <AreaSection
+            title="Variants"
+            note={
+              variants.data === undefined
+                ? undefined
+                : `${variants.data.length} ${variants.data.length === 1 ? 'SKU' : 'SKUs'}`
+            }
+            action={
+              addingVariant ? undefined : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<Plus size={14} />}
+                  onClick={() => setAddingVariant(true)}
+                >
+                  Add variant
+                </Button>
+              )
+            }
+          >
+            <Panel flush>
               {addingVariant && (
-                <div className="border-border border-b p-3">
+                <PanelPad>
                   <AddVariantPanel productId={productId} onDone={() => setAddingVariant(false)} />
-                </div>
+                </PanelPad>
               )}
               {variants.isLoading ? (
-                <div className="p-3">
-                  <LoadingState label="Loading variants…" />
-                </div>
+                <PanelPad>
+                  <SkeletonRows rows={3} cols={5} label="Loading variants…" />
+                </PanelPad>
               ) : variants.isError ? (
-                <div className="p-3">
+                <PanelPad>
                   <ErrorState
                     message={variants.error?.message ?? 'Failed to load variants.'}
                     retry={() => void variants.refetch()}
                   />
-                </div>
+                </PanelPad>
               ) : !variants.data || variants.data.length === 0 ? (
-                <div className="p-3">
+                <PanelPad>
                   <EmptyState
+                    bare
                     title="No variants yet"
                     description="A product needs at least one variant before it can be ordered — nothing can be stocked or picked against the product itself."
                     action={
-                      <Button variant="primary" size="md" onClick={() => setAddingVariant(true)}>
+                      <Button
+                        variant="primary"
+                        size="md"
+                        icon={<Plus size={15} />}
+                        onClick={() => setAddingVariant(true)}
+                      >
                         Add variant
                       </Button>
                     }
                   />
-                </div>
+                </PanelPad>
               ) : (
-                <Table>
+                <Table caption="Variants">
                   <THead>
                     <Tr>
-                      <Th className="w-12" aria-label="Image" />
+                      <Th aria-label="Image" />
                       <Th>SKU</Th>
                       <Th>Label</Th>
                       <Th align="right">Weight (g)</Th>
@@ -341,27 +394,20 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                             to find the green one. */}
                           {v.primaryImageUrl != null ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={v.primaryImageUrl}
-                              alt=""
-                              className="border-border h-9 w-9 rounded-[4px] border object-cover"
-                            />
+                            <img src={v.primaryImageUrl} alt="" className="prd-thumb" />
                           ) : (
-                            <div
-                              className="border-border bg-surface-raised h-9 w-9 rounded-[4px] border"
-                              aria-hidden
-                            />
+                            <div className="prd-thumb" aria-hidden />
                           )}
                         </Td>
                         <Td>
                           <Link
                             href={`/products/${productId}/variants/${v.id}`}
-                            className="text-text-bright hover:underline font-mono text-xs"
+                            className="inv-strong-link sk-ident"
                           >
                             {v.skuCode}
                           </Link>
                         </Td>
-                        <Td className="text-text-body">{v.variantLabel ?? '—'}</Td>
+                        <Td>{v.variantLabel ?? '—'}</Td>
                         {/*
                         The EFFECTIVE weight, not the variant's own column.
                         A blank variant weight means "inherit the product
@@ -372,62 +418,51 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                         500g. Inherited values are marked as inherited
                         rather than silently shown as the variant's own.
                       */}
-                        <Td align="right" className="font-mono text-xs">
+                        <Td align="right" className="sk-figure">
                           {v.weightGrams !== null ? (
-                            <span className="text-text-body">{v.weightGrams}</span>
+                            <span>{v.weightGrams}</span>
                           ) : detail.data?.defaultWeightGrams != null ? (
                             // The product default, shown plainly. It IS the
                             // weight this variant ships at, so dressing it up
                             // as second-class only invites the question the
                             // dash used to raise.
-                            <span className="text-text-body" title="From the product default">
+                            <span title="From the product default">
                               {detail.data.defaultWeightGrams}
                             </span>
                           ) : (
-                            <span className="text-text-muted">—</span>
+                            <span className="inv-muted">—</span>
                           )}
                         </Td>
-                        <Td>
-                          <StatusBadge
-                            kind={
-                              v.status === 'ACTIVE'
-                                ? 'confirmed'
-                                : v.status === 'ARCHIVED'
-                                  ? 'cancelled'
-                                  : 'pending'
-                            }
-                            label={v.status.toLowerCase()}
-                          />
-                        </Td>
+                        <Td>{statusChip(v.status)}</Td>
                       </Tr>
                     ))}
                   </TBody>
                 </Table>
               )}
-            </BandBody>
-          </div>
+            </Panel>
+          </AreaSection>
         </>
       )}
-    </div>
+    </AreaPage>
   );
 }
 
 /**
  * The product's own columns, read-only.
  *
- * No `Card`: `BandBody` IS the bordered surface the band above caps,
- * and nesting one drew a second border a hair inside the first.
+ * No card of its own: the section's panel IS the surface, and nesting
+ * one drew a second border a hair inside the first.
  */
 function ProductReadCard({ product }: { product: SellerProductView }): ReactElement {
   return (
-    <DescriptionList
+    <Facts
       columns={2}
       items={[
         ...(product.description
           ? [
               {
                 label: 'Description',
-                value: <span className="whitespace-pre-wrap">{product.description}</span>,
+                value: <span style={{ whiteSpace: 'pre-wrap' }}>{product.description}</span>,
               },
             ]
           : []),
@@ -437,7 +472,7 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
             product.externalRef === null ? (
               <Dash />
             ) : (
-              <span className="font-mono text-xs">{product.externalRef}</span>
+              <span className="sk-ident">{product.externalRef}</span>
             ),
         },
         {
@@ -446,7 +481,7 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
             product.defaultWeightGrams === null ? (
               <Dash />
             ) : (
-              <span className="font-mono">{product.defaultWeightGrams} g</span>
+              <span className="sk-figure">{product.defaultWeightGrams} g</span>
             ),
         },
         {
@@ -455,7 +490,7 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
             product.defaultLengthCm === null ? (
               <Dash />
             ) : (
-              <span className="font-mono text-xs">
+              <span className="sk-figure">
                 {product.defaultLengthCm} × {product.defaultWidthCm ?? '—'} ×{' '}
                 {product.defaultHeightCm ?? '—'} cm
               </span>
@@ -473,10 +508,6 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
       ]}
     />
   );
-}
-
-function Dash(): ReactElement {
-  return <span className="text-text-faint">—</span>;
 }
 
 function ProductEditForm({
@@ -534,103 +565,95 @@ function ProductEditForm({
   }
 
   return (
-    <form onSubmit={handleSave} className="space-y-3">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <FormField label="Name" htmlFor="name" required>
-          <Input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            disabled={update.isPending}
-          />
-        </FormField>
-      </div>
-      <FormField label="Description" htmlFor="description">
-        <Textarea
-          id="description"
-          rows={3}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
+    <form onSubmit={handleSave} className="inv-stack">
+      <FieldGrid columns={2}>
+        <TextField
+          label="Name"
+          id="name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
           disabled={update.isPending}
         />
-      </FormField>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <FormField label="External ref" htmlFor="externalRef">
-          <Input
-            id="externalRef"
-            value={externalRef}
-            onChange={(e) => setExternalRef(e.target.value)}
-            disabled={update.isPending}
-          />
-        </FormField>
-        <FormField label="Default weight (g)" htmlFor="defaultWeight">
-          <Input
-            id="defaultWeight"
-            type="number"
-            min="0"
-            value={defaultWeight}
-            onChange={(e) => setDefaultWeight(e.target.value)}
-            disabled={update.isPending}
-          />
-        </FormField>
-        <FormField label="Default length (cm)" htmlFor="defaultLength">
-          <Input
-            id="defaultLength"
-            type="number"
-            min="0"
-            step="0.1"
-            value={defaultLength}
-            onChange={(e) => setDefaultLength(e.target.value)}
-            disabled={update.isPending}
-          />
-        </FormField>
-        <FormField label="Default width (cm)" htmlFor="defaultWidth">
-          <Input
-            id="defaultWidth"
-            type="number"
-            min="0"
-            step="0.1"
-            value={defaultWidth}
-            onChange={(e) => setDefaultWidth(e.target.value)}
-            disabled={update.isPending}
-          />
-        </FormField>
-        <FormField label="Default height (cm)" htmlFor="defaultHeight">
-          <Input
-            id="defaultHeight"
-            type="number"
-            min="0"
-            step="0.1"
-            value={defaultHeight}
-            onChange={(e) => setDefaultHeight(e.target.value)}
-            disabled={update.isPending}
-          />
-        </FormField>
-        <FormField label="Default declared (INR)" htmlFor="defaultDeclared">
-          <Input
-            id="defaultDeclared"
-            type="number"
-            step="0.01"
-            value={defaultDeclared}
-            onChange={(e) => setDefaultDeclared(e.target.value)}
-            disabled={update.isPending}
-          />
-        </FormField>
-      </div>
-      {serverError && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
-          {serverError}
-        </div>
-      )}
-      <FormActions>
+      </FieldGrid>
+      <TextArea
+        label="Description"
+        id="description"
+        rows={3}
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        disabled={update.isPending}
+      />
+      <FieldGrid columns={3}>
+        <TextField
+          label="External ref"
+          id="externalRef"
+          value={externalRef}
+          onChange={(e) => setExternalRef(e.target.value)}
+          disabled={update.isPending}
+          inputClassName="sk-ident"
+        />
+        <TextField
+          label="Default weight (g)"
+          id="defaultWeight"
+          type="number"
+          min="0"
+          value={defaultWeight}
+          onChange={(e) => setDefaultWeight(e.target.value)}
+          disabled={update.isPending}
+        />
+        <TextField
+          label="Default length (cm)"
+          id="defaultLength"
+          type="number"
+          min="0"
+          step="0.1"
+          value={defaultLength}
+          onChange={(e) => setDefaultLength(e.target.value)}
+          disabled={update.isPending}
+        />
+        <TextField
+          label="Default width (cm)"
+          id="defaultWidth"
+          type="number"
+          min="0"
+          step="0.1"
+          value={defaultWidth}
+          onChange={(e) => setDefaultWidth(e.target.value)}
+          disabled={update.isPending}
+        />
+        <TextField
+          label="Default height (cm)"
+          id="defaultHeight"
+          type="number"
+          min="0"
+          step="0.1"
+          value={defaultHeight}
+          onChange={(e) => setDefaultHeight(e.target.value)}
+          disabled={update.isPending}
+        />
+        <TextField
+          label="Default declared (INR)"
+          id="defaultDeclared"
+          type="number"
+          step="0.01"
+          value={defaultDeclared}
+          onChange={(e) => setDefaultDeclared(e.target.value)}
+          disabled={update.isPending}
+        />
+      </FieldGrid>
+      {serverError && <InlineError message={serverError} />}
+      <Actions>
+        <AsyncButton
+          type="submit"
+          variant="primary"
+          labels={{ idle: 'Save changes', busy: 'Saving…' }}
+          state={mutationPhase(update)}
+        />
         <Button variant="ghost" onClick={onCancel} disabled={update.isPending}>
           Cancel
         </Button>
-        <Button type="submit" variant="primary" disabled={update.isPending}>
-          {update.isPending ? 'Saving…' : 'Save changes'}
-        </Button>
-      </FormActions>
+      </Actions>
     </form>
   );
 }
