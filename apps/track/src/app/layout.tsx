@@ -1,29 +1,25 @@
 import type { Metadata } from 'next';
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import localFont from 'next/font/local';
+import { pinnedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
 import { getActiveLocale } from '@/lib/locale';
-import { themeInitScript } from '@/lib/theme-init';
 import './globals.css';
 
-// MISSION CONTROL type stack — matches apps/marketing.
 /**
- * Fonts are COMMITTED, not fetched at build time.
+ * Fonts are COMMITTED, not fetched at build time (a build must never depend
+ * on a font CDN answering). Plus Jakarta Sans everywhere, JetBrains Mono for
+ * the AWB only.
  *
- * `next/font/google` self-hosts at RUNTIME, which is the part everyone
- * checks — but it downloads the file during `next build`, and that made
- * every build and every deploy depend on fonts.gstatic.com answering.
- * It failed three CI runs in one day, each time on a different family,
- * each time with nothing wrong in the diff. The same outage during a
- * deploy is worse: it fails the deploy for a reason no one changed.
- *
- * These are the latin subsets of the same variable faces, so the
- * rendered result is identical. `declarations` pins unicode-range to
- * what latin actually covers, which is what the CDN's own @font-face
- * carried and is otherwise lost when self-hosting.
+ * Hindi: a Devanagari face (Poppins Devanagari 400, 39.7 KB, OFL) whose
+ * @font-face is declared on every page but which is only NAMED in the font
+ * stack when Hindi is active (`data-lang="hi"` → `--app-font` in
+ * track.css). A browser downloads a web font only for text that asks for
+ * it, so an English visitor never fetches it — even the "हिन्दी" label on
+ * the switcher renders in the system font, exactly as it did before.
  */
-const grotesk = localFont({
-  src: './fonts/space-grotesk-latin.woff2',
-  variable: '--font-grotesk',
+const sans = localFont({
+  src: './fonts/plus-jakarta-sans-latin.woff2',
+  variable: '--font-sans-face',
   display: 'swap',
   declarations: [
     {
@@ -34,28 +30,30 @@ const grotesk = localFont({
   ],
 });
 
-const inter = localFont({
-  src: './fonts/inter-latin.woff2',
-  variable: '--font-inter',
-  display: 'swap',
-  declarations: [
-    {
-      prop: 'unicode-range',
-      value:
-        'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
-    },
-  ],
-});
-
-const jetbrains = localFont({
+const mono = localFont({
   src: './fonts/jetbrains-mono-latin.woff2',
-  variable: '--font-jetbrains',
+  variable: '--font-mono-face',
   display: 'swap',
+  preload: false,
   declarations: [
     {
       prop: 'unicode-range',
       value:
         'U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+2074, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD',
+    },
+  ],
+});
+
+const devanagari = localFont({
+  src: './fonts/poppins-devanagari-400.woff2',
+  variable: '--font-deva-face',
+  display: 'swap',
+  preload: false,
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value:
+        'U+0900-097F, U+1CD0-1CF9, U+200C-200D, U+20A8, U+20B9, U+20F0, U+25CC, U+A830-A839, U+A8E0-A8FF',
     },
   ],
 });
@@ -73,24 +71,24 @@ export default async function RootLayout({
 }): Promise<React.ReactElement> {
   const locale = await getActiveLocale();
   // The no-flash theme script has to be inline — it must run before first
-  // paint, and an external file would be a round-trip of white screen. Under
-  // the nonce CSP that means it needs the nonce, which middleware forwards on
-  // the request as `x-nonce`. Next stamps its OWN scripts automatically; a
-  // hand-written one like this is on us.
+  // paint. Under the nonce CSP it needs the nonce, which middleware
+  // forwards on the request as `x-nonce`.
   const nonce = (await headers()).get('x-nonce') ?? undefined;
+  // A pinned theme is also server-rendered from the `sd-theme` cookie, so a
+  // hydration recovery cannot drop it (FE-7).
+  const theme = pinnedTheme((await cookies()).get(THEME_COOKIE_NAME)?.value);
   return (
     <html
       lang={locale}
-      className={`${grotesk.variable} ${inter.variable} ${jetbrains.variable}`}
+      data-lang={locale}
+      data-theme={theme}
+      className={`${sans.variable} ${mono.variable}${locale === 'hi' ? ` ${devanagari.variable}` : ''}`}
       suppressHydrationWarning
     >
       <head>
-        {/* `suppressHydrationWarning` on the SCRIPT, not just on <html>:
-            the browser STRIPS the nonce attribute from the DOM once CSP
-            has been applied (it stops a nonce being read back out via a
-            CSS attribute selector), so the server renders nonce="…" and
-            the client reads "". React flags that as a mismatch, and
-            suppression does not cascade from <html>. */}
+        {/* `suppressHydrationWarning` on the SCRIPT too: the browser strips
+            the nonce attribute once CSP is applied, so server and client
+            disagree, and suppression does not cascade from <html>. */}
         <script
           nonce={nonce}
           suppressHydrationWarning

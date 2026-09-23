@@ -1,0 +1,334 @@
+/*
+ * apps/track page rules — tokens only (FE-6), transform/opacity motion.
+ * Components are the @skydrop/ui/app primitives; this file lays them out.
+ */
+
+/* Hindi: name the Devanagari face only when Hindi is active (see layout). */
+:root[data-lang='hi'] {
+  --app-font:
+    var(--font-sans-face, ui-sans-serif), var(--font-deva-face, ui-sans-serif), ui-sans-serif,
+    system-ui, sans-serif;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* ── page frame ─────────────────────────────────────────────────────── */
+.tr-page {
+  position: relative;
+  min-height: 100dvh;
+  overflow: clip;
+  isolation: isolate;
+}
+.tr-map {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  display: block;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.tr-map--soft {
+  opacity: 0.5;
+}
+/* A soft clearing so the map never fights the cards. */
+.tr-veil {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(60% 55% at 50% 32%, var(--page) 25%, transparent 100%);
+  opacity: 0.75;
+}
+.tr-wrap {
+  width: min(100% - 2 * var(--sp-4), 44rem);
+  margin-inline: auto;
+  padding-block: var(--sp-4) var(--sp-12);
+}
+.tr-wrap--narrow {
+  width: min(100% - 2 * var(--sp-4), 30rem);
+}
+
+/* ── top bar ────────────────────────────────────────────────────────── */
+.tr-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-8);
+}
+.tr-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap);
+  color: var(--fg-strong);
+  text-decoration: none;
+}
+.tr-brand__mark {
+  height: 28px;
+  width: auto;
+  user-select: none;
+}
+.tr-brand__name {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.tr-top__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.tr-top__link {
+  display: none;
+  align-items: center;
+  min-height: var(--tap);
+  padding-inline: var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.tr-top__link:hover {
+  color: var(--fg-strong);
+}
+@media (min-width: 640px) {
+  .tr-top__link {
+    display: inline-flex;
+  }
+}
+
+/* The language pill: two options, the active one filled. */
+.tr-lang {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.tr-lang__opt {
+  min-height: calc(var(--tap) - 4px);
+  padding-inline: var(--sp-3);
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.tr-lang__opt:hover {
+  color: var(--fg-strong);
+}
+.tr-lang__opt[aria-pressed='true'] {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+.tr-lang__opt:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ── cards ──────────────────────────────────────────────────────────── */
+.tr-card {
+  position: relative;
+  padding: var(--sp-6);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  box-shadow: var(--elev-2);
+  animation: tr-rise var(--dur-slow) var(--ease-out) both;
+}
+.tr-card + .tr-card {
+  margin-top: var(--sp-4);
+  animation-delay: calc(80ms * var(--motion-slow));
+}
+/* Movement only, never a fade: the status heading and the lookup title
+   are the page's LCP, and text at opacity 0 is not a paint — a fade-in
+   handed LCP to the logo image and cost first paint on Slow 4G. */
+@keyframes tr-rise {
+  from {
+    transform: translateY(8px);
+  }
+}
+
+/* ── home ───────────────────────────────────────────────────────────── */
+.tr-home {
+  padding-top: clamp(var(--sp-4), 8vh, var(--sp-12));
+}
+.tr-home__eyebrow {
+  margin: 0 0 var(--sp-3);
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-align: center;
+}
+.tr-lookup {
+  padding: var(--sp-8) var(--sp-6);
+}
+.tr-lookup::before {
+  content: '';
+  position: absolute;
+  inset: 0 var(--sp-6) auto;
+  height: 3px;
+  border-radius: 0 0 var(--r-pill) var(--r-pill);
+  background: var(--corridor-gradient);
+}
+.tr-lookup__title {
+  margin: 0 0 var(--sp-2);
+  color: var(--fg-strong);
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+.tr-lookup__sub {
+  margin: 0 0 var(--sp-6);
+  color: var(--fg-muted);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+.tr-form {
+  display: grid;
+  gap: var(--sp-4);
+}
+
+/* ── parcel summary ─────────────────────────────────────────────────── */
+.tr-summary {
+  display: grid;
+  gap: var(--sp-3);
+  justify-items: start;
+}
+.tr-summary__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--sp-2) var(--sp-4);
+  width: 100%;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.tr-summary__courier {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.tr-summary__awb {
+  color: var(--fg-strong);
+}
+.tr-summary__title {
+  margin: 0;
+  color: var(--st-summary-fg, var(--fg-strong));
+  font-size: var(--fs-3xl);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+.tr-summary[data-kind='delivered'] {
+  --st-summary-fg: var(--st-delivered-fg);
+}
+.tr-summary[data-kind='failed'] {
+  --st-summary-fg: var(--st-failed-fg);
+}
+.tr-summary[data-kind='rto'] {
+  --st-summary-fg: var(--st-rto-fg);
+}
+.tr-summary[data-kind='pending'] {
+  --st-summary-fg: var(--st-pending-fg);
+}
+.tr-summary__updated {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.tr-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  width: 100%;
+  margin: var(--sp-2) 0 0;
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+}
+@media (min-width: 560px) {
+  .tr-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.tr-facts__row {
+  min-width: 0;
+}
+.tr-facts dt {
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.tr-facts dd {
+  margin: var(--sp-1) 0 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.tr-facts__sold {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.tr-facts__logo {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--r-sm);
+  object-fit: contain;
+  background: var(--surface);
+}
+
+/* ── journey ────────────────────────────────────────────────────────── */
+.tr-journey__title {
+  margin: 0 0 var(--sp-4);
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+.tr-journey__empty {
+  margin: 0;
+  color: var(--fg-muted);
+}
+
+/* ── not found / unavailable (u27) ──────────────────────────────────── */
+.tr-miss {
+  padding-top: clamp(var(--sp-4), 6vh, var(--sp-10));
+}
+.tr-miss__title {
+  margin: 0;
+  font: inherit;
+}
+.tr-miss__awb {
+  display: block;
+  margin-bottom: var(--sp-2);
+  color: var(--fg-strong);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.tr-miss__body {
+  display: block;
+}
+.tr-miss__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-2);
+}
+
+/* Devanagari has no use for the tight display tracking the Latin headings
+   carry; it only crowds the words. */
+:root[data-lang='hi'] :is(.tr-summary__title, .tr-lookup__title, .tr-brand__name) {
+  letter-spacing: 0;
+}

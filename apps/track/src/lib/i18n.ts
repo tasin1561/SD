@@ -55,6 +55,16 @@ type Dict = {
   readonly soldBy: string;
   readonly timelineHeading: string;
   readonly noScansYet: string;
+  readonly courier: string;
+  readonly parcel: string;
+  /** The journey timeline's accessible name, and its progress words. */
+  readonly journey: string;
+  readonly onTheWay: string;
+  /** Spoken state of each timeline step (colour is never the only signal). */
+  readonly stepDone: string;
+  readonly stepCurrent: string;
+  readonly stepTodo: string;
+  readonly stepSkipped: string;
 
   // Status labels (one per PublicShipmentDisplayStatus value)
   readonly s_processing: string;
@@ -98,6 +108,14 @@ const EN: Dict = {
   soldBy: 'Sold by',
   timelineHeading: 'Timeline',
   noScansYet: 'No scans yet. Once the courier picks up the parcel, scan events will appear here.',
+  courier: 'Courier',
+  parcel: 'Parcel',
+  journey: 'Parcel journey',
+  onTheWay: 'On the way',
+  stepDone: 'Completed',
+  stepCurrent: 'Current step',
+  stepTodo: 'Still to come',
+  stepSkipped: 'Skipped',
   s_processing: 'Processing',
   s_dispatched: 'Dispatched',
   s_in_transit: 'In transit',
@@ -137,6 +155,14 @@ const HI: Dict = {
   soldBy: 'विक्रेता',
   timelineHeading: 'टाइमलाइन',
   noScansYet: 'अभी तक कोई स्कैन नहीं। कूरियर द्वारा पार्सल उठाते ही स्कैन इवेंट यहाँ दिखाई देंगे।',
+  courier: 'कूरियर',
+  parcel: 'पार्सल',
+  journey: 'पार्सल की यात्रा',
+  onTheWay: 'रास्ते में',
+  stepDone: 'पूरा हुआ',
+  stepCurrent: 'मौजूदा चरण',
+  stepTodo: 'आगे होना है',
+  stepSkipped: 'छोड़ा गया',
   s_processing: 'प्रक्रियाधीन',
   s_dispatched: 'डिस्पैच',
   s_in_transit: 'रास्ते में',
