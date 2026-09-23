@@ -3,21 +3,26 @@
 import Link from 'next/link';
 import type { ReactElement } from 'react';
 import { ArrowLeft, Boxes, Download, FileSpreadsheet, Layers, XCircle } from 'lucide-react';
+import { Ident } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { ParachuteProgress, type ParachuteState } from '@skydrop/ui/app/parachute-progress';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
 import {
-  BandBody,
-  Button,
-  Card,
-  CardBody,
-  Crumbs,
-  DescriptionList,
-  ErrorNote,
-  Ident,
-  MetaChip,
-  PageHeader,
-  SectionBand,
-  Skeleton,
-  Stat,
-} from '@skydrop/ui/components';
+  AreaPage,
+  AreaSection,
+  BackLink as AreaBackLink,
+  Facts,
+  InlineError,
+  KpiGrid,
+  MetaFact,
+  MetaFacts,
+  Note,
+  Panel,
+  mutationPhase,
+  rawCount,
+} from '@/app/(authed)/inventory/_components/stock-ui';
 import { BulkUploadStatus } from '@skydrop/db';
 import {
   useCsvImport,
@@ -26,7 +31,7 @@ import {
   type CsvImportView,
 } from '@/lib/csv-import-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
-import { ImportStatusBadge } from './import-status';
+import { ImportStatusBadge, humaniseStatus } from './import-status';
 
 /**
  * One catalog import, opened.
@@ -49,25 +54,25 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
 
   if (query.isError || query.data === undefined) {
     return (
-      <div>
+      <AreaPage>
         <BackLink />
         <PageHeader title="Import" />
-        <Card>
-          <CardBody>
+        <Panel>
+          <div className="inv-stack">
             {/* FE-2 — the server's verdict verbatim. A wrong id and
                 another seller's import both come back UPLOAD_NOT_FOUND,
                 which is the whole message worth showing. */}
-            <ErrorNote
+            <InlineError
               message={serverVerdict(query.error, 'Could not load this import.')}
               retry={() => void query.refetch()}
             />
-            <p className="text-text-muted mt-3 text-xs">
+            <Note>
               Imports are scoped to the account that uploaded them. If a colleague sent this file
               from their own login, it is on their history, not yours.
-            </p>
-          </CardBody>
-        </Card>
-      </div>
+            </Note>
+          </div>
+        </Panel>
+      </AreaPage>
     );
   }
 
@@ -75,32 +80,28 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
   const inFlight = isImportInFlight(job.status);
 
   return (
-    <div>
+    <AreaPage>
       <BackLink />
 
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Stock & WMS' },
-              { label: 'Products', href: '/products' },
-              { label: 'History', href: '/products/import/jobs' },
-              { label: job.fileName },
-            ]}
-            Link={Link}
-          />
-        }
-        title={<span className="font-mono">{job.fileName}</span>}
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Stock & WMS' },
+          { label: 'Products', href: '/products' },
+          { label: 'History', href: '/products/import/jobs' },
+          { label: job.fileName },
+        ]}
+        Link={Link}
+        title={<span className="sk-ident">{job.fileName}</span>}
         subtitle={`Uploaded ${formatDateTime(job.createdAt)}`}
         meta={
-          <>
-            <MetaChip tone="accent">
+          <MetaFacts>
+            <MetaFact tone="accent">
               {job.rowCount ?? '—'} {job.rowCount === 1 ? 'row' : 'rows'}
-            </MetaChip>
-            {inFlight && <MetaChip dot>Running now</MetaChip>}
-            {job.rowsFailed > 0 && <MetaChip tone="bad">{job.rowsFailed} refused</MetaChip>}
-          </>
+            </MetaFact>
+            {inFlight && <MetaFact dot>Running now</MetaFact>}
+            {job.rowsFailed > 0 && <MetaFact tone="bad">{job.rowsFailed} refused</MetaFact>}
+          </MetaFacts>
         }
         action={<ImportStatusBadge status={job.status} />}
       />
@@ -109,28 +110,40 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
              OBJECTS, not rows: one row can create a product AND its
              first variant, so these deliberately do not add up to the
              row count — each tile's footer says which half is new. */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="Rows in file"
-          icon={<FileSpreadsheet size={13} aria-hidden />}
-          value={job.rowCount ?? <span className="text-text-faint">—</span>}
-          unit={job.rowCount === null ? undefined : job.rowCount === 1 ? 'row' : 'rows'}
-          tone="neutral"
-        />
-        <Stat
+      <KpiGrid>
+        {job.rowCount === null ? (
+          <KpiCard
+            label="Rows in file"
+            icon={<FileSpreadsheet size={14} />}
+            figure={<span className="inv-faint">—</span>}
+            tone="neutral"
+          />
+        ) : (
+          <KpiCard
+            label="Rows in file"
+            icon={<FileSpreadsheet size={14} />}
+            value={job.rowCount}
+            format={rawCount}
+            unit={job.rowCount === 1 ? 'row' : 'rows'}
+            tone="neutral"
+          />
+        )}
+        <KpiCard
           label="Products"
-          icon={<Boxes size={13} aria-hidden />}
+          icon={<Boxes size={14} />}
           value={job.productsCreated + job.productsUpdated}
+          format={rawCount}
           tone="neutral"
           foot={[
             { label: 'New', value: job.productsCreated },
             { label: 'Updated', value: job.productsUpdated },
           ]}
         />
-        <Stat
+        <KpiCard
           label="Variants"
-          icon={<Layers size={13} aria-hidden />}
+          icon={<Layers size={14} />}
           value={job.variantsCreated + job.variantsUpdated}
+          format={rawCount}
           unit="SKUs"
           tone="neutral"
           foot={[
@@ -138,44 +151,52 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
             { label: 'Updated', value: job.variantsUpdated },
           ]}
         />
-        <Stat
+        <KpiCard
           label="Refused"
-          icon={<XCircle size={13} aria-hidden />}
+          icon={<XCircle size={14} />}
           value={job.rowsFailed}
+          format={rawCount}
           unit={job.rowsFailed === 1 ? 'row' : 'rows'}
-          tone={job.rowsFailed > 0 ? 'bad' : 'neutral'}
+          tone={job.rowsFailed > 0 ? 'debit' : 'neutral'}
           hint={
             job.rowsSkipped > 0
               ? `${job.rowsSkipped} row${job.rowsSkipped === 1 ? '' : 's'} also skipped as unchanged.`
               : 'Rows we could not write.'
           }
         />
-      </div>
+      </KpiGrid>
 
-      <div className="mb-4">
-        <SectionBand index="01" title="Outcome" note="What this upload did to your catalogue." />
-        <BandBody>
-          <p className="text-text-body text-sm leading-relaxed">{OUTCOME_COPY[job.status]}</p>
-          {inFlight && (
-            <p className="text-text-faint mt-1 text-xs">
-              This page refreshes itself while it runs — nothing to reload.
+      <AreaSection title="Outcome" note="What this upload did to your catalogue.">
+        <Panel>
+          <div className="inv-stack">
+            {/* The run itself. The file's row progress is not reported
+                by the server, so while it runs the parachute is honest
+                about not knowing (no percentage); it lands on the
+                status the server reports, in the status's own words. */}
+            <ParachuteProgress
+              label={`Importing ${job.fileName}`}
+              state={runState(job.status)}
+              doneLabel={humaniseStatus(job.status)}
+              failedLabel={humaniseStatus(job.status)}
+              detail={
+                job.rowCount === null
+                  ? undefined
+                  : `${job.rowCount} ${job.rowCount === 1 ? 'row' : 'rows'} in the file`
+              }
+            />
+            <p className="inv-note" style={{ color: 'var(--fg-body)' }}>
+              {OUTCOME_COPY[job.status]}
             </p>
-          )}
-        </BandBody>
-      </div>
+            {inFlight && <Note>This page refreshes itself while it runs — nothing to reload.</Note>}
+          </div>
+        </Panel>
+      </AreaSection>
 
-      {job.errorReportKey !== null && <ErrorReport job={job} index="02" />}
+      {job.errorReportKey !== null && <ErrorReport job={job} />}
 
-      <div>
-        {/* 02 when nothing was refused, 03 when the band above it
-            exists — a gap in the numbers reads as a missing section. */}
-        <SectionBand
-          index={job.errorReportKey === null ? '02' : '03'}
-          title="Timing"
-          note="When it ran."
-        />
-        <BandBody>
-          <DescriptionList
+      <AreaSection title="Timing" note="When it ran.">
+        <Panel>
+          <Facts
             columns={3}
             items={[
               { label: 'Uploaded', value: formatDateTime(job.createdAt) },
@@ -191,10 +212,25 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
               { label: 'Import id', value: <Ident value={job.id} /> },
             ]}
           />
-        </BandBody>
-      </div>
-    </div>
+        </Panel>
+      </AreaSection>
+    </AreaPage>
   );
+}
+
+/** Where the run is, in the parachute's three states. F2-exhaustive. */
+function runState(status: BulkUploadStatus): ParachuteState {
+  switch (status) {
+    case BulkUploadStatus.PENDING:
+    case BulkUploadStatus.PROCESSING:
+      return 'running';
+    case BulkUploadStatus.COMPLETED:
+    case BulkUploadStatus.COMPLETED_WITH_ERRORS:
+      return 'done';
+    case BulkUploadStatus.FAILED:
+    case BulkUploadStatus.CANCELLED:
+      return 'failed';
+  }
 }
 
 /**
@@ -205,40 +241,33 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
  * `(sellerId, externalRef)` for products and `(sellerId, skuCode)` for
  * variants, so sending the corrected rows again touches only them.
  */
-function ErrorReport({
-  job,
-  index,
-}: {
-  readonly job: CsvImportView;
-  readonly index: string;
-}): ReactElement {
+function ErrorReport({ job }: { readonly job: CsvImportView }): ReactElement {
   const download = useErrorReportDownload();
 
   return (
-    <div className="mb-4">
-      <SectionBand index={index} title="Refused rows" note={`${job.rowsFailed} to fix`} />
-      <BandBody>
-        <p className="text-text-body text-sm leading-relaxed">
-          {job.rowsFailed} row{job.rowsFailed === 1 ? '' : 's'} could not be written. The report
-          below carries each one with the reason it was refused — fix those rows and upload the file
-          again; re-importing updates what already exists rather than duplicating it.
-        </p>
-        <div className="mt-3">
-          <Button
-            variant="secondary"
-            size="md"
-            disabled={download.isPending}
-            onClick={() => download.mutate({ id: job.id, fileName: job.fileName })}
-          >
-            <Download size={14} />
-            {download.isPending ? 'Preparing…' : 'Download the report'}
-          </Button>
+    <AreaSection title="Refused rows" note={`${job.rowsFailed} to fix`}>
+      <Panel>
+        <div className="inv-stack">
+          <p className="inv-note" style={{ color: 'var(--fg-body)' }}>
+            {job.rowsFailed} row{job.rowsFailed === 1 ? '' : 's'} could not be written. The report
+            below carries each one with the reason it was refused — fix those rows and upload the
+            file again; re-importing updates what already exists rather than duplicating it.
+          </p>
+          <div>
+            <AsyncButton
+              variant="secondary"
+              size="md"
+              icon={<Download size={15} />}
+              labels={{ idle: 'Download the report', busy: 'Preparing…' }}
+              state={mutationPhase(download)}
+              disabled={download.isPending}
+              onClick={() => download.mutate({ id: job.id, fileName: job.fileName })}
+            />
+          </div>
+          {download.error !== null && <InlineError message={serverVerdict(download.error)} />}
         </div>
-        {download.error !== null && (
-          <ErrorNote className="mt-3" message={serverVerdict(download.error)} />
-        )}
-      </BandBody>
-    </div>
+      </Panel>
+    </AreaSection>
   );
 }
 
@@ -261,18 +290,15 @@ const OUTCOME_COPY: Readonly<Record<BulkUploadStatus, string>> = {
 
 function BackLink(): ReactElement {
   return (
-    <Link
-      href="/products/import/jobs"
-      className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs"
-    >
-      <ArrowLeft size={13} />
+    <AreaBackLink href="/products/import/jobs">
+      <ArrowLeft size={14} />
       Import history
-    </Link>
+    </AreaBackLink>
   );
 }
 
 function Waiting(): ReactElement {
-  return <span className="text-text-faint">not yet</span>;
+  return <span className="inv-faint">not yet</span>;
 }
 
 /** Wall-clock time the worker held the file. Unknown until both ends
@@ -293,39 +319,29 @@ function formatDateTime(value: string): string {
 
 function DetailSkeleton(): ReactElement {
   return (
-    <div>
+    <AreaPage>
       <BackLink />
-      <div className="mb-6 space-y-2">
-        <Skeleton className="h-6 w-2/3 max-w-sm" />
-        <Skeleton className="h-3.5 w-1/3 max-w-[14rem]" />
+      <div className="inv-stack inv-stack--tight">
+        <Skeleton width="60%" height={28} />
+        <Skeleton width="30%" height={14} />
       </div>
-      <Card className="mb-6">
-        <CardBody>
-          <Skeleton className="h-4 w-3/4" />
-        </CardBody>
-      </Card>
-      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <KpiGrid>
         {Array.from({ length: 4 }, (_, i) => (
-          <Card key={i}>
-            <CardBody>
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="mt-2 h-5 w-12" />
-            </CardBody>
-          </Card>
+          <Panel key={i}>
+            <div className="inv-stack inv-stack--tight">
+              <Skeleton width={80} height={12} />
+              <Skeleton width={56} height={24} />
+            </div>
+          </Panel>
         ))}
-      </div>
-      <Card>
-        <CardBody>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {Array.from({ length: 5 }, (_, i) => (
-              <div key={i} className="space-y-1.5">
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-4 w-28" />
-              </div>
-            ))}
-          </div>
-        </CardBody>
-      </Card>
-    </div>
+      </KpiGrid>
+      <Panel>
+        <div className="inv-stack">
+          {Array.from({ length: 3 }, (_, i) => (
+            <Skeleton key={i} width="75%" height={16} />
+          ))}
+        </div>
+      </Panel>
+    </AreaPage>
   );
 }

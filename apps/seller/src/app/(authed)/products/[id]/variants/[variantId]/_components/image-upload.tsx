@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useRef, useState, type DragEvent, type ReactElement } from 'react';
-import { Trash2, Upload } from 'lucide-react';
+import { useCallback, useState, type ReactElement } from 'react';
+import { Trash2 } from 'lucide-react';
 import { ApiError } from '@skydrop/api-client';
 import {
   useDeleteImage,
@@ -9,7 +9,14 @@ import {
   useRegisterImage,
   useVariantImages,
 } from '@/lib/api-hooks';
-import { Button, EmptyState, ErrorState, LoadingState, StatusBadge } from '@skydrop/ui/components';
+import { serverVerdict } from '@/lib/server-verdict';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { DropZone } from '@skydrop/ui/app/drop-zone';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Note } from '@/app/(authed)/inventory/_components/stock-ui';
 
 /**
  * Variant image upload — drag-drop multi (up to MAX concurrent,
@@ -36,15 +43,28 @@ interface UploadItem {
   errorMessage: string | null;
 }
 
-export function VariantImageUpload({ variantId }: { variantId: string }): ReactElement {
+export function VariantImageUpload({
+  variantId,
+  skuCode,
+}: {
+  variantId: string;
+  /** Named in the delete confirm, so it says whose picture goes. */
+  skuCode?: string | undefined;
+}): ReactElement {
   const images = useVariantImages(variantId);
   const presign = usePresignImage();
   const register = useRegisterImage();
   const deleteImg = useDeleteImage();
 
   const [queue, setQueue] = useState<UploadItem[]>([]);
-  const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // The picture a delete is waiting on its confirm for, and its verdict.
+  const [pendingDelete, setPendingDelete] = useState<{
+    readonly id: string;
+    readonly position: number;
+    readonly sizeKb: number;
+    readonly src: string;
+  } | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const acceptFiles = useCallback(
     (files: FileList | File[]) => {
@@ -145,72 +165,37 @@ export function VariantImageUpload({ variantId }: { variantId: string }): ReactE
     [variantId, presign, register],
   );
 
-  const onDrop = useCallback(
-    (e: DragEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      setDragActive(false);
-      if (e.dataTransfer.files.length > 0) acceptFiles(e.dataTransfer.files);
-    },
-    [acceptFiles],
-  );
+  const total = images.data?.length ?? 0;
 
-  // No <Card> and no head of its own: the caller caps this with a
-  // SectionBand, and `BandBody` is the bordered surface. The drag hint
-  // that used to be the card subtitle now leads the dropzone, where
-  // the person about to drop something is looking.
+  // No card and no head of its own: the caller's section panel is the
+  // surface. The drag hint leads the drop zone, where the person about to
+  // drop something is looking. The zone only hands files over; the
+  // presign → PUT → register flow above is unchanged.
   return (
-    <div className="space-y-3">
-      <p className="text-text-faint text-xs">
-        Drag up to {MAX_UPLOAD_BATCH} files at once. JPG / PNG / WEBP.
-      </p>
-      {/* Dropzone */}
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragActive(true);
-        }}
-        onDragLeave={() => setDragActive(false)}
-        onDrop={onDrop}
-        className={
-          'rounded-[7px] border-2 border-dashed px-4 py-8 text-center transition-colors cursor-pointer ' +
-          (dragActive
-            ? 'border-accent bg-[var(--color-accent-tint)]'
-            : 'border-border hover:border-border-strong')
-        }
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <Upload size={20} className="mx-auto text-text-muted mb-2" />
-        <div className="text-text-body text-sm">Drop images here or click to browse</div>
-        <div className="text-text-faint text-xs mt-1">
-          JPG / PNG / WEBP · up to {MAX_UPLOAD_BATCH} at once
-        </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept={ACCEPTED_TYPES.join(',')}
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files) acceptFiles(e.target.files);
-            if (fileInputRef.current) fileInputRef.current.value = '';
-          }}
-        />
-      </div>
+    <div className="inv-stack">
+      <Note>Drag up to {MAX_UPLOAD_BATCH} files at once. JPG / PNG / WEBP.</Note>
+      <DropZone
+        label="Drop images here or click to browse"
+        hint={`JPG / PNG / WEBP · up to ${MAX_UPLOAD_BATCH} at once`}
+        buttonText="Choose images"
+        accept={ACCEPTED_TYPES.join(',')}
+        multiple
+        showFiles={false}
+        // A dropped file of the wrong type still reaches acceptFiles, which
+        // lists it as an INVALID_TYPE row exactly as before.
+        filterDropped={false}
+        onFiles={(files) => acceptFiles(files)}
+      />
 
       {/* Upload queue */}
       {queue.length > 0 && (
-        <ul className="space-y-1.5">
+        <ul className="prd-uploads" aria-label="Uploads">
           {queue.map((item) => (
-            <li
-              key={item.id}
-              className="flex items-center gap-3 px-2 py-1.5 rounded-[5px] bg-surface-raised border border-border"
-            >
-              <span className="text-text-body text-sm flex-1 min-w-0 truncate font-mono text-xs">
-                {item.file.name}
-              </span>
+            <li key={item.id} className="prd-upload">
+              <span className="prd-upload__name">{item.file.name}</span>
               <UploadStatusBadge status={item.status} />
               {item.status === 'error' && item.errorCode && (
-                <span className="text-critical text-xs font-mono">
+                <span className="inv-num" data-tone="bad" style={{ fontSize: 'var(--fs-xs)' }}>
                   [{item.errorCode}] {item.errorMessage}
                 </span>
               )}
@@ -220,50 +205,91 @@ export function VariantImageUpload({ variantId }: { variantId: string }): ReactE
       )}
 
       {/* Persisted images */}
-      <div className="pt-3 border-t border-border">
+      <div>
         {images.isLoading ? (
-          <LoadingState label="Loading images…" />
+          <SkeletonRows rows={2} label="Loading images…" />
         ) : images.isError ? (
           <ErrorState
             message={images.error?.message ?? 'Failed to load images.'}
             retry={() => void images.refetch()}
           />
         ) : !images.data || images.data.length === 0 ? (
-          <EmptyState title="No images yet" description="Drop a file above to upload your first." />
+          <EmptyState
+            bare
+            title="No images yet"
+            description="Drop a file above to upload your first."
+          />
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {images.data.map((img) => (
-              <div
-                key={img.id}
-                className="rounded-[5px] border border-border bg-surface-raised overflow-hidden"
-              >
+          <ul className="prd-gallery" aria-label="Pictures">
+            {images.data.map((img, i) => (
+              <li key={img.id} className="prd-gallery__item">
                 {/* Plain img — Next/Image would need a remotePatterns
                        allowlist; deferred for Phase 2 optimizations. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={img.thumbnailUrl ?? img.displayUrl}
                   alt={img.altText ?? 'Variant image'}
-                  className="w-full aspect-square object-cover"
+                  className="prd-gallery__img"
                 />
-                <div className="flex items-center justify-between px-2 py-1.5 text-xs">
-                  <span className="text-text-faint font-mono truncate">
-                    {Math.round(img.sizeBytes / 1024)} KB
-                  </span>
+                <div className="prd-gallery__bar">
+                  <span className="sk-figure">{Math.round(img.sizeBytes / 1024)} KB</span>
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => void deleteImg.mutateAsync({ variantId, imageId: img.id })}
+                    icon={<Trash2 size={14} />}
+                    onClick={() => {
+                      setDeleteError(null);
+                      setPendingDelete({
+                        id: img.id,
+                        position: i + 1,
+                        sizeKb: Math.round(img.sizeBytes / 1024),
+                        src: img.thumbnailUrl ?? img.displayUrl,
+                      });
+                    }}
                     disabled={deleteImg.isPending}
                     title="Delete image"
-                  >
-                    <Trash2 size={12} />
-                  </Button>
+                    aria-label="Delete image"
+                  />
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDelete(null);
+            setDeleteError(null);
+          }
+        }}
+        title="Delete this picture?"
+        entity={
+          pendingDelete === null
+            ? ''
+            : `${skuCode ?? 'This SKU'} · picture ${pendingDelete.position} of ${total} · ${pendingDelete.sizeKb} KB`
+        }
+        consequence="It is removed from this SKU and customers stop seeing it beside the product. To show it again you upload it again."
+        confirmLabel="Delete picture"
+        destructive
+        error={deleteError ?? undefined}
+        onConfirm={async () => {
+          if (pendingDelete === null) return;
+          try {
+            await deleteImg.mutateAsync({ variantId, imageId: pendingDelete.id });
+          } catch (err) {
+            setDeleteError(serverVerdict(err));
+            throw err;
+          }
+        }}
+      >
+        {pendingDelete !== null && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={pendingDelete.src} alt="" className="prd-thumb prd-thumb--lg" />
+        )}
+      </ConfirmDialog>
     </div>
   );
 }
@@ -277,5 +303,5 @@ function UploadStatusBadge({ status }: { status: UploadItem['status'] }): ReactE
         : status === 'queued'
           ? ('pending' as const)
           : ('in-transit' as const);
-  return <StatusBadge kind={kind} label={status} />;
+  return <StatusChip kind={kind} label={status} size="sm" />;
 }

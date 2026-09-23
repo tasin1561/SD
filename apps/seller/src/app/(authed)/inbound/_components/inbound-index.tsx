@@ -2,36 +2,54 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
-import { Info, PackageOpen, Plane, Scale } from 'lucide-react';
+import {
+  Info,
+  MapPin,
+  PackageOpen,
+  PackagePlus,
+  Plane,
+  Plus,
+  RotateCcw,
+  Scale,
+  Ship,
+  Trash2,
+  Truck,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { ConsignmentRoute, ConsignmentStatus } from '@skydrop/db';
+import { Num } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
+import { Table, TBody, Td, Th, THead, Tr, TableEmpty } from '@skydrop/ui/app/data-table';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { NumberStepper } from '@skydrop/ui/app/number-stepper';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Stepper } from '@skydrop/ui/app/stepper';
+import { Tabs } from '@skydrop/ui/app/tabs';
+import { TextField } from '@skydrop/ui/app/text-field';
 import {
-  BandBody,
-  Button,
-  Crumbs,
-  EmptyState,
-  ErrorNote,
-  FilterChip,
-  FormField,
-  Input,
-  MetaChip,
-  Modal,
-  ModalFooter,
-  Num,
-  PageHeader,
-  SectionBand,
-  Section,
-  SkeletonRows,
-  Stat,
-  StatusBadge,
-  TBody,
-  Table,
-  TablePaginator,
-  Td,
-  THead,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+  AreaPage,
+  AreaSection,
+  Dash,
+  FieldGrid,
+  InlineError,
+  KpiGrid,
+  MetaFact,
+  MetaFacts,
+  Note,
+  Panel,
+  PanelPad,
+  mutationPhase,
+  rawCount,
+} from '@/app/(authed)/inventory/_components/stock-ui';
 import { consignmentStatusKind } from '@skydrop/ui/status';
 import { useConsignments, useDeclareConsignment } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -92,37 +110,41 @@ export function InboundIndex(): ReactElement {
   const landed = items.filter((c) => c.status === ConsignmentStatus.COMPLETED);
   const filtered = status !== '' || route !== '';
 
+  const resetFilters = (): void => {
+    setStatus('');
+    setRoute('');
+    setPage(1);
+  };
+
   return (
-    <div>
+    <AreaPage>
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[{ label: 'Seller console' }, { label: 'Stock' }, { label: 'Add stock' }]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[{ label: 'Seller console' }, { label: 'Stock' }, { label: 'Add stock' }]}
+        Link={Link}
         title="Add stock"
         subtitle="Consignments on their way to the Indian warehouse — where each one is now, and what was counted when it got there."
         meta={
           list.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">
+            <MetaFacts>
+              <MetaFact tone="accent">
                 {total} {total === 1 ? 'consignment' : 'consignments'}
-              </MetaChip>
-              {moving.length > 0 && <MetaChip dot>{moving.length} still travelling</MetaChip>}
+              </MetaFact>
+              {moving.length > 0 && <MetaFact dot>{moving.length} still travelling</MetaFact>}
               {varied.length > 0 && (
-                <MetaChip tone="warn">{varied.length} counted differently</MetaChip>
+                <MetaFact tone="warn">{varied.length} counted differently</MetaFact>
               )}
-            </>
+            </MetaFacts>
           )
         }
         action={
           canManage ? (
-            // PRIMARY, and the larger size. `Button` defaults to
-            // secondary, so the one action this page exists for was
-            // rendering as an outline in the corner — quieter than the
-            // filters below it.
-            <Button variant="primary" size="md" onClick={() => setAnnouncing(true)}>
+            // PRIMARY — the one action this page exists for.
+            <Button
+              variant="primary"
+              size="md"
+              icon={<PackagePlus size={16} />}
+              onClick={() => setAnnouncing(true)}
+            >
               Announce a consignment
             </Button>
           ) : undefined
@@ -138,48 +160,52 @@ export function InboundIndex(): ReactElement {
         of rows dressed as a fleet statistic is the reading a seller
         would plan a shipment around.
       */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Stat
-          label="Still travelling"
-          icon={<Plane size={13} aria-hidden />}
-          value={
-            list.data === undefined ? <span className="text-text-faint">—</span> : moving.length
-          }
-          unit={list.data === undefined ? undefined : 'on this page'}
-          tone="neutral"
-          hint="Announced, in Dhaka, or in the air."
-        />
-        <Stat
-          label="Landed and counted"
-          icon={<PackageOpen size={13} aria-hidden />}
-          value={
-            list.data === undefined ? <span className="text-text-faint">—</span> : landed.length
-          }
-          unit={list.data === undefined ? undefined : 'on this page'}
-          tone="neutral"
-          hint="Fully received in India. Their stock is on the shelf."
-        />
-        <Stat
-          label="Counted differently"
-          icon={<Scale size={13} aria-hidden />}
-          value={
-            list.data === undefined ? <span className="text-text-faint">—</span> : varied.length
-          }
-          unit={list.data === undefined ? undefined : 'on this page'}
-          tone={varied.length > 0 ? 'warn' : 'neutral'}
-          // CNS-3: a variance is a NUMBER, never a blocking state.
-          // Saying so on the tile is what stops somebody waiting for a
-          // release that is never coming.
-          hint={
-            varied.length > 0
-              ? 'Nothing is blocked by it — your stock is what was counted.'
-              : 'Every count so far matched what was declared.'
-          }
-        />
-      </div>
+      {list.data === undefined ? (
+        <KpiGrid>
+          <KpiCard label="Still travelling" icon={<Plane size={14} />} figure={<Dash />} />
+          <KpiCard label="Landed and counted" icon={<PackageOpen size={14} />} figure={<Dash />} />
+          <KpiCard label="Counted differently" icon={<Scale size={14} />} figure={<Dash />} />
+        </KpiGrid>
+      ) : (
+        <KpiGrid>
+          <KpiCard
+            label="Still travelling"
+            icon={<Plane size={14} />}
+            value={moving.length}
+            format={rawCount}
+            unit="on this page"
+            tone="info"
+            hint="Announced, in Dhaka, or in the air."
+          />
+          <KpiCard
+            label="Landed and counted"
+            icon={<PackageOpen size={14} />}
+            value={landed.length}
+            format={rawCount}
+            unit="on this page"
+            tone="neutral"
+            hint="Fully received in India. Their stock is on the shelf."
+          />
+          <KpiCard
+            label="Counted differently"
+            icon={<Scale size={14} />}
+            value={varied.length}
+            format={rawCount}
+            unit="on this page"
+            tone={varied.length > 0 ? 'pending' : 'neutral'}
+            // CNS-3: a variance is a NUMBER, never a blocking state.
+            // Saying so on the tile is what stops somebody waiting for a
+            // release that is never coming.
+            hint={
+              varied.length > 0
+                ? 'Nothing is blocked by it — your stock is what was counted.'
+                : 'Every count so far matched what was declared.'
+            }
+          />
+        </KpiGrid>
+      )}
 
-      <SectionBand
-        index="01"
+      <AreaSection
         title="Consignment register"
         note={
           list.data === undefined
@@ -187,188 +213,170 @@ export function InboundIndex(): ReactElement {
             : `${total} ${total === 1 ? 'consignment' : 'consignments'}${filtered ? ' matching' : ''}`
         }
         action={
-          filtered && (
-            <button
-              type="button"
-              onClick={() => {
-                setStatus('');
-                setRoute('');
-                setPage(1);
-              }}
-              className="text-text-faint hover:text-text-body px-1 text-xs transition-colors"
-            >
+          filtered ? (
+            <Button variant="ghost" size="sm" icon={<RotateCcw size={14} />} onClick={resetFilters}>
               Reset
-            </button>
-          )
+            </Button>
+          ) : undefined
         }
-      />
-
-      <BandBody flush>
-        {/* Two chip rows — where it is, and which way it came. Both are
-            short vocabularies worth seeing at once, and the comps put
-            the triage row directly above the register it filters. */}
-        <div className="border-border space-y-1.5 border-b px-3 py-2.5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-text-faint mr-1 font-mono text-[11px] tracking-[0.08em] uppercase">
-              Where
-            </span>
-            <FilterChip
-              label="Anywhere"
-              active={status === ''}
-              onClick={() => {
-                setStatus('');
-                setPage(1);
-              }}
-            />
-            {Object.values(ConsignmentStatus).map((s) => (
-              <FilterChip
-                key={s}
-                label={statusWords(s)}
-                active={status === s}
-                onClick={() => {
-                  setStatus(s);
+      >
+        <Panel flush>
+          {/* Two tab rows — where it is, and which way it came. Both are
+              short vocabularies worth seeing at once, directly above the
+              register they filter. Their labels are plain sentence-case
+              words now, not mono capitals. */}
+          <div className="inv-pad inv-stack inv-stack--tight">
+            <div className="inv-filter-row">
+              <span className="inv-filter-row__label" id="cn-where">
+                Where
+              </span>
+              <Tabs
+                label="Where"
+                size="sm"
+                value={status === '' ? 'ANY' : status}
+                onChange={(id) => {
+                  setStatus(id === 'ANY' ? '' : (id as ConsignmentStatus));
                   setPage(1);
                 }}
+                items={[
+                  { id: 'ANY', label: 'Anywhere' },
+                  ...Object.values(ConsignmentStatus).map((s) => ({
+                    id: s,
+                    label: statusWords(s),
+                  })),
+                ]}
               />
-            ))}
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-text-faint mr-1 font-mono text-[11px] tracking-[0.08em] uppercase">
-              Route
-            </span>
-            <FilterChip
-              label="Either route"
-              active={route === ''}
-              onClick={() => {
-                setRoute('');
-                setPage(1);
-              }}
-            />
-            {Object.values(ConsignmentRoute).map((r) => (
-              <FilterChip
-                key={r}
-                label={routeWords(r).title}
-                active={route === r}
-                onClick={() => {
-                  setRoute(r);
+            </div>
+            <div className="inv-filter-row">
+              <span className="inv-filter-row__label" id="cn-route">
+                Route
+              </span>
+              <Tabs
+                label="Route"
+                size="sm"
+                value={route === '' ? 'ANY' : route}
+                onChange={(id) => {
+                  setRoute(id === 'ANY' ? '' : (id as ConsignmentRoute));
                   setPage(1);
                 }}
+                items={[
+                  { id: 'ANY', label: 'Either route' },
+                  ...Object.values(ConsignmentRoute).map((r) => ({
+                    id: r,
+                    label: routeWords(r).title,
+                  })),
+                ]}
               />
-            ))}
+            </div>
           </div>
-        </div>
 
-        {list.isLoading ? (
-          <div className="p-3">
-            <SkeletonRows rows={5} />
-          </div>
-        ) : list.isError ? (
-          <div className="p-3">
-            <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
-          </div>
-        ) : items.length === 0 ? (
-          <div className="p-3">
-            <EmptyState
-              title={filtered ? 'Nothing matches that' : 'No stock announced yet'}
-              description={
-                filtered
-                  ? 'Try another place or route, or reset the filters.'
-                  : 'Announce a consignment before it ships so receiving knows to expect it — and so you can follow it.'
-              }
-              action={
-                filtered ? (
-                  <Button
-                    variant="secondary"
-                    size="md"
-                    onClick={() => {
-                      setStatus('');
-                      setRoute('');
-                      setPage(1);
-                    }}
-                  >
-                    Reset filters
-                  </Button>
-                ) : canManage ? (
-                  <Button variant="primary" size="md" onClick={() => setAnnouncing(true)}>
-                    Announce a consignment
-                  </Button>
-                ) : undefined
-              }
-              bare
-            />
-          </div>
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Consignment</Th>
-                <Th>Route</Th>
-                <Th align="right">Products</Th>
-                <Th>Your reference</Th>
-                <Th>Expected</Th>
-                <Th>Where it is</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {items.map((c) => (
-                <Tr
-                  key={c.id}
-                  // `onActivate`, not a raw onClick: it already skips a
-                  // click that landed on a link or button, and one that
-                  // ended a text selection. The <a> below stays — it is
-                  // the keyboard path, and a <tr> has no Enter key.
-                  onActivate={() => router.push(`/inbound/${c.id}`)}
-                >
-                  <Td>
-                    <Link
-                      href={`/inbound/${c.id}`}
-                      className="text-accent font-mono text-xs hover:underline"
+          {list.isLoading ? (
+            <PanelPad>
+              <SkeletonRows rows={5} cols={6} />
+            </PanelPad>
+          ) : list.isError ? (
+            <PanelPad>
+              <InlineError message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+            </PanelPad>
+          ) : items.length === 0 ? (
+            <PanelPad>
+              <EmptyState
+                title={filtered ? 'Nothing matches that' : 'No stock announced yet'}
+                description={
+                  filtered
+                    ? 'Try another place or route, or reset the filters.'
+                    : 'Announce a consignment before it ships so receiving knows to expect it — and so you can follow it.'
+                }
+                action={
+                  filtered ? (
+                    <Button variant="secondary" size="md" onClick={resetFilters}>
+                      Reset filters
+                    </Button>
+                  ) : canManage ? (
+                    <Button
+                      variant="primary"
+                      size="md"
+                      icon={<PackagePlus size={16} />}
+                      onClick={() => setAnnouncing(true)}
                     >
-                      {c.consignmentNumber}
-                    </Link>
-                  </Td>
-                  <Td>{routeWords(c.route).title}</Td>
-                  <Td align="right">
-                    <Num value={productCount(c)} />
-                  </Td>
-                  <Td className="text-text-muted text-xs">
-                    {c.sellerReference ?? <span className="text-text-faint">—</span>}
-                  </Td>
-                  <Td className="text-text-muted font-mono text-xs">
-                    {shortDate(c.expectedArrivalAt)}
-                  </Td>
-                  <Td>
-                    <StatusBadge
-                      kind={consignmentStatusKind(c.status)}
-                      label={statusWords(c.status)}
-                    />
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-            <tfoot>
-              <tr>
-                <td colSpan={6} className="p-0">
-                  <TablePaginator
-                    page={page}
-                    pageSize={PAGE_SIZE}
-                    total={total}
-                    onPageChange={setPage}
-                  />
-                </td>
-              </tr>
-            </tfoot>
-          </Table>
-        )}
-      </BandBody>
-
-      <p className="text-text-muted mt-3 text-sm">
-        Open a consignment to see its timeline, and what each warehouse counted against what you
-        declared.
-      </p>
+                      Announce a consignment
+                    </Button>
+                  ) : undefined
+                }
+                bare
+              />
+            </PanelPad>
+          ) : (
+            <>
+              <Table caption="Consignment register">
+                <THead>
+                  <Tr>
+                    <Th>Consignment</Th>
+                    <Th>Route</Th>
+                    <Th align="right">Products</Th>
+                    <Th>Your reference</Th>
+                    <Th>Expected</Th>
+                    <Th>Where it is</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {items.map((c) => (
+                    <Tr
+                      key={c.id}
+                      // `onActivate`, not a raw onClick: it already skips a
+                      // click that landed on a link or button, and one that
+                      // ended a text selection. The <a> below stays — it is
+                      // the keyboard path, and a <tr> has no Enter key.
+                      onActivate={() => router.push(`/inbound/${c.id}`)}
+                    >
+                      <Td>
+                        <Link href={`/inbound/${c.id}`} className="inv-link sk-ident">
+                          {c.consignmentNumber}
+                        </Link>
+                      </Td>
+                      <Td>{routeWords(c.route).title}</Td>
+                      <Td align="right">
+                        <Num value={productCount(c)} />
+                      </Td>
+                      <Td>
+                        <span className="inv-muted">{c.sellerReference ?? <Dash />}</span>
+                      </Td>
+                      <Td>
+                        <span className="sk-figure inv-muted">
+                          {shortDate(c.expectedArrivalAt)}
+                        </span>
+                      </Td>
+                      <Td>
+                        <StatusChip
+                          kind={consignmentStatusKind(c.status)}
+                          label={statusWords(c.status)}
+                          size="sm"
+                        />
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+              <PanelPad>
+                <Pagination
+                  page={page}
+                  pageSize={PAGE_SIZE}
+                  total={total}
+                  onPageChange={setPage}
+                  label="Consignment pages"
+                />
+              </PanelPad>
+            </>
+          )}
+        </Panel>
+        <Note>
+          Open a consignment to see its timeline, and what each warehouse counted against what you
+          declared.
+        </Note>
+      </AreaSection>
 
       <AnnounceConsignment open={announcing} onClose={() => setAnnouncing(false)} />
-    </div>
+    </AreaPage>
   );
 }
 
@@ -480,90 +488,140 @@ function AnnounceConsignment({
   const draft = draftLine();
   const pendingLines = draft === null ? lines : [...lines, draft];
 
+  // The three steps of announcing, as a progress header over the SAME
+  // single form: the route always has an answer (it defaults), the
+  // contents step is done once a product is listed, and the last step is
+  // the arrival date, reference and the Announce press. Nothing is hidden
+  // or skipped — it only shows where the form stands.
+  const step = pendingLines.length === 0 ? 1 : 2;
+
+  function announce(): void {
+    create.mutate(
+      {
+        route,
+        // Mapped down to the wire shape here — the extra fields
+        // exist so the seller can read the list, not for the API.
+        lines: pendingLines.map((l) => ({
+          variantId: l.variantId,
+          expectedQty: l.expectedQty,
+          ...(l.unitCostInr === undefined ? {} : { unitCostInr: l.unitCostInr }),
+          ...(l.manufacturedAt === undefined ? {} : { manufacturedAt: l.manufacturedAt }),
+          ...(l.expiresAt === undefined ? {} : { expiresAt: l.expiresAt }),
+        })),
+        ...(expectedArrivalAt === ''
+          ? {}
+          : { expectedArrivalAt: new Date(expectedArrivalAt).toISOString() }),
+        ...(sellerReference.trim() === '' ? {} : { sellerReference: sellerReference.trim() }),
+      },
+      { onSuccess: close },
+    );
+  }
+
+  const announceLabel = `Announce ${pendingLines.length} product${pendingLines.length === 1 ? '' : 's'}`;
+
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) close();
       }}
       size="lg"
+      icon={<Ship size={18} />}
       title="Announce a consignment"
       description="Say where you are sending it and what is in it, so receiving knows what to count against."
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={close}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            icon={<Truck size={16} />}
+            labels={{ idle: announceLabel, busy: 'Announcing…' }}
+            state={mutationPhase(create)}
+            disabled={pendingLines.length === 0 || create.isPending}
+            onClick={announce}
+          />
+        </DialogFooter>
+      }
     >
-      <Section
-        title="Where are you sending it?"
-        // The full explanation of each route used to sit inside the two
-        // choices, which made them tall enough to be most of the modal —
-        // and a seller picking the same route for the tenth time read
-        // none of it. It moved behind this toggle: the choice carries
-        // enough to decide, the paragraph is one click away, and neither
-        // is lost.
-        action={
-          <button
-            type="button"
-            onClick={() => setRouteInfo((v) => !v)}
-            aria-expanded={routeInfo}
-            aria-label={routeInfo ? 'Hide what the routes mean' : 'What do the routes mean?'}
-            className="text-text-muted hover:text-text-strong inline-flex h-8 w-8 items-center justify-center rounded-full"
-          >
-            <Info size={16} aria-hidden />
-          </button>
-        }
-      >
-        <fieldset className="grid gap-2 sm:grid-cols-2">
-          <legend className="sr-only">Route</legend>
-          {Object.values(ConsignmentRoute).map((r) => {
-            const words = routeWords(r);
-            const chosen = route === r;
-            return (
-              <label
-                key={r}
-                className={`border-border flex min-h-[44px] cursor-pointer items-center gap-2.5 rounded-[6px] border px-3 py-2 ${
-                  chosen ? 'bg-[var(--color-accent-tint)] border-accent' : 'hover:bg-surface-hover'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="cn-route-choice"
-                  value={r}
-                  checked={chosen}
-                  onChange={() => setRoute(r)}
-                  className="h-4 w-4 shrink-0"
-                />
-                <span className="flex min-w-0 flex-col">
-                  <span className="text-text-strong text-sm font-medium">{words.title}</span>
-                  <span className="text-text-muted text-xs">{words.hint}</span>
-                </span>
-              </label>
-            );
-          })}
-        </fieldset>
-        {routeInfo && (
-          <dl className="text-text-muted mt-2 space-y-1.5 text-xs leading-snug">
-            {Object.values(ConsignmentRoute).map((r) => (
-              <div key={r}>
-                <dt className="text-text-strong inline font-medium">{routeWords(r).title}: </dt>
-                <dd className="inline">{routeWords(r).blurb}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </Section>
+      <div className="inv-stack">
+        <Stepper
+          mode="wizard"
+          label="Announcing a consignment"
+          current={step}
+          navigable="none"
+          steps={[
+            { id: 'cn-step-route', label: 'Route', icon: <MapPin size={14} /> },
+            { id: 'cn-step-lines', label: 'Contents', icon: <PackageOpen size={14} /> },
+            { id: 'cn-step-send', label: 'Arrival and reference', icon: <Truck size={14} /> },
+          ]}
+        />
 
-      <Section title="What is in it?">
-        <p className="text-text-muted mb-3 text-xs">
-          At least one product. Unit cost is optional but makes landed cost and margin accurate.
-        </p>
-        {/*
-          Four columns, with the button in the last one. It belongs to
-          the row it adds — parked on a line of its own underneath, it
-          read as a second opinion on the whole form and sat close enough
-          to Announce to be mistaken for it.
-        */}
-        <div className="grid items-start gap-3 sm:grid-cols-[2fr_1fr_1fr_auto]">
-          <FormField label="Item" htmlFor="cn-variant">
+        <section className="inv-stack inv-stack--tight" aria-labelledby="cn-route-h">
+          <SectionHeading
+            as="h3"
+            id="cn-route-h"
+            title="Where are you sending it?"
+            // The full explanation of each route used to sit inside the
+            // two choices, which made them tall enough to be most of the
+            // modal — and a seller picking the same route for the tenth
+            // time read none of it. It moved behind this toggle: the
+            // choice carries enough to decide, the paragraph is one click
+            // away, and neither is lost.
+            action={
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={<Info size={16} />}
+                onClick={() => setRouteInfo((v) => !v)}
+                aria-expanded={routeInfo}
+                aria-label={routeInfo ? 'Hide what the routes mean' : 'What do the routes mean?'}
+              />
+            }
+          />
+          <ChoiceCards
+            label="Route"
+            hideLegend
+            name="cn-route-choice"
+            value={route}
+            onChange={(v) => setRoute(v as ConsignmentRoute)}
+            options={Object.values(ConsignmentRoute).map((r) => ({
+              value: r,
+              title: routeWords(r).title,
+              description: routeWords(r).hint,
+              icon: r === ConsignmentRoute.DIRECT_IN ? <Truck size={16} /> : <Plane size={16} />,
+            }))}
+          />
+          {routeInfo && (
+            <dl className="inv-route-info">
+              {Object.values(ConsignmentRoute).map((r) => (
+                <div key={r}>
+                  <dt>{routeWords(r).title}: </dt>
+                  <dd>{routeWords(r).blurb}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+        </section>
+
+        <section className="inv-stack inv-stack--tight" aria-labelledby="cn-lines-h">
+          <SectionHeading as="h3" id="cn-lines-h" title="What is in it?" />
+          <Note>
+            At least one product. Unit cost is optional but makes landed cost and margin accurate.
+          </Note>
+          {/*
+            Four columns, with the button in the last one. It belongs to
+            the row it adds — parked on a line of its own underneath, it
+            read as a second opinion on the whole form and sat close enough
+            to Announce to be mistaken for it.
+          */}
+          <div className="inv-line-grid">
             <VariantPicker
               id="cn-variant"
+              fieldLabel="Item"
               value={picked?.id ?? ''}
               label={variantLabel}
               onPick={(hit, shown) => {
@@ -571,54 +629,45 @@ function AnnounceConsignment({
                 setVariantLabel(shown);
               }}
             />
-          </FormField>
-          <FormField label="Quantity" htmlFor="cn-qty">
-            <Input
+            <NumberStepper
+              label="Quantity"
               id="cn-qty"
-              type="number"
               min={1}
               value={qty}
               onChange={(e) => setQty(e.target.value)}
             />
-          </FormField>
-          <FormField label="Unit cost (₹)" htmlFor="cn-cost" hint="Optional">
-            <Input
+            <TextField
+              label="Unit cost (₹)"
               id="cn-cost"
+              hint="Optional"
               type="number"
               min={0}
               step="0.01"
               value={unitCost}
               onChange={(e) => setUnitCost(e.target.value)}
             />
-          </FormField>
-          {/*
-            Inside a FormField with an INVISIBLE label, so it inherits the
-            same vertical rhythm as the three inputs and lands on their
-            baseline. Aligning the column with `justify-end` instead put
-            it at the bottom of the tallest column — and "Unit cost"
-            carries an "Optional" hint, so the button sat a line low.
+            {/*
+              Always PRIMARY, never dimmed to secondary while incomplete.
+              The disabled state already reads as not-yet; switching
+              colour as well made it recede exactly when somebody is
+              looking for what to press next.
+            */}
+            <div className="inv-line-grid__add">
+              <Button
+                variant="primary"
+                size="lg"
+                icon={<Plus size={16} />}
+                disabled={!lineReady}
+                onClick={addLine}
+                aria-label="Add this product to the consignment"
+              >
+                Add
+              </Button>
+            </div>
+          </div>
 
-            Always PRIMARY, never dimmed to secondary while incomplete.
-            The disabled state already reads as not-yet (50% opacity, no
-            pointer); switching colour as well made it recede exactly when
-            somebody is looking for what to press next.
-          */}
-          <FormField label={<span aria-hidden>&nbsp;</span>}>
-            <span className="sr-only">Add this product to the consignment</span>
-            <Button
-              variant="primary"
-              disabled={!lineReady}
-              onClick={addLine}
-              className="h-10 w-full whitespace-nowrap sm:w-auto sm:px-6"
-            >
-              Add
-            </Button>
-          </FormField>
-        </div>
-
-        <label className="text-text-body mt-2 flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
+          <Checkbox
+            label="Has manufacture / expiry dates"
             checked={hasDates}
             onChange={(e) => {
               setHasDates(e.target.checked);
@@ -629,82 +678,74 @@ function AnnounceConsignment({
                 setExpiresAt('');
               }
             }}
-            className="h-4 w-4"
           />
-          Has manufacture / expiry dates
-        </label>
-        {hasDates && (
-          <div className="mt-2 grid gap-3 sm:grid-cols-2">
-            <FormField label="Manufactured" htmlFor="cn-mfg" hint="Optional">
-              <Input
+          {hasDates && (
+            <FieldGrid columns={2}>
+              <DateField
+                label="Manufactured"
                 id="cn-mfg"
-                type="date"
+                hint="Optional"
                 value={manufacturedAt}
                 onChange={(e) => setManufacturedAt(e.target.value)}
               />
-            </FormField>
-            <FormField label="Expires" htmlFor="cn-exp" hint="Optional">
-              <Input
+              <DateField
+                label="Expires"
                 id="cn-exp"
-                type="date"
+                hint="Optional"
                 value={expiresAt}
                 onChange={(e) => setExpiresAt(e.target.value)}
               />
-            </FormField>
-          </div>
-        )}
+            </FieldGrid>
+          )}
 
-        {/*
-          Always rendered, empty or not. Hidden until the first row went
-          in, the seller had no way to know a list existed — they filled
-          the fields, saw nothing appear anywhere, and reasonably assumed
-          typing them was the whole job. The header IS the instruction.
-        */}
-        <div className="mt-3">
-          <Table>
+          {/*
+            Always rendered, empty or not. Hidden until the first row went
+            in, the seller had no way to know a list existed — they filled
+            the fields, saw nothing appear anywhere, and reasonably assumed
+            typing them was the whole job. The header IS the instruction.
+          */}
+          <Table caption="Products in this consignment">
             <THead>
               <Tr>
                 <Th>Product</Th>
                 <Th align="right">Qty</Th>
                 <Th align="right">Unit cost</Th>
-                <Th align="right" />
+                <Th align="right" aria-label="Remove" />
               </Tr>
             </THead>
             <TBody>
               {lines.map((l, i) => (
                 <Tr key={`${l.variantId}-${i}`}>
                   <Td>
-                    <span className="flex items-center gap-2.5">
+                    <span className="inv-product">
                       {l.imageUrl !== null ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={l.imageUrl}
-                          alt=""
-                          className="border-border h-8 w-8 shrink-0 rounded-[4px] border object-cover"
-                        />
+                        <img src={l.imageUrl} alt="" className="prd-thumb" />
                       ) : (
-                        <span
-                          className="border-border bg-surface-raised h-8 w-8 shrink-0 rounded-[4px] border"
-                          aria-hidden
-                        />
+                        <span className="prd-thumb" aria-hidden />
                       )}
-                      <span className="flex min-w-0 flex-col">
+                      <span className="inv-combo__text">
                         {/* Same reason as the picker: the variant label
                             is the tail of the string and the thing that
                             distinguishes one staged row from the next. */}
-                        <span className="text-text-body text-sm leading-snug">{l.label}</span>
-                        <span className="text-text-muted font-mono text-xs">{l.skuCode}</span>
+                        <span className="inv-combo__name">{l.label}</span>
+                        <span className="sk-ident inv-muted">{l.skuCode}</span>
                       </span>
                     </span>
                   </Td>
                   <Td align="right">
                     <Num value={l.expectedQty} />
                   </Td>
-                  <Td align="right">{l.unitCostInr === undefined ? '—' : l.unitCostInr}</Td>
+                  <Td align="right">
+                    <span className="sk-figure">
+                      {l.unitCostInr === undefined ? '—' : l.unitCostInr}
+                    </span>
+                  </Td>
                   <Td align="right">
                     <Button
                       variant="ghost"
                       size="sm"
+                      icon={<Trash2 size={14} />}
                       onClick={() => setLines((ls) => ls.filter((_, j) => j !== i))}
                     >
                       Remove
@@ -713,81 +754,35 @@ function AnnounceConsignment({
                 </Tr>
               ))}
               {lines.length === 0 && (
-                <Tr>
-                  <Td colSpan={4}>
-                    <span className="text-text-muted text-xs">
-                      Nothing added yet. Pick a product above, give it a quantity, then press Add.
-                    </span>
-                  </Td>
-                </Tr>
+                <TableEmpty colSpan={4}>
+                  <span className="inv-muted">
+                    Nothing added yet. Pick a product above, give it a quantity, then press Add.
+                  </span>
+                </TableEmpty>
               )}
             </TBody>
           </Table>
-        </div>
-      </Section>
+        </section>
 
-      <Section>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField
+        <FieldGrid columns={2}>
+          <DateField
             label="Expected arrival"
-            htmlFor="cn-eta"
+            id="cn-eta"
             hint="Optional. A rough date beats none."
-          >
-            <Input
-              id="cn-eta"
-              type="date"
-              value={expectedArrivalAt}
-              onChange={(e) => setExpectedArrivalAt(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Your reference" htmlFor="cn-ref" hint="Optional.">
-            <Input
-              id="cn-ref"
-              value={sellerReference}
-              onChange={(e) => setSellerReference(e.target.value)}
-            />
-          </FormField>
-        </div>
-      </Section>
+            value={expectedArrivalAt}
+            onChange={(e) => setExpectedArrivalAt(e.target.value)}
+          />
+          <TextField
+            label="Your reference"
+            id="cn-ref"
+            hint="Optional."
+            value={sellerReference}
+            onChange={(e) => setSellerReference(e.target.value)}
+          />
+        </FieldGrid>
 
-      {create.error !== null && <ErrorNote message={serverVerdict(create.error)} />}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close}>
-          Cancel
-        </Button>
-        <Button
-          size="md"
-          disabled={pendingLines.length === 0 || create.isPending}
-          onClick={() =>
-            create.mutate(
-              {
-                route,
-                // Mapped down to the wire shape here — the extra fields
-                // exist so the seller can read the list, not for the API.
-                lines: pendingLines.map((l) => ({
-                  variantId: l.variantId,
-                  expectedQty: l.expectedQty,
-                  ...(l.unitCostInr === undefined ? {} : { unitCostInr: l.unitCostInr }),
-                  ...(l.manufacturedAt === undefined ? {} : { manufacturedAt: l.manufacturedAt }),
-                  ...(l.expiresAt === undefined ? {} : { expiresAt: l.expiresAt }),
-                })),
-                ...(expectedArrivalAt === ''
-                  ? {}
-                  : { expectedArrivalAt: new Date(expectedArrivalAt).toISOString() }),
-                ...(sellerReference.trim() === ''
-                  ? {}
-                  : { sellerReference: sellerReference.trim() }),
-              },
-              { onSuccess: close },
-            )
-          }
-        >
-          {create.isPending
-            ? 'Announcing…'
-            : `Announce ${pendingLines.length} product${pendingLines.length === 1 ? '' : 's'}`}
-        </Button>
-      </ModalFooter>
-    </Modal>
+        {create.error !== null && <InlineError message={serverVerdict(create.error)} />}
+      </div>
+    </Dialog>
   );
 }

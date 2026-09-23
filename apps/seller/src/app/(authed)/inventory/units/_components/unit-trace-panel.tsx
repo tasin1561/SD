@@ -1,22 +1,18 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { Search } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TextField } from '@skydrop/ui/app/text-field';
 import {
-  BandBody,
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  SectionBand,
-  SkeletonRows,
+  AreaSection,
+  InlineError,
+  Note,
+  Panel,
   StockUnitStatusBadge,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-} from '@skydrop/ui/components';
+} from '@/app/(authed)/inventory/_components/stock-ui';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useUnitTrace } from '@/lib/ops-hooks';
 
@@ -42,16 +38,16 @@ export function UnitTracePanel(): ReactElement {
   const events = trace.data?.events ?? [];
 
   return (
-    <div>
-      <SectionBand
-        index="05"
-        title="Trace a serial"
-        note="The number printed on a single unit. Its whole history, in the order it happened."
-      />
-      <BandBody>
-        <div className="mb-3 flex flex-wrap items-end gap-3">
-          <FormField label="Serial" className="min-w-[220px] flex-1">
-            <Input
+    <AreaSection
+      title="Trace a serial"
+      note="The number printed on a single unit. Its whole history, in the order it happened."
+    >
+      <Panel>
+        <div className="inv-stack">
+          <div className="inv-lookup">
+            <TextField
+              label="Serial"
+              icon={<Search size={16} />}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               // A barcode gun types the number and presses Enter.
@@ -62,74 +58,77 @@ export function UnitTracePanel(): ReactElement {
                 }
               }}
               placeholder="Scan or type"
+              inputClassName="sk-ident"
             />
-          </FormField>
-          <Button
-            variant="primary"
-            size="md"
-            disabled={typed.trim() === ''}
-            onClick={() => setSerial(typed.trim())}
-          >
-            Trace
-          </Button>
-        </div>
+            <AsyncButton
+              variant="primary"
+              size="lg"
+              labels={{ idle: 'Trace', busy: 'Tracing…' }}
+              state={serial !== '' && trace.isFetching ? 'busy' : 'idle'}
+              disabled={typed.trim() === ''}
+              onClick={() => setSerial(typed.trim())}
+            />
+          </div>
 
-        {trace.isError && (
-          <ErrorNote message={serverVerdict(trace.error)} retry={() => void trace.refetch()} />
-        )}
+          {trace.isError && (
+            <InlineError message={serverVerdict(trace.error)} retry={() => void trace.refetch()} />
+          )}
 
-        {trace.isLoading && serial !== '' && <SkeletonRows rows={3} />}
+          {trace.isLoading && serial !== '' && <SkeletonRows rows={3} />}
 
-        {serial !== '' && !trace.isLoading && !trace.isError && unit === null && (
-          <p className="text-text-muted text-sm">
-            No unit of yours carries that serial. Either the number belongs to something we never
-            received, or this SKU is not tracked per unit.
-          </p>
-        )}
+          {serial !== '' && !trace.isLoading && !trace.isError && unit === null && (
+            <Note>
+              No unit of yours carries that serial. Either the number belongs to something we never
+              received, or this SKU is not tracked per unit.
+            </Note>
+          )}
 
-        {unit !== null && (
-          <>
-            <div className="border-border bg-surface-raised mb-3 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-[var(--radius-2)] border px-3 py-2 text-sm">
-              <span className="text-text-bright font-mono text-xs">{unit.serialBarcode}</span>
-              <span className="text-text-muted">{unit.skuCode ?? unit.variantId}</span>
-              <StockUnitStatusBadge status={unit.status} />
-            </div>
+          {unit !== null && (
+            <>
+              <div className="inv-callout" data-tone="info">
+                <span className="sk-ident">{unit.serialBarcode}</span>
+                <span>{unit.skuCode ?? unit.variantId}</span>
+                <StockUnitStatusBadge status={unit.status} />
+              </div>
 
-            <Table>
-              <THead>
-                <Tr>
-                  <Th>When</Th>
-                  <Th>Moved</Th>
-                  <Th>Step</Th>
-                  <Th>Note</Th>
-                </Tr>
-              </THead>
-              <TBody>
-                {events.map((e, i) => (
-                  <Tr key={`${e.at}-${i}`}>
-                    <Td className="text-text-muted font-mono text-xs whitespace-nowrap">
-                      {new Date(e.at).toLocaleString('en-IN')}
-                    </Td>
-                    <Td>
-                      {/* The transition, not just the destination — a unit
-                          that went picked → in stock came back off a
-                          cancelled box, and that is the interesting part. */}
-                      <span className="text-text-muted">
-                        {e.fromStatus === null
-                          ? '—'
-                          : e.fromStatus.toLowerCase().replace(/_/g, ' ')}
-                      </span>{' '}
-                      → {e.toStatus.toLowerCase().replace(/_/g, ' ')}
-                    </Td>
-                    <Td>{e.gate.toLowerCase().replace(/_/g, ' ')}</Td>
-                    <Td>{e.note ?? '—'}</Td>
+              <Table caption={`History of ${unit.serialBarcode}`}>
+                <THead>
+                  <Tr>
+                    <Th>When</Th>
+                    <Th>Moved</Th>
+                    <Th>Step</Th>
+                    <Th>Note</Th>
                   </Tr>
-                ))}
-              </TBody>
-            </Table>
-          </>
-        )}
-      </BandBody>
-    </div>
+                </THead>
+                <TBody>
+                  {events.map((e, i) => (
+                    <Tr key={`${e.at}-${i}`}>
+                      <Td>
+                        <span className="sk-figure inv-muted" style={{ whiteSpace: 'nowrap' }}>
+                          {new Date(e.at).toLocaleString('en-IN')}
+                        </span>
+                      </Td>
+                      <Td>
+                        {/* The transition, not just the destination — a unit
+                            that went picked → in stock came back off a
+                            cancelled box, and that is the interesting part. */}
+                        <span className="inv-muted">
+                          {e.fromStatus === null
+                            ? '—'
+                            : e.fromStatus.toLowerCase().replace(/_/g, ' ')}
+                        </span>{' '}
+                        → {e.toStatus.toLowerCase().replace(/_/g, ' ')}
+                      </Td>
+                      <Td>{e.gate.toLowerCase().replace(/_/g, ' ')}</Td>
+                      <Td>{e.note ?? '—'}</Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+            </>
+          )}
+        </div>
+      </Panel>
+    </AreaSection>
   );
 }

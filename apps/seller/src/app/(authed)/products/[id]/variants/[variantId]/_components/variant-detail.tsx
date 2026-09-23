@@ -1,7 +1,16 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Barcode, Boxes, Percent, Wallet } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowLeft,
+  Barcode,
+  Boxes,
+  Pencil,
+  Percent,
+  Wallet,
+} from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { ApiError, type SellerVariantView } from '@skydrop/api-client';
 import type { SellerProductView } from '@skydrop/api-client';
@@ -14,26 +23,33 @@ import {
 } from '@/lib/api-hooks';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
+// The LEGACY toast on purpose, for `ArchiveVariantButton` only: its
+// behaviour test mounts the legacy `Toaster`, and the shell mounts both
+// providers while pages move across, so the toast looks the same either way.
+import { Money, useToast } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TextField } from '@skydrop/ui/app/text-field';
 import {
-  BandBody,
-  Button,
-  Crumbs,
-  DescriptionList,
-  ErrorState,
-  FormActions,
-  FormField,
-  Input,
-  LoadingState,
-  MetaChip,
-  Modal,
-  ModalFooter,
-  Money,
-  PageHeader,
-  SectionBand,
-  Stat,
-  StatusBadge,
-  useToast,
-} from '@skydrop/ui/components';
+  Actions,
+  AreaPage,
+  AreaSection,
+  BackLink,
+  Dash,
+  FieldGrid,
+  Facts,
+  InlineError,
+  KpiGrid,
+  MetaFact,
+  Panel,
+  mutationPhase,
+} from '@/app/(authed)/inventory/_components/stock-ui';
 import { VariantImageUpload } from './image-upload';
 import { StockConfigPanel } from './stock-config-panel';
 
@@ -64,17 +80,18 @@ export function VariantDetailView({
   const product = useProductDetail(productId);
   const [editing, setEditing] = useState(false);
 
+  const weight = detail.data
+    ? effective(detail.data.weightGrams, product.data?.defaultWeightGrams)
+    : null;
+
   return (
-    <div>
-      <Link
-        href={`/products/${productId}`}
-        className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
-      >
-        <ArrowLeft size={12} /> Product
-      </Link>
+    <AreaPage>
+      <BackLink href={`/products/${productId}`}>
+        <ArrowLeft size={14} /> Product
+      </BackLink>
 
       {detail.isLoading ? (
-        <LoadingState label="Loading variant…" />
+        <SkeletonRows rows={6} label="Loading variant…" />
       ) : detail.isError ? (
         <ErrorState
           message={detail.error?.message ?? 'Failed to load variant.'}
@@ -85,18 +102,14 @@ export function VariantDetailView({
       ) : (
         <>
           <PageHeader
-            breadcrumb={
-              <Crumbs
-                items={[
-                  { label: 'Seller console' },
-                  { label: 'Products', href: '/products' },
-                  { label: product.data?.name ?? 'Product', href: `/products/${productId}` },
-                  { label: detail.data.skuCode },
-                ]}
-                Link={Link}
-              />
-            }
-            title={<span className="font-mono">{detail.data.skuCode}</span>}
+            breadcrumbs={[
+              { label: 'Seller console' },
+              { label: 'Products', href: '/products' },
+              { label: product.data?.name ?? 'Product', href: `/products/${productId}` },
+              { label: detail.data.skuCode },
+            ]}
+            Link={Link}
+            title={<span className="sk-ident">{detail.data.skuCode}</span>}
             subtitle={detail.data.variantLabel ?? undefined}
             /*
               The comps show a "scans to" chip beside the SKU. What a
@@ -107,12 +120,12 @@ export function VariantDetailView({
             */
             meta={
               product.data === undefined ? undefined : (
-                <MetaChip tone="accent">{product.data.name}</MetaChip>
+                <MetaFact tone="accent">{product.data.name}</MetaFact>
               )
             }
             action={
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge
+              <Actions>
+                <StatusChip
                   kind={
                     detail.data.status === 'ACTIVE'
                       ? 'confirmed'
@@ -128,7 +141,7 @@ export function VariantDetailView({
                   skuCode={detail.data.skuCode}
                   archived={detail.data.status === 'ARCHIVED'}
                 />
-              </div>
+              </Actions>
             }
           />
 
@@ -142,34 +155,22 @@ export function VariantDetailView({
                  No "units in stock" tile: this screen has no stock
                  read, and the number that does exist is per warehouse.
                  The stock SETTINGS below are a different question. */}
-          <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Stat
+          <KpiGrid>
+            <KpiCard
               label="Ships at"
-              icon={<Boxes size={13} aria-hidden />}
-              value={
-                effective(detail.data.weightGrams, product.data?.defaultWeightGrams) ?? (
-                  <span className="text-text-faint text-base">Not set</span>
-                )
-              }
-              unit={
-                effective(detail.data.weightGrams, product.data?.defaultWeightGrams) === null
-                  ? undefined
-                  : 'g'
-              }
-              tone={
-                effective(detail.data.weightGrams, product.data?.defaultWeightGrams) === null
-                  ? 'warn'
-                  : 'neutral'
-              }
+              icon={<Boxes size={14} />}
+              figure={weight ?? <span className="inv-faint">Not set</span>}
+              {...(weight === null ? {} : { unit: 'g' })}
+              tone={weight === null ? 'pending' : 'neutral'}
               hint={inheritHint(detail.data.weightGrams, product.data?.defaultWeightGrams)}
             />
-            <Stat
+            <KpiCard
               label="Declared value"
-              icon={<Wallet size={13} aria-hidden />}
-              value={
+              icon={<Wallet size={14} />}
+              figure={
                 effective(detail.data.declaredValueInr, product.data?.defaultDeclaredValueInr) ===
                 null ? (
-                  <span className="text-text-faint text-base">Not set</span>
+                  <span className="inv-faint">Not set</span>
                 ) : (
                   <Money
                     amount={
@@ -184,31 +185,31 @@ export function VariantDetailView({
                 product.data?.defaultDeclaredValueInr,
               )}
             />
-            <Stat
+            <KpiCard
               label="GST rate"
-              icon={<Percent size={13} aria-hidden />}
-              value={
+              icon={<Percent size={14} />}
+              figure={
                 detail.data.gstRate === null ? (
-                  <span className="text-text-faint text-base">Not set</span>
+                  <span className="inv-faint">Not set</span>
                 ) : (
                   detail.data.gstRate
                 )
               }
-              unit={detail.data.gstRate === null ? undefined : '%'}
+              {...(detail.data.gstRate === null ? {} : { unit: '%' })}
               tone="neutral"
               hint={detail.data.gstRate === null ? 'Falls back to the system rate.' : undefined}
             />
-            <Stat
+            <KpiCard
               label="Scans as"
-              icon={<Barcode size={13} aria-hidden />}
+              icon={<Barcode size={14} />}
               /*
                 LBL-2: the pack bench resolves a scan to
                 `variant.barcode ?? skuCode`, and accepts BOTH. So the
                 SKU code is not a placeholder here — it is the code on
                 the sticker until the seller fills in a real EAN.
               */
-              value={
-                <span className="font-mono text-base break-all">
+              figure={
+                <span className="sk-ident" style={{ overflowWrap: 'anywhere' }}>
                   {detail.data.barcode ?? detail.data.skuCode}
                 </span>
               }
@@ -219,22 +220,25 @@ export function VariantDetailView({
                   : 'Your own barcode.'
               }
             />
-          </div>
+          </KpiGrid>
 
-          <div>
-            <SectionBand
-              index="01"
-              title="Details"
-              note="What this SKU is, and what it inherits."
-              action={
-                !editing && (
-                  <Button variant="ghost" size="sm" onClick={() => setEditing(true)}>
-                    Edit variant
-                  </Button>
-                )
-              }
-            />
-            <BandBody className="mb-4">
+          <AreaSection
+            title="Details"
+            note="What this SKU is, and what it inherits."
+            action={
+              !editing && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Pencil size={14} />}
+                  onClick={() => setEditing(true)}
+                >
+                  Edit variant
+                </Button>
+              )
+            }
+          >
+            <Panel>
               {editing ? (
                 <VariantEditForm
                   productId={productId}
@@ -245,24 +249,19 @@ export function VariantDetailView({
               ) : (
                 <VariantReadCard variant={detail.data} product={product.data} />
               )}
-            </BandBody>
-          </div>
+            </Panel>
+          </AreaSection>
 
           <StockConfigPanel productId={productId} variantId={variantId} />
 
-          <div>
-            <SectionBand
-              index="03"
-              title="Pictures"
-              note="What the customer sees beside this SKU."
-            />
-            <BandBody>
-              <VariantImageUpload variantId={variantId} />
-            </BandBody>
-          </div>
+          <AreaSection title="Pictures" note="What the customer sees beside this SKU.">
+            <Panel>
+              <VariantImageUpload variantId={variantId} skuCode={detail.data.skuCode} />
+            </Panel>
+          </AreaSection>
         </>
       )}
-    </div>
+    </AreaPage>
   );
 }
 
@@ -308,47 +307,42 @@ export function ArchiveVariantButton({
       );
     } catch (err) {
       const verdict = serverVerdict(err);
-      if (nextArchived) setError(verdict);
-      else toast.error(verdict);
+      if (nextArchived) {
+        setError(verdict);
+        // Rejecting keeps the confirm open with the verdict in it.
+        throw err;
+      } else toast.error(verdict);
     }
   }
 
   return (
     <>
-      <Button
+      <AsyncButton
         variant="secondary"
+        icon={archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+        labels={{
+          idle: archived ? 'Restore variant' : 'Archive variant',
+          busy: archived ? 'Restoring…' : 'Archiving…',
+        }}
+        state={mutationPhase(archive)}
         disabled={archive.isPending}
         onClick={() => (archived ? void run(false) : setConfirming(true))}
-      >
-        {archive.isPending && archived
-          ? 'Restoring…'
-          : archived
-            ? 'Restore variant'
-            : 'Archive variant'}
-      </Button>
-      <Modal
+      />
+      <ConfirmDialog
         open={confirming}
         onOpenChange={(next) => {
           setConfirming(next);
           if (!next) setError(null);
         }}
         title={`Archive ${skuCode}?`}
-        description="It stops being orderable and no new stock can be received against it. Its order history and any stock already here stay as they are, and you can restore it at any time."
-      >
-        {error !== null && (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
-        )}
-        <ModalFooter>
-          <Button variant="ghost" onClick={() => setConfirming(false)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" disabled={archive.isPending} onClick={() => void run(true)}>
-            {archive.isPending ? 'Archiving…' : 'Archive variant'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+        entity={skuCode}
+        entityIsIdentifier
+        consequence="It stops being orderable and no new stock can be received against it. Its order history and any stock already here stay as they are, and you can restore it at any time."
+        confirmLabel="Archive variant"
+        destructive
+        error={error ?? undefined}
+        onConfirm={() => run(true)}
+      />
     </>
   );
 }
@@ -398,17 +392,17 @@ function VariantReadCard({
   variant: SellerVariantView;
   product: SellerProductView | undefined;
 }): ReactElement {
-  // No <Card>: the band's own `BandBody` is the bordered surface.
+  // No card of its own: the section's panel is the surface.
   return (
-    <DescriptionList
+    <Facts
       columns={2}
       items={[
-        { label: 'SKU', value: <span className="font-mono text-xs">{variant.skuCode}</span> },
+        { label: 'SKU', value: <span className="sk-ident">{variant.skuCode}</span> },
         { label: 'Label', value: variant.variantLabel ?? <Dash /> },
         {
           label: 'Weight',
           value: (
-            <span className="font-mono">
+            <span className="sk-figure">
               <Inherited
                 own={variant.weightGrams}
                 fallback={product?.defaultWeightGrams}
@@ -420,7 +414,7 @@ function VariantReadCard({
         {
           label: 'Box (L × W × H)',
           value: (
-            <span className="font-mono text-xs">
+            <span className="sk-figure">
               {variant.lengthCm !== null ? (
                 `${variant.lengthCm} × ${variant.widthCm ?? '—'} × ${variant.heightCm ?? '—'} cm`
               ) : product?.defaultLengthCm != null ? (
@@ -437,7 +431,7 @@ function VariantReadCard({
         {
           label: 'Declared value',
           value: (
-            <span className="font-mono">
+            <span className="sk-figure">
               <Inherited
                 own={variant.declaredValueInr}
                 fallback={product?.defaultDeclaredValueInr}
@@ -451,7 +445,7 @@ function VariantReadCard({
             variant.gstRate === null ? (
               <Dash />
             ) : (
-              <span className="font-mono">{variant.gstRate} %</span>
+              <span className="sk-figure">{variant.gstRate} %</span>
             ),
         },
         {
@@ -460,16 +454,12 @@ function VariantReadCard({
             variant.barcode === null ? (
               <Dash />
             ) : (
-              <span className="font-mono text-xs break-all">{variant.barcode}</span>
+              <span className="sk-ident">{variant.barcode}</span>
             ),
         },
       ]}
     />
   );
-}
-
-function Dash(): ReactElement {
-  return <span className="text-text-faint">—</span>;
 }
 
 /**
@@ -548,107 +538,109 @@ function VariantEditForm({
     }
   }
 
+  const fields: ReadonlyArray<{
+    readonly id: string;
+    readonly label: string;
+    readonly value: string;
+    readonly set: (v: string) => void;
+    readonly type?: 'number';
+    readonly min?: string;
+    readonly step?: string;
+    readonly ident?: boolean;
+  }> = [
+    { id: 'variantLabel', label: 'Label', value: variantLabel, set: setVariantLabel },
+    {
+      id: 'weightGrams',
+      label: 'Weight (g)',
+      value: weightGrams,
+      set: setWeightGrams,
+      type: 'number',
+      min: '0',
+    },
+    {
+      id: 'lengthCm',
+      label: 'Length (cm)',
+      value: lengthCm,
+      set: setLengthCm,
+      type: 'number',
+      min: '0',
+      step: '0.1',
+    },
+    {
+      id: 'widthCm',
+      label: 'Width (cm)',
+      value: widthCm,
+      set: setWidthCm,
+      type: 'number',
+      min: '0',
+      step: '0.1',
+    },
+    {
+      id: 'heightCm',
+      label: 'Height (cm)',
+      value: heightCm,
+      set: setHeightCm,
+      type: 'number',
+      min: '0',
+      step: '0.1',
+    },
+    {
+      id: 'declaredValueInr',
+      label: 'Declared (INR)',
+      value: declaredValueInr,
+      set: setDeclaredValueInr,
+      type: 'number',
+      step: '0.01',
+    },
+    {
+      id: 'gstRate',
+      label: 'GST rate (%)',
+      value: gstRate,
+      set: setGstRate,
+      type: 'number',
+      step: '0.01',
+    },
+    { id: 'barcode', label: 'Barcode', value: barcode, set: setBarcode, ident: true },
+  ];
+
   return (
-    <>
-      <form onSubmit={handleSave} className="space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <FormField label="SKU" htmlFor="sku" hint="Immutable">
-            <Input id="sku" value={variant.skuCode} disabled className="font-mono text-xs" />
-          </FormField>
-          <FormField label="Label" htmlFor="variantLabel">
-            <Input
-              id="variantLabel"
-              value={variantLabel}
-              onChange={(e) => setVariantLabel(e.target.value)}
-              disabled={update.isPending}
-            />
-          </FormField>
-          <FormField label="Weight (g)" htmlFor="weightGrams">
-            <Input
-              id="weightGrams"
-              type="number"
-              min="0"
-              value={weightGrams}
-              onChange={(e) => setWeightGrams(e.target.value)}
-              disabled={update.isPending}
-            />
-          </FormField>
-          <FormField label="Length (cm)" htmlFor="lengthCm">
-            <Input
-              id="lengthCm"
-              type="number"
-              min="0"
-              step="0.1"
-              value={lengthCm}
-              onChange={(e) => setLengthCm(e.target.value)}
-              disabled={update.isPending}
-            />
-          </FormField>
-          <FormField label="Width (cm)" htmlFor="widthCm">
-            <Input
-              id="widthCm"
-              type="number"
-              min="0"
-              step="0.1"
-              value={widthCm}
-              onChange={(e) => setWidthCm(e.target.value)}
-              disabled={update.isPending}
-            />
-          </FormField>
-          <FormField label="Height (cm)" htmlFor="heightCm">
-            <Input
-              id="heightCm"
-              type="number"
-              min="0"
-              step="0.1"
-              value={heightCm}
-              onChange={(e) => setHeightCm(e.target.value)}
-              disabled={update.isPending}
-            />
-          </FormField>
-          <FormField label="Declared (INR)" htmlFor="declaredValueInr">
-            <Input
-              id="declaredValueInr"
-              type="number"
-              step="0.01"
-              value={declaredValueInr}
-              onChange={(e) => setDeclaredValueInr(e.target.value)}
-              disabled={update.isPending}
-            />
-          </FormField>
-          <FormField label="GST rate (%)" htmlFor="gstRate">
-            <Input
-              id="gstRate"
-              type="number"
-              step="0.01"
-              value={gstRate}
-              onChange={(e) => setGstRate(e.target.value)}
-              disabled={update.isPending}
-            />
-          </FormField>
-          <FormField label="Barcode" htmlFor="barcode">
-            <Input
-              id="barcode"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              disabled={update.isPending}
-            />
-          </FormField>
-        </div>
-        {serverError && (
-          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
-            {serverError}
-          </div>
-        )}
-        <FormActions>
-          <Button variant="ghost" onClick={onCancel} disabled={update.isPending}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" disabled={update.isPending}>
-            {update.isPending ? 'Saving…' : 'Save changes'}
-          </Button>
-        </FormActions>
-      </form>
-    </>
+    <form onSubmit={handleSave} className="inv-stack">
+      <FieldGrid columns={2}>
+        <TextField
+          label="SKU"
+          id="sku"
+          hint="Immutable"
+          value={variant.skuCode}
+          disabled
+          inputClassName="sk-ident"
+        />
+        {fields.map((f) => (
+          <TextField
+            key={f.id}
+            label={f.label}
+            id={f.id}
+            {...(f.type === undefined ? {} : { type: f.type })}
+            {...(f.min === undefined ? {} : { min: f.min })}
+            {...(f.step === undefined ? {} : { step: f.step })}
+            value={f.value}
+            onChange={(e) => f.set(e.target.value)}
+            disabled={update.isPending}
+            {...(f.ident === true ? { inputClassName: 'sk-ident' } : {})}
+          />
+        ))}
+      </FieldGrid>
+      {serverError && <InlineError message={serverError} />}
+      <Actions>
+        <AsyncButton
+          type="submit"
+          variant="primary"
+          labels={{ idle: 'Save changes', busy: 'Saving…' }}
+          state={mutationPhase(update)}
+        />
+        <Button variant="ghost" onClick={onCancel} disabled={update.isPending}>
+          Cancel
+        </Button>
+      </Actions>
+    </form>
   );
 }

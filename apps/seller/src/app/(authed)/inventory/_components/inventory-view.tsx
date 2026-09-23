@@ -3,27 +3,29 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, type ReactElement } from 'react';
-import { Boxes, Plane, TriangleAlert, Wallet } from 'lucide-react';
+import { Boxes, Plane, ScanLine, TriangleAlert, Wallet } from 'lucide-react';
 import { useStockList, useStockSummary } from '@/lib/api-hooks';
+import { Money } from '@skydrop/ui/components';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { GlossaryTerm } from '@skydrop/ui/app/tooltip-card';
 import {
-  BandBody,
-  Crumbs,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  MetaChip,
-  Money,
-  PageHeader,
-  SectionBand,
-  Stat,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  TablePaginator,
-} from '@skydrop/ui/components';
+  AreaPage,
+  AreaSection,
+  Dash,
+  KpiGrid,
+  LinkButton,
+  MetaFact,
+  MetaFacts,
+  Panel,
+  PanelPad,
+  rawCount,
+} from './stock-ui';
 
 const PAGE_SIZE = 25;
 
@@ -77,230 +79,249 @@ export function InventoryView(): ReactElement {
   );
 
   return (
-    <div>
+    <AreaPage>
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[{ label: 'Seller console' }, { label: 'Stock' }, { label: 'Inventory' }]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[{ label: 'Seller console' }, { label: 'Stock' }, { label: 'Inventory' }]}
+        Link={Link}
         title="Inventory"
         subtitle="Stock available for orders. Receiving happens at the warehouse — speak to ops to add inventory."
         meta={
           s === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">{s.totalSkus} SKUs</MetaChip>
-              {s.lowStockSkus > 0 && <MetaChip tone="warn">{s.lowStockSkus} low on stock</MetaChip>}
+            <MetaFacts>
+              <MetaFact tone="accent">{s.totalSkus} SKUs</MetaFact>
+              {s.lowStockSkus > 0 && <MetaFact tone="warn">{s.lowStockSkus} low on stock</MetaFact>}
               {s.totalQtyInTransit > 0 && (
-                <MetaChip dot>{s.totalQtyInTransit} units in transit</MetaChip>
+                <MetaFact dot>{s.totalQtyInTransit} units in transit</MetaFact>
               )}
-            </>
+            </MetaFacts>
           )
         }
         action={
-          <Link href="/inventory/units" className="text-accent text-sm hover:underline">
+          <LinkButton href="/inventory/units" variant="ghost" icon={<ScanLine size={15} />}>
             Unit discrepancies →
-          </Link>
+          </LinkButton>
         }
       />
 
       {/* A value is ABSENT rather than 0 while loading: a tile reading
           "0 in stock" that then becomes 14,820 has told you something
           false in the meantime, and this is the screen a seller checks
-          before deciding whether to ship more. */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          label="India stock"
-          icon={<Boxes size={13} aria-hidden />}
-          value={s?.totalQtyOnHand ?? <span className="text-text-faint">—</span>}
-          unit={s === undefined ? undefined : 'units'}
-          tone="neutral"
-          {...(s === undefined
-            ? {}
-            : {
-                foot: [
-                  { label: 'Sellable now', value: s.totalQtyAvailable },
-                  { label: 'Held for orders', value: s.totalQtyReserved },
-                ],
-              })}
-        />
-        <Stat
-          label="In transit"
-          icon={<Plane size={13} aria-hidden />}
-          value={s?.totalQtyInTransit ?? <span className="text-text-faint">—</span>}
-          unit={s === undefined ? undefined : 'units'}
-          tone="neutral"
-          /*
-            A HINT IS A CLAIM, so it waits for the figure it explains.
+          before deciding whether to ship more. The figures roll once,
+          to the same string the old tiles printed. */}
+      {s === undefined ? (
+        <KpiGrid>
+          <KpiCard label="India stock" icon={<Boxes size={14} />} figure={<Dash />} />
+          <KpiCard label="In transit" icon={<Plane size={14} />} figure={<Dash />} />
+          <KpiCard label="Low on stock" icon={<TriangleAlert size={14} />} figure={<Dash />} />
+          <KpiCard label="Stock value at cost" icon={<Wallet size={14} />} figure={<Dash />} />
+        </KpiGrid>
+      ) : (
+        <KpiGrid>
+          <KpiCard
+            label="India stock"
+            icon={<Boxes size={14} />}
+            value={s.totalQtyOnHand}
+            format={rawCount}
+            unit="units"
+            tone="neutral"
+            foot={[
+              { label: 'Sellable now', value: s.totalQtyAvailable },
+              { label: 'Held for orders', value: s.totalQtyReserved },
+            ]}
+          />
+          <KpiCard
+            label={
+              <GlossaryTerm
+                title="In transit"
+                icon={<Plane size={16} />}
+                description="Goods that have left you but are not on our Indian shelf yet — in Dhaka or in the air. They are counted, and they cannot be sold until they arrive."
+              >
+                In transit
+              </GlossaryTerm>
+            }
+            icon={<Plane size={14} />}
+            value={s.totalQtyInTransit}
+            format={rawCount}
+            unit="units"
+            tone="info"
+            /*
+              A HINT IS A CLAIM, so it waits for the figure it explains.
 
-            Written as a plain ternary this said "Nothing is on its way
-            in." for the second or two before the summary landed — with
-            "—" sitting above it. That is the same falsehood the absent
-            VALUE is carefully avoiding, only in words, and a seller
-            deciding whether to ship more reads the sentence.
-          */
-          {...(s === undefined
-            ? {}
-            : {
-                hint:
-                  s.totalQtyInTransit > 0
-                    ? 'In Dhaka or in the air — not sellable yet.'
-                    : 'Nothing is on its way in.',
-              })}
-        />
-        <Stat
-          label="Low on stock"
-          icon={<TriangleAlert size={13} aria-hidden />}
-          value={s?.lowStockSkus ?? <span className="text-text-faint">—</span>}
-          unit={s === undefined ? undefined : 'SKUs'}
-          tone={s !== undefined && s.lowStockSkus > 0 ? 'warn' : 'neutral'}
-          {...(s === undefined
-            ? {}
-            : {
-                hint:
-                  s.lowStockSkus > 0
-                    ? 'At or under the threshold you set.'
-                    : 'Every SKU is above its threshold.',
-              })}
-        />
-        <Stat
-          label="Stock value at cost"
-          icon={<Wallet size={13} aria-hidden />}
-          value={
-            s === undefined ? (
-              <span className="text-text-faint">—</span>
-            ) : (
+              Written as a plain ternary this said "Nothing is on its way
+              in." for the second or two before the summary landed — with
+              "—" sitting above it. That is the same falsehood the absent
+              VALUE is carefully avoiding, only in words, and a seller
+              deciding whether to ship more reads the sentence.
+            */
+            hint={
+              s.totalQtyInTransit > 0
+                ? 'In Dhaka or in the air — not sellable yet.'
+                : 'Nothing is on its way in.'
+            }
+          />
+          <KpiCard
+            label="Low on stock"
+            icon={<TriangleAlert size={14} />}
+            value={s.lowStockSkus}
+            format={rawCount}
+            unit="SKUs"
+            tone={s.lowStockSkus > 0 ? 'pending' : 'neutral'}
+            hint={
+              s.lowStockSkus > 0
+                ? 'At or under the threshold you set.'
+                : 'Every SKU is above its threshold.'
+            }
+          />
+          <KpiCard
+            label="Stock value at cost"
+            icon={<Wallet size={14} />}
+            figure={
               <Money
                 amount={(Number(s.valueAtWarehouseInr) + Number(s.valueInTransitInr)).toFixed(2)}
               />
-            )
-          }
-          tone="neutral"
-          {...(s === undefined
-            ? {}
-            : {
-                foot: [
-                  {
-                    label: 'On the shelf in India',
-                    value: <Money amount={s.valueAtWarehouseInr} />,
-                  },
-                  { label: 'In transit', value: <Money amount={s.valueInTransitInr} /> },
-                  ...(s.valueUnknownUnits > 0
-                    ? [{ label: 'Units with no cost — excluded', value: s.valueUnknownUnits }]
-                    : []),
-                ],
-              })}
-        />
-      </div>
+            }
+            tone="neutral"
+            foot={[
+              {
+                label: 'On the shelf in India',
+                value: <Money amount={s.valueAtWarehouseInr} />,
+              },
+              { label: 'In transit', value: <Money amount={s.valueInTransitInr} /> },
+              ...(s.valueUnknownUnits > 0
+                ? [{ label: 'Units with no cost — excluded', value: s.valueUnknownUnits }]
+                : []),
+            ]}
+          />
+        </KpiGrid>
+      )}
 
-      <SectionBand
-        index="01"
+      <AreaSection
         title="Stock register"
         note={
           list.data === undefined
             ? undefined
             : `${list.data.total} ${list.data.total === 1 ? 'SKU' : 'SKUs'}`
         }
-      />
-
-      <BandBody flush>
-        {list.isLoading ? (
-          <div className="p-3">
-            <LoadingState label="Loading inventory…" />
-          </div>
-        ) : list.isError ? (
-          <div className="p-3">
-            <ErrorState
-              message={list.error?.message ?? 'Failed to load inventory.'}
-              retry={() => void list.refetch()}
-            />
-          </div>
-        ) : !list.data || list.data.items.length === 0 ? (
-          <div className="p-3">
-            <EmptyState
-              title="No stock yet"
-              description="Once your shipment is received at our Indian warehouse, your variants will show up here with on-hand qty."
-              bare
-            />
-          </div>
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>SKU</Th>
-                <Th>Variant</Th>
-                <Th align="right">India stock</Th>
-                <Th align="right">Reserved</Th>
-                <Th align="right">Available</Th>
-                <Th align="right">In transit</Th>
-                <Th align="right">Low-stock</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {list.data.items.map((row) => (
-                <Tr
-                  key={row.variantId}
-                  onActivate={() =>
-                    router.push(`/products/${row.productId}/variants/${row.variantId}`)
-                  }
-                >
-                  <Td>
-                    <Link
-                      href={`/products/${row.productId}/variants/${row.variantId}`}
-                      className="text-text-bright font-mono text-xs hover:underline"
+      >
+        <Panel flush>
+          {list.isLoading ? (
+            <PanelPad>
+              <SkeletonRows rows={6} cols={7} label="Loading inventory…" />
+            </PanelPad>
+          ) : list.isError ? (
+            <PanelPad>
+              <ErrorState
+                message={list.error?.message ?? 'Failed to load inventory.'}
+                retry={() => void list.refetch()}
+              />
+            </PanelPad>
+          ) : !list.data || list.data.items.length === 0 ? (
+            <PanelPad>
+              <EmptyState
+                title="No stock yet"
+                description="Once your shipment is received at our Indian warehouse, your variants will show up here with on-hand qty."
+                bare
+                action={
+                  <LinkButton href="/inbound" variant="secondary">
+                    Inbound
+                  </LinkButton>
+                }
+              />
+            </PanelPad>
+          ) : (
+            <>
+              <Table caption="Stock register">
+                <THead>
+                  <Tr>
+                    <Th>SKU</Th>
+                    <Th>Variant</Th>
+                    <Th align="right">India stock</Th>
+                    <Th align="right">Reserved</Th>
+                    <Th align="right">Available</Th>
+                    <Th align="right">In transit</Th>
+                    <Th align="right">Low-stock</Th>
+                  </Tr>
+                </THead>
+                <TBody>
+                  {list.data.items.map((row) => (
+                    <Tr
+                      key={row.variantId}
+                      onActivate={() =>
+                        router.push(`/products/${row.productId}/variants/${row.variantId}`)
+                      }
                     >
-                      {row.skuCode}
-                    </Link>
-                  </Td>
-                  <Td className="text-text-muted text-xs">
-                    {row.variantLabel ?? <span className="text-text-faint">—</span>}
-                  </Td>
-                  <Td align="right" className="font-mono">
-                    {row.qtyOnHand.toLocaleString('en-IN')}
-                  </Td>
-                  <Td align="right" className="text-text-muted font-mono">
-                    {row.qtyReserved.toLocaleString('en-IN')}
-                  </Td>
-                  <Td align="right" className="font-mono">
-                    <span
-                      className={row.isLowStock ? 'text-critical font-medium' : 'text-text-bright'}
-                    >
-                      {row.qtyAvailable.toLocaleString('en-IN')}
-                    </span>
-                  </Td>
-                  <Td align="right" className="text-text-muted font-mono">
-                    {row.qtyInTransit > 0 ? (
-                      row.qtyInTransit.toLocaleString('en-IN')
-                    ) : (
-                      <span className="text-text-faint">—</span>
-                    )}
-                  </Td>
-                  <Td align="right" className="text-text-muted font-mono text-xs">
-                    {row.lowStockThreshold !== null ? (
-                      row.lowStockThreshold.toLocaleString('en-IN')
-                    ) : (
-                      <span className="text-text-faint">—</span>
-                    )}
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-            <tfoot>
-              <tr>
-                <td colSpan={7} className="p-0">
-                  <TablePaginator
-                    page={page}
-                    pageSize={PAGE_SIZE}
-                    total={list.data.total}
-                    onPageChange={updateUrl}
-                  />
-                </td>
-              </tr>
-            </tfoot>
-          </Table>
-        )}
-      </BandBody>
-    </div>
+                      <Td>
+                        <Link
+                          href={`/products/${row.productId}/variants/${row.variantId}`}
+                          className="inv-strong-link sk-ident"
+                        >
+                          {row.skuCode}
+                        </Link>
+                      </Td>
+                      <Td>
+                        <span className="inv-muted">{row.variantLabel ?? <Dash />}</span>
+                      </Td>
+                      <Td align="right">
+                        <span className="sk-figure inv-num">
+                          {row.qtyOnHand.toLocaleString('en-IN')}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <span className="sk-figure inv-muted">
+                          {row.qtyReserved.toLocaleString('en-IN')}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <span
+                          className="sk-figure inv-num"
+                          data-tone={row.isLowStock ? 'bad' : undefined}
+                          style={row.isLowStock ? { fontWeight: 'var(--fw-semibold)' } : undefined}
+                        >
+                          {row.qtyAvailable.toLocaleString('en-IN')}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        {row.qtyInTransit > 0 ? (
+                          <span className="sk-figure inv-muted">
+                            {row.qtyInTransit.toLocaleString('en-IN')}
+                          </span>
+                        ) : (
+                          <Dash />
+                        )}
+                      </Td>
+                      <Td align="right">
+                        <span className="inv-cell-row">
+                          {row.lowStockThreshold !== null ? (
+                            <span className="sk-figure inv-muted">
+                              {row.lowStockThreshold.toLocaleString('en-IN')}
+                            </span>
+                          ) : (
+                            <Dash />
+                          )}
+                          {/* The warning chip rings ONCE when it appears —
+                              a word and an icon, never colour alone. */}
+                          {row.isLowStock && (
+                            <StatusChip kind="pending" label="Low on stock" size="sm" pulse />
+                          )}
+                        </span>
+                      </Td>
+                    </Tr>
+                  ))}
+                </TBody>
+              </Table>
+              <PanelPad>
+                <Pagination
+                  page={page}
+                  pageSize={PAGE_SIZE}
+                  total={list.data.total}
+                  onPageChange={updateUrl}
+                  label="Stock register pages"
+                />
+              </PanelPad>
+            </>
+          )}
+        </Panel>
+      </AreaSection>
+    </AreaPage>
   );
 }

@@ -7,30 +7,30 @@ import { ProductStatus } from '@skydrop/db';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { useProductsList, useStockSummary } from '@/lib/api-hooks';
 import { can, canSeePath } from '@/lib/page-access';
-import { Boxes, Layers, Plus, TriangleAlert, Wallet } from 'lucide-react';
+import { Boxes, Layers, Plus, RotateCcw, TriangleAlert, Upload, Wallet } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Table, TBody, Td, Th, THead, Tr, TableToolbar } from '@skydrop/ui/app/data-table';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Tabs } from '@skydrop/ui/app/tabs';
 import {
-  BandBody,
-  Button,
-  Crumbs,
-  EmptyState,
-  ErrorState,
-  FilterChip,
-  Input,
-  LoadingState,
-  MetaChip,
-  Money,
-  PageHeader,
-  SectionBand,
-  Stat,
-  StatusBadge,
-  TBody,
-  Table,
-  TablePaginator,
-  Td,
-  Th,
-  THead,
-  Tr,
-} from '@skydrop/ui/components';
+  Actions,
+  AreaPage,
+  AreaSection,
+  Dash,
+  KpiGrid,
+  LinkButton,
+  MetaFact,
+  MetaFacts,
+  Panel,
+  PanelPad,
+  rawCount,
+} from '@/app/(authed)/inventory/_components/stock-ui';
 
 /**
  * Seller catalogue list — the LIST pattern for the console redesign.
@@ -154,47 +154,44 @@ export function ProductsIndex(): ReactElement {
 
   const filtered = params.status !== '' || params.search !== '';
 
+  const resetFilters = (): void => {
+    setSearchInput('');
+    updateUrl({ status: '', search: '', page: 1 });
+  };
+
   return (
-    <div>
+    <AreaPage>
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[{ label: 'Seller console' }, { label: 'Stock & WMS' }, { label: 'Products' }]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[{ label: 'Seller console' }, { label: 'Stock & WMS' }, { label: 'Products' }]}
+        Link={Link}
         title="Products"
         subtitle="Your catalogue: products, their variants and the pictures customers see."
         meta={
           stock.data === undefined ? undefined : (
-            <>
-              <MetaChip tone="accent">{stock.data.totalSkus} SKUs</MetaChip>
+            <MetaFacts>
+              <MetaFact tone="accent">{stock.data.totalSkus} SKUs</MetaFact>
               {stock.data.lowStockSkus > 0 && (
-                <MetaChip tone="warn">{stock.data.lowStockSkus} low on stock</MetaChip>
+                <MetaFact tone="warn">{stock.data.lowStockSkus} low on stock</MetaFact>
               )}
               {stock.data.totalQtyInTransit > 0 && (
-                <MetaChip dot>{stock.data.totalQtyInTransit} units in transit</MetaChip>
+                <MetaFact dot>{stock.data.totalQtyInTransit} units in transit</MetaFact>
               )}
-            </>
+            </MetaFacts>
           )
         }
         action={
-          <div className="flex items-center gap-2">
+          <Actions>
             {canSeePath(identity, '/products/import') && (
-              <Link href="/products/import">
-                <Button variant="ghost" size="md">
-                  CSV import
-                </Button>
-              </Link>
+              <LinkButton href="/products/import" variant="ghost" icon={<Upload size={15} />}>
+                CSV import
+              </LinkButton>
             )}
             {canSeePath(identity, '/products/new') && (
-              <Link href="/products/new">
-                <Button variant="primary" size="md">
-                  <Plus size={14} /> New product
-                </Button>
-              </Link>
+              <LinkButton href="/products/new" variant="primary" icon={<Plus size={15} />}>
+                New product
+              </LinkButton>
             )}
-          </div>
+          </Actions>
         }
       />
 
@@ -204,77 +201,75 @@ export function ProductsIndex(): ReactElement {
              than 0 while loading: a tile reading "0 in stock" that
              then becomes 14,820 has told you something false in the
              meantime, and this is the screen a seller checks before
-             deciding whether to ship more. */}
+             deciding whether to ship more. The figure rolls once, to
+             the same string the old tile printed. */}
       {canSeeStock && (
-        <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Stat
-            label="Active SKUs"
-            icon={<Layers size={13} aria-hidden />}
-            value={stock.data?.totalSkus ?? <span className="text-text-faint">—</span>}
-            unit={stock.data === undefined ? undefined : 'SKUs'}
-            tone="neutral"
-          />
-          <Stat
-            label="Units in stock"
-            icon={<Boxes size={13} aria-hidden />}
-            value={stock.data?.totalQtyOnHand ?? <span className="text-text-faint">—</span>}
-            unit={stock.data === undefined ? undefined : 'units'}
-            tone="neutral"
-            {...(stock.data === undefined
-              ? {}
-              : {
-                  foot: [
-                    { label: 'Sellable now', value: stock.data.totalQtyAvailable },
-                    { label: 'Held for orders', value: stock.data.totalQtyReserved },
-                  ],
-                })}
-          />
-          <Stat
-            label="Low on stock"
-            icon={<TriangleAlert size={13} aria-hidden />}
-            value={stock.data?.lowStockSkus ?? <span className="text-text-faint">—</span>}
-            unit={stock.data === undefined ? undefined : 'SKUs'}
-            tone={stock.data !== undefined && stock.data.lowStockSkus > 0 ? 'warn' : 'neutral'}
-            hint={
-              stock.data !== undefined && stock.data.lowStockSkus > 0
-                ? 'At or under the threshold you set.'
-                : undefined
-            }
-          />
-          <Stat
-            label="Stock value at cost"
-            icon={<Wallet size={13} aria-hidden />}
-            value={
-              stock.data === undefined ? (
-                <span className="text-text-faint">—</span>
-              ) : (
-                <Money amount={stock.data.valueAtWarehouseInr} />
-              )
-            }
-            tone="neutral"
-            {...(stock.data === undefined
-              ? {}
-              : {
-                  foot: [
-                    {
-                      label: 'In transit',
-                      value: <Money amount={stock.data.valueInTransitInr} />,
-                    },
-                    // NOT folded into the total as zero. A batch with no
-                    // recorded cost is worth something unknown, and the
-                    // summary counts those units separately for exactly
-                    // this reason (TRE-6's "uncovered, never defaulted").
-                    ...(stock.data.valueUnknownUnits > 0
-                      ? [{ label: 'Units with no cost', value: stock.data.valueUnknownUnits }]
-                      : []),
-                  ],
-                })}
-          />
-        </div>
+        <KpiGrid>
+          {stock.data === undefined ? (
+            <>
+              <KpiCard label="Active SKUs" icon={<Layers size={14} />} figure={<Dash />} />
+              <KpiCard label="Units in stock" icon={<Boxes size={14} />} figure={<Dash />} />
+              <KpiCard label="Low on stock" icon={<TriangleAlert size={14} />} figure={<Dash />} />
+              <KpiCard label="Stock value at cost" icon={<Wallet size={14} />} figure={<Dash />} />
+            </>
+          ) : (
+            <>
+              <KpiCard
+                label="Active SKUs"
+                icon={<Layers size={14} />}
+                value={stock.data.totalSkus}
+                format={rawCount}
+                unit="SKUs"
+                tone="neutral"
+              />
+              <KpiCard
+                label="Units in stock"
+                icon={<Boxes size={14} />}
+                value={stock.data.totalQtyOnHand}
+                format={rawCount}
+                unit="units"
+                tone="neutral"
+                foot={[
+                  { label: 'Sellable now', value: stock.data.totalQtyAvailable },
+                  { label: 'Held for orders', value: stock.data.totalQtyReserved },
+                ]}
+              />
+              <KpiCard
+                label="Low on stock"
+                icon={<TriangleAlert size={14} />}
+                value={stock.data.lowStockSkus}
+                format={rawCount}
+                unit="SKUs"
+                tone={stock.data.lowStockSkus > 0 ? 'pending' : 'neutral'}
+                hint={
+                  stock.data.lowStockSkus > 0 ? 'At or under the threshold you set.' : undefined
+                }
+              />
+              <KpiCard
+                label="Stock value at cost"
+                icon={<Wallet size={14} />}
+                figure={<Money amount={stock.data.valueAtWarehouseInr} />}
+                tone="neutral"
+                foot={[
+                  {
+                    label: 'In transit',
+                    value: <Money amount={stock.data.valueInTransitInr} />,
+                  },
+                  // NOT folded into the total as zero. A batch with no
+                  // recorded cost is worth something unknown, and the
+                  // summary counts those units separately for exactly
+                  // this reason (TRE-6's "uncovered, never defaulted").
+                  ...(stock.data.valueUnknownUnits > 0
+                    ? [{ label: 'Units with no cost', value: stock.data.valueUnknownUnits }]
+                    : []),
+                ]}
+              />
+            </>
+          )}
+        </KpiGrid>
       )}
 
-      <SectionBand
-        index="01"
+      <AreaSection
         title="Catalogue register"
         note={
           list.data === undefined
@@ -283,199 +278,183 @@ export function ProductsIndex(): ReactElement {
                 filtered ? ' matching' : ''
               }`
         }
-        action={
-          <>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                updateUrl({ search: searchInput.trim(), page: 1 });
+      >
+        <Panel flush>
+          {/* The search submits on Enter, exactly as before; the status
+              filter is the liquid-bead tab row: three values, all worth
+              seeing at once, directly above the register it filters. */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              updateUrl({ search: searchInput.trim(), page: 1 });
+            }}
+          >
+            <TableToolbar
+              search={{
+                value: searchInput,
+                onChange: setSearchInput,
+                label: 'Search products by name or reference',
+                placeholder: 'Name or ref…',
               }}
-            >
-              <Input
-                placeholder="Name or ref…"
-                aria-label="Search products by name or reference"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="w-full sm:w-64"
-              />
-            </form>
-            {filtered && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchInput('');
-                  updateUrl({ status: '', search: '', page: 1 });
-                }}
-                className="text-text-faint hover:text-text-body px-1 text-xs transition-colors"
-              >
-                Reset
-              </button>
-            )}
-          </>
-        }
-      />
-
-      <BandBody flush>
-        {/* The status filter as chips rather than a <select>: three
-            values, all worth seeing at once, and the comps put the
-            triage row directly above the register it filters. */}
-        <div className="border-border flex flex-wrap items-center gap-1.5 border-b px-3 py-2.5">
-          <FilterChip
-            label="All products"
-            active={params.status === ''}
-            onClick={() => updateUrl({ status: '', page: 1 })}
-          />
-          {STATUSES.map((s) => (
-            <FilterChip
-              key={s}
-              label={s.charAt(0) + s.slice(1).toLowerCase()}
-              active={params.status === s}
-              onClick={() => updateUrl({ status: s, page: 1 })}
-            />
-          ))}
-        </div>
-
-        {list.isLoading ? (
-          <div className="p-3">
-            <LoadingState label="Loading catalogue…" />
-          </div>
-        ) : list.isError ? (
-          <div className="p-3">
-            <ErrorState
-              message={list.error?.message ?? 'Failed to load catalog.'}
-              retry={() => void list.refetch()}
-            />
-          </div>
-        ) : !list.data || list.data.items.length === 0 ? (
-          <div className="p-3">
-            <EmptyState
-              title={filtered ? 'Nothing matches that' : 'No products yet'}
-              description={
-                filtered
-                  ? 'Try a different name or reference, or reset the filters.'
-                  : 'Add one by hand, or bring a whole catalogue in with the CSV import.'
+              filters={
+                <Tabs
+                  label="Product status"
+                  size="sm"
+                  value={params.status === '' ? 'ALL' : params.status}
+                  onChange={(id) =>
+                    updateUrl({ status: id === 'ALL' ? '' : (id as ProductStatus), page: 1 })
+                  }
+                  items={[
+                    { id: 'ALL', label: 'All products' },
+                    ...STATUSES.map((s) => ({
+                      id: s,
+                      label: s.charAt(0) + s.slice(1).toLowerCase(),
+                    })),
+                  ]}
+                />
               }
               action={
                 filtered ? (
                   <Button
-                    variant="secondary"
-                    size="md"
-                    onClick={() => {
-                      setSearchInput('');
-                      updateUrl({ status: '', search: '', page: 1 });
-                    }}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    icon={<RotateCcw size={14} />}
+                    onClick={resetFilters}
                   >
-                    Reset filters
+                    Reset
                   </Button>
-                ) : canSeePath(identity, '/products/new') ? (
-                  <Link href="/products/new">
-                    <Button variant="primary" size="md">
-                      <Plus size={14} /> New product
-                    </Button>
-                  </Link>
                 ) : undefined
               }
             />
-          </div>
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th className="w-14" aria-label="Picture" />
-                <Th>Product</Th>
-                <Th>Your ref</Th>
-                <Th>Box &amp; weight</Th>
-                <Th align="right">Declared value</Th>
-                <Th>Status</Th>
-                <Th>Updated</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {list.data.items.map((p) => {
-                const box = dimensions(p);
-                return (
-                  <Tr key={p.id} onActivate={() => router.push(`/products/${p.id}`)}>
-                    <Td>
-                      {/* A catalogue is browsed by eye; a column of
-                          names makes the seller read to find the thing
-                          they can already see. */}
-                      {p.primaryImageUrl != null ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.primaryImageUrl}
-                          alt=""
-                          className="border-border h-9 w-9 rounded-[var(--radius-2)] border object-cover"
-                        />
-                      ) : (
-                        <div
-                          className="border-border bg-surface-raised h-9 w-9 rounded-[var(--radius-2)] border"
-                          aria-hidden
-                        />
-                      )}
-                    </Td>
-                    <Td>
-                      <Link
-                        href={`/products/${p.id}`}
-                        className="text-text-bright font-medium hover:underline"
-                      >
-                        {p.name}
-                      </Link>
-                      {p.description !== null && p.description !== '' && (
-                        <span className="text-text-faint mt-0.5 block truncate text-xs">
-                          {p.description}
-                        </span>
-                      )}
-                    </Td>
-                    <Td className="text-text-muted font-mono text-xs">{p.externalRef ?? '—'}</Td>
-                    <Td className="text-text-muted text-xs">
-                      {box === null && p.defaultWeightGrams === null ? (
-                        <span className="text-text-faint">—</span>
-                      ) : (
-                        <>
-                          <span className="font-mono">{box ?? 'No box size'}</span>
-                          <span className="text-text-faint mt-0.5 block font-mono">
-                            {p.defaultWeightGrams === null
-                              ? 'No weight'
-                              : `${p.defaultWeightGrams} g`}
-                          </span>
-                        </>
-                      )}
-                    </Td>
-                    <Td align="right">
-                      {p.defaultDeclaredValueInr === null ? (
-                        <span className="text-text-faint text-xs">—</span>
-                      ) : (
-                        <Money amount={p.defaultDeclaredValueInr} />
-                      )}
-                    </Td>
-                    <Td>
-                      <StatusBadge
-                        kind={productStatusKind(p.status)}
-                        label={p.status.toLowerCase()}
-                      />
-                    </Td>
-                    <Td className="text-text-muted font-mono text-xs">
-                      {new Date(p.updatedAt).toISOString().slice(0, 16).replace('T', ' ')}
-                    </Td>
+          </form>
+
+          {list.isLoading ? (
+            <PanelPad>
+              <SkeletonRows rows={6} cols={6} label="Loading catalogue…" />
+            </PanelPad>
+          ) : list.isError ? (
+            <PanelPad>
+              <ErrorState
+                message={list.error?.message ?? 'Failed to load catalog.'}
+                retry={() => void list.refetch()}
+              />
+            </PanelPad>
+          ) : !list.data || list.data.items.length === 0 ? (
+            <PanelPad>
+              <EmptyState
+                bare
+                title={filtered ? 'Nothing matches that' : 'No products yet'}
+                description={
+                  filtered
+                    ? 'Try a different name or reference, or reset the filters.'
+                    : 'Add one by hand, or bring a whole catalogue in with the CSV import.'
+                }
+                action={
+                  filtered ? (
+                    <Button variant="secondary" size="md" onClick={resetFilters}>
+                      Reset filters
+                    </Button>
+                  ) : canSeePath(identity, '/products/new') ? (
+                    <LinkButton href="/products/new" variant="primary" icon={<Plus size={15} />}>
+                      New product
+                    </LinkButton>
+                  ) : undefined
+                }
+              />
+            </PanelPad>
+          ) : (
+            <>
+              <Table caption="Catalogue register">
+                <THead>
+                  <Tr>
+                    <Th aria-label="Picture" />
+                    <Th>Product</Th>
+                    <Th>Your ref</Th>
+                    <Th>Box &amp; weight</Th>
+                    <Th align="right">Declared value</Th>
+                    <Th>Status</Th>
+                    <Th>Updated</Th>
                   </Tr>
-                );
-              })}
-            </TBody>
-            <tfoot>
-              <tr>
-                <td colSpan={7} className="p-0">
-                  <TablePaginator
-                    page={params.page}
-                    pageSize={PAGE_SIZE}
-                    total={list.data.total}
-                    onPageChange={(next) => updateUrl({ page: next })}
-                  />
-                </td>
-              </tr>
-            </tfoot>
-          </Table>
-        )}
-      </BandBody>
-    </div>
+                </THead>
+                <TBody>
+                  {list.data.items.map((p) => {
+                    const box = dimensions(p);
+                    return (
+                      <Tr key={p.id} onActivate={() => router.push(`/products/${p.id}`)}>
+                        <Td>
+                          {/* A catalogue is browsed by eye; a column of
+                              names makes the seller read to find the thing
+                              they can already see. */}
+                          {p.primaryImageUrl != null ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={p.primaryImageUrl} alt="" className="prd-thumb" />
+                          ) : (
+                            <div className="prd-thumb" aria-hidden />
+                          )}
+                        </Td>
+                        <Td>
+                          <Link href={`/products/${p.id}`} className="inv-strong-link">
+                            {p.name}
+                          </Link>
+                          {p.description !== null && p.description !== '' && (
+                            <span className="inv-sub inv-truncate">{p.description}</span>
+                          )}
+                        </Td>
+                        <Td>
+                          <span className="sk-ident inv-muted">{p.externalRef ?? '—'}</span>
+                        </Td>
+                        <Td>
+                          {box === null && p.defaultWeightGrams === null ? (
+                            <Dash />
+                          ) : (
+                            <>
+                              <span className="sk-figure inv-muted">{box ?? 'No box size'}</span>
+                              <span className="inv-sub sk-figure">
+                                {p.defaultWeightGrams === null
+                                  ? 'No weight'
+                                  : `${p.defaultWeightGrams} g`}
+                              </span>
+                            </>
+                          )}
+                        </Td>
+                        <Td align="right">
+                          {p.defaultDeclaredValueInr === null ? (
+                            <Dash />
+                          ) : (
+                            <Money amount={p.defaultDeclaredValueInr} />
+                          )}
+                        </Td>
+                        <Td>
+                          <StatusChip
+                            kind={productStatusKind(p.status)}
+                            label={p.status.toLowerCase()}
+                            size="sm"
+                          />
+                        </Td>
+                        <Td>
+                          <span className="sk-figure inv-muted">
+                            {new Date(p.updatedAt).toISOString().slice(0, 16).replace('T', ' ')}
+                          </span>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </TBody>
+              </Table>
+              <PanelPad>
+                <Pagination
+                  page={params.page}
+                  pageSize={PAGE_SIZE}
+                  total={list.data.total}
+                  onPageChange={(next) => updateUrl({ page: next })}
+                  label="Catalogue pages"
+                />
+              </PanelPad>
+            </>
+          )}
+        </Panel>
+      </AreaSection>
+    </AreaPage>
   );
 }
