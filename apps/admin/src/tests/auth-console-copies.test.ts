@@ -1,6 +1,12 @@
 /**
  * The sign-in screen is moving from three copies to ONE shared component.
  *
+ * UPDATED 2026-09-24 (Phase 4): apps/reseller has moved too. Only
+ * apps/admin still carries its own console (until Phase 5), so there are no
+ * longer two copies to compare: the byte-identical checks are RETIRED and
+ * this spec pins that seller and reseller both render the shared frame and
+ * carry no copy. When admin moves, it joins the list below.
+ *
  * UPDATED 2026-09-23 (apps restyle, Phase 3): apps/seller now renders the
  * shared `SignInFrame` / `SignInCard` from `@skydrop/ui/app/sign-in` and
  * carries no copy of the old auth console. apps/admin and apps/reseller
@@ -55,43 +61,11 @@
  * build time, so this is the earliest point the mistake is visible, and
  * seeing it in behaviour would need three browsers and two themes.
  */
-import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const REPO = join(__dirname, '..', '..', '..', '..');
-/** The apps that still carry a local copy of the old console. */
-const COPIES = ['admin', 'reseller'] as const;
-
-/** Files whose copies must be byte-identical — pure mechanism. */
-const SHARED_MECHANISM = [
-  'src/components/auth-console/corridor-console.tsx',
-  'src/components/auth-console/map-geometry.ts',
-  'src/lib/tilt.tsx',
-] as const;
-
-const CONSOLE_CSS = 'src/components/auth-console/console.css';
-
-function digest(app: string, relative: string): string {
-  const path = join(REPO, 'apps', app, relative);
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
-}
-
-describe('the remaining console copies are pinned', () => {
-  it.each(SHARED_MECHANISM)('%s is byte-identical in apps/admin and apps/reseller', (relative) => {
-    const [admin, reseller] = COPIES.map((app) => digest(app, relative));
-    expect(reseller, `apps/reseller's ${relative} has drifted from apps/admin's`).toBe(admin);
-  });
-
-  it('console.css matches between apps/admin and apps/reseller', () => {
-    expect(
-      digest('reseller', CONSOLE_CSS),
-      "apps/reseller's auth console palette has drifted from apps/admin's — " +
-        'both render on @skydrop/ui tokens.css alone and must match',
-    ).toBe(digest('admin', CONSOLE_CSS));
-  });
-});
 
 describe('apps/seller uses the ONE shared sign-in frame', () => {
   const LAYOUTS = [
@@ -111,5 +85,25 @@ describe('apps/seller uses the ONE shared sign-in frame', () => {
     expect(existsSync(join(REPO, 'apps', 'seller', 'src', 'components', 'auth-console'))).toBe(
       false,
     );
+  });
+});
+
+describe('apps/reseller uses the ONE shared sign-in frame', () => {
+  it('AuthFrame (every signed-out page) renders SignInFrame and SignInCard', () => {
+    const src = readFileSync(
+      join(REPO, 'apps', 'reseller', 'src', 'components', 'auth-frame.tsx'),
+      'utf8',
+    );
+    expect(src).toContain("from '@skydrop/ui/app/sign-in'");
+    expect(src).toContain('<SignInFrame');
+    expect(src).toContain('<SignInCard');
+    expect(src).not.toContain('auth-console');
+  });
+
+  it('carries no local copy of the old console', () => {
+    expect(existsSync(join(REPO, 'apps', 'reseller', 'src', 'components', 'auth-console'))).toBe(
+      false,
+    );
+    expect(existsSync(join(REPO, 'apps', 'reseller', 'src', 'lib', 'tilt.tsx'))).toBe(false);
   });
 });
