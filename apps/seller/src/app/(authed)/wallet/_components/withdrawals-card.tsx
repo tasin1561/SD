@@ -3,31 +3,24 @@
 import Link from 'next/link';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  SkeletonRows,
-  TBody,
-  Table,
-  Td,
-  Textarea,
-  THead,
-  Th,
-  Tr,
-  useToast,
-  WithdrawalStatusBadge,
-} from '@skydrop/ui/components';
+import { HandCoins, OctagonAlert } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { withdrawalStatusKind, withdrawalStatusLabel } from '@skydrop/ui/status';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useRequestWithdrawal,
   useSellerWithdrawals,
   useWithdrawalEligibility,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { WalCallout } from './wallet-parts';
 
 /**
  * Withdrawal requests, on the wallet page because that is where the balance
@@ -60,26 +53,35 @@ export function WithdrawalsCard({
   const rows = list.data ?? [];
 
   /*
-    No `<Card>` of its own: this is the body of the wallet page's
-    "Withdrawal requests" band, and `BandBody` IS the bordered surface
-    that band caps. A card inside it drew a second border.
+    No card of its own: the table is its own card, and it sits directly
+    under the wallet page's tab bar.
   */
   return (
-    <div>
+    <>
       {list.isError ? (
-        <ErrorNote
+        <ErrorState
           message={list.error?.message ?? 'Failed to load withdrawal requests.'}
           retry={() => void list.refetch()}
         />
       ) : list.isLoading ? (
-        <SkeletonRows rows={3} cols={4} />
+        <SkeletonRows rows={3} cols={4} label="Loading withdrawal requests…" />
       ) : rows.length === 0 ? (
-        <p className="text-text-muted py-2 text-sm">
-          No withdrawal requests yet. Request one when you want your balance transferred; we will
-          pay it to the bank account on your profile.
-        </p>
+        <EmptyState
+          title="No withdrawal requests yet."
+          description="Request one when you want your balance transferred; we will pay it to the bank account on your profile."
+          action={
+            <Button
+              variant="primary"
+              size="md"
+              icon={<HandCoins size={15} />}
+              onClick={() => onRequestingChange(true)}
+            >
+              Request a withdrawal
+            </Button>
+          }
+        />
       ) : (
-        <Table>
+        <Table caption="Withdrawal requests">
           <THead>
             <Tr>
               <Th>Requested</Th>
@@ -91,25 +93,27 @@ export function WithdrawalsCard({
           <TBody>
             {rows.map((w) => (
               <Tr key={w.id}>
-                <Td className="text-text-muted whitespace-nowrap">
+                <Td className="wal-when sk-figure">
                   {new Date(w.createdAt).toLocaleDateString()}
-                  <div className="text-text-faint text-xs">
+                  <div className="wal-faint">
                     {new Date(w.createdAt).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
+                    {w.requestedBy === 'SYSTEM' && <span className="wal-tag">auto</span>}
                   </div>
-                  {w.requestedBy === 'SYSTEM' && (
-                    <span className="text-text-faint ml-1.5 text-xs">auto</span>
-                  )}
                 </Td>
                 <Td align="right">
                   <Money amount={w.amountRequested} currency={w.currency} />
                 </Td>
                 <Td>
-                  <WithdrawalStatusBadge status={w.status} audience="seller" />
+                  <StatusChip
+                    kind={withdrawalStatusKind(w.status)}
+                    label={withdrawalStatusLabel(w.status, 'seller')}
+                    size="sm"
+                  />
                 </Td>
-                <Td className="text-text-muted text-xs">
+                <Td className="wal-faint">
                   {w.rejectionReason ??
                     (w.resolvedAt === null
                       ? 'Awaiting review'
@@ -125,7 +129,7 @@ export function WithdrawalsCard({
       )}
 
       <RequestWithdrawalModal open={requesting} onOpenChange={onRequestingChange} />
-    </div>
+    </>
   );
 }
 
@@ -155,6 +159,13 @@ function RequestWithdrawalModal({
     typed > Number(eligibility.data.withdrawableInr);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
+  /**
+   * The owner's rule: money leaving is confirmed on a second screen that
+   * restates the amount, where it goes and what happens next — and only
+   * then does the SAME request fire. The form's own button opens that
+   * screen; it never sends anything itself.
+   */
+  const [confirming, setConfirming] = useState(false);
 
   async function submit(): Promise<void> {
     setError(null);
@@ -164,142 +175,182 @@ function RequestWithdrawalModal({
         amount: amount.trim(),
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
-      toast.success('Withdrawal requested.');
-      setAmount('');
-      setNote('');
-      onOpenChange(false);
     } catch (err) {
       setError(serverVerdict(err));
+      // Rethrown so the confirm screen stays open with the verdict on it.
+      throw err;
     }
+    toast.success('Withdrawal requested.');
+    setAmount('');
+    setNote('');
+    setConfirming(false);
+    onOpenChange(false);
   }
 
+  const cannotRequest =
+    amount.trim() === '' ||
+    request.isPending ||
+    eligibility.data?.hasBankAccount === false ||
+    overAvailable;
+
   return (
-    <Modal
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-        if (!next) setError(null);
-      }}
-      size="sm"
-      title="Request a withdrawal"
-      description="We will review this and transfer to the bank account on your profile. Your balance changes when the transfer is recorded, not when you request it."
-    >
-      <div className="space-y-3">
-        {/* Without bank details there is nowhere to send the money, and
-            the request would sit in the queue while the seller waited.
-            The server refuses it either way (NO_BANK_ACCOUNT_ON_FILE);
-            this stops them filling in a form that cannot succeed, and
-            says where to go instead. */}
-        {eligibility.data?.hasBankAccount === false && (
-          <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical rounded-md border px-3 py-2 text-sm">
-            Add your bank details before requesting a withdrawal — without them there is nowhere for
-            us to send the money.{' '}
-            <Link href="/profile" className="underline">
-              Go to your profile
-            </Link>
-            .
-          </div>
-        )}
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          onOpenChange(next);
+          if (!next) setError(null);
+        }}
+        size="sm"
+        icon={<HandCoins size={18} />}
+        title="Request a withdrawal"
+        description="We will review this and transfer to the bank account on your profile. Your balance changes when the transfer is recorded, not when you request it."
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              disabled={cannotRequest}
+              onClick={() => {
+                setError(null);
+                setConfirming(true);
+              }}
+            >
+              Request withdrawal
+            </Button>
+          </DialogFooter>
+        }
+      >
+        <div className="wal-form">
+          {/* Without bank details there is nowhere to send the money, and
+              the request would sit in the queue while the seller waited.
+              The server refuses it either way (NO_BANK_ACCOUNT_ON_FILE);
+              this stops them filling in a form that cannot succeed, and
+              says where to go instead. */}
+          {eligibility.data?.hasBankAccount === false && (
+            <WalCallout tone="critical" icon={<OctagonAlert size={16} />}>
+              <p>
+                Add your bank details before requesting a withdrawal — without them there is nowhere
+                for us to send the money. <Link href="/profile">Go to your profile</Link>.
+              </p>
+            </WalCallout>
+          )}
 
-        {/* The number that matters: what can actually be taken, not the
-            balance. The two differ by the minimum this account must
-            leave behind, and a seller who does not know that reads a
-            refusal as a bug. */}
-        {eligibility.data !== undefined && (
-          <div className="border-border text-text-muted rounded-md border px-3 py-2 text-sm">
-            <div>
-              Available to withdraw:{' '}
-              <span className="text-text-bright">
-                <Money amount={eligibility.data.withdrawableInr} currency="INR" convert={false} />
-              </span>
-            </div>
-            {/* The three figures that make up the one above, so a
-                refusal is never a surprise. */}
-            <div className="text-text-faint mt-1 space-y-0.5 text-xs">
-              <div>
-                Balance{' '}
-                <Money amount={eligibility.data.balanceInr} currency="INR" convert={false} />
+          {/* The number that matters: what can actually be taken, not the
+              balance. The two differ by the minimum this account must
+              leave behind, and a seller who does not know that reads a
+              refusal as a bug. */}
+          {eligibility.data !== undefined && (
+            <div className="wal-avail">
+              <div className="wal-avail__head">
+                <span>Available to withdraw:</span>
+                <span className="wal-avail__figure sk-figure">
+                  <Money amount={eligibility.data.withdrawableInr} currency="INR" convert={false} />
+                </span>
               </div>
-              {Number(eligibility.data.minimumBalanceInr) > 0 && (
-                <div>
-                  Must stay in the account{' '}
-                  <Money
-                    amount={eligibility.data.minimumBalanceInr}
-                    currency="INR"
-                    convert={false}
-                  />
+              {/* The three figures that make up the one above, so a
+                  refusal is never a surprise. */}
+              <dl className="wal-avail__rows">
+                <div className="wal-avail__row">
+                  <dt>Balance</dt>
+                  <dd className="sk-figure">
+                    <Money amount={eligibility.data.balanceInr} currency="INR" convert={false} />
+                  </dd>
                 </div>
-              )}
-              {/* Money already asked for is HELD, not spent. The balance
-                  still shows it because no transfer has been made yet,
-                  but it cannot be requested a second time — otherwise the
-                  same rupees go out twice. */}
-              {Number(eligibility.data.pendingWithdrawalInr) > 0 && (
-                <div>
-                  On hold for a withdrawal you already requested{' '}
-                  <Money
-                    amount={eligibility.data.pendingWithdrawalInr}
-                    currency="INR"
-                    convert={false}
-                  />
-                </div>
-              )}
+                {Number(eligibility.data.minimumBalanceInr) > 0 && (
+                  <div className="wal-avail__row">
+                    <dt>Must stay in the account</dt>
+                    <dd className="sk-figure">
+                      <Money
+                        amount={eligibility.data.minimumBalanceInr}
+                        currency="INR"
+                        convert={false}
+                      />
+                    </dd>
+                  </div>
+                )}
+                {/* Money already asked for is HELD, not spent. The balance
+                    still shows it because no transfer has been made yet,
+                    but it cannot be requested a second time — otherwise
+                    the same rupees go out twice. */}
+                {Number(eligibility.data.pendingWithdrawalInr) > 0 && (
+                  <div className="wal-avail__row">
+                    <dt>On hold for a withdrawal you already requested</dt>
+                    <dd className="sk-figure">
+                      <Money
+                        amount={eligibility.data.pendingWithdrawalInr}
+                        currency="INR"
+                        convert={false}
+                      />
+                    </dd>
+                  </div>
+                )}
+              </dl>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* No currency choice: the wallet is kept in rupees, and taka is
-            a conversion of that balance rather than a second pot. The
-            option was always going to be refused — there is nothing to
-            withdraw from a currency nothing is ever credited in. */}
-        {/* No hint: the ₹ in the label and the rupee figure in the
-            availability box above already say which currency this is,
-            and a sentence explaining it a third time is noise on a form
-            with two fields. */}
-        {/*
-          The server refuses more than is withdrawable
-          (INSUFFICIENT_WITHDRAWABLE_BALANCE) and is the authority — this
-          only saves a round trip to learn something already printed two
-          inches above the field. FE-2: it is a mirror of the number we
-          just showed, not of the server's policy, and the button stays
-          enabled for everything else so a refusal still comes from the
-          server verbatim.
-        */}
-        <FormField label="Amount (₹)" htmlFor="wd-amount" required>
-          <Input
+          {/* No currency choice: the wallet is kept in rupees, and taka is
+              a conversion of that balance rather than a second pot. The
+              option was always going to be refused — there is nothing to
+              withdraw from a currency nothing is ever credited in. */}
+          {/*
+            The server refuses more than is withdrawable
+            (INSUFFICIENT_WITHDRAWABLE_BALANCE) and is the authority — the
+            disabled button only saves a round trip to learn something
+            already printed above the field. FE-2: it is a mirror of the
+            number we just showed, not of the server's policy, and a
+            refusal still comes from the server verbatim.
+          */}
+          <TextField
             id="wd-amount"
+            label="Amount (₹)"
+            required
             inputMode="decimal"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             placeholder="25000.00"
+            inputClassName="sk-figure"
           />
-        </FormField>
 
-        <FormField label="Note" htmlFor="wd-note" hint="Optional.">
-          <Textarea id="wd-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-        </FormField>
+          <TextArea
+            id="wd-note"
+            label="Note"
+            hint="Optional."
+            rows={2}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
 
-        {error !== null && <ErrorNote message={error} />}
-      </div>
+          {error !== null && !confirming && <ErrorState title="Not requested" message={error} />}
+        </div>
+      </Dialog>
 
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={
-            amount.trim() === '' ||
-            request.isPending ||
-            eligibility.data?.hasBankAccount === false ||
-            overAvailable
-          }
-          onClick={() => void submit()}
-        >
-          {request.isPending ? 'Requesting…' : 'Request withdrawal'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={(next) => {
+          setConfirming(next);
+          if (!next) setError(null);
+        }}
+        title="Request this withdrawal?"
+        entity="To the bank account on your profile"
+        amount={
+          Number.isFinite(typed) ? (
+            <Money amount={amount.trim()} currency="INR" convert={false} size="md" />
+          ) : (
+            amount.trim()
+          )
+        }
+        consequence="We review the request and transfer it to that account. Your balance changes when the transfer is recorded, not now."
+        confirmLabel="Request withdrawal"
+        cancelLabel="Back"
+        onConfirm={submit}
+        error={error}
+      >
+        {note.trim() !== '' && <p className="wal-muted">Your note: {note.trim()}</p>}
+      </ConfirmDialog>
+    </>
   );
 }

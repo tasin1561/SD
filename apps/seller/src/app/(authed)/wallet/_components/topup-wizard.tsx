@@ -2,16 +2,20 @@
 
 import { useState, type ReactElement } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { Check, CircleCheck, Landmark } from 'lucide-react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  Money,
-  useToast,
-} from '@skydrop/ui/components';
+import { ArrowLeft, Landmark, ReceiptText, Send, TriangleAlert } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { topupStatusKind, topupStatusLabel } from '@skydrop/ui/status';
+import { TopupRequestStatus } from '@skydrop/db';
+import { Dialog } from '@skydrop/ui/app/dialog';
+import { Stepper, type StepperStep } from '@skydrop/ui/app/stepper';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { DropZone } from '@skydrop/ui/app/drop-zone';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   usePresignTopupProof,
   useSubmitTopup,
@@ -19,6 +23,7 @@ import {
   type TopupBankAccountsResponse,
 } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { WalCallout } from './wallet-parts';
 
 /**
  * Recording a bank transfer, one decision at a time.
@@ -38,7 +43,18 @@ import { serverVerdict } from '@/lib/server-verdict';
  * asking them to make an arithmetic mistake that we would then have to
  * find on a statement. The rupee equivalent is shown beside it — that
  * is what reaches the wallet, and INR is what the wallet is kept in.
+ *
+ * Drawn as the u34 stepper: the connector fills as the steps complete
+ * and the last step ends on the pending chip the claim will carry under
+ * Top-ups ("Waiting for Skydrop to see it"), so the seller sees the
+ * state their money is in rather than a bare "done".
  */
+const STEPS: readonly StepperStep[] = [
+  { id: 'account', label: 'Choose account', icon: <Landmark size={16} /> },
+  { id: 'details', label: 'Payment details', icon: <ReceiptText size={16} /> },
+  { id: 'submitted', label: 'Submitted', icon: <Send size={16} /> },
+];
+
 export function TopupWizard({
   open,
   onDone,
@@ -134,7 +150,7 @@ export function TopupWizard({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(next) => {
         if (!next) {
@@ -144,84 +160,55 @@ export function TopupWizard({
       }}
       size="lg"
       title="Top up your wallet"
+      icon={<Landmark size={18} />}
     >
-      <Stepper step={step} />
+      <Stepper mode="wizard" label="Top-up steps" steps={STEPS} current={step - 1} navigable="none">
+        <div className="wal-wizard">
+          {error !== null && <ErrorState title="Not recorded" message={error} />}
 
-      {error !== null && <ErrorNote message={error} />}
+          {step === 1 && (
+            <SelectBank
+              accounts={accounts}
+              loading={banks.isLoading}
+              onPick={(a) => {
+                setBank(a);
+                setStep(2);
+              }}
+            />
+          )}
 
-      {step === 1 && (
-        <SelectBank
-          accounts={accounts}
-          loading={banks.isLoading}
-          onPick={(a) => {
-            setBank(a);
-            setStep(2);
-          }}
-        />
-      )}
+          {step === 2 && bank !== null && (
+            <PaymentDetails
+              bank={bank}
+              amount={amount}
+              onAmount={setAmount}
+              inrAmount={inrAmount}
+              bdtAmount={bdtAmount}
+              transactionRef={transactionRef}
+              onTransactionRef={setTransactionRef}
+              proof={proof}
+              onProof={setProof}
+              hasEvidence={hasEvidence}
+              canSubmit={amountValid && hasEvidence && !busy}
+              busy={busy}
+              failed={error !== null}
+              onBack={() => setStep(1)}
+              onSubmit={() => void onSubmit()}
+            />
+          )}
 
-      {step === 2 && bank !== null && (
-        <PaymentDetails
-          bank={bank}
-          amount={amount}
-          onAmount={setAmount}
-          inrAmount={inrAmount}
-          bdtAmount={bdtAmount}
-          transactionRef={transactionRef}
-          onTransactionRef={setTransactionRef}
-          proof={proof}
-          onProof={setProof}
-          hasEvidence={hasEvidence}
-          canSubmit={amountValid && hasEvidence && !busy}
-          busy={busy}
-          onBack={() => setStep(1)}
-          onSubmit={() => void onSubmit()}
-        />
-      )}
-
-      {step === 3 && (
-        <Submitted
-          onClose={() => {
-            onDone();
-            reset();
-            toast.success('Top-up recorded. We will email you when it is verified.');
-          }}
-        />
-      )}
-    </Modal>
-  );
-}
-
-function Stepper({ step }: { readonly step: 1 | 2 | 3 }): ReactElement {
-  const labels = ['Choose account', 'Payment details', 'Submitted'] as const;
-  return (
-    <ol className="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-      {labels.map((label, i) => {
-        const n = (i + 1) as 1 | 2 | 3;
-        const done = n < step;
-        const active = n === step;
-        return (
-          <li key={label} className="flex items-center gap-2">
-            <span
-              className={
-                'inline-flex h-5 w-5 items-center justify-center rounded-full text-[11px] ' +
-                (done
-                  ? 'bg-[var(--color-success)] text-white'
-                  : active
-                    ? 'bg-accent-fill text-white'
-                    : 'border-border text-text-faint border')
-              }
-            >
-              {done ? <Check size={11} /> : n}
-            </span>
-            <span className={active ? 'text-text-bright font-medium' : 'text-text-muted'}>
-              {label}
-            </span>
-            {n < 3 && <span className="text-text-faint px-1">›</span>}
-          </li>
-        );
-      })}
-    </ol>
+          {step === 3 && (
+            <Submitted
+              onClose={() => {
+                onDone();
+                reset();
+                toast.success('Top-up recorded. We will email you when it is verified.');
+              }}
+            />
+          )}
+        </div>
+      </Stepper>
+    </Dialog>
   );
 }
 
@@ -234,57 +221,51 @@ function SelectBank({
   readonly loading: boolean;
   readonly onPick: (a: PlatformBankAccountView) => void;
 }): ReactElement {
-  if (loading) return <p className="text-text-muted py-4 text-sm">Loading accounts…</p>;
+  if (loading) {
+    return (
+      <div className="wal-loading" role="status" aria-live="polite">
+        <p className="wal-muted">Loading accounts…</p>
+        <div className="wal-banks">
+          <Skeleton height={132} rounded="md" />
+          <Skeleton height={132} rounded="md" />
+        </div>
+      </div>
+    );
+  }
   if (accounts.length === 0) {
     return (
-      <div className="border-border text-text-muted rounded-md border px-3 py-3 text-sm">
-        We have not published a bank account yet, so there is nowhere to send money. Please contact
-        support before transferring anything — a payment we have not published an account for is one
-        we cannot match to you.
-      </div>
+      <WalCallout tone="warn" icon={<TriangleAlert size={16} />}>
+        <p>
+          We have not published a bank account yet, so there is nowhere to send money. Please
+          contact support before transferring anything — a payment we have not published an account
+          for is one we cannot match to you.
+        </p>
+      </WalCallout>
     );
   }
   return (
     <>
-      <p className="text-text-muted mb-3 text-sm">
+      <p className="wal-muted">
         Send the money to one of these accounts first, then come back and tell us. Nothing reaches
         your balance until we match it against our statement.
       </p>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="wal-banks">
         {accounts.map((a) => (
-          <button
-            key={a.id}
-            type="button"
-            onClick={() => onPick(a)}
-            className="border-border hover:border-accent focus-visible:border-accent rounded-lg border p-3 text-left transition-colors"
-          >
-            <div className="mb-2 flex items-start gap-2">
-              <span className="bg-accent/10 text-accent inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
-                <Landmark size={15} />
-              </span>
-              <div className="min-w-0">
-                <div className="text-text-bright text-sm font-medium">{a.bankName}</div>
-                <div className="text-text-muted truncate text-xs">
-                  {[a.branchName, a.district].filter(Boolean).join(' — ') || a.label}
-                </div>
+          <button key={a.id} type="button" onClick={() => onPick(a)} className="wal-bank">
+            <BankHead bank={a} />
+            <dl className="wal-bank__details">
+              <div className="wal-bank__line">
+                <dt>Account name</dt>
+                <dd>{a.accountName}</dd>
               </div>
-              <span className="text-text-muted border-border ml-auto shrink-0 rounded-full border px-2 py-0.5 text-[11px]">
-                {a.currency === 'BDT' ? '৳ BDT' : '₹ INR'}
-              </span>
-            </div>
-            <dl className="bg-surface-raised rounded-md px-2 py-1.5 text-xs">
-              <div className="flex justify-between gap-2 py-0.5">
-                <dt className="text-text-muted">Account name</dt>
-                <dd className="text-text-body truncate font-mono">{a.accountName}</dd>
-              </div>
-              <div className="flex justify-between gap-2 py-0.5">
-                <dt className="text-text-muted">Account number</dt>
-                <dd className="text-text-body font-mono">{a.accountNumber}</dd>
+              <div className="wal-bank__line">
+                <dt>Account number</dt>
+                <dd className="sk-ident">{a.accountNumber}</dd>
               </div>
               {a.routingNumber !== null && (
-                <div className="flex justify-between gap-2 py-0.5">
-                  <dt className="text-text-muted">Routing</dt>
-                  <dd className="text-text-body font-mono">{a.routingNumber}</dd>
+                <div className="wal-bank__line">
+                  <dt>Routing</dt>
+                  <dd className="sk-ident">{a.routingNumber}</dd>
                 </div>
               )}
             </dl>
@@ -292,6 +273,32 @@ function SelectBank({
         ))}
       </div>
     </>
+  );
+}
+
+/** The bank's name, branch and currency, as the top of its card. */
+function BankHead({
+  bank,
+  action,
+}: {
+  readonly bank: PlatformBankAccountView;
+  readonly action?: ReactElement | undefined;
+}): ReactElement {
+  return (
+    <div className="wal-bank__head">
+      <span className="wal-bank__chip" aria-hidden>
+        <Landmark size={15} />
+      </span>
+      <div className="wal-bank__names">
+        <div className="wal-bank__name">{bank.bankName}</div>
+        <div className="wal-bank__branch">
+          {[bank.branchName, bank.district].filter(Boolean).join(' — ') || bank.label}
+        </div>
+      </div>
+      {action ?? (
+        <span className="wal-bank__cur">{bank.currency === 'BDT' ? '৳ BDT' : '₹ INR'}</span>
+      )}
+    </div>
   );
 }
 
@@ -308,38 +315,33 @@ function PaymentDetails(props: {
   readonly hasEvidence: boolean;
   readonly canSubmit: boolean;
   readonly busy: boolean;
+  readonly failed: boolean;
   readonly onBack: () => void;
   readonly onSubmit: () => void;
 }): ReactElement {
   const { bank } = props;
   const symbol = bank.currency === 'BDT' ? '৳' : '₹';
   return (
-    <div className="space-y-3">
-      <div className="border-accent/40 bg-accent/5 rounded-lg border p-3">
-        <div className="mb-2 flex items-start gap-2">
-          <span className="bg-accent/10 text-accent inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md">
-            <Landmark size={15} />
-          </span>
-          <div className="min-w-0">
-            <div className="text-text-bright text-sm font-medium">{bank.bankName}</div>
-            <div className="text-text-muted truncate text-xs">
-              {[bank.branchName, bank.district].filter(Boolean).join(' — ') || bank.label}
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" className="ml-auto shrink-0" onClick={props.onBack}>
-            Change
-          </Button>
-        </div>
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+    <>
+      <div className="wal-bank" data-chosen="1">
+        <BankHead
+          bank={bank}
+          action={
+            <Button variant="ghost" size="sm" onClick={props.onBack}>
+              Change
+            </Button>
+          }
+        />
+        <dl className="wal-bank__details wal-bank__details--grid">
           <Detail label="Account name" value={bank.accountName} />
-          <Detail label="Account number" value={bank.accountNumber} />
+          <Detail label="Account number" value={bank.accountNumber} ident />
           {bank.routingNumber !== null && (
-            <Detail label="Routing number" value={bank.routingNumber} />
+            <Detail label="Routing number" value={bank.routingNumber} ident />
           )}
           {bank.district !== null && <Detail label="District" value={bank.district} />}
         </dl>
         {bank.instructions !== null && bank.instructions !== '' && (
-          <p className="text-text-muted mt-2 text-xs">{bank.instructions}</p>
+          <p className="wal-bank__note">{bank.instructions}</p>
         )}
       </div>
 
@@ -347,159 +349,159 @@ function PaymentDetails(props: {
           seller's transfer receipt. Asking them to convert first is
           asking for an arithmetic mistake we would then have to find on
           a statement. */}
-      <FormField
+      <TextField
+        id="tw-amount"
         label={`Amount you paid (${symbol} ${bank.currency})`}
-        htmlFor="tw-amount"
         required
-      >
-        <Input
-          id="tw-amount"
-          className="max-w-none"
-          inputMode="decimal"
-          value={props.amount}
-          onChange={(e) => props.onAmount(e.target.value)}
-          placeholder="0.00"
-        />
-      </FormField>
+        inputMode="decimal"
+        value={props.amount}
+        onChange={(e) => props.onAmount(e.target.value)}
+        placeholder="0.00"
+        inputClassName="sk-figure"
+      />
 
       {props.inrAmount !== null && (
-        <div className="border-border rounded-md border px-3 py-2 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-text-muted">Credited to your wallet</span>
-            <span className="text-text-bright font-medium">
+        <div className="wal-credited">
+          <div className="wal-credited__row">
+            <span>Credited to your wallet</span>
+            <strong>
               <Money amount={props.inrAmount.toFixed(2)} currency="INR" convert={false} />
-            </span>
+            </strong>
           </div>
           {props.bdtAmount !== null && (
-            <div className="text-text-faint mt-0.5 flex items-center justify-between gap-2 text-xs">
+            <div className="wal-credited__row wal-credited__row--sub">
               <span>Same amount in taka</span>
               <span>
                 <Money amount={props.bdtAmount.toFixed(2)} currency="BDT" convert={false} />
               </span>
             </div>
           )}
-          <p className="text-text-faint mt-1 text-xs">
-            Your wallet is kept in rupees, so the rupee figure is what gets credited.
-          </p>
+          <p>Your wallet is kept in rupees, so the rupee figure is what gets credited.</p>
         </div>
       )}
 
-      <FormField
+      <TextField
+        id="tw-ref"
         label="Transaction ID / reference"
-        htmlFor="tw-ref"
         hint="From your bank's confirmation."
-      >
-        <Input
-          id="tw-ref"
-          className="max-w-none"
-          value={props.transactionRef}
-          onChange={(e) => props.onTransactionRef(e.target.value)}
-          placeholder="e.g. TXN123456789"
-        />
-      </FormField>
+        value={props.transactionRef}
+        onChange={(e) => props.onTransactionRef(e.target.value)}
+        placeholder="e.g. TXN123456789"
+      />
 
-      <FormField
-        label="Payment proof"
-        htmlFor="tw-proof"
-        hint="A screenshot or PDF of the transfer (JPG, PNG, WEBP, PDF)."
-      >
-        {/* A bare file input renders as unstyled system text — "Choose
-            File No file chosen" — which does not read as a control at
-            all, on a step where uploading a receipt is one of only two
-            ways to proceed. The `file:` variants style the button the
-            browser draws for us; the filename is echoed separately
-            because the native one truncates and cannot be cleared. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            id="tw-proof"
-            /* Remounts on clear, which resets the NATIVE value too.
-               Without it the element still holds the file after Remove,
-               so re-picking the same one fires no change event and the
-               seller is stuck with a field that ignores them. */
-            key={props.proof === null ? 'empty' : 'chosen'}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,application/pdf"
-            className={
-              'text-text-muted min-h-[36px] max-w-full text-sm ' +
-              'file:border-border file:bg-surface-raised file:text-text-body ' +
-              'file:mr-3 file:cursor-pointer file:rounded-md file:border file:px-3 file:py-1.5 ' +
-              'file:text-sm file:font-medium file:transition-colors ' +
-              'hover:file:border-accent hover:file:text-accent'
-            }
-            onChange={(e) => props.onProof(e.target.files?.[0] ?? null)}
-          />
-          {props.proof !== null && (
-            <button
-              type="button"
-              className="text-text-muted hover:text-text-body min-h-[32px] text-xs underline"
-              onClick={() => props.onProof(null)}
-            >
-              Remove
-            </button>
-          )}
-        </div>
+      <div className="wal-proof">
+        <span className="wal-proof__label">Payment proof</span>
+        {/* The drop zone uploads nothing: it hands the file over and the
+            submit uploads it, exactly as the file input did. It is
+            REMOUNTED on clear so its own list and the native value reset
+            too — without that, re-picking the same file fires no change
+            event and the seller is stuck with a field that ignores them.
+            The chosen file is listed from the wizard's own state, so it
+            is still named after going Back and returning. */}
+        <DropZone
+          id="tw-proof"
+          key={props.proof === null ? 'empty' : 'chosen'}
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          label="Drop the receipt here"
+          buttonText="Choose file"
+          hint="A screenshot or PDF of the transfer (JPG, PNG, WEBP, PDF)."
+          showFiles={false}
+          onFiles={(files) => props.onProof(files[0] ?? null)}
+        />
         {props.proof !== null && (
-          <p className="text-text-faint mt-1 text-xs">
-            {props.proof.name} · {(props.proof.size / 1024).toFixed(0)} KB
-          </p>
+          <div className="wal-proof__chosen">
+            <span>
+              {props.proof.name} · {(props.proof.size / 1024).toFixed(0)} KB
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => props.onProof(null)}>
+              Remove
+            </Button>
+          </div>
         )}
-      </FormField>
+      </div>
 
       {/* Either identifies the payment on a statement; neither leaves us
           hunting an unnamed amount on a day. */}
       {!props.hasEvidence && (
-        <div className="border-[var(--color-warning-ring)] bg-[var(--color-warning-tint)] text-text-body rounded-md border px-3 py-2 text-xs">
-          Give a transaction ID or upload a receipt — either one lets us find your payment. Both is
-          better.
-        </div>
+        <WalCallout tone="warn" icon={<TriangleAlert size={16} />}>
+          <p>
+            Give a transaction ID or upload a receipt — either one lets us find your payment. Both
+            is better.
+          </p>
+        </WalCallout>
       )}
 
-      <div className="flex justify-end gap-2 pt-1">
-        <Button variant="ghost" size="md" onClick={props.onBack}>
+      <div className="wal-wizard__foot">
+        <Button variant="ghost" size="md" icon={<ArrowLeft size={15} />} onClick={props.onBack}>
           Back
         </Button>
-        <Button variant="primary" size="md" disabled={!props.canSubmit} onClick={props.onSubmit}>
-          {props.busy ? 'Submitting…' : 'Submit for verification'}
-        </Button>
+        {/* Controlled: the wizard owns the real request (upload, then
+            submit), so the button reads its busy flag and its refusal
+            rather than running a promise of its own. */}
+        <AsyncButton
+          variant="primary"
+          size="md"
+          icon={<Send size={15} />}
+          state={props.busy ? 'busy' : props.failed ? 'error' : 'idle'}
+          disabled={!props.canSubmit}
+          labels={{ idle: 'Submit for verification', busy: 'Submitting…' }}
+          onClick={props.onSubmit}
+        />
       </div>
-    </div>
+    </>
   );
 }
 
 function Detail({
   label,
   value,
+  ident = false,
 }: {
   readonly label: string;
   readonly value: string;
+  readonly ident?: boolean;
 }): ReactElement {
   return (
-    <div>
-      <dt className="text-text-muted">{label}</dt>
-      <dd className="text-text-body font-mono">{value}</dd>
+    <div className="wal-bank__line">
+      <dt>{label}</dt>
+      <dd className={ident ? 'sk-ident' : undefined}>{value}</dd>
     </div>
   );
 }
 
 function Submitted({ onClose }: { readonly onClose: () => void }): ReactElement {
   return (
-    <div className="py-4 text-center">
-      <span className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-success-tint)] text-[var(--color-success)]">
-        <CircleCheck size={26} />
+    <div className="wal-done">
+      <span className="wal-done__badge" aria-hidden>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" focusable="false">
+          <path
+            className="wal-done__check"
+            d="M5 12.5l4.5 4.5L19 7.5"
+            stroke="currentColor"
+            strokeWidth="2.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
       </span>
-      <h3 className="text-text-bright text-base font-medium">We have your top-up</h3>
-      <p className="text-text-muted mx-auto mt-1 max-w-md text-sm">
+      <h3 className="wal-done__title">We have your top-up</h3>
+      <p className="wal-done__body">
         We check every transfer against our bank statement by hand, which usually takes 24–48 hours.
         Your wallet is credited the moment it is matched, and we will email you either way.
       </p>
-      <p className="text-text-faint mx-auto mt-2 max-w-md text-xs">
+      {/* The state the claim is in now, in the same chip and the same
+          words it carries in the Top-ups list. */}
+      <StatusChip
+        kind={topupStatusKind(TopupRequestStatus.PENDING)}
+        label={topupStatusLabel(TopupRequestStatus.PENDING, 'payer')}
+        pulse
+      />
+      <p className="wal-done__aside">
         Nothing has been added to your balance yet. You can follow it under Top-ups.
       </p>
-      <div className="mt-4">
-        <Button variant="primary" size="md" onClick={onClose}>
-          Done
-        </Button>
-      </div>
+      <Button variant="primary" size="md" onClick={onClose}>
+        Done
+      </Button>
     </div>
   );
 }

@@ -1,0 +1,676 @@
+/* Seller wallet (/wallet and /wallet/limits) — layout and the few
+   wallet-only pieces. Tokens only. The primitives (KpiCard, Table, Tabs,
+   Stepper, Dialog …) carry their own CSS; this file arranges them and draws
+   the ledger direction mark, the bank cards, the callouts and the settings
+   rows. */
+
+.wal-page {
+  display: grid;
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.wal-page > .sk-ph {
+  margin-bottom: 0;
+}
+.wal-section {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* ── Header facts and actions ─────────────────────────────────────────── */
+.wal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+.wal-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.wal-fact[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.wal-fact[data-tone='bad'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.wal-fact[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.wal-fact[data-tone='accent'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.wal-fact__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: currentColor;
+}
+.wal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.wal-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap);
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.wal-link:hover {
+  text-decoration: underline;
+}
+.wal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+}
+.wal-back:hover {
+  color: var(--fg-strong);
+}
+
+/* ── Balance KPIs ─────────────────────────────────────────────────────── */
+.wal-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.wal-kpi-skel {
+  display: block;
+  width: 100%;
+}
+
+/* ── The three views: the tab bar, then its panel ───────────────────── */
+.wal-panel {
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding-top: var(--sp-3);
+}
+.wal-panel:focus-visible {
+  border-radius: var(--r-md);
+}
+.wal-more {
+  display: flex;
+  justify-content: center;
+}
+.wal-card {
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.wal-muted {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.wal-faint {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+
+/* ── Ledger ───────────────────────────────────────────────────────────── */
+.wal-when {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.wal-type {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--fg-body);
+}
+.wal-type__text {
+  min-width: 0;
+}
+.wal-type__note {
+  margin-top: 2px;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  font-style: italic;
+}
+/* Which way the money went: an arrow in a tinted chip, beside the sign
+   and colour the <Money> figure already carries — never colour alone. */
+.wal-dir {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+}
+.wal-dir[data-dir='credit'] {
+  background: var(--green-tint);
+  color: var(--money-credit);
+}
+.wal-dir[data-dir='debit'] {
+  background: var(--red-tint);
+  color: var(--money-debit);
+}
+.wal-linked {
+  color: var(--sky);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+.wal-linked:hover {
+  text-decoration: underline;
+}
+
+/* ── Footer strip ─────────────────────────────────────────────────────── */
+.wal-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-5);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.wal-strip__fact {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.wal-strip__label {
+  color: var(--fg-muted);
+}
+.wal-strip__value {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.wal-strip__value[data-tone='warn'] {
+  color: var(--saffron-text);
+}
+.wal-strip__value[data-tone='good'] {
+  color: var(--green-text);
+}
+.wal-strip__note {
+  min-width: 0;
+}
+.wal-strip__note a {
+  color: var(--sky);
+}
+
+/* ── Callouts (credit standing, bank missing, evidence, availability) ─── */
+.wal-callout {
+  display: flex;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.wal-callout[data-tone='critical'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.wal-callout[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.wal-callout[data-tone='info'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.wal-callout__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.wal-callout__body {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.wal-callout__title {
+  color: inherit;
+  font-weight: var(--fw-semibold);
+}
+.wal-callout p {
+  margin: 0;
+}
+.wal-callout a {
+  color: inherit;
+  text-decoration: underline;
+}
+.wal-callout__aside {
+  opacity: 0.85;
+  font-size: var(--fs-xs);
+}
+
+/* ── Withdrawal availability breakdown ───────────────────────────────── */
+.wal-avail {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+.wal-avail__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.wal-avail__figure {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.wal-avail__rows {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.wal-avail__row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+.wal-avail__row dd {
+  margin: 0;
+}
+.wal-form {
+  display: grid;
+  gap: var(--sp-4);
+}
+.wal-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+}
+.wal-stack {
+  display: grid;
+  gap: 2px;
+}
+
+/* ── Top-up wizard ────────────────────────────────────────────────────── */
+.wal-wizard {
+  display: grid;
+  gap: var(--sp-4);
+}
+.wal-banks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: var(--sp-3);
+}
+.wal-bank {
+  position: relative;
+  display: grid;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  color: var(--fg-body);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+.wal-bank:hover,
+.wal-bank:focus-visible {
+  border-color: var(--accent-line);
+  box-shadow: var(--elev-2);
+  transform: translateY(-2px);
+}
+.wal-bank[data-chosen='1'] {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+  cursor: default;
+}
+.wal-bank[data-chosen='1']:hover {
+  transform: none;
+}
+.wal-bank__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.wal-bank__chip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  background: var(--blue-tint);
+  color: var(--blue-text);
+}
+.wal-bank__names {
+  min-width: 0;
+  flex: 1;
+}
+.wal-bank__name {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.wal-bank__branch {
+  overflow: hidden;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wal-bank__cur {
+  flex: none;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--fg-muted);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+}
+.wal-bank__details {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  font-size: var(--fs-xs);
+}
+.wal-bank__details--grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: var(--sp-2) var(--sp-3);
+}
+.wal-bank__line {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.wal-bank__details--grid .wal-bank__line {
+  display: grid;
+  justify-content: start;
+  gap: 0;
+}
+.wal-bank__line dt {
+  color: var(--fg-muted);
+}
+.wal-bank__line dd {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-body);
+  text-overflow: ellipsis;
+}
+.wal-bank__note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.wal-credited {
+  display: grid;
+  gap: 2px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--green-line);
+  border-radius: var(--r-md);
+  background: var(--green-tint);
+  font-size: var(--fs-sm);
+}
+.wal-credited__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  color: var(--green-on-tint);
+}
+.wal-credited__row strong {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.wal-credited__row--sub {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.wal-credited p {
+  margin: 2px 0 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.wal-proof {
+  display: grid;
+  gap: var(--sp-2);
+}
+.wal-proof__label {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+}
+.wal-proof__chosen {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.wal-wizard__foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+.wal-loading {
+  display: grid;
+  gap: var(--sp-3);
+}
+
+/* The last step: a drawn check, what happens next, and the pending chip
+   the claim will carry under Top-ups. */
+.wal-done {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0 var(--sp-1);
+  text-align: center;
+}
+.wal-done__badge {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-pill);
+  background: var(--green-fill);
+  color: var(--green-on-fill);
+  box-shadow: 0 0 0 6px var(--green-tint);
+  animation: wal-pop var(--dur-slow) var(--ease-spring) both;
+}
+.wal-done__check {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: wal-draw var(--dur-slow) var(--ease-out) 160ms forwards;
+}
+.wal-done__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+.wal-done__body {
+  max-width: 28rem;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.wal-done__aside {
+  max-width: 28rem;
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+@keyframes wal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes wal-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── /wallet/limits ───────────────────────────────────────────────────── */
+.wal-settings {
+  display: grid;
+}
+.wal-setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-top: 1px solid var(--line);
+}
+.wal-setting:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+.wal-setting__text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+.wal-setting__title {
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-medium);
+}
+.wal-setting__desc {
+  margin: 2px 0 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.wal-setting__control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.wal-setting__hour {
+  min-width: 8.5rem;
+}
+.wal-setting__keep {
+  width: 10rem;
+}
+.wal-setting__keep input {
+  text-align: right;
+}
+
+.wal-terms {
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: var(--sp-2) var(--sp-5);
+  margin: 0;
+}
+.wal-term {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-2) 0;
+}
+.wal-term__chip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  background: var(--blue-tint);
+  color: var(--blue-text);
+}
+.wal-term__text {
+  flex: 1;
+  min-width: 0;
+}
+.wal-term__label {
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.wal-term__hint {
+  margin: 2px 0 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.wal-term__value {
+  flex: none;
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  text-align: right;
+}
+.wal-terms + .wal-setting__desc {
+  margin-top: var(--sp-3);
+}

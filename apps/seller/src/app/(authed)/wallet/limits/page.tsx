@@ -3,9 +3,10 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { Crumbs, PageHeader } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
 import { WithdrawalScheduleCard } from '../_components/withdrawal-schedule-card';
 import { WalletTermsCard } from '../_components/wallet-terms-card';
+import '../_components/wallet.css';
 
 /**
  * The rules this wallet runs on, on their own page.
@@ -25,35 +26,27 @@ import { WalletTermsCard } from '../_components/wallet-terms-card';
  */
 export default function WalletLimitsPage(): ReactElement {
   return (
-    <div>
-      <Link
-        href="/wallet"
-        className="text-text-muted hover:text-text-bright mb-3 inline-flex items-center gap-1.5 text-xs"
-      >
-        <ArrowLeft size={13} aria-hidden />
+    <div className="wal-page">
+      <Link href="/wallet" className="wal-back">
+        <ArrowLeft size={14} aria-hidden />
         Back to wallet
       </Link>
 
       <PageHeader
-        breadcrumb={
-          <Crumbs
-            items={[
-              { label: 'Seller console' },
-              { label: 'Money' },
-              { label: 'Wallet', href: '/wallet' },
-              { label: 'Limits' },
-            ]}
-            Link={Link}
-          />
-        }
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Money' },
+          { label: 'Wallet', href: '/wallet' },
+          { label: 'Limits' },
+        ]}
+        Link={Link}
         title="Wallet limits and settings"
         subtitle="Every rule that decides what you can take out, when COD reaches you, and what is charged. Set by Skydrop — ask us if one looks wrong for your account."
       />
 
       {/* What you can change, then what you cannot. Mixing the two was
           the old shape: a list of eighteen facts where two happened to
-          be adjustable, which is not discoverable. Each band carries
-          its own ordinal (01, 02) inside the component. */}
+          be adjustable, which is not discoverable. */}
       <WithdrawalScheduleCard />
       <WalletTermsCard />
     </div>
