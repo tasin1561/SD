@@ -1,21 +1,12 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Money,
-  Num,
-  ProductThumb,
-  Section,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money, Num, ProductThumb } from '@skydrop/ui/components';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AcSection } from '../../../settings/_components/ac-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAdminResellerCatalogue } from '@/lib/reseller-catalogue-hooks';
 
@@ -29,7 +20,7 @@ const REASON_WORDS = {
 export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
   const terms = useAdminResellerCatalogue(storeId);
   const body = ((): ReactElement => {
-    if (terms.isPending) return <LoadingState label="Loading catalogue terms" rows={4} />;
+    if (terms.isPending) return <SkeletonRows rows={4} cols={6} label="Loading catalogue terms" />;
     if (terms.isError) {
       return <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />;
     }
@@ -37,43 +28,50 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
     if (rows.length === 0) {
       return (
         <EmptyState
+          bare
           title="The seller has not given this store any products yet"
           description="Products appear here once the seller turns them on for the store."
         />
       );
     }
     return (
-      <Table>
+      <Table caption="Catalogue terms">
         <THead>
           <Tr>
             <Th>Product</Th>
             <Th>Sold</Th>
-            <Th>Transfer price</Th>
+            <Th align="right">Transfer price</Th>
             <Th>Stock</Th>
-            <Th>Available (real)</Th>
-            <Th>Store sees</Th>
+            <Th align="right">Available (real)</Th>
+            <Th align="right">Store sees</Th>
           </Tr>
         </THead>
         <TBody>
           {rows.map((r) => (
             <Tr key={r.variantId}>
               <Td>
-                <div className="flex items-center gap-3">
+                <div className="ac-inline">
                   <ProductThumb src={r.thumbnailUrl} size={32} alt={r.productName} />
                   <div>
-                    <div>{r.overlayTitle ?? r.productName}</div>
-                    <div className="text-text-muted text-xs">{r.skuCode}</div>
+                    <span className="ac-cell-main">{r.overlayTitle ?? r.productName}</span>
+                    <span className="ac-cell-sub sk-ident">{r.skuCode}</span>
                   </div>
                 </div>
               </Td>
-              <Td>{r.sellable ? 'Yes' : REASON_WORDS[r.notSellableReason ?? 'NOT_ENABLED']}</Td>
               <Td>
+                <StatusChip
+                  kind={r.sellable ? 'delivered' : 'neutral'}
+                  label={r.sellable ? 'Yes' : REASON_WORDS[r.notSellableReason ?? 'NOT_ENABLED']}
+                  size="sm"
+                />
+              </Td>
+              <Td align="right">
                 {r.effective === null ? (
                   '—'
                 ) : (
-                  <span className="whitespace-nowrap">
+                  <span>
                     <Money amount={r.effective.transferPriceInr} convert={false} />
-                    <span className="text-text-muted text-xs">
+                    <span className="ac-cell-sub">
                       {r.priceSource === 'OVERRIDE' ? ' (store’s own)' : ' (default)'}
                     </span>
                   </span>
@@ -83,10 +81,10 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
                 {r.stockMode === 'SET_ASIDE' ? `Set aside ${r.setAsideQty ?? 0}` : 'Shared'}
                 {r.hiddenPercent > 0 ? ` · ${r.hiddenPercent}% hidden` : ''}
               </Td>
-              <Td>
+              <Td align="right">
                 <Num value={r.realAvailable} />
               </Td>
-              <Td>
+              <Td align="right">
                 <Num value={r.visibleQty} />
               </Td>
             </Tr>
@@ -96,11 +94,12 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
     );
   })();
   return (
-    <Section
+    <AcSection
       title="Catalogue terms"
-      subtitle="What the seller lets this store sell, at what price, and how much stock it is shown."
+      note="What the seller lets this store sell, at what price, and how much stock it is shown."
+      flush
     >
       {body}
-    </Section>
+    </AcSection>
   );
 }

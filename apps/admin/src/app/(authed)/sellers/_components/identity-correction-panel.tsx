@@ -5,7 +5,11 @@ import { PencilLine } from 'lucide-react';
 import { useUpdateSellerIdentity } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
-import { Button, FormField, Input, Modal, ModalFooter, Textarea } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { AcAlert, AcDl, phaseOf } from '../../settings/_components/ac-parts';
 
 /**
  * Correct the company name / phone a seller was APPROVED under.
@@ -88,116 +92,100 @@ export function IdentityCorrectionPanel({
 
   return (
     <>
-      <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
-        <dt className="text-text-muted">Company name</dt>
-        <dd className="text-text-body">{currentCompanyName}</dd>
-        <dt className="text-text-muted">Phone</dt>
-        <dd className="text-text-body font-mono text-xs">{currentPhone}</dd>
-      </dl>
+      <AcDl
+        items={[
+          { label: 'Company name', value: currentCompanyName },
+          { label: 'Phone', value: <span className="sk-figure">{currentPhone}</span> },
+        ]}
+      />
 
-      <div className="mt-3">
+      <div className="ac-buttons" data-align="start">
         <Button
           variant="secondary"
           size="md"
+          icon={<PencilLine size={15} />}
           disabled={!canCorrect || correct.isPending}
           onClick={openPanel}
           title={!canCorrect ? "Requires the 'sellers.approve' permission" : undefined}
         >
-          <PencilLine size={12} /> Correct these details…
+          Correct these details…
         </Button>
       </div>
 
       {!canCorrect && (
-        <div className="text-text-faint text-xs mt-2">
+        <p className="ac-faint">
           Your role can&apos;t correct an approved identity. Ask a super-admin if a seller has
           reported one of these is wrong.
-        </div>
+        </p>
       )}
 
-      <Modal
+      <Dialog
         open={open}
-        onOpenChange={(o) => !o && close()}
+        onOpenChange={(o) => {
+          if (!o) close();
+        }}
         title="Correct this seller's identity"
         description="Use this when the approved details are wrong — a mistyped company name, a phone number captured incorrectly at registration. It corrects the record; it does not move the account to a different business."
+        icon={<PencilLine size={18} />}
         size="lg"
+        locked={correct.isPending}
+        footer={
+          <DialogFooter>
+            <Button variant="ghost" size="md" onClick={close} disabled={correct.isPending}>
+              Cancel
+            </Button>
+            <AsyncButton
+              variant="primary"
+              size="md"
+              state={phaseOf(correct.isPending, error)}
+              labels={{ idle: 'Apply correction', busy: 'Correcting…', error: 'Not applied' }}
+              // The ONLY client-side block: a reason that is blank or all
+              // whitespace. Everything else — length, phone shape, whether
+              // anything changed — is the server's to refuse.
+              disabled={correct.isPending || reason.trim() === ''}
+              onClick={() => {
+                void submit();
+              }}
+            />
+          </DialogFooter>
+        }
       >
-        <div className="space-y-3">
-          <FormField
+        <div className="ac-form">
+          <TextField
             label="Company name"
-            htmlFor="identity-company-name"
+            id="identity-company-name"
             hint="As approved. Leave it exactly as it is if only the phone is wrong."
-          >
-            <Input
-              id="identity-company-name"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              maxLength={120}
-              disabled={correct.isPending}
-            />
-          </FormField>
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            maxLength={120}
+            disabled={correct.isPending}
+          />
 
-          <FormField
+          <TextField
             label="Phone"
-            htmlFor="identity-phone"
+            id="identity-phone"
             hint="Bangladesh number in E.164 — starts +880, digits only after it."
-          >
-            <Input
-              id="identity-phone"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="font-mono"
-              disabled={correct.isPending}
-            />
-          </FormField>
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            inputClassName="sk-figure"
+            disabled={correct.isPending}
+          />
 
-          <FormField
+          <TextArea
             label="Reason for the correction (required)"
-            htmlFor="identity-reason"
+            id="identity-reason"
             hint="This is the only record of why an approved identity changed. Whoever reads the audit row in six months has nothing else to go on — say what was wrong and who asked for it. At least 20 characters."
-          >
-            <Textarea
-              id="identity-reason"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              maxLength={500}
-              rows={4}
-              placeholder="e.g. Seller emailed 2026-08-14: trade licence reads “Nabeela Traders”, registered here as “Nabila Traders”. Corrected to match the licence."
-              disabled={correct.isPending}
-            />
-          </FormField>
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={500}
+            rows={4}
+            placeholder="e.g. Seller emailed 2026-08-14: trade licence reads “Nabeela Traders”, registered here as “Nabila Traders”. Corrected to match the licence."
+            disabled={correct.isPending}
+          />
+
+          {error !== null && <AcAlert message={error} />}
         </div>
-
-        {error !== null && (
-          <div
-            className="text-critical mt-3 rounded-[5px] px-2.5 py-1.5 text-xs"
-            style={{
-              background: 'var(--color-critical-tint)',
-              border: '1px solid var(--color-critical-ring)',
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        <ModalFooter>
-          <Button variant="ghost" size="md" onClick={close} disabled={correct.isPending}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            // The ONLY client-side block: a reason that is blank or all
-            // whitespace. Everything else — length, phone shape, whether
-            // anything changed — is the server's to refuse.
-            disabled={correct.isPending || reason.trim() === ''}
-            onClick={() => {
-              void submit();
-            }}
-          >
-            {correct.isPending ? 'Correcting…' : 'Apply correction'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+      </Dialog>
     </>
   );
 }

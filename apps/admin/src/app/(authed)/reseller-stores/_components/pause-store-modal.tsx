@@ -1,10 +1,16 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, FormField, Input, Modal, ModalFooter, useToast } from '@skydrop/ui/components';
+import { PauseCircle } from 'lucide-react';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { usePauseResellerStore } from '@/lib/reseller-analysis-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { AcAlert } from '../../settings/_components/ac-parts';
 
 /**
  * RS-9 — staff pause a reseller store (`reseller.stores.pause`). Shared by
@@ -29,38 +35,29 @@ export function PauseStoreModal({
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
   return (
-    <Modal
+    <Dialog
       open
       tone="critical"
+      icon={<PauseCircle size={18} />}
+      size="sm"
+      locked={pause.isPending}
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
       title={`Pause “${storeName}”?`}
       description="It stops placing new orders now. Orders already placed carry on, and only its seller can resume it. The seller and the store read your reason."
-    >
-      <div className="space-y-4">
-        <FormField label="Why" htmlFor="pause-reason" required>
-          <Input id="pause-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
-        </FormField>
-        {mayPause ? null : (
-          <p className="text-text-muted text-sm">
-            Pausing a store needs the “reseller.stores.pause” permission. Its seller can pause it
-            themselves.
-          </p>
-        )}
-        {error !== null ? (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
-        ) : null}
-        <ModalFooter>
+      footer={
+        <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={onClose}>
             Cancel
           </Button>
-          <Button
+          <AsyncButton
             type="button"
             variant="destructive"
             size="md"
+            icon={<PauseCircle size={15} />}
+            state={pause.isPending ? 'busy' : error !== null ? 'error' : 'idle'}
+            labels={{ idle: 'Pause', busy: 'Pausing…', error: 'Not paused' }}
             disabled={pause.isPending || !mayPause}
             onClick={() => {
               setError(null);
@@ -75,11 +72,26 @@ export function PauseStoreModal({
                 },
               );
             }}
-          >
-            {pause.isPending ? 'Pausing…' : 'Pause'}
-          </Button>
-        </ModalFooter>
+          />
+        </DialogFooter>
+      }
+    >
+      <div className="ac-form">
+        <TextField
+          label="Why"
+          id="pause-reason"
+          requiredMark
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        {mayPause ? null : (
+          <p className="ac-muted">
+            Pausing a store needs the “reseller.stores.pause” permission. Its seller can pause it
+            themselves.
+          </p>
+        )}
+        {error !== null ? <AcAlert message={error} /> : null}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

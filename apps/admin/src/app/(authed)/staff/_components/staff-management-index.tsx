@@ -1,20 +1,16 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-  Section,
-  Select,
-  Table,
-  useToast,
-} from '@skydrop/ui/components';
-import type { CreatedStaffInvitation } from '@skydrop/api-client';
+import { RotateCw, UserMinus, UserPlus, XCircle } from 'lucide-react';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import type { CreatedStaffInvitation, StaffUserRow } from '@skydrop/api-client';
 import {
   useDeactivateStaffUser,
   useResendStaffInvitation,
@@ -28,6 +24,7 @@ import { InviteLinkRevealCard } from './invite-link-reveal-card';
 import { useRoles } from '@/lib/rbac-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AcAlert, AcHeader, AcPage, AcSection } from '../../settings/_components/ac-parts';
 
 // The hardcoded seven are gone: roles are rows now, so the options come
 // from the server and include anything created under Roles.
@@ -47,6 +44,12 @@ export function StaffManagementIndex(): ReactElement {
   const [revealed, setRevealed] = useState<CreatedStaffInvitation | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const [pendingRevoke, setPendingRevoke] = useState<string | null>(null);
+  // A role change waits here until it is confirmed: the select no longer
+  // fires the PATCH on its own, so a slip of the wheel changes nothing.
+  const [pendingRole, setPendingRole] = useState<{
+    readonly user: StaffUserRow;
+    readonly roleId: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
@@ -63,14 +66,16 @@ export function StaffManagementIndex(): ReactElement {
     }
   }
 
-  async function onDeactivate(id: string): Promise<void> {
+  async function onDeactivate(id: string): Promise<boolean> {
     setError(null);
     try {
       await deactivate.mutateAsync({ id });
       toast.success('Staff member deactivated.');
       setPendingDelete(null);
+      return true;
     } catch (e) {
       setError(fmtError(e));
+      return false;
     }
   }
 
@@ -85,25 +90,36 @@ export function StaffManagementIndex(): ReactElement {
     }
   }
 
-  async function onRevoke(id: string): Promise<void> {
+  async function onRevoke(id: string): Promise<boolean> {
     setError(null);
     try {
       await revoke.mutateAsync({ id });
       toast.success('Invitation revoked.');
       setPendingRevoke(null);
+      return true;
     } catch (e) {
       setError(fmtError(e));
+      return false;
     }
   }
 
+  const deleteUser = users.data?.find((u) => u.id === pendingDelete) ?? null;
+  const revokeInvite = invitations.data?.items.find((i) => i.id === pendingRevoke) ?? null;
+  const roleName = (id: string): string => roles.data?.find((r) => r.id === id)?.name ?? id;
+
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <AcPage>
+      <AcHeader
         title="Staff"
         subtitle="Invite + manage admin / operational users. SUPER_ADMIN only."
         action={
           canWrite ? (
-            <Button variant="primary" size="md" onClick={() => setInviting(true)}>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<UserPlus size={15} />}
+              onClick={() => setInviting(true)}
+            >
               Invite staff
             </Button>
           ) : null
@@ -114,189 +130,224 @@ export function StaffManagementIndex(): ReactElement {
         <InviteLinkRevealCard invitation={revealed} onDismiss={() => setRevealed(null)} />
       )}
 
-      {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-          {error}
-        </div>
-      )}
+      {error && <AcAlert message={error} />}
 
-      <Section title="Active staff">
-        <Card>
-          {users.isLoading ? (
-            <LoadingState label="Loading staff…" />
-          ) : users.isError ? (
-            <ErrorState
-              message={users.error?.message ?? 'Failed.'}
-              retry={() => void users.refetch()}
-            />
-          ) : !users.data || users.data.length === 0 ? (
-            <CardBody>
-              <p className="text-text-muted text-sm">No staff yet.</p>
-            </CardBody>
-          ) : (
-            <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-                <tr>
-                  <th className="text-left px-3 py-2 font-medium">Email</th>
-                  <th className="text-left px-3 py-2 font-medium">Role</th>
-                  <th className="text-left px-3 py-2 font-medium">Last login</th>
-                  <th className="text-left px-3 py-2 font-medium">Created</th>
-                  <th className="text-right px-3 py-2 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {users.data.map((u) => (
-                  <tr key={u.id} className={u.deletedAt ? 'opacity-50' : undefined}>
-                    <td className="px-3 py-2 text-text-body font-mono text-xs">
-                      {u.emailDisplay}
-                      {u.deletedAt && (
-                        <span className="text-critical text-xs ml-2 uppercase">Deactivated</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Select
-                        value={u.roleId}
-                        disabled={Boolean(u.deletedAt) || roles.data === undefined || !canWrite}
-                        onChange={(e) => void onRoleChange(u.id, e.target.value)}
-                        className="font-mono text-xs"
-                      >
-                        {(roles.data ?? []).map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                      </Select>
-                    </td>
-                    <td className="px-3 py-2 text-text-muted font-mono text-xs">
+      <AcSection title="Active staff" flush>
+        {users.isLoading ? (
+          <SkeletonRows rows={4} cols={5} label="Loading staff…" />
+        ) : users.isError ? (
+          <ErrorState
+            message={users.error?.message ?? 'Failed.'}
+            retry={() => void users.refetch()}
+          />
+        ) : !users.data || users.data.length === 0 ? (
+          <EmptyState bare title="No staff yet." />
+        ) : (
+          <Table caption="Active staff">
+            <THead>
+              <Tr>
+                <Th>Email</Th>
+                <Th>Role</Th>
+                <Th>Last login</Th>
+                <Th>Created</Th>
+                <Th align="right">Actions</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {users.data.map((u) => (
+                <Tr key={u.id} className={u.deletedAt ? 'ac-row-off' : undefined}>
+                  <Td>
+                    <span className="ac-inline">
+                      <span className="ac-cell-main">{u.emailDisplay}</span>
+                      {u.deletedAt && <StatusChip kind="cancelled" label="Deactivated" size="sm" />}
+                    </span>
+                  </Td>
+                  <Td>
+                    <Select
+                      aria-label={`Role for ${u.emailDisplay}`}
+                      value={u.roleId}
+                      disabled={Boolean(u.deletedAt) || roles.data === undefined || !canWrite}
+                      onChange={(e) => {
+                        if (e.target.value === u.roleId) return;
+                        setError(null);
+                        setPendingRole({ user: u, roleId: e.target.value });
+                      }}
+                    >
+                      {(roles.data ?? []).map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Td>
+                  <Td>
+                    <span className="sk-figure ac-faint">
                       {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-text-muted font-mono text-xs">
+                    </span>
+                  </Td>
+                  <Td>
+                    <span className="sk-figure ac-faint">
                       {new Date(u.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {u.deletedAt ? (
-                        <span className="text-text-faint text-xs">—</span>
-                      ) : pendingDelete === u.id ? (
-                        <>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => void onDeactivate(u.id)}
-                          >
-                            Confirm
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => setPendingDelete(null)}>
-                            Cancel
-                          </Button>
-                        </>
-                      ) : (
-                        <Button variant="ghost" size="sm" onClick={() => setPendingDelete(u.id)}>
-                          Deactivate
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-        </Card>
-      </Section>
+                    </span>
+                  </Td>
+                  <Td align="right">
+                    {u.deletedAt ? (
+                      <span className="ac-faint">—</span>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<UserMinus size={14} />}
+                        onClick={() => {
+                          setError(null);
+                          setPendingDelete(u.id);
+                        }}
+                      >
+                        Deactivate
+                      </Button>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </AcSection>
 
-      <Section title="Pending invitations">
-        <Card>
-          <CardHeader title="Invitations" />
-          {invitations.isLoading ? (
-            <LoadingState label="Loading…" />
-          ) : invitations.isError ? (
-            <ErrorState
-              message={invitations.error?.message ?? 'Failed.'}
-              retry={() => void invitations.refetch()}
-            />
-          ) : !invitations.data || invitations.data.items.length === 0 ? (
-            <CardBody>
-              <p className="text-text-muted text-sm">No invitations yet.</p>
-            </CardBody>
-          ) : (
-            <Table wrapperClassName="rounded-none border-0 bg-transparent">
-              <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-                <tr>
-                  <th className="text-left px-3 py-2 font-medium">Email</th>
-                  <th className="text-left px-3 py-2 font-medium">Role</th>
-                  <th className="text-left px-3 py-2 font-medium">Status</th>
-                  <th className="text-left px-3 py-2 font-medium">Expires</th>
-                  <th className="text-right px-3 py-2 font-medium">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {invitations.data.items.map((inv) => {
-                  const now = Date.now();
-                  const isUsed = inv.usedAt !== null;
-                  const isExpired = !isUsed && new Date(inv.expiresAt).getTime() < now;
-                  const status = isUsed ? 'USED' : isExpired ? 'EXPIRED' : 'PENDING';
-                  return (
-                    <tr key={inv.id}>
-                      <td className="px-3 py-2 text-text-body font-mono text-xs">{inv.email}</td>
-                      <td className="px-3 py-2 text-text-body font-mono text-xs">{inv.role}</td>
-                      <td className="px-3 py-2">
-                        <span
-                          className={
-                            isUsed
-                              ? 'text-accent text-xs uppercase'
-                              : isExpired
-                                ? 'text-text-muted text-xs uppercase'
-                                : 'text-pending text-xs uppercase'
-                          }
-                        >
-                          {status}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-text-muted font-mono text-xs">
+      <AcSection title="Pending invitations" flush>
+        {invitations.isLoading ? (
+          <SkeletonRows rows={3} cols={5} label="Loading…" />
+        ) : invitations.isError ? (
+          <ErrorState
+            message={invitations.error?.message ?? 'Failed.'}
+            retry={() => void invitations.refetch()}
+          />
+        ) : !invitations.data || invitations.data.items.length === 0 ? (
+          <EmptyState bare title="No invitations yet." />
+        ) : (
+          <Table caption="Invitations">
+            <THead>
+              <Tr>
+                <Th>Email</Th>
+                <Th>Role</Th>
+                <Th>Status</Th>
+                <Th>Expires</Th>
+                <Th align="right">Actions</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {invitations.data.items.map((inv) => {
+                const now = Date.now();
+                const isUsed = inv.usedAt !== null;
+                const isExpired = !isUsed && new Date(inv.expiresAt).getTime() < now;
+                const status = isUsed ? 'USED' : isExpired ? 'EXPIRED' : 'PENDING';
+                return (
+                  <Tr key={inv.id}>
+                    <Td>
+                      <span className="ac-cell-main">{inv.email}</span>
+                    </Td>
+                    <Td>
+                      <span className="ac-code">{inv.role}</span>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        kind={isUsed ? 'delivered' : isExpired ? 'cancelled' : 'pending'}
+                        label={status}
+                        size="sm"
+                      />
+                    </Td>
+                    <Td>
+                      <span className="sk-figure ac-faint">
                         {new Date(inv.expiresAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {!isUsed && (
-                          <>
-                            <Button variant="ghost" size="sm" onClick={() => void onResend(inv.id)}>
-                              Resend
-                            </Button>
-                            {pendingRevoke === inv.id ? (
-                              <>
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => void onRevoke(inv.id)}
-                                >
-                                  Confirm
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setPendingRevoke(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setPendingRevoke(inv.id)}
-                              >
-                                Revoke
-                              </Button>
-                            )}
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </Table>
-          )}
-        </Card>
-      </Section>
+                      </span>
+                    </Td>
+                    <Td align="right">
+                      {!isUsed && (
+                        <div className="ac-buttons">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<RotateCw size={14} />}
+                            onClick={() => void onResend(inv.id)}
+                          >
+                            Resend
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<XCircle size={14} />}
+                            onClick={() => {
+                              setError(null);
+                              setPendingRevoke(inv.id);
+                            }}
+                          >
+                            Revoke
+                          </Button>
+                        </div>
+                      )}
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
+        )}
+      </AcSection>
+
+      <ConfirmDialog
+        open={pendingRole !== null}
+        onOpenChange={(o) => {
+          if (!o) setPendingRole(null);
+        }}
+        title="Change this person's role?"
+        entity={pendingRole?.user.emailDisplay ?? ''}
+        consequence={
+          pendingRole === null
+            ? ''
+            : `Their role changes from ${pendingRole.user.roleName} to ${roleName(pendingRole.roleId)}, and what they can see and do changes with it.`
+        }
+        confirmLabel="Change role"
+        onConfirm={async () => {
+          if (pendingRole === null) return;
+          await onRoleChange(pendingRole.user.id, pendingRole.roleId);
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(o) => {
+          if (!o) setPendingDelete(null);
+        }}
+        title="Deactivate this staff member?"
+        entity={deleteUser?.emailDisplay ?? ''}
+        consequence="Their account is deactivated and they can no longer sign in to the console."
+        confirmLabel="Deactivate"
+        destructive
+        error={error}
+        onConfirm={async () => {
+          if (pendingDelete === null) return;
+          const ok = await onDeactivate(pendingDelete);
+          if (!ok) throw new Error('not deactivated');
+        }}
+      />
+
+      <ConfirmDialog
+        open={pendingRevoke !== null}
+        onOpenChange={(o) => {
+          if (!o) setPendingRevoke(null);
+        }}
+        title="Revoke this invitation?"
+        entity={revokeInvite?.email ?? ''}
+        consequence="The invitation link stops working. You can invite them again any time."
+        confirmLabel="Revoke"
+        destructive
+        error={error}
+        onConfirm={async () => {
+          if (pendingRevoke === null) return;
+          const ok = await onRevoke(pendingRevoke);
+          if (!ok) throw new Error('not revoked');
+        }}
+      />
 
       {inviting && (
         <InviteStaffModal
@@ -308,6 +359,6 @@ export function StaffManagementIndex(): ReactElement {
           }}
         />
       )}
-    </div>
+    </AcPage>
   );
 }

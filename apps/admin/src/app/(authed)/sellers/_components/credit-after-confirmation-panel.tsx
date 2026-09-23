@@ -2,20 +2,16 @@
 
 import Link from 'next/link';
 import { useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorState,
-  FormField,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  Switch,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { TriangleAlert } from 'lucide-react';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Switch } from '@skydrop/ui/app/switch';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { AcAlert, AcCallout, AcSection, phaseOf } from '../../settings/_components/ac-parts';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
@@ -74,52 +70,51 @@ export function CreditAfterConfirmationPanel({
   }
 
   return (
-    <Card className="mt-6">
-      <CardHeader
-        title="Reseller stores — credit after confirmation"
-        subtitle="Lets this seller's store terms credit a party days after the order is confirmed — before the customer has paid. Off by default."
-      />
-      <CardBody>
-        {status.isPending ? (
-          <LoadingState label="Loading" rows={1} />
-        ) : status.isError ? (
-          <ErrorState message={serverVerdict(status.error)} retry={() => void status.refetch()} />
-        ) : (
-          <div className="space-y-3">
-            <Switch
-              checked={status.data.enabled}
-              label={status.data.enabled ? 'On for this seller' : 'Off for this seller'}
-              disabled={!canSet || set.isPending}
-              onChange={(next) => {
-                setError(null);
-                setTarget(next);
-              }}
-            />
-            {status.data.source === 'UNREADABLE' ? (
-              <p className="text-critical text-sm">
-                The setting could not be read, so it is treated as off.
+    <AcSection
+      title="Reseller stores — credit after confirmation"
+      note="Lets this seller's store terms credit a party days after the order is confirmed — before the customer has paid. Off by default."
+    >
+      {status.isPending ? (
+        <SkeletonRows rows={1} cols={2} label="Loading" />
+      ) : status.isError ? (
+        <ErrorState message={serverVerdict(status.error)} retry={() => void status.refetch()} />
+      ) : (
+        <div className="ac-card__body">
+          <Switch
+            checked={status.data.enabled}
+            label={status.data.enabled ? 'On for this seller' : 'Off for this seller'}
+            disabled={!canSet || set.isPending}
+            onCheckedChange={(next) => {
+              setError(null);
+              setTarget(next);
+            }}
+          />
+          {status.data.source === 'UNREADABLE' ? (
+            <p className="ac-danger-text">
+              The setting could not be read, so it is treated as off.
+            </p>
+          ) : null}
+          {status.data.flaggedStores.length > 0 ? (
+            <AcCallout tone="critical" icon={<TriangleAlert size={15} />}>
+              <p className="ac-text">
+                These stores’ current terms still use it, so they cannot place new orders until the
+                seller publishes new terms:
               </p>
-            ) : null}
-            {status.data.flaggedStores.length > 0 ? (
-              <div className="text-sm">
-                <p className="text-critical">
-                  These stores’ current terms still use it, so they cannot place new orders until
-                  the seller publishes new terms:
-                </p>
-                <ul className="list-disc pl-5">
-                  {status.data.flaggedStores.map((s) => (
-                    <li key={s.storeId}>
-                      <Link href={`/reseller-stores/${s.storeId}`}>{s.storeName}</Link> (version{' '}
-                      {s.version})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </CardBody>
-      <Modal
+              <ul className="ac-list">
+                {status.data.flaggedStores.map((s) => (
+                  <li key={s.storeId}>
+                    <Link href={`/reseller-stores/${s.storeId}`} className="ac-link">
+                      {s.storeName}
+                    </Link>{' '}
+                    (version {s.version})
+                  </li>
+                ))}
+              </ul>
+            </AcCallout>
+          ) : null}
+        </div>
+      )}
+      <Dialog
         open={target !== null}
         onOpenChange={(o) => {
           if (!o) setTarget(null);
@@ -135,36 +130,37 @@ export function CreditAfterConfirmationPanel({
             : 'No terms are rewritten: stores whose current terms use it are flagged and cannot order until the seller publishes new terms. Say why.'
         }
         tone="critical"
+        icon={<TriangleAlert size={18} />}
+        locked={set.isPending}
       >
-        <form onSubmit={submit} className="space-y-4">
-          <FormField
+        <form onSubmit={submit} className="ac-form">
+          <TextArea
             label="Why"
-            htmlFor="cac-reason"
+            id="cac-reason"
             hint="At least 20 characters. Audited."
             required
-          >
-            <Textarea
-              id="cac-reason"
-              required
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </FormField>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {error}
-            </p>
-          ) : null}
-          <ModalFooter>
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          {error !== null ? <AcAlert message={error} /> : null}
+          <DialogFooter>
             <Button type="button" variant="secondary" size="md" onClick={() => setTarget(null)}>
               Cancel
             </Button>
-            <Button type="submit" variant="destructive" size="md" disabled={set.isPending}>
-              {set.isPending ? 'Saving…' : target === true ? 'Switch on' : 'Switch off'}
-            </Button>
-          </ModalFooter>
+            <AsyncButton
+              type="submit"
+              variant="destructive"
+              size="md"
+              state={phaseOf(set.isPending, error)}
+              labels={{
+                idle: target === true ? 'Switch on' : 'Switch off',
+                busy: 'Saving…',
+                error: 'Not saved',
+              }}
+            />
+          </DialogFooter>
         </form>
-      </Modal>
-    </Card>
+      </Dialog>
+    </AcSection>
   );
 }

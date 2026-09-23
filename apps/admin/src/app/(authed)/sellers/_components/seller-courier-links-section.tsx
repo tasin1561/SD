@@ -1,28 +1,20 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorNote,
-  ErrorState,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Section,
-  Select,
-  SkeletonRows,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Link2, Link2Off, Pause, Play, Scale } from 'lucide-react';
+// The legacy toast on purpose: the component tests mount this section
+// under the legacy <Toaster> only, and the shell mounts both.
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TBody, Table, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AcAlert, AcSection, phaseOf } from '../../settings/_components/ac-parts';
 import {
   useCourierAccounts,
   useLinkSellerCourierAccount,
@@ -77,69 +69,72 @@ export function SellerCourierLinksSection({
   const activeWeight = rows.filter((l) => l.isActive).reduce((t, l) => t + l.distributionWeight, 0);
 
   return (
-    <Section
+    <AcSection
       title="Courier accounts"
-      subtitle={
+      note={
         rows.length === 0
           ? "No links: this seller's parcels go to each courier's default account."
           : "This seller's parcels are split across these accounts by weight. Unlinking returns them to the default account."
       }
       action={
         canManage ? (
-          <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Link2 size={14} />}
+            onClick={() => setAdding(true)}
+          >
             Add link
           </Button>
         ) : undefined
       }
+      flush
     >
-      <Card>
-        {links.isLoading ? (
-          <div className="p-4">
-            <SkeletonRows rows={2} />
-          </div>
-        ) : links.isError ? (
-          <ErrorState
-            message={serverVerdict(links.error, 'Failed to load courier links.')}
-            retry={() => void links.refetch()}
-          />
-        ) : rows.length === 0 ? (
-          <EmptyState
-            title="Uses the default accounts"
-            description={
-              canManage
-                ? 'Add a link to route this seller to a specific courier account.'
-                : 'A person with the courier-links permission can route this seller to a specific account.'
-            }
-          />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Account</Th>
-                <Th>Courier</Th>
-                <Th align="right">Weight</Th>
-                <Th align="right">Share</Th>
-                <Th>State</Th>
-                {canManage && <Th align="right">Actions</Th>}
-              </Tr>
-            </THead>
-            <TBody>
-              {rows.map((link) => (
-                <LinkRow
-                  key={link.id}
-                  sellerId={sellerId}
-                  link={link}
-                  account={byId.get(link.courierAccountId) ?? null}
-                  activeWeight={activeWeight}
-                  canManage={canManage}
-                  onReweigh={() => setReweighing(link)}
-                  onUnlink={() => setUnlinking(link)}
-                />
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </Card>
+      {links.isLoading ? (
+        <SkeletonRows rows={2} />
+      ) : links.isError ? (
+        <ErrorState
+          message={serverVerdict(links.error, 'Failed to load courier links.')}
+          retry={() => void links.refetch()}
+        />
+      ) : rows.length === 0 ? (
+        <EmptyState
+          bare
+          title="Uses the default accounts"
+          description={
+            canManage
+              ? 'Add a link to route this seller to a specific courier account.'
+              : 'A person with the courier-links permission can route this seller to a specific account.'
+          }
+        />
+      ) : (
+        <Table caption="Courier accounts for this seller">
+          <THead>
+            <Tr>
+              <Th>Account</Th>
+              <Th>Courier</Th>
+              <Th align="right">Weight</Th>
+              <Th align="right">Share</Th>
+              <Th>State</Th>
+              {canManage && <Th align="right">Actions</Th>}
+            </Tr>
+          </THead>
+          <TBody>
+            {rows.map((link) => (
+              <LinkRow
+                key={link.id}
+                sellerId={sellerId}
+                link={link}
+                account={byId.get(link.courierAccountId) ?? null}
+                activeWeight={activeWeight}
+                canManage={canManage}
+                onReweigh={() => setReweighing(link)}
+                onUnlink={() => setUnlinking(link)}
+              />
+            ))}
+          </TBody>
+        </Table>
+      )}
 
       {adding && (
         <AddLinkModal
@@ -165,7 +160,7 @@ export function SellerCourierLinksSection({
           onClose={() => setUnlinking(null)}
         />
       )}
-    </Section>
+    </AcSection>
   );
 }
 
@@ -213,39 +208,39 @@ function LinkRow({
   return (
     <Tr>
       <Td>
-        <div className="text-text-body">{accountName(account)}</div>
-        {account !== null && (
-          <div className="text-text-faint font-mono text-xs">{account.environment}</div>
-        )}
+        <span className="ac-cell-main">{accountName(account)}</span>
+        {account !== null && <span className="ac-cell-sub">{account.environment}</span>}
       </Td>
-      <Td className="text-text-muted text-xs uppercase">{account?.courierCode ?? '—'}</Td>
-      <Td align="right" className="font-mono text-xs">
-        {link.distributionWeight}
+      <Td>{account?.courierCode ?? '—'}</Td>
+      <Td align="right">
+        <span className="sk-figure">{link.distributionWeight}</span>
       </Td>
-      <Td align="right" className="font-mono text-xs">
-        {share}
+      <Td align="right">
+        <span className="sk-figure">{share}</span>
       </Td>
       <Td>
-        <StatusBadge
+        <StatusChip
           kind={link.isActive ? 'confirmed' : 'cancelled'}
           label={link.isActive ? 'Active' : 'Paused'}
+          size="sm"
         />
       </Td>
       {canManage && (
         <Td align="right">
-          <div className="flex flex-wrap justify-end gap-1">
-            <Button variant="ghost" size="sm" onClick={onReweigh}>
+          <div className="ac-buttons">
+            <Button variant="ghost" size="sm" icon={<Scale size={14} />} onClick={onReweigh}>
               Change weight
             </Button>
             <Button
               variant="ghost"
               size="sm"
+              icon={link.isActive ? <Pause size={14} /> : <Play size={14} />}
               disabled={update.isPending}
               onClick={() => void toggleActive()}
             >
               {link.isActive ? 'Pause' : 'Activate'}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onUnlink}>
+            <Button variant="ghost" size="sm" icon={<Link2Off size={14} />} onClick={onUnlink}>
               Unlink
             </Button>
           </div>
@@ -289,59 +284,64 @@ function AddLinkModal({
   }
 
   return (
-    <Modal open onOpenChange={(o) => !o && onClose()} title="Link a courier account">
-      <div className="space-y-3">
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title="Link a courier account"
+      icon={<Link2 size={18} />}
+      locked={link.isPending}
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={onClose}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            state={phaseOf(link.isPending, error)}
+            labels={{ idle: 'Link account', busy: 'Linking…', error: 'Not linked' }}
+            disabled={available.length === 0 || accountId === '' || link.isPending}
+            onClick={() => void submit()}
+          />
+        </DialogFooter>
+      }
+    >
+      <div className="ac-form">
         {available.length === 0 ? (
-          <p className="text-text-muted text-sm">
-            Every courier account is already linked to this seller.
-          </p>
+          <p className="ac-muted">Every courier account is already linked to this seller.</p>
         ) : (
           <>
-            <FormField label="Account" htmlFor="courier-link-account" required>
-              <Select
-                id="courier-link-account"
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-              >
-                {available.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.label} — {a.courierCode} · {a.environment}
-                    {a.isActive ? '' : ' (switched off)'}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <FormField
-              label="Weight"
-              htmlFor="courier-link-weight"
-              hint="Relative share of this seller's parcels sent to this account. Two links at 100 split evenly."
-              required
+            <Select
+              label="Account"
+              id="courier-link-account"
+              requiredMark
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
             >
-              <Input
-                id="courier-link-weight"
-                inputMode="numeric"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-              />
-            </FormField>
+              {available.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label} — {a.courierCode} · {a.environment}
+                  {a.isActive ? '' : ' (switched off)'}
+                </option>
+              ))}
+            </Select>
+            <TextField
+              label="Weight"
+              id="courier-link-weight"
+              hint="Relative share of this seller's parcels sent to this account. Two links at 100 split evenly."
+              requiredMark
+              inputMode="numeric"
+              inputClassName="sk-figure"
+              value={weight}
+              onChange={(e) => setWeight(e.target.value)}
+            />
           </>
         )}
-        {error !== null && <ErrorNote message={error} />}
+        {error !== null && <AcAlert message={error} />}
       </div>
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={available.length === 0 || accountId === '' || link.isPending}
-          onClick={() => void submit()}
-        >
-          {link.isPending ? 'Linking…' : 'Link account'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -377,37 +377,44 @@ function WeightModal({
   }
 
   return (
-    <Modal open onOpenChange={(o) => !o && onClose()} title={`Weight for ${name}`}>
-      <div className="space-y-3">
-        <FormField
-          label="Weight"
-          htmlFor="courier-link-weight-edit"
-          hint="0 keeps the link but sends it nothing."
-          required
-        >
-          <Input
-            id="courier-link-weight-edit"
-            inputMode="numeric"
-            value={weight}
-            onChange={(e) => setWeight(e.target.value)}
+    <Dialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title={`Weight for ${name}`}
+      icon={<Scale size={18} />}
+      locked={update.isPending}
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={onClose}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            state={phaseOf(update.isPending, error)}
+            labels={{ idle: 'Save weight', busy: 'Saving…', error: 'Not saved' }}
+            disabled={weight.trim() === '' || update.isPending}
+            onClick={() => void submit()}
           />
-        </FormField>
-        {error !== null && <ErrorNote message={error} />}
+        </DialogFooter>
+      }
+    >
+      <div className="ac-form">
+        <TextField
+          label="Weight"
+          id="courier-link-weight-edit"
+          hint="0 keeps the link but sends it nothing."
+          requiredMark
+          inputMode="numeric"
+          inputClassName="sk-figure"
+          value={weight}
+          onChange={(e) => setWeight(e.target.value)}
+        />
+        {error !== null && <AcAlert message={error} />}
       </div>
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={weight.trim() === '' || update.isPending}
-          onClick={() => void submit()}
-        >
-          {update.isPending ? 'Saving…' : 'Save weight'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -434,33 +441,25 @@ function UnlinkModal({
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
+      // Rethrown so the confirm step stays open with the verdict on it.
+      throw err;
     }
   }
 
   return (
-    <Modal open onOpenChange={(o) => !o && onClose()} title={`Unlink ${name}?`}>
-      <p className="text-text-body text-sm">
-        New parcels for this seller stop going to {name}. If no other link remains, they go to the
-        courier&apos;s default account. Parcels already booked keep the account that carried them.
-      </p>
-      {error !== null && (
-        <div className="mt-3">
-          <ErrorNote message={error} />
-        </div>
-      )}
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={onClose}>
-          Keep it
-        </Button>
-        <Button
-          variant="destructive"
-          size="md"
-          disabled={unlink.isPending}
-          onClick={() => void submit()}
-        >
-          {unlink.isPending ? 'Unlinking…' : 'Unlink'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    <ConfirmDialog
+      open
+      onOpenChange={(o) => {
+        if (!o) onClose();
+      }}
+      title={`Unlink ${name}?`}
+      entity={name}
+      consequence={`New parcels for this seller stop going to ${name}. If no other link remains, they go to the courier's default account. Parcels already booked keep the account that carried them.`}
+      confirmLabel="Unlink"
+      cancelLabel="Keep it"
+      destructive
+      error={error}
+      onConfirm={submit}
+    />
   );
 }

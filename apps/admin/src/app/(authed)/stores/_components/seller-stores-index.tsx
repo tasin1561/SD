@@ -2,30 +2,17 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { Store as StoreIcon } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  Section,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Textarea,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { PencilLine, Search, Star, Store as StoreIcon } from 'lucide-react';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TBody, THead, Table, TableEmpty, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AcAlert, AcHeader, AcPage, AcSection, phaseOf } from '../../settings/_components/ac-parts';
 import {
   useAdminCreateStore,
   useAdminMakeStoreDefault,
@@ -89,14 +76,14 @@ export function SellerStoresIndex(): ReactElement {
   });
 
   return (
-    <div className="space-y-4">
-      <PageHeader
+    <AcPage>
+      <AcHeader
         title="Seller stores"
         subtitle="The shopfronts each seller sells under. A store decides which brand an order belongs to — their products, stock, wallet and couriers are shared across all of them."
       />
 
       {groups.isLoading ? (
-        <LoadingState />
+        <SkeletonRows rows={6} cols={4} />
       ) : groups.isError || groups.data === undefined ? (
         <ErrorState
           message={groups.error?.message ?? 'Could not load the stores.'}
@@ -104,41 +91,43 @@ export function SellerStoresIndex(): ReactElement {
         />
       ) : (
         <>
-          <Card>
-            <CardBody>
-              <Input
-                className="w-full sm:w-80"
-                placeholder="Filter by seller or store name…"
-                aria-label="Filter"
-                value={term}
-                onChange={(e) => setTerm(e.target.value)}
-              />
-            </CardBody>
-          </Card>
+          <div className="ac-toolbar">
+            <TextField
+              icon={<Search size={15} />}
+              placeholder="Filter by seller or store name…"
+              aria-label="Filter"
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+            />
+          </div>
 
           {shown.length === 0 ? (
-            <Card>
-              <CardBody className="text-text-muted text-sm">No seller matches that.</CardBody>
-            </Card>
+            <EmptyState title="No seller matches that." />
           ) : (
             shown.map((g) => (
-              <Section
+              <AcSection
                 key={g.sellerId}
                 title={
-                  <Link href={`/sellers/${g.sellerId}`} className="hover:underline">
+                  <Link href={`/sellers/${g.sellerId}`} className="ac-link">
                     {g.companyName}
                   </Link>
                 }
-                subtitle={g.email}
+                note={g.email}
                 action={
                   canManage ? (
-                    <Button variant="secondary" size="sm" onClick={() => setAdding(g)}>
-                      <StoreIcon className="size-3.5" /> Add a store
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      icon={<StoreIcon size={14} />}
+                      onClick={() => setAdding(g)}
+                    >
+                      Add a store
                     </Button>
                   ) : undefined
                 }
+                flush
               >
-                <Table>
+                <Table caption={`Stores for ${g.companyName}`}>
                   <THead>
                     <Tr>
                       <Th>Store</Th>
@@ -160,29 +149,31 @@ export function SellerStoresIndex(): ReactElement {
                       g.stores.map((s) => (
                         <Tr key={s.id}>
                           <Td>
-                            <div className="font-medium">{s.name}</div>
-                            {s.note !== null && (
-                              <div className="text-text-muted mt-0.5 text-xs">{s.note}</div>
-                            )}
+                            <span className="ac-cell-main">{s.name}</span>
+                            {s.note !== null && <span className="ac-cell-sub">{s.note}</span>}
                           </Td>
-                          <Td align="right" className="tabular-nums">
-                            {s.orderCount}
+                          <Td align="right">
+                            <span className="sk-figure">{s.orderCount}</span>
                           </Td>
                           <Td>
-                            <div className="flex flex-wrap items-center gap-1.5">
-                              {s.isDefault && <StatusBadge kind="confirmed" label="Default" />}
-                              <StatusBadge
+                            <span className="ac-inline">
+                              {s.isDefault && (
+                                <StatusChip kind="confirmed" label="Default" size="sm" />
+                              )}
+                              <StatusChip
                                 kind={s.isActive ? 'delivered' : 'cancelled'}
                                 label={s.isActive ? 'Open' : 'Closed'}
+                                size="sm"
                               />
-                            </div>
+                            </span>
                           </Td>
                           <Td align="right">
                             {canManage ? (
-                              <div className="flex flex-wrap justify-end gap-1.5">
+                              <div className="ac-buttons">
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  icon={<PencilLine size={14} />}
                                   onClick={() => setEditing({ seller: g, store: s })}
                                 >
                                   Rename
@@ -191,6 +182,7 @@ export function SellerStoresIndex(): ReactElement {
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    icon={<Star size={14} />}
                                     disabled={makeDefault.isPending}
                                     onClick={() =>
                                       void run(
@@ -230,7 +222,7 @@ export function SellerStoresIndex(): ReactElement {
                                 )}
                               </div>
                             ) : (
-                              <span className="text-text-faint">—</span>
+                              <span className="ac-faint">—</span>
                             )}
                           </Td>
                         </Tr>
@@ -238,7 +230,7 @@ export function SellerStoresIndex(): ReactElement {
                     )}
                   </TBody>
                 </Table>
-              </Section>
+              </AcSection>
             ))
           )}
         </>
@@ -252,7 +244,7 @@ export function SellerStoresIndex(): ReactElement {
           onClose={() => setEditing(null)}
         />
       )}
-    </div>
+    </AcPage>
   );
 }
 
@@ -301,7 +293,7 @@ function StoreModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open
       onOpenChange={(next) => {
         if (!next) onClose();
@@ -316,24 +308,39 @@ function StoreModal({
           ? 'Orders already placed keep the name they were placed under. This is recorded against the seller as a change WE made.'
           : 'It never becomes the default, so adding one cannot move where their orders are filed. Recorded against the seller as a change WE made.'
       }
+      icon={<StoreIcon size={18} />}
+      locked={busy}
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <AsyncButton
+            state={phaseOf(busy, error)}
+            labels={{
+              idle: editing ? 'Save' : 'Add store',
+              busy: 'Saving…',
+              error: 'Not saved',
+            }}
+            disabled={busy}
+            onClick={() => void save()}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="space-y-4">
-        <FormField label="Name" required>
-          <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoFocus />
-        </FormField>
-        <FormField label="Note">
-          <Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-        </FormField>
-        {error !== null && <p className="text-danger text-sm">{error}</p>}
+      <div className="ac-form">
+        <TextField
+          label="Name"
+          requiredMark
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          maxLength={80}
+          showCount
+          autoFocus
+        />
+        <TextArea label="Note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+        {error !== null && <AcAlert message={error} />}
       </div>
-      <ModalFooter>
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button disabled={busy} onClick={() => void save()}>
-          {busy ? 'Saving…' : editing ? 'Save' : 'Add store'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

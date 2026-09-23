@@ -9,27 +9,17 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Section,
-  Select,
-  SkeletonRows,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Textarea,
-  Tr,
-} from '@skydrop/ui/components';
+import { RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TBody, Table, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AcAlert, AcSection } from '../../settings/_components/ac-parts';
 import { FEE_CURRENCY_OPTIONS, isFeeCurrencyKey } from '@/lib/fee-currency';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -115,79 +105,92 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
   const overridden = items.filter((s) => s.source === 'SELLER_OVERRIDE');
 
   return (
-    <Section
+    <AcSection
       title="Settings for this seller"
-      subtitle={
+      note={
         overridden.length === 0
           ? 'Everything is on the system default.'
           : `${overridden.length} of ${items.length} keys are overridden for this seller.`
       }
+      flush
     >
-      <Card>
-        {list.isLoading ? (
-          <SkeletonRows rows={4} />
-        ) : list.isError ? (
-          <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
-        ) : items.length === 0 ? (
-          <EmptyState
-            title="Nothing overridable"
-            description="A key becomes settable per seller when it is marked seller-overridable in system settings."
-          />
-        ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>Setting</Th>
-                <Th>In effect</Th>
-                <Th>System default</Th>
-                <Th>Source</Th>
-                <Th align="right" />
-              </Tr>
-            </THead>
-            <TBody>
-              {items.map((s) => (
-                <Tr key={s.key}>
-                  <Td>
-                    <code className="text-xs">{s.key}</code>
-                  </Td>
-                  <Td>{render(s.value)}</Td>
-                  <Td>
-                    <span className="text-text-faint">{render(s.systemDefault)}</span>
-                  </Td>
-                  <Td>
-                    <StatusBadge
-                      kind={s.source === 'SELLER_OVERRIDE' ? 'confirmed' : 'draft'}
-                      label={s.source === 'SELLER_OVERRIDE' ? 'override' : 'default'}
-                    />
-                  </Td>
-                  <Td align="right">
-                    <span className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => setEditing(s)}>
-                        {s.source === 'SELLER_OVERRIDE' ? 'Change' : 'Override'}
+      {list.isLoading ? (
+        <SkeletonRows rows={4} />
+      ) : list.isError ? (
+        <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+      ) : items.length === 0 ? (
+        <EmptyState
+          bare
+          title="Nothing overridable"
+          description="A key becomes settable per seller when it is marked seller-overridable in system settings."
+        />
+      ) : (
+        <Table caption="Settings for this seller">
+          <THead>
+            <Tr>
+              <Th>Setting</Th>
+              <Th>In effect</Th>
+              <Th>System default</Th>
+              <Th>Source</Th>
+              <Th align="right">Actions</Th>
+            </Tr>
+          </THead>
+          <TBody>
+            {items.map((s) => (
+              <Tr key={s.key}>
+                <Td>
+                  <code className="sk-ident ac-code">{s.key}</code>
+                </Td>
+                <Td>
+                  <span className="ac-strong">{render(s.value)}</span>
+                </Td>
+                <Td>
+                  <span className="ac-faint">{render(s.systemDefault)}</span>
+                </Td>
+                <Td>
+                  <StatusChip
+                    kind={s.source === 'SELLER_OVERRIDE' ? 'confirmed' : 'draft'}
+                    label={s.source === 'SELLER_OVERRIDE' ? 'override' : 'default'}
+                    size="sm"
+                  />
+                </Td>
+                <Td align="right">
+                  <div className="ac-buttons">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<SlidersHorizontal size={14} />}
+                      onClick={() => setEditing(s)}
+                    >
+                      {s.source === 'SELLER_OVERRIDE' ? 'Change' : 'Override'}
+                    </Button>
+                    {s.source === 'SELLER_OVERRIDE' && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<RotateCcw size={14} />}
+                        disabled={clear.isPending}
+                        onClick={() => clear.mutate({ key: s.key })}
+                      >
+                        Reset
                       </Button>
-                      {s.source === 'SELLER_OVERRIDE' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={clear.isPending}
-                          onClick={() => clear.mutate({ key: s.key })}
-                        >
-                          Reset
-                        </Button>
-                      )}
-                    </span>
-                  </Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
-        )}
-      </Card>
+                    )}
+                  </div>
+                </Td>
+              </Tr>
+            ))}
+          </TBody>
+        </Table>
+      )}
 
-      {clear.error !== null && <ErrorNote message={serverVerdict(clear.error)} />}
+      {clear.error !== null && (
+        <div className="ac-pad">
+          <AcAlert message={serverVerdict(clear.error)} />
+        </div>
+      )}
 
       <OverrideDialog sellerId={sellerId} setting={editing} onClose={() => setEditing(null)} />
-    </Section>
+    </AcSection>
   );
 }
 
@@ -233,118 +236,118 @@ function OverrideDialog({
   const current = setting === null ? '' : render(setting.value);
 
   return (
-    <Modal
+    <Dialog
       open={setting !== null}
       onOpenChange={(next) => {
         if (!next) close();
       }}
       title="Override for this seller"
+      icon={<SlidersHorizontal size={18} />}
+      locked={save.isPending}
       description={
         setting === null ? undefined : (
           <span>
-            <code className="text-xs">{setting.key}</code> — currently {current} (
+            <code className="sk-ident">{setting.key}</code> — currently {current} (
             {setting.source === 'SELLER_OVERRIDE' ? 'overridden' : 'system default'})
           </span>
         )
       }
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={close}>
+            Cancel
+          </Button>
+          <AsyncButton
+            size="md"
+            state={save.isPending ? 'busy' : save.error !== null ? 'error' : 'idle'}
+            labels={{ idle: 'Set override', busy: 'Saving…', error: 'Not saved' }}
+            disabled={raw === '' || save.isPending}
+            onClick={() => {
+              if (setting === null) return;
+              setParseError(null);
+              let value: unknown;
+              try {
+                value = parsed();
+              } catch {
+                setParseError('That is not valid JSON.');
+                return;
+              }
+              if (typeof value === 'number' && Number.isNaN(value)) {
+                setParseError('That is not a number.');
+                return;
+              }
+              save.mutate(
+                {
+                  key: setting.key,
+                  valueType: setting.valueType,
+                  value,
+                  ...(note.trim() === '' ? {} : { note: note.trim() }),
+                },
+                { onSuccess: close },
+              );
+            }}
+          />
+        </DialogFooter>
+      }
     >
       {setting !== null && (
-        <>
+        <div className="ac-form">
           {setting.valueType === 'BOOLEAN' ? (
-            <FormField label="Value" htmlFor="ov-value">
-              <Select id="ov-value" value={raw} onChange={(e) => setRaw(e.target.value)}>
-                <option value="">Choose…</option>
-                <option value="true">yes</option>
-                <option value="false">no</option>
-              </Select>
-            </FormField>
+            <Select
+              label="Value"
+              id="ov-value"
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
+            >
+              <option value="">Choose…</option>
+              <option value="true">yes</option>
+              <option value="false">no</option>
+            </Select>
           ) : setting.valueType === 'JSON' ? (
-            <FormField label="Value (JSON)" htmlFor="ov-value">
-              <Textarea
-                id="ov-value"
-                rows={4}
-                value={raw}
-                onChange={(e) => setRaw(e.target.value)}
-              />
-            </FormField>
+            <TextArea
+              label="Value (JSON)"
+              id="ov-value"
+              rows={4}
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
+            />
           ) : isFeeCurrencyKey(setting.key) ? (
-            <FormField
+            <Select
               label="Currency"
-              htmlFor="ov-value"
+              id="ov-value"
               hint="What this seller's fee is AGREED in. A BDT fee is converted to rupees at the rate in force when the charge is taken, so the seller owes what was agreed rather than a rupee figure that drifts."
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
             >
-              <Select
-                id="ov-value"
-                className="font-mono"
-                value={raw}
-                onChange={(e) => setRaw(e.target.value)}
-              >
-                {FEE_CURRENCY_OPTIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+              {FEE_CURRENCY_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
           ) : (
-            <FormField
+            <TextField
               label={`Value (${setting.valueType.toLowerCase()})`}
-              htmlFor="ov-value"
+              id="ov-value"
               hint="Allowed range is enforced when you save — the server has the authoritative bounds."
-            >
-              <Input
-                id="ov-value"
-                type={setting.valueType === 'STRING' ? 'text' : 'number'}
-                value={raw}
-                onChange={(e) => setRaw(e.target.value)}
-              />
-            </FormField>
+              type={setting.valueType === 'STRING' ? 'text' : 'number'}
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
+            />
           )}
 
-          <FormField label="Note" htmlFor="ov-note" hint="Optional. Why this seller is different.">
-            <Input id="ov-note" value={note} onChange={(e) => setNote(e.target.value)} />
-          </FormField>
+          <TextField
+            label="Note"
+            id="ov-note"
+            hint="Optional. Why this seller is different."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
 
-          {parseError !== null && <ErrorNote message={parseError} />}
-          {save.error !== null && <ErrorNote message={serverVerdict(save.error)} />}
-        </>
+          {parseError !== null && <AcAlert message={parseError} />}
+          {save.error !== null && <AcAlert message={serverVerdict(save.error)} />}
+        </div>
       )}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close}>
-          Cancel
-        </Button>
-        <Button
-          size="md"
-          disabled={raw === '' || save.isPending}
-          onClick={() => {
-            if (setting === null) return;
-            setParseError(null);
-            let value: unknown;
-            try {
-              value = parsed();
-            } catch {
-              setParseError('That is not valid JSON.');
-              return;
-            }
-            if (typeof value === 'number' && Number.isNaN(value)) {
-              setParseError('That is not a number.');
-              return;
-            }
-            save.mutate(
-              {
-                key: setting.key,
-                valueType: setting.valueType,
-                value,
-                ...(note.trim() === '' ? {} : { note: note.trim() }),
-              },
-              { onSuccess: close },
-            );
-          }}
-        >
-          {save.isPending ? 'Saving…' : 'Set override'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

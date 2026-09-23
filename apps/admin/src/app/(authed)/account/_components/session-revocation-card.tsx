@@ -1,14 +1,10 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ConfirmDialog,
-  ErrorNote,
-} from '@skydrop/ui/components';
+import { LogIn, LogOut } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { AcAlert, AcCard } from '../../settings/_components/ac-parts';
 import { useLogoutAllSessions } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 
@@ -63,80 +59,85 @@ export function SessionRevocationCard(): ReactElement {
   // they were worried about were among them.
   if (revokedCount !== null) {
     return (
-      <Card>
-        <CardHeader
-          title="Signed out everywhere"
-          subtitle="This browser included — the refresh cookie has been cleared."
-        />
-        <CardBody>
-          <p className="text-text-bright text-sm">
-            {revokedCount === 1
-              ? '1 session ended.'
-              : `${String(revokedCount)} sessions ended, this one among them.`}
-          </p>
-          <p className="text-text-muted mt-1.5 text-xs">
-            Any other browser still showing the console will be sent to the sign-in page the moment
-            it asks the server for anything.
-          </p>
-          <div className="mt-3">
-            <Button
-              variant="primary"
-              size="md"
-              onClick={() => {
-                // Hard navigation, matching the shell's sign-out: SSR
-                // re-runs clean and the in-memory access token (FE-1)
-                // dies with the page.
-                window.location.assign('/login');
-              }}
-            >
-              Sign in again
-            </Button>
-          </div>
-        </CardBody>
-      </Card>
+      <AcCard
+        title="Signed out everywhere"
+        note="This browser included — the refresh cookie has been cleared."
+      >
+        <p className="ac-strong">
+          {revokedCount === 1
+            ? '1 session ended.'
+            : `${String(revokedCount)} sessions ended, this one among them.`}
+        </p>
+        <p className="ac-muted">
+          Any other browser still showing the console will be sent to the sign-in page the moment it
+          asks the server for anything.
+        </p>
+        <div className="ac-buttons" data-align="start">
+          <Button
+            variant="primary"
+            size="md"
+            icon={<LogIn size={15} />}
+            onClick={() => {
+              // Hard navigation, matching the shell's sign-out: SSR
+              // re-runs clean and the in-memory access token (FE-1)
+              // dies with the page.
+              window.location.assign('/login');
+            }}
+          >
+            Sign in again
+          </Button>
+        </div>
+      </AcCard>
     );
   }
 
   return (
-    <Card>
-      <CardHeader
-        tone="critical"
-        title="Sessions"
-        subtitle="Every browser you have signed in from holds its own session."
-        action={
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={logoutAll.isPending}
-            onClick={() => setConfirming(true)}
-          >
-            {logoutAll.isPending ? 'Signing out…' : 'Sign out everywhere'}
-          </Button>
-        }
-      />
-      <CardBody>
-        <p className="text-text-body text-sm leading-relaxed">
-          Ends every session for your account at once — a lost laptop, a shared machine, a browser
-          you cannot get back to. <span className="text-text-bright">Including this one:</span> you
-          will be returned to the sign-in page and will need your password again.
-        </p>
-        <p className="text-text-muted mt-2 text-xs leading-relaxed">
-          Do this the moment a device goes missing. It does not change your password, so if you also
-          think someone knows it, change that too.
-        </p>
-        {error !== null && <ErrorNote className="mt-3" message={error} retry={() => void run()} />}
-      </CardBody>
+    <AcCard
+      tone="critical"
+      title="Sessions"
+      note="Every browser you have signed in from holds its own session."
+      action={
+        <Button
+          variant="destructive"
+          size="md"
+          icon={<LogOut size={15} />}
+          disabled={logoutAll.isPending}
+          onClick={() => setConfirming(true)}
+        >
+          {logoutAll.isPending ? 'Signing out…' : 'Sign out everywhere'}
+        </Button>
+      }
+    >
+      <p className="ac-text">
+        Ends every session for your account at once — a lost laptop, a shared machine, a browser you
+        cannot get back to. <span className="ac-strong">Including this one:</span> you will be
+        returned to the sign-in page and will need your password again.
+      </p>
+      <p className="ac-muted">
+        Do this the moment a device goes missing. It does not change your password, so if you also
+        think someone knows it, change that too.
+      </p>
+      {error !== null && (
+        <AcAlert
+          message={error}
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void run()}>
+              Retry
+            </Button>
+          }
+        />
+      )}
 
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
         title="Sign out of every device?"
-        description="This ends every session for your account, including the one you are using right now. You will be signed out here and will need your password to get back in. Sessions on other devices stop working immediately."
-        confirmLabel={logoutAll.isPending ? 'Signing out…' : 'Sign out everywhere'}
-        confirmVariant="destructive"
-        disabled={logoutAll.isPending}
-        onConfirm={() => void run()}
+        entity="Your account, on every device"
+        consequence="This ends every session for your account, including the one you are using right now. You will be signed out here and will need your password to get back in. Sessions on other devices stop working immediately."
+        confirmLabel="Sign out everywhere"
+        destructive
+        onConfirm={run}
       />
-    </Card>
+    </AcCard>
   );
 }

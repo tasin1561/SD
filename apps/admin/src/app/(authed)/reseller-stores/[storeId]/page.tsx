@@ -3,26 +3,23 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
+import { PauseCircle } from 'lucide-react';
+import { Money } from '@skydrop/ui/components';
+import { resellerStoreStatusKind, resellerStoreStatusLabel } from '@skydrop/ui/status';
+import { Button } from '@skydrop/ui/app/button';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Timeline } from '@skydrop/ui/app/timeline';
+import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  DescriptionList,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Money,
-  PageHeader,
-  ResellerStoreStatusBadge,
-  Section,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+  AcAlert,
+  AcCard,
+  AcDl,
+  AcHeader,
+  AcPage,
+  AcSection,
+} from '../../settings/_components/ac-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAdminResellerStore } from '@/lib/reseller-store-hooks';
 import { CatalogueTerms } from './_components/catalogue-terms';
@@ -63,16 +60,17 @@ const ACTOR_WORDS: Record<string, string> = {
  */
 function TermsSection({ storeId }: { storeId: string }): ReactElement {
   const terms = useAdminResellerStoreTerms(storeId);
-  if (terms.isPending) return <LoadingState label="Loading the terms" rows={3} />;
+  if (terms.isPending) return <SkeletonRows rows={3} cols={4} label="Loading the terms" />;
   if (terms.isError) {
     return <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />;
   }
   const t = terms.data;
   const c = t.current;
   return (
-    <Section
+    <AcSection
       title="Terms"
-      subtitle="Who pays which Skydrop fee on this store’s orders, and when each side is credited."
+      note="Who pays which Skydrop fee on this store’s orders, and when each side is credited."
+      bare
     >
       {c === null ? (
         <EmptyState
@@ -80,26 +78,29 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
           description="The store cannot place orders until the seller publishes terms and the store accepts them."
         />
       ) : (
-        <div className="space-y-4">
-          <p className="text-sm">
-            Version {c.version}, published {when(c.publishedAt)} —{' '}
-            {c.acceptance === null
-              ? 'not accepted by the store yet.'
-              : `accepted by ${c.acceptance.acceptedByName} on ${when(c.acceptance.acceptedAt)}${
-                  c.acceptance.ipAddress === null ? '' : ` from ${c.acceptance.ipAddress}`
-                }.`}
-          </p>
-          {t.needsRevision !== null ? (
-            <p role="alert" className="text-critical text-sm">
-              {t.needsRevision}
+        <AcCard flush>
+          <div className="ac-pad">
+            <p className="ac-text">
+              Version <span className="sk-figure">{c.version}</span>, published{' '}
+              {when(c.publishedAt)} —{' '}
+              {c.acceptance === null
+                ? 'not accepted by the store yet.'
+                : `accepted by ${c.acceptance.acceptedByName} on ${when(c.acceptance.acceptedAt)}${
+                    c.acceptance.ipAddress === null ? '' : ` from ${c.acceptance.ipAddress}`
+                  }.`}
             </p>
+          </div>
+          {t.needsRevision !== null ? (
+            <div className="ac-pad">
+              <AcAlert message={t.needsRevision} />
+            </div>
           ) : null}
-          <Table>
+          <Table caption="Fee shares">
             <THead>
               <Tr>
                 <Th>Fee</Th>
-                <Th>Store pays</Th>
-                <Th>Seller pays</Th>
+                <Th align="right">Store pays</Th>
+                <Th align="right">Seller pays</Th>
                 <Th>Example</Th>
               </Tr>
             </THead>
@@ -109,8 +110,12 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
                 return (
                   <Tr key={sh.feeType}>
                     <Td>{sh.label}</Td>
-                    <Td>{Number(sh.storePercent)}%</Td>
-                    <Td>{Number(sh.sellerPercent)}%</Td>
+                    <Td align="right">
+                      <span className="sk-figure">{Number(sh.storePercent)}%</span>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure">{Number(sh.sellerPercent)}%</span>
+                    </Td>
                     <Td>
                       {ex === undefined ? (
                         '—'
@@ -127,16 +132,18 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
               })}
             </TBody>
           </Table>
-          <ul className="space-y-1 text-sm">
-            <li>{c.storeCredit.words}</li>
-            <li>{c.sellerCredit.words}</li>
-          </ul>
-          <p className="text-text-muted text-xs">{t.rounding}</p>
-        </div>
+          <div className="ac-pad">
+            <ul className="ac-list">
+              <li>{c.storeCredit.words}</li>
+              <li>{c.sellerCredit.words}</li>
+            </ul>
+            <p className="ac-muted">{t.rounding}</p>
+          </div>
+        </AcCard>
       )}
       {t.history.length > 1 ? (
-        <div className="mt-4">
-          <Table>
+        <AcCard flush title="Earlier versions">
+          <Table caption="Terms versions">
             <THead>
               <Tr>
                 <Th>Version</Th>
@@ -148,7 +155,9 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
             <TBody>
               {t.history.map((v) => (
                 <Tr key={v.id}>
-                  <Td>{v.version}</Td>
+                  <Td>
+                    <span className="sk-figure">{v.version}</span>
+                  </Td>
                   <Td>{when(v.publishedAt)}</Td>
                   <Td>
                     {v.acceptance === null
@@ -162,9 +171,9 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
               ))}
             </TBody>
           </Table>
-        </div>
+        </AcCard>
       ) : null}
-    </Section>
+    </AcSection>
   );
 }
 
@@ -175,39 +184,45 @@ export default function AdminResellerStorePage(): ReactElement {
   const mayPause = usePermission('reseller.stores.pause');
   const [pausing, setPausing] = useState(false);
 
-  const back = (
-    <div>
-      <Link href="/reseller-stores" className="text-accent hover:text-accent-hover text-sm">
-        ← All reseller stores
-      </Link>
-    </div>
-  );
+  const crumbs = [{ label: 'Reseller stores', href: '/reseller-stores' }] as const;
   // The header and the way back stay on screen while the store loads or
   // fails, so a slow or refused read never leaves a blank page.
   if (store.isPending || store.isError) {
     return (
-      <div className="space-y-6">
-        {back}
-        <PageHeader title="Reseller store" />
+      <AcPage>
+        <AcHeader crumbs={[...crumbs, { label: 'Reseller store' }]} title="Reseller store" />
         {store.isPending ? (
-          <LoadingState label="Loading the store" rows={5} />
+          <SkeletonRows rows={5} cols={2} label="Loading the store" />
         ) : (
           <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />
         )}
-      </div>
+      </AcPage>
     );
   }
   const s = store.data;
+  const events = s.events;
 
   return (
-    <div className="space-y-6">
-      {back}
-      <PageHeader
+    <AcPage>
+      <AcHeader
+        crumbs={[...crumbs, { label: s.name }]}
         title={s.name}
-        subtitle={<ResellerStoreStatusBadge status={s.status} />}
+        meta={
+          <div className="ac-meta">
+            <StatusChip
+              kind={resellerStoreStatusKind(s.status)}
+              label={resellerStoreStatusLabel(s.status)}
+            />
+          </div>
+        }
         action={
           mayPause && s.status === 'ACTIVE' ? (
-            <Button variant="destructive" size="md" onClick={() => setPausing(true)}>
+            <Button
+              variant="destructive"
+              size="md"
+              icon={<PauseCircle size={15} />}
+              onClick={() => setPausing(true)}
+            >
               Pause store
             </Button>
           ) : undefined
@@ -217,90 +232,90 @@ export default function AdminResellerStorePage(): ReactElement {
         <PauseStoreModal storeId={s.id} storeName={s.name} onClose={() => setPausing(false)} />
       ) : null}
 
-      <Card>
-        <CardHeader title="Details" />
-        <CardBody>
-          <DescriptionList
-            columns={2}
-            items={[
-              {
-                label: 'Seller',
-                value: (
-                  <>
-                    <Link href={`/sellers/${s.sellerId}`} className="text-accent">
-                      {s.sellerCompanyName}
-                    </Link>{' '}
-                    <Link
-                      href={`/reseller-stores?sellerId=${s.sellerId}`}
-                      className="text-text-muted text-xs hover:underline"
-                    >
-                      (their other stores)
-                    </Link>
-                  </>
-                ),
-              },
-              { label: 'Customers see', value: s.displayName ?? s.name },
-              { label: 'Opened by', value: s.origin === 'ADMIN' ? 'Skydrop' : 'The seller' },
-              {
-                label: 'Wallet managed by',
-                value: s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'The seller',
-              },
-              { label: 'Contact email', value: s.contactEmail ?? '—' },
-              { label: 'Contact phone', value: s.contactPhone ?? '—' },
-              { label: 'Note', value: s.note ?? '—' },
-              { label: 'Status since', value: when(s.statusChangedAt) },
-            ]}
-          />
-        </CardBody>
-      </Card>
+      <AcSection title="Details">
+        <AcDl
+          columns={2}
+          items={[
+            {
+              label: 'Seller',
+              value: (
+                <span className="ac-inline">
+                  <Link href={`/sellers/${s.sellerId}`} className="ac-link">
+                    {s.sellerCompanyName}
+                  </Link>
+                  <Link
+                    href={`/reseller-stores?sellerId=${s.sellerId}`}
+                    className="ac-link ac-faint"
+                  >
+                    (their other stores)
+                  </Link>
+                </span>
+              ),
+            },
+            { label: 'Customers see', value: s.displayName ?? s.name },
+            { label: 'Opened by', value: s.origin === 'ADMIN' ? 'Skydrop' : 'The seller' },
+            {
+              label: 'Wallet managed by',
+              value: s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'The seller',
+            },
+            { label: 'Contact email', value: s.contactEmail ?? '—' },
+            { label: 'Contact phone', value: s.contactPhone ?? '—' },
+            { label: 'Note', value: s.note ?? '—' },
+            { label: 'Status since', value: when(s.statusChangedAt) },
+          ]}
+        />
+      </AcSection>
 
       <CatalogueTerms storeId={s.id} />
       <TermsSection storeId={s.id} />
       <StoreWalletPanel storeId={s.id} />
 
-      <Section title="Status history" subtitle="Every change to this store’s life, oldest first.">
-        {s.events.length === 0 ? (
-          <EmptyState title="No history" />
+      <AcSection title="Status history" note="Every change to this store’s life, oldest first.">
+        {events.length === 0 ? (
+          <EmptyState bare title="No history" />
         ) : (
-          <Table>
-            <THead>
-              <Tr>
-                <Th>When</Th>
-                <Th>What</Th>
-                <Th>From → to</Th>
-                <Th>By</Th>
-                <Th>Note</Th>
-              </Tr>
-            </THead>
-            <TBody>
-              {s.events.map((e) => (
-                <Tr key={e.id}>
-                  <Td>{when(e.createdAt)}</Td>
-                  <Td>{EVENT_WORDS[e.kind] ?? e.kind}</Td>
-                  <Td>
-                    {e.fromStatus === null && e.toStatus === null
-                      ? '—'
-                      : `${e.fromStatus?.toLowerCase().replace(/_/g, ' ') ?? 'new'} → ${
-                          e.toStatus?.toLowerCase().replace(/_/g, ' ') ?? '—'
-                        }`}
-                  </Td>
-                  <Td>{ACTOR_WORDS[e.actorType] ?? e.actorType}</Td>
-                  <Td>{e.note ?? '—'}</Td>
-                </Tr>
-              ))}
-            </TBody>
-          </Table>
+          <Timeline
+            label="Status history"
+            steps={events.map((e, i) => ({
+              id: e.id,
+              label: EVENT_WORDS[e.kind] ?? e.kind,
+              state: i === events.length - 1 ? ('current' as const) : ('done' as const),
+              time: when(e.createdAt),
+              description: (
+                <>
+                  {e.fromStatus === null && e.toStatus === null
+                    ? '—'
+                    : `${e.fromStatus?.toLowerCase().replace(/_/g, ' ') ?? 'new'} → ${
+                        e.toStatus?.toLowerCase().replace(/_/g, ' ') ?? '—'
+                      }`}
+                  {' · '}
+                  {ACTOR_WORDS[e.actorType] ?? e.actorType}
+                  {e.note === null ? null : (
+                    <>
+                      {' · '}
+                      {e.note}
+                    </>
+                  )}
+                </>
+              ),
+            }))}
+          />
         )}
-      </Section>
+      </AcSection>
 
-      <Section title="Team" subtitle="Logins on the reseller portal, and invitations still open.">
+      <AcSection
+        title="Team"
+        note="Logins on the reseller portal, and invitations still open."
+        flush
+      >
         {s.team.members.length === 0 && s.team.invitations.length === 0 ? (
           <EmptyState
+            bare
             title="Nobody on the team yet"
             description="The seller invites the store’s first user."
           />
         ) : (
-          <Table>
+          <Table caption="Store team">
             <THead>
               <Tr>
                 <Th>Name</Th>
@@ -312,7 +327,9 @@ export default function AdminResellerStorePage(): ReactElement {
             <TBody>
               {s.team.members.map((m) => (
                 <Tr key={m.id}>
-                  <Td>{m.fullName}</Td>
+                  <Td>
+                    <span className="ac-cell-main">{m.fullName}</span>
+                  </Td>
                   <Td>{m.email}</Td>
                   <Td>{m.roleName}</Td>
                   <Td>Last signed in {when(m.lastLoginAt)}</Td>
@@ -320,7 +337,9 @@ export default function AdminResellerStorePage(): ReactElement {
               ))}
               {s.team.invitations.map((i) => (
                 <Tr key={i.id}>
-                  <Td>{i.fullName}</Td>
+                  <Td>
+                    <span className="ac-cell-main">{i.fullName}</span>
+                  </Td>
                   <Td>{i.email}</Td>
                   <Td>{i.roleName}</Td>
                   <Td>Invited — expires {when(i.expiresAt)}</Td>
@@ -329,7 +348,7 @@ export default function AdminResellerStorePage(): ReactElement {
             </TBody>
           </Table>
         )}
-      </Section>
-    </div>
+      </AcSection>
+    </AcPage>
   );
 }

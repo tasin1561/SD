@@ -2,8 +2,14 @@
 
 import { useEffect, useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { Button, Card, CardBody, PageHeader, Section, SkeletonRows } from '@skydrop/ui/components';
+import { CheckCheck, Mail, MailOpen, Megaphone, Settings2, Trash2 } from 'lucide-react';
+import { Button, buttonClassName } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { AcCard, AcHeader, AcPage } from '../../settings/_components/ac-parts';
 import { usePermission } from '@/lib/use-permission';
+import { serverVerdict } from '@/lib/server-verdict';
 import {
   useMarkAllNotificationsRead,
   useDismissAllNotifications,
@@ -34,6 +40,9 @@ export function NotificationsView(): ReactElement {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const markAll = useMarkAllNotificationsRead();
+  // Clearing every notification cannot be taken back, so it asks first.
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
 
   // Cosmetic only (FE-2) — the server gates the broadcast endpoints.
   const canBroadcast = usePermission('notifications.broadcast');
@@ -53,27 +62,35 @@ export function NotificationsView(): ReactElement {
   }, [items]);
 
   return (
-    <Section>
-      <PageHeader
+    <AcPage width="narrow">
+      <AcHeader
         title="Notifications"
         subtitle="Everything sent to you, and what you have chosen to silence."
         action={
-          <div className="flex items-center gap-2">
+          <div className="ac-buttons">
             {canBroadcast && (
-              <Link
-                className="text-accent text-sm underline-offset-2 hover:underline"
-                href="/notifications/broadcasts"
-              >
-                Send a broadcast
+              <Link className={buttonClassName('ghost', 'md')} href="/notifications/broadcasts">
+                <span className="sk-btn__icon" aria-hidden>
+                  <Megaphone size={15} />
+                </span>
+                <span className="sk-btn__label">Send a broadcast</span>
               </Link>
             )}
             {(feed.data?.unreadCount ?? 0) > 0 && (
-              <Button variant="secondary" onClick={() => markAll.mutate()}>
+              <Button
+                variant="secondary"
+                icon={<CheckCheck size={15} />}
+                onClick={() => markAll.mutate()}
+              >
                 Mark all read
               </Button>
             )}
             {items.length > 0 && (
-              <Button variant="ghost" onClick={() => dismissAll.mutate()}>
+              <Button
+                variant="ghost"
+                icon={<Trash2 size={15} />}
+                onClick={() => setConfirmClear(true)}
+              >
                 Clear all
               </Button>
             )}
@@ -81,103 +98,104 @@ export function NotificationsView(): ReactElement {
         }
       />
 
-      <Card>
-        <CardBody>
-          {feed.isLoading ? (
-            <SkeletonRows rows={4} cols={2} />
-          ) : items.length === 0 ? (
-            <p className="text-text-muted text-sm">
-              Nothing yet. Anything needing you will appear here.
-            </p>
-          ) : (
-            <ul className="divide-border-subtle divide-y">
-              {items.map((n) => {
-                const open = expanded === n.id;
-                return (
-                  <li key={n.id} id={n.id} className="py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      {/*
-                        The whole row opens it. A notification is a
-                        paragraph, not a document — it does not earn a
-                        page of its own, and truncating it with no way
-                        to read the rest is the thing being fixed here.
-                        Opening also marks it read, which is what
-                        reading something means.
-                      */}
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 text-left"
-                        aria-expanded={open}
-                        onClick={() => {
-                          setExpanded(open ? null : n.id);
-                          if (!open && n.readAt === null) markRead.mutate(n.id);
-                        }}
+      <AcCard flush>
+        {feed.isLoading ? (
+          <SkeletonRows rows={4} cols={2} />
+        ) : items.length === 0 ? (
+          <EmptyState
+            bare
+            tone="positive"
+            title="Nothing yet"
+            description="Anything needing you will appear here."
+          />
+        ) : (
+          <ul className="ac-rows">
+            {items.map((n) => {
+              const open = expanded === n.id;
+              return (
+                <li
+                  key={n.id}
+                  id={n.id}
+                  className="ac-notif"
+                  data-unread={n.readAt === null ? '1' : undefined}
+                >
+                  {/*
+                    The whole row opens it. A notification is a
+                    paragraph, not a document — it does not earn a
+                    page of its own, and truncating it with no way
+                    to read the rest is the thing being fixed here.
+                    Opening also marks it read, which is what
+                    reading something means.
+                  */}
+                  <button
+                    type="button"
+                    className="ac-notif__open"
+                    aria-expanded={open}
+                    onClick={() => {
+                      setExpanded(open ? null : n.id);
+                      if (!open && n.readAt === null) markRead.mutate(n.id);
+                    }}
+                  >
+                    {n.title !== null && (
+                      <span className="ac-notif__title">
+                        {n.readAt === null && <span aria-hidden className="ac-notif__dot" />}
+                        {n.title}
+                      </span>
+                    )}
+                    <span className="ac-notif__body" data-clamp={open ? undefined : '1'}>
+                      {n.body}
+                    </span>
+                    <span className="ac-notif__meta">
+                      <span className="sk-figure">{new Date(n.createdAt).toLocaleString()}</span> ·{' '}
+                      {n.topic}
+                      {!open && ' · click to read'}
+                    </span>
+                  </button>
+
+                  <div className="ac-notif__side">
+                    {n.readAt === null ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<MailOpen size={14} />}
+                        onClick={() => markRead.mutate(n.id)}
                       >
-                        {n.title !== null && (
-                          <div
-                            className={
-                              n.readAt === null ? 'text-sm font-semibold' : 'text-sm font-medium'
-                            }
-                          >
-                            {n.readAt === null && (
-                              <span
-                                aria-hidden
-                                className="bg-accent-fill mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
-                              />
-                            )}
-                            {n.title}
-                          </div>
-                        )}
-                        <div
-                          className={
-                            open
-                              ? 'text-text-muted mt-0.5 whitespace-pre-line text-sm'
-                              : 'text-text-muted mt-0.5 line-clamp-2 whitespace-pre-line text-sm'
-                          }
-                        >
-                          {n.body}
-                        </div>
-                        <div className="text-text-faint mt-1 text-xs tabular-nums">
-                          {new Date(n.createdAt).toLocaleString()} · {n.topic}
-                          {!open && ' · click to read'}
-                        </div>
-                      </button>
+                        Mark read
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon={<Mail size={14} />}
+                        onClick={() => markUnread.mutate(n.id)}
+                      >
+                        Mark unread
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      icon={<Trash2 size={14} />}
+                      aria-label="Delete this notification"
+                      onClick={() => dismiss.mutate(n.id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
 
-                      <div className="flex shrink-0 items-center gap-1">
-                        {n.readAt === null ? (
-                          <Button size="sm" variant="ghost" onClick={() => markRead.mutate(n.id)}>
-                            Mark read
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="ghost" onClick={() => markUnread.mutate(n.id)}>
-                            Mark unread
-                          </Button>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          aria-label="Delete this notification"
-                          onClick={() => dismiss.mutate(n.id)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          {feed.data?.nextCursor != null && (
-            <div className="mt-3">
-              <Button variant="ghost" onClick={() => setCursor(feed.data?.nextCursor ?? undefined)}>
-                Older
-              </Button>
-            </div>
-          )}
-        </CardBody>
-      </Card>
+        {feed.data?.nextCursor != null && (
+          <div className="ac-pad">
+            <Button variant="ghost" onClick={() => setCursor(feed.data?.nextCursor ?? undefined)}>
+              Older
+            </Button>
+          </div>
+        )}
+      </AcCard>
 
       {/*
         The preferences moved to their own page. They are a standing
@@ -185,12 +203,33 @@ export function NotificationsView(): ReactElement {
         under a list that is read several times a day, pushing it up the
         screen every time somebody came to check what had happened.
       */}
-      <p className="text-text-muted text-sm">
-        <Link className="text-accent underline underline-offset-2" href="/notifications/settings">
+      <p className="ac-text">
+        <Link className="ac-link ac-inline" href="/notifications/settings">
+          <Settings2 size={14} aria-hidden />
           Choose what reaches you
         </Link>{' '}
         — switch off anything you would rather not see here.
       </p>
-    </Section>
+
+      <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Clear every notification?"
+        entity="Your inbox"
+        consequence="Every notification is removed from your inbox, including ones not loaded on this page."
+        confirmLabel="Clear all"
+        destructive
+        error={clearError}
+        onConfirm={async () => {
+          setClearError(null);
+          try {
+            await dismissAll.mutateAsync();
+          } catch (err) {
+            setClearError(serverVerdict(err));
+            throw err;
+          }
+        }}
+      />
+    </AcPage>
   );
 }

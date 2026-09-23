@@ -1,18 +1,14 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorNote,
-  FormField,
-  Modal,
-  ModalFooter,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { PhoneOff } from 'lucide-react';
+// The legacy toast on purpose: the component test mounts this panel
+// under the legacy <Toaster> only, and the shell mounts both.
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { AcCard } from '../../settings/_components/ac-parts';
 import { useBulkDequeue } from '@/lib/callcenter-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
@@ -60,34 +56,31 @@ export function BulkDequeuePanel({
       setReason('');
     } catch (err) {
       setError(serverVerdict(err));
+      // Rethrown so the confirm step stays open with the verdict on it.
+      throw err;
     }
   }
 
   return (
-    <Card>
-      <CardHeader
-        title="Call queue"
-        subtitle="Stop agents calling this seller's customers. Closes every open queue entry; the orders themselves do not move, and confirmed orders are untouched."
-      />
-      <CardBody>
-        <div className="space-y-3">
-          <FormField
-            label="Reason (recorded in the audit log)"
-            htmlFor="bulk-dequeue-reason"
-            required
-          >
-            <Textarea
-              id="bulk-dequeue-reason"
-              className="max-w-none"
-              rows={2}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Seller paused trading until their stock arrives"
-            />
-          </FormField>
+    <AcCard
+      title="Call queue"
+      note="Stop agents calling this seller's customers. Closes every open queue entry; the orders themselves do not move, and confirmed orders are untouched."
+    >
+      <div className="ac-form">
+        <TextArea
+          label="Reason (recorded in the audit log)"
+          id="bulk-dequeue-reason"
+          requiredMark
+          rows={2}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. Seller paused trading until their stock arrives"
+        />
+        <div className="ac-buttons" data-align="start">
           <Button
             variant="secondary"
             size="sm"
+            icon={<PhoneOff size={14} />}
             disabled={reason.trim() === ''}
             onClick={() => {
               setError(null);
@@ -97,38 +90,22 @@ export function BulkDequeuePanel({
             Close all open queue entries
           </Button>
         </div>
-      </CardBody>
+      </div>
 
-      <Modal
+      <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
         title={`Close ${sellerName}'s call queue?`}
+        entity={sellerName}
+        consequence="Every open call-queue entry for this seller is closed now. Agents stop being handed these orders; the orders stay in their current status until something else moves them."
+        confirmLabel="Close entries"
+        destructive
+        error={error}
+        closeOnSuccess={false}
+        onConfirm={submit}
       >
-        <p className="text-text-body text-sm">
-          Every open call-queue entry for <strong>{sellerName}</strong> is closed now. Agents stop
-          being handed these orders; the orders stay in their current status until something else
-          moves them.
-        </p>
-        <p className="text-text-muted mt-2 text-xs">Reason: {reason.trim()}</p>
-        {error !== null && (
-          <div className="mt-3">
-            <ErrorNote message={error} />
-          </div>
-        )}
-        <ModalFooter>
-          <Button variant="ghost" size="md" onClick={() => setConfirming(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={dequeue.isPending}
-            onClick={() => void submit()}
-          >
-            {dequeue.isPending ? 'Closing…' : 'Close entries'}
-          </Button>
-        </ModalFooter>
-      </Modal>
-    </Card>
+        <p className="ac-muted">Reason: {reason.trim()}</p>
+      </ConfirmDialog>
+    </AcCard>
   );
 }

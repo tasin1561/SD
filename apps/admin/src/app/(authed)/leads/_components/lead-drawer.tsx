@@ -1,19 +1,22 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { Check, Mail, Phone, Send } from 'lucide-react';
+import { Check, Mail, Phone, Send, UserRound } from 'lucide-react';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
 import {
-  Button,
-  DescriptionList,
-  ErrorNote,
-  FormField,
-  Modal,
-  ModalFooter,
-  Select,
-  StatusBadge,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+  AcAlert,
+  AcCallout,
+  AcDl,
+  AcFact,
+  AcRevealValue,
+  phaseOf,
+} from '../../settings/_components/ac-parts';
 import { inviteLeadStatusKind } from '@skydrop/ui/status';
 import { InviteLeadStatus } from '@skydrop/db';
 import {
@@ -149,52 +152,61 @@ export function LeadDrawer({
   }
 
   return (
-    <Modal open onOpenChange={(next) => !next && onClose()} title={lead.companyName}>
-      <div className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+      title={lead.companyName}
+      icon={<UserRound size={18} />}
+      size="lg"
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={onClose}>
+            Close
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            state={phaseOf(update.isPending, error)}
+            labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+            disabled={!dirty || update.isPending || !canWrite}
+            onClick={() => void save()}
+          />
+        </DialogFooter>
+      }
+    >
+      <div className="ac-form">
+        <div className="ac-meta">
+          <StatusChip
             kind={inviteLeadStatusKind(lead.status as InviteLeadStatus)}
             label={lead.status.toLowerCase()}
+            size="sm"
           />
-          {lead.submissionCount > 1 && (
-            <span className="text-[var(--status-pending-fg)] text-xs">
-              asked {lead.submissionCount}×
-            </span>
-          )}
+          {lead.submissionCount > 1 && <AcFact tone="warn">asked {lead.submissionCount}×</AcFact>}
           {direction?.unserved === true && (
-            <span className="text-critical text-xs">
-              {direction.label} — we do not run this corridor
-            </span>
+            <AcFact tone="bad">{direction.label} — we do not run this corridor</AcFact>
           )}
         </div>
 
         {/* Contact first, and one click each. Whoever opens this is about
             to get in touch; making them select-and-copy a phone number
             is the difference between a queue worked and a queue skimmed. */}
-        <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
-          <a
-            href={`mailto:${lead.email}`}
-            className="text-accent inline-flex items-center gap-1.5 hover:underline"
-          >
-            <Mail size={13} /> {lead.email}
+        <div className="ac-buttons" data-align="start">
+          <a href={`mailto:${lead.email}`} className="ac-link ac-inline">
+            <Mail size={14} aria-hidden /> {lead.email}
           </a>
-          <a
-            href={`tel:${lead.phone.replace(/\s+/g, '')}`}
-            className="text-accent inline-flex items-center gap-1.5 hover:underline"
-          >
-            <Phone size={13} /> {lead.phone}
+          <a href={`tel:${lead.phone.replace(/\s+/g, '')}`} className="ac-link ac-inline">
+            <Phone size={14} aria-hidden /> <span className="sk-figure">{lead.phone}</span>
           </a>
           {lead.altPhone !== null && lead.altPhone !== '' && (
-            <a
-              href={`tel:${lead.altPhone.replace(/\s+/g, '')}`}
-              className="text-accent inline-flex items-center gap-1.5 hover:underline"
-            >
-              <Phone size={13} /> {lead.altPhone}
+            <a href={`tel:${lead.altPhone.replace(/\s+/g, '')}`} className="ac-link ac-inline">
+              <Phone size={14} aria-hidden /> <span className="sk-figure">{lead.altPhone}</span>
             </a>
           )}
         </div>
 
-        <DescriptionList
+        <AcDl
           items={[
             { label: 'Contact', value: lead.fullName },
             { label: 'Delivering to', value: direction?.label ?? '—' },
@@ -210,138 +222,111 @@ export function LeadDrawer({
         />
 
         {lead.message !== null && lead.message !== '' && (
-          <div>
-            <div className="text-text-muted mb-1 text-xs">What they wrote</div>
-            <p className="border-border text-text-body border-l-2 pl-3 text-sm whitespace-pre-wrap">
-              {lead.message}
-            </p>
+          <div className="ac-card__body">
+            <span className="ac-label">What they wrote</span>
+            <p className="ac-quote">{lead.message}</p>
           </div>
         )}
 
-        <FormField label="Status" htmlFor="lead-status" hint={STATUS_COPY[status]}>
-          <Select
-            id="lead-status"
-            value={status}
-            onChange={(e) => setStatus(e.target.value as LeadStatus)}
-          >
-            {Object.keys(STATUS_COPY).map((s) => (
-              <option key={s} value={s}>
-                {s.toLowerCase()}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-
-        <FormField
-          label="Internal notes"
-          htmlFor="lead-notes"
-          hint="Never shown to the lead. What was said, what they need, when to call back."
+        <Select
+          label="Status"
+          id="lead-status"
+          hint={STATUS_COPY[status]}
+          value={status}
+          onChange={(e) => setStatus(e.target.value as LeadStatus)}
         >
-          <Textarea
-            id="lead-notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={4}
-          />
-        </FormField>
+          {Object.keys(STATUS_COPY).map((s) => (
+            <option key={s} value={s}>
+              {s.toLowerCase()}
+            </option>
+          ))}
+        </Select>
+
+        <TextArea
+          label="Internal notes"
+          id="lead-notes"
+          hint="Never shown to the lead. What was said, what they need, when to call back."
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={4}
+        />
 
         {canInvite && (
-          <div className="border-border rounded-xl border p-3">
+          <div className="ac-card">
             {existing.data === undefined ? (
-              <div className="text-text-muted text-xs">Checking for an invitation…</div>
+              <p className="ac-muted">Checking for an invitation…</p>
             ) : existing.data === null ? (
               // Nobody has invited them yet.
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-text-bright text-sm">Invite them to register</div>
-                  <div className="text-text-muted text-xs">
-                    Sends a registration link to {lead.email}.
-                  </div>
+              <div className="ac-card__head">
+                <div className="ac-card__titles">
+                  <span className="ac-strong">Invite them to register</span>
+                  <span className="ac-muted">Sends a registration link to {lead.email}.</span>
                 </div>
-                <Button
+                <AsyncButton
                   variant="secondary"
                   size="sm"
-                  disabled={invite.isPending}
+                  icon={<Send size={14} />}
+                  state={invite.isPending ? 'busy' : 'idle'}
+                  labels={{ idle: 'Send invite', busy: 'Sending…' }}
                   onClick={() => void sendInvite()}
-                >
-                  <Send size={12} /> {invite.isPending ? 'Sending…' : 'Send invite'}
-                </Button>
+                />
               </div>
             ) : existing.data.status === 'used' ? (
               // They accepted it. There is nothing to resend, and the
               // account exists — offering a button here would be an
               // invitation to break something.
-              <div className="flex items-start gap-2">
-                <Check size={13} className="text-[var(--status-delivered-fg)] mt-0.5 shrink-0" />
-                <div className="text-sm">
-                  <span className="text-text-bright">They registered</span>
-                  <span className="text-text-muted block text-xs">
-                    Invitation accepted{' '}
-                    {existing.data.usedAt === null
-                      ? ''
-                      : new Date(existing.data.usedAt).toLocaleString()}
-                    . Their account is under Sellers.
-                  </span>
-                </div>
-              </div>
+              <AcCallout tone="good" icon={<Check size={15} />} title="They registered">
+                <span className="ac-muted">
+                  Invitation accepted{' '}
+                  {existing.data.usedAt === null
+                    ? ''
+                    : new Date(existing.data.usedAt).toLocaleString()}
+                  . Their account is under Sellers.
+                </span>
+              </AcCallout>
             ) : (
               // Sent and still outstanding, or expired unaccepted.
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-text-bright flex items-center gap-1.5 text-sm">
+              <div className="ac-card__head">
+                <div className="ac-card__titles">
+                  <span className="ac-inline ac-strong">
                     Invitation sent
-                    <StatusBadge
+                    <StatusChip
                       kind={existing.data.status === 'expired' ? 'failed' : 'pending'}
                       label={existing.data.status}
+                      size="sm"
                     />
-                  </div>
-                  <div className="text-text-muted text-xs">
+                  </span>
+                  <span className="ac-muted">
                     {new Date(existing.data.invitedAt).toLocaleString()} ·{' '}
                     {existing.data.status === 'expired' ? 'expired' : 'expires'}{' '}
                     {new Date(existing.data.expiresAt).toLocaleDateString()}
-                  </div>
+                  </span>
                 </div>
-                <Button
+                <AsyncButton
                   variant="secondary"
                   size="sm"
-                  disabled={resend.isPending}
+                  icon={<Send size={14} />}
+                  state={resend.isPending ? 'busy' : 'idle'}
+                  labels={{ idle: 'Resend', busy: 'Sending…' }}
                   onClick={() => void resendInvite()}
-                >
-                  <Send size={12} /> {resend.isPending ? 'Sending…' : 'Resend'}
-                </Button>
+                />
               </div>
             )}
 
             {inviteUrl !== null && (
-              <div className="mt-3">
-                <div className="text-text-muted mb-1 text-xs">
+              <div className="ac-card__body">
+                <p className="ac-muted">
                   The email is on its way. This link is shown once — only a hash of it is stored, so
                   it cannot be looked up later. Resending issues a new one and retires this.
-                </div>
-                <code className="text-text-body block overflow-x-auto rounded-lg bg-[var(--color-bg)] p-2 text-xs">
-                  {inviteUrl}
-                </code>
+                </p>
+                <AcRevealValue value={inviteUrl} label="Invitation link" />
               </div>
             )}
           </div>
         )}
 
-        {error !== null && <ErrorNote message={error} />}
+        {error !== null && <AcAlert message={error} />}
       </div>
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={onClose}>
-          Close
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={!dirty || update.isPending || !canWrite}
-          onClick={() => void save()}
-        >
-          {update.isPending ? 'Saving…' : 'Save'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

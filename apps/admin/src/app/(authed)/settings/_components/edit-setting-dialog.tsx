@@ -1,20 +1,18 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Settings2 } from 'lucide-react';
 import { SettingValueType } from '@skydrop/db';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useSystemSetting, useUpdateSystemSetting } from '@/lib/api-hooks';
-import {
-  Button,
-  FormField,
-  Input,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  Select,
-  Textarea,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { AcAlert, AcFact, phaseOf } from './ac-parts';
 import { FEE_CURRENCY_OPTIONS, isFeeCurrencyKey } from '@/lib/fee-currency';
 import { usePermission } from '@/lib/use-permission';
 
@@ -90,124 +88,108 @@ export function EditSettingDialog({
   }
 
   return (
-    <Modal
+    <Dialog
       open
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       title={detail.data?.displayName ?? settingKey}
+      icon={<Settings2 size={18} />}
+      locked={update.isPending}
       description={
         detail.data ? (
-          <span>
-            <span className="font-mono text-xs">{detail.data.key}</span>
-            {detail.data.requiresRestart && (
-              <span className="text-critical ml-2 uppercase text-xs tracking-wide">
-                Restart required
-              </span>
-            )}
+          <span className="ac-inline">
+            <span className="sk-ident ac-code">{detail.data.key}</span>
+            {detail.data.requiresRestart && <AcFact tone="bad">Restart required</AcFact>}
           </span>
         ) : undefined
       }
       size="md"
     >
       {detail.isLoading ? (
-        <LoadingState />
+        <SkeletonRows rows={3} cols={1} />
       ) : !detail.data ? (
-        <div className="text-text-muted text-sm">Setting not found.</div>
+        <p className="ac-muted">Setting not found.</p>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {detail.data.helpText && (
-            <p className="text-text-muted text-xs">{detail.data.helpText}</p>
-          )}
+        <form onSubmit={handleSubmit} className="ac-form">
+          {detail.data.helpText && <p className="ac-muted">{detail.data.helpText}</p>}
 
           {detail.data.valueType === SettingValueType.BOOLEAN ? (
-            <FormField label="Value">
-              <label className="inline-flex items-center gap-2 text-sm text-text-body">
-                <input
-                  type="checkbox"
-                  checked={boolDraft}
-                  onChange={(e) => setBoolDraft(e.target.checked)}
-                  disabled={update.isPending || !canWrite}
-                />
-                <span>{boolDraft ? 'true' : 'false'}</span>
-              </label>
-            </FormField>
-          ) : detail.data.valueType === SettingValueType.JSON ? (
-            <FormField label="Value (JSON)" hint="Must parse as a JSON object or array.">
-              <Textarea
-                rows={8}
-                value={detail.data.isSensitive && !reveal ? '••••••••' : draft}
-                onChange={(e) => setDraft(e.target.value)}
-                disabled={update.isPending || (detail.data.isSensitive && !reveal)}
-                className="font-mono text-xs"
+            <fieldset className="ac-fieldset">
+              <legend>Value</legend>
+              <Checkbox
+                label={boolDraft ? 'true' : 'false'}
+                checked={boolDraft}
+                onChange={(e) => setBoolDraft(e.target.checked)}
+                disabled={update.isPending || !canWrite}
               />
-            </FormField>
+            </fieldset>
+          ) : detail.data.valueType === SettingValueType.JSON ? (
+            <TextArea
+              label="Value (JSON)"
+              hint="Must parse as a JSON object or array."
+              rows={8}
+              value={detail.data.isSensitive && !reveal ? '••••••••' : draft}
+              onChange={(e) => setDraft(e.target.value)}
+              disabled={update.isPending || (detail.data.isSensitive && !reveal)}
+            />
           ) : isFeeCurrencyKey(detail.data.key) ? (
-            <FormField
+            <Select
               label="Currency"
               hint="The currency this fee is AGREED in. A non-INR fee is converted to rupees at the rate in force when the charge is taken."
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              disabled={update.isPending}
             >
-              <Select
-                className="font-mono"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                disabled={update.isPending}
-              >
-                {FEE_CURRENCY_OPTIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+              {FEE_CURRENCY_OPTIONS.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
           ) : (
-            <FormField label="Value" hint={typeHint(detail.data.valueType)} error={undefined}>
-              <Input
-                type={inputTypeFor(detail.data.valueType)}
-                value={detail.data.isSensitive && !reveal ? '••••••••' : draft}
-                onChange={(e) => setDraft(e.target.value)}
-                disabled={update.isPending || (detail.data.isSensitive && !reveal)}
-                className="font-mono"
-              />
-            </FormField>
+            <TextField
+              label="Value"
+              hint={typeHint(detail.data.valueType)}
+              type={inputTypeFor(detail.data.valueType)}
+              floatLabel={inputTypeFor(detail.data.valueType) === 'datetime-local'}
+              value={detail.data.isSensitive && !reveal ? '••••••••' : draft}
+              onChange={(e) => setDraft(e.target.value)}
+              disabled={update.isPending || (detail.data.isSensitive && !reveal)}
+            />
           )}
 
           {detail.data.isSensitive && (
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => setReveal((r) => !r)}
-              disabled={update.isPending}
-            >
-              {reveal ? (
-                <>
-                  <EyeOff size={12} /> Mask
-                </>
-              ) : (
-                <>
-                  <Eye size={12} /> Show value
-                </>
-              )}
-            </Button>
-          )}
-
-          {serverError && (
-            <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-2.5 py-1.5 rounded-[5px]">
-              {serverError}
+            <div className="ac-buttons" data-align="start">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                icon={reveal ? <EyeOff size={14} /> : <Eye size={14} />}
+                onClick={() => setReveal((r) => !r)}
+                disabled={update.isPending}
+              >
+                {reveal ? 'Mask' : 'Show value'}
+              </Button>
             </div>
           )}
 
-          <ModalFooter>
+          {serverError && <AcAlert message={serverError} />}
+
+          <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose} disabled={update.isPending}>
               Cancel
             </Button>
-            <Button type="submit" variant="primary" disabled={update.isPending}>
-              {update.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </ModalFooter>
+            <AsyncButton
+              type="submit"
+              variant="primary"
+              state={phaseOf(update.isPending, serverError)}
+              labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+            />
+          </DialogFooter>
         </form>
       )}
-    </Modal>
+    </Dialog>
   );
 }
 

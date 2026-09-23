@@ -1,23 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Copy, Eye } from 'lucide-react';
+import { ArrowLeftRight, Eye, PackageSearch, PencilLine } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { useRevealBankAccount, useSellerDetail, useUpdateSellerInitials } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  PageHeader,
-  Section,
-  SellerStatusBadge,
-} from '@skydrop/ui/components';
+import { Button, buttonClassName } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { RestrictionPanel } from './restriction-panel';
 import { StatusActionPanel } from './status-action-panel';
 import { IdentityCorrectionPanel } from './identity-correction-panel';
@@ -26,6 +18,19 @@ import { CreditAfterConfirmationPanel } from './credit-after-confirmation-panel'
 import { SellerCourierLinksSection } from './seller-courier-links-section';
 import { BulkDequeuePanel } from './bulk-dequeue-panel';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  AcAlert,
+  AcCard,
+  AcDl,
+  AcHeader,
+  AcPage,
+  AcRevealValue,
+  AcSection,
+  SellerStatusChip,
+  phaseOf,
+} from '../../settings/_components/ac-parts';
+
+const CRUMBS = [{ label: 'Sellers', href: '/sellers' }] as const;
 
 // Was a check against the role NAME, which cannot see a role somebody
 // created — the permission is what the server enforces, so it is what
@@ -36,169 +41,165 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
   // Cosmetic (FE-2): the transfer page and its endpoints refuse without it.
   const canTransfer = usePermission('money.wallet.transfer');
 
-  return (
-    <div>
-      <Link
-        href="/sellers"
-        className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
-      >
-        <ArrowLeft size={12} /> Sellers
-      </Link>
-
-      {detail.isLoading ? (
-        <LoadingState label="Loading seller…" />
-      ) : detail.isError ? (
-        <ErrorState
-          message={detail.error?.message ?? 'Failed to load seller.'}
-          retry={() => void detail.refetch()}
-        />
-      ) : !detail.data ? (
-        <ErrorState message="Seller not found." />
-      ) : (
-        <>
-          <PageHeader
-            title={detail.data.companyName}
-            subtitle={
-              <>
-                <span className="font-mono">{detail.data.email}</span>
-                <span className="mx-2">·</span>
-                <span>{detail.data.contactPersonName}</span>
-              </>
-            }
-            action={
-              <div className="flex flex-wrap items-center gap-2">
-                <SellerStatusBadge status={detail.data.status} />
-                <Link
-                  href={`/orders?sellerId=${sellerId}`}
-                  className="text-accent text-sm hover:underline"
-                >
-                  This seller&apos;s orders →
-                </Link>
-                {canTransfer && (
-                  <Link
-                    href={`/wallet-transfers?sellerId=${sellerId}`}
-                    className="text-accent text-sm hover:underline"
-                  >
-                    Debit or credit wallet →
-                  </Link>
-                )}
-              </div>
-            }
+  if (detail.isLoading || detail.isError || !detail.data) {
+    return (
+      <AcPage>
+        <AcHeader crumbs={[...CRUMBS, { label: 'Seller' }]} title="Seller" />
+        {detail.isLoading ? (
+          <SkeletonRows rows={6} cols={2} label="Loading seller…" />
+        ) : detail.isError ? (
+          <ErrorState
+            message={detail.error?.message ?? 'Failed to load seller.'}
+            retry={() => void detail.refetch()}
           />
+        ) : (
+          <ErrorState message="Seller not found." />
+        )}
+      </AcPage>
+    );
+  }
 
-          <Section title="Profile">
-            <Card>
-              <CardBody>
-                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
-                  <dt className="text-text-muted">Short code</dt>
-                  <dd className="text-text-body">
-                    <InitialsRow sellerId={detail.data.id} current={detail.data.initials} />
-                  </dd>
-                  <dt className="text-text-muted">Contact name</dt>
-                  <dd className="text-text-body">{detail.data.contactPersonName}</dd>
-                  <dt className="text-text-muted">Phone</dt>
-                  <dd className="text-text-body font-mono text-xs">{detail.data.phone}</dd>
-                  <dt className="text-text-muted">WhatsApp</dt>
-                  <dd className="text-text-body font-mono text-xs">
-                    {detail.data.whatsapp ?? '—'}
-                  </dd>
-                  <dt className="text-text-muted">Country</dt>
-                  <dd className="text-text-body">{detail.data.countryCode}</dd>
-                  <dt className="text-text-muted">Display currency</dt>
-                  <dd className="text-text-body">{detail.data.displayCurrency}</dd>
-                  <dt className="text-text-muted">Display language</dt>
-                  <dd className="text-text-body">{detail.data.displayLanguage}</dd>
-                  <dt className="text-text-muted">Email verified</dt>
-                  <dd className="text-text-body">
-                    {detail.data.emailVerifiedAt ? (
-                      <span className="text-text-body">
-                        {new Date(detail.data.emailVerifiedAt).toISOString().slice(0, 10)}
-                      </span>
-                    ) : (
-                      <span className="text-text-muted">Pending</span>
-                    )}
-                  </dd>
-                  <dt className="text-text-muted">Approved</dt>
-                  <dd className="text-text-body">
-                    {detail.data.approvedAt
-                      ? new Date(detail.data.approvedAt).toISOString().slice(0, 10)
-                      : '—'}
-                  </dd>
-                  <dt className="text-text-muted">Created</dt>
-                  <dd className="text-text-body font-mono text-xs">
-                    {new Date(detail.data.createdAt).toISOString().slice(0, 16)}
-                  </dd>
-                </dl>
-              </CardBody>
-            </Card>
-          </Section>
+  const d = detail.data;
 
-          {/* The approved identity, and the only way it moves. Sits
-              directly under the profile because that is where an operator
-              reads the wrong value and forms the intent to fix it. */}
-          <Section title="Registered identity">
-            <Card>
-              <CardHeader
-                title="Company name and phone"
-                subtitle="What this account was approved as. The seller cannot change either — a staff correction, recorded with a reason, is the only route."
-              />
-              <CardBody>
-                <IdentityCorrectionPanel
-                  sellerId={detail.data.id}
-                  currentCompanyName={detail.data.companyName}
-                  currentPhone={detail.data.phone}
-                />
-              </CardBody>
-            </Card>
-          </Section>
+  return (
+    <AcPage>
+      <AcHeader
+        crumbs={[...CRUMBS, { label: d.companyName }]}
+        title={d.companyName}
+        meta={
+          <div className="ac-meta">
+            <SellerStatusChip status={d.status} />
+            <span className="ac-muted">
+              <span>{d.email}</span>
+              <span aria-hidden> · </span>
+              <span>{d.contactPersonName}</span>
+            </span>
+          </div>
+        }
+        action={
+          <div className="ac-buttons">
+            <Link
+              href={`/orders?sellerId=${sellerId}`}
+              className={buttonClassName('secondary', 'md')}
+            >
+              <span className="sk-btn__icon" aria-hidden>
+                <PackageSearch size={15} />
+              </span>
+              <span className="sk-btn__label">This seller&apos;s orders →</span>
+            </Link>
+            {canTransfer && (
+              <Link
+                href={`/wallet-transfers?sellerId=${sellerId}`}
+                className={buttonClassName('secondary', 'md')}
+              >
+                <span className="sk-btn__icon" aria-hidden>
+                  <ArrowLeftRight size={15} />
+                </span>
+                <span className="sk-btn__label">Debit or credit wallet →</span>
+              </Link>
+            )}
+          </div>
+        }
+      />
 
-          <Section title="Status">
-            <Card>
-              <CardHeader
-                title="Account status"
-                subtitle="Suspend a seller to immediately revoke their portal access; reapprove to restore it."
-              />
-              <CardBody>
-                <StatusActionPanel
-                  sellerId={detail.data.id}
-                  currentStatus={detail.data.status}
-                  canChangeStatus={canChangeStatus}
-                />
-              </CardBody>
-            </Card>
-          </Section>
+      <AcSection title="Profile">
+        <AcDl
+          items={[
+            {
+              label: 'Short code',
+              value: <InitialsRow sellerId={d.id} current={d.initials} />,
+            },
+            { label: 'Contact name', value: d.contactPersonName },
+            { label: 'Phone', value: <span className="sk-figure">{d.phone}</span> },
+            { label: 'WhatsApp', value: <span className="sk-figure">{d.whatsapp ?? '—'}</span> },
+            { label: 'Country', value: d.countryCode },
+            { label: 'Display currency', value: d.displayCurrency },
+            { label: 'Display language', value: d.displayLanguage },
+            {
+              label: 'Email verified',
+              value: d.emailVerifiedAt ? (
+                <span className="sk-figure">
+                  {new Date(d.emailVerifiedAt).toISOString().slice(0, 10)}
+                </span>
+              ) : (
+                <span className="ac-faint">Pending</span>
+              ),
+            },
+            {
+              label: 'Approved',
+              value: (
+                <span className="sk-figure">
+                  {d.approvedAt ? new Date(d.approvedAt).toISOString().slice(0, 10) : '—'}
+                </span>
+              ),
+            },
+            {
+              label: 'Created',
+              value: (
+                <span className="sk-figure">
+                  {new Date(d.createdAt).toISOString().slice(0, 16)}
+                </span>
+              ),
+            },
+          ]}
+        />
+      </AcSection>
 
-          <Section title="Account hold">
-            <div className="space-y-4">
-              <RestrictionPanel sellerId={detail.data.id} canManage={canChangeStatus} />
-              <BulkDequeuePanel sellerId={detail.data.id} sellerName={detail.data.companyName} />
-            </div>
-          </Section>
+      {/* The approved identity, and the only way it moves. Sits
+          directly under the profile because that is where an operator
+          reads the wrong value and forms the intent to fix it. */}
+      <AcSection title="Registered identity" bare>
+        <AcCard
+          title="Company name and phone"
+          note="What this account was approved as. The seller cannot change either — a staff correction, recorded with a reason, is the only route."
+        >
+          <IdentityCorrectionPanel
+            sellerId={d.id}
+            currentCompanyName={d.companyName}
+            currentPhone={d.phone}
+          />
+        </AcCard>
+      </AcSection>
 
-          <Section title="Bank account">
-            <Card>
-              <CardHeader
-                title="Reveal bank account number"
-                subtitle="Decrypts + audits HIGH. Use only when copying into a bank portal for a manual withdrawal."
-              />
-              <CardBody>
-                <RevealBankAccountPanel sellerId={detail.data.id} />
-              </CardBody>
-            </Card>
-          </Section>
+      <AcSection title="Status" bare>
+        <AcCard
+          title="Account status"
+          note="Suspend a seller to immediately revoke their portal access; reapprove to restore it."
+        >
+          <StatusActionPanel
+            sellerId={d.id}
+            sellerName={d.companyName}
+            currentStatus={d.status}
+            canChangeStatus={canChangeStatus}
+          />
+        </AcCard>
+      </AcSection>
 
-          {/* SET-1 per-seller overrides. Lives here rather than on its own
-              page because "what is this seller on" is a question you ask
-              while looking at the seller. */}
-          <SellerSettingsSection sellerId={detail.data.id} />
-          {/* CACC-1 weighted routing: which courier accounts carry this
-              seller's parcels. Beside the settings because it is the same
-              question — what has been agreed with this seller. */}
-          <SellerCourierLinksSection sellerId={detail.data.id} />
-          <CreditAfterConfirmationPanel sellerId={detail.data.id} />
-        </>
-      )}
-    </div>
+      <AcSection title="Account hold" bare>
+        <RestrictionPanel sellerId={d.id} canManage={canChangeStatus} />
+        <BulkDequeuePanel sellerId={d.id} sellerName={d.companyName} />
+      </AcSection>
+
+      <AcSection title="Bank account" bare>
+        <AcCard
+          title="Reveal bank account number"
+          note="Decrypts + audits HIGH. Use only when copying into a bank portal for a manual withdrawal."
+          tone="warn"
+        >
+          <RevealBankAccountPanel sellerId={d.id} />
+        </AcCard>
+      </AcSection>
+
+      {/* SET-1 per-seller overrides. Lives here rather than on its own
+          page because "what is this seller on" is a question you ask
+          while looking at the seller. */}
+      <SellerSettingsSection sellerId={d.id} />
+      {/* CACC-1 weighted routing: which courier accounts carry this
+          seller's parcels. Beside the settings because it is the same
+          question — what has been agreed with this seller. */}
+      <SellerCourierLinksSection sellerId={d.id} />
+      <CreditAfterConfirmationPanel sellerId={d.id} />
+    </AcPage>
   );
 }
 
@@ -213,7 +214,6 @@ function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): Re
   const [reason, setReason] = useState('');
   const [revealed, setRevealed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const reveal = useRevealBankAccount(sellerId);
 
   async function onReveal(): Promise<void> {
@@ -229,59 +229,35 @@ function RevealBankAccountPanel({ sellerId }: { readonly sellerId: string }): Re
     }
   }
 
-  async function onCopy(): Promise<void> {
-    if (!revealed) return;
-    try {
-      await navigator.clipboard.writeText(revealed);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2_500);
-    } catch {
-      // Falls back to manual selection in the input.
-    }
-  }
-
   return (
-    <div className="space-y-3">
-      <FormField
+    <div className="ac-form">
+      <TextField
         label="Reason for revealing (recorded in the audit log)"
         hint="Optional but recommended"
-      >
-        <Input
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          maxLength={200}
-          placeholder="e.g. manual withdrawal via DBBL portal — TRF-2026-06-03"
-          disabled={reveal.isPending || !canReveal}
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        maxLength={200}
+        placeholder="e.g. manual withdrawal via DBBL portal — TRF-2026-06-03"
+        disabled={reveal.isPending || !canReveal}
+      />
+      <div className="ac-buttons" data-align="start">
+        <AsyncButton
+          variant="primary"
+          size="md"
+          icon={<Eye size={15} />}
+          state={phaseOf(reveal.isPending, error)}
+          labels={{
+            idle: 'Reveal account number',
+            busy: 'Revealing…',
+            error: 'Not revealed',
+          }}
+          onClick={() => void onReveal()}
         />
-      </FormField>
-      <Button
-        variant="primary"
-        size="md"
-        disabled={reveal.isPending}
-        onClick={() => void onReveal()}
-      >
-        <Eye size={12} /> {reveal.isPending ? 'Revealing…' : 'Reveal account number'}
-      </Button>
+      </div>
 
-      {revealed !== null && (
-        <div className="mt-2 flex items-stretch gap-2">
-          <input
-            readOnly
-            value={revealed}
-            onFocus={(e) => e.currentTarget.select()}
-            className="flex-1 px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm font-mono focus:border-accent focus:outline-none"
-          />
-          <Button type="button" variant="secondary" size="md" onClick={() => void onCopy()}>
-            <Copy size={12} /> {copied ? 'Copied!' : 'Copy'}
-          </Button>
-        </div>
-      )}
+      {revealed !== null && <AcRevealValue value={revealed} label="Bank account number" />}
 
-      {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
-          {error}
-        </div>
-      )}
+      {error && <AcAlert message={error} />}
     </div>
   );
 }
@@ -315,12 +291,13 @@ function InitialsRow({
 
   if (!editing) {
     return (
-      <span className="inline-flex items-center gap-2">
-        <span className="font-mono">{current ?? '—'}</span>
+      <div className="ac-inline">
+        <span className="sk-ident">{current ?? '—'}</span>
         {canEdit && (
-          <button
-            type="button"
-            className="text-accent text-xs hover:underline"
+          <Button
+            variant="ghost"
+            size="sm"
+            icon={<PencilLine size={14} />}
             onClick={() => {
               setValue(current ?? '');
               setError(null);
@@ -328,9 +305,9 @@ function InitialsRow({
             }}
           >
             Change
-          </button>
+          </Button>
         )}
-      </span>
+      </div>
     );
   }
 
@@ -347,21 +324,26 @@ function InitialsRow({
   };
 
   return (
-    <span className="inline-flex flex-wrap items-center gap-2">
-      <input
+    <div className="ac-inline-edit">
+      <TextField
         value={value}
         onChange={(e) => setValue(e.target.value)}
         maxLength={4}
         aria-label="Seller short code"
-        className="border-border-strong bg-surface text-text-body w-20 rounded-[5px] border px-2 py-1 font-mono text-sm"
+        inputClassName="sk-ident"
       />
-      <Button variant="primary" size="sm" onClick={save} disabled={value.trim().length < 2}>
-        Save
-      </Button>
+      <AsyncButton
+        variant="primary"
+        size="sm"
+        state={phaseOf(rename.isPending, error)}
+        labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+        onClick={save}
+        disabled={value.trim().length < 2}
+      />
       <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
         Cancel
       </Button>
-      {error !== null && <span className="text-critical text-xs">{error}</span>}
-    </span>
+      {error !== null && <AcAlert message={error} />}
+    </div>
   );
 }

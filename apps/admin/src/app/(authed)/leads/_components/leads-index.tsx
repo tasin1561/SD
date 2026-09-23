@@ -2,23 +2,15 @@
 
 import { useState, type ReactElement } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  Input,
-  LoadingState,
-  PageHeader,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Toolbar,
-  Tr,
-} from '@skydrop/ui/components';
+import { Search } from 'lucide-react';
+import { Tabs } from '@skydrop/ui/app/tabs';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AcCard, AcFact, AcHeader, AcPage, type AcTone } from '../../settings/_components/ac-parts';
 import { inviteLeadStatusKind } from '@skydrop/ui/status';
 import { InviteLeadStatus } from '@skydrop/db';
 import {
@@ -74,6 +66,14 @@ function waited(iso: string): string {
   return `${Math.round(hours / 24)}d`;
 }
 
+/** How loud the wait reads: a lead goes cold fast. Colour only — the words carry it too. */
+function waitTone(iso: string): AcTone {
+  const hours = (Date.now() - new Date(iso).getTime()) / 3_600_000;
+  if (hours >= 72) return 'bad';
+  if (hours >= 24) return 'warn';
+  return undefined;
+}
+
 export function LeadsIndex(): ReactElement {
   const [tab, setTab] = useState(0);
   const [search, setSearch] = useState('');
@@ -113,147 +113,133 @@ export function LeadsIndex(): ReactElement {
     // A dense table is the opposite — every extra pixel goes into the
     // columns, and the contact column in particular was truncating names
     // while a third of the screen sat unused.
-    <div>
-      <PageHeader
+    <AcPage>
+      <AcHeader
         title="Invite requests"
         subtitle="People who asked to be let into the beta from the landing page. Newest first — a lead goes cold fast."
       />
 
-      <Toolbar>
-        <div className="flex flex-wrap gap-1.5">
-          {TABS.map((t, i) => {
+      <div className="ac-toolbar">
+        <Tabs
+          label="Invite request status"
+          size="sm"
+          value={String(tab)}
+          onChange={(id) => {
+            setTab(Number(id));
+            setPage(1);
+          }}
+          items={TABS.map((t, i) => {
             const count = t.status ? (q.data?.counts[t.status] ?? 0) : undefined;
-            return (
-              <Button
-                key={t.label}
-                variant={i === tab ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => {
-                  setTab(i);
-                  setPage(1);
-                }}
-              >
-                {t.label}
-                {count !== undefined && count > 0 ? ` (${count})` : ''}
-              </Button>
-            );
+            return {
+              id: String(i),
+              label: t.label,
+              ...(count !== undefined && count > 0 ? { count } : {}),
+            };
           })}
-        </div>
-        <Input
+        />
+        <TextField
+          icon={<Search size={15} />}
+          aria-label="Search requests"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
             if (page > 1) setPage(1);
           }}
           placeholder="Company, name, email or phone"
-          className="sm:w-72"
         />
-      </Toolbar>
+      </div>
 
       {q.isLoading ? (
-        <LoadingState label="Loading requests…" />
+        <SkeletonRows rows={6} cols={6} label="Loading requests…" />
       ) : q.isError ? (
         <ErrorState
           message={q.error?.message ?? 'Could not load requests.'}
           retry={() => void q.refetch()}
         />
       ) : items.length === 0 ? (
-        <Card>
-          <EmptyState
-            title={search ? 'Nothing matches that' : 'No requests here'}
-            description={
-              search
-                ? 'Try a shorter search — it matches company, name, email and phone.'
-                : 'New requests from the landing page appear here the moment someone submits the form, and every super-admin is emailed.'
-            }
-          />
-        </Card>
+        <EmptyState
+          title={search ? 'Nothing matches that' : 'No requests here'}
+          description={
+            search
+              ? 'Try a shorter search — it matches company, name, email and phone.'
+              : 'New requests from the landing page appear here the moment someone submits the form, and every super-admin is emailed.'
+          }
+        />
       ) : (
-        <Table wrapperClassName="rounded-t-none border-t-0">
-          <THead>
-            <Tr>
-              <Th>Company</Th>
-              <Th>Contact</Th>
-              <Th>Route</Th>
-              <Th>Volume</Th>
-              <Th>Status</Th>
-              <Th align="right">Waiting</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {items.map((lead) => {
-              const dir =
-                lead.shippingDirection === null ? null : DIRECTION_SHORT[lead.shippingDirection];
-              return (
-                <Tr key={lead.id} onActivate={() => setSelected(lead)}>
-                  <Td>
-                    <span className="text-text-bright">{lead.companyName}</span>
-                    {lead.submissionCount > 1 && (
-                      <span className="ml-2 text-[var(--status-pending-fg)] text-xs">
-                        ×{lead.submissionCount}
-                      </span>
-                    )}
-                  </Td>
-                  <Td className="text-text-muted">
-                    <div className="truncate">{lead.fullName}</div>
-                    <div className="text-text-faint truncate text-xs">{lead.email}</div>
-                  </Td>
-                  <Td className="whitespace-nowrap">
-                    {dir === undefined || dir === null ? (
-                      <span className="text-text-faint">—</span>
-                    ) : (
-                      <span className={dir.unserved ? 'text-[var(--status-rto-fg)]' : ''}>
-                        {dir.text}
-                      </span>
-                    )}
-                  </Td>
-                  <Td className="text-text-muted whitespace-nowrap">{lead.monthlyOrders ?? '—'}</Td>
-                  <Td>
-                    <StatusBadge
-                      kind={inviteLeadStatusKind(lead.status as InviteLeadStatus)}
-                      label={lead.status.toLowerCase()}
-                    />
-                  </Td>
-                  <Td align="right" className="text-text-muted tabular-nums whitespace-nowrap">
-                    {waited(lead.createdAt)}
-                  </Td>
-                </Tr>
-              );
-            })}
-          </TBody>
-        </Table>
+        <AcCard flush>
+          <Table caption="Invite requests">
+            <THead>
+              <Tr>
+                <Th>Company</Th>
+                <Th>Contact</Th>
+                <Th>Route</Th>
+                <Th>Volume</Th>
+                <Th>Status</Th>
+                <Th align="right">Waiting</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {items.map((lead) => {
+                const dir =
+                  lead.shippingDirection === null ? null : DIRECTION_SHORT[lead.shippingDirection];
+                return (
+                  <Tr key={lead.id} onActivate={() => setSelected(lead)}>
+                    <Td>
+                      <span className="ac-cell-main">{lead.companyName}</span>
+                      {lead.submissionCount > 1 && (
+                        <>
+                          {' '}
+                          <AcFact tone="warn">×{lead.submissionCount}</AcFact>
+                        </>
+                      )}
+                    </Td>
+                    <Td>
+                      <span className="ac-text">{lead.fullName}</span>
+                      <span className="ac-cell-sub">{lead.email}</span>
+                    </Td>
+                    <Td>
+                      {dir === undefined || dir === null ? (
+                        <span className="ac-faint">—</span>
+                      ) : dir.unserved ? (
+                        <AcFact tone="bad">{dir.text}</AcFact>
+                      ) : (
+                        <span>{dir.text}</span>
+                      )}
+                    </Td>
+                    <Td>
+                      <span className="ac-muted">{lead.monthlyOrders ?? '—'}</span>
+                    </Td>
+                    <Td>
+                      <StatusChip
+                        kind={inviteLeadStatusKind(lead.status as InviteLeadStatus)}
+                        label={lead.status.toLowerCase()}
+                        size="sm"
+                      />
+                    </Td>
+                    <Td align="right">
+                      <AcFact tone={waitTone(lead.createdAt)}>
+                        <span className="sk-figure">{waited(lead.createdAt)}</span>
+                      </AcFact>
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </TBody>
+          </Table>
+        </AcCard>
       )}
 
       {total > pageSize && (
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-          <span className="text-text-muted">
-            {total} request{total === 1 ? '' : 's'}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage(Math.max(1, page - 1))}
-            >
-              Previous
-            </Button>
-            <span className="text-text-faint text-xs tabular-nums">
-              {page} / {lastPage}
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={page >= lastPage}
-              onClick={() => setPage(page + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(next) => setPage(Math.min(Math.max(1, next), lastPage))}
+          label="Invite request pages"
+        />
       )}
 
       <LeadDrawer lead={selected} onClose={() => setSelected(null)} />
-    </div>
+    </AcPage>
   );
 }

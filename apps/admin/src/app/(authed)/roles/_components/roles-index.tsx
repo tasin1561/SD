@@ -1,22 +1,14 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Lock, Users } from 'lucide-react';
-import {
-  Button,
-  ConfirmDialog,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Toolbar,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Lock, PencilLine, Plus, Trash2, Users } from 'lucide-react';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AcCard, AcFact, AcHeader, AcPage } from '../../settings/_components/ac-parts';
 import { useDeleteRole, usePermissionCatalogue, useRoles, type RoleView } from '@/lib/rbac-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { RoleEditor } from './role-editor';
@@ -62,31 +54,36 @@ export function RolesIndex(): ReactElement {
   }
 
   return (
-    <div>
-      <PageHeader
+    <AcPage>
+      <AcHeader
         title="Roles"
         subtitle="A role is a set of permissions. Create as many as the work needs — the permissions themselves are fixed by the system."
+        meta={
+          <div className="ac-meta">
+            <AcFact>
+              <span className="sk-figure">{roles.data?.length ?? 0}</span> role
+              {roles.data?.length === 1 ? '' : 's'}
+            </AcFact>
+          </div>
+        }
+        action={
+          <Button
+            variant="primary"
+            size="md"
+            icon={<Plus size={15} />}
+            disabled={catalogue.data === undefined}
+            onClick={() => {
+              setEditing(null);
+              setOpen(true);
+            }}
+          >
+            New role
+          </Button>
+        }
       />
 
-      <Toolbar>
-        <span className="text-text-muted text-sm">
-          {roles.data?.length ?? 0} role{roles.data?.length === 1 ? '' : 's'}
-        </span>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={catalogue.data === undefined}
-          onClick={() => {
-            setEditing(null);
-            setOpen(true);
-          }}
-        >
-          New role
-        </Button>
-      </Toolbar>
-
       {roles.isLoading || catalogue.isLoading ? (
-        <LoadingState label="Loading roles…" />
+        <SkeletonRows rows={5} cols={4} label="Loading roles…" />
       ) : roles.isError || catalogue.isError ? (
         <ErrorState
           message={serverVerdict(roles.error ?? catalogue.error, 'Could not load roles.')}
@@ -96,65 +93,71 @@ export function RolesIndex(): ReactElement {
           }}
         />
       ) : (
-        <Table wrapperClassName="rounded-t-none border-t-0">
-          <THead>
-            <Tr>
-              <Th>Role</Th>
-              <Th>Covers</Th>
-              <Th align="right">People</Th>
-              <Th align="right">Actions</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {(roles.data ?? []).map((role) => (
-              <Tr key={role.id}>
-                <Td>
-                  <span className="text-text-bright flex items-center gap-1.5">
-                    {role.name}
-                    {role.isSuperAdmin && <Lock size={12} className="text-text-faint" />}
-                  </span>
-                  <span className="text-text-faint block text-xs">
-                    {role.description ?? role.key}
-                  </span>
-                </Td>
-                <Td className="text-text-muted">
-                  {role.isSuperAdmin
-                    ? 'Everything, including permissions added later'
-                    : `${role.permissions.length} permission${role.permissions.length === 1 ? '' : 's'}`}
-                </Td>
-                <Td align="right" className="text-text-muted tabular-nums">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Users size={12} />
-                    {role.staffCount}
-                  </span>
-                </Td>
-                <Td align="right">
-                  <div className="flex justify-end gap-1.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={role.isSuperAdmin}
-                      onClick={() => {
-                        setEditing(role);
-                        setOpen(true);
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={role.isSuperAdmin || role.isSystem || role.staffCount > 0}
-                      onClick={() => onDelete(role)}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </Td>
+        <AcCard flush>
+          <Table caption="Roles">
+            <THead>
+              <Tr>
+                <Th>Role</Th>
+                <Th>Covers</Th>
+                <Th align="right">People</Th>
+                <Th align="right">Actions</Th>
               </Tr>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {(roles.data ?? []).map((role) => (
+                <Tr key={role.id}>
+                  <Td>
+                    <span className="ac-inline ac-cell-main">
+                      {role.name}
+                      {role.isSuperAdmin && (
+                        <Lock size={13} aria-label="Cannot be changed" className="ac-faint" />
+                      )}
+                    </span>
+                    <span className="ac-cell-sub">{role.description ?? role.key}</span>
+                  </Td>
+                  <Td>
+                    <span className="ac-muted">
+                      {role.isSuperAdmin
+                        ? 'Everything, including permissions added later'
+                        : `${role.permissions.length} permission${role.permissions.length === 1 ? '' : 's'}`}
+                    </span>
+                  </Td>
+                  <Td align="right">
+                    <span className="ac-inline sk-figure">
+                      <Users size={13} aria-hidden />
+                      {role.staffCount}
+                    </span>
+                  </Td>
+                  <Td align="right">
+                    <div className="ac-buttons">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<PencilLine size={14} />}
+                        disabled={role.isSuperAdmin}
+                        onClick={() => {
+                          setEditing(role);
+                          setOpen(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<Trash2 size={14} />}
+                        disabled={role.isSuperAdmin || role.isSystem || role.staffCount > 0}
+                        onClick={() => onDelete(role)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </AcCard>
       )}
 
       <ConfirmDialog
@@ -163,10 +166,10 @@ export function RolesIndex(): ReactElement {
           if (!o) setPendingDelete(null);
         }}
         title={`Delete ${pendingDelete?.name ?? 'this role'}?`}
-        description="This cannot be undone. Nobody holds the role now, so no one loses access."
+        entity={pendingDelete?.name ?? 'This role'}
+        consequence="This cannot be undone. Nobody holds the role now, so no one loses access."
         confirmLabel="Delete role"
-        confirmVariant="destructive"
-        disabled={remove.isPending}
+        destructive
         onConfirm={confirmDelete}
       />
 
@@ -178,6 +181,6 @@ export function RolesIndex(): ReactElement {
           onClose={() => setOpen(false)}
         />
       )}
-    </div>
+    </AcPage>
   );
 }
