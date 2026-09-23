@@ -2,23 +2,16 @@
 
 import Link from 'next/link';
 import type { ReactElement } from 'react';
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Money,
-  Section,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
 import { isStoreWalletCredit, storeWalletDirectionLabel } from '@skydrop/ui/status';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useStoreWalletEntries } from '@/lib/store-wallet-hooks';
+import { RmAlert, RmDir, RmSection } from './rm-parts';
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
@@ -28,6 +21,10 @@ function when(iso: string): string {
  * Every movement of the store's wallet, newest first, a page at a time.
  * "Show older" asks for the entries before the last one shown, so a busy
  * store's history is never cut off at a fixed number of rows.
+ *
+ * The direction is shown three ways — the arrow chip, the sign and the
+ * colour of the figure — read from the ONE credit switch in
+ * `@skydrop/ui/status`, never a local map.
  */
 export function LedgerSection({
   sellerCompanyName,
@@ -43,9 +40,10 @@ export function LedgerSection({
   const olderFailed = entries.isFetchNextPageError ? entries.failureReason : null;
 
   return (
-    <Section title="Every movement" subtitle="Newest first.">
+    <RmSection>
+      <SectionHeading title="Every movement" note="Newest first." />
       {entries.isPending ? (
-        <LoadingState label="Loading the ledger" rows={4} />
+        <SkeletonRows rows={4} cols={4} label="Loading the ledger" />
       ) : entries.isError ? (
         <ErrorState
           message={serverVerdict(entries.failureReason)}
@@ -55,7 +53,7 @@ export function LedgerSection({
         <EmptyState title="Nothing has moved yet" description={emptyDescription} />
       ) : (
         <>
-          <Table>
+          <Table caption="Wallet ledger">
             <THead>
               <Tr>
                 <Th>When</Th>
@@ -65,60 +63,55 @@ export function LedgerSection({
               </Tr>
             </THead>
             <TBody>
-              {items.map((e) => (
-                <Tr key={e.id}>
-                  <Td className="text-text-muted text-xs">{when(e.createdAt)}</Td>
-                  <Td>
-                    <div>{storeWalletDirectionLabel(e.direction, sellerCompanyName)}</div>
-                    {e.linkedOrderId !== null ? (
-                      <Link
-                        href={`/orders/${e.linkedOrderId}`}
-                        className="text-accent text-xs hover:underline"
-                      >
-                        See the order
-                      </Link>
-                    ) : null}
-                    {e.note !== null ? (
-                      <div className="text-text-faint text-xs">{e.note}</div>
-                    ) : null}
-                  </Td>
-                  <Td align="right">
-                    <Money
-                      amount={e.amountInr}
-                      direction={isStoreWalletCredit(e.direction) ? 'credit' : 'debit'}
-                    />
-                  </Td>
-                  <Td align="right">
-                    <Money amount={e.runningBalanceAfterInr} />
-                  </Td>
-                </Tr>
-              ))}
+              {items.map((e) => {
+                const credit = isStoreWalletCredit(e.direction);
+                return (
+                  <Tr key={e.id}>
+                    <Td className="rm-when sk-figure">{when(e.createdAt)}</Td>
+                    <Td>
+                      <div className="rm-type">
+                        <RmDir credit={credit} />
+                        <div className="rm-type__text">
+                          <div>{storeWalletDirectionLabel(e.direction, sellerCompanyName)}</div>
+                          {e.linkedOrderId !== null ? (
+                            <Link href={`/orders/${e.linkedOrderId}`} className="rm-ref">
+                              See the order
+                            </Link>
+                          ) : null}
+                          {e.note !== null ? <div className="rm-faint">{e.note}</div> : null}
+                        </div>
+                      </div>
+                    </Td>
+                    <Td align="right">
+                      <Money amount={e.amountInr} direction={credit ? 'credit' : 'debit'} />
+                    </Td>
+                    <Td align="right">
+                      <Money amount={e.runningBalanceAfterInr} />
+                    </Td>
+                  </Tr>
+                );
+              })}
             </TBody>
           </Table>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
-            <p className="text-text-muted text-xs">
+          <div className="rm-more">
+            <p className="rm-muted">
               {entries.hasNextPage
                 ? `Showing the latest ${items.length} movements.`
                 : `Showing all ${items.length} movements.`}
             </p>
             {entries.hasNextPage ? (
-              <Button
+              <AsyncButton
                 variant="secondary"
                 size="sm"
-                disabled={entries.isFetchingNextPage}
+                state={entries.isFetchingNextPage ? 'busy' : 'idle'}
+                labels={{ idle: 'Show older', busy: 'Loading…' }}
                 onClick={() => void entries.fetchNextPage()}
-              >
-                {entries.isFetchingNextPage ? 'Loading…' : 'Show older'}
-              </Button>
+              />
             ) : null}
           </div>
-          {olderFailed !== null ? (
-            <p role="alert" className="text-critical mt-2 text-sm">
-              {serverVerdict(olderFailed)}
-            </p>
-          ) : null}
+          {olderFailed !== null ? <RmAlert>{serverVerdict(olderFailed)}</RmAlert> : null}
         </>
       )}
-    </Section>
+    </RmSection>
   );
 }

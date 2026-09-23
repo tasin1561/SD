@@ -1,19 +1,16 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ConfirmDialog,
-  FormField,
-  Input,
-  Money,
-  useToast,
-} from '@skydrop/ui/components';
+import { HandCoins } from 'lucide-react';
+// The legacy toaster: this card's test mounts only the legacy `<Toaster>`
+// (and the app layout mounts both), so the call stays on the legacy hook.
+import { Money, useToast } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useRequestStoreWithdrawal, type StoreWalletSummary } from '@/lib/store-wallet-hooks';
+import { RmAlert } from './rm-parts';
 
 /**
  * Ask Skydrop to pay out (RS-6). The form is checked by a person before it
@@ -66,86 +63,105 @@ export function WithdrawCard({ summary }: { readonly summary: StoreWalletSummary
     }
   }
 
+  const amountShown = amount.trim() === '' ? '0' : amount.trim();
+
   return (
-    <Card>
-      <CardHeader
-        title="Withdraw"
-        subtitle={
-          summary.withdrawableInr === null ? (
-            'Ask Skydrop to pay out your balance.'
-          ) : (
-            <>
-              Ask Skydrop to pay out up to{' '}
-              <Money amount={summary.withdrawableInr} convert={false} />. Nothing leaves the wallet
-              until they pay it.
-            </>
-          )
-        }
-      />
-      <CardBody>
-        <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <FormField label="Amount (₹)" htmlFor="wd-amount" required>
-            <Input
-              id="wd-amount"
-              inputMode="decimal"
-              required
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Name on the account" htmlFor="wd-name" required>
-            <Input
-              id="wd-name"
-              required
-              value={payeeName}
-              onChange={(e) => setPayeeName(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Account number" htmlFor="wd-account" required>
-            <Input
-              id="wd-account"
-              required
-              inputMode="numeric"
-              value={account}
-              onChange={(e) => setAccount(e.target.value)}
-            />
-          </FormField>
-          <FormField label="IFSC" htmlFor="wd-ifsc" required>
-            <Input id="wd-ifsc" required value={ifsc} onChange={(e) => setIfsc(e.target.value)} />
-          </FormField>
-          <FormField label="Bank" htmlFor="wd-bank" required>
-            <Input id="wd-bank" required value={bank} onChange={(e) => setBank(e.target.value)} />
-          </FormField>
-          <FormField label="Note (optional)" htmlFor="wd-note">
-            <Input id="wd-note" value={note} onChange={(e) => setNote(e.target.value)} />
-          </FormField>
-          {error !== null ? (
-            <p role="alert" className="text-critical text-sm md:col-span-2">
-              {error}
-            </p>
-          ) : null}
-          <div className="md:col-span-2">
-            <Button type="submit" variant="primary" size="md" disabled={request.isPending}>
-              {request.isPending ? 'Asking…' : 'Ask to withdraw'}
-            </Button>
+    <section className="rm-card" aria-labelledby="wd-title">
+      <div className="rm-card__head">
+        <span className="rm-card__chip" aria-hidden>
+          <HandCoins size={18} />
+        </span>
+        <div className="rm-card__titles">
+          <h2 id="wd-title" className="rm-card__title">
+            Withdraw
+          </h2>
+          <div className="rm-card__sub">
+            {summary.withdrawableInr === null ? (
+              'Ask Skydrop to pay out your balance.'
+            ) : (
+              <>
+                Ask Skydrop to pay out up to{' '}
+                <Money amount={summary.withdrawableInr} convert={false} />. Nothing leaves the
+                wallet until they pay it.
+              </>
+            )}
           </div>
-        </form>
-      </CardBody>
+        </div>
+      </div>
+      <form onSubmit={onSubmit} className="rm-form">
+        <TextField
+          id="wd-amount"
+          label="Amount (₹)"
+          inputMode="decimal"
+          required
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+        />
+        <TextField
+          id="wd-name"
+          label="Name on the account"
+          required
+          value={payeeName}
+          onChange={(e) => setPayeeName(e.target.value)}
+        />
+        <TextField
+          id="wd-account"
+          label="Account number"
+          required
+          inputMode="numeric"
+          inputClassName="sk-ident"
+          value={account}
+          onChange={(e) => setAccount(e.target.value)}
+        />
+        <TextField
+          id="wd-ifsc"
+          label="IFSC"
+          required
+          inputClassName="sk-ident"
+          value={ifsc}
+          onChange={(e) => setIfsc(e.target.value)}
+        />
+        <TextField
+          id="wd-bank"
+          label="Bank"
+          required
+          value={bank}
+          onChange={(e) => setBank(e.target.value)}
+        />
+        <TextField
+          id="wd-note"
+          label="Note (optional)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+        {error !== null ? <RmAlert>{error}</RmAlert> : null}
+        <div className="rm-form__full rm-form__actions">
+          <AsyncButton
+            type="submit"
+            variant="primary"
+            size="md"
+            icon={<HandCoins size={15} />}
+            state={request.isPending ? 'busy' : 'idle'}
+            labels={{ idle: 'Ask to withdraw', busy: 'Asking…' }}
+          />
+        </div>
+      </form>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
         title={
           <>
-            Ask Skydrop to pay{' '}
-            <Money amount={amount.trim() === '' ? '0' : amount.trim()} convert={false} /> to{' '}
-            {payeeName.trim()} · {account.trim()}?
+            Ask Skydrop to pay <Money amount={amountShown} convert={false} /> to {payeeName.trim()}{' '}
+            · {account.trim()}?
           </>
         }
-        description={`${bank.trim()} · IFSC ${ifsc.trim()}. Check the account number — money sent to the wrong one is very hard to get back.`}
+        entity={`${payeeName.trim()} · ${account.trim()}`}
+        entityIsIdentifier={false}
+        amount={<Money amount={amountShown} convert={false} />}
+        consequence={`${bank.trim()} · IFSC ${ifsc.trim()}. Check the account number — money sent to the wrong one is very hard to get back.`}
         confirmLabel="Ask to withdraw"
-        disabled={request.isPending}
-        onConfirm={() => void send()}
+        onConfirm={send}
       />
-    </Card>
+    </section>
   );
 }

@@ -1,0 +1,448 @@
+/* Reseller money + catalogue area (/wallet, /expenses, /reports,
+   /reports/analysis, /terms, /catalogue) — layout and the few area-only
+   pieces. Tokens only. The primitives (KpiCard, Table, Dialog, TextField …)
+   carry their own CSS; this file arranges them. Every grid declares its
+   columns with minmax(0, …) so nothing sizes to its content and no page
+   scrolls sideways at 320–390 px. */
+
+.rm-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-6);
+  min-width: 0;
+}
+.rm-page > .sk-ph {
+  margin-bottom: 0;
+}
+.rm-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rm-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* ── KPI rows ─────────────────────────────────────────────────────────── */
+.rm-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rm-kpis--3 {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+.rm-kpi-skel {
+  display: block;
+  width: 100%;
+}
+
+/* ── Cards ────────────────────────────────────────────────────────────── */
+.rm-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+}
+.rm-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rm-card__chip {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--accent-fg);
+}
+.rm-card__titles {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.rm-card__title {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-lg);
+  font-weight: var(--fw-semibold);
+}
+.rm-card__sub {
+  margin: 2px 0 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.rm-card__aside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* ── Forms ────────────────────────────────────────────────────────────── */
+.rm-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+@media (min-width: 768px) {
+  .rm-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1024px) {
+  .rm-form--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.rm-form__full {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.rm-form__end {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+}
+.rm-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* Date windows and period pickers above a list. */
+.rm-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 220px));
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rm-filters--wide {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 260px));
+}
+
+/* ── Text ─────────────────────────────────────────────────────────────── */
+.rm-muted {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.rm-faint {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+}
+.rm-when {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.rm-strong {
+  color: var(--fg-strong);
+  font-weight: var(--fw-semibold);
+}
+.rm-struck {
+  text-decoration: line-through;
+  color: var(--fg-muted);
+}
+.rm-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap);
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+}
+.rm-link:hover {
+  text-decoration: underline;
+}
+.rm-inline-link {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--sky);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  text-decoration: none;
+}
+.rm-inline-link:hover {
+  text-decoration: underline;
+}
+.rm-inline-link:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.rm-ref {
+  color: var(--sky);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+.rm-ref:hover {
+  text-decoration: underline;
+}
+
+/* ── Ledger direction ─────────────────────────────────────────────────── */
+.rm-type {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.rm-type__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+/* Which way the money went: an arrow in a tinted chip, beside the sign
+   and colour the <Money> figure already carries — never colour alone. */
+.rm-dir {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+}
+.rm-dir[data-dir='credit'] {
+  background: var(--green-tint);
+  color: var(--money-credit);
+}
+.rm-dir[data-dir='debit'] {
+  background: var(--red-tint);
+  color: var(--money-debit);
+}
+.rm-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+/* ── A state chip whose words are shown exactly as given ──────────────── */
+.rm-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 22px;
+  padding: 1px 8px;
+  border: 1px solid var(--rm-state-line);
+  border-radius: var(--r-pill);
+  background: var(--rm-state-bg);
+  color: var(--rm-state-fg);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  line-height: 1.3;
+}
+.rm-state__icon {
+  flex: none;
+}
+
+/* ── Callouts and alerts ──────────────────────────────────────────────── */
+.rm-callout {
+  display: flex;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.rm-callout[data-tone='critical'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.rm-callout[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.rm-callout[data-tone='info'] {
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.rm-callout__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+}
+.rm-callout__body {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.rm-callout__body p {
+  margin: 0;
+}
+.rm-callout__title {
+  font-weight: var(--fw-semibold);
+}
+
+/* ── Top-up: the chosen account's details ─────────────────────────────── */
+.rm-bank {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* ── Catalogue product cell ───────────────────────────────────────────── */
+.rm-product {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.rm-product__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.rm-product__title {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.rm-product__desc {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.rm-range {
+  white-space: nowrap;
+}
+
+/* ── Terms ────────────────────────────────────────────────────────────── */
+.rm-terms {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.rm-terms__block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+.rm-terms__heading {
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.rm-terms__list {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rm-terms__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.rm-terms__tick {
+  flex: none;
+  margin-top: 2px;
+  color: var(--accent-fg);
+}
+.rm-quote {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 3px solid var(--accent-line);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+
+/* ── Reports ──────────────────────────────────────────────────────────── */
+.rm-count {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-regular);
+}
+.rm-cash {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-5);
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.rm-cash__fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rm-sub-heading {
+  margin: var(--sp-2) 0 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.rm-overdue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--saffron-text);
+}
+
+/* Two cards side by side once there is room (top-up + withdraw). */
+.rm-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--sp-4);
+  align-items: start;
+  min-width: 0;
+}
+.rm-block {
+  display: block;
+}
+.rm-small {
+  font-size: var(--fs-xs);
+}
