@@ -1,19 +1,18 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { CircleAlert, FileText, Link2, Tag, Webhook } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useStoreWebhookEvents, useUpdateStoreWebhook, type StoreWebhook } from '@/lib/order-hooks';
+import { RdCallout, phaseOf } from '../../settings/_components/rd-parts';
 
 /** The events a webhook starts with, when they exist in the offered list. */
 export const DEFAULT_EVENTS: readonly string[] = [
@@ -35,34 +34,29 @@ export function EventPicker({
   readonly onChange: (next: string[]) => void;
 }): ReactElement {
   const events = useStoreWebhookEvents();
-  if (events.isPending) return <LoadingState label="Loading the events" rows={2} />;
+  if (events.isPending) return <SkeletonRows label="Loading the events" rows={2} cols={2} />;
   if (events.isError) {
     return <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />;
   }
   const chosen = new Set(value);
   return (
-    <fieldset className="border-border rounded-lg border p-3">
-      <legend className="text-text-body px-1 text-sm font-medium">Events</legend>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+    <fieldset className="rd-events">
+      <legend>Events</legend>
+      <div className="rd-events__grid">
         {events.data.map((e) => (
-          <label key={e.code} className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={chosen.has(e.code)}
-              onChange={(ev) => {
-                const next = new Set(chosen);
-                if (ev.target.checked) next.add(e.code);
-                else next.delete(e.code);
-                // Keep the API's order, so the list reads the same everywhere.
-                onChange(events.data.map((x) => x.code).filter((c) => next.has(c)));
-              }}
-            />
-            <span>
-              <span className="font-mono text-xs">{e.code}</span>
-              <span className="text-text-muted block text-xs">{e.description}</span>
-            </span>
-          </label>
+          <Checkbox
+            key={e.code}
+            checked={chosen.has(e.code)}
+            label={<span className="sk-ident">{e.code}</span>}
+            description={e.description}
+            onChange={(ev) => {
+              const next = new Set(chosen);
+              if (ev.target.checked) next.add(e.code);
+              else next.delete(e.code);
+              // Keep the API's order, so the list reads the same everywhere.
+              onChange(events.data.map((x) => x.code).filter((c) => next.has(c)));
+            }}
+          />
         ))}
       </div>
     </fieldset>
@@ -104,61 +98,65 @@ export function EditWebhookModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open
       size="lg"
+      icon={<Webhook size={18} />}
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
       title="Edit webhook"
       description="The signing secret does not change — use New secret for that."
     >
-      <form onSubmit={(e) => void submit(e)} className="space-y-4">
-        <FormField label="Your https URL" htmlFor="wh-edit-url" required>
-          <Input
-            id="wh-edit-url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            inputMode="url"
-            required
-          />
-        </FormField>
-        <FormField label="Name" htmlFor="wh-edit-name">
-          <Input
-            id="wh-edit-name"
-            value={name}
-            maxLength={160}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </FormField>
-        <FormField label="Description" htmlFor="wh-edit-description">
-          <Textarea
-            id="wh-edit-description"
-            value={description}
-            maxLength={2000}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </FormField>
+      <form onSubmit={(e) => void submit(e)} className="rd-form">
+        <TextField
+          id="wh-edit-url"
+          label="Your https URL"
+          icon={<Link2 size={15} />}
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          inputMode="url"
+          inputClassName="sk-ident"
+          required
+        />
+        <TextField
+          id="wh-edit-name"
+          label="Name"
+          icon={<Tag size={15} />}
+          value={name}
+          maxLength={160}
+          showCount
+          onChange={(e) => setName(e.target.value)}
+        />
+        <TextArea
+          id="wh-edit-description"
+          label="Description"
+          icon={<FileText size={15} />}
+          value={description}
+          maxLength={2000}
+          showCount
+          onChange={(e) => setDescription(e.target.value)}
+        />
         <EventPicker value={events} onChange={setEvents} />
         {error !== null ? (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
+          <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+            <p>{error}</p>
+          </RdCallout>
         ) : null}
-        <ModalFooter>
+        <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={onClose}>
             Cancel
           </Button>
-          <Button
+          <AsyncButton
             type="submit"
             variant="primary"
             size="md"
+            labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+            state={phaseOf(update.isPending, error)}
             disabled={update.isPending || url.trim() === '' || events.length === 0}
-          >
-            {update.isPending ? 'Saving…' : 'Save'}
-          </Button>
-        </ModalFooter>
+          />
+        </DialogFooter>
       </form>
-    </Modal>
+    </Dialog>
   );
 }

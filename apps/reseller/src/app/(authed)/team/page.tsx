@@ -1,28 +1,18 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
+import { CircleAlert, Mail, ShieldCheck, Trash2, User, UserPlus, Undo2 } from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
-import {
-  Button,
-  ConfirmDialog,
-  EmptyState,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  Section,
-  Select,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
@@ -34,6 +24,7 @@ import {
   type StoreMemberView,
   type StoreRoleKey,
 } from '@/lib/store-hooks';
+import { RdCallout, RdSection, phaseOf } from '../settings/_components/rd-parts';
 
 function when(iso: string | null): string {
   return iso === null
@@ -54,10 +45,10 @@ export default function TeamPage(): ReactElement {
 
   if (team.isPending || team.isError) {
     return (
-      <div className="space-y-6">
+      <div className="rd-page">
         <PageHeader title="Team" subtitle="Everybody with a login for this store." />
         {team.isPending ? (
-          <LoadingState label="Loading the team" rows={4} />
+          <SkeletonRows label="Loading the team" rows={4} cols={5} />
         ) : (
           <ErrorState message={serverVerdict(team.error)} retry={() => void team.refetch()} />
         )}
@@ -67,20 +58,25 @@ export default function TeamPage(): ReactElement {
   const { members, invitations, roles } = team.data;
 
   return (
-    <div className="space-y-6">
+    <div className="rd-page">
       <PageHeader
         title="Team"
         subtitle="Everybody with a login for this store."
         action={
           manage ? (
-            <Button variant="primary" size="md" onClick={() => setInviting(true)}>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<UserPlus size={15} />}
+              onClick={() => setInviting(true)}
+            >
               Invite a colleague
             </Button>
           ) : undefined
         }
       />
 
-      <Section title="Members">
+      <RdSection title="Members">
         {members.length === 0 ? (
           <EmptyState title="No members yet" description="Invite a colleague to get started." />
         ) : (
@@ -91,7 +87,7 @@ export default function TeamPage(): ReactElement {
                 <Th>Email</Th>
                 <Th>Role</Th>
                 <Th>Last signed in</Th>
-                {manage ? <Th>Actions</Th> : null}
+                {manage ? <Th align="right">Actions</Th> : null}
               </Tr>
             </THead>
             <TBody>
@@ -108,9 +104,9 @@ export default function TeamPage(): ReactElement {
             </TBody>
           </Table>
         )}
-      </Section>
+      </RdSection>
 
-      <Section title="Pending invitations">
+      <RdSection title="Pending invitations">
         {invitations.length === 0 ? (
           <EmptyState
             title="No pending invitations"
@@ -126,7 +122,7 @@ export default function TeamPage(): ReactElement {
                 <Th>Email</Th>
                 <Th>Role</Th>
                 <Th>Expires</Th>
-                {manage ? <Th>Actions</Th> : null}
+                {manage ? <Th align="right">Actions</Th> : null}
               </Tr>
             </THead>
             <TBody>
@@ -136,7 +132,7 @@ export default function TeamPage(): ReactElement {
             </TBody>
           </Table>
         )}
-      </Section>
+      </RdSection>
 
       {manage ? (
         <InviteModal
@@ -167,62 +163,91 @@ function MemberRow({
   const change = useChangeStoreMemberRole();
   const remove = useRemoveStoreMember();
   const [confirming, setConfirming] = useState(false);
+  // The role picked in the select, waiting for its confirmation. The
+  // select keeps showing the member's CURRENT role until the change lands.
+  // Kept after the dialog closes so its words do not blank mid-exit.
+  const [pendingRole, setPendingRole] = useState<StoreRoleKey | null>(null);
+  const [roleOpen, setRoleOpen] = useState(false);
   const locked = member.isOwner && !mayTouchOwners;
+  const pendingRoleName =
+    pendingRole === null ? '' : (roles.find((r) => r.key === pendingRole)?.name ?? 'updated');
 
   return (
     <Tr>
       <Td>
-        {member.fullName}
-        {isYou ? <span className="text-text-muted"> (you)</span> : null}
+        <span className="rd-cell-strong">{member.fullName}</span>
+        {isYou ? <span className="rd-you"> (you)</span> : null}
       </Td>
       <Td>{member.email}</Td>
       <Td>
         {manage && !locked ? (
-          <Select
-            aria-label={`Role for ${member.fullName}`}
-            value={member.roleKey}
-            disabled={change.isPending}
-            onChange={(e) =>
-              change.mutate(
-                { memberId: member.id, roleKey: e.target.value as StoreRoleKey },
-                {
-                  onSuccess: () =>
-                    toast.success(
-                      `${member.fullName} is now ${e.target.selectedOptions[0]?.text ?? 'updated'}.`,
-                    ),
-                  onError: (err) => toast.error(serverVerdict(err)),
-                },
-              )
-            }
-          >
-            {roles
-              .filter((r) => r.key !== 'owner' || mayTouchOwners)
-              .map((r) => (
-                <option key={r.key} value={r.key}>
-                  {r.name}
-                </option>
-              ))}
-          </Select>
+          <>
+            <Select
+              aria-label={`Role for ${member.fullName}`}
+              className="rd-role-select"
+              value={member.roleKey}
+              disabled={change.isPending}
+              onChange={(e) => {
+                const next = e.target.value as StoreRoleKey;
+                if (next === member.roleKey) return;
+                setPendingRole(next);
+                setRoleOpen(true);
+              }}
+            >
+              {roles
+                .filter((r) => r.key !== 'owner' || mayTouchOwners)
+                .map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {r.name}
+                  </option>
+                ))}
+            </Select>
+            <ConfirmDialog
+              open={roleOpen}
+              onOpenChange={setRoleOpen}
+              title={`Make ${member.fullName} ${pendingRoleName}?`}
+              entity={`${member.fullName} · ${member.email}`}
+              consequence={`Their role changes from ${member.roleName} to ${pendingRoleName} at once — what they can see and do in this store changes with it.`}
+              confirmLabel="Change role"
+              onConfirm={async () => {
+                if (pendingRole === null) return;
+                const roleKey = pendingRole;
+                const name = pendingRoleName;
+                try {
+                  await change.mutateAsync({ memberId: member.id, roleKey });
+                  toast.success(`${member.fullName} is now ${name}.`);
+                } catch (err) {
+                  toast.error(serverVerdict(err));
+                }
+                setRoleOpen(false);
+              }}
+            />
+          </>
         ) : (
           member.roleName
         )}
       </Td>
-      <Td>{when(member.lastLoginAt)}</Td>
+      <Td className="rd-cell-muted">{when(member.lastLoginAt)}</Td>
       {manage || isYou ? (
-        <Td>
+        <Td align="right">
           {manage && !locked ? (
             <>
-              <Button variant="destructive" size="sm" onClick={() => setConfirming(true)}>
+              <Button
+                variant="destructive"
+                size="sm"
+                icon={<Trash2 size={14} />}
+                onClick={() => setConfirming(true)}
+              >
                 Remove
               </Button>
               <ConfirmDialog
                 open={confirming}
                 onOpenChange={setConfirming}
                 title={`Remove ${member.fullName}?`}
-                description="Their access ends now, including any session they have open."
+                entity={`${member.fullName} · ${member.email}`}
+                consequence="Their access ends now, including any session they have open."
                 confirmLabel="Remove access"
-                confirmVariant="destructive"
-                disabled={remove.isPending}
+                destructive
                 onConfirm={async () => {
                   try {
                     await remove.mutateAsync({ memberId: member.id });
@@ -230,6 +255,8 @@ function MemberRow({
                     setConfirming(false);
                   } catch (err) {
                     toast.error(serverVerdict(err));
+                    // Stays open, as before: nothing was removed.
+                    throw err;
                   }
                 }}
               />
@@ -253,15 +280,18 @@ function InvitationRow({
   const [confirming, setConfirming] = useState(false);
   return (
     <Tr>
-      <Td>{invitation.fullName}</Td>
+      <Td>
+        <span className="rd-cell-strong">{invitation.fullName}</span>
+      </Td>
       <Td>{invitation.email}</Td>
       <Td>{invitation.roleName}</Td>
-      <Td>{when(invitation.expiresAt)}</Td>
+      <Td className="rd-cell-muted">{when(invitation.expiresAt)}</Td>
       {manage ? (
-        <Td>
+        <Td align="right">
           <Button
             variant="secondary"
             size="sm"
+            icon={<Undo2 size={14} />}
             disabled={revoke.isPending}
             onClick={() => setConfirming(true)}
           >
@@ -271,10 +301,10 @@ function InvitationRow({
             open={confirming}
             onOpenChange={setConfirming}
             title={`Withdraw the invitation to ${invitation.fullName}?`}
-            description={`The link sent to ${invitation.email} stops working. You can invite them again later.`}
+            entity={`${invitation.fullName} · ${invitation.email}`}
+            consequence={`The link sent to ${invitation.email} stops working. You can invite them again later.`}
             confirmLabel="Withdraw invitation"
-            confirmVariant="destructive"
-            disabled={revoke.isPending}
+            destructive
             onConfirm={async () => {
               try {
                 await revoke.mutateAsync({ invitationId: invitation.id });
@@ -325,60 +355,67 @@ function InviteModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={onOpenChange}
+      icon={<UserPlus size={18} />}
       title="Invite a colleague"
       description="They get an email with a link to set up their login. It works for 7 days."
     >
-      <form onSubmit={submit} className="space-y-4">
-        <FormField label="Name" htmlFor="invite-name" required>
-          <Input
-            id="invite-name"
-            required
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-          />
-        </FormField>
-        <FormField label="Email" htmlFor="invite-email" required>
-          <Input
-            id="invite-email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </FormField>
-        <FormField label="Role" htmlFor="invite-role">
-          <Select
-            id="invite-role"
-            value={roleKey}
-            onChange={(e) => setRoleKey(e.target.value as StoreRoleKey)}
-          >
-            {roles
-              .filter((r) => r.key !== 'owner' || mayGrantOwner)
-              .map((r) => (
-                <option key={r.key} value={r.key}>
-                  {r.name}
-                  {r.description !== null ? ` — ${r.description}` : ''}
-                </option>
-              ))}
-          </Select>
-        </FormField>
+      <form onSubmit={submit} className="rd-form">
+        <TextField
+          id="invite-name"
+          label="Name"
+          icon={<User size={15} />}
+          required
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+        />
+        <TextField
+          id="invite-email"
+          type="email"
+          label="Email"
+          icon={<Mail size={15} />}
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <Select
+          id="invite-role"
+          label="Role"
+          icon={<ShieldCheck size={15} />}
+          value={roleKey}
+          onChange={(e) => setRoleKey(e.target.value as StoreRoleKey)}
+        >
+          {roles
+            .filter((r) => r.key !== 'owner' || mayGrantOwner)
+            .map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.name}
+                {r.description !== null ? ` — ${r.description}` : ''}
+              </option>
+            ))}
+        </Select>
         {error !== null ? (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
+          <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+            <p>{error}</p>
+          </RdCallout>
         ) : null}
-        <ModalFooter>
+        <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" size="md" disabled={invite.isPending}>
-            {invite.isPending ? 'Sending…' : 'Send invitation'}
-          </Button>
-        </ModalFooter>
+          <AsyncButton
+            type="submit"
+            variant="primary"
+            size="md"
+            icon={<UserPlus size={15} />}
+            labels={{ idle: 'Send invitation', busy: 'Sending…', error: 'Not sent' }}
+            state={phaseOf(invite.isPending, error)}
+            disabled={invite.isPending}
+          />
+        </DialogFooter>
       </form>
-    </Modal>
+    </Dialog>
   );
 }

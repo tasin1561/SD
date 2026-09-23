@@ -1,0 +1,88 @@
+/* The store portal's signed-out forms (sign in, reset, accept an
+   invitation, confirm an email) inside the shared SignInCard. Tokens only;
+   the fields and buttons carry their own CSS. */
+
+.rd-auth-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+.rd-auth-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+.rd-auth-notice[data-tone='critical'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.rd-auth-notice[data-tone='good'] {
+  border-color: var(--green-line);
+  background: var(--green-tint);
+  color: var(--green-on-tint);
+}
+.rd-auth-notice__icon {
+  flex: none;
+  margin-top: 2px;
+}
+.rd-auth-notice a {
+  color: inherit;
+  font-weight: var(--fw-semibold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.rd-auth-text {
+  margin: 0;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}
+
+/* The invitation's facts, before the password is asked for. */
+.rd-auth-facts {
+  display: grid;
+  grid-template-columns: minmax(72px, 32%) minmax(0, 1fr);
+  gap: var(--sp-2) var(--sp-3);
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  font-size: var(--fs-sm);
+}
+.rd-auth-facts dt {
+  color: var(--fg-muted);
+}
+.rd-auth-facts dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+
+.rd-auth-skel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+}
+
+.rd-auth-alt {
+  display: block;
+  margin-top: var(--sp-2);
+  color: var(--fg-faint);
+}

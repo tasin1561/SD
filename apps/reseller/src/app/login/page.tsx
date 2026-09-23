@@ -5,6 +5,7 @@ import { resolveStoreSsrIdentity } from '@skydrop/auth/server';
 import { apiOrigin } from '@/lib/api-origin';
 import { AuthFrame } from '@/components/auth-frame';
 import { LoginForm } from './_components/login-form';
+import './_components/rd-auth.css';
 
 /**
  * Sign in. A visitor who already holds a valid `__Host-storeRefresh`
@@ -28,10 +29,7 @@ export default async function LoginPage(): Promise<ReactElement> {
       subtitle="Use the login from your store invitation."
       footer={
         <>
-          Forgot your password?{' '}
-          <a href="/password-reset" className="text-accent hover:text-accent-hover">
-            Reset it
-          </a>
+          Forgot your password? <a href="/password-reset">Reset it</a>
           {/*
            * The way OUT to the seller portal.
            *
@@ -48,14 +46,9 @@ export default async function LoginPage(): Promise<ReactElement> {
            * already-authenticated visitor to their own dashboard, so
            * this is safe in either direction and needs no query string.
            */}
-          <span className="text-text-faint mt-2 block">
+          <span className="rd-auth-alt">
             Looking for the seller portal?{' '}
-            <a
-              href="https://app.skydrop.online/login"
-              className="text-accent hover:text-accent-hover"
-            >
-              Sign in there
-            </a>
+            <a href="https://app.skydrop.online/login">Sign in there</a>
           </span>
         </>
       }

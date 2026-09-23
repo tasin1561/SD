@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import type { ReactElement } from 'react';
+import { FileWarning, ScrollText } from 'lucide-react';
 import { useStoreTerms } from '@/lib/terms-hooks';
+import { RdCallout } from '../settings/_components/rd-parts';
 
 /**
  * RS-4 — the portal-wide notice while the terms in force are unaccepted.
@@ -32,26 +34,24 @@ export function TermsBanner({ enabled }: { enabled: boolean }): ReactElement | n
   if (!enabled || t === undefined) return null;
   if (t.current === null) {
     return (
-      <p
-        role="status"
-        className="border-border bg-surface-raised text-text-body mb-4 rounded-lg border px-3 py-2 text-sm"
-      >
-        {t.sellerCompanyName} has not published terms for your store yet. You can place orders once
-        they have and you have accepted them.
-      </p>
+      <RdCallout tone="info" icon={<ScrollText size={15} />} role="status" className="rd-banner">
+        <p>
+          {t.sellerCompanyName} has not published terms for your store yet. You can place orders
+          once they have and you have accepted them.
+        </p>
+      </RdCallout>
     );
   }
   if (t.currentAccepted && t.needsRevision === null) return null;
   return (
-    <p
-      role="alert"
-      className="border-border bg-surface-raised text-critical mb-4 rounded-lg border px-3 py-2 text-sm"
-    >
-      {t.needsRevision ??
-        `${t.sellerCompanyName} published version ${t.current.version} of your terms. Your store cannot place new orders until it is accepted.`}{' '}
-      <Link href="/terms" className="text-accent hover:text-accent-hover underline">
-        Read the terms
-      </Link>
-    </p>
+    <RdCallout tone="critical" icon={<FileWarning size={15} />} role="alert" className="rd-banner">
+      <p>
+        {t.needsRevision ??
+          `${t.sellerCompanyName} published version ${t.current.version} of your terms. Your store cannot place new orders until it is accepted.`}{' '}
+        <Link href="/terms" className="rd-link">
+          Read the terms
+        </Link>
+      </p>
+    </RdCallout>
   );
 }
