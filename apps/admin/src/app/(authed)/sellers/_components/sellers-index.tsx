@@ -2,31 +2,21 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
+import { Plus, Search } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useSellersList } from '@/lib/api-hooks';
 import type { SellerStatusValue } from '@skydrop/api-client';
-import {
-  Button,
-  Input,
-  Select,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  TableEmpty,
-  TablePaginator,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-  SellerStatusBadge,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Select } from '@skydrop/ui/app/select';
+import { Table, TBody, Td, Th, THead, Tr, TableEmpty } from '@skydrop/ui/app/data-table';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { AcCard, AcHeader, AcPage, SellerStatusChip } from '../../settings/_components/ac-parts';
 import { InvitationsPanel } from './invitations-panel';
-import { Plus } from 'lucide-react';
 import { CreateInvitationDialog } from './create-invitation-dialog';
 import { usePermission } from '@/lib/use-permission';
-import { useRouter } from 'next/navigation';
 
 const PAGE_SIZE = 20;
 const STATUSES: readonly SellerStatusValue[] = ['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'];
@@ -47,14 +37,19 @@ export function SellersIndex(): ReactElement {
   });
 
   return (
-    <div>
-      <PageHeader
+    <AcPage>
+      <AcHeader
         title="Sellers"
         subtitle="Invitation lifecycle + seller status management."
         action={
           canWrite ? (
-            <Button variant="primary" size="md" onClick={() => setInviteOpen(true)}>
-              <Plus size={14} /> Invite seller
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Plus size={15} />}
+              onClick={() => setInviteOpen(true)}
+            >
+              Invite seller
             </Button>
           ) : null
         }
@@ -62,23 +57,24 @@ export function SellersIndex(): ReactElement {
 
       <InvitationsPanel />
 
-      <div className="flex items-center gap-2 mb-3">
-        <Input
+      <div className="ac-toolbar">
+        <TextField
+          label="Search"
+          icon={<Search size={15} />}
           placeholder="Search by name, email, phone…"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
             setPage(1);
           }}
-          className="max-w-xs"
         />
         <Select
+          label="Status"
           value={status}
           onChange={(e) => {
             setStatus(e.target.value as SellerStatusValue | '');
             setPage(1);
           }}
-          className="max-w-[180px]"
         >
           <option value="">All statuses</option>
           {STATUSES.map((s) => (
@@ -90,7 +86,7 @@ export function SellersIndex(): ReactElement {
       </div>
 
       {list.isLoading ? (
-        <LoadingState label="Loading sellers…" />
+        <SkeletonRows rows={6} cols={7} label="Loading sellers…" />
       ) : list.isError ? (
         <ErrorState
           message={list.error?.message ?? 'Failed to load sellers.'}
@@ -102,64 +98,71 @@ export function SellersIndex(): ReactElement {
           description="Try clearing the filters or invite a new seller."
         />
       ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Company</Th>
-              <Th>Code</Th>
-              <Th>Contact</Th>
-              <Th>Email</Th>
-              <Th>Status</Th>
-              <Th>Approved</Th>
-              <Th>Created</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {list.data.items.map((s) => (
-              <Tr key={s.id} onActivate={() => router.push(`/sellers/${s.id}`)}>
-                <Td>
-                  <Link href={`/sellers/${s.id}`} className="text-text-bright hover:underline">
-                    {s.companyName}
-                  </Link>
-                </Td>
-                <Td className="text-text-muted font-mono text-xs">{s.initials ?? '—'}</Td>
-                <Td>{s.contactPersonName}</Td>
-                <Td className="text-text-muted font-mono text-xs">{s.email}</Td>
-                <Td>
-                  <SellerStatusBadge status={s.status} />
-                </Td>
-                <Td className="text-text-muted text-xs font-mono">
-                  {s.approvedAt ? new Date(s.approvedAt).toISOString().slice(0, 10) : '—'}
-                </Td>
-                <Td className="text-text-muted text-xs font-mono">
-                  {new Date(s.createdAt).toISOString().slice(0, 10)}
-                </Td>
+        <AcCard flush>
+          <Table caption="Sellers">
+            <THead>
+              <Tr>
+                <Th>Company</Th>
+                <Th>Code</Th>
+                <Th>Contact</Th>
+                <Th>Email</Th>
+                <Th>Status</Th>
+                <Th>Approved</Th>
+                <Th>Created</Th>
               </Tr>
-            ))}
-          </TBody>
-          {list.data.total === 0 && (
+            </THead>
             <TBody>
-              <TableEmpty colSpan={6}>
-                No sellers match this filter. Sellers appear here once they accept an invitation.
-              </TableEmpty>
+              {list.data.items.map((s) => (
+                <Tr key={s.id} onActivate={() => router.push(`/sellers/${s.id}`)}>
+                  <Td>
+                    <Link href={`/sellers/${s.id}`} className="ac-link ac-cell-main">
+                      {s.companyName}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <span className="sk-ident">{s.initials ?? '—'}</span>
+                  </Td>
+                  <Td>{s.contactPersonName}</Td>
+                  <Td>
+                    <span className="ac-code">{s.email}</span>
+                  </Td>
+                  <Td>
+                    <SellerStatusChip status={s.status} />
+                  </Td>
+                  <Td>
+                    <span className="sk-figure ac-faint">
+                      {s.approvedAt ? new Date(s.approvedAt).toISOString().slice(0, 10) : '—'}
+                    </span>
+                  </Td>
+                  <Td>
+                    <span className="sk-figure ac-faint">
+                      {new Date(s.createdAt).toISOString().slice(0, 10)}
+                    </span>
+                  </Td>
+                </Tr>
+              ))}
             </TBody>
-          )}
-          <tfoot>
-            <tr>
-              <td colSpan={6} className="p-0">
-                <TablePaginator
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={list.data.total}
-                  onPageChange={setPage}
-                />
-              </td>
-            </tr>
-          </tfoot>
-        </Table>
+            {list.data.total === 0 && (
+              <TBody>
+                <TableEmpty colSpan={6}>
+                  No sellers match this filter. Sellers appear here once they accept an invitation.
+                </TableEmpty>
+              </TBody>
+            )}
+          </Table>
+          <div className="ac-pad">
+            <Pagination
+              page={page}
+              pageSize={PAGE_SIZE}
+              total={list.data.total}
+              onPageChange={setPage}
+              label="Sellers pages"
+            />
+          </div>
+        </AcCard>
       )}
 
       <CreateInvitationDialog open={inviteOpen} onOpenChange={setInviteOpen} />
-    </div>
+    </AcPage>
   );
 }

@@ -1,25 +1,22 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { Megaphone, Send, Users } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
 import {
-  Button,
-  Card,
-  CardBody,
-  FormField,
-  Input,
-  Label,
-  PageHeader,
-  Section,
-  Select,
-  StatusBadge,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Textarea,
-  Tr,
-} from '@skydrop/ui/components';
+  AcAlert,
+  AcCallout,
+  AcCard,
+  AcHeader,
+  AcPage,
+  AcSection,
+} from '../../../settings/_components/ac-parts';
 import {
   useBroadcastPreview,
   useBroadcasts,
@@ -175,33 +172,28 @@ export function BroadcastsView(): ReactElement {
   }
 
   return (
-    <Section>
-      <PageHeader
+    <AcPage width="narrow">
+      <AcHeader
+        crumbs={[{ label: 'Notifications', href: '/notifications' }, { label: 'Broadcast' }]}
         title="Broadcast"
         subtitle="A message you choose to send. It cannot be recalled, so the count comes first."
       />
 
-      {error !== null && (
-        <Card>
-          <CardBody>
-            <p className="text-status-failed-fg text-sm">{error}</p>
-          </CardBody>
-        </Card>
-      )}
+      {error !== null && <AcAlert message={error} />}
 
       {sent !== null && (
-        <Card>
-          <CardBody>
-            <p className="text-status-delivered-fg text-sm">{sent}</p>
-          </CardBody>
-        </Card>
+        <AcCallout tone="good" icon={<Send size={15} />} role="status">
+          {sent}
+        </AcCallout>
       )}
 
-      <Card>
-        <CardBody className="space-y-4">
-          <FormField label="Who it reaches" htmlFor="bc-audience" hint={pick.hint}>
+      <AcCard>
+        <div className="ac-form">
+          <div className="ac-card__body">
             <Select
+              label="Who it reaches"
               id="bc-audience"
+              hint={pick.hint}
               value={audienceIdx}
               onChange={(e) => {
                 setAudienceIdx(Number(e.target.value));
@@ -215,55 +207,64 @@ export function BroadcastsView(): ReactElement {
                 </option>
               ))}
             </Select>
-            {pick.fields.map((field, i) => (
-              <Input
-                key={field}
-                aria-label={field}
-                className="font-mono"
-                placeholder={field}
-                value={audienceValues[i] ?? ''}
-                onChange={(e) => {
-                  const next = [...audienceValues];
-                  next[i] = e.target.value;
-                  setAudienceValues(next);
-                  preview.reset();
-                }}
-              />
-            ))}
-          </FormField>
-
-          <div>
-            <Label>Channels</Label>
-            <div className="mt-1 flex gap-4">
-              {['IN_APP', 'EMAIL'].map((c) => (
-                <label key={c} className="flex items-center gap-1.5 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={channels.includes(c)}
-                    onChange={() => toggleChannel(c)}
+            {pick.fields.length > 0 && (
+              <div className="ac-form-grid" data-cols={pick.fields.length > 1 ? '2' : undefined}>
+                {pick.fields.map((field, i) => (
+                  <TextField
+                    key={field}
+                    aria-label={field}
+                    inputClassName="sk-ident"
+                    placeholder={field}
+                    value={audienceValues[i] ?? ''}
+                    onChange={(e) => {
+                      const next = [...audienceValues];
+                      next[i] = e.target.value;
+                      setAudienceValues(next);
+                      preview.reset();
+                    }}
                   />
-                  {c === 'IN_APP' ? 'In app' : 'Email'}
-                </label>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <FormField label="Title" htmlFor="bc-title" required>
-            <Input id="bc-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </FormField>
+          <fieldset className="ac-fieldset">
+            <legend>Channels</legend>
+            <div className="ac-buttons" data-align="start">
+              {['IN_APP', 'EMAIL'].map((c) => (
+                <Checkbox
+                  key={c}
+                  label={c === 'IN_APP' ? 'In app' : 'Email'}
+                  checked={channels.includes(c)}
+                  onChange={() => toggleChannel(c)}
+                />
+              ))}
+            </div>
+          </fieldset>
 
-          <FormField label="Message" htmlFor="bc-body" required>
-            <Textarea
-              id="bc-body"
-              rows={5}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-          </FormField>
+          <TextField
+            label="Title"
+            id="bc-title"
+            requiredMark
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
+          <TextArea
+            label="Message"
+            id="bc-body"
+            requiredMark
+            rows={5}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+
+          <div className="ac-buttons" data-align="start">
+            <AsyncButton
               variant="secondary"
+              icon={<Users size={15} />}
+              state={preview.isPending ? 'busy' : 'idle'}
+              labels={{ idle: 'How many is that?', busy: 'Counting…' }}
               disabled={preview.isPending || channels.length === 0 || !audienceComplete}
               onClick={() => {
                 setError(null);
@@ -273,103 +274,119 @@ export function BroadcastsView(): ReactElement {
                   { onError: (e) => setError(serverVerdict(e)) },
                 );
               }}
-            >
-              How many is that?
-            </Button>
+            />
 
             {previewed !== null && (
-              <span className="text-sm">
-                <strong className="tabular-nums">{people(previewed.recipientCount)}</strong>
+              <span className="ac-text" role="status">
+                <strong className="sk-figure">{people(previewed.recipientCount)}</strong>
                 {previewed.sample.length > 0 && (
-                  <span className="text-text-muted"> — {previewed.sample.join(', ')}…</span>
+                  <span className="ac-faint"> — {previewed.sample.join(', ')}…</span>
                 )}
               </span>
             )}
           </div>
 
           {previewed !== null && (
-            <div className="border-border-subtle border-t pt-4">
-              <Button
-                variant="destructive"
-                disabled={!ready}
-                onClick={() => {
-                  setError(null);
-                  send.mutate(
-                    {
-                      audience,
-                      category: 'ANNOUNCEMENT',
-                      channels,
-                      title: title.trim(),
-                      body: body.trim(),
-                      expectedRecipientCount: previewed.recipientCount,
-                    },
-                    {
-                      onSuccess: (r) => {
-                        setSent(`Sent to ${people(r.recipientCount)} (${r.delivered} delivered).`);
-                        setTitle('');
-                        setBody('');
-                        preview.reset();
+            <AcCallout tone="critical" icon={<Megaphone size={15} />}>
+              <div className="ac-buttons" data-align="start">
+                <AsyncButton
+                  variant="destructive"
+                  icon={<Send size={15} />}
+                  state={send.isPending ? 'busy' : 'idle'}
+                  labels={{
+                    idle: `Send to ${people(previewed.recipientCount)}`,
+                    busy: 'Sending…',
+                  }}
+                  disabled={!ready}
+                  onClick={() => {
+                    setError(null);
+                    send.mutate(
+                      {
+                        audience,
+                        category: 'ANNOUNCEMENT',
+                        channels,
+                        title: title.trim(),
+                        body: body.trim(),
+                        expectedRecipientCount: previewed.recipientCount,
                       },
-                      onError: (e) => setError(serverVerdict(e)),
-                    },
-                  );
-                }}
-              >
-                Send to {people(previewed.recipientCount)}
-              </Button>
-              <p className="text-text-faint mt-2 text-xs">
+                      {
+                        onSuccess: (r) => {
+                          setSent(
+                            `Sent to ${people(r.recipientCount)} (${r.delivered} delivered).`,
+                          );
+                          setTitle('');
+                          setBody('');
+                          preview.reset();
+                        },
+                        onError: (e) => setError(serverVerdict(e)),
+                      },
+                    );
+                  }}
+                />
+              </div>
+              <p className="ac-muted">
                 This cannot be recalled. If anyone joined or left that audience since the count
                 above, the server refuses rather than sending to a number you were not shown.
               </p>
-            </div>
+            </AcCallout>
           )}
-        </CardBody>
-      </Card>
+        </div>
+      </AcCard>
 
-      <Card>
-        <CardBody>
-          <h2 className="text-sm font-semibold">What has been sent</h2>
-          {(history.data ?? []).length === 0 ? (
-            <p className="text-text-muted mt-2 text-sm">Nothing sent yet.</p>
-          ) : (
-            <Table className="mt-2">
-              <THead>
-                <Tr>
-                  <Th>Sent</Th>
-                  <Th>Title</Th>
-                  <Th>Reached</Th>
-                  <Th>Delivered</Th>
-                  <Th>Failed</Th>
-                  <Th>Status</Th>
+      <AcSection title="What has been sent" flush>
+        {(history.data ?? []).length === 0 ? (
+          <EmptyState bare title="Nothing sent yet." />
+        ) : (
+          <Table caption="Broadcasts sent">
+            <THead>
+              <Tr>
+                <Th>Sent</Th>
+                <Th>Title</Th>
+                <Th align="right">Reached</Th>
+                <Th align="right">Delivered</Th>
+                <Th align="right">Failed</Th>
+                <Th>Status</Th>
+              </Tr>
+            </THead>
+            <TBody>
+              {(history.data ?? []).map((b) => (
+                <Tr key={b.id}>
+                  <Td>
+                    <span className="sk-figure ac-faint">
+                      {new Date(b.createdAt).toLocaleString()}
+                    </span>
+                  </Td>
+                  <Td>
+                    <span className="ac-cell-main">{b.title}</span>
+                  </Td>
+                  <Td align="right">
+                    <span className="sk-figure">{b.recipientCount}</span>
+                  </Td>
+                  <Td align="right">
+                    <span className="sk-figure">{b.sentCount}</span>
+                  </Td>
+                  <Td align="right">
+                    <span className="sk-figure">{b.failedCount}</span>
+                  </Td>
+                  <Td>
+                    <StatusChip
+                      kind={
+                        b.status === 'SENT'
+                          ? 'delivered'
+                          : b.status === 'FAILED'
+                            ? 'failed'
+                            : 'pending'
+                      }
+                      label={b.status.toLowerCase()}
+                      size="sm"
+                    />
+                  </Td>
                 </Tr>
-              </THead>
-              <TBody>
-                {(history.data ?? []).map((b) => (
-                  <Tr key={b.id}>
-                    <Td>{new Date(b.createdAt).toLocaleString()}</Td>
-                    <Td>{b.title}</Td>
-                    <Td className="tabular-nums">{b.recipientCount}</Td>
-                    <Td className="tabular-nums">{b.sentCount}</Td>
-                    <Td className="tabular-nums">{b.failedCount}</Td>
-                    <Td>
-                      <StatusBadge
-                        kind={
-                          b.status === 'SENT'
-                            ? 'delivered'
-                            : b.status === 'FAILED'
-                              ? 'failed'
-                              : 'pending'
-                        }
-                        label={b.status.toLowerCase()}
-                      />
-                    </Td>
-                  </Tr>
-                ))}
-              </TBody>
-            </Table>
-          )}
-        </CardBody>
-      </Card>
-    </Section>
+              ))}
+            </TBody>
+          </Table>
+        )}
+      </AcSection>
+    </AcPage>
   );
 }

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
-import { Card, CardBody, PageHeader, Section, SkeletonRows } from '@skydrop/ui/components';
+import { Switch } from '@skydrop/ui/app/switch';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { AcAlert, AcCard, AcHeader, AcPage } from '../../../settings/_components/ac-parts';
 import {
   useClearNotificationSubscription,
   useNotificationSubscriptions,
@@ -37,76 +37,58 @@ export function NotificationSettingsView(): ReactElement {
   }, {});
 
   return (
-    <Section>
-      <Link
-        href="/notifications"
-        className="text-text-muted hover:text-text-body mb-4 inline-flex items-center gap-1.5 text-xs transition-colors"
-      >
-        <ArrowLeft size={12} /> Notifications
-      </Link>
-
-      <PageHeader
+    <AcPage width="narrow">
+      <AcHeader
+        crumbs={[{ label: 'Notifications', href: '/notifications' }, { label: 'What reaches you' }]}
         title="What reaches you"
         subtitle="Switch off anything you would rather not see. Messages about your account and credentials are not listed — they only ever go to your email, and cannot be silenced."
       />
 
-      {error !== null && (
-        <Card>
-          <CardBody>
-            <p className="text-status-failed-fg text-sm">{error}</p>
-          </CardBody>
-        </Card>
-      )}
+      {error !== null && <AcAlert message={error} />}
 
-      <Card>
-        <CardBody>
-          {topics.isLoading ? (
-            <SkeletonRows rows={4} cols={2} />
-          ) : (
-            Object.entries(grouped).map(([group, defs]) => (
-              <div key={group} className="mt-4 first:mt-0">
-                <h3 className="text-text-faint text-xs font-medium tracking-wide uppercase">
-                  {group}
-                </h3>
-                <ul className="divide-border-subtle mt-1 divide-y">
-                  {defs.map((d) => {
-                    const on = !muted.has(d.topic);
-                    return (
-                      <li key={d.topic} className="flex items-start justify-between gap-4 py-2.5">
-                        <div className="min-w-0">
-                          <div className="text-sm">{d.label}</div>
-                          <div className="text-text-muted text-xs">{d.description}</div>
-                        </div>
-                        <label className="flex shrink-0 items-center gap-2 text-xs">
-                          <input
-                            type="checkbox"
-                            checked={on}
-                            aria-label={`Notify me about: ${d.label}`}
-                            onChange={() => {
-                              setError(null);
-                              if (on) {
-                                setSub.mutate(
-                                  { topic: d.topic, mode: 'MUTED' },
-                                  { onError: (e) => setError(serverVerdict(e)) },
-                                );
-                              } else {
-                                clearSub.mutate(d.topic, {
-                                  onError: (e) => setError(serverVerdict(e)),
-                                });
-                              }
-                            }}
-                          />
-                          <span className="text-text-faint">{on ? 'On' : 'Off'}</span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))
-          )}
-        </CardBody>
-      </Card>
-    </Section>
+      <AcCard flush>
+        {topics.isLoading ? (
+          <SkeletonRows rows={4} cols={2} />
+        ) : (
+          Object.entries(grouped).map(([group, defs]) => (
+            <div key={group} className="ac-topic-group">
+              <h3 className="ac-topic-group__title">{group}</h3>
+              <ul className="ac-rows">
+                {defs.map((d) => {
+                  const on = !muted.has(d.topic);
+                  return (
+                    <li key={d.topic} className="ac-row">
+                      <div className="ac-row__main">
+                        <span className="ac-row__title">{d.label}</span>
+                        <span className="ac-muted">{d.description}</span>
+                      </div>
+                      <div className="ac-row__side">
+                        <Switch
+                          checked={on}
+                          aria-label={`Notify me about: ${d.label}`}
+                          onCheckedChange={() => {
+                            setError(null);
+                            if (on) {
+                              setSub.mutate(
+                                { topic: d.topic, mode: 'MUTED' },
+                                { onError: (e) => setError(serverVerdict(e)) },
+                              );
+                            } else {
+                              clearSub.mutate(d.topic, {
+                                onError: (e) => setError(serverVerdict(e)),
+                              });
+                            }
+                          }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))
+        )}
+      </AcCard>
+    </AcPage>
   );
 }

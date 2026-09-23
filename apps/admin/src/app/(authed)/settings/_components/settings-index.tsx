@@ -4,16 +4,12 @@ import { useState, type ReactElement } from 'react';
 import { SettingValueType } from '@skydrop/db';
 import type { SystemSettingView } from '@skydrop/api-client';
 import { useSystemSettingsList } from '@/lib/api-hooks';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  PageHeader,
-  Section,
-  StatusBadge,
-} from '@skydrop/ui/components';
+import { PencilLine } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { AcFact, AcHeader, AcPage, AcSection } from './ac-parts';
 import { EditSettingDialog } from './edit-setting-dialog';
 
 /**
@@ -31,14 +27,14 @@ export function SettingsIndex(): ReactElement {
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   return (
-    <div>
-      <PageHeader
+    <AcPage>
+      <AcHeader
         title="System settings"
         subtitle="Runtime configuration — values consumed by the operational services. Edits audit MEDIUM with before/after."
       />
 
       {list.isLoading ? (
-        <LoadingState label="Loading settings…" />
+        <SkeletonRows rows={8} cols={3} label="Loading settings…" />
       ) : list.isError ? (
         <ErrorState
           message={list.error?.message ?? 'Failed to load settings.'}
@@ -51,22 +47,20 @@ export function SettingsIndex(): ReactElement {
         />
       ) : (
         list.data.map((group) => (
-          <Section key={group.category} title={categoryLabel(group.category)}>
-            <Card>
-              <ol className="divide-y divide-border">
-                {group.items.map((s) => (
-                  <SettingRow key={s.id} setting={s} onEdit={() => setEditingKey(s.key)} />
-                ))}
-              </ol>
-            </Card>
-          </Section>
+          <AcSection key={group.category} title={categoryLabel(group.category)} flush>
+            <ol className="ac-rows">
+              {group.items.map((s) => (
+                <SettingRow key={s.id} setting={s} onEdit={() => setEditingKey(s.key)} />
+              ))}
+            </ol>
+          </AcSection>
         ))
       )}
 
       {editingKey && (
         <EditSettingDialog settingKey={editingKey} onClose={() => setEditingKey(null)} />
       )}
-    </div>
+    </AcPage>
   );
 }
 
@@ -78,44 +72,38 @@ function SettingRow({
   onEdit: () => void;
 }): ReactElement {
   return (
-    <li className="px-4 py-3 flex items-start gap-4">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-text-bright text-sm font-medium">{setting.displayName}</span>
-          {/* `flex-wrap` wraps between items, not inside one — and a key
-              like `courier.delhivery_pickup_location` is a single
-              unbreakable token wider than a phone. */}
-          <span className="text-text-faint max-w-full font-mono text-xs break-all">
-            {setting.key}
-          </span>
-          <StatusBadge
+    <li className="ac-row">
+      <div className="ac-row__main">
+        <div className="ac-row__title">
+          <span>{setting.displayName}</span>
+          <StatusChip
             kind={valueTypeKind(setting.valueType)}
             label={setting.valueType.toLowerCase()}
+            size="sm"
           />
-          {setting.isSensitive && (
-            <span className="text-xs uppercase tracking-wide text-pending">Sensitive</span>
-          )}
-          {setting.requiresRestart && (
-            <span className="text-xs uppercase tracking-wide text-critical">Restart</span>
-          )}
-          {!setting.isEditableByAdmin && (
-            <span className="text-xs uppercase tracking-wide text-text-muted">Read-only</span>
-          )}
+          {setting.isSensitive && <AcFact tone="warn">Sensitive</AcFact>}
+          {setting.requiresRestart && <AcFact tone="bad">Restart</AcFact>}
+          {!setting.isEditableByAdmin && <AcFact>Read-only</AcFact>}
         </div>
-        {setting.description && (
-          <div className="text-text-muted text-xs mt-0.5">{setting.description}</div>
-        )}
-        <div className="mt-1.5 text-text-body text-sm font-mono break-all">
-          {setting.valueDisplay}
-        </div>
+        {/* A key like `courier.delhivery_pickup_location` is a single
+            unbreakable token wider than a phone, so it wraps anywhere. */}
+        <span className="sk-ident ac-code">{setting.key}</span>
+        {setting.description && <span className="ac-muted">{setting.description}</span>}
+        <div className="ac-row__value">{setting.valueDisplay}</div>
         {setting.lastEditedAt && (
-          <div className="text-text-faint text-xs mt-1 font-mono">
+          <span className="ac-faint sk-figure">
             Last edit: {new Date(setting.lastEditedAt).toISOString().replace('T', ' ').slice(0, 16)}
-          </div>
+          </span>
         )}
       </div>
-      <div className="shrink-0">
-        <Button onClick={onEdit} disabled={!setting.isEditableByAdmin}>
+      <div className="ac-row__side">
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<PencilLine size={14} />}
+          onClick={onEdit}
+          disabled={!setting.isEditableByAdmin}
+        >
           Edit
         </Button>
       </div>

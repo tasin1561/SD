@@ -3,7 +3,10 @@
 import { useState, type ReactElement } from 'react';
 import { useUpdateSellerStatus } from '@/lib/api-hooks';
 import { type SellerStatusValue } from '@skydrop/api-client';
-import { Button, FormField, Textarea, Modal, ModalFooter } from '@skydrop/ui/components';
+import { ShieldBan, ShieldCheck } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -37,10 +40,13 @@ import { serverVerdict } from '@/lib/server-verdict';
  */
 export function StatusActionPanel({
   sellerId,
+  sellerName,
   currentStatus,
   canChangeStatus,
 }: {
   readonly sellerId: string;
+  /** Restated in the confirm step; the panel still works without it. */
+  readonly sellerName?: string | undefined;
   readonly currentStatus: SellerStatusValue;
   readonly canChangeStatus: boolean;
 }): ReactElement {
@@ -76,6 +82,8 @@ export function StatusActionPanel({
       // gate, or an invariant we don't know about), display its
       // message verbatim. UI is reading material; server is law.
       setServerError(serverVerdict(err, 'Failed to change status.'));
+      // Rethrown so the confirm step stays open with the verdict on it.
+      throw err;
     }
   }
 
@@ -97,20 +105,21 @@ export function StatusActionPanel({
 
   if (actions.length === 0) {
     return (
-      <div className="text-text-muted text-sm">
+      <p className="ac-muted">
         No status changes available from the current state ({currentStatus.toLowerCase()}).
-      </div>
+      </p>
     );
   }
 
   return (
     <>
-      <div className="flex flex-wrap gap-2">
+      <div className="ac-buttons" data-align="start">
         {actions.map((a) => (
           <Button
             key={a.target}
             variant={a.variant}
             size="md"
+            icon={a.target === 'SUSPENDED' ? <ShieldBan size={15} /> : <ShieldCheck size={15} />}
             disabled={!canChangeStatus || mutate.isPending}
             onClick={() => open(a.target)}
             title={
@@ -122,62 +131,38 @@ export function StatusActionPanel({
         ))}
       </div>
       {!canChangeStatus && (
-        <div className="text-text-faint text-xs mt-2">
+        <p className="ac-faint">
           Your role can&apos;t change seller status. Contact a super-admin if you need this changed.
-        </div>
+        </p>
       )}
 
-      <Modal
+      <ConfirmDialog
         open={intent !== null}
-        onOpenChange={(o) => !o && close()}
+        onOpenChange={(o) => {
+          if (!o) close();
+        }}
         title={intent === 'SUSPENDED' ? 'Suspend this seller?' : 'Reapprove this seller?'}
-        description={
+        entity={sellerName ?? 'This seller'}
+        consequence={
           intent === 'SUSPENDED'
             ? 'The seller will immediately lose portal access. Existing orders + shipments continue under our operations. A read-only profile view remains for ops.'
             : 'The seller regains full portal access. Their open invitations and existing orders are unaffected by the status change itself.'
         }
-        size="md"
+        confirmLabel={intent === 'SUSPENDED' ? 'Suspend' : 'Reapprove'}
+        destructive={intent === 'SUSPENDED'}
+        error={serverError}
+        onConfirm={confirm}
       >
-        <FormField
+        <TextArea
           label="Reason (optional, recorded in the audit trail)"
-          htmlFor="status-reason"
+          id="status-reason"
           hint="Surfaced on the seller's audit timeline + the global audit log."
-        >
-          <Textarea
-            id="status-reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g., Customer complaints about fulfillment quality."
-            disabled={mutate.isPending}
-          />
-        </FormField>
-        {serverError && (
-          <div
-            className="mt-3 px-2.5 py-1.5 rounded-[5px] text-critical text-xs"
-            style={{
-              background: 'var(--color-critical-tint)',
-              border: '1px solid var(--color-critical-ring)',
-            }}
-          >
-            {serverError}
-          </div>
-        )}
-        <ModalFooter>
-          <Button variant="ghost" size="md" onClick={close} disabled={mutate.isPending}>
-            Cancel
-          </Button>
-          <Button
-            variant={intent === 'SUSPENDED' ? 'destructive' : 'primary'}
-            size="md"
-            onClick={() => {
-              void confirm();
-            }}
-            disabled={mutate.isPending}
-          >
-            {mutate.isPending ? 'Working…' : intent === 'SUSPENDED' ? 'Suspend' : 'Reapprove'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g., Customer complaints about fulfillment quality."
+          disabled={mutate.isPending}
+        />
+      </ConfirmDialog>
     </>
   );
 }

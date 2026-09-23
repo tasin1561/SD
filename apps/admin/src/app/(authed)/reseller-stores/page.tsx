@@ -3,28 +3,19 @@
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState, type FormEvent, type ReactElement } from 'react';
-import {
-  Button,
-  EmptyState,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  ResellerStoreStatusBadge,
-  Select,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Textarea,
-  Th,
-  Toolbar,
-  Tr,
-  useToast,
-} from '@skydrop/ui/components';
+import { Store } from 'lucide-react';
+import { resellerStoreStatusKind, resellerStoreStatusLabel } from '@skydrop/ui/status';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { AcAlert, AcCard, AcHeader, AcPage, phaseOf } from '../settings/_components/ac-parts';
 import { useSellersList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -50,7 +41,7 @@ export default function ResellerStoresPage(): ReactElement {
   // The filters live in the URL (`?status=&sellerId=`) so a link — a
   // seller's page, a store's "their other stores" — can open it pre-filled.
   return (
-    <Suspense fallback={<LoadingState label="Loading reseller stores" rows={5} />}>
+    <Suspense fallback={<SkeletonRows rows={5} cols={7} label="Loading reseller stores" />}>
       <ResellerStoresIndex />
     </Suspense>
   );
@@ -79,51 +70,54 @@ function ResellerStoresIndex(): ReactElement {
   const sellerKnown = sellerId === '' || sellerOptions.some((o) => o.id === sellerId);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
+    <AcPage>
+      <AcHeader
         title="Reseller stores"
         subtitle="Businesses reselling one seller’s stock under their own name."
         action={
           mayCreate ? (
-            <Button variant="primary" size="md" onClick={() => setCreating(true)}>
+            <Button
+              variant="primary"
+              size="md"
+              icon={<Store size={15} />}
+              onClick={() => setCreating(true)}
+            >
               Open a store for a seller
             </Button>
           ) : undefined
         }
       />
-      <Toolbar>
-        <FormField label="Status" htmlFor="rs-status">
-          <Select
-            id="rs-status"
-            value={status}
-            onChange={(e) => setFilter('status', e.target.value)}
-          >
-            {STATUSES.map(([v, label]) => (
-              <option key={v} value={v}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Seller" htmlFor="rs-seller">
-          <Select
-            id="rs-seller"
-            value={sellerId}
-            onChange={(e) => setFilter('sellerId', e.target.value)}
-          >
-            <option value="">Every seller</option>
-            {!sellerKnown ? <option value={sellerId}>The seller in the link</option> : null}
-            {sellerOptions.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.companyName}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-      </Toolbar>
+      <div className="ac-toolbar">
+        <Select
+          label="Status"
+          id="rs-status"
+          value={status}
+          onChange={(e) => setFilter('status', e.target.value)}
+        >
+          {STATUSES.map(([v, label]) => (
+            <option key={v} value={v}>
+              {label}
+            </option>
+          ))}
+        </Select>
+        <Select
+          label="Seller"
+          id="rs-seller"
+          value={sellerId}
+          onChange={(e) => setFilter('sellerId', e.target.value)}
+        >
+          <option value="">Every seller</option>
+          {!sellerKnown ? <option value={sellerId}>The seller in the link</option> : null}
+          {sellerOptions.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.companyName}
+            </option>
+          ))}
+        </Select>
+      </div>
 
       {stores.isPending ? (
-        <LoadingState label="Loading reseller stores" rows={5} />
+        <SkeletonRows rows={5} cols={7} label="Loading reseller stores" />
       ) : stores.isError ? (
         <ErrorState message={serverVerdict(stores.error)} retry={() => void stores.refetch()} />
       ) : stores.data.length === 0 ? (
@@ -136,54 +130,61 @@ function ResellerStoresIndex(): ReactElement {
           }
         />
       ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Store</Th>
-              <Th>Seller</Th>
-              <Th>Status</Th>
-              <Th>Opened by</Th>
-              <Th>Wallet</Th>
-              <Th>Team</Th>
-              <Th>Created</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {stores.data.map((s) => (
-              <Tr key={s.id}>
-                <Td>
-                  <Link
-                    href={`/reseller-stores/${s.id}`}
-                    className="text-accent hover:text-accent-hover"
-                  >
-                    {s.name}
-                  </Link>
-                </Td>
-                <Td>
-                  <Link
-                    href={`/reseller-stores?sellerId=${s.sellerId}`}
-                    className="hover:underline"
-                    title="Only this seller’s stores"
-                  >
-                    {s.sellerCompanyName}
-                  </Link>
-                </Td>
-                <Td>
-                  <ResellerStoreStatusBadge status={s.status} />
-                </Td>
-                <Td>{s.origin === 'ADMIN' ? 'Skydrop' : 'Seller'}</Td>
-                <Td>{s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'Seller'}</Td>
-                <Td>{s.memberCount}</Td>
-                <Td>
-                  {new Date(s.createdAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
-                </Td>
+        <AcCard flush>
+          <Table caption="Reseller stores">
+            <THead>
+              <Tr>
+                <Th>Store</Th>
+                <Th>Seller</Th>
+                <Th>Status</Th>
+                <Th>Opened by</Th>
+                <Th>Wallet</Th>
+                <Th>Team</Th>
+                <Th>Created</Th>
               </Tr>
-            ))}
-          </TBody>
-        </Table>
+            </THead>
+            <TBody>
+              {stores.data.map((s) => (
+                <Tr key={s.id}>
+                  <Td>
+                    <Link href={`/reseller-stores/${s.id}`} className="ac-link ac-cell-main">
+                      {s.name}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <Link
+                      href={`/reseller-stores?sellerId=${s.sellerId}`}
+                      className="ac-link"
+                      title="Only this seller’s stores"
+                    >
+                      {s.sellerCompanyName}
+                    </Link>
+                  </Td>
+                  <Td>
+                    <StatusChip
+                      kind={resellerStoreStatusKind(s.status)}
+                      label={resellerStoreStatusLabel(s.status)}
+                      size="sm"
+                    />
+                  </Td>
+                  <Td>{s.origin === 'ADMIN' ? 'Skydrop' : 'Seller'}</Td>
+                  <Td>{s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'Seller'}</Td>
+                  <Td>
+                    <span className="sk-figure">{s.memberCount}</span>
+                  </Td>
+                  <Td>
+                    <span className="sk-figure ac-faint">
+                      {new Date(s.createdAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
+                    </span>
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+        </AcCard>
       )}
       {mayCreate ? <CreateModal open={creating} onOpenChange={setCreating} /> : null}
-    </div>
+    </AcPage>
   );
 }
 
@@ -228,104 +229,97 @@ function CreateModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={onOpenChange}
       title="Open a reseller store for a seller"
       description="It waits for the seller to approve or reject it, and they are told now. Nothing about it is live until they do."
+      icon={<Store size={18} />}
       size="lg"
+      locked={create.isPending}
     >
-      <form onSubmit={submit} className="space-y-4">
-        <FormField label="Find the seller" htmlFor="cr-search">
-          <Input id="cr-search" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </FormField>
-        <FormField label="Seller" htmlFor="cr-seller" required>
-          <Select
-            id="cr-seller"
-            required
-            value={sellerId}
-            onChange={(e) => setSellerId(e.target.value)}
-          >
-            <option value="">{sellers.isPending ? 'Loading…' : 'Choose an approved seller'}</option>
-            {(sellers.data?.items ?? []).map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.companyName}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField
-          label="Store name"
-          htmlFor="cr-name"
-          hint="Unique among this seller’s stores."
+      <form onSubmit={submit} className="ac-form">
+        <TextField
+          label="Find the seller"
+          id="cr-search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <Select
+          label="Seller"
+          id="cr-seller"
           required
+          value={sellerId}
+          onChange={(e) => setSellerId(e.target.value)}
         >
-          <Input
+          <option value="">{sellers.isPending ? 'Loading…' : 'Choose an approved seller'}</option>
+          {(sellers.data?.items ?? []).map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.companyName}
+            </option>
+          ))}
+        </Select>
+        <div className="ac-form-grid" data-cols="2">
+          <TextField
+            label="Store name"
             id="cr-name"
+            hint="Unique among this seller’s stores."
             required
             maxLength={80}
+            showCount
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
-        </FormField>
-        <FormField label="Name customers see" htmlFor="cr-display">
-          <Input
+          <TextField
+            label="Name customers see"
             id="cr-display"
             maxLength={80}
+            showCount
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
           />
-        </FormField>
-        <FormField label="Contact email" htmlFor="cr-email" required>
-          <Input
+          <TextField
+            label="Contact email"
             id="cr-email"
             type="email"
             required
             value={contactEmail}
             onChange={(e) => setContactEmail(e.target.value)}
           />
-        </FormField>
-        <FormField
-          label="Contact phone"
-          htmlFor="cr-phone"
-          hint="E.164, e.g. +919812345678."
-          required
-        >
-          <Input
+          <TextField
+            label="Contact phone"
             id="cr-phone"
+            hint="E.164, e.g. +919812345678."
             type="tel"
             required
             value={contactPhone}
             onChange={(e) => setContactPhone(e.target.value)}
           />
-        </FormField>
-        <FormField label="Note for the seller" htmlFor="cr-note">
-          <Textarea
-            id="cr-note"
-            maxLength={500}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-        </FormField>
-        {error !== null ? (
-          <p role="alert" className="text-critical text-sm">
-            {error}
-          </p>
-        ) : null}
-        <ModalFooter>
+        </div>
+        <TextArea
+          label="Note for the seller"
+          id="cr-note"
+          maxLength={500}
+          showCount
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
+        {error !== null ? <AcAlert message={error} /> : null}
+        <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button
+          <AsyncButton
             type="submit"
             variant="primary"
             size="md"
+            icon={<Store size={15} />}
+            state={phaseOf(create.isPending, error)}
+            labels={{ idle: 'Open and ask the seller', busy: 'Opening…', error: 'Not opened' }}
             disabled={create.isPending || sellerId === ''}
-          >
-            {create.isPending ? 'Opening…' : 'Open and ask the seller'}
-          </Button>
-        </ModalFooter>
+          />
+        </DialogFooter>
       </form>
-    </Modal>
+    </Dialog>
   );
 }

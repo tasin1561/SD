@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
-import { Button, Card, CardBody } from '@skydrop/ui/components';
+import type { ReactElement } from 'react';
+import { Link2 } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
 import type { CreatedStaffInvitation } from '@skydrop/api-client';
+import { AcCallout, AcRevealValue } from '../../settings/_components/ac-parts';
 
 /**
  * One-shot invitation-link reveal. The plaintext token is only
@@ -17,50 +19,24 @@ export function InviteLinkRevealCard({
   readonly invitation: CreatedStaffInvitation;
   readonly onDismiss: () => void;
 }): ReactElement {
-  const [copied, setCopied] = useState(false);
-
-  async function copy(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(invitation.inviteUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2_500);
-    } catch {
-      // Clipboard may fail (insecure context); URL is still selectable.
-    }
-  }
-
   return (
-    <Card>
-      <CardBody>
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div>
-            <div className="text-accent text-xs uppercase tracking-wide mb-1">
-              Invitation link — copy + share
-            </div>
-            <div className="text-text-bright font-mono text-sm">
-              {invitation.email} <span className="text-text-muted">· {invitation.role}</span>
-            </div>
-            <p className="text-text-muted text-xs mt-1">
-              This is the only time we&apos;ll show this URL. Expires{' '}
-              {new Date(invitation.expiresAt).toLocaleString()}.
-            </p>
+    <section className="ac-card" data-tone="warn" aria-live="polite">
+      <div className="ac-card__head">
+        <div className="ac-card__titles">
+          <h2 className="ac-card__title">Invitation link — copy + share</h2>
+          <div className="ac-text">
+            {invitation.email} <span className="ac-faint">· {invitation.role}</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={onDismiss}>
-            Dismiss
-          </Button>
         </div>
-        <div className="mt-3 flex items-stretch gap-2">
-          <input
-            readOnly
-            value={invitation.inviteUrl}
-            onFocus={(e) => e.currentTarget.select()}
-            className="flex-1 px-3 py-1.5 rounded-[5px] bg-bg border border-border text-text-bright text-sm font-mono focus:border-accent focus:outline-none"
-          />
-          <Button type="button" variant="primary" size="md" onClick={() => void copy()}>
-            {copied ? 'Copied!' : 'Copy'}
-          </Button>
-        </div>
-      </CardBody>
-    </Card>
+        <Button variant="ghost" size="sm" onClick={onDismiss}>
+          Dismiss
+        </Button>
+      </div>
+      <AcCallout tone="warn" icon={<Link2 size={15} />}>
+        This is the only time we&apos;ll show this URL. Expires{' '}
+        {new Date(invitation.expiresAt).toLocaleString()}.
+      </AcCallout>
+      <AcRevealValue value={invitation.inviteUrl} label="Invitation link" />
+    </section>
   );
 }

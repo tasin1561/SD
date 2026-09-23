@@ -1,9 +1,15 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { Mail, Send } from 'lucide-react';
 import { useCreateInvitation } from '@/lib/api-hooks';
-import { Button, FormActions, FormField, Input, Modal, useToast } from '@skydrop/ui/components';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { phaseOf } from '../../settings/_components/ac-parts';
 
 /**
  * Invite-a-seller dialog. Email-only — the API generates the
@@ -45,40 +51,47 @@ export function CreateInvitationDialog({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(o) => (o ? onOpenChange(true) : close())}
       title="Invite a seller"
       description="An invitation email with a one-time registration link will be sent. The invitee creates their account; you can monitor it from the invitations panel."
+      icon={<Mail size={18} />}
+      locked={create.isPending}
     >
       <form
         onSubmit={(e) => {
           e.preventDefault();
           void handleSubmit();
         }}
-        className="space-y-3"
+        className="ac-form"
       >
-        <FormField label="Email address" htmlFor="invite-email" required error={error ?? undefined}>
-          <Input
-            id="invite-email"
-            type="email"
-            autoComplete="off"
-            required
-            placeholder="seller@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            disabled={create.isPending}
-          />
-        </FormField>
-        <FormActions>
+        <TextField
+          label="Email address"
+          id="invite-email"
+          type="email"
+          autoComplete="off"
+          required
+          placeholder="seller@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          disabled={create.isPending}
+          error={error ?? undefined}
+        />
+        <DialogFooter>
           <Button variant="ghost" size="md" onClick={close} disabled={create.isPending}>
             Cancel
           </Button>
-          <Button variant="primary" size="md" type="submit" disabled={create.isPending}>
-            {create.isPending ? 'Sending…' : 'Send invitation'}
-          </Button>
-        </FormActions>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            type="submit"
+            icon={<Send size={15} />}
+            state={phaseOf(create.isPending, error)}
+            labels={{ idle: 'Send invitation', busy: 'Sending…', error: 'Not sent' }}
+          />
+        </DialogFooter>
       </form>
-    </Modal>
+    </Dialog>
   );
 }
