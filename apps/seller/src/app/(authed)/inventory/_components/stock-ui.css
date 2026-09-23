@@ -4,6 +4,7 @@
 
 .inv-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-8);
   min-width: 0;
 }
@@ -13,6 +14,7 @@
 
 .inv-section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   min-width: 0;
 }
@@ -43,6 +45,7 @@
 }
 .inv-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
   min-width: 0;
 }
@@ -378,6 +381,7 @@
 }
 .prd-uploads {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2);
   margin: 0;
   padding: 0;
@@ -437,6 +441,7 @@
 /* ── Consignment legs ─────────────────────────────────────────────────── */
 .inv-legs {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
   min-width: 0;
 }

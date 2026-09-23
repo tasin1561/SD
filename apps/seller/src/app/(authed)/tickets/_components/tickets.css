@@ -3,6 +3,7 @@
 
 .tkt-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-6);
   min-width: 0;
 }
@@ -12,6 +13,7 @@
 
 .tkt-section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   min-width: 0;
 }
@@ -28,6 +30,7 @@
 
 .tkt-card {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   padding: var(--sp-4);
   border: 1px solid var(--line);
@@ -129,6 +132,7 @@
 }
 .tkt-well {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   padding: var(--sp-4);
   min-width: 0;
@@ -172,6 +176,7 @@
 /* ── Updates (list's opened row) ──────────────────────────────────────── */
 .tkt-updates {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2);
 }
 .tkt-updates__title {
@@ -222,6 +227,7 @@
 }
 .tkt-courier__list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
 }
 .tkt-courier__msg[data-ours='1'] {
@@ -390,6 +396,7 @@
 /* ── Conversation ─────────────────────────────────────────────────────── */
 .tkt-thread {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   margin: 0;
   padding: 0;
@@ -451,6 +458,7 @@
 
 .tkt-reply {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2);
   margin-top: var(--sp-4);
   padding-top: var(--sp-4);
@@ -471,6 +479,7 @@
 /* ── Raise dialog ─────────────────────────────────────────────────────── */
 .tkt-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
 }
 .tkt-error {

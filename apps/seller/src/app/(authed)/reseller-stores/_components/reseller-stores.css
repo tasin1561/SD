@@ -6,6 +6,7 @@
 
 .rs-page {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-6);
   min-width: 0;
 }
@@ -22,6 +23,7 @@
 }
 .rs-stack {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
   min-width: 0;
 }
@@ -91,6 +93,7 @@
 /* ── Section: heading + one bordered card ─────────────────────────────── */
 .rs-section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   min-width: 0;
 }
@@ -378,11 +381,13 @@
 /* ── Forms inside dialogs ─────────────────────────────────────────────── */
 .rs-form {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-4);
   min-width: 0;
 }
 .rs-fieldset {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
   min-width: 0;
   margin: 0;
@@ -399,6 +404,7 @@
 }
 .rs-switches {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-3);
 }
 .rs-file {
@@ -449,6 +455,7 @@
 }
 .rs-confirm-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   margin: 0;
   padding: var(--sp-2) var(--sp-3);
@@ -466,6 +473,7 @@
 /* ── Store detail ─────────────────────────────────────────────────────── */
 .rs-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-6);
   min-width: 0;
   padding-top: var(--sp-4);
@@ -577,6 +585,7 @@
 }
 .rs-credits {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-2);
   margin: 0;
   padding: 0;
@@ -634,6 +643,7 @@
 /* ── Requests ─────────────────────────────────────────────────────────── */
 .rs-changes {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   margin: 0;
   padding: 0;
