@@ -170,3 +170,97 @@
     transform: translateX(4px);
   }
 }
+
+/* ── while-busy: the van IS the busy state ──────────────────────────────
+   `cruise` (while the request runs): the pill shrinks into the van, which
+   rolls on the spot — wheels turning, road lines streaming, a small bob —
+   until the result. `drive` (success, page still here): it pulls away.
+   `reverse` (anything else): it backs into the button, which comes back
+   and shows the error. */
+.sk-van__box[data-story='cruise'] .sk-van__btn {
+  animation: sk-van-shrink var(--van-t) var(--ease-out) forwards;
+}
+.sk-van__box[data-story='cruise'] .sk-async__window {
+  opacity: 0;
+}
+.sk-van__box[data-story='cruise'] .sk-van__truck {
+  animation:
+    sk-van-appear calc(var(--van-t) * 0.5) var(--ease-out) forwards,
+    sk-van-bob calc(560ms * var(--motion-slow, 1)) ease-in-out calc(var(--van-t) * 0.5) infinite;
+}
+.sk-van__box[data-story='cruise'] .sk-van__wheel {
+  animation: sk-van-wheel calc(360ms * var(--motion-slow, 1)) linear infinite;
+}
+.sk-van__box[data-story='cruise'] .sk-van__lines {
+  animation: sk-van-stream calc(480ms * var(--motion-slow, 1)) linear infinite;
+}
+.sk-van__box[data-mode='while-busy'][data-story='drive'] .sk-van__btn {
+  animation: none;
+  opacity: 0;
+}
+.sk-van__box[data-mode='while-busy'][data-story='drive'] .sk-van__truck {
+  opacity: 1;
+  animation: sk-van-leave var(--van-t) var(--ease-in) forwards;
+}
+.sk-van__box[data-story='reverse'] .sk-van__btn {
+  animation: sk-van-back calc(520ms * var(--motion-slow, 1)) var(--ease-spring) both;
+}
+.sk-van__box[data-story='reverse'] .sk-van__truck {
+  opacity: 1;
+  animation: sk-van-reverse calc(520ms * var(--motion-slow, 1)) var(--ease-out) forwards;
+}
+.sk-van__box[data-story='reverse'] .sk-van__wheel {
+  animation: sk-van-wheel-back calc(260ms * var(--motion-slow, 1)) linear 2;
+}
+@keyframes sk-van-appear {
+  0%,
+  40% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sk-van-bob {
+  50% {
+    transform: translateY(-1.5px);
+  }
+}
+@keyframes sk-van-stream {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+@keyframes sk-van-leave {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(240px);
+  }
+}
+@keyframes sk-van-reverse {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-36px) scale(0.7);
+  }
+}
+@keyframes sk-van-wheel-back {
+  to {
+    transform: rotate(-360deg);
+  }
+}

@@ -83,16 +83,16 @@ function AsyncDemo({ ok }: { ok: boolean }): ReactElement {
 
 // ── Storytelling: van, plane ─────────────────────────────────────────
 /** DEMO ONLY: the storytelling buttons get a 700 ms fake request. */
-function storyRequest(ok: boolean): Promise<string> {
+function storyRequest(ok: boolean, delayMs = 700): Promise<string> {
   return new Promise((resolve, reject) => {
     window.setTimeout(() => {
       if (ok) resolve('ok');
       else reject(new Error('Demo: the server refused'));
-    }, 700);
+    }, delayMs);
   });
 }
 
-function VanDemo({ ok }: { ok: boolean }): ReactElement {
+function VanDemo({ ok, whileBusy = false }: { ok: boolean; whileBusy?: boolean }): ReactElement {
   return (
     <VanDriveOffButton
       icon={<Truck size={16} />}
@@ -100,7 +100,8 @@ function VanDemo({ ok }: { ok: boolean }): ReactElement {
       busyLabel="Creating…"
       doneLabel="Order created"
       errorLabel="Not created, retry"
-      onAction={() => storyRequest(ok)}
+      {...(whileBusy ? { mode: 'while-busy' as const } : {})}
+      onAction={() => storyRequest(ok, whileBusy ? 1800 : undefined)}
     />
   );
 }
@@ -409,8 +410,17 @@ export const ACTION_ENTRIES: readonly GalleryEntry[] = [
     id: 'van-drive-off',
     name: 'Van drive-off',
     patterns: ['van-drive-off'],
-    usedFor: '"Create order" — the button becomes a van, only after the real request succeeds.',
+    usedFor:
+      '"Create order": while-busy — the van IS the busy state and the page navigates on success; after-success — the van drives off once the request has succeeded.',
     states: [
+      {
+        label: 'While busy, success (the create-order mode; here the page stays, so it drives off)',
+        render: () => <VanDemo ok whileBusy />,
+      },
+      {
+        label: 'While busy, error: the van reverses into the red button',
+        render: () => <VanDemo ok={false} whileBusy />,
+      },
       { label: 'Success: 700 ms demo request, then the van', render: () => <VanDemo ok /> },
       { label: 'Error: shake + red, no van', render: () => <VanDemo ok={false} /> },
       { label: 'Reduced motion', render: () => <p style={{ maxWidth: 320 }}>{reducedNote}</p> },

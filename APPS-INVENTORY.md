@@ -292,3 +292,17 @@ Dense T + F + Ch + Sk + toasts + CD everywhere; queues (calls to make, units to 
 4. **Create order as a wizard.** A true multi-step wizard hides fields per step and changes the flow. I recommend a u34 stepper as a **progress header over the same single form** (it tracks the section you're in and jumps on click), which keeps the form and its behaviour exactly as they are. Or do you want the real wizard?
 5. **Confirm dialogs where none exist today** (§1 lists them). Add all of them, or only the money-moving and destructive ones (withdrawal, discard, delete, dispatch, receive-complete, RTO finalize, bin delete, invoice, role changes) and leave the routine ones (make default, toggle webhook, mark read)?
 6. **Auth screens.** They share a login design that a test requires to be byte-identical across the three consoles, with the telemetry look ("sys online", mono labels). Rebuild them in the brand look (updating that test) — or leave them for last?
+
+## 8. Owner decisions after Phase 3 (2026-09-24)
+
+- **Create order uses the van as the BUSY animation** (`VanDriveOffButton
+  mode="while-busy"`): the button turns into the van when the request is
+  sent, the van keeps driving while it runs, the page navigates the moment
+  the API succeeds (nothing waits for the animation), and on an error the
+  van reverses into the button, which shows the error. Done for seller
+  (`/orders/new`, "Submit for confirmation"). **The same treatment is
+  required for reseller and admin order creation** — applied in Phases 4
+  and 5 when those create-order screens move onto the primitives.
+- **Counters show, never enforce** (`countMax`), unless the field already
+  enforced the limit. No new `required`, `maxLength`, `pattern` or `min`/
+  `max`; a visual-only asterisk is `requiredMark`.

@@ -36,6 +36,23 @@ export type VanDriveOffButtonProps = Omit<
   /** `submit` validates the form (native `reportValidity`) and then runs `onAction`. */
   type?: 'button' | 'submit' | undefined;
   onSettled?: ((outcome: AsyncOutcome<unknown>) => void) | undefined;
+  /**
+   * `after-success` (default): the van drives off once the real request has
+   * succeeded. `while-busy`: the van IS the busy state — the button turns
+   * into it the moment the request is sent and it keeps driving until the
+   * result; a page that navigates on success simply leaves with the van
+   * still on the road (nothing waits for it). If the page is still there on
+   * success it drives off; on an error (or any end that is not a success)
+   * it reverses back into the button, which shows the error.
+   */
+  mode?: 'after-success' | 'while-busy' | undefined;
+  /**
+   * Controlled phase, for a page that runs its own request (it then omits
+   * `onAction`'s work or passes a no-op): `busy` while it runs, `error`
+   * when it failed. Moving from `busy` to anything else without passing
+   * `success` counts as "did not go through" and reverses the van.
+   */
+  state?: 'idle' | 'busy' | 'success' | 'error' | undefined;
 };
 
 /** The morph: shrink into the van, drive off. The button is back when it ends. */
@@ -44,6 +61,8 @@ const DRIVE_MS = 700;
 const SETTLE_MS = 2000;
 /** Reduced motion: how long the pill beside the button stays. */
 const PILL_MS = 3000;
+/** while-busy: the van backing into the button after a failure. */
+const REVERSE_MS = 520;
 
 /**
  * Van drive-off (storytelling 02) — the BUTTON becomes the van.
@@ -73,12 +92,16 @@ export function VanDriveOffButton({
   icon,
   type = 'button',
   onSettled,
+  mode = 'after-success',
+  state,
   onClick,
   disabled,
   className,
   ...rest
 }: VanDriveOffButtonProps): ReactElement {
   const [driving, setDriving] = useState(0);
+  const [reversing, setReversing] = useState(0);
+  const [shownError, setShownError] = useState(false);
   const [pill, setPill] = useState(false);
   const timers = useRef<number[]>([]);
 
@@ -97,7 +120,7 @@ export function VanDriveOffButton({
     minBusyMs: 500,
     settleMs: SETTLE_MS,
     onSettled: (outcome) => {
-      if (outcome.ok) {
+      if (outcome.ok && mode === 'after-success') {
         if (reducedMotion()) {
           setPill(true);
           later(() => setPill(false), PILL_MS);
@@ -110,8 +133,42 @@ export function VanDriveOffButton({
     },
   });
 
-  const phase = s.phase === 'success' && pill ? 'idle' : s.phase;
-  const story = driving > 0 ? 'drive' : phase;
+  const internal = s.phase === 'success' && pill ? 'idle' : s.phase;
+  const phase =
+    state === undefined ? internal : state === 'error' ? (shownError ? 'error' : 'idle') : state;
+  const cruising = mode === 'while-busy' && phase === 'busy' && !reducedMotion();
+
+  // while-busy: leaving `busy` any way other than success reverses the van;
+  // a controlled `error` then rests on the button for SETTLE_MS.
+  const prev = useRef(phase);
+  useEffect(() => {
+    const was = prev.current;
+    prev.current = phase;
+    if (mode !== 'while-busy' || was !== 'busy' || phase === 'busy') return;
+    if (phase === 'success') {
+      if (!reducedMotion()) {
+        setDriving((n) => n + 1);
+        later(() => setDriving(0), DRIVE_MS);
+      }
+      return;
+    }
+    if (!reducedMotion()) {
+      setReversing((n) => n + 1);
+      later(() => setReversing(0), REVERSE_MS);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `later` is stable in effect
+  }, [phase, mode]);
+  useEffect(() => {
+    if (state !== 'error') {
+      setShownError(false);
+      return;
+    }
+    setShownError(true);
+    later(() => setShownError(false), SETTLE_MS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `later` is stable in effect
+  }, [state]);
+
+  const story = driving > 0 ? 'drive' : reversing > 0 ? 'reverse' : cruising ? 'cruise' : phase;
   const lead =
     phase === 'busy' ? (
       <LoaderCircle size={16} className="sk-async__spin" />
@@ -123,11 +180,11 @@ export function VanDriveOffButton({
       icon
     );
   const announce =
-    s.phase === 'busy'
+    phase === 'busy'
       ? busyLabel
-      : s.phase === 'success'
+      : phase === 'success'
         ? doneLabel
-        : s.phase === 'error'
+        : phase === 'error'
           ? errorLabel
           : '';
 
@@ -139,12 +196,13 @@ export function VanDriveOffButton({
       if (form !== null && !form.reportValidity()) return;
       e.preventDefault();
     }
-    void s.run(onAction);
+    if (state === undefined) void s.run(onAction);
+    else void onAction();
   };
 
   return (
     <span className={clsx('sk-van', fullWidth && 'sk-van--full', className)}>
-      <span className="sk-van__box" data-story={story}>
+      <span className="sk-van__box" data-story={story} data-mode={mode}>
         <Button
           {...rest}
           type={type}
@@ -153,10 +211,12 @@ export function VanDriveOffButton({
           fullWidth={fullWidth}
           icon={lead}
           className="sk-async sk-van__btn"
+          // Reversing, the button is already heading back to its result
+          // (the error), so it says so as it returns.
           data-phase={driving > 0 ? 'busy' : phase}
           aria-label={label}
-          aria-busy={s.phase === 'busy' || undefined}
-          disabled={disabled === true || s.phase === 'busy' || driving > 0}
+          aria-busy={phase === 'busy' || undefined}
+          disabled={disabled === true || phase === 'busy' || driving > 0 || reversing > 0}
           onClick={handleClick}
         >
           <span className="sk-async__window" aria-hidden>
@@ -169,8 +229,8 @@ export function VanDriveOffButton({
           </span>
         </Button>
         <span className="sk-van__art" aria-hidden>
-          {driving > 0 ? (
-            <svg key={driving} className="sk-van__truck" viewBox="0 0 64 32" focusable="false">
+          {driving > 0 || reversing > 0 || cruising ? (
+            <svg className="sk-van__truck" viewBox="0 0 64 32" focusable="false">
               <path className="sk-van__lines" d="M2 13h11M5 18h9M1 23h10" pathLength={1} />
               <path className="sk-van__cargo" d="M16 6h24v18H16z" />
               <path className="sk-van__cab" d="M40 11h9l7 7v6H40z" />

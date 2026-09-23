@@ -25,6 +25,7 @@ import { PageHeader } from '@skydrop/ui/app/page-header';
 import { Stepper } from '@skydrop/ui/app/stepper';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { VanDriveOffButton } from '@skydrop/ui/app/van-drive-off';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { Select } from '@skydrop/ui/app/select';
@@ -162,6 +163,8 @@ export function NewOrderForm(): ReactElement {
   const [duplicates, setDuplicates] = useState<ReadonlyArray<DuplicateCandidate> | null>(null);
   const [pendingAction, setPendingAction] = useState<'draft' | 'submit' | null>(null);
   const [busy, setBusy] = useState<'draft' | 'submit' | null>(null);
+  // Drives the van's error state only: set when a SUBMIT did not go through.
+  const [submitFailed, setSubmitFailed] = useState(false);
   /**
    * Ticked by the seller when they mean to order stock we do not have
    * yet. Mirrors the duplicate-order acknowledgement already in this
@@ -476,6 +479,7 @@ export function NewOrderForm(): ReactElement {
   ): Promise<void> {
     e?.preventDefault();
     setError(null);
+    setSubmitFailed(false);
     const v = validate();
     if (v) {
       setError(v);
@@ -509,17 +513,32 @@ export function NewOrderForm(): ReactElement {
         }
       }
       setError(serverVerdict(err, 'Failed to create order.'));
+      if (action === 'submit') setSubmitFailed(true);
       setBusy(null);
     }
+  }
+
+  /** What "Submit for confirmation" does, from the button or from Enter:
+   *  a form that would be refused goes straight to `go`, which names the
+   *  problem exactly as before; only a submit that can go through is
+   *  asked to confirm first. */
+  function requestSubmit(): void {
+    if (validate() !== null) {
+      void go('submit', null);
+      return;
+    }
+    setConfirmSubmit(true);
   }
 
   /** The three actions, rendered twice — at the top and on the sticky
    *  bar. A long form whose only submit is 1,400px below the fold makes
    *  a seller scroll past everything they have just checked.
    *
-   *  "Submit for confirmation" navigates to the new order the moment it
-   *  succeeds, so it carries the rolling label only — a storytelling
-   *  animation there would either be cut off or delay the navigation. */
+   *  "Submit for confirmation" is the VAN, as the BUSY state (owner,
+   *  2026-09-24): it turns into the van the moment the order is sent and
+   *  keeps driving while it is created; the page navigates the instant the
+   *  API succeeds, so nothing waits for the animation. If it does not go
+   *  through, the van reverses into the button, which shows the error. */
   const actions = (
     <>
       {/* Desktop only in BOTH placements. On a phone the sticky bar is
@@ -544,14 +563,20 @@ export function NewOrderForm(): ReactElement {
         disabled={busy !== null}
         onClick={(e) => void go('draft', e)}
       />
-      <AsyncButton
+      <VanDriveOffButton
         type="submit"
+        mode="while-busy"
         variant="primary"
         className="ord-nowrap"
         icon={<Send size={15} />}
-        state={busy === 'submit' ? 'busy' : undefined}
-        labels={{ idle: 'Submit for confirmation', busy: 'Submitting…' }}
-        disabled={busy !== null}
+        label="Submit for confirmation"
+        busyLabel="Submitting…"
+        errorLabel="Not submitted"
+        state={busy === 'submit' ? 'busy' : submitFailed ? 'error' : 'idle'}
+        disabled={busy === 'draft'}
+        onAction={async () => {
+          requestSubmit();
+        }}
       />
     </>
   );
@@ -578,15 +603,8 @@ export function NewOrderForm(): ReactElement {
     <form
       className="ord-page"
       onSubmit={(e) => {
-        // A form that would be refused goes straight to `go`, which
-        // names the problem exactly as before; only a submit that can
-        // go through is asked to confirm first.
-        if (validate() !== null) {
-          void go('submit', e);
-          return;
-        }
         e.preventDefault();
-        setConfirmSubmit(true);
+        requestSubmit();
       }}
     >
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
@@ -1110,7 +1128,11 @@ export function NewOrderForm(): ReactElement {
           items.length === 1 ? 'the product' : `the ${items.length} products`
         }. Stock is held only when they confirm.`}
         confirmLabel="Submit for confirmation"
-        onConfirm={() => go('submit', null)}
+        // Closes at once: the van on the page carries the busy state while
+        // the order is created (go() never throws — it reports on the page).
+        onConfirm={() => {
+          void go('submit', null);
+        }}
       />
 
       <DuplicateOrderDialog
