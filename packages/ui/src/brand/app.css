@@ -7,6 +7,8 @@
  *   @import '@skydrop/ui/brand/scales.css';   raw hue steps (copy of marketing's)
  *   @import '@skydrop/ui/brand/theme.css';    four-block semantic theme (copy of marketing's)
  *   @import '@skydrop/ui/brand/app.css';      this file
+ *   @import '@skydrop/ui/brand/legacy.css';   ONLY while the app still renders
+ *                                             legacy `@skydrop/ui/components`
  *   @import 'tailwindcss';
  *
  * `scales.css` and `theme.css` are byte-identical copies of apps/marketing's
@@ -33,8 +35,6 @@
  *
  * Every value below reads a token — there is no raw colour in this file.
  */
-@import './legacy.css';
-
 :root {
   /* ── 1. App scales ─────────────────────────────────────────────────── */
   /* The face variables are set by each app's next/font/local call. */

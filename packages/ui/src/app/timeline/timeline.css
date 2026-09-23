@@ -1,6 +1,9 @@
 /* Timeline (u17). */
 .sk-tl {
   --tl-fill: var(--green-fill);
+  /* Steps stack their time chip by the TIMELINE's width, not the page's:
+     a timeline in a narrow card needs it as much as one on a phone. */
+  container-type: inline-size;
   display: grid;
   gap: var(--sp-4);
   min-width: 0;
@@ -215,7 +218,7 @@
   font-weight: var(--fw-semibold);
   white-space: nowrap;
 }
-@media (max-width: 379.98px) {
+@container (max-width: 440px) {
   .sk-tl__step {
     grid-template-columns: 24px minmax(0, 1fr);
   }

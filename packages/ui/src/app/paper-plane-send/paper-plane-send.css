@@ -1,28 +1,51 @@
-/* Paper-plane send (storytelling 03-04). The plane pops in beside the
-   button, banks, and flies off up-right on a curve (transform keyframes);
-   the "Sent" line fades up behind it at 45 % and stays. */
+/* Paper-plane send (storytelling 03-04): the button folds into the plane.
+   Colours and the label roll come from .sk-async (async-button.css); this
+   file adds the morph. `fly` (700 ms): 0–28 % the pill folds to a square and
+   the label fades, 22–40 % the plane pops out and banks back, 40–100 % it
+   flies off up-right trailing a dashed line. Then `success`: the pill
+   springs back green with a check. Reduced motion never reaches `fly`. */
 .sk-plane {
-  --plane-t: calc(1000ms * var(--motion-slow, 1));
+  --plane-t: calc(700ms * var(--motion-slow, 1));
+  position: relative;
   display: inline-flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--sp-3);
+  max-width: 100%;
 }
-.sk-plane__stage {
+.sk-plane--full {
+  display: flex;
+}
+.sk-plane--full .sk-plane__box {
+  flex: 1;
+}
+.sk-plane__box {
   position: relative;
   display: inline-grid;
-  pointer-events: none;
-  /* The flight never widens the page: it fades out inside this margin. */
-  overflow: clip;
-  overflow-clip-margin: 96px;
+  max-width: 100%;
 }
-.sk-plane__run {
+.sk-plane__art {
+  position: absolute;
+  inset: 0;
   display: grid;
-  align-items: center;
-  justify-items: start;
+  place-items: center;
+  pointer-events: none;
+  /* The flight leaves through the button's own edge, never past the page. */
+  overflow: clip;
+  overflow-clip-margin: var(--sp-6);
 }
-.sk-plane__run > * {
-  grid-area: 1 / 1;
+.sk-plane__box[data-story='fly'] .sk-plane__btn {
+  animation: sk-plane-fold var(--plane-t) var(--ease-out) forwards;
+}
+.sk-plane__box[data-story='fly'] .sk-async__window {
+  opacity: 0;
+  transition: opacity calc(var(--plane-t) * 0.2) var(--ease-out);
+}
+.sk-plane__box[data-story='success'] .sk-plane__btn {
+  animation: sk-plane-back var(--dur-slow) var(--ease-spring);
+}
+.sk-plane__box[data-story='error'] .sk-plane__btn {
+  animation: sk-plane-shake calc(360ms * var(--motion-slow, 1)) var(--ease-out);
 }
 .sk-plane__plane {
   width: 26px;
@@ -42,57 +65,90 @@
   stroke: var(--fg-faint);
   stroke-width: 1.4;
   stroke-linecap: round;
-  stroke-dasharray: 2 3;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: sk-plane-trail var(--plane-t) var(--ease-out) forwards;
 }
-.sk-plane__done {
+.sk-plane__pill {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1);
   min-height: var(--ctl-h-sm);
   padding: 0 var(--sp-3);
+  border: 1px solid var(--green-line);
   border-radius: var(--r-pill);
   background: var(--green-tint);
   color: var(--green-on-tint);
   font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
-  opacity: 0;
-  transform: translateY(4px);
-  animation: sk-plane-done calc(var(--plane-t) * 0.3) var(--ease-out) calc(var(--plane-t) * 0.45)
-    forwards;
 }
-@keyframes sk-plane-fly {
+@keyframes sk-plane-fold {
   0% {
-    opacity: 0;
-    transform: translate(0, 6px) scale(0.5) rotate(10deg);
-  }
-  20% {
-    opacity: 1;
-    transform: translate(0, 0) scale(1) rotate(0deg);
-  }
-  35% {
-    opacity: 1;
-    transform: translate(-4px, 2px) rotate(-6deg);
-  }
-  70% {
-    opacity: 1;
-    transform: translate(56px, -22px) rotate(-18deg) scale(0.9);
-  }
-  100% {
-    opacity: 0;
-    transform: translate(110px, -60px) rotate(-30deg) scale(0.7);
-  }
-}
-@keyframes sk-plane-done {
-  to {
     opacity: 1;
     transform: none;
   }
+  28%,
+  34% {
+    opacity: 1;
+    transform: scale(0.26, 0.9) rotate(-4deg);
+  }
+  42%,
+  100% {
+    opacity: 0;
+    transform: scale(0.2, 0.7);
+  }
 }
-.sk-plane__live {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+@keyframes sk-plane-fly {
+  0%,
+  22% {
+    opacity: 0;
+    transform: scale(0.4) rotate(12deg);
+  }
+  36% {
+    opacity: 1;
+    transform: none;
+  }
+  46% {
+    opacity: 1;
+    transform: translate(-4px, 2px) rotate(-6deg);
+  }
+  80% {
+    opacity: 1;
+    transform: translate(60px, -18px) rotate(-18deg) scale(0.9);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(120px, -40px) rotate(-28deg) scale(0.7);
+  }
+}
+@keyframes sk-plane-trail {
+  0%,
+  46% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  78% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+@keyframes sk-plane-back {
+  from {
+    opacity: 0;
+    transform: scale(0.8, 0.9);
+  }
+}
+@keyframes sk-plane-shake {
+  20%,
+  60% {
+    transform: translateX(-4px);
+  }
+  40%,
+  80% {
+    transform: translateX(4px);
+  }
 }

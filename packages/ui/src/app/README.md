@@ -87,3 +87,13 @@ micro budget). `node scripts/primitive-sizes.mjs` reports them.
 already has the pattern (`apps/marketing/src/components/micro/<name>`), start
 from it — copy, then adapt to app density and these tokens. Never modify
 apps/marketing.
+
+## Recorded budget exceptions (owner, 2026-09-23)
+
+`node scripts/primitive-sizes.mjs` reports these as exceptions, not failures:
+
+- **`shell`** (≈3.4 KB JS, 2.6 KB CSS) — the app chrome, loaded once per app.
+- **`sign-in-map`** (≈11.4 KB JS) — the full-detail coastline behind the
+  sign-in screen. `sign-in` itself stays small; it renders `LazyCorridorMap`,
+  which imports the map only after first paint when the browser is idle, so
+  the form is interactive at once.

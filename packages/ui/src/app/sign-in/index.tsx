@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import { CorridorMap } from './corridor-map';
+import { LazyCorridorMap } from '../sign-in-map';
 import './sign-in.css';
 
 /**
@@ -8,7 +8,7 @@ import './sign-in.css';
  * portal"), replacing three copies of `AuthConsoleShell`.
  *
  * The brand look: Plus Jakarta, the corridor gradient as an accent along
- * the card, and the corridor MAP (`CorridorMap`) as a calm background.
+ * the card, and the corridor MAP (`LazyCorridorMap`, loaded after first paint) as a calm background.
  * No "sys online", no mono telemetry labels.
  *
  * What the apps' login specs pin, and so what this renders verbatim: the
@@ -45,7 +45,7 @@ export function SignInScreen({
   return (
     <div className="sk-signin">
       <div className="sk-signin__backdrop" aria-hidden>
-        <CorridorMap className="sk-signin__map" />
+        <LazyCorridorMap className="sk-signin__map" />
         <span className="sk-signin__veil" />
         <span className="sk-signin__glow" />
       </div>

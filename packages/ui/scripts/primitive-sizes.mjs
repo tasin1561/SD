@@ -20,6 +20,11 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'app');
 const JS_BUDGET = 3072;
 const CSS_BUDGET = 2048;
 const strict = process.argv.includes('--strict');
+// Owner-approved exceptions (2026-09-23). Reported, never counted as OVER.
+const EXCEPTIONS = {
+  shell: 'app chrome, loaded once per app',
+  'sign-in-map': 'full-detail coastline, lazy-loaded after first paint',
+};
 
 const kb = (n) => `${(n / 1024).toFixed(2)} KB`;
 const rows = [];
@@ -49,16 +54,17 @@ for (const name of readdirSync(root).sort()) {
     .join('\n');
   const jsGz = js ? gzipSync(js, { level: 9 }).length : 0;
   const cssGz = css ? gzipSync(css, { level: 9 }).length : 0;
-  const flag = jsGz > JS_BUDGET || cssGz > CSS_BUDGET;
+  const excepted = EXCEPTIONS[name];
+  const flag = !excepted && (jsGz > JS_BUDGET || cssGz > CSS_BUDGET);
   if (flag) over += 1;
-  rows.push({ name, jsGz, cssGz, flag });
+  rows.push({ name, jsGz, cssGz, flag, excepted });
 }
 
 const w = Math.max(...rows.map((r) => r.name.length), 9);
 console.log(`${'primitive'.padEnd(w)}   JS gz      CSS gz`);
 for (const r of rows) {
   console.log(
-    `${r.name.padEnd(w)}   ${kb(r.jsGz).padStart(8)}   ${kb(r.cssGz).padStart(8)}${r.flag ? '   OVER' : ''}`,
+    `${r.name.padEnd(w)}   ${kb(r.jsGz).padStart(8)}   ${kb(r.cssGz).padStart(8)}${r.flag ? '   OVER' : ''}${r.excepted ? `   exception: ${r.excepted}` : ''}`,
   );
 }
 const tj = rows.reduce((a, r) => a + r.jsGz, 0);

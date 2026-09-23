@@ -75,6 +75,7 @@ export function Timeline({
   progress,
   expected,
   label = 'Journey',
+  stateWords,
   className,
 }: {
   readonly steps: readonly TimelineStep[];
@@ -85,6 +86,8 @@ export function Timeline({
     | { readonly label?: string; readonly day: ReactNode; readonly time?: ReactNode }
     | undefined;
   readonly label?: string;
+  /** The spoken state words, translated ("Completed" → "पूरा हुआ"). */
+  readonly stateWords?: Partial<Record<TimelineStepState, string>> | undefined;
   readonly className?: string | undefined;
 }): ReactElement {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -192,7 +195,7 @@ export function Timeline({
               </span>
               <span className="sk-tl__body">
                 <span className="sk-tl__label">
-                  <span className="sk-tl__sr">{`${STATE_WORD[s.state]}: `}</span>
+                  <span className="sk-tl__sr">{`${stateWords?.[s.state] ?? STATE_WORD[s.state]}: `}</span>
                   {s.label}
                 </span>
                 {s.description !== undefined && (
