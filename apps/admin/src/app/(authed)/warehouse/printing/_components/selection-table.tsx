@@ -1,17 +1,10 @@
 'use client';
 
 import type { ReactElement } from 'react';
-import {
-  Money,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, TableEmpty, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import '../../_components/benches.css';
 import type { PrintQueueRow } from '@/lib/ops-hooks';
 
 /**
@@ -48,12 +41,13 @@ export function SelectionTable({
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.shipmentId));
 
   return (
-    <Table>
+    <Table caption="Parcels">
       <THead>
         <Tr>
           <Th>
             <input
               type="checkbox"
+              className="wh-check"
               checked={allSelected}
               onChange={onToggleAll}
               aria-label={allSelected ? 'Clear selection' : 'Select every parcel'}
@@ -64,58 +58,61 @@ export function SelectionTable({
           <Th>Courier</Th>
           <Th>AWB</Th>
           <Th>Destination</Th>
-          <Th>COD</Th>
-          <Th>Items</Th>
-          {showPrintCount && <Th>Printed</Th>}
+          <Th align="right">COD</Th>
+          <Th align="right">Items</Th>
+          {showPrintCount && <Th align="right">Printed</Th>}
         </Tr>
       </THead>
       <TBody>
         {rows.length === 0 ? (
           <TableEmpty colSpan={showPrintCount ? 8 : 7}>
-            <div className="flex flex-col items-center gap-1.5 py-2">
-              <div className="font-medium">{emptyTitle}</div>
-              <div className="text-xs text-text-muted">{emptyBody}</div>
+            <div className="wh-empty-cell">
+              <div className="wh-empty-cell__title">{emptyTitle}</div>
+              <div className="wh-note">{emptyBody}</div>
             </div>
           </TableEmpty>
         ) : (
           rows.map((r) => (
-            <Tr key={r.shipmentId}>
+            <Tr key={r.shipmentId} selected={selected.has(r.shipmentId)}>
               <Td>
                 <input
                   type="checkbox"
+                  className="wh-check"
                   checked={selected.has(r.shipmentId)}
                   onChange={() => onToggle(r.shipmentId)}
                   aria-label={`Select ${r.orderNumber}`}
                 />
               </Td>
               <Td>
-                <div className="font-medium">{r.orderNumber}</div>
-                <div className="text-xs text-text-muted">
-                  {r.sellerCompanyName ?? r.shipmentNumber}
-                </div>
+                <div className="sk-ident wh-item__name">{r.orderNumber}</div>
+                <div className="wh-faint">{r.sellerCompanyName ?? r.shipmentNumber}</div>
               </Td>
               <Td>
                 {r.isManualCourier ? (
-                  <StatusBadge kind="pending" label={r.courierName} />
+                  <StatusChip kind="pending" label={r.courierName} size="sm" />
                 ) : (
-                  <span className="capitalize">{r.courierName}</span>
+                  <span className="wh-capitalize">{r.courierName}</span>
                 )}
               </Td>
               <Td>
-                <span className="font-mono text-xs">{r.awbNumber ?? '—'}</span>
+                <span className="sk-ident">{r.awbNumber ?? '—'}</span>
               </Td>
               <Td>
                 <div>{r.destCity === '' ? '—' : r.destCity}</div>
-                <div className="text-xs text-text-muted tabular-nums">{r.destPostalCode}</div>
+                <div className="wh-faint sk-figure">{r.destPostalCode}</div>
               </Td>
-              <Td>{r.codAmountInr === null ? '—' : <Money amount={r.codAmountInr} />}</Td>
-              <Td className="tabular-nums">{r.itemCount}</Td>
+              <Td align="right">
+                {r.codAmountInr === null ? '—' : <Money amount={r.codAmountInr} />}
+              </Td>
+              <Td align="right" className="sk-figure">
+                {r.itemCount}
+              </Td>
               {showPrintCount && (
-                <Td className="tabular-nums">
+                <Td align="right" className="sk-figure">
                   {/* Above one, a duplicate label may physically exist —
                       which is exactly what somebody is here to weigh
                       before adding another. */}
-                  <span className={r.labelPrintCount > 1 ? 'text-status-pending-fg' : undefined}>
+                  <span className={r.labelPrintCount > 1 ? 'wh-warn' : undefined}>
                     {r.labelPrintCount}×
                   </span>
                 </Td>

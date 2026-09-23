@@ -3,22 +3,16 @@
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
 import { GoodsReceiptStatus } from '@skydrop/db';
-import {
-  EmptyState,
-  ErrorState,
-  LoadingState,
-  Select,
-  Table,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-  TablePaginator,
-} from '@skydrop/ui/components';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
 import { useGoodsReceiptsList, useSellersList, useWarehouses } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { useRouter } from 'next/navigation';
+import '../../_components/benches.css';
 
 const PAGE_SIZE = 20;
 // No DISCREPANCY. Nothing writes that status any more (CNS-3): a count
@@ -59,15 +53,15 @@ export function ReceiveIndex(): ReactElement {
   });
 
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
+    <div className="wh-stack">
+      <div className="wh-fields wh-filters">
         <Select
+          label="Status"
           value={status}
           onChange={(e) => {
             setStatus(e.target.value as GoodsReceiptStatus | '');
             setPage(1);
           }}
-          className="max-w-[180px]"
         >
           <option value="">All statuses</option>
           {STATUSES.map((s) => (
@@ -79,13 +73,13 @@ export function ReceiveIndex(): ReactElement {
 
         {maySeeSellers && (
           <Select
+            label="Seller"
             value={sellerId}
             aria-label="Filter by seller"
             onChange={(e) => {
               setSellerId(e.target.value);
               setPage(1);
             }}
-            className="max-w-[220px]"
           >
             <option value="">All sellers</option>
             {(sellers.data?.items ?? []).map((s) => (
@@ -97,13 +91,13 @@ export function ReceiveIndex(): ReactElement {
         )}
 
         <Select
+          label="Warehouse"
           value={warehouseId}
           aria-label="Filter by warehouse"
           onChange={(e) => {
             setWarehouseId(e.target.value);
             setPage(1);
           }}
-          className="max-w-[200px]"
         >
           <option value="">All warehouses</option>
           {(warehouses.data ?? []).map((w) => (
@@ -115,7 +109,9 @@ export function ReceiveIndex(): ReactElement {
       </div>
 
       {list.isLoading ? (
-        <LoadingState label="Loading goods receipts…" />
+        <section className="wh-card">
+          <SkeletonRows rows={6} cols={7} label="Loading goods receipts…" />
+        </section>
       ) : list.isError ? (
         <ErrorState
           message={list.error?.message ?? 'Failed to load.'}
@@ -127,73 +123,71 @@ export function ReceiveIndex(): ReactElement {
           description="Sellers declare stock as a consignment from Inbound in their portal before shipping. Once it arrives, its goods receipt appears here for the warehouse team to count."
         />
       ) : (
-        <Table>
-          <THead>
-            <Tr>
-              <Th>Receipt</Th>
-              <Th>Consignment</Th>
-              <Th>Seller</Th>
-              <Th>Status</Th>
-              <Th className="text-right">Products</Th>
-              <Th>Declared</Th>
-              <Th>Last update</Th>
-            </Tr>
-          </THead>
-          <TBody>
-            {list.data.items.map((r) => (
-              <Tr key={r.id} onActivate={() => router.push(`/warehouse/receive/${r.id}`)}>
-                <Td className="font-mono text-xs">
-                  <Link
-                    href={`/warehouse/receive/${r.id}`}
-                    className="text-text-bright hover:underline"
-                  >
-                    {r.receiptNumber}
-                  </Link>
-                </Td>
-                {/*
-                  A leg of a consignment says so, and links back to it.
-                  Without this the queue showed a bare GR- number and an
-                  operator had no way to tell it was the same thing as the
-                  consignment open in another tab — two lists of one
-                  parcel with nothing joining them.
-                */}
-                <Td className="font-mono text-xs">
-                  {r.consignment === null ? (
-                    <span className="text-text-faint">—</span>
-                  ) : (
-                    <Link
-                      href={`/warehouse/consignments/${r.consignment.id}`}
-                      className="text-accent hover:underline"
-                    >
-                      {r.consignment.consignmentNumber}
-                    </Link>
-                  )}
-                </Td>
-                <Td>{r.seller.companyName}</Td>
-                <Td className="text-text-muted text-xs uppercase">{r.status}</Td>
-                <Td className="text-right font-mono">{r.lines.length}</Td>
-                <Td className="text-text-faint text-xs font-mono">
-                  {new Date(r.createdAt).toISOString().slice(0, 10)}
-                </Td>
-                <Td className="text-text-faint text-xs font-mono">
-                  {new Date(r.updatedAt).toISOString().slice(0, 16).replace('T', ' ')}
-                </Td>
+        <div className="wh-stack">
+          <Table caption="Goods receipts">
+            <THead>
+              <Tr>
+                <Th>Receipt</Th>
+                <Th>Consignment</Th>
+                <Th>Seller</Th>
+                <Th>Status</Th>
+                <Th align="right">Products</Th>
+                <Th>Declared</Th>
+                <Th>Last update</Th>
               </Tr>
-            ))}
-          </TBody>
-          <tfoot>
-            <tr>
-              <td colSpan={6} className="p-0">
-                <TablePaginator
-                  page={page}
-                  pageSize={PAGE_SIZE}
-                  total={list.data.total}
-                  onPageChange={setPage}
-                />
-              </td>
-            </tr>
-          </tfoot>
-        </Table>
+            </THead>
+            <TBody>
+              {list.data.items.map((r) => (
+                <Tr key={r.id} onActivate={() => router.push(`/warehouse/receive/${r.id}`)}>
+                  <Td>
+                    <Link href={`/warehouse/receive/${r.id}`} className="sk-ident wh-cell-link">
+                      {r.receiptNumber}
+                    </Link>
+                  </Td>
+                  {/*
+                    A leg of a consignment says so, and links back to it.
+                    Without this the queue showed a bare GR- number and an
+                    operator had no way to tell it was the same thing as the
+                    consignment open in another tab — two lists of one
+                    parcel with nothing joining them.
+                  */}
+                  <Td>
+                    {r.consignment === null ? (
+                      <span className="wh-faint">—</span>
+                    ) : (
+                      <Link
+                        href={`/warehouse/consignments/${r.consignment.id}`}
+                        className="sk-ident wh-link"
+                      >
+                        {r.consignment.consignmentNumber}
+                      </Link>
+                    )}
+                  </Td>
+                  <Td>{r.seller.companyName}</Td>
+                  <Td>
+                    <StatusChip kind="neutral" label={r.status} size="sm" />
+                  </Td>
+                  <Td align="right" className="sk-figure">
+                    {r.lines.length}
+                  </Td>
+                  <Td className="sk-figure wh-faint">
+                    {new Date(r.createdAt).toISOString().slice(0, 10)}
+                  </Td>
+                  <Td className="sk-figure wh-faint">
+                    {new Date(r.updatedAt).toISOString().slice(0, 16).replace('T', ' ')}
+                  </Td>
+                </Tr>
+              ))}
+            </TBody>
+          </Table>
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={list.data.total}
+            onPageChange={setPage}
+            label="Goods receipts pages"
+          />
+        </div>
       )}
     </div>
   );

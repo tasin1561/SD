@@ -2,21 +2,16 @@
 
 import Link from 'next/link';
 import { useState, type ReactElement } from 'react';
-import { ArrowLeft } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  LoadingState,
-  PageHeader,
-  Select,
-  useToast,
-} from '@skydrop/ui/components';
+import { Check, ClipboardCheck, PackageX } from 'lucide-react';
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TextField } from '@skydrop/ui/app/text-field';
 import type { RecordReceiptLineInput } from '@skydrop/api-client';
 import {
   useCancelGoodsReceipt,
@@ -32,6 +27,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 import { SkuLabelSheetView } from '@/components/sku-label-sheet';
+import '../../_components/benches.css';
 
 /**
  * Admin receive-station — full goods-receipt lifecycle in one page:
@@ -65,6 +61,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   const mayManage = usePermission('inventory.goods_receipts.manage');
   const [busy, setBusy] = useState<'start' | 'record' | 'complete' | 'cancel' | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
+  const [completeOpen, setCompleteOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -78,7 +75,14 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
 
   const bins = useWarehouseBins(detail.data?.warehouseId ?? '');
 
-  if (detail.isLoading) return <LoadingState label="Loading…" />;
+  if (detail.isLoading)
+    return (
+      <div className="wh-page">
+        <section className="wh-card">
+          <SkeletonRows rows={6} cols={3} label="Loading…" />
+        </section>
+      </div>
+    );
   if (detail.isError)
     return (
       <ErrorState
@@ -200,7 +204,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     (l) => !scanCountMet((serialsByLine[l.id] ?? []).length, lineQty(l.id, l.receivedQty), true),
   );
 
-  async function onComplete(): Promise<void> {
+  async function onComplete(): Promise<boolean> {
     setError(null);
     setBusy('complete');
     // Only STRICT lines that actually captured something go in the map —
@@ -229,8 +233,10 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       } else {
         toast.info(`Status now ${result.status}.`);
       }
+      return true;
     } catch (e) {
       setError(serverVerdict(e));
+      return false;
     } finally {
       setBusy(null);
     }
@@ -251,21 +257,26 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
     }
   }
 
-  return (
-    <div>
-      <Link
-        href="/warehouse/receive"
-        className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
-      >
-        <ArrowLeft size={12} /> Receive queue
-      </Link>
+  const recordedCount = r.lines.filter((l) => l.receivedQty !== null).length;
 
+  return (
+    <div className="wh-page">
       <PageHeader
-        title={<span className="font-mono">{r.receiptNumber}</span>}
+        breadcrumbs={[
+          { label: 'Warehouse', href: '/warehouse' },
+          { label: 'Receive queue', href: '/warehouse/receive' },
+          { label: r.receiptNumber },
+        ]}
+        Link={Link}
+        title={<span className="sk-ident">{r.receiptNumber}</span>}
+        meta={
+          <span className="wh-row">
+            <StatusChip kind={isCompleted ? 'delivered' : 'neutral'} label={r.status} />
+          </span>
+        }
         subtitle={
           <span>
-            {r.seller.companyName} · {r.lines.length} product(s) ·{' '}
-            <span className="uppercase tracking-wide">{r.status}</span>
+            {r.seller.companyName} · {r.lines.length} product(s)
             {/*
               Says which consignment this is a leg of, and links back.
               This page is the BENCH — counting happens here; the
@@ -276,7 +287,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 {' · leg of '}
                 <Link
                   href={`/warehouse/consignments/${r.consignment.id}`}
-                  className="text-accent font-mono hover:underline"
+                  className="sk-ident wh-link"
                 >
                   {r.consignment.consignmentNumber}
                 </Link>
@@ -285,7 +296,7 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
           </span>
         }
         action={
-          <div className="flex items-center gap-2">
+          <div className="wh-row">
             {isPending && (
               <Button
                 variant="primary"
@@ -336,7 +347,10 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                   variant="primary"
                   size="md"
                   disabled={busy !== null || serialsOverCount}
-                  onClick={() => void onComplete()}
+                  onClick={() => {
+                    setError(null);
+                    setCompleteOpen(true);
+                  }}
                 >
                   {busy === 'complete' ? 'Completing…' : 'Complete'}
                 </Button>
@@ -347,152 +361,145 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
       />
 
       {error && (
-        <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px] mb-3">
+        <div role="alert" className="wh-alert">
           {error}
         </div>
       )}
 
-      <Card>
-        <CardBody>
-          {/* Everything the receipt carries. Somebody at a bench deciding
-              whether a carton matches its paperwork should not have to
-              open another screen for a field the API already sent. */}
-          <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
-            <Field label="Seller" value={r.seller.companyName} />
-            <Field label="Seller email" value={r.seller.email} />
-            <Field label="Seller ref" value={r.sellerReference ?? '—'} />
-            <Field label="Status" value={r.status} />
+      <section className="wh-card">
+        {/* Everything the receipt carries. Somebody at a bench deciding
+            whether a carton matches its paperwork should not have to
+            open another screen for a field the API already sent. */}
+        <dl className="wh-facts">
+          <Field label="Seller" value={r.seller.companyName} />
+          <Field label="Seller email" value={r.seller.email} />
+          <Field label="Seller ref" value={r.sellerReference ?? '—'} ident />
+          <Field label="Status" value={r.status} />
+          <Field
+            label="Expected arrival"
+            value={r.expectedArrivalAt ? new Date(r.expectedArrivalAt).toLocaleDateString() : '—'}
+          />
+          <Field label="Warehouse" value={`${r.warehouse.code} — ${r.warehouse.name}`} />
+          <Field label="Declared" value={new Date(r.createdAt).toLocaleString()} />
+          {/* `receivedAt` is stamped at completion; the receipt moving
+              to ARRIVING is what "started" means, and the staff id
+              recorded then is who took it on. */}
+          <Field
+            label="Received by"
+            value={r.receivedBy?.emailDisplay ?? r.receivedBy?.email ?? '—'}
+          />
+          <Field
+            label="Received at"
+            value={r.receivedAt ? new Date(r.receivedAt).toLocaleString() : '—'}
+          />
+          <Field label="Discrepancy" value={r.hasDiscrepancies ? 'YES' : 'no'} />
+          {/*
+            Computed from the LINES, which carry the sku. The stored
+            `discrepancyNotes` is still shown beneath when it holds
+            something the lines cannot say — a transit loss, an
+            operator's note — but the per-line variance is derived, so
+            it can never go stale the way a stored sentence does.
+          */}
+          {variance.length > 0 && (
             <Field
-              label="Expected arrival"
-              value={r.expectedArrivalAt ? new Date(r.expectedArrivalAt).toLocaleDateString() : '—'}
+              label="Counted differently"
+              value={variance
+                .map((v) => `${v.sku}: counted ${v.got} against ${v.want} expected`)
+                .join('; ')}
             />
-            <Field label="Warehouse" value={`${r.warehouse.code} — ${r.warehouse.name}`} />
-            <Field label="Declared" value={new Date(r.createdAt).toLocaleString()} />
-            {/* `receivedAt` is stamped at completion; the receipt moving
-                to ARRIVING is what "started" means, and the staff id
-                recorded then is who took it on. */}
-            <Field
-              label="Received by"
-              value={r.receivedBy?.emailDisplay ?? r.receivedBy?.email ?? '—'}
-            />
-            <Field
-              label="Received at"
-              value={r.receivedAt ? new Date(r.receivedAt).toLocaleString() : '—'}
-            />
-            <Field label="Discrepancy" value={r.hasDiscrepancies ? 'YES' : 'no'} />
-            {/*
-              Computed from the LINES, which carry the sku. The stored
-              `discrepancyNotes` is still shown beneath when it holds
-              something the lines cannot say — a transit loss, an
-              operator's note — but the per-line variance is derived, so
-              it can never go stale the way a stored sentence does.
-            */}
-            {variance.length > 0 && (
-              <Field
-                label="Counted differently"
-                value={variance
-                  .map((v) => `${v.sku}: counted ${v.got} against ${v.want} expected`)
-                  .join('; ')}
-              />
-            )}
-            {r.discrepancyNotes && <Field label="Notes" value={r.discrepancyNotes} />}
-          </div>
-        </CardBody>
-      </Card>
+          )}
+          {r.discrepancyNotes && <Field label="Notes" value={r.discrepancyNotes} />}
+        </dl>
+      </section>
 
-      <h2 className="text-text-bright text-sm font-medium mt-5 mb-2">Products</h2>
-
-      <div className="space-y-2">
+      <div className="wh-stack">
+        <SectionHeading title="Products" />
         {r.lines.map((line) => (
           <div
             key={line.id}
-            className={
-              'p-3 rounded-[6px] border ' +
-              (line.receivedQty !== null
-                ? 'border-[var(--color-accent-ring)] bg-[var(--color-accent-tint)]'
-                : 'border-border')
-            }
+            className="wh-item"
+            data-done={line.receivedQty !== null ? '1' : undefined}
           >
-            <div className="flex items-baseline justify-between mb-2">
-              <div className="flex items-start gap-3">
+            <div className="wh-item__head">
+              <div className="wh-item__who">
                 {/* The carton is open on the bench; a photograph settles
                     "is this the right thing" faster than a SKU string. */}
                 {line.primaryImageUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={line.primaryImageUrl}
-                    alt=""
-                    className="border-border h-12 w-12 shrink-0 rounded-[4px] border object-cover"
-                  />
+                  <img src={line.primaryImageUrl} alt="" className="wh-thumb" />
                 ) : (
-                  <div
-                    className="border-border bg-surface-raised h-12 w-12 shrink-0 rounded-[4px] border"
-                    aria-hidden
-                  />
+                  <div className="wh-thumb" aria-hidden />
                 )}
-                <div>
-                  <div className="text-text-bright text-sm">
+                <div className="wh-min0">
+                  <div className="wh-item__name">
                     {line.variant.product.name}
                     {line.variant.variantLabel ? (
-                      <span className="text-text-muted"> · {line.variant.variantLabel}</span>
+                      <span className="wh-note"> · {line.variant.variantLabel}</span>
                     ) : null}
                   </div>
-                  <div className="text-text-faint text-xs mt-0.5 font-mono">
-                    {line.variant.skuCode} · expected {line.expectedQty}
+                  <div className="wh-item__sub">
+                    <span className="sk-ident">{line.variant.skuCode}</span> ·{' '}
+                    <span className="sk-figure">expected {line.expectedQty}</span>
                     {line.inventoryMode === 'STRICT' ? ' · per-unit tracked' : ''}
                   </div>
-                  <div className="text-text-muted mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                    <span>Unit cost {line.unitCostInr ?? '—'}</span>
-                    <span>Damaged {line.damagedQty ?? 0}</span>
-                    <span>
+                  <div className="wh-item__facts">
+                    <span className="sk-figure">Unit cost {line.unitCostInr ?? '—'}</span>
+                    <span className="sk-figure">Damaged {line.damagedQty ?? 0}</span>
+                    <span className="sk-figure">
                       Mfg{' '}
                       {line.manufacturedAt
                         ? new Date(line.manufacturedAt).toLocaleDateString()
                         : '—'}
                     </span>
-                    <span>
+                    <span className="sk-figure">
                       Exp {line.expiresAt ? new Date(line.expiresAt).toLocaleDateString() : '—'}
                     </span>
                     {line.batch !== null && (
-                      <span className="font-mono">batch {line.batch.batchCode}</span>
+                      <span>
+                        batch <span className="sk-ident">{line.batch.batchCode}</span>
+                      </span>
                     )}
                     {line.putawayBin !== null && (
-                      <span className="font-mono">bin {line.putawayBin.code}</span>
+                      <span>
+                        bin <span className="sk-ident">{line.putawayBin.code}</span>
+                      </span>
                     )}
                   </div>
                 </div>
               </div>
               {line.receivedQty !== null && (
-                <div className="text-accent text-xs">
-                  ✓ recorded: {line.receivedQty}
+                <span className="wh-tag" data-tone="good">
+                  <Check size={12} aria-hidden /> recorded:{' '}
+                  <span className="sk-figure">{line.receivedQty}</span>
                   {line.damagedQty ? ` (${line.damagedQty} dmg)` : ''}
-                </div>
+                </span>
               )}
             </div>
 
             {isArriving && (
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_2fr] gap-2 mt-2">
-                <FormField label="Received qty">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={1_000_000}
-                    inputMode="numeric"
-                    value={received[line.id] ?? String(line.receivedQty ?? '')}
-                    onChange={(e) => setReceived({ ...received, [line.id]: e.target.value })}
-                  />
-                </FormField>
-                <FormField label="Damaged">
-                  <Input
-                    type="number"
-                    min={0}
-                    inputMode="numeric"
-                    value={damaged[line.id] ?? String(line.damagedQty ?? '0')}
-                    onChange={(e) => setDamaged({ ...damaged, [line.id]: e.target.value })}
-                  />
-                </FormField>
-                <FormField label="Putaway bin">
+              <div className="wh-fields" data-cols="receive">
+                <TextField
+                  label="Received qty"
+                  type="number"
+                  min={0}
+                  max={1_000_000}
+                  inputMode="numeric"
+                  inputClassName="sk-figure"
+                  value={received[line.id] ?? String(line.receivedQty ?? '')}
+                  onChange={(e) => setReceived({ ...received, [line.id]: e.target.value })}
+                />
+                <TextField
+                  label="Damaged"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  inputClassName="sk-figure"
+                  value={damaged[line.id] ?? String(line.damagedQty ?? '0')}
+                  onChange={(e) => setDamaged({ ...damaged, [line.id]: e.target.value })}
+                />
+                <div className="wh-stack wh-stack--tight">
                   <Select
+                    label="Putaway bin"
                     value={binByLine[line.id] ?? line.putawayBinId ?? ''}
                     onChange={(e) => setBinByLine({ ...binByLine, [line.id]: e.target.value })}
                   >
@@ -511,15 +518,15 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     // An empty REQUIRED dropdown with no explanation is a
                     // dead end: the operator cannot complete the receipt
                     // and nothing on the screen says why or what to do.
-                    <p className="text-text-muted mt-1 text-xs">
+                    <p className="wh-note">
                       Its only locations are ones stock cannot be shelved in.{' '}
-                      <Link href="/warehouse/bins" className="text-accent underline">
+                      <Link href="/warehouse/bins" className="wh-link">
                         Add a storage bin
                       </Link>{' '}
                       and reload.
                     </p>
                   )}
-                </FormField>
+                </div>
               </div>
             )}
 
@@ -528,68 +535,101 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                 every line is how a receiving bench learns to skip
                 fields. */}
             {isArriving && line.inventoryMode === 'STRICT' && (
-              <div className="mt-2">
-                <SerialScanner
-                  id={`receipt-serials-${line.id}`}
-                  label={`Supplier serials for ${line.variant.skuCode}`}
-                  required={lineQty(line.id, line.receivedQty)}
-                  serials={serialsByLine[line.id] ?? []}
-                  onChange={(next) => setSerialsByLine({ ...serialsByLine, [line.id]: next })}
-                  hint="Scan what the supplier printed. Skip any they did not serialize — Skydrop prints a serial for each of those at completion."
-                />
-              </div>
+              <SerialScanner
+                id={`receipt-serials-${line.id}`}
+                label={`Supplier serials for ${line.variant.skuCode}`}
+                required={lineQty(line.id, line.receivedQty)}
+                serials={serialsByLine[line.id] ?? []}
+                onChange={(next) => setSerialsByLine({ ...serialsByLine, [line.id]: next })}
+                hint="Scan what the supplier printed. Skip any they did not serialize — Skydrop prints a serial for each of those at completion."
+              />
             )}
           </div>
         ))}
       </div>
 
       {isCompleted && (
-        <div className="text-accent text-xs uppercase tracking-wide mt-5 text-center">
-          ✓ Stock written. This receipt is now history.
+        <div className="wh-done-line">
+          <Check size={16} aria-hidden /> Stock written. This receipt is now history.
         </div>
       )}
 
-      <Modal
+      <ConfirmDialog
+        open={completeOpen}
+        onOpenChange={setCompleteOpen}
+        title="Complete this receipt and write stock?"
+        entity={r.receiptNumber}
+        entityIsIdentifier
+        consequence={`Stock is written for what was counted on each of ${r.seller.companyName}'s products and the receipt closes. It cannot be cancelled afterwards — a mistake is corrected with a stock adjustment.`}
+        confirmLabel="Complete and write stock"
+        error={error}
+        onConfirm={async () => {
+          const ok = await onComplete();
+          if (!ok) throw new Error('refused');
+        }}
+      >
+        <p className="wh-note">
+          <ClipboardCheck size={14} aria-hidden className="wh-inline-icon" />{' '}
+          <span className="sk-figure">{recordedCount}</span> of{' '}
+          <span className="sk-figure">{r.lines.length}</span> product(s) have a recorded count at{' '}
+          {r.warehouse.code}. A variance does not block — it is recorded on the receipt.
+        </p>
+      </ConfirmDialog>
+
+      <Dialog
         open={cancelOpen}
         onOpenChange={setCancelOpen}
         tone="critical"
+        icon={<PackageX size={18} />}
         title={`Cancel ${r.receiptNumber}?`}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={() => setCancelOpen(false)}>
+              Keep it
+            </Button>
+            <Button
+              variant="destructive"
+              size="md"
+              disabled={busy !== null || cancelReason.trim().length < 10}
+              onClick={() => void onCancel()}
+            >
+              {busy === 'cancel' ? 'Cancelling…' : 'Cancel receipt'}
+            </Button>
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          Nothing has been written to stock yet, so nothing is removed — the receipt simply leaves
-          the queue. A receipt that has already been completed cannot be cancelled; correct that
-          with a stock adjustment, where the movement is visible.
-        </p>
-        <FormField label="Why" required>
-          <Input
+        <div className="wh-stack">
+          <p className="wh-note">
+            Nothing has been written to stock yet, so nothing is removed — the receipt simply leaves
+            the queue. A receipt that has already been completed cannot be cancelled; correct that
+            with a stock adjustment, where the movement is visible.
+          </p>
+          <TextField
+            label="Why"
+            requiredMark
             value={cancelReason}
             onChange={(e) => setCancelReason(e.target.value)}
             placeholder="At least 10 characters — recorded on the receipt"
           />
-        </FormField>
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={() => setCancelOpen(false)}>
-            Keep it
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={busy !== null || cancelReason.trim().length < 10}
-            onClick={() => void onCancel()}
-          >
-            {busy === 'cancel' ? 'Cancelling…' : 'Cancel receipt'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+        </div>
+      </Dialog>
     </div>
   );
 }
 
-function Field({ label, value }: { readonly label: string; readonly value: string }): ReactElement {
+function Field({
+  label,
+  value,
+  ident = false,
+}: {
+  readonly label: string;
+  readonly value: string;
+  readonly ident?: boolean;
+}): ReactElement {
   return (
-    <div>
-      <div className="text-text-faint text-xs uppercase tracking-wide">{label}</div>
-      <div className="text-text-body mt-0.5">{value}</div>
+    <div className="wh-fact">
+      <dt>{label}</dt>
+      <dd className={ident ? 'sk-ident' : undefined}>{value}</dd>
     </div>
   );
 }

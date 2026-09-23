@@ -2,16 +2,16 @@
 
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import {
-  Button,
-  Card,
-  CardBody,
-  EmptyState,
-  FormField,
-  Input,
-  useToast,
-} from '@skydrop/ui/components';
-import type { InspectRtoItemRequest } from '@skydrop/api-client';
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { EmptyState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { PackageOpen } from 'lucide-react';
+import type { InspectRtoItemRequest, RtoShipmentItem } from '@skydrop/api-client';
 import { PutawayPanel } from './putaway-panel';
 import { RtoItemRow, type RtoInspectPayload } from './rto-item-row';
 import type { RtoItemCondition, RtoDisposition } from '@skydrop/db';
@@ -28,6 +28,7 @@ import {
   useAwaitingRtoReceipt,
   useOpenRtoShipments,
 } from '@/lib/api-hooks';
+import '../../_components/benches.css';
 
 /**
  * RTO workspace — three phases:
@@ -50,6 +51,41 @@ import {
  */
 const TAB_VALUES: readonly RtoTab[] = ['door', 'transit', 'bench', 'receive'];
 
+/**
+ * What finalising will do, restated for the confirm: units per decision,
+ * read off each line's inspection rows (or its one summary decision).
+ * Display only — the server is the authority on whether it may finalise.
+ */
+function finalizeSummary(items: ReadonlyArray<RtoShipmentItem>): {
+  readonly restock: number;
+  readonly hold: number;
+  readonly writeOff: number;
+  readonly later: number;
+  readonly uninspectedLines: number;
+} {
+  let restock = 0;
+  let hold = 0;
+  let writeOff = 0;
+  let later = 0;
+  let uninspectedLines = 0;
+  for (const it of items) {
+    const rows =
+      it.rtoInspections.length > 0
+        ? it.rtoInspections
+        : it.rtoDisposition !== null
+          ? [{ quantity: it.quantity, disposition: it.rtoDisposition }]
+          : [];
+    if (rows.length === 0) uninspectedLines += 1;
+    for (const r of rows) {
+      if (r.disposition === 'RESTOCK') restock += r.quantity;
+      else if (r.disposition === 'HOLD_DAMAGED') hold += r.quantity;
+      else if (r.disposition === 'WRITE_OFF') writeOff += r.quantity;
+      else later += r.quantity;
+    }
+  }
+  return { restock, hold, writeOff, later, uninspectedLines };
+}
+
 export function RtoStation(): ReactElement {
   const toast = useToast();
   const router = useRouter();
@@ -58,6 +94,7 @@ export function RtoStation(): ReactElement {
   const [shipmentId, setShipmentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [camera, setCamera] = useState(false);
+  const [finalizeOpen, setFinalizeOpen] = useState(false);
 
   /*
     The tab lives in the URL.
@@ -161,8 +198,8 @@ export function RtoStation(): ReactElement {
     }
   }
 
-  async function onFinalize(): Promise<void> {
-    if (!shipmentId) return;
+  async function onFinalize(): Promise<boolean> {
+    if (!shipmentId) return false;
     setError(null);
     try {
       const r = await finalize.mutateAsync({ shipmentId });
@@ -173,13 +210,15 @@ export function RtoStation(): ReactElement {
       );
       setShipmentId(null);
       setAwb('');
+      return true;
     } catch (err) {
       setError(fmtError(err));
+      return false;
     }
   }
 
   return (
-    <>
+    <div className="wh-stack">
       <RtoTabs
         active={tab}
         onChange={go}
@@ -208,102 +247,121 @@ export function RtoStation(): ReactElement {
         </RtoTabPanel>
       )}
 
-      <div className={tab === 'receive' ? 'space-y-4' : 'hidden'}>
-        <Card>
-          <CardBody>
-            <h2 className="text-text-bright text-sm font-medium mb-3">Receive</h2>
-            <div className="flex items-end gap-2">
-              <FormField label="AWB number">
-                <Input
-                  value={awb}
-                  onChange={(e) => setAwb(e.target.value)}
-                  placeholder="DL12345678"
-                  disabled={receive.isPending}
-                />
-              </FormField>
-              {/* The label on a returned parcel is the same barcode the
-                  courier printed, so the bench should not have to read
-                  thirteen digits off a battered box and type them. */}
+      <div className={tab === 'receive' ? 'wh-stack' : 'wh-hidden'}>
+        <section className="wh-card wh-stack">
+          <h2 className="wh-title">Receive</h2>
+          <div className="wh-fields wh-receive-awb">
+            <TextField
+              label="AWB number"
+              inputClassName="sk-ident"
+              value={awb}
+              onChange={(e) => setAwb(e.target.value)}
+              placeholder="DL12345678"
+              disabled={receive.isPending}
+            />
+            {/* The label on a returned parcel is the same barcode the
+                courier printed, so the bench should not have to read
+                thirteen digits off a battered box and type them. */}
+            <div className="wh-row">
               <CameraScanButton onClick={() => setCamera(true)} />
               <Button
                 variant="primary"
-                size="md"
+                size="lg"
                 disabled={receive.isPending || !awb.trim()}
                 onClick={() => void onReceive()}
               >
                 {receive.isPending ? 'Receiving…' : 'Receive'}
               </Button>
             </div>
-          </CardBody>
-        </Card>
+          </div>
+        </section>
 
         {error && (
-          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+          <div role="alert" className="wh-alert">
             {error}
           </div>
         )}
 
         {!shipmentId ? (
           <EmptyState
+            icon={<PackageOpen size={26} />}
             title="No shipment selected"
             description="Receive an inbound RTO by AWB to begin inspection."
           />
         ) : detail.isLoading ? (
-          <Card>
-            <CardBody>Loading shipment…</CardBody>
-          </Card>
+          <section className="wh-card">
+            <SkeletonRows rows={3} cols={3} label="Loading shipment…" />
+          </section>
         ) : detail.isError || !detail.data ? (
-          <div className="text-critical text-xs bg-[var(--color-critical-tint)] border border-[var(--color-critical-ring)] px-3 py-2 rounded-[5px]">
+          <div role="alert" className="wh-alert">
             Failed to load shipment.
           </div>
         ) : (
-          <Card>
-            <CardBody>
-              <div className="flex items-baseline justify-between mb-3">
-                <div>
-                  <div className="text-text-bright font-medium text-sm">
-                    Shipment {detail.data.shipmentNumber}
-                  </div>
-                  <div className="text-text-faint text-xs mt-0.5">
-                    Order status: {detail.data.orderStatus ?? '—'} · {detail.data.items.length}{' '}
-                    line(s)
-                  </div>
+          <section className="wh-card wh-stack">
+            <div className="wh-row wh-row--between">
+              <div>
+                <div className="wh-title">
+                  Shipment <span className="sk-ident">{detail.data.shipmentNumber}</span>
+                </div>
+                <div className="wh-faint">
+                  <span className="sk-figure">{detail.data.items.length}</span> line(s)
                 </div>
               </div>
-              <div className="space-y-2">
-                {detail.data.items.map((it) => (
-                  <RtoItemRow
-                    key={it.shipmentItemId}
-                    item={it}
-                    onSave={async (payload) => {
-                      setError(null);
-                      try {
-                        await inspect.mutateAsync({
-                          shipmentItemId: it.shipmentItemId,
-                          ...toRequest(payload),
-                        });
-                        toast.success(`Line inspected.`);
-                        await detail.refetch();
-                      } catch (err) {
-                        setError(fmtError(err));
-                      }
-                    }}
-                    saving={inspect.isPending}
-                  />
-                ))}
-              </div>
-              <div className="mt-4 flex justify-end">
-                <Button
-                  variant="primary"
-                  size="md"
-                  disabled={finalize.isPending}
-                  onClick={() => void onFinalize()}
-                >
-                  {finalize.isPending ? 'Finalizing…' : 'Finalize disposition'}
-                </Button>
-              </div>
-            </CardBody>
-          </Card>
+              {detail.data.orderStatus !== null && (
+                <StatusChip
+                  kind={orderStatusKind(detail.data.orderStatus)}
+                  label={statusLabel(detail.data.orderStatus)}
+                />
+              )}
+            </div>
+            <div className="wh-stack wh-stack--tight">
+              {detail.data.items.map((it) => (
+                <RtoItemRow
+                  key={it.shipmentItemId}
+                  item={it}
+                  onSave={async (payload) => {
+                    setError(null);
+                    try {
+                      await inspect.mutateAsync({
+                        shipmentItemId: it.shipmentItemId,
+                        ...toRequest(payload),
+                      });
+                      toast.success(`Line inspected.`);
+                      await detail.refetch();
+                    } catch (err) {
+                      setError(fmtError(err));
+                    }
+                  }}
+                  saving={inspect.isPending}
+                />
+              ))}
+            </div>
+            <div className="wh-row wh-row--end">
+              <Button
+                variant="primary"
+                size="md"
+                disabled={finalize.isPending}
+                onClick={() => {
+                  setError(null);
+                  setFinalizeOpen(true);
+                }}
+              >
+                {finalize.isPending ? 'Finalizing…' : 'Finalize disposition'}
+              </Button>
+            </div>
+            <FinalizeConfirm
+              open={finalizeOpen}
+              onOpenChange={setFinalizeOpen}
+              shipmentNumber={detail.data.shipmentNumber}
+              items={detail.data.items}
+              error={error}
+              onConfirm={async () => {
+                const ok = await onFinalize();
+                if (!ok) throw new Error('refused');
+                setFinalizeOpen(false);
+              }}
+            />
+          </section>
         )}
 
         {/* Only for a unit an OLDER finalise left in the returns hold (a
@@ -329,6 +387,47 @@ export function RtoStation(): ReactElement {
         }}
         title="Scan the return label"
       />
-    </>
+    </div>
+  );
+}
+
+function FinalizeConfirm({
+  open,
+  onOpenChange,
+  shipmentNumber,
+  items,
+  error,
+  onConfirm,
+}: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly shipmentNumber: string;
+  readonly items: ReadonlyArray<RtoShipmentItem>;
+  readonly error: string | null;
+  readonly onConfirm: () => Promise<void>;
+}): ReactElement {
+  const t = finalizeSummary(items);
+  const unit = (n: number): string => `${n} unit${n === 1 ? '' : 's'}`;
+  return (
+    <ConfirmDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Finalize this return?"
+      entity={shipmentNumber}
+      entityIsIdentifier
+      consequence={`${unit(t.restock)} go back in stock, ${unit(t.hold)} are kept aside damaged and ${unit(t.writeOff)} are written off — stock moves now and this cannot be undone.`}
+      confirmLabel="Finalize disposition"
+      destructive={t.writeOff > 0}
+      error={error}
+      onConfirm={onConfirm}
+    >
+      {t.later > 0 || t.uninspectedLines > 0 ? (
+        <p className="wh-note">
+          {t.later > 0 ? `${unit(t.later)} marked Decide later. ` : ''}
+          {t.uninspectedLines > 0 ? `${t.uninspectedLines} line(s) not inspected yet. ` : ''}A
+          return cannot be finalised until every line has a decision — the server will say so.
+        </p>
+      ) : null}
+    </ConfirmDialog>
   );
 }

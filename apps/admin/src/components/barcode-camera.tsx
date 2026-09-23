@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Camera, X } from 'lucide-react';
-import { Button, Modal } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog } from '@skydrop/ui/app/dialog';
 
 /**
  * Read a barcode with the device camera.
@@ -90,35 +91,38 @@ export function BarcodeCamera({
   }, [open, onScan]);
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
       title={title}
+      icon={<Camera size={18} />}
     >
-      <div className="space-y-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-3">
         {error === null ? (
           <>
             {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
             <video
               ref={videoRef}
-              className="bg-surface-hover aspect-video w-full rounded"
+              className="aspect-video w-full rounded-[var(--r-md)] bg-[var(--surface-3)]"
               playsInline
               muted
             />
-            <p className="text-text-muted text-xs">
+            <p className="m-0 text-xs text-[var(--fg-muted)]">
               Hold the barcode steady in the frame. It reads automatically.
             </p>
           </>
         ) : (
-          <p className="text-status-failed-fg text-sm">{error}</p>
+          <p className="m-0 text-sm text-[var(--red-text)]">{error}</p>
         )}
-        <Button variant="ghost" onClick={onClose}>
-          <X size={14} /> Close camera
-        </Button>
+        <div>
+          <Button variant="secondary" onClick={onClose} icon={<X size={14} />}>
+            Close camera
+          </Button>
+        </div>
       </div>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -158,8 +162,13 @@ export function CameraScanButton({ onClick }: { onClick: () => void }): ReactEle
   }, []);
   if (!supported) return null;
   return (
-    <Button variant="ghost" onClick={onClick} aria-label="Scan with the camera">
-      <Camera size={14} /> Camera
+    <Button
+      variant="secondary"
+      onClick={onClick}
+      aria-label="Scan with the camera"
+      icon={<Camera size={16} />}
+    >
+      Camera
     </Button>
   );
 }

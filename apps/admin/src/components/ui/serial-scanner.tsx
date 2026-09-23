@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import { Button, Input } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
 import { X } from 'lucide-react';
 
 /**
@@ -99,12 +99,12 @@ export function SerialScanner({
   const over = required !== undefined && serials.length > required;
 
   return (
-    <div className="border-border rounded-[6px] border p-3">
-      <label htmlFor={id} className="text-text-muted mb-1 block text-xs">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-2 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-3">
+      <label htmlFor={id} className="text-[length:var(--fs-sm)] font-medium text-[var(--fg-body)]">
         {label}
       </label>
-      <div className="flex items-start gap-2">
-        <Input
+      <div className="flex min-w-0 items-center gap-3">
+        <input
           id={id}
           value={code}
           disabled={disabled}
@@ -118,12 +118,10 @@ export function SerialScanner({
               capture(code);
             }
           }}
-          className="flex-1 font-mono text-base"
+          className="sk-ident min-h-11 w-full min-w-0 flex-1 rounded-[var(--r-md)] border-[1.5px] border-[var(--border-control)] bg-[var(--surface-input)] px-3 text-base text-[var(--fg-strong)] transition-[border-color,box-shadow,opacity] placeholder:text-[var(--fg-faint)] focus:border-[var(--accent-line)] focus:shadow-[0_0_0_3px_var(--focus-ring)] focus:outline-none disabled:cursor-not-allowed disabled:opacity-55"
         />
         <div
-          className={
-            'shrink-0 pt-1.5 text-sm tabular-nums ' + (over ? 'text-critical' : 'text-text-bright')
-          }
+          className={'sk-figure shrink-0 text-sm ' + (over ? 'text-critical' : 'text-text-bright')}
         >
           {required === undefined ? (
             <span>{serials.length} captured</span>
@@ -135,14 +133,14 @@ export function SerialScanner({
         </div>
       </div>
 
-      {notice !== null && <div className="text-text-faint mt-1.5 text-xs">{notice}</div>}
-      {hint !== undefined && <div className="text-text-faint mt-1.5 text-xs">{hint}</div>}
+      {notice !== null && <div className="text-xs text-[var(--saffron-text)]">{notice}</div>}
+      {hint !== undefined && <div className="text-xs text-[var(--fg-faint)]">{hint}</div>}
 
       {serials.length > 0 && (
-        <ul className="mt-2 flex flex-wrap gap-1.5">
+        <ul className="flex flex-wrap gap-1.5">
           {serials.map((serial) => (
             <li key={serial}>
-              <span className="border-border text-text-body inline-flex items-center gap-0.5 rounded-[4px] border py-0.5 pl-2 font-mono text-xs">
+              <span className="sk-ident inline-flex items-center gap-0.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] py-0.5 pl-3 text-xs text-[var(--fg-body)]">
                 {serial}
                 {/* Button keeps the 44px projected hit area (FE-7) — a
                     wrong serial gets removed with a gloved thumb. */}
@@ -152,9 +150,8 @@ export function SerialScanner({
                   disabled={disabled}
                   aria-label={`Remove ${serial}`}
                   onClick={() => remove(serial)}
-                >
-                  <X size={11} />
-                </Button>
+                  icon={<X size={12} />}
+                />
               </span>
             </li>
           ))}

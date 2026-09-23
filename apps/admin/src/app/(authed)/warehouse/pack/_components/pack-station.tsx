@@ -1,17 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  Input,
-  Modal,
-  ModalFooter,
-  useToast,
-} from '@skydrop/ui/components';
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { TextField } from '@skydrop/ui/app/text-field';
 import Link from 'next/link';
-import { AlertTriangle, Check } from 'lucide-react';
+import { AlertTriangle, Check, OctagonX } from 'lucide-react';
 import { ApiError } from '@skydrop/api-client';
 import {
   useCancelPackBox,
@@ -29,6 +24,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { SerialScanner } from '@/components/ui/serial-scanner';
 import { PackQueueList } from './pack-queue-list';
+import '../../_components/benches.css';
 
 /**
  * The pack bench.
@@ -288,243 +284,225 @@ export function PackStation(): ReactElement {
     completePack.isPending;
 
   return (
-    <div className="space-y-4">
+    <div className="wh-stack">
       {block.data != null && (
-        <Card>
-          <CardBody>
-            <div className="border-status-failed-fg/40 bg-status-failed-bg/40 rounded-md border p-3">
-              <div className="text-status-failed-fg flex items-center gap-2 text-sm font-semibold">
-                <AlertTriangle size={15} /> Scanning is stopped
-              </div>
-              <p className="mt-1 text-sm">{block.data.title}</p>
-              <p className="text-text-muted mt-2 text-xs whitespace-pre-line">
-                {block.data.detail}
-              </p>
-              <p className="text-text-faint mt-2 text-xs">
-                Put the box aside and get an admin. They clear it on{' '}
-                <Link href="/system-issues" className="hover:text-text underline">
-                  system issues
-                </Link>
-                , after checking whether there are two of them.
-              </p>
-            </div>
-          </CardBody>
-        </Card>
+        <div className="wh-stop">
+          <div className="wh-stop__title">
+            <AlertTriangle size={18} /> Scanning is stopped
+          </div>
+          <p>{block.data.title}</p>
+          <p className="wh-pre">{block.data.detail}</p>
+          <p>
+            Put the box aside and get an admin. They clear it on{' '}
+            <Link href="/system-issues" className="wh-link">
+              system issues
+            </Link>
+            , after checking whether there are two of them.
+          </p>
+        </div>
       )}
       {/* While a parcel is waiting on its serials the label field means
           nothing — a scan would open a second box on a bench that is not
           free yet. */}
       {pending === null && block.data == null && (
-        <Card>
-          <CardBody>
-            <label htmlFor="pack-scan" className="text-text-muted mb-1 block text-xs">
-              {box === null
-                ? 'Scan the shipping label to open a box'
-                : 'Scan a product — or the label again to close'}
-            </label>
-            <Input
-              id="pack-scan"
-              ref={inputRef}
-              value={code}
-              // Disabled while a refusal is up: a scan gun types and
-              // presses Enter on its own, so an un-blocked field would
-              // let the next scan land before anybody read the warning.
-              disabled={busy || refusal !== null}
-              autoComplete="off"
-              placeholder={box === null ? 'Shipping label…' : 'Product barcode or serial…'}
-              onChange={(e) => setCode(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  void onScan(code);
-                }
-              }}
-              className="font-mono text-base"
-            />
-            {box !== null && (
-              <div className="text-text-faint mt-2 text-xs">
-                Box open on <span className="font-mono">{box.awbNumber}</span> — {done} of {total}{' '}
-                scanned
-              </div>
-            )}
-          </CardBody>
-        </Card>
+        <section className="wh-card wh-scan">
+          <label htmlFor="pack-scan" className="wh-scan__label">
+            {box === null
+              ? 'Scan the shipping label to open a box'
+              : 'Scan a product — or the label again to close'}
+          </label>
+          <input
+            id="pack-scan"
+            ref={inputRef}
+            value={code}
+            // Disabled while a refusal is up: a scan gun types and
+            // presses Enter on its own, so an un-blocked field would
+            // let the next scan land before anybody read the warning.
+            disabled={busy || refusal !== null}
+            autoComplete="off"
+            placeholder={box === null ? 'Shipping label…' : 'Product barcode or serial…'}
+            onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                void onScan(code);
+              }
+            }}
+            className="wh-scan__input"
+          />
+          {box !== null && (
+            <div className="wh-scan__meta">
+              Box open on <span className="sk-ident">{box.awbNumber}</span> —{' '}
+              <span className="sk-figure">{done}</span> of{' '}
+              <span className="sk-figure">{total}</span> scanned
+            </div>
+          )}
+        </section>
       )}
 
       {error !== null && (
-        <div
-          role="alert"
-          className="text-critical rounded-[5px] border border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] px-3 py-2 text-sm"
-        >
+        <div role="alert" className="wh-alert">
           {error}
         </div>
       )}
 
       {pending !== null ? (
-        <Card>
-          <CardBody className="space-y-3">
-            <div>
-              <div className="text-text-bright text-sm font-medium">
-                One step left on <span className="font-mono">{pending.awbNumber}</span>
-              </div>
-              <p className="text-text-muted mt-1 text-xs">
-                The box is closed and its contents matched. This parcel is tracked per unit, so the
-                serials go with it — these are the ones you scanned in. Add any the box did not
-                recognise, then finish.
-              </p>
+        <section className="wh-card wh-stack">
+          <div>
+            <div className="wh-title">
+              One step left on <span className="sk-ident">{pending.awbNumber}</span>
             </div>
-            <SerialScanner
-              id="pack-finish-serials"
-              label="Unit serials in this parcel"
-              serials={unitSerials}
-              onChange={setUnitSerials}
-              disabled={busy}
-              autoFocus
-              hint="No target count here — the server checks these against the units picked for this parcel and will say if one is missing or does not belong."
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="primary"
-                size="md"
-                disabled={busy || unitSerials.length === 0}
-                onClick={() => void onFinishPack()}
-              >
-                {completePack.isPending ? 'Finishing…' : 'Finish pack'}
-              </Button>
-              <Button variant="ghost" size="md" disabled={busy} onClick={() => reset()}>
-                Leave it for now
-              </Button>
-            </div>
-            <p className="text-text-faint text-xs">
-              Leaving it discards this list and changes nothing on the parcel — it stays picked and
-              un-packed, and whoever takes it next scans its label to open a fresh box.
+            <p className="wh-note">
+              The box is closed and its contents matched. This parcel is tracked per unit, so the
+              serials go with it — these are the ones you scanned in. Add any the box did not
+              recognise, then finish.
             </p>
-          </CardBody>
-        </Card>
+          </div>
+          <SerialScanner
+            id="pack-finish-serials"
+            label="Unit serials in this parcel"
+            serials={unitSerials}
+            onChange={setUnitSerials}
+            disabled={busy}
+            autoFocus
+            hint="No target count here — the server checks these against the units picked for this parcel and will say if one is missing or does not belong."
+          />
+          <div className="wh-row">
+            <Button
+              variant="primary"
+              size="md"
+              disabled={busy || unitSerials.length === 0}
+              onClick={() => void onFinishPack()}
+            >
+              {completePack.isPending ? 'Finishing…' : 'Finish pack'}
+            </Button>
+            <Button variant="ghost" size="md" disabled={busy} onClick={() => reset()}>
+              Leave it for now
+            </Button>
+          </div>
+          <p className="wh-faint">
+            Leaving it discards this list and changes nothing on the parcel — it stays picked and
+            un-packed, and whoever takes it next scans its label to open a fresh box.
+          </p>
+        </section>
       ) : box === null ? (
         // Nothing in hand — so show what is coming rather than an empty
         // card telling the packer what they already know.
         <PackQueueList />
       ) : (
         <>
-          <Card>
-            <CardBody className="p-0">
-              <ul className="divide-border divide-y">
-                {lines.map((l) => {
-                  const satisfied = l.scanned >= l.quantity;
-                  return (
-                    <li
-                      key={l.variantId}
-                      className={
-                        'flex items-center justify-between gap-4 px-4 py-3 ' +
-                        (satisfied ? 'text-text-faint' : 'text-text-bright')
-                      }
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{l.productName}</div>
-                        <div className="text-text-faint font-mono text-xs">{l.skuCode}</div>
+          <section className="wh-card" data-flush="1" aria-label="What goes in this box">
+            <ul className="wh-lines">
+              {lines.map((l) => {
+                const satisfied = l.scanned >= l.quantity;
+                return (
+                  <li key={l.variantId}>
+                    <div className="wh-line" data-done={satisfied ? '1' : undefined}>
+                      <div className="wh-min0">
+                        <div className="wh-line__name">{l.productName}</div>
+                        <div className="wh-line__sku sk-ident">{l.skuCode}</div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2 tabular-nums">
-                        {satisfied && (
-                          <Check size={15} className="text-[var(--status-delivered-fg)]" />
-                        )}
-                        <span className={satisfied ? 'text-sm' : 'text-lg font-semibold'}>
+                      <div className="wh-line__count sk-figure">
+                        {satisfied && <Check size={16} className="wh-line__check" />}
+                        <span className="wh-line__figure">
                           {l.scanned} / {l.quantity}
                         </span>
                       </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </CardBody>
-          </Card>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
 
           {complete && (
-            <div className="text-sm text-[var(--status-delivered-fg)]">
-              Everything is in. Scan the label again to close the box.
+            <div className="wh-good">
+              <Check size={14} /> Everything is in. Scan the label again to close the box.
             </div>
           )}
 
-          <Card>
-            <CardBody className="space-y-2">
-              {!cancelling ? (
+          <section className="wh-card wh-stack">
+            {!cancelling ? (
+              <div>
                 <Button variant="ghost" size="md" onClick={() => setCancelling(true)}>
                   Cancel this box
                 </Button>
-              ) : (
-                <>
-                  <div className="text-text-muted text-xs">
-                    The scans are discarded and the parcel goes back in the queue. Nothing returns
-                    to inventory — packing never took it out.
-                  </div>
-                  <Input
-                    value={reason}
-                    placeholder="Why? e.g. damaged outer carton"
-                    onChange={(e) => setReason(e.target.value)}
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="destructive"
-                      size="md"
-                      disabled={reason.trim().length < 3 || cancel.isPending}
-                      onClick={() => void onCancel()}
-                    >
-                      {cancel.isPending ? 'Cancelling…' : 'Cancel the box'}
-                    </Button>
-                    <Button variant="ghost" size="md" onClick={() => setCancelling(false)}>
-                      Keep packing
-                    </Button>
-                  </div>
-                </>
-              )}
-
-              {/* The escape hatch, and only for somebody who can carry
-                  it: a packer must not be able to waive the check they
-                  are the one performing. Cosmetic here — the server
-                  holds the permission (FE-2). */}
-              {canForce && !cancelling && (
-                <div className="border-border-subtle mt-3 border-t pt-3">
-                  {!forcing ? (
-                    <button
-                      type="button"
-                      className="text-text-faint hover:text-text text-xs underline"
-                      onClick={() => setForcing(true)}
-                    >
-                      These products have no labels to scan
-                    </button>
-                  ) : (
-                    <>
-                      <p className="text-text-muted mb-2 text-xs">
-                        This packs the parcel without checking its contents. It is recorded against
-                        your name with the reason below.
-                      </p>
-                      <Input
-                        value={forceReason}
-                        placeholder="Why? e.g. stock received before product labelling; counted by hand against the pick list"
-                        onChange={(e) => setForceReason(e.target.value)}
-                      />
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <Button
-                          variant="destructive"
-                          size="md"
-                          disabled={forceReason.trim().length < 20 || forceComplete.isPending}
-                          onClick={() => void onForceComplete()}
-                        >
-                          {forceComplete.isPending ? 'Packing…' : 'Pack without scanning'}
-                        </Button>
-                        <Button variant="ghost" size="md" onClick={() => setForcing(false)}>
-                          Back
-                        </Button>
-                      </div>
-                    </>
-                  )}
+              </div>
+            ) : (
+              <>
+                <p className="wh-note">
+                  The scans are discarded and the parcel goes back in the queue. Nothing returns to
+                  inventory — packing never took it out.
+                </p>
+                <TextField
+                  label="Reason for cancelling"
+                  value={reason}
+                  placeholder="Why? e.g. damaged outer carton"
+                  onChange={(e) => setReason(e.target.value)}
+                />
+                <div className="wh-row">
+                  <Button
+                    variant="destructive"
+                    size="md"
+                    disabled={reason.trim().length < 3 || cancel.isPending}
+                    onClick={() => void onCancel()}
+                  >
+                    {cancel.isPending ? 'Cancelling…' : 'Cancel the box'}
+                  </Button>
+                  <Button variant="ghost" size="md" onClick={() => setCancelling(false)}>
+                    Keep packing
+                  </Button>
                 </div>
-              )}
-            </CardBody>
-          </Card>
+              </>
+            )}
+
+            {/* The escape hatch, and only for somebody who can carry
+                it: a packer must not be able to waive the check they
+                are the one performing. Cosmetic here — the server
+                holds the permission (FE-2). */}
+            {canForce && !cancelling && (
+              <div className="wh-stack wh-divide">
+                {!forcing ? (
+                  <div>
+                    <Button variant="ghost" size="sm" onClick={() => setForcing(true)}>
+                      These products have no labels to scan
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="wh-note">
+                      This packs the parcel without checking its contents. It is recorded against
+                      your name with the reason below.
+                    </p>
+                    <TextField
+                      label="Reason for packing without scanning"
+                      value={forceReason}
+                      placeholder="Why? e.g. stock received before product labelling; counted by hand against the pick list"
+                      onChange={(e) => setForceReason(e.target.value)}
+                    />
+                    <div className="wh-row">
+                      <Button
+                        variant="destructive"
+                        size="md"
+                        disabled={forceReason.trim().length < 20 || forceComplete.isPending}
+                        onClick={() => void onForceComplete()}
+                      >
+                        {forceComplete.isPending ? 'Packing…' : 'Pack without scanning'}
+                      </Button>
+                      <Button variant="ghost" size="md" onClick={() => setForcing(false)}>
+                        Back
+                      </Button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </section>
         </>
       )}
-      <CameraScanButton onClick={() => setCamera(true)} />
+      <div className="wh-row">
+        <CameraScanButton onClick={() => setCamera(true)} />
+      </div>
       <BarcodeCamera
         open={camera}
         onClose={() => setCamera(false)}
@@ -539,7 +517,7 @@ export function PackStation(): ReactElement {
       {/* A refusal STOPS the bench. The packer says they have fixed it
           before anything else can be scanned — which is the difference
           between a warning and a gate. */}
-      <Modal
+      <Dialog
         open={refusal !== null}
         onOpenChange={(o) => {
           if (!o) {
@@ -550,23 +528,26 @@ export function PackStation(): ReactElement {
         }}
         title="That scan was refused"
         tone="critical"
+        icon={<OctagonX size={18} />}
+        footer={
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setRefusal(null);
+                setCode('');
+                inputRef.current?.focus();
+              }}
+            >
+              I have fixed it
+            </Button>
+          </DialogFooter>
+        }
       >
-        <p className="text-sm">{refusal}</p>
-        <p className="text-text-muted mt-2 text-xs">
+        <p className="wh-alert">{refusal}</p>
+        <p className="wh-note wh-gap-top">
           Nothing was added to the box. Put that item aside, find the right one, and carry on.
         </p>
-        <ModalFooter>
-          <Button
-            onClick={() => {
-              setRefusal(null);
-              setCode('');
-              inputRef.current?.focus();
-            }}
-          >
-            I have fixed it
-          </Button>
-        </ModalFooter>
-      </Modal>
+      </Dialog>
     </div>
   );
 }

@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
-import { Button, Card, CardBody, Select, useToast } from '@skydrop/ui/components';
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
 import { serverVerdict } from '@/lib/server-verdict';
 import { NON_PICKABLE_BIN_TYPES as NON_PICKABLE } from '@/lib/bin-policy';
 import {
@@ -10,6 +13,7 @@ import {
   useWarehouseBins,
   type RtoPutawayPending,
 } from '@/lib/api-hooks';
+import '../../_components/benches.css';
 
 /**
  * Shelving returned goods an OLDER finalise left in the returns hold.
@@ -50,6 +54,7 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
   const putaway = useRtoPutaway();
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const rows: ReadonlyArray<RtoPutawayPending> = useMemo(() => pending.data ?? [], [pending.data]);
 
@@ -85,7 +90,7 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
   const ready = rows.filter((r) => (choices[r.shipmentItemId] ?? '') !== '');
   const allChosen = ready.length === rows.length;
 
-  async function onShelve(): Promise<void> {
+  async function onShelve(): Promise<boolean> {
     setError(null);
     try {
       const result = await putaway.mutateAsync({
@@ -99,79 +104,84 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
         `${result.movedCount} line${result.movedCount === 1 ? '' : 's'} shelved — now sellable.`,
       );
       setChoices({});
+      return true;
     } catch (err) {
       // FE-2: the server's refusal, verbatim. It knows things this
       // screen does not — a bin deleted since the list was fetched, a
       // line already shelved by somebody else.
       setError(serverVerdict(err));
+      return false;
     }
   }
 
+  const binCode = (id: string): string =>
+    shelvable.find((b) => b.id === id)?.code ??
+    (bins.data ?? []).find((b) => b.id === id)?.code ??
+    id;
+
   return (
-    <Card className="mb-4">
-      <CardBody>
-        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-text-bright text-sm font-medium">
-            In hold — not yet sellable ({rows.length})
-          </h2>
-          <span className="text-text-faint text-xs">
-            An earlier version of finalise left these in the returns hold. They stay unsellable
-            until they are on a shelf — returns finalised now go straight back into stock.
-          </span>
+    <section className="wh-card wh-stack">
+      <div className="wh-row wh-row--between">
+        <h2 className="wh-title">
+          In hold — not yet sellable (<span className="sk-figure">{rows.length}</span>)
+        </h2>
+        <span className="wh-faint">
+          An earlier version of finalise left these in the returns hold. They stay unsellable until
+          they are on a shelf — returns finalised now go straight back into stock.
+        </span>
+      </div>
+
+      {error !== null && (
+        <div role="alert" className="wh-alert">
+          {error}
         </div>
+      )}
 
-        {error !== null && (
-          <div className="border-[var(--color-critical-ring)] bg-[var(--color-critical-tint)] text-critical mb-3 rounded-md border px-3 py-2 text-sm">
-            {error}
-          </div>
-        )}
+      {bins.isError && (
+        <div role="alert" className="wh-alert">
+          Could not load bins for this warehouse — {bins.error?.message ?? 'unknown error'}.
+        </div>
+      )}
 
-        {bins.isError && (
-          <div className="text-critical mb-3 text-sm">
-            Could not load bins for this warehouse — {bins.error?.message ?? 'unknown error'}.
-          </div>
-        )}
-
-        <div className="space-y-2">
-          {rows.map((r) => {
-            const chosen = choices[r.shipmentItemId] ?? '';
-            const isSuggestion = chosen !== '' && chosen === r.suggestedBinId;
-            return (
-              <div
-                key={r.shipmentItemId}
-                className="border-border grid grid-cols-1 items-center gap-2 rounded-md border p-2.5 sm:grid-cols-[1fr_auto_minmax(200px,260px)]"
-              >
-                <div className="min-w-0">
-                  <div className="text-text-bright truncate text-sm">{r.productName}</div>
-                  <div className="text-text-faint mt-0.5 font-mono text-xs">
-                    {r.skuCode} · {r.quantity} unit{r.quantity === 1 ? '' : 's'} · in{' '}
-                    {r.holdBinCode}
+      <div className="wh-stack wh-stack--tight">
+        {rows.map((r) => {
+          const chosen = choices[r.shipmentItemId] ?? '';
+          const isSuggestion = chosen !== '' && chosen === r.suggestedBinId;
+          return (
+            <div key={r.shipmentItemId} className="wh-item">
+              <div className="wh-fields" data-cols="putaway">
+                <div className="wh-min0">
+                  <div className="wh-item__name">{r.productName}</div>
+                  <div className="wh-item__sub">
+                    <span className="sk-ident">{r.skuCode}</span> ·{' '}
+                    <span className="sk-figure">
+                      {r.quantity} unit{r.quantity === 1 ? '' : 's'}
+                    </span>{' '}
+                    · in <span className="sk-ident">{r.holdBinCode}</span>
                   </div>
                 </div>
 
-                <div className="text-text-faint text-xs">
+                <div className="wh-faint">
                   {r.suggestedBinCode !== null && r.suggestionReason !== null ? (
                     <span>
-                      suggested{' '}
-                      <span className="text-text-body font-mono">{r.suggestedBinCode}</span>{' '}
-                      <span className="opacity-70">
-                        ({REASON_LABEL[r.suggestionReason] ?? r.suggestionReason})
-                      </span>
+                      suggested <span className="sk-ident">{r.suggestedBinCode}</span>{' '}
+                      <span>({REASON_LABEL[r.suggestionReason] ?? r.suggestionReason})</span>
                     </span>
                   ) : (
                     // Said out loud rather than shown as an empty dropdown:
                     // this SKU has never been here before.
-                    <span className="opacity-70">no suggestion — pick a shelf</span>
+                    <span>no suggestion — pick a shelf</span>
                   )}
                 </div>
 
                 <Select
+                  label="Shelf"
                   aria-label={`Shelf for ${r.skuCode}`}
                   value={chosen}
                   onChange={(e: ChangeEvent<HTMLSelectElement>) =>
                     setChoices((prev) => ({ ...prev, [r.shipmentItemId]: e.target.value }))
                   }
-                  className={isSuggestion ? '' : 'border-border-strong'}
+                  {...(isSuggestion ? { hint: 'Suggested shelf' } : {})}
                 >
                   <option value="">Choose a shelf…</option>
                   {shelvable.map((b) => (
@@ -182,32 +192,51 @@ export function PutawayPanel({ shipmentId }: { readonly shipmentId: string }): R
                   ))}
                 </Select>
               </div>
-            );
-          })}
-        </div>
+            </div>
+          );
+        })}
+      </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button
-            variant="primary"
-            size="md"
-            disabled={putaway.isPending || ready.length === 0}
-            onClick={() => void onShelve()}
-          >
-            {putaway.isPending
-              ? 'Shelving…'
-              : allChosen
-                ? `Shelve all ${rows.length}`
-                : `Shelve ${ready.length} of ${rows.length}`}
-          </Button>
-          {!allChosen && ready.length > 0 && (
-            // Partial is allowed on purpose — an operator who can place
-            // three of four items should not have to hold all four.
-            <span className="text-text-faint text-xs">
-              The rest stay in hold until they have a shelf.
-            </span>
-          )}
-        </div>
-      </CardBody>
-    </Card>
+      <div className="wh-row">
+        <Button
+          variant="primary"
+          size="md"
+          disabled={putaway.isPending || ready.length === 0}
+          onClick={() => {
+            setError(null);
+            setConfirmOpen(true);
+          }}
+        >
+          {putaway.isPending
+            ? 'Shelving…'
+            : allChosen
+              ? `Shelve all ${rows.length}`
+              : `Shelve ${ready.length} of ${rows.length}`}
+        </Button>
+        {!allChosen && ready.length > 0 && (
+          // Partial is allowed on purpose — an operator who can place
+          // three of four items should not have to hold all four.
+          <span className="wh-faint">The rest stay in hold until they have a shelf.</span>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Shelve these returns?"
+        entity={ready
+          .map((r) => `${r.skuCode} → ${binCode(choices[r.shipmentItemId] ?? '')}`)
+          .join(', ')}
+        entityIsIdentifier
+        consequence={`${ready.length} of ${rows.length} line(s) move out of the returns hold onto the chosen shelves and become sellable at once.`}
+        confirmLabel="Shelve now"
+        error={error}
+        onConfirm={async () => {
+          const ok = await onShelve();
+          if (!ok) throw new Error('refused');
+          setConfirmOpen(false);
+        }}
+      />
+    </section>
   );
 }

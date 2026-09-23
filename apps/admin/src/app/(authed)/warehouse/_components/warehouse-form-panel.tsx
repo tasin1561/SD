@@ -1,16 +1,14 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-  useToast,
-} from '@skydrop/ui/components';
+import { Warehouse } from 'lucide-react';
+import { useToast } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextField } from '@skydrop/ui/app/text-field';
+import './benches.css';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useCreateWarehouse, useUpdateWarehouse, type WarehouseSummary } from '@/lib/api-hooks';
@@ -168,25 +166,52 @@ export function WarehouseFormPanel({
         {isEdit ? 'Edit' : 'New warehouse'}
       </Button>
 
-      <Modal
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           if (!next) close();
         }}
         title={isEdit ? `Edit ${warehouse.code}` : 'New warehouse'}
+        icon={<Warehouse size={18} />}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={close}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              disabled={invalid || nothingChanged || pending}
+              onClick={() => void submit()}
+            >
+              {pending
+                ? 'Saving…'
+                : isEdit
+                  ? nothingChanged
+                    ? 'No changes'
+                    : 'Save changes'
+                  : 'Create warehouse'}
+            </Button>
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          {isEdit
-            ? 'The code is fixed — settings, manifests and pick sheets all refer to it. Everything else here is safe to change; none of it moves stock.'
-            : 'A new building starts with a MAIN zone and a FLOOR bin so it can receive stock immediately. Location tracking starts off; turn it on from Bins once the shelving is laid out.'}
-        </p>
+        <div className="wh-stack">
+          <p className="wh-note">
+            {isEdit
+              ? 'The code is fixed — settings, manifests and pick sheets all refer to it. Everything else here is safe to change; none of it moves stock.'
+              : 'A new building starts with a MAIN zone and a FLOOR bin so it can receive stock immediately. Location tracking starts off; turn it on from Bins once the shelving is laid out.'}
+          </p>
 
-        {error !== null && <ErrorNote message={error} />}
+          {error !== null && (
+            <div role="alert" className="wh-alert">
+              {error}
+            </div>
+          )}
 
-        <div className="space-y-3">
-          <FormField
+          <TextField
             label="Code"
-            required={!isEdit}
+            requiredMark={!isEdit}
+            inputClassName="sk-ident"
             hint={
               isEdit
                 ? 'Immutable — the natural key other settings point at.'
@@ -197,102 +222,77 @@ export function WarehouseFormPanel({
                 ? 'Uppercase A–Z, 0–9 and dashes only, 2–32 characters.'
                 : undefined
             }
-          >
-            <Input
-              value={isEdit ? warehouse.code : code}
-              disabled={isEdit}
-              maxLength={32}
-              placeholder="CCU-01"
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-            />
-          </FormField>
+            value={isEdit ? warehouse.code : code}
+            disabled={isEdit}
+            maxLength={32}
+            placeholder="CCU-01"
+            onChange={(e) => setCode(e.target.value.toUpperCase())}
+          />
 
-          <FormField label="Name" required hint="What people call the building.">
-            <Input
-              value={name}
-              maxLength={120}
-              placeholder="Bangalore fulfilment centre"
-              onChange={(e) => setName(e.target.value)}
-            />
-          </FormField>
+          <TextField
+            label="Name"
+            requiredMark
+            hint="What people call the building."
+            value={name}
+            maxLength={120}
+            showCount
+            placeholder="Bangalore fulfilment centre"
+            onChange={(e) => setName(e.target.value)}
+          />
 
-          <FormField
+          <Select
             label="Status"
             hint="Only ACTIVE warehouses are offered for receiving and picking."
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
           >
-            <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-              {STATUSES.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+            {STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </Select>
 
-          <div className="grid gap-3 sm:grid-cols-2">
-            <FormField
+          <div className="wh-fields" data-cols="2">
+            <TextField
               label="Country"
               hint="ISO two-letter code."
               error={cc !== '' && ccBad ? 'Exactly two letters.' : undefined}
-            >
-              <Input
-                value={countryCode}
-                maxLength={2}
-                placeholder="IN"
-                onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
-              />
-            </FormField>
+              value={countryCode}
+              maxLength={2}
+              placeholder="IN"
+              onChange={(e) => setCountryCode(e.target.value.toUpperCase())}
+            />
 
-            <FormField label="Timezone" hint="Drives the local hour on anything scheduled here.">
-              <Select value={trimmedTz} onChange={(e) => setTimezone(e.target.value)}>
-                {tzOptions.map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+            <Select
+              label="Timezone"
+              hint="Drives the local hour on anything scheduled here."
+              value={trimmedTz}
+              onChange={(e) => setTimezone(e.target.value)}
+            >
+              {tzOptions.map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))}
+            </Select>
           </div>
 
-          <FormField
-            label="Ships customer orders"
-            hint="Leave this on for a normal warehouse. Turn it OFF for an intake-only site such as our Bangladesh warehouse: stock waiting there is real and on hand, and must not be offered to customers in India until it lands and is counted."
-          >
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={fulfilsOrders}
-                onChange={(e) => setFulfilsOrders(e.target.checked)}
-              />
-              <span>
-                {fulfilsOrders
+          <div className="wh-stack wh-stack--tight">
+            <div className="wh-scan__label">Ships customer orders</div>
+            <Checkbox
+              checked={fulfilsOrders}
+              onChange={(e) => setFulfilsOrders(e.target.checked)}
+              label={
+                fulfilsOrders
                   ? 'Orders can ship from here'
-                  : 'Intake only — stock here is not sellable'}
-              </span>
-            </label>
-          </FormField>
+                  : 'Intake only — stock here is not sellable'
+              }
+              description="Leave this on for a normal warehouse. Turn it OFF for an intake-only site such as our Bangladesh warehouse: stock waiting there is real and on hand, and must not be offered to customers in India until it lands and is counted."
+            />
+          </div>
         </div>
-
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={close}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            size="md"
-            disabled={invalid || nothingChanged || pending}
-            onClick={() => void submit()}
-          >
-            {pending
-              ? 'Saving…'
-              : isEdit
-                ? nothingChanged
-                  ? 'No changes'
-                  : 'Save changes'
-                : 'Create warehouse'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+      </Dialog>
     </>
   );
 }

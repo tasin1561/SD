@@ -3,15 +3,12 @@
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Section,
-} from '@skydrop/ui/components';
+import { Unlock } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { TextField } from '@skydrop/ui/app/text-field';
+import '../../_components/benches.css';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -61,72 +58,81 @@ export function ForceExpirePick(): ReactElement {
   }
 
   return (
-    <Section title="Stuck pick" subtitle="Release a claim a picker is holding but not working.">
-      <Button variant="ghost" size="md" onClick={() => setOpen(true)}>
-        Release a stuck pick
-      </Button>
+    <section className="wh-card wh-stack">
+      <SectionHeading
+        title="Stuck pick"
+        note="Release a claim a picker is holding but not working."
+        action={
+          <Button variant="secondary" size="md" onClick={() => setOpen(true)}>
+            Release a stuck pick
+          </Button>
+        }
+      />
 
-      <Modal
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           if (!next) close();
         }}
         title="Release a stuck pick claim"
         description="Hands the shipment back to the queue so another picker can take it."
+        icon={<Unlock size={18} />}
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={close}>
+              {result === null ? 'Cancel' : 'Done'}
+            </Button>
+            {result === null && (
+              <Button
+                size="md"
+                disabled={shipmentId.trim() === '' || expire.isPending}
+                onClick={() =>
+                  expire.mutate(
+                    { shipmentId: shipmentId.trim() },
+                    { onSuccess: (r) => setResult(r) },
+                  )
+                }
+              >
+                {expire.isPending ? 'Releasing…' : 'Release'}
+              </Button>
+            )}
+          </DialogFooter>
+        }
       >
-        <FormField
-          label="Shipment id"
-          htmlFor="fe-shipment"
-          hint="From the order's shipments section."
-        >
-          <Input
+        <div className="wh-stack">
+          <TextField
             id="fe-shipment"
+            label="Shipment id"
+            hint="From the order's shipments section."
+            inputClassName="sk-ident"
             value={shipmentId}
             onChange={(e) => {
               setShipmentId(e.target.value);
               setResult(null);
             }}
           />
-        </FormField>
 
-        <p className="text-text-faint text-xs">
-          Safe to run twice, and it will not take a shipment away from a picker who has since
-          claimed it — it checks the claim is still the one it expected before releasing.
-        </p>
+          <p className="wh-faint">
+            Safe to run twice, and it will not take a shipment away from a picker who has since
+            claimed it — it checks the claim is still the one it expected before releasing.
+          </p>
 
-        {expire.error !== null && <ErrorNote message={serverVerdict(expire.error)} />}
-        {result !== null && (
-          <p className="text-sm">
-            {result.expired ? (
-              <span className="text-[var(--color-good)]">
-                Released — the shipment is back in the pick queue.
-              </span>
+          {expire.error !== null && (
+            <div role="alert" className="wh-alert">
+              {serverVerdict(expire.error)}
+            </div>
+          )}
+          {result !== null &&
+            (result.expired ? (
+              <p className="wh-good">Released — the shipment is back in the pick queue.</p>
             ) : (
-              <span className="text-text-muted">
+              <p className="wh-note">
                 Nothing to release. Either it was never claimed, it is already finished, or someone
                 has claimed it since.
-              </span>
-            )}
-          </p>
-        )}
-
-        <ModalFooter>
-          <Button variant="ghost" size="md" onClick={close}>
-            {result === null ? 'Cancel' : 'Done'}
-          </Button>
-          {result === null && (
-            <Button
-              size="md"
-              disabled={shipmentId.trim() === '' || expire.isPending}
-              onClick={() =>
-                expire.mutate({ shipmentId: shipmentId.trim() }, { onSuccess: (r) => setResult(r) })
-              }
-            >
-              {expire.isPending ? 'Releasing…' : 'Release'}
-            </Button>
-          )}
-        </ModalFooter>
-      </Modal>
-    </Section>
+              </p>
+            ))}
+        </div>
+      </Dialog>
+    </section>
   );
 }
