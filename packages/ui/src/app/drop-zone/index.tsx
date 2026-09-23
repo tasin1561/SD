@@ -40,6 +40,12 @@ export type DropZoneProps = Omit<
   readonly buttonText?: string | undefined;
   /** Show the chosen files under the zone. */
   readonly showFiles?: boolean | undefined;
+  /**
+   * false: a DROPPED file is handed to `onFiles` whatever its type, so a
+   * page that already validates types itself keeps its own messages (the
+   * `accept` list still filters the native picker). Default true.
+   */
+  readonly filterDropped?: boolean | undefined;
 };
 
 function matchesAccept(file: File, accept: string | undefined): boolean {
@@ -71,6 +77,7 @@ export const DropZone = forwardRef<HTMLInputElement, DropZoneProps>(function Dro
     error,
     buttonText = 'Choose files',
     showFiles = true,
+    filterDropped = true,
     accept,
     multiple,
     disabled,
@@ -91,7 +98,7 @@ export const DropZone = forwardRef<HTMLInputElement, DropZoneProps>(function Dro
   const hasHint = hint !== undefined && hint !== null && hint !== false && hint !== '';
 
   function take(list: File[]): void {
-    const ok = list.filter((f) => matchesAccept(f, accept));
+    const ok = filterDropped ? list.filter((f) => matchesAccept(f, accept)) : list;
     const kept = multiple === true ? ok : ok.slice(0, 1);
     const wrongType = list.length - ok.length;
     const extra = ok.length - kept.length;

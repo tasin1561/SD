@@ -173,6 +173,8 @@ export function FieldShell({
   const guidance = hint ?? help;
   const invalid = hasContent(error) || status === 'invalid';
   const near = counter !== undefined && counter.max > 0 && counter.count >= counter.max * 0.9;
+  // Only a display-only counter can go over; it says so, it does not block.
+  const over = counter !== undefined && counter.count > counter.max;
   return (
     <div
       className={clsx('sk-field', variant, className)}
@@ -240,9 +242,10 @@ export function FieldShell({
               className="sk-field__count sk-figure"
               id={ids.count}
               data-near={near || undefined}
+              data-over={over || undefined}
             >
               <span aria-hidden>
-                {counter.count}/{counter.max}
+                {counter.count.toLocaleString('en-IN')} / {counter.max.toLocaleString('en-IN')}
               </span>
               <span className="sk-field__sr">
                 {counter.count} of {counter.max} characters

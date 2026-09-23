@@ -292,6 +292,9 @@ textarea.sk-field__input {
   color: var(--saffron-text);
   font-weight: var(--fw-semibold);
 }
+.sk-field__count[data-over] {
+  color: var(--red-text);
+}
 .sk-field__sr {
   position: absolute;
   width: 1px;
