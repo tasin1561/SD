@@ -44,8 +44,14 @@ export {
  * (`value` + `onChange`) and uncontrolled (`defaultValue`) both work.
  */
 interface FieldExtras extends FieldMessages {
-  /** Show "n/max" under the field. Needs `maxLength`. */
+  /** Show "n / max" under the field, enforcing `maxLength` (the browser stops typing). */
   readonly showCount?: boolean | undefined;
+  /**
+   * Show "n / countMax" under the field WITHOUT enforcing it — display only.
+   * For a limit the server enforces and the form never did: nothing is
+   * blocked client-side that was not blocked before (owner's rule).
+   */
+  readonly countMax?: number | undefined;
   /** An inline valid/invalid icon at the end of the field. */
   readonly status?: FieldStatus | undefined;
   /** Keep the label floated even when empty. */
@@ -73,6 +79,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     error,
     icon,
     showCount = false,
+    countMax,
     status,
     floatLabel = false,
     lead,
@@ -98,7 +105,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const id = idProp ?? `sk-f-${autoId}`;
   const [node, setRef] = useMergedRef<HTMLInputElement>(ref);
   const { text, track } = useFieldText(value, defaultValue, node);
-  const counting = showCount && maxLength !== undefined;
+  const counting = (showCount && maxLength !== undefined) || countMax !== undefined;
+  const countLimit = showCount && maxLength !== undefined ? maxLength : countMax;
   const guidance = hint ?? help;
   const invalid = hasContent(error) || status === 'invalid';
 
@@ -120,7 +128,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
       float={floatLabel || placeholder !== undefined || text !== ''}
       status={status}
       counter={
-        counting && maxLength !== undefined ? { count: text.length, max: maxLength } : undefined
+        counting && countLimit !== undefined ? { count: text.length, max: countLimit } : undefined
       }
       lead={lead}
       trail={trail}
@@ -167,6 +175,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
     error,
     icon,
     showCount = false,
+    countMax,
     floatLabel = false,
     after,
     variant,
@@ -190,7 +199,8 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
   const id = idProp ?? `sk-f-${autoId}`;
   const [node, setRef] = useMergedRef<HTMLTextAreaElement>(ref);
   const { text, track } = useFieldText(value, defaultValue, node);
-  const counting = showCount && maxLength !== undefined;
+  const counting = (showCount && maxLength !== undefined) || countMax !== undefined;
+  const countLimit = showCount && maxLength !== undefined ? maxLength : countMax;
   const guidance = hint ?? help;
 
   function change(e: ChangeEvent<HTMLTextAreaElement>): void {
@@ -210,7 +220,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
       disabled={disabled}
       float={floatLabel || placeholder !== undefined || text !== ''}
       counter={
-        counting && maxLength !== undefined ? { count: text.length, max: maxLength } : undefined
+        counting && countLimit !== undefined ? { count: text.length, max: countLimit } : undefined
       }
       after={after}
       multiline

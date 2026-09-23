@@ -74,6 +74,8 @@ const ACRONYMS = new Set([
  * case needs the acronyms kept, so "RTO in transit". A label that is not a
  * plain string (a node) is left exactly as given.
  */
+export function chipWords(label: string): string;
+export function chipWords(label: ReactNode): ReactNode;
 export function chipWords(label: ReactNode): ReactNode {
   if (typeof label !== 'string') return label;
   return label
