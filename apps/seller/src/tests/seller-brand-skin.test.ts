@@ -54,4 +54,70 @@ describe('apps/seller wears the brand skin', () => {
     const css = readFileSync(ADMIN_GLOBALS, 'utf8');
     expect(css).not.toContain('seller-theme.css');
   });
+
+  it('nothing in the shared package pulls the retired palette in behind an app s back', () => {
+    // Kept from seller-theme-scope.test.ts: an `@import` from INSIDE a
+    // shared sheet reaches every consumer while each app's own globals
+    // still read clean. Now covers the brand sheets as well.
+    const shared = [
+      'tokens.css',
+      'corridor.css',
+      'brand/scales.css',
+      'brand/theme.css',
+      'brand/app.css',
+      'brand/legacy.css',
+    ];
+    for (const file of shared) {
+      const css = readFileSync(join(REPO, 'packages', 'ui', 'src', file), 'utf8');
+      // An IMPORT is what would leak it; a comment naming it is history.
+      expect(css, file).not.toMatch(/@import[^;]*seller-theme\.css/);
+    }
+  });
+});
+
+/**
+ * The sign-in screen moved with the app. REPLACES the two checks
+ * seller-theme-scope.test.ts ran on apps/seller's own login `console.css`
+ * (deleted — seller now renders the shared SignInFrame, which reads the
+ * brand theme). The guarantees carry over to the sheet the login screen
+ * now actually paints with:
+ *   - the dark canvas is #090d16 (the value the old check pinned);
+ *   - the theme declares its LIGHT palette twice — the OS default and the
+ *     toggle — and the two copies must be identical, or the login page
+ *     changes colour when somebody touches the switch.
+ */
+describe('the sign-in screen paints with the brand theme', () => {
+  const THEME_CSS = join(REPO, 'packages', 'ui', 'src', 'brand', 'theme.css');
+
+  function block(css: string, opener: string): string[] {
+    const start = css.indexOf(opener);
+    expect(start, `${opener} not found`).toBeGreaterThan(-1);
+    const body = css.slice(css.indexOf('{', start + opener.length - 1) + 1);
+    let depth = 1;
+    let end = 0;
+    for (let i = 0; i < body.length && depth > 0; i += 1) {
+      if (body[i] === '{') depth += 1;
+      if (body[i] === '}') depth -= 1;
+      end = i;
+    }
+    return body
+      .slice(0, end)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('--'));
+  }
+
+  it('carries the #090d16 dark canvas', () => {
+    const css = readFileSync(THEME_CSS, 'utf8');
+    expect(block(css, ':root {')).toContain('--surface: #090d16;');
+  });
+
+  it('declares the two LIGHT copies identically', () => {
+    const css = readFileSync(THEME_CSS, 'utf8');
+    const media = block(css, ':root:not([data-theme]) {');
+    const pinned = block(css, ":root[data-theme='light'] {");
+    expect(media.length).toBeGreaterThan(20);
+    expect(media).toEqual(pinned);
+    expect(pinned).toContain('--surface: #f8f9ff;');
+  });
 });
