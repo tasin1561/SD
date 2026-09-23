@@ -2,27 +2,17 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import { AlertTriangle } from 'lucide-react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorState,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  Section,
-  StatusBadge,
-  TBody,
-  THead,
-  Table,
-  TableEmpty,
-  Td,
-  Textarea,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { AlertTriangle, Truck } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import {
   useDecideDeliveryAction,
   useDeliveryActionQueue,
@@ -30,6 +20,7 @@ import {
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { AgeChip, Notice, OoCard, OoSection } from '../../orders/_components/order-ops-parts';
 
 /**
  * The operator gate for failed deliveries (CUR-10).
@@ -84,12 +75,13 @@ export function DeliveryActionsIndex(): ReactElement {
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  async function submit(): Promise<void> {
-    if (deciding === null) return;
+  /** Resolves true when the decision landed; false when refused (the reason is in `error`). */
+  async function submit(): Promise<boolean> {
+    if (deciding === null) return false;
     setError(null);
     if (deciding.decision === 'reject' && note.trim().length < 5) {
       setError('Say why — the seller sees this, and an unexplained no comes straight back');
-      return;
+      return false;
     }
     try {
       await decide.mutateAsync({
@@ -99,45 +91,61 @@ export function DeliveryActionsIndex(): ReactElement {
       });
       setNote('');
       setDeciding(null);
+      return true;
     } catch (err) {
       setError(serverVerdict(err));
+      return false;
     }
   }
 
+  const rows = queue.data ?? [];
+
   return (
-    <div className="space-y-4">
+    <div className="oo-page">
       <PageHeader
         title="Failed deliveries"
         subtitle="What sellers have asked us to do about parcels the courier could not hand over. A Reseller store's ask that its seller chose to approve is shown for reference only — Seller staff decide it, not Skydrop admin."
       />
 
-      <Card>
-        <CardBody>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={showAll}
-              onChange={(e) => setShowAll(e.target.checked)}
-            />
-            Show decided requests too
-          </label>
-          <p className="text-text-muted mt-1 text-xs">
-            Approving a re-attempt sends a van; approving a return ends the sale. A recall only
-            queues one of our agents to phone the customer.
-          </p>
-        </CardBody>
-      </Card>
+      <OoCard>
+        <Checkbox
+          checked={showAll}
+          onChange={(e) => setShowAll(e.target.checked)}
+          label="Show decided requests too"
+          description="Approving a re-attempt sends a van; approving a return ends the sale. A recall only queues one of our agents to phone the customer."
+        />
+      </OoCard>
 
-      <Section title={showAll ? 'All requests' : 'Waiting on a decision'}>
+      <OoSection
+        title={showAll ? 'All requests' : 'Waiting on a decision'}
+        note={queue.data === undefined ? undefined : `${rows.length} shown`}
+        flush
+      >
         {queue.isLoading ? (
-          <LoadingState />
+          <div className="oo-card__pad">
+            <SkeletonRows rows={4} cols={6} label="Loading the queue…" />
+          </div>
         ) : queue.isError || queue.data === undefined ? (
-          <ErrorState
-            message={queue.error?.message ?? 'Could not read the queue.'}
-            retry={() => void queue.refetch()}
+          <div className="oo-card__pad">
+            <ErrorState
+              message={queue.error?.message ?? 'Could not read the queue.'}
+              retry={() => void queue.refetch()}
+            />
+          </div>
+        ) : rows.length === 0 ? (
+          <EmptyState
+            bare
+            tone={showAll ? 'neutral' : 'positive'}
+            icon={<Truck size={20} />}
+            title={showAll ? 'No requests yet' : 'Nothing waiting'}
+            description={
+              showAll
+                ? 'No seller has asked for anything yet.'
+                : 'Nothing waiting. Failed deliveries appear here when a seller asks us to act.'
+            }
           />
         ) : (
-          <Table>
+          <Table caption="Failed-delivery requests">
             <THead>
               <Tr>
                 <Th>Order</Th>
@@ -149,91 +157,93 @@ export function DeliveryActionsIndex(): ReactElement {
               </Tr>
             </THead>
             <TBody>
-              {queue.data.length === 0 ? (
-                <TableEmpty colSpan={6}>
-                  {showAll
-                    ? 'No seller has asked for anything yet.'
-                    : 'Nothing waiting. Failed deliveries appear here when a seller asks us to act.'}
-                </TableEmpty>
-              ) : (
-                queue.data.map((r) => (
-                  <Tr key={r.id}>
-                    <Td>
-                      <Link
-                        href={`/orders?q=${r.order?.orderNumber ?? ''}`}
-                        className="text-accent hover:underline"
-                      >
-                        {r.order?.orderNumber ?? '—'}
-                      </Link>
-                      <div className="text-text-faint text-xs">
-                        {r.shipment?.awbNumber ?? r.shipment?.shipmentNumber ?? ''}
-                      </div>
-                    </Td>
-                    <Td className="text-text-muted">
-                      {r.seller?.companyName ?? '—'}
-                      {r.resellerStore !== null && (
-                        <div className="text-text-faint text-xs">
-                          Reseller store: {r.resellerStore.displayName ?? r.resellerStore.name}
-                        </div>
-                      )}
-                    </Td>
-                    <Td>
-                      <div className="font-medium">{actionLabel(r.action)}</div>
-                      {r.action === 'RECALL' && (
-                        <div className="text-text-faint text-xs">No courier involved</div>
-                      )}
-                    </Td>
-                    <Td className="text-text-muted max-w-xs text-xs">{r.reason}</Td>
-                    <Td>
-                      <StatusBadge kind={statusKind(r.status)} label={r.status.toLowerCase()} />
+              {rows.map((r) => (
+                <Tr key={r.id}>
+                  <Td>
+                    <Link
+                      href={`/orders?q=${r.order?.orderNumber ?? ''}`}
+                      className="oo-link sk-ident"
+                    >
+                      {r.order?.orderNumber ?? '—'}
+                    </Link>
+                    <span className="oo-sub sk-ident">
+                      {r.shipment?.awbNumber ?? r.shipment?.shipmentNumber ?? ''}
+                    </span>
+                  </Td>
+                  <Td className="oo-muted">
+                    {r.seller?.companyName ?? '—'}
+                    {r.resellerStore !== null && (
+                      <span className="oo-sub">
+                        Reseller store: {r.resellerStore.displayName ?? r.resellerStore.name}
+                      </span>
+                    )}
+                  </Td>
+                  <Td>
+                    <span className="oo-strong">{actionLabel(r.action)}</span>
+                    {r.action === 'RECALL' && <span className="oo-sub">No courier involved</span>}
+                  </Td>
+                  <Td className="oo-muted oo-clip">{r.reason}</Td>
+                  <Td>
+                    <div className="oo-stack oo-stack--tight">
+                      <span className="oo-row">
+                        <StatusChip
+                          size="sm"
+                          kind={statusKind(r.status)}
+                          label={r.status.toLowerCase()}
+                        />
+                        <AgeChip title="When the seller asked">
+                          {new Date(r.createdAt).toLocaleString('en-IN')}
+                        </AgeChip>
+                      </span>
                       {r.executionError !== null && (
-                        <div className="text-danger mt-1 text-xs">{r.executionError}</div>
+                        <span className="oo-error">{r.executionError}</span>
                       )}
                       {r.decisionNote !== null && (
-                        <div className="text-text-faint mt-1 text-xs">{r.decisionNote}</div>
+                        <span className="oo-faint">{r.decisionNote}</span>
                       )}
-                    </Td>
-                    <Td align="right">
-                      {r.waitingOnSeller ? (
-                        // Seller staff decide this one — the Reseller
-                        // store's policy says so. Skydrop admin can see it,
-                        // and the server refuses a decision here anyway.
-                        <span className="text-text-muted text-xs">Waiting on seller staff</span>
-                      ) : r.status === 'PENDING' && canDecide ? (
-                        <div className="flex justify-end gap-1.5">
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setDeciding({ row: r, decision: 'approve' });
-                              setNote('');
-                            }}
-                          >
-                            Approve
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setDeciding({ row: r, decision: 'reject' });
-                              setNote('');
-                            }}
-                          >
-                            Decline
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-text-faint">—</span>
-                      )}
-                    </Td>
-                  </Tr>
-                ))
-              )}
+                    </div>
+                  </Td>
+                  <Td align="right">
+                    {r.waitingOnSeller ? (
+                      // Seller staff decide this one — the Reseller
+                      // store's policy says so. Skydrop admin can see it,
+                      // and the server refuses a decision here anyway.
+                      <span className="oo-muted">Waiting on seller staff</span>
+                    ) : r.status === 'PENDING' && canDecide ? (
+                      <div className="oo-row oo-row--end">
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={() => {
+                            setDeciding({ row: r, decision: 'approve' });
+                            setNote('');
+                          }}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setDeciding({ row: r, decision: 'reject' });
+                            setNote('');
+                          }}
+                        >
+                          Decline
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="oo-faint">—</span>
+                    )}
+                  </Td>
+                </Tr>
+              ))}
             </TBody>
           </Table>
         )}
-      </Section>
+      </OoSection>
 
-      <Modal
+      <Dialog
         open={deciding !== null}
         onOpenChange={(next) => {
           if (!next) {
@@ -253,43 +263,61 @@ export function DeliveryActionsIndex(): ReactElement {
               : 'This reaches Delhivery. A re-attempt dispatches a van; a return ends the sale.'
             : 'The seller sees your reason.'
         }
+        footer={
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeciding(null)}>
+              Cancel
+            </Button>
+            <AsyncButton
+              variant="primary"
+              labels={{
+                idle: deciding?.decision === 'approve' ? 'Approve and act' : 'Decline',
+                busy: 'Working…',
+              }}
+              onAction={async () => {
+                const ok = await submit();
+                if (!ok) throw new Error('refused');
+              }}
+            />
+          </DialogFooter>
+        }
       >
-        {deciding !== null &&
-          deciding.decision === 'approve' &&
-          deciding.row.action !== 'RECALL' && (
-            <div className="text-warning mb-3 flex gap-2 text-sm">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              <p>
-                Delhivery answers asynchronously — this returns a reference, not an outcome. The
-                real result arrives on the next scan.
-              </p>
+        {deciding !== null && (
+          <div className="oo-stack">
+            <div className="oo-row">
+              <span className="sk-ident oo-strong">{deciding.row.order?.orderNumber ?? '—'}</span>
+              <span className="oo-muted">
+                {deciding.row.seller?.companyName ?? '—'} · {actionLabel(deciding.row.action)}
+              </span>
             </div>
-          )}
-        <Textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={3}
-          maxLength={2000}
-          placeholder={
-            deciding?.decision === 'approve'
-              ? 'Optional note for the seller'
-              : 'e.g. Two attempts already made — a third is unlikely to land'
-          }
-        />
-        {error !== null && <p className="text-danger mt-2 text-sm">{error}</p>}
-        <ModalFooter>
-          <Button variant="ghost" onClick={() => setDeciding(null)}>
-            Cancel
-          </Button>
-          <Button onClick={() => void submit()} disabled={decide.isPending}>
-            {decide.isPending
-              ? 'Working…'
-              : deciding?.decision === 'approve'
-                ? 'Approve and act'
-                : 'Decline'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+            {deciding.decision === 'approve' && deciding.row.action !== 'RECALL' && (
+              <Notice tone="warn" icon={<AlertTriangle size={16} />}>
+                <p>
+                  Delhivery answers asynchronously — this returns a reference, not an outcome. The
+                  real result arrives on the next scan.
+                </p>
+              </Notice>
+            )}
+            <TextArea
+              label="Note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              placeholder={
+                deciding.decision === 'approve'
+                  ? 'Optional note for the seller'
+                  : 'e.g. Two attempts already made — a third is unlikely to land'
+              }
+            />
+            {error !== null && (
+              <p className="oo-error" role="alert">
+                {error}
+              </p>
+            )}
+          </div>
+        )}
+      </Dialog>
     </div>
   );
 }

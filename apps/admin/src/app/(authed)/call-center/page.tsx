@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
-import { PageHeader } from '@skydrop/ui/components';
+import { PageHeader } from '@skydrop/ui/app/page-header';
 import { CallCenterStation } from './_components/call-center-station';
+import '../orders/_components/order-ops.css';
 
 /**
  * Single-page call-center agent workspace. CALL_AGENT role pulls
@@ -9,7 +10,7 @@ import { CallCenterStation } from './_components/call-center-station';
  */
 export default function CallCenterPage(): ReactElement {
   return (
-    <div>
+    <div className="oo-page">
       <PageHeader
         title="Call centre"
         subtitle="Pull a call, talk to the customer, record the outcome. The order moves automatically."

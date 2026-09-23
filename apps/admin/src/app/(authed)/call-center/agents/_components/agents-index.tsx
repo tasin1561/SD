@@ -1,29 +1,20 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  DescriptionList,
-  EmptyState,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Num,
-  PageHeader,
-  Section,
-  SkeletonRows,
-  Stat,
-  StatusBadge,
-  TBody,
-  Table,
-  Td,
-  THead,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Num } from '@skydrop/ui/components';
+import { Headset, PhoneCall, UserCheck } from 'lucide-react';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { KpiCard } from '@skydrop/ui/app/kpi-card';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Facts, OoCard } from '../../../orders/_components/order-ops-parts';
+import '../../_components/call-center.css';
 import {
   useAgentMetrics,
   useAgents,
@@ -54,39 +45,54 @@ export function AgentsIndex(): ReactElement {
   const holding = items.reduce((n, a) => n + a.activeAssigned, 0);
 
   return (
-    <div>
+    <div className="oo-page">
       <PageHeader
         title="Call agents"
         subtitle="Who is taking calls, what they are holding, and how their attempts are landing."
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
-        <Stat label="Agents" value={<Num value={items.length} />} />
-        <Stat
+      <div className="oo-kpis">
+        <KpiCard
+          label="Agents"
+          icon={<Headset size={14} />}
+          {...(list.data === undefined
+            ? { figure: <span className="oo-faint">—</span> }
+            : { value: items.length })}
+        />
+        <KpiCard
           label="Marked available"
-          value={<Num value={availableCount} />}
-          tone={items.length > 0 && availableCount === 0 ? 'bad' : 'neutral'}
+          icon={<UserCheck size={14} />}
+          tone={items.length > 0 && availableCount === 0 ? 'debit' : 'neutral'}
           hint={
             items.length > 0 && availableCount === 0
               ? 'Nobody is available — nothing will be assigned'
               : undefined
           }
+          {...(list.data === undefined
+            ? { figure: <span className="oo-faint">—</span> }
+            : { value: availableCount })}
         />
-        <Stat label="Calls held right now" value={<Num value={holding} />} />
+        <KpiCard
+          label="Calls held right now"
+          icon={<PhoneCall size={14} />}
+          {...(list.data === undefined
+            ? { figure: <span className="oo-faint">—</span> }
+            : { value: holding })}
+        />
       </div>
 
-      <Card>
-        {list.isLoading ? (
-          <SkeletonRows rows={4} />
-        ) : list.isError ? (
-          <ErrorNote message={serverVerdict(list.error)} retry={() => void list.refetch()} />
-        ) : items.length === 0 ? (
-          <EmptyState
-            title="No call agents"
-            description="Staff with the call agent role appear here once they exist. Add them from Staff."
-          />
-        ) : (
-          <Table>
+      {list.isLoading ? (
+        <SkeletonRows rows={4} cols={6} label="Loading agents…" />
+      ) : list.isError ? (
+        <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+      ) : items.length === 0 ? (
+        <EmptyState
+          title="No call agents"
+          description="Staff with the call agent role appear here once they exist. Add them from Staff."
+        />
+      ) : (
+        <OoCard flush>
+          <Table caption="Call agents">
             <THead>
               <Tr>
                 <Th>Agent</Th>
@@ -100,16 +106,16 @@ export function AgentsIndex(): ReactElement {
             <TBody>
               {items.map((a) => (
                 <Tr key={a.agentId}>
-                  <Td>{a.email}</Td>
+                  <Td className="oo-wrap">{a.email}</Td>
                   <Td>
-                    <span className="text-text-muted text-xs">
+                    <span className="oo-muted sk-figure">
                       {a.settings.workingHoursStart}–{a.settings.workingHoursEnd}{' '}
                       {a.settings.timezone}
                     </span>
                   </Td>
                   <Td>
                     {a.settings.languages.length === 0 ? (
-                      <span className="text-text-faint">—</span>
+                      <span className="oo-faint">—</span>
                     ) : (
                       a.settings.languages.join(', ')
                     )}
@@ -118,21 +124,22 @@ export function AgentsIndex(): ReactElement {
                     <span
                       className={
                         a.activeAssigned >= a.settings.maxActiveCalls
-                          ? 'text-[var(--color-warn)]'
-                          : ''
+                          ? 'sk-figure oo-warn'
+                          : 'sk-figure'
                       }
                     >
                       {a.activeAssigned} of {a.settings.maxActiveCalls}
                     </span>
                   </Td>
                   <Td>
-                    <StatusBadge
+                    <StatusChip
+                      size="sm"
                       kind={a.settings.isAvailable ? 'delivered' : 'cancelled'}
                       label={a.settings.isAvailable ? 'available' : 'off'}
                     />
                   </Td>
                   <Td align="right">
-                    <span className="flex justify-end gap-1">
+                    <span className="cc-row-actions">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -155,10 +162,14 @@ export function AgentsIndex(): ReactElement {
               ))}
             </TBody>
           </Table>
-        )}
-      </Card>
+        </OoCard>
+      )}
 
-      {update.error !== null && <ErrorNote message={serverVerdict(update.error)} />}
+      {update.error !== null && (
+        <p className="oo-error" role="alert">
+          {serverVerdict(update.error)}
+        </p>
+      )}
 
       <AgentDetail agent={openAgent} onClose={() => setOpenAgent(null)} />
     </div>
@@ -188,7 +199,7 @@ function AgentDetail({
   const holds = metrics.data?.holds;
 
   return (
-    <Modal
+    <Dialog
       open={agent !== null}
       onOpenChange={(next) => {
         if (!next) close();
@@ -196,10 +207,36 @@ function AgentDetail({
       size="lg"
       title={agent?.email ?? 'Agent'}
       description="Attempt history and capacity."
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={close}>
+            Close
+          </Button>
+          {agent !== null && (
+            <AsyncButton
+              size="md"
+              state={update.isPending ? 'busy' : 'idle'}
+              labels={{ idle: 'Save capacity', busy: 'Saving…' }}
+              disabled={
+                maxActiveCalls === '' ||
+                Number(maxActiveCalls) === agent.settings.maxActiveCalls ||
+                Number(maxActiveCalls) < 1 ||
+                update.isPending
+              }
+              onClick={() =>
+                update.mutate({
+                  agentId: agent.agentId,
+                  body: { maxActiveCalls: Number(maxActiveCalls) },
+                })
+              }
+            />
+          )}
+        </DialogFooter>
+      }
     >
       {agent !== null && (
-        <>
-          <DescriptionList
+        <div className="oo-stack">
+          <Facts
             items={[
               {
                 label: 'Working hours',
@@ -224,19 +261,21 @@ function AgentDetail({
           />
 
           {holds !== undefined && (holds.holdsCompleted > 0 || holds.holdsDropped > 0) && (
-            <Section
-              title="Time holding calls"
-              // An attempt count says how much work an agent DID. This
-              // says what became of the work they TOOK — a dropped hold
-              // logs no attempt, so it is invisible above by
-              // construction.
-              subtitle={
-                holds.holdsDropped === 0
-                  ? 'Every call this agent picked up ended in a logged outcome.'
-                  : `${holds.holdsDropped} of ${holds.holdsCompleted + holds.holdsDropped} calls picked up ended without a call being logged.`
-              }
-            >
-              <DescriptionList
+            <section className="oo-section">
+              <SectionHeading
+                as="h3"
+                title="Time holding calls"
+                // An attempt count says how much work an agent DID. This
+                // says what became of the work they TOOK — a dropped hold
+                // logs no attempt, so it is invisible above by
+                // construction.
+                note={
+                  holds.holdsDropped === 0
+                    ? 'Every call this agent picked up ended in a logged outcome.'
+                    : `${holds.holdsDropped} of ${holds.holdsCompleted + holds.holdsDropped} calls picked up ended without a call being logged.`
+                }
+              />
+              <Facts
                 items={[
                   { label: 'Calls worked', value: <Num value={holds.holdsCompleted} /> },
                   { label: 'Picked up then dropped', value: <Num value={holds.holdsDropped} /> },
@@ -260,19 +299,21 @@ function AgentDetail({
                   })),
                 ]}
               />
-            </Section>
+            </section>
           )}
 
-          <Section
-            title="Attempts"
-            subtitle={
-              attempts === 0
-                ? 'No attempts logged yet.'
-                : `${confirmed} of ${attempts} attempts ended in a confirmed order.`
-            }
-          >
+          <section className="oo-section">
+            <SectionHeading
+              as="h3"
+              title="Attempts"
+              note={
+                attempts === 0
+                  ? 'No attempts logged yet.'
+                  : `${confirmed} of ${attempts} attempts ended in a confirmed order.`
+              }
+            />
             {metrics.isLoading ? (
-              <SkeletonRows rows={3} />
+              <SkeletonRows rows={3} cols={3} label="Loading attempts…" />
             ) : outcomes.length === 0 ? (
               <EmptyState
                 bare
@@ -280,7 +321,7 @@ function AgentDetail({
                 description="No calls recorded for this agent."
               />
             ) : (
-              <Table>
+              <Table caption="Attempts by outcome">
                 <THead>
                   <Tr>
                     <Th>Outcome</Th>
@@ -295,7 +336,7 @@ function AgentDetail({
                       <Td align="right">
                         <Num value={count} />
                       </Td>
-                      <Td align="right">
+                      <Td align="right" className="sk-figure">
                         {attempts === 0 ? '—' : `${Math.round((count / attempts) * 100)}%`}
                       </Td>
                     </Tr>
@@ -303,54 +344,32 @@ function AgentDetail({
                 </TBody>
               </Table>
             )}
-          </Section>
+          </section>
 
-          <Section
-            title="Capacity"
-            subtitle="How many calls this agent can hold at once. Lower it if they are drowning; raise it only if they are idle."
-          >
-            <FormField label="Maximum concurrent calls" htmlFor="ag-max">
-              <Input
-                id="ag-max"
-                type="number"
-                min={1}
-                value={
-                  maxActiveCalls === '' ? String(agent.settings.maxActiveCalls) : maxActiveCalls
-                }
-                onChange={(e) => setMaxActiveCalls(e.target.value)}
-              />
-            </FormField>
-          </Section>
+          <section className="oo-section">
+            <SectionHeading
+              as="h3"
+              title="Capacity"
+              note="How many calls this agent can hold at once. Lower it if they are drowning; raise it only if they are idle."
+            />
+            <TextField
+              id="ag-max"
+              label="Maximum concurrent calls"
+              type="number"
+              min={1}
+              value={maxActiveCalls === '' ? String(agent.settings.maxActiveCalls) : maxActiveCalls}
+              onChange={(e) => setMaxActiveCalls(e.target.value)}
+            />
+          </section>
 
-          {update.error !== null && <ErrorNote message={serverVerdict(update.error)} />}
-        </>
+          {update.error !== null && (
+            <p className="oo-error" role="alert">
+              {serverVerdict(update.error)}
+            </p>
+          )}
+        </div>
       )}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close}>
-          Close
-        </Button>
-        {agent !== null && (
-          <Button
-            size="md"
-            disabled={
-              maxActiveCalls === '' ||
-              Number(maxActiveCalls) === agent.settings.maxActiveCalls ||
-              Number(maxActiveCalls) < 1 ||
-              update.isPending
-            }
-            onClick={() =>
-              update.mutate({
-                agentId: agent.agentId,
-                body: { maxActiveCalls: Number(maxActiveCalls) },
-              })
-            }
-          >
-            {update.isPending ? 'Saving…' : 'Save capacity'}
-          </Button>
-        )}
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }
 

@@ -1,0 +1,55 @@
+/* Courier decisions: the carrier option buttons. Tokens only. */
+.oq-options {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  max-width: 28rem;
+  min-width: 0;
+}
+.oq-option {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+  color: var(--fg-body);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+}
+.oq-option:hover:not(:disabled) {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+}
+.oq-option:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.oq-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.oq-option__name {
+  display: block;
+  overflow: hidden;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oq-option__main {
+  min-width: 0;
+}
+.oq-option__rate {
+  flex: none;
+  font-size: var(--fs-sm);
+}

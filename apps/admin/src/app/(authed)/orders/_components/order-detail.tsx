@@ -2,24 +2,24 @@
 
 import Link from 'next/link';
 import { CustomerRiskStrip } from '../../call-center/_components/customer-risk-strip';
-import { ArrowLeft } from 'lucide-react';
-import type { ReactElement } from 'react';
+import { ArrowLeft, Route, ShieldAlert } from 'lucide-react';
+import type { ReactElement, ReactNode } from 'react';
+import type { OrderStatus } from '@skydrop/db';
 import { useOrderDetail } from '@/lib/api-hooks';
 import {
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorState,
-  HasOverrideBadge,
-  LoadingState,
-  OrderStatusBadge,
-  PageHeader,
-  Section,
-  Table,
-  OrderJourneyPanels,
-  SkeletonRows,
-  ErrorNote,
+  JourneyTimeline,
+  ParcelFacts,
+  type JourneyMilestoneView,
+  type JourneyParcelView,
+  type JourneyEntryView,
 } from '@skydrop/ui/components';
+import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
+import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { Timeline, type TimelineStep, type TimelineStepState } from '@skydrop/ui/app/timeline';
 import { OrderActionsPanel } from './order-actions-panel';
 import { OrderChargesSection } from './order-charges';
 import { OrderShipmentsSection } from './order-shipments-section';
@@ -29,6 +29,8 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { ConsigneePanel } from './consignee-panel';
 import { ResellerOrderPanel } from './reseller-order-panel';
 import { ResellerMoneyPanel } from './reseller-money-panel';
+import { BackLink, Facts, OoSection } from './order-ops-parts';
+import './order-core.css';
 
 /**
  * Order detail. Single-fetch (admin /orders/:id). Renders:
@@ -45,16 +47,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
   const detail = useOrderDetail(orderId);
 
   return (
-    <div>
-      <Link
-        href="/orders"
-        className="inline-flex items-center gap-1.5 text-text-muted hover:text-text-body text-xs mb-4 transition-colors"
-      >
-        <ArrowLeft size={12} /> Orders
-      </Link>
+    <div className="oo-page">
+      <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
+        Orders
+      </BackLink>
 
       {detail.isLoading ? (
-        <LoadingState label="Loading order…" />
+        <div className="oo-stack" aria-busy="true">
+          <Skeleton height={36} width="40%" />
+          <SkeletonRows rows={6} cols={2} label="Loading order…" />
+        </div>
       ) : detail.isError ? (
         <ErrorState
           message={detail.error?.message ?? 'Failed to load order.'}
@@ -65,73 +67,86 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
       ) : (
         <>
           <PageHeader
-            title={<span className="font-mono">{detail.data.orderNumber}</span>}
+            breadcrumbs={[
+              { label: 'Operations' },
+              { label: 'Orders', href: '/orders' },
+              { label: detail.data.orderNumber },
+            ]}
+            Link={Link}
+            title={<span className="sk-ident">{detail.data.orderNumber}</span>}
             subtitle={
               detail.data.sellerOrderRef ? (
                 <span>
-                  Seller ref: <span className="font-mono">{detail.data.sellerOrderRef}</span>
+                  Seller ref: <span className="sk-ident">{detail.data.sellerOrderRef}</span>
                 </span>
               ) : undefined
             }
             action={
-              <div className="flex items-center gap-2">
-                {detail.data.hasAdminOverride && <HasOverrideBadge />}
-                <OrderStatusBadge status={detail.data.status} />
+              <div className="oc-head-chips">
+                {detail.data.hasAdminOverride && (
+                  <span
+                    className="oc-override"
+                    title="This order was modified via god-mode (ORD-2). The flag is set-once and never cleared — it permanently records that admin override was used."
+                  >
+                    <ShieldAlert size={12} aria-hidden />
+                    Override
+                  </span>
+                )}
+                <StatusChip
+                  kind={orderStatusKind(detail.data.status)}
+                  label={statusLabel(detail.data.status)}
+                />
               </div>
             }
           />
 
-          <Section title="Recipient">
+          <OoSection title="Recipient">
             {/* The same strip the call agent sees. On this page it is
                 the answer to "why did this one come back?" — a customer
                 who returns a third of what they order was never a
                 surprise, and the RTO investigation should start there. */}
             <CustomerRiskStrip orderId={detail.data.id} />
-            <Card>
-              <CardBody>
-                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[160px_1fr] gap-x-3 sm:gap-x-6 gap-y-1.5 text-sm">
-                  <dt className="text-text-muted">Name</dt>
-                  <dd className="text-text-body">{detail.data.recipientName}</dd>
-                  <dt className="text-text-muted">Phone</dt>
-                  <dd className="text-text-body font-mono text-xs">
-                    {detail.data.recipientPhoneE164}
-                    {detail.data.recipientAltPhoneE164 && (
-                      <span className="text-text-faint ml-2">
-                        / {detail.data.recipientAltPhoneE164}
-                      </span>
-                    )}
-                  </dd>
-                  {detail.data.recipientEmail && (
+            <Facts
+              items={[
+                { label: 'Name', value: detail.data.recipientName },
+                {
+                  label: 'Phone',
+                  value: (
+                    <span className="sk-figure">
+                      {detail.data.recipientPhoneE164}
+                      {detail.data.recipientAltPhoneE164 && (
+                        <span className="oo-faint"> / {detail.data.recipientAltPhoneE164}</span>
+                      )}
+                    </span>
+                  ),
+                },
+                ...(detail.data.recipientEmail
+                  ? [{ label: 'Email', value: detail.data.recipientEmail }]
+                  : []),
+                {
+                  label: 'Address',
+                  value: (
                     <>
-                      <dt className="text-text-muted">Email</dt>
-                      <dd className="text-text-body font-mono text-xs">
-                        {detail.data.recipientEmail}
-                      </dd>
+                      <span className="oo-sub oo-body">{detail.data.recipientAddressLine1}</span>
+                      {detail.data.recipientAddressLine2 && (
+                        <span className="oo-sub oo-body">{detail.data.recipientAddressLine2}</span>
+                      )}
+                      {detail.data.recipientLandmark && (
+                        <span className="oo-sub">Landmark: {detail.data.recipientLandmark}</span>
+                      )}
+                      <span className="oo-sub oo-body">
+                        {[detail.data.recipientCity, detail.data.recipientStateProvince]
+                          .filter(Boolean)
+                          .join(', ')}{' '}
+                        <span className="sk-figure">{detail.data.recipientPostalCode}</span>{' '}
+                        <span className="oo-muted">{detail.data.recipientCountryCode}</span>
+                      </span>
                     </>
-                  )}
-                  <dt className="text-text-muted">Address</dt>
-                  <dd className="text-text-body">
-                    <div>{detail.data.recipientAddressLine1}</div>
-                    {detail.data.recipientAddressLine2 && (
-                      <div>{detail.data.recipientAddressLine2}</div>
-                    )}
-                    {detail.data.recipientLandmark && (
-                      <div className="text-text-muted text-xs">
-                        Landmark: {detail.data.recipientLandmark}
-                      </div>
-                    )}
-                    <div className="mt-0.5">
-                      {[detail.data.recipientCity, detail.data.recipientStateProvince]
-                        .filter(Boolean)
-                        .join(', ')}{' '}
-                      <span className="font-mono">{detail.data.recipientPostalCode}</span>{' '}
-                      <span className="text-text-muted">{detail.data.recipientCountryCode}</span>
-                    </div>
-                  </dd>
-                </dl>
-              </CardBody>
-            </Card>
-          </Section>
+                  ),
+                },
+              ]}
+            />
+          </OoSection>
 
           {/* RS-5 — a reseller store's order: the store and the terms
               snapshot it was placed under. Nothing for a channel order. */}
@@ -139,164 +154,261 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           {/* RS-6 phase 3c — the full split: both parties, both wallets. */}
           <ResellerMoneyPanel orderId={orderId} enabled={detail.data.storeKind === 'RESELLER'} />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <Card>
-              <CardHeader title="Payment" />
-              <CardBody>
-                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
-                  <dt className="text-text-muted">Mode</dt>
-                  <dd className="text-text-body uppercase">{detail.data.paymentMode}</dd>
-                  <dt className="text-text-muted">COD (INR)</dt>
-                  <dd className="text-text-body font-mono">{detail.data.codAmountInr ?? '—'}</dd>
-                  <dt className="text-text-muted">Declared (INR)</dt>
-                  <dd className="text-text-body font-mono">
-                    {detail.data.declaredValueInr ?? '—'}
-                  </dd>
-                </dl>
-              </CardBody>
-            </Card>
-            <Card>
-              <CardHeader title="Physical" />
-              <CardBody>
-                <dl className="grid grid-cols-[minmax(84px,36%)_1fr] sm:grid-cols-[120px_1fr] gap-x-3 sm:gap-x-4 gap-y-1.5 text-sm">
-                  <dt className="text-text-muted">Weight (g)</dt>
-                  <dd className="text-text-body font-mono">
-                    {detail.data.totalWeightGrams ?? '—'}
-                  </dd>
-                  <dt className="text-text-muted">Package</dt>
-                  <dd className="text-text-body uppercase">{detail.data.packageType}</dd>
-                  <dt className="text-text-muted">Flags</dt>
-                  <dd className="text-text-body">
-                    {detail.data.isUrgent || detail.data.isHighRisk ? (
-                      <div className="flex items-center gap-1.5">
-                        {detail.data.isUrgent && (
-                          <span className="text-pending text-xs uppercase tracking-wide">
-                            Urgent
-                          </span>
-                        )}
-                        {detail.data.isHighRisk && (
-                          <span className="text-critical text-xs uppercase tracking-wide">
-                            High risk
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-text-muted">—</span>
-                    )}
-                  </dd>
-                </dl>
-              </CardBody>
-            </Card>
+          <div className="oo-grid-2">
+            <OoSection title="Payment">
+              <Facts
+                items={[
+                  { label: 'Mode', value: detail.data.paymentMode },
+                  {
+                    label: 'COD (INR)',
+                    value: <span className="sk-figure">{detail.data.codAmountInr ?? '—'}</span>,
+                  },
+                  {
+                    label: 'Declared (INR)',
+                    value: <span className="sk-figure">{detail.data.declaredValueInr ?? '—'}</span>,
+                  },
+                ]}
+              />
+            </OoSection>
+            <OoSection title="Physical">
+              <Facts
+                items={[
+                  {
+                    label: 'Weight (g)',
+                    value: <span className="sk-figure">{detail.data.totalWeightGrams ?? '—'}</span>,
+                  },
+                  { label: 'Package', value: detail.data.packageType },
+                  {
+                    label: 'Flags',
+                    value:
+                      detail.data.isUrgent || detail.data.isHighRisk ? (
+                        <span className="oo-row">
+                          {detail.data.isUrgent && (
+                            <span className="oc-flag" data-tone="warn">
+                              Urgent
+                            </span>
+                          )}
+                          {detail.data.isHighRisk && (
+                            <span className="oc-flag" data-tone="bad">
+                              High risk
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="oo-muted">—</span>
+                      ),
+                  },
+                ]}
+              />
+            </OoSection>
           </div>
 
-          <Section title={`Items (${detail.data.items.length})`}>
-            <Card>
-              <Table wrapperClassName="rounded-none border-0 bg-transparent">
-                <thead className="text-text-muted text-xs uppercase tracking-wide bg-surface-raised border-b border-border">
-                  <tr>
-                    <th className="text-left px-3 py-2 font-medium">SKU</th>
-                    <th className="text-left px-3 py-2 font-medium">Product</th>
-                    <th className="text-right px-3 py-2 font-medium">Qty</th>
-                    <th className="text-right px-3 py-2 font-medium">Reserved</th>
-                    <th className="text-right px-3 py-2 font-medium">Weight (g)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {detail.data.items.map((item) => (
-                    <tr key={item.id}>
-                      <td className="px-3 py-2 font-mono text-xs text-text-body">{item.skuCode}</td>
-                      <td className="px-3 py-2 text-text-body">
-                        {item.productName}
-                        {item.variantLabel && (
-                          <span className="text-text-muted ml-1">· {item.variantLabel}</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right text-text-body font-mono">
-                        {item.quantity}
-                      </td>
-                      <td className="px-3 py-2 text-right text-text-muted font-mono text-xs">
-                        {item.qtyReserved}
-                      </td>
-                      <td className="px-3 py-2 text-right text-text-muted font-mono text-xs">
-                        {item.unitWeightGrams ?? '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-            </Card>
-          </Section>
+          <OoSection title={`Items (${detail.data.items.length})`} flush>
+            <Table caption="Items">
+              <THead>
+                <Tr>
+                  <Th>SKU</Th>
+                  <Th>Product</Th>
+                  <Th align="right">Qty</Th>
+                  <Th align="right">Reserved</Th>
+                  <Th align="right">Weight (g)</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {detail.data.items.map((item) => (
+                  <Tr key={item.id}>
+                    <Td>
+                      <span className="sk-ident">{item.skuCode}</span>
+                    </Td>
+                    <Td>
+                      {item.productName}
+                      {item.variantLabel && (
+                        <span className="oo-muted"> · {item.variantLabel}</span>
+                      )}
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure">{item.quantity}</span>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure oo-muted">{item.qtyReserved}</span>
+                    </Td>
+                    <Td align="right">
+                      <span className="sk-figure oo-muted">{item.unitWeightGrams ?? '—'}</span>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </OoSection>
 
           {(detail.data.sellerNotes || detail.data.internalNotes || detail.data.callNotes) && (
-            <Section title="Notes">
-              <Card>
-                <CardBody className="space-y-3">
-                  {detail.data.sellerNotes && (
-                    <div>
-                      <div className="text-text-faint text-xs uppercase tracking-wide mb-0.5">
-                        From seller
-                      </div>
-                      <p className="text-text-body text-sm whitespace-pre-wrap">
-                        {detail.data.sellerNotes}
-                      </p>
-                    </div>
-                  )}
-                  {detail.data.callNotes && (
-                    <div>
-                      <div className="text-text-faint text-xs uppercase tracking-wide mb-0.5">
-                        Call center
-                      </div>
-                      <p className="text-text-body text-sm whitespace-pre-wrap">
-                        {detail.data.callNotes}
-                      </p>
-                    </div>
-                  )}
-                  {detail.data.internalNotes && (
-                    <div>
-                      <div className="text-text-faint text-xs uppercase tracking-wide mb-0.5">
-                        Internal
-                      </div>
-                      <p className="text-text-body text-sm whitespace-pre-wrap">
-                        {detail.data.internalNotes}
-                      </p>
-                    </div>
-                  )}
-                </CardBody>
-              </Card>
-            </Section>
+            <OoSection title="Notes">
+              {detail.data.sellerNotes && (
+                <NoteBlock label="From seller">{detail.data.sellerNotes}</NoteBlock>
+              )}
+              {detail.data.callNotes && (
+                <NoteBlock label="Call center">{detail.data.callNotes}</NoteBlock>
+              )}
+              {detail.data.internalNotes && (
+                <NoteBlock label="Internal">{detail.data.internalNotes}</NoteBlock>
+              )}
+            </OoSection>
           )}
 
-          <Section title="Charges">
-            <OrderChargesSection orderId={orderId} />
-          </Section>
+          <section className="oo-section">
+            <SectionHeading title="Charges" />
+            <OrderChargesSection orderId={orderId} orderNumber={detail.data.orderNumber} />
+          </section>
 
-          <Section title="Shipments">
-            {/* Renders nothing unless the order is actually stuck. */}
-            <StuckOrderRecovery orderId={orderId} orderStatus={detail.data.status} />
+          <section className="oo-section">
+            <SectionHeading title="Shipments" />
+            <div className="oo-stack">
+              {/* Renders nothing unless the order is actually stuck. */}
+              <StuckOrderRecovery
+                orderId={orderId}
+                orderStatus={detail.data.status}
+                orderNumber={detail.data.orderNumber}
+              />
 
-            <OrderShipmentsSection orderId={orderId} orderStatus={detail.data.status} />
-            {/* Correcting the consignee sits with the parcel: it is only
-                ever done while looking at a delivery about to go wrong. */}
-            <ConsigneePanel orderId={orderId} />
-          </Section>
+              <OrderShipmentsSection orderId={orderId} orderStatus={detail.data.status} />
+              {/* Correcting the consignee sits with the parcel: it is only
+                  ever done while looking at a delivery about to go wrong. */}
+              <ConsigneePanel orderId={orderId} />
+            </div>
+          </section>
 
           {/* The whole journey — the stage ladder, what the courier
               says the parcel weighs and will collect, and our handling
               merged with their scans. Staff also see the courier's own
               NSL codes: an agent explaining a delay needs the code the
               courier will quote back at them. */}
-          <OrderJourneySection orderId={orderId} />
+          <OrderJourneySection
+            orderId={orderId}
+            orderNumber={detail.data.orderNumber}
+            status={detail.data.status}
+          />
 
-          <Section title="Actions">
+          <section className="oo-section">
+            <SectionHeading title="Actions" />
             <OrderActionsPanel order={detail.data} />
-          </Section>
+          </section>
 
-          <div className="text-text-faint text-xs text-center mt-8">
+          <div className="oc-footnote sk-figure">
             Placed {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·{' '}
             Updated {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function NoteBlock({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: ReactNode;
+}): ReactElement {
+  return (
+    <div className="oc-note-block">
+      <span className="oc-note-block__label">{label}</span>
+      <p className="oo-body">{children}</p>
+    </div>
+  );
+}
+
+/** The ladder's own time format, unchanged. */
+function fmt(at: string | null): string {
+  if (at === null) return '—';
+  return new Date(at).toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+/** An estimated date carries no time. */
+function fmtDate(at: string | null): string {
+  if (at === null) return '—';
+  return new Date(at).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+const STEP_STATE: Record<JourneyMilestoneView['state'], TimelineStepState> = {
+  DONE: 'done',
+  CURRENT: 'current',
+  PENDING: 'todo',
+  SKIPPED: 'skipped',
+};
+
+/** Milestones → u17 timeline steps. Same labels, same owner word, same times. */
+function milestoneSteps(milestones: readonly JourneyMilestoneView[]): TimelineStep[] {
+  return milestones.map((m) => {
+    const owner = m.owner === 'SKYDROP' ? 'Skydrop' : 'Courier';
+    const description: ReactNode = (
+      <>
+        <span>{owner}</span>
+        {m.state === 'SKIPPED' && <span> · not needed</span>}
+        {m.detail !== null && <span className="oo-sub">{m.detail}</span>}
+      </>
+    );
+    return {
+      id: m.key,
+      label: m.label,
+      state: STEP_STATE[m.state],
+      description,
+      ...(m.at === null ? {} : { time: m.estimated ? `Estimated ${fmtDate(m.at)}` : fmt(m.at) }),
+    };
+  });
+}
+
+function OrderJourney({
+  orderNumber,
+  status,
+  milestones,
+  parcels,
+  entries,
+}: {
+  readonly orderNumber: string;
+  readonly status: OrderStatus;
+  readonly milestones: readonly JourneyMilestoneView[];
+  readonly parcels: readonly JourneyParcelView[];
+  readonly entries: readonly JourneyEntryView[];
+}): ReactElement {
+  // The latest parcel, as the shared panels chose it.
+  const parcel = parcels[parcels.length - 1] ?? null;
+  return (
+    <div className="oo-stack">
+      <div className={parcel === null ? 'oo-stack' : 'oo-split'}>
+        <OoSection title="Order tracker">
+          <Timeline
+            label="Order tracker"
+            steps={milestoneSteps(milestones)}
+            header={{
+              icon: <Route size={16} />,
+              title: 'Order',
+              id: orderNumber,
+              status: (
+                <StatusChip kind={orderStatusKind(status)} label={statusLabel(status)} size="sm" />
+              ),
+            }}
+          />
+        </OoSection>
+        {parcel !== null && (
+          <OoSection title="Parcel">
+            <ParcelFacts parcel={parcel} />
+          </OoSection>
+        )}
+      </div>
+      <OoSection title="Full history">
+        <JourneyTimeline entries={entries} showCourierCodes />
+      </OoSection>
     </div>
   );
 }
@@ -309,22 +421,31 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
  * the recipient and the items an agent has the customer on the phone
  * about.
  */
-function OrderJourneySection({ orderId }: { readonly orderId: string }): ReactElement {
+function OrderJourneySection({
+  orderId,
+  orderNumber,
+  status,
+}: {
+  readonly orderId: string;
+  readonly orderNumber: string;
+  readonly status: OrderStatus;
+}): ReactElement {
   const journey = useOrderJourney(orderId);
-  if (journey.isPending) return <SkeletonRows rows={4} />;
+  if (journey.isPending) return <SkeletonRows rows={4} cols={1} label="Loading the journey…" />;
   if (journey.isError || journey.data === undefined) {
     return (
-      <Section title="Order tracker">
-        <ErrorNote message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
-      </Section>
+      <OoSection title="Order tracker">
+        <ErrorState message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
+      </OoSection>
     );
   }
   return (
-    <OrderJourneyPanels
+    <OrderJourney
+      orderNumber={orderNumber}
+      status={status}
       milestones={journey.data.milestones}
       parcels={journey.data.parcels}
       entries={journey.data.timeline}
-      showCourierCodes
     />
   );
 }

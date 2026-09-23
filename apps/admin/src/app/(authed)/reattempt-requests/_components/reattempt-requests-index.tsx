@@ -2,28 +2,24 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  Button,
-  Card,
-  EmptyState,
-  ErrorNote,
-  ErrorState,
-  FormField,
-  Input,
-  LoadingState,
-  Modal,
-  ModalFooter,
-  PageHeader,
-  Select,
-  StatusBadge,
-  Toolbar,
-} from '@skydrop/ui/components';
+import { PhoneCall } from 'lucide-react';
+import { PageHeader } from '@skydrop/ui/app/page-header';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
+import { FilterBar, FilterField } from '@skydrop/ui/app/filter-bar';
+import { Select } from '@skydrop/ui/app/select';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   useReattemptRequests,
   useDecideReattempt,
   type AdminReattemptRequest,
 } from '@/lib/callcenter-hooks';
+import { AgeChip } from '../../orders/_components/order-ops-parts';
 
 /**
  * Sellers asking to ring a customer who declined.
@@ -41,47 +37,58 @@ export function ReattemptRequestsIndex(): ReactElement {
   } | null>(null);
 
   return (
-    <div className="space-y-4">
+    <div className="oo-page">
       <PageHeader
         title="Re-attempt requests"
         subtitle="Sellers asking us to call a customer who declined. Read the reason before approving — the customer already said no once."
       />
 
-      <Toolbar>
-        <FormField label="Status" htmlFor="ra-status" className="w-56">
-          <Select id="ra-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+      <FilterBar activeCount={status === 'PENDING' ? 0 : 1}>
+        <FilterField>
+          <Select
+            id="ra-status"
+            label="Status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
             <option value="PENDING">Waiting for a decision</option>
             <option value="APPROVED">Approved</option>
             <option value="REJECTED">Declined</option>
             <option value="">All</option>
           </Select>
-        </FormField>
-      </Toolbar>
+        </FilterField>
+      </FilterBar>
 
       {list.isLoading ? (
-        <LoadingState rows={3} />
+        <SkeletonRows rows={3} cols={3} label="Loading requests…" />
       ) : list.error !== null ? (
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : (list.data ?? []).length === 0 ? (
         <EmptyState
+          tone={status === 'PENDING' ? 'positive' : 'neutral'}
+          icon={<PhoneCall size={20} />}
           title="Nothing waiting"
           description="When a seller asks us to call a customer who declined, it lands here."
         />
       ) : (
-        <div className="space-y-3">
+        <ul className="oo-queue" aria-label="Re-attempt requests">
           {(list.data ?? []).map((r) => (
-            <Card key={r.id}>
-              <div className="space-y-2 p-4">
-                <div className="flex flex-wrap items-baseline gap-x-3">
+            <li
+              key={r.id}
+              className="oo-qcard"
+              data-severity={r.status === 'PENDING' ? 'medium' : undefined}
+            >
+              <div className="oo-qcard__head">
+                <div className="oo-qcard__title">
                   {r.orderNumber !== null && (
-                    <Link
-                      href={`/orders/${r.orderId}`}
-                      className="text-accent font-mono text-sm hover:underline"
-                    >
+                    <Link href={`/orders/${r.orderId}`} className="oo-link sk-ident">
                       {r.orderNumber}
                     </Link>
                   )}
-                  <StatusBadge
+                </div>
+                <div className="oo-qcard__chips">
+                  <StatusChip
+                    size="sm"
                     kind={
                       r.status === 'PENDING'
                         ? 'pending'
@@ -91,46 +98,51 @@ export function ReattemptRequestsIndex(): ReactElement {
                     }
                     label={r.status.toLowerCase()}
                   />
-                  <span className="text-text-faint text-xs">
+                  <AgeChip title="When the seller asked">
                     asked {new Date(r.createdAt).toLocaleString('en-IN')}
-                  </span>
+                  </AgeChip>
                 </div>
-
-                {/* The reason IS the decision. Rendered at full size,
-                    not truncated into a column. */}
-                <p className="text-text-body text-sm leading-relaxed">{r.reason}</p>
-
-                {r.status === 'APPROVED' && r.extraAttempts > 0 && (
-                  <p className="text-text-muted text-sm">
-                    <span className="text-text-faint">Granted:</span> {r.extraAttempts} extra{' '}
-                    {r.extraAttempts === 1 ? 'call' : 'calls'}
-                  </p>
-                )}
-
-                {r.decisionNote !== null && r.decisionNote !== '' && (
-                  <p className="text-text-muted text-sm">
-                    <span className="text-text-faint">Decision note:</span> {r.decisionNote}
-                  </p>
-                )}
-
-                {r.status === 'PENDING' && (
-                  <div className="flex gap-2 pt-1">
-                    <Button size="sm" onClick={() => setDeciding({ row: r, approve: true })}>
-                      Approve — call again
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setDeciding({ row: r, approve: false })}
-                    >
-                      Decline
-                    </Button>
-                  </div>
-                )}
               </div>
-            </Card>
+
+              {/* The reason IS the decision. Rendered at full size,
+                  not truncated into a column. */}
+              <p className="oo-body">{r.reason}</p>
+
+              {r.status === 'APPROVED' && r.extraAttempts > 0 && (
+                <p className="oo-p">
+                  <span className="oo-faint">Granted:</span>{' '}
+                  <span className="sk-figure">{r.extraAttempts}</span> extra{' '}
+                  {r.extraAttempts === 1 ? 'call' : 'calls'}
+                </p>
+              )}
+
+              {r.decisionNote !== null && r.decisionNote !== '' && (
+                <p className="oo-p">
+                  <span className="oo-faint">Decision note:</span> {r.decisionNote}
+                </p>
+              )}
+
+              {r.status === 'PENDING' && (
+                <div className="oo-row">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    onClick={() => setDeciding({ row: r, approve: true })}
+                  >
+                    Approve — call again
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDeciding({ row: r, approve: false })}
+                  >
+                    Decline
+                  </Button>
+                </div>
+              )}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
 
       <Decide target={deciding} onClose={() => setDeciding(null)} />
@@ -157,7 +169,7 @@ function Decide({
   }
 
   return (
-    <Modal
+    <Dialog
       open={target !== null}
       onOpenChange={(next) => {
         if (!next) close();
@@ -172,53 +184,70 @@ function Decide({
           ? 'The order returns to PENDING_CONFIRMATION and is queued for calling. Its attempt count is unchanged; choose how many extra calls to allow, or it comes back already at its cap.'
           : 'The order stays rejected. The seller can ask again if something changes.'
       }
+      footer={
+        <DialogFooter>
+          <Button variant="ghost" size="md" onClick={close}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            labels={{
+              idle: target?.approve === true ? 'Approve' : 'Decline request',
+              busy: 'Saving…',
+            }}
+            onAction={async () => {
+              if (target !== null) {
+                await decide.mutateAsync({
+                  requestId: target.row.id,
+                  approve: target.approve,
+                  note: note.trim(),
+                  extraAttempts: Number(extra),
+                });
+                close();
+              }
+            }}
+          />
+        </DialogFooter>
+      }
     >
-      {target?.approve === true && (
-        <FormField
-          label="Extra calls to allow"
-          htmlFor="ra-extra"
-          hint="On top of the seller's normal cap. One is usually right — an approval that grants none puts the order back already out of chances, so the first unanswered ring rejects it again."
-        >
-          <Select id="ra-extra" value={extra} onChange={(e) => setExtra(e.target.value)}>
+      <div className="oo-stack">
+        {target !== null && (
+          <div className="oo-row">
+            <span className="sk-ident oo-strong">{target.row.orderNumber ?? '—'}</span>
+            <span className="oo-muted">asked by the seller</span>
+          </div>
+        )}
+        {target?.approve === true && (
+          <Select
+            id="ra-extra"
+            label="Extra calls to allow"
+            hint="On top of the seller's normal cap. One is usually right — an approval that grants none puts the order back already out of chances, so the first unanswered ring rejects it again."
+            value={extra}
+            onChange={(e) => setExtra(e.target.value)}
+          >
             {['1', '2', '3', '4', '5'].map((n) => (
               <option key={n} value={n}>
                 {n} more {n === '1' ? 'call' : 'calls'}
               </option>
             ))}
           </Select>
-        </FormField>
-      )}
+        )}
 
-      <FormField label="Note" htmlFor="ra-note" hint="Optional — recorded with the decision.">
-        <Input id="ra-note" value={note} onChange={(e) => setNote(e.target.value)} />
-      </FormField>
+        <TextField
+          id="ra-note"
+          label="Note"
+          hint="Optional — recorded with the decision."
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+        />
 
-      {decide.error !== null && <ErrorNote message={serverVerdict(decide.error)} />}
-
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close}>
-          Cancel
-        </Button>
-        <Button
-          size="md"
-          disabled={decide.isPending}
-          onClick={() => {
-            if (target !== null) {
-              decide.mutate(
-                {
-                  requestId: target.row.id,
-                  approve: target.approve,
-                  note: note.trim(),
-                  extraAttempts: Number(extra),
-                },
-                { onSuccess: close },
-              );
-            }
-          }}
-        >
-          {decide.isPending ? 'Saving…' : target?.approve === true ? 'Approve' : 'Decline request'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+        {decide.error !== null && (
+          <p className="oo-error" role="alert">
+            {serverVerdict(decide.error)}
+          </p>
+        )}
+      </div>
+    </Dialog>
   );
 }

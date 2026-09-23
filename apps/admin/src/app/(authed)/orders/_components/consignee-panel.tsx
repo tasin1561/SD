@@ -1,19 +1,18 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  ErrorNote,
-  FormField,
-  Input,
-  SkeletonRows,
-  useToast,
-} from '@skydrop/ui/components';
+import { TriangleAlert, UserRound } from 'lucide-react';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TextField } from '@skydrop/ui/app/text-field';
+import { Timeline, type TimelineStep } from '@skydrop/ui/app/timeline';
+import { useToast } from '@skydrop/ui/app/toast';
 import { useChangeConsignee, useConsignee, useConsigneeHistory } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { Notice, OoSection } from './order-ops-parts';
+import './order-shipping.css';
 
 /**
  * Correcting who the parcel is going to, while the courier still allows
@@ -52,7 +51,7 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
     // being at a perfectly normal stage of its life.
     const code = (info.error as { body?: { code?: string } } | undefined)?.body?.code;
     if (code === 'NO_LIVE_PARCEL') return <div />;
-    return <ErrorNote message={serverVerdict(info.error)} retry={() => void info.refetch()} />;
+    return <ErrorState message={serverVerdict(info.error)} retry={() => void info.refetch()} />;
   }
   const d = info.data;
   if (d === undefined) return <div />;
@@ -65,153 +64,149 @@ export function ConsigneePanel({ orderId }: { readonly orderId: string }): React
     (phone !== null && phone !== d.currentPhone) ||
     (address !== null && address !== d.currentAddressLine1);
 
-  const submit = (): void => {
-    void (async () => {
-      try {
-        const r = await change.mutateAsync({
-          orderId,
-          ...(name !== null && name !== d.currentName ? { name } : {}),
-          ...(phone !== null && phone !== d.currentPhone ? { phone } : {}),
-          ...(address !== null && address !== d.currentAddressLine1
-            ? { addressLine1: address }
-            : {}),
-        });
-        setName(null);
-        setPhone(null);
-        setAddress(null);
-        // Sent is not landed. Saying "changed" here would be a claim we
-        // have not checked — the portal confirms it within the hour.
-        if (r.accepted) {
-          toast.success('Sent to the courier. We confirm it on their system shortly.');
-        } else {
-          toast.error(r.message ?? 'The courier would not take the change.');
-        }
-      } catch (err) {
+  // The request and its outcome, unchanged; returned as a promise so the
+  // button's rolling label follows the real request. A refusal is
+  // re-thrown after its toast so the button shows the error state too.
+  const submit = async (): Promise<void> => {
+    try {
+      const r = await change.mutateAsync({
+        orderId,
+        ...(name !== null && name !== d.currentName ? { name } : {}),
+        ...(phone !== null && phone !== d.currentPhone ? { phone } : {}),
+        ...(address !== null && address !== d.currentAddressLine1 ? { addressLine1: address } : {}),
+      });
+      setName(null);
+      setPhone(null);
+      setAddress(null);
+      // Sent is not landed. Saying "changed" here would be a claim we
+      // have not checked — the portal confirms it within the hour.
+      if (r.accepted) {
+        toast.success('Sent to the courier. We confirm it on their system shortly.');
+      } else {
+        toast.error(r.message ?? 'The courier would not take the change.');
+        throw new Error('not accepted');
+      }
+    } catch (err) {
+      if (!(err instanceof Error && err.message === 'not accepted')) {
         toast.error(serverVerdict(err));
       }
-    })();
+      throw err;
+    }
   };
 
+  const steps: TimelineStep[] = rows.map((r) => {
+    const failed =
+      r.courierAcceptedAt === null || (r.verifiedAt !== null && r.verifiedMatch !== true);
+    return {
+      id: r.id,
+      state: r.courierAcceptedAt !== null && r.verifiedAt === null ? 'current' : 'done',
+      tone: failed ? 'failed' : 'default',
+      time: (
+        <span className="sk-figure">
+          {new Date(r.createdAt).toLocaleString('en-IN', {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </span>
+      ),
+      label: [
+        r.nameBefore !== null ? `name: ${r.nameBefore} → ${r.nameAfter}` : null,
+        r.phoneBefore !== null ? `phone: ${r.phoneBefore} → ${r.phoneAfter}` : null,
+        r.addressBefore !== null ? `address: ${r.addressBefore} → ${r.addressAfter}` : null,
+      ]
+        .filter((x) => x !== null)
+        .join(' · '),
+      description:
+        r.courierAcceptedAt === null ? (
+          <span className="oo-bad">the courier did not take it</span>
+        ) : r.verifiedAt === null ? (
+          <span className="oo-muted">sent — confirming</span>
+        ) : r.verifiedMatch === true ? (
+          <span className="oo-good">confirmed on their system</span>
+        ) : (
+          <span className="oo-bad">their system still shows the old value — we are on it</span>
+        ),
+    };
+  });
+
   return (
-    <Card className="mt-4">
-      <CardBody>
-        <div className="mb-3">
-          <h2 className="text-sm font-medium">Customer details</h2>
-          {/*
-            The same warning the seller gets, without their raise-an-issue
-            button: an operator's route to the courier is the escalation
-            on the ticket, which is somewhere else and already built.
-          */}
-          {d.editable ? (
-            <p className="text-text-muted mt-0.5 text-xs">{d.reason}</p>
-          ) : (
-            <div className="border-warning/40 bg-warning/10 mt-2 rounded-lg border p-3">
-              <p className="text-text-bright text-sm font-medium">
-                These can no longer be changed through the courier
-              </p>
-              <p className="text-text-body mt-1 text-sm">{d.reason}</p>
-              <p className="text-text-muted mt-1 text-xs">
-                To chase it anyway, open a courier conversation on a ticket for this order.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <FormField label="Name" htmlFor="admin-cons-name">
-            <Input
-              id="admin-cons-name"
-              value={name ?? d.currentName}
-              disabled={!d.editable || !canWrite}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Phone" htmlFor="admin-cons-phone">
-            <Input
-              id="admin-cons-phone"
-              value={phone ?? d.currentPhone}
-              disabled={!d.editable || !canWrite}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </FormField>
-        </div>
-
-        <FormField
-          label="Address"
-          htmlFor="admin-cons-address"
-          hint="The street address only — see below for why the rest cannot move."
+    <OoSection title="Customer details" note={d.editable ? d.reason : undefined}>
+      {/*
+        The same warning the seller gets, without their raise-an-issue
+        button: an operator's route to the courier is the escalation
+        on the ticket, which is somewhere else and already built.
+      */}
+      {!d.editable && (
+        <Notice
+          tone="warn"
+          icon={<TriangleAlert size={16} />}
+          title="These can no longer be changed through the courier"
         >
-          <Input
-            id="admin-cons-address"
-            value={address ?? d.currentAddressLine1}
-            disabled={!d.editable || !canWrite}
-            onChange={(e) => setAddress(e.target.value)}
+          <p>{d.reason}</p>
+          <p className="oo-faint">
+            To chase it anyway, open a courier conversation on a ticket for this order.
+          </p>
+        </Notice>
+      )}
+
+      <div className="os-fields" data-cols="2">
+        <TextField
+          id="admin-cons-name"
+          label="Name"
+          icon={<UserRound size={15} />}
+          value={name ?? d.currentName}
+          disabled={!d.editable || !canWrite}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <TextField
+          id="admin-cons-phone"
+          label="Phone"
+          value={phone ?? d.currentPhone}
+          disabled={!d.editable || !canWrite}
+          onChange={(e) => setPhone(e.target.value)}
+        />
+      </div>
+
+      <TextField
+        id="admin-cons-address"
+        label="Address"
+        hint="The street address only — see below for why the rest cannot move."
+        value={address ?? d.currentAddressLine1}
+        disabled={!d.editable || !canWrite}
+        onChange={(e) => setAddress(e.target.value)}
+      />
+
+      <p className="oo-faint">
+        {d.city} · {d.stateProvince} · <span className="sk-figure">{d.postalCode}</span> — fixed.
+        The parcel is already sorted and routed on this pincode, so it cannot be sent somewhere
+        else; only the street address can be corrected.
+      </p>
+
+      {d.editable && canWrite ? (
+        <div className="oo-row oo-row--end">
+          <AsyncButton
+            variant="primary"
+            size="sm"
+            labels={{
+              idle: 'Send to the courier',
+              busy: 'Sending…',
+              done: 'Sent',
+              error: 'Not taken, try again',
+            }}
+            disabled={!dirty || change.isPending}
+            onAction={submit}
           />
-        </FormField>
+        </div>
+      ) : null}
 
-        <p className="text-text-muted mt-2 text-xs">
-          {d.city} · {d.stateProvince} · {d.postalCode} — fixed. The parcel is already sorted and
-          routed on this pincode, so it cannot be sent somewhere else; only the street address can
-          be corrected.
-        </p>
-
-        {d.editable && canWrite ? (
-          <div className="mt-3 flex justify-end">
-            <Button
-              variant="primary"
-              size="sm"
-              disabled={!dirty || change.isPending}
-              onClick={submit}
-            >
-              {change.isPending ? 'Sending…' : 'Send to the courier'}
-            </Button>
-          </div>
-        ) : null}
-
-        {rows.length > 0 ? (
-          <div className="border-border mt-4 border-t pt-3">
-            <p className="text-text-muted mb-2 text-xs font-medium tracking-wide uppercase">
-              Changes made
-            </p>
-            <ol className="space-y-2">
-              {rows.map((r) => (
-                <li key={r.id} className="text-sm">
-                  <span className="text-text-muted mr-2 text-xs tabular-nums">
-                    {new Date(r.createdAt).toLocaleString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                  {[
-                    r.nameBefore !== null ? `name: ${r.nameBefore} → ${r.nameAfter}` : null,
-                    r.phoneBefore !== null ? `phone: ${r.phoneBefore} → ${r.phoneAfter}` : null,
-                    r.addressBefore !== null
-                      ? `address: ${r.addressBefore} → ${r.addressAfter}`
-                      : null,
-                  ]
-                    .filter((x) => x !== null)
-                    .join(' · ')}
-                  <span className="ml-2 text-xs">
-                    {r.courierAcceptedAt === null ? (
-                      <span className="text-danger">the courier did not take it</span>
-                    ) : r.verifiedAt === null ? (
-                      <span className="text-text-muted">sent — confirming</span>
-                    ) : r.verifiedMatch === true ? (
-                      <span className="text-success">confirmed on their system</span>
-                    ) : (
-                      <span className="text-danger">
-                        their system still shows the old value — we are on it
-                      </span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </div>
-        ) : null}
-      </CardBody>
-    </Card>
+      {rows.length > 0 ? (
+        <div className="os-panel__block">
+          <p className="oo-card__title">Changes made</p>
+          <Timeline steps={steps} label="Changes made" />
+        </div>
+      ) : null}
+    </OoSection>
   );
 }

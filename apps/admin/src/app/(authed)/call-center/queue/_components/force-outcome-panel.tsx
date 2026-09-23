@@ -4,17 +4,15 @@ import { useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 import { CallOutcome } from '@skydrop/db';
-import {
-  Button,
-  ErrorNote,
-  FormField,
-  Input,
-  Modal,
-  ModalFooter,
-  Select,
-  Textarea,
-  useToast,
-} from '@skydrop/ui/components';
+import { Gavel } from 'lucide-react';
+import { Button } from '@skydrop/ui/app/button';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Select } from '@skydrop/ui/app/select';
+import { TextArea } from '@skydrop/ui/app/text-field';
+import { DateField } from '@skydrop/ui/app/date-field';
+import { useToast } from '@skydrop/ui/app/toast';
+import { Notice } from '../../../orders/_components/order-ops-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 
@@ -141,7 +139,7 @@ export function ForceOutcomePanel({
         Force outcome
       </Button>
 
-      <Modal
+      <Dialog
         open={open}
         onOpenChange={(next) => {
           if (!next) close();
@@ -149,110 +147,100 @@ export function ForceOutcomePanel({
         title={`Overrule this call — ${orderLabel}`}
         description="Recorded as a real attempt against your own name, with the same effect on the order as if an agent had made the call."
         tone="critical"
+        icon={<Gavel size={18} />}
+        size="md"
+        footer={
+          <DialogFooter>
+            <Button variant="secondary" size="md" onClick={close}>
+              Leave it in the queue
+            </Button>
+            <AsyncButton
+              variant="destructive"
+              size="md"
+              state={force.isPending ? 'busy' : 'idle'}
+              labels={{ idle: 'Record this outcome', busy: 'Recording…' }}
+              disabled={outcome === '' || startedMissing || callbackMissing || force.isPending}
+              onClick={() => void submit()}
+            />
+          </DialogFooter>
+        }
       >
-        <p className="text-text-muted mb-3 text-sm">
-          Use this when you already know how the call ended and nobody needs to dial. The attempt is
-          permanent, counts toward the customer&apos;s attempt cap where the outcome counts, and
-          moves the order — confirming here reserves stock.
-        </p>
+        <div className="oo-stack">
+          <p className="oo-p">
+            Use this when you already know how the call ended and nobody needs to dial. The attempt
+            is permanent, counts toward the customer&apos;s attempt cap where the outcome counts,
+            and moves the order — confirming here reserves stock.
+          </p>
 
-        {error !== null && <ErrorNote message={error} />}
+          {error !== null && (
+            <Notice tone="bad" role="alert">
+              <p className="oo-error">{error}</p>
+            </Notice>
+          )}
 
-        <div className="space-y-3">
-          <FormField label="Outcome" htmlFor="fo-outcome" required>
-            <Select
-              id="fo-outcome"
-              value={outcome}
-              onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
-            >
-              <option value="">Select an outcome…</option>
-              {OUTCOME_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+          <Select
+            id="fo-outcome"
+            label="Outcome"
+            requiredMark
+            value={outcome}
+            onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
+          >
+            <option value="">Select an outcome…</option>
+            {OUTCOME_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </Select>
 
           {outcome !== '' && (
-            <div className="text-text-faint -mt-2 text-xs">
-              {OUTCOME_OPTIONS.find((o) => o.value === outcome)?.helper}
-            </div>
+            <p className="oo-faint">{OUTCOME_OPTIONS.find((o) => o.value === outcome)?.helper}</p>
           )}
 
-          <FormField
+          <DateField
+            id="fo-started"
+            type="datetime-local"
             label="Call started"
-            htmlFor="fo-started"
-            required
+            requiredMark
             hint="When the conversation you are recording actually happened. Defaults to now."
-          >
-            <Input
-              id="fo-started"
-              type="datetime-local"
-              value={startedAt}
-              onChange={(e) => setStartedAt(e.target.value)}
-            />
-          </FormField>
+            value={startedAt}
+            onChange={(e) => setStartedAt(e.target.value)}
+          />
 
-          <FormField
+          <DateField
+            id="fo-ended"
+            type="datetime-local"
             label="Call ended"
-            htmlFor="fo-ended"
             hint="Optional — only used to record how long the call ran."
-          >
-            <Input
-              id="fo-ended"
-              type="datetime-local"
-              value={endedAt}
-              onChange={(e) => setEndedAt(e.target.value)}
-            />
-          </FormField>
+            value={endedAt}
+            onChange={(e) => setEndedAt(e.target.value)}
+          />
 
           {isCallback && (
-            <FormField
+            <DateField
+              id="fo-callback"
+              type="datetime-local"
               label="Callback scheduled for"
-              htmlFor="fo-callback"
-              required
+              requiredMark
               hint="The order returns to the queue at this time. The server enforces how near and how far it may be."
-            >
-              <Input
-                id="fo-callback"
-                type="datetime-local"
-                value={scheduledFor}
-                onChange={(e) => setScheduledFor(e.target.value)}
-              />
-            </FormField>
+              value={scheduledFor}
+              onChange={(e) => setScheduledFor(e.target.value)}
+            />
           )}
 
-          <FormField
+          <TextArea
+            id="fo-notes"
             label="Notes"
-            htmlFor="fo-notes"
             hint="Say why you overruled this — the attempt ledger is append-only and this is the only place the reason lives."
-          >
-            <Textarea
-              id="fo-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              maxLength={2000}
-              rows={3}
-              placeholder="e.g. Customer confirmed on WhatsApp; agent unavailable to log it."
-            />
-          </FormField>
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            maxLength={2000}
+            showCount
+            rows={3}
+            placeholder="e.g. Customer confirmed on WhatsApp; agent unavailable to log it."
+          />
         </div>
-
-        <ModalFooter>
-          <Button variant="secondary" size="md" onClick={close}>
-            Leave it in the queue
-          </Button>
-          <Button
-            variant="destructive"
-            size="md"
-            disabled={outcome === '' || startedMissing || callbackMissing || force.isPending}
-            onClick={() => void submit()}
-          >
-            {force.isPending ? 'Recording…' : 'Record this outcome'}
-          </Button>
-        </ModalFooter>
-      </Modal>
+      </Dialog>
     </>
   );
 }

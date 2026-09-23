@@ -2,21 +2,14 @@
 
 import { useState, type ReactElement } from 'react';
 import Link from 'next/link';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  ErrorNote,
-  SkeletonRows,
-  Table,
-  TableEmpty,
-  TBody,
-  Td,
-  Th,
-  THead,
-  Tr,
-} from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { SectionHeading } from '@skydrop/ui/app/page-header';
+import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Pagination } from '@skydrop/ui/app/pagination';
+import { Table, TableEmpty, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
+import { OoCard } from '../../orders/_components/order-ops-parts';
+import './call-center.css';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAgentCallHistory } from '@/lib/api-hooks';
 
@@ -54,31 +47,30 @@ export function MyCallHistory(): ReactElement {
   const history = useAgentCallHistory(page, PAGE_SIZE);
 
   const data = history.data;
-  const lastPage = data === undefined ? 1 : Math.max(1, Math.ceil(data.total / data.pageSize));
 
   return (
-    <Card className="mt-4">
-      <CardHeader
+    <section className="oo-section">
+      <SectionHeading
         title="My calls"
-        subtitle="Everything you have logged, newest first. Opening it loads your own history."
+        note="Everything you have logged, newest first. Opening it loads your own history."
         action={
-          <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)}>
+          <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
             {open ? 'Hide' : 'Show'}
           </Button>
         }
       />
       {open && (
-        <CardBody>
+        <OoCard>
           {history.isLoading ? (
-            <SkeletonRows rows={4} />
+            <SkeletonRows rows={4} cols={5} label="Loading your calls…" />
           ) : history.isError ? (
-            <ErrorNote
+            <ErrorState
               message={serverVerdict(history.error)}
               retry={() => void history.refetch()}
             />
           ) : (
             <>
-              <Table>
+              <Table caption="My calls">
                 <THead>
                   <Tr>
                     <Th>When</Th>
@@ -96,22 +88,22 @@ export function MyCallHistory(): ReactElement {
                   ) : (
                     (data?.items ?? []).map((r) => (
                       <Tr key={r.attemptId}>
-                        <Td>{new Date(r.startedAt).toLocaleString()}</Td>
+                        <Td className="oo-nowrap">{new Date(r.startedAt).toLocaleString()}</Td>
                         <Td>{r.outcome.toLowerCase().replace(/_/g, ' ')}</Td>
-                        <Td>{duration(r.durationSeconds)}</Td>
+                        <Td className="sk-figure">{duration(r.durationSeconds)}</Td>
                         <Td>
                           {/* The order, not the attempt: the attempt is a
                               fact about the past and has no page of its
                               own — what an agent wants is where the order
                               got to afterwards. */}
-                          <Link href={`/orders/${r.orderId}`} className="text-accent text-xs">
+                          <Link href={`/orders/${r.orderId}`} className="oo-link">
                             open
                           </Link>
                         </Td>
-                        <Td>
+                        <Td className="oo-clip">
                           {r.outcomeNotes ?? '—'}
                           {r.rescheduledFor !== null && (
-                            <span className="text-text-faint ml-2 text-xs">
+                            <span className="oo-sub">
                               call back {new Date(r.rescheduledFor).toLocaleString()}
                             </span>
                           )}
@@ -123,37 +115,20 @@ export function MyCallHistory(): ReactElement {
               </Table>
 
               {(data?.total ?? 0) > PAGE_SIZE && (
-                <div className="mt-3 flex items-center justify-between text-sm">
-                  <span className="text-text-muted">
-                    {data?.total} call{data?.total === 1 ? '' : 's'}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={page <= 1}
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    >
-                      Previous
-                    </Button>
-                    <span className="text-text-faint text-xs">
-                      {page} / {lastPage}
-                    </span>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      disabled={page >= lastPage}
-                      onClick={() => setPage((p) => p + 1)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
+                <Pagination
+                  className="cc-history-pager"
+                  label="My calls pages"
+                  page={page}
+                  pageSize={PAGE_SIZE}
+                  total={data?.total ?? 0}
+                  showJump={false}
+                  onPageChange={setPage}
+                />
               )}
             </>
           )}
-        </CardBody>
+        </OoCard>
       )}
-    </Card>
+    </section>
   );
 }

@@ -3,7 +3,8 @@
 import { useState, type ReactElement } from 'react';
 import { type ReleaseReservationsResult } from '@skydrop/api-client';
 import { useReleaseReservations } from '@/lib/api-hooks';
-import { Button, FormField, Textarea, Modal, ModalFooter } from '@skydrop/ui/components';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -19,11 +20,14 @@ export function ReleaseReservationsDialog({
   open,
   onOpenChange,
   orderId,
+  orderNumber,
   onSuccess,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (o: boolean) => void;
   readonly orderId: string;
+  /** Restated in the confirm; the id stands in when it is not passed. */
+  readonly orderNumber?: string | undefined;
   readonly onSuccess: (result: ReleaseReservationsResult) => void;
 }): ReactElement {
   const [reason, setReason] = useState('');
@@ -43,60 +47,37 @@ export function ReleaseReservationsDialog({
         ...(reason.trim() ? { reason: reason.trim() } : {}),
       });
       onSuccess(result);
-      close();
+      setReason('');
     } catch (err) {
       setServerError(serverVerdict(err, 'Failed to release reservations.'));
+      throw err;
     }
   }
 
   return (
-    <Modal
+    <ConfirmDialog
       open={open}
-      onOpenChange={(o) => !o && close()}
+      onOpenChange={(o) => {
+        if (!o) close();
+      }}
       title="Release order reservations"
-      description="God-mode cleanup. Releases every ACTIVE reservation tied to this order. Idempotent — safe to retry."
+      entity={orderNumber ?? orderId}
+      entityIsIdentifier
+      consequence="God-mode cleanup: every ACTIVE reservation tied to this order is released. Idempotent — safe to retry."
+      confirmLabel="Release reservations"
+      destructive={true}
+      onConfirm={confirm}
+      error={serverError}
     >
-      <div className="space-y-3">
-        <FormField
-          label="Reason (optional)"
-          htmlFor="release-reason"
-          hint="Recorded in the audit log + order event. Audited HIGH."
-        >
-          <Textarea
-            id="release-reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g., Cleanup after force-mutation away from CONFIRMED."
-            disabled={release.isPending}
-          />
-        </FormField>
-        {serverError && (
-          <div
-            className="px-2.5 py-1.5 rounded-[5px] text-critical text-xs"
-            style={{
-              background: 'var(--color-critical-tint)',
-              border: '1px solid var(--color-critical-ring)',
-            }}
-          >
-            {serverError}
-          </div>
-        )}
-      </div>
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close} disabled={release.isPending}>
-          Cancel
-        </Button>
-        <Button
-          variant="destructive"
-          size="md"
-          onClick={() => {
-            void confirm();
-          }}
-          disabled={release.isPending}
-        >
-          {release.isPending ? 'Releasing…' : 'Release reservations'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+      <TextArea
+        id="release-reason"
+        label="Reason (optional)"
+        hint="Recorded in the audit log + order event. Audited HIGH."
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="e.g., Cleanup after force-mutation away from CONFIRMED."
+        disabled={release.isPending}
+      />
+    </ConfirmDialog>
   );
 }

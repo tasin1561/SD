@@ -9,7 +9,11 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
-import { Button, Card, CardBody, ErrorNote, Skeleton, StatusBadge } from '@skydrop/ui/components';
+import { Button } from '@skydrop/ui/app/button';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { OoCard } from '../../orders/_components/order-ops-parts';
+import './call-center.css';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -63,11 +67,9 @@ export function MyAvailability(): ReactElement {
 
   if (settings.isLoading) {
     return (
-      <Card>
-        <CardBody>
-          <Skeleton className="h-6 w-64" />
-        </CardBody>
-      </Card>
+      <OoCard>
+        <Skeleton height={24} width={256} />
+      </OoCard>
     );
   }
 
@@ -78,35 +80,34 @@ export function MyAvailability(): ReactElement {
   const available = settings.data.isAvailable;
 
   return (
-    <Card>
-      <CardBody>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <StatusBadge
-              kind={available ? 'delivered' : 'cancelled'}
-              label={available ? 'available' : 'not taking calls'}
-            />
-            <span className="text-text-muted text-xs">
-              {available
-                ? 'Orders will be assigned to you.'
-                : 'Nothing new will be assigned until you turn this back on.'}
-            </span>
-          </div>
-          <Button
-            variant={available ? 'secondary' : 'primary'}
-            size="md"
-            disabled={update.isPending}
-            onClick={() => update.mutate({ isAvailable: !available })}
-          >
-            {update.isPending ? 'Saving…' : available ? 'Stop taking calls' : 'Start taking calls'}
-          </Button>
+    <OoCard>
+      <div className="cc-avail">
+        <div className="cc-avail__state">
+          <StatusChip
+            kind={available ? 'delivered' : 'cancelled'}
+            label={available ? 'available' : 'not taking calls'}
+          />
+          <span className="oo-muted">
+            {available
+              ? 'Orders will be assigned to you.'
+              : 'Nothing new will be assigned until you turn this back on.'}
+          </span>
         </div>
-        {update.error !== null && (
-          <div className="mt-2">
-            <ErrorNote message={serverVerdict(update.error)} />
-          </div>
-        )}
-      </CardBody>
-    </Card>
+        <Button
+          variant={available ? 'secondary' : 'primary'}
+          size="md"
+          loading={update.isPending}
+          disabled={update.isPending}
+          onClick={() => update.mutate({ isAvailable: !available })}
+        >
+          {update.isPending ? 'Saving…' : available ? 'Stop taking calls' : 'Start taking calls'}
+        </Button>
+      </div>
+      {update.error !== null && (
+        <p className="oo-error" role="alert">
+          {serverVerdict(update.error)}
+        </p>
+      )}
+    </OoCard>
   );
 }

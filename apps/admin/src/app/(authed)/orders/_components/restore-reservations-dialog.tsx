@@ -3,7 +3,8 @@
 import { useState, type ReactElement } from 'react';
 import { type RestoreReservationsResult } from '@skydrop/api-client';
 import { useRestoreReservations } from '@/lib/api-hooks';
-import { Button, FormField, Textarea, Modal, ModalFooter } from '@skydrop/ui/components';
+import { ConfirmDialog } from '@skydrop/ui/app/dialog';
+import { TextArea } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -26,11 +27,14 @@ export function RestoreReservationsDialog({
   open,
   onOpenChange,
   orderId,
+  orderNumber,
   onSuccess,
 }: {
   readonly open: boolean;
   readonly onOpenChange: (o: boolean) => void;
   readonly orderId: string;
+  /** Restated in the confirm; the id stands in when it is not passed. */
+  readonly orderNumber?: string | undefined;
   readonly onSuccess: (result: RestoreReservationsResult) => void;
 }): ReactElement {
   const [reason, setReason] = useState('');
@@ -50,64 +54,37 @@ export function RestoreReservationsDialog({
         ...(reason.trim() ? { reason: reason.trim() } : {}),
       });
       onSuccess(result);
-      close();
+      setReason('');
     } catch (err) {
       setServerError(serverVerdict(err, 'Failed to restore reservations.'));
+      throw err;
     }
   }
 
   return (
-    <Modal
+    <ConfirmDialog
       open={open}
-      onOpenChange={(o) => !o && close()}
-      title="Restore this order\u2019s stock claim"
-      description="Re-reserves stock for an order that lost its claim to an expired reservation. Refused if the order already holds one, or if it is past packing. All or nothing: on a shortfall nothing is reserved."
+      onOpenChange={(o) => {
+        if (!o) close();
+      }}
+      title="Restore this order’s stock claim"
+      entity={orderNumber ?? orderId}
+      entityIsIdentifier
+      consequence="Stock is re-reserved for an order that lost its claim to an expired reservation — refused if it already holds one or is past packing; all or nothing on a shortfall."
+      confirmLabel="Restore stock claim"
+      destructive={false}
+      onConfirm={confirm}
+      error={serverError}
     >
-      <div className="space-y-3">
-        <FormField
-          label="Reason (optional)"
-          htmlFor="restore-reason"
-          hint="Recorded in the audit log + order event. Audited HIGH."
-        >
-          <Textarea
-            id="restore-reason"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g., Reservation expired by the TTL sweep before the fix; order still needs picking."
-            disabled={restore.isPending}
-          />
-        </FormField>
-        {serverError && (
-          <div
-            className="px-2.5 py-1.5 rounded-[5px] text-critical text-xs"
-            style={{
-              background: 'var(--color-critical-tint)',
-              border: '1px solid var(--color-critical-ring)',
-            }}
-          >
-            {serverError}
-          </div>
-        )}
-      </div>
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={close} disabled={restore.isPending}>
-          Cancel
-        </Button>
-        <Button
-          // `secondary`, not `destructive`: this GIVES stock back to an
-          // order rather than taking it away, and dressing it in the
-          // colour of a dangerous action teaches people to hesitate over
-          // the wrong one.
-          variant="secondary"
-          size="md"
-          onClick={() => {
-            void confirm();
-          }}
-          disabled={restore.isPending}
-        >
-          {restore.isPending ? 'Reserving…' : 'Restore stock claim'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+      <TextArea
+        id="restore-reason"
+        label="Reason (optional)"
+        hint="Recorded in the audit log + order event. Audited HIGH."
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="e.g., Reservation expired by the TTL sweep before the fix; order still needs picking."
+        disabled={restore.isPending}
+      />
+    </ConfirmDialog>
   );
 }

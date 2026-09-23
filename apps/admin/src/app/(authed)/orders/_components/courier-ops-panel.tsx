@@ -1,26 +1,23 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
-import { ExternalLink, FileText, Truck } from 'lucide-react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import {
-  Button,
-  Card,
-  CardBody,
-  ConfirmDialog,
-  DescriptionList,
-  ErrorNote,
-  FormField,
-  Ident,
-  Input,
-  Modal,
-  ModalFooter,
-  Money,
-  Num,
-  Skeleton,
-  Textarea,
-  useToast,
-  openExternalWhenReady,
-} from '@skydrop/ui/components';
+  ExternalLink,
+  FileText,
+  PenLine,
+  RotateCcw,
+  TriangleAlert,
+  Truck,
+  XCircle,
+} from 'lucide-react';
+import { Ident, Money, Num, openExternalWhenReady } from '@skydrop/ui/components';
+import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { Button } from '@skydrop/ui/app/button';
+import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { Skeleton } from '@skydrop/ui/app/skeleton';
+import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { useToast } from '@skydrop/ui/app/toast';
 import {
   useAttachEwaybill,
   useCancelWithCourier,
@@ -32,8 +29,85 @@ import {
   useShipmentInsight,
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { Facts } from './order-ops-parts';
+import './order-shipping.css';
 
 const MIN_CANCEL_REASON = 10;
+
+/**
+ * A confirm that restates the waybill and the consequence, whose confirm
+ * button stays DISABLED until the reason meets the server's floor —
+ * exactly as the legacy confirm gated it. The app `ConfirmDialog` has no
+ * `disabled`, so this draws the same restating layout (`sk-confirm`) on
+ * the app `Dialog` rather than let a click through that the old dialog
+ * refused.
+ */
+function ReasonConfirm({
+  open,
+  onOpenChange,
+  title,
+  entity,
+  consequence,
+  note,
+  confirmLabel,
+  busyLabel,
+  busy,
+  disabled,
+  destructive,
+  onConfirm,
+  children,
+}: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly title: string;
+  readonly entity: string | null;
+  readonly consequence: string;
+  readonly note?: string | undefined;
+  readonly confirmLabel: string;
+  readonly busyLabel: string;
+  readonly busy: boolean;
+  readonly disabled: boolean;
+  readonly destructive: boolean;
+  readonly onConfirm: () => void;
+  readonly children: ReactNode;
+}): ReactElement {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      size="sm"
+      tone={destructive ? 'critical' : 'default'}
+      icon={destructive ? <TriangleAlert size={18} /> : <PenLine size={18} />}
+      title={title}
+      locked={busy}
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={busy}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant={destructive ? 'destructive' : 'primary'}
+            labels={{ idle: confirmLabel, busy: busyLabel }}
+            state={busy ? 'busy' : 'idle'}
+            disabled={disabled}
+            onClick={onConfirm}
+          />
+        </DialogFooter>
+      }
+    >
+      <div className="sk-confirm">
+        {entity !== null && (
+          <div className="sk-confirm__subject">
+            <span className="sk-confirm__entity sk-ident">{entity}</span>
+          </div>
+        )}
+        <p className="sk-confirm__consequence">{consequence}</p>
+        {note !== undefined && <p className="os-note">{note}</p>}
+        {children}
+      </div>
+    </Dialog>
+  );
+}
 
 /**
  * What the courier says about this parcel, and what we can ask it to do.
@@ -66,7 +140,7 @@ export function CourierOpsPanel({
 
   if (isManualCourier) {
     return (
-      <p className="text-text-faint text-xs">
+      <p className="os-note">
         Placed manually with a non-integrated courier — arrange any change directly with them.
       </p>
     );
@@ -82,26 +156,28 @@ export function CourierOpsPanel({
   }
   if (awbNumber === null) {
     return (
-      <p className="text-text-faint text-xs">
-        No AWB yet. Courier actions become available once one is issued.
-      </p>
+      <p className="os-note">No AWB yet. Courier actions become available once one is issued.</p>
     );
   }
 
   return open ? (
-    <CourierOpsBody shipmentId={shipmentId} onClose={() => setOpen(false)} />
+    <CourierOpsBody shipmentId={shipmentId} awbNumber={awbNumber} onClose={() => setOpen(false)} />
   ) : (
-    <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-      <Truck size={13} aria-hidden /> Courier actions &amp; costs
-    </Button>
+    <div className="os-tools">
+      <Button variant="ghost" size="sm" icon={<Truck size={14} />} onClick={() => setOpen(true)}>
+        Courier actions &amp; costs
+      </Button>
+    </div>
   );
 }
 
 function CourierOpsBody({
   shipmentId,
+  awbNumber,
   onClose,
 }: {
   readonly shipmentId: string;
+  readonly awbNumber: string;
   readonly onClose: () => void;
 }): ReactElement {
   const toast = useToast();
@@ -115,6 +191,8 @@ function CourierOpsBody({
   const [ewaybilling, setEwaybilling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  const [confirmNdr, setConfirmNdr] = useState(false);
+  const [ndrError, setNdrError] = useState<string | null>(null);
 
   async function getDocument(docType: string): Promise<void> {
     try {
@@ -138,7 +216,10 @@ function CourierOpsBody({
     }
   }
 
+  // Now behind a confirm that restates the waybill (it sends a van). The
+  // request is the same; a refusal stays on the confirm, verbatim.
   async function takeNdrAction(): Promise<void> {
+    setNdrError(null);
     try {
       const r = await ndr.mutateAsync({ shipmentId, action: 'RE-ATTEMPT' });
       // Delhivery answers asynchronously — saying "re-attempt booked"
@@ -149,7 +230,8 @@ function CourierOpsBody({
           : `Request submitted (ref ${r.uplId}). Delhivery confirms separately.`,
       );
     } catch (err) {
-      toast.error(serverVerdict(err));
+      setNdrError(serverVerdict(err));
+      throw err;
     }
   }
 
@@ -168,123 +250,135 @@ function CourierOpsBody({
   }
 
   return (
-    <Card className="mt-2">
-      <CardBody className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-text-muted text-xs font-medium tracking-wide uppercase">Courier</h4>
-          <Button variant="ghost" size="sm" onClick={onClose}>
-            Hide
-          </Button>
+    <div className="os-panel">
+      <div className="oo-card__head">
+        <p className="oo-card__title">Courier</p>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          Hide
+        </Button>
+      </div>
+
+      {insight.isError ? (
+        <ErrorState message={serverVerdict(insight.error)} retry={() => void insight.refetch()} />
+      ) : insight.isLoading ? (
+        <div className="os-skel" role="status" aria-label="Loading courier details">
+          <Skeleton width="75%" height={14} />
+          <Skeleton width="50%" height={14} />
         </div>
+      ) : (
+        <>
+          <Facts
+            items={[
+              {
+                label: 'Expected transit',
+                value:
+                  insight.data?.tat?.tatDays == null ? (
+                    <span className="oo-faint">—</span>
+                  ) : (
+                    <Num value={insight.data.tat.tatDays} suffix=" days" />
+                  ),
+              },
+              {
+                label: 'Courier cost',
+                value:
+                  insight.data?.cost == null ? (
+                    <span className="oo-faint">—</span>
+                  ) : (
+                    <Money amount={insight.data.cost.totalInr} />
+                  ),
+              },
+              {
+                label: 'Their zone',
+                value: insight.data?.cost?.zone ?? <span className="oo-faint">—</span>,
+              },
+            ]}
+          />
 
-        {insight.isError ? (
-          <ErrorNote message={serverVerdict(insight.error)} retry={() => void insight.refetch()} />
-        ) : insight.isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-          </div>
-        ) : (
-          <>
-            <DescriptionList
-              columns={3}
-              items={[
-                {
-                  label: 'Expected transit',
-                  value:
-                    insight.data?.tat?.tatDays == null ? (
-                      <span className="text-text-faint">—</span>
-                    ) : (
-                      <Num value={insight.data.tat.tatDays} suffix=" days" />
-                    ),
-                },
-                {
-                  label: 'Courier cost',
-                  value:
-                    insight.data?.cost == null ? (
-                      <span className="text-text-faint">—</span>
-                    ) : (
-                      <Money amount={insight.data.cost.totalInr} />
-                    ),
-                },
-                {
-                  label: 'Their zone',
-                  value: insight.data?.cost?.zone ?? <span className="text-text-faint">—</span>,
-                },
-              ]}
-            />
+          {(insight.data?.unavailable.length ?? 0) > 0 && (
+            <ul className="oo-list oo-faint">
+              {insight.data?.unavailable.map((u) => (
+                <li key={u}>{u}</li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
 
-            {(insight.data?.unavailable.length ?? 0) > 0 && (
-              <ul className="text-text-faint space-y-1 text-xs">
-                {insight.data?.unavailable.map((u) => (
-                  <li key={u}>{u}</li>
-                ))}
-              </ul>
-            )}
-          </>
-        )}
-
-        {/* ── evidence ── */}
-        <div className="border-border flex flex-wrap gap-2 border-t pt-3">
+      {/* ── evidence ── */}
+      <div className="os-panel__block">
+        <div className="os-tools">
           <Button
             variant="secondary"
             size="sm"
+            icon={<FileText size={14} />}
             disabled={document.isPending}
             onClick={() => void getDocument('EPOD')}
           >
-            <FileText size={13} aria-hidden /> Proof of delivery
+            Proof of delivery
           </Button>
           <Button
             variant="ghost"
             size="sm"
+            iconRight={<ExternalLink size={13} />}
             disabled={document.isPending}
             onClick={() => void getDocument('SIGNATURE_URL')}
           >
-            Signature <ExternalLink size={12} aria-hidden />
+            Signature
           </Button>
         </div>
+      </div>
 
-        {/* ── NDR ── */}
-        <div className="border-border border-t pt-3">
-          {readiness.isLoading ? (
-            <Skeleton className="h-4 w-2/3" />
-          ) : readiness.data?.eligible === true ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={ndr.isPending}
-                onClick={() => void takeNdrAction()}
-              >
-                {ndr.isPending ? 'Requesting…' : 'Request another delivery attempt'}
-              </Button>
-              <span className="text-text-faint text-xs">
-                after {readiness.data.attemptCount} failed attempt
-                {readiness.data.attemptCount === 1 ? '' : 's'}
-                {readiness.data.nslCode !== null && (
-                  <>
-                    {' · '}
-                    <Ident value={readiness.data.nslCode} />
-                  </>
-                )}
-              </span>
-            </div>
-          ) : (
-            // The server's verdict, not a guess. Saying WHY a re-attempt
-            // is unavailable is the difference between a disabled button
-            // and a useful one.
-            <p className="text-text-faint text-xs leading-relaxed">
-              Re-attempt unavailable
-              {readiness.data?.reason === null || readiness.data?.reason === undefined
-                ? '.'
-                : `: ${readiness.data.reason}`}
-            </p>
-          )}
-        </div>
+      {/* ── NDR ── */}
+      <div className="os-panel__block">
+        {readiness.isLoading ? (
+          <Skeleton width="66%" height={14} />
+        ) : readiness.data?.eligible === true ? (
+          <div className="os-tools">
+            <Button
+              variant="primary"
+              size="sm"
+              icon={<RotateCcw size={14} />}
+              disabled={ndr.isPending}
+              onClick={() => {
+                setNdrError(null);
+                setConfirmNdr(true);
+              }}
+            >
+              {ndr.isPending ? 'Requesting…' : 'Request another delivery attempt'}
+            </Button>
+            <span className="os-note">
+              after <span className="sk-figure">{readiness.data.attemptCount}</span> failed attempt
+              {readiness.data.attemptCount === 1 ? '' : 's'}
+              {readiness.data.nslCode !== null && (
+                <>
+                  {' · '}
+                  <Ident value={readiness.data.nslCode} />
+                </>
+              )}
+            </span>
+          </div>
+        ) : (
+          // The server's verdict, not a guess. Saying WHY a re-attempt
+          // is unavailable is the difference between a disabled button
+          // and a useful one.
+          <p className="os-note">
+            Re-attempt unavailable
+            {readiness.data?.reason === null || readiness.data?.reason === undefined
+              ? '.'
+              : `: ${readiness.data.reason}`}
+          </p>
+        )}
+      </div>
 
-        {/* ── corrections ── */}
-        <div className="border-border flex flex-wrap gap-2 border-t pt-3">
-          <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+      {/* ── corrections ── */}
+      <div className="os-panel__block">
+        <div className="os-tools">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<PenLine size={14} />}
+            onClick={() => setEditing(true)}
+          >
             Correct recipient
           </Button>
           {/*
@@ -303,41 +397,56 @@ function CourierOpsBody({
             deleting it would mean rebuilding it from scratch to answer
             a question the codebase has already answered.
           */}
-          <Button variant="destructive" size="sm" onClick={() => setConfirmCancel(true)}>
+          <Button
+            variant="destructive"
+            size="sm"
+            icon={<XCircle size={14} />}
+            onClick={() => setConfirmCancel(true)}
+          >
             Cancel with courier
           </Button>
         </div>
-      </CardBody>
+      </div>
 
       <EditRecipientModal shipmentId={shipmentId} open={editing} onOpenChange={setEditing} />
       <EwaybillModal shipmentId={shipmentId} open={ewaybilling} onOpenChange={setEwaybilling} />
       <ConfirmDialog
+        open={confirmNdr}
+        onOpenChange={(next) => {
+          setConfirmNdr(next);
+          if (!next) setNdrError(null);
+        }}
+        title="Request another delivery attempt?"
+        entity={awbNumber}
+        entityIsIdentifier
+        consequence="The courier is asked to send its van out to the customer again; it confirms separately, and only its own scans move the order."
+        confirmLabel="Request the attempt"
+        onConfirm={takeNdrAction}
+        error={ndrError ?? undefined}
+      />
+      <ReasonConfirm
         open={confirmCancel}
         onOpenChange={setConfirmCancel}
         title="Cancel this parcel with the courier?"
-        confirmVariant="destructive"
-        confirmLabel={cancel.isPending ? 'Cancelling…' : 'Cancel parcel'}
+        entity={awbNumber}
+        consequence="A parcel already in transit does not vanish — it becomes a return and comes back to us, at the cost of a return leg. Only a not-yet-collected parcel stops where it is."
+        note="The order is not moved by this action; the courier's own scans will move it."
+        destructive
+        confirmLabel="Cancel parcel"
+        busyLabel="Cancelling…"
+        busy={cancel.isPending}
         disabled={cancel.isPending || cancelReason.trim().length < MIN_CANCEL_REASON}
         onConfirm={() => void doCancel()}
-        description={
-          <div className="space-y-2">
-            <p>
-              A parcel already in transit does not vanish — it becomes a return and comes back to
-              us, at the cost of a return leg. Only a not-yet-collected parcel stops where it is.
-            </p>
-            <p className="text-text-faint">
-              The order is not moved by this action; the courier&apos;s own scans will move it.
-            </p>
-            <Textarea
-              rows={2}
-              placeholder="Why is this being pulled?"
-              value={cancelReason}
-              onChange={(e) => setCancelReason(e.target.value)}
-            />
-          </div>
-        }
-      />
-    </Card>
+      >
+        <TextArea
+          label="Reason"
+          rows={2}
+          placeholder="Why is this being pulled?"
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
+        />
+      </ReasonConfirm>
+    </div>
   );
 }
 
@@ -369,16 +478,19 @@ function VoidedWaybill({
 
   if (awbNumber === null) {
     return (
-      <p className="text-text-faint text-xs">
+      <p className="os-note">
         Voided with its order. It never had a waybill, so there is nothing at the courier.
       </p>
     );
   }
   if (courierCancelledAt !== null) {
     return (
-      <p className="text-text-faint text-xs">
+      <p className="os-note">
         Voided with its order. Waybill cancelled with the courier on{' '}
-        {new Date(courierCancelledAt).toISOString().slice(0, 16).replace('T', ' ')} UTC.
+        <span className="sk-figure">
+          {new Date(courierCancelledAt).toISOString().slice(0, 16).replace('T', ' ')}
+        </span>{' '}
+        UTC.
       </p>
     );
   }
@@ -412,63 +524,66 @@ function VoidedWaybill({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <p className="text-xs text-[var(--color-warning)]">
+    <div className="os-panel">
+      <p className="os-warn-line">
         Voided with its order, but waybill <Ident value={awbNumber} /> is still live with the
         courier. Cancel it so the booking charge is credited back.
       </p>
-      <Button variant="destructive" size="sm" onClick={() => setConfirming(true)}>
-        Cancel waybill with courier
-      </Button>
-      <Button variant="secondary" size="sm" onClick={() => setRecording(true)}>
-        Mark cancelled outside Skydrop
-      </Button>
-      <ConfirmDialog
+      <div className="os-tools">
+        <Button
+          variant="destructive"
+          size="sm"
+          icon={<XCircle size={14} />}
+          onClick={() => setConfirming(true)}
+        >
+          Cancel waybill with courier
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setRecording(true)}>
+          Mark cancelled outside Skydrop
+        </Button>
+      </div>
+      <ReasonConfirm
         open={recording}
         onOpenChange={setRecording}
         title="Record this waybill as cancelled outside Skydrop?"
-        confirmLabel={recordOutside.isPending ? 'Recording…' : 'Record as cancelled'}
+        entity={awbNumber}
+        consequence="Use this only when the waybill was already cancelled in the courier's own portal or by phone. Skydrop does NOT call the courier; it records your word, and the record says so."
+        destructive={false}
+        confirmLabel="Record as cancelled"
+        busyLabel="Recording…"
+        busy={recordOutside.isPending}
         disabled={recordOutside.isPending || reason.trim().length < MIN_CANCEL_REASON}
         onConfirm={() => void doRecordOutside()}
-        description={
-          <div className="space-y-2">
-            <p>
-              Use this only when the waybill was already cancelled in the courier&apos;s own portal
-              or by phone. Skydrop does NOT call the courier; it records your word, and the record
-              says so.
-            </p>
-            <Textarea
-              rows={2}
-              placeholder="How was it cancelled? e.g. cancelled in the Delhivery portal on 12 Sep"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-        }
-      />
-      <ConfirmDialog
+      >
+        <TextArea
+          label="How was it cancelled?"
+          rows={2}
+          placeholder="How was it cancelled? e.g. cancelled in the Delhivery portal on 12 Sep"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </ReasonConfirm>
+      <ReasonConfirm
         open={confirming}
         onOpenChange={setConfirming}
         title="Cancel this waybill with the courier?"
-        confirmVariant="destructive"
-        confirmLabel={cancel.isPending ? 'Cancelling…' : 'Cancel waybill'}
+        entity={awbNumber}
+        consequence="The order is already cancelled. This asks the courier to close the waybill it booked, which is what credits the booking charge back. The order does not change."
+        destructive
+        confirmLabel="Cancel waybill"
+        busyLabel="Cancelling…"
+        busy={cancel.isPending}
         disabled={cancel.isPending || reason.trim().length < MIN_CANCEL_REASON}
         onConfirm={() => void doCancel()}
-        description={
-          <div className="space-y-2">
-            <p>
-              The order is already cancelled. This asks the courier to close the waybill it booked,
-              which is what credits the booking charge back. The order does not change.
-            </p>
-            <Textarea
-              rows={2}
-              placeholder="Why? e.g. order cancelled before pickup"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </div>
-        }
-      />
+      >
+        <TextArea
+          label="Reason"
+          rows={2}
+          placeholder="Why? e.g. order cancelled before pickup"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </ReasonConfirm>
     </div>
   );
 }
@@ -511,49 +626,57 @@ function EditRecipientModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={onOpenChange}
       size="md"
+      icon={<PenLine size={18} />}
       title="Correct the recipient"
       description="Only the fields you fill are changed. Delhivery refuses edits on parcels already dispatched or in a terminal state."
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            labels={{ idle: 'Send correction', busy: 'Sending…' }}
+            state={edit.isPending ? 'busy' : 'idle'}
+            disabled={!anything || edit.isPending}
+            onClick={() => void submit()}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="space-y-3">
-        <FormField label="Name" htmlFor="edit-name">
-          <Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} />
-        </FormField>
-        <FormField label="Phone" htmlFor="edit-phone">
-          <Input
-            id="edit-phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="+919812345678"
-          />
-        </FormField>
-        <FormField label="Address" htmlFor="edit-address">
-          <Textarea
-            id="edit-address"
-            rows={3}
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-        </FormField>
-        {error !== null && <ErrorNote message={error} />}
+      <div className="os-fields">
+        <TextField
+          id="edit-name"
+          label="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <TextField
+          id="edit-phone"
+          label="Phone"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="+919812345678"
+        />
+        <TextArea
+          id="edit-address"
+          label="Address"
+          rows={3}
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+        />
+        {error !== null && (
+          <p className="oo-error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={!anything || edit.isPending}
-          onClick={() => void submit()}
-        >
-          {edit.isPending ? 'Sending…' : 'Send correction'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }
 
@@ -590,48 +713,53 @@ function EwaybillModal({
   }
 
   return (
-    <Modal
+    <Dialog
       open={open}
       onOpenChange={onOpenChange}
       size="sm"
+      icon={<FileText size={18} />}
       title="Attach an e-way bill"
       description="Required by law above ₹50,000 of goods. Moving them without one risks the consignment being detained and penalised."
+      footer={
+        <DialogFooter>
+          <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <AsyncButton
+            variant="primary"
+            size="md"
+            labels={{ idle: 'Attach', busy: 'Attaching…' }}
+            state={attach.isPending ? 'busy' : 'idle'}
+            disabled={
+              invoiceNumber.trim() === '' || ewaybillNumber.trim() === '' || attach.isPending
+            }
+            onClick={() => void submit()}
+          />
+        </DialogFooter>
+      }
     >
-      <div className="space-y-3">
-        <FormField
+      <div className="os-fields">
+        <TextField
+          id="ewb-invoice"
           label="Invoice number"
-          htmlFor="ewb-invoice"
           hint="The invoice the e-way bill was raised against."
-          required
-        >
-          <Input
-            id="ewb-invoice"
-            value={invoiceNumber}
-            onChange={(e) => setInvoiceNumber(e.target.value)}
-          />
-        </FormField>
-        <FormField label="E-way bill number" htmlFor="ewb-number" required>
-          <Input
-            id="ewb-number"
-            value={ewaybillNumber}
-            onChange={(e) => setEwaybillNumber(e.target.value)}
-          />
-        </FormField>
-        {error !== null && <ErrorNote message={error} />}
+          requiredMark
+          value={invoiceNumber}
+          onChange={(e) => setInvoiceNumber(e.target.value)}
+        />
+        <TextField
+          id="ewb-number"
+          label="E-way bill number"
+          requiredMark
+          value={ewaybillNumber}
+          onChange={(e) => setEwaybillNumber(e.target.value)}
+        />
+        {error !== null && (
+          <p className="oo-error" role="alert">
+            {error}
+          </p>
+        )}
       </div>
-      <ModalFooter>
-        <Button variant="ghost" size="md" onClick={() => onOpenChange(false)}>
-          Cancel
-        </Button>
-        <Button
-          variant="primary"
-          size="md"
-          disabled={invoiceNumber.trim() === '' || ewaybillNumber.trim() === '' || attach.isPending}
-          onClick={() => void submit()}
-        >
-          {attach.isPending ? 'Attaching…' : 'Attach'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+    </Dialog>
   );
 }

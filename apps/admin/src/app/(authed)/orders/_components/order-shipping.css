@@ -1,0 +1,130 @@
+/* Order detail — the shipments card and the per-parcel panels (courier
+   actions, manual scan, manual placement, courier cost, customer details).
+   Tokens only; layout sits on the shared `oo-*` classes. */
+
+.os-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.os-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+}
+.os-item + .os-item {
+  border-top: 1px solid var(--line);
+}
+.os-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.os-item__id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.os-item__number {
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.os-item__meta {
+  margin-top: 2px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.os-item__awb {
+  margin-top: 2px;
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+}
+.os-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap);
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.os-track:hover {
+  text-decoration: underline;
+}
+.os-track:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+.os-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.os-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+.os-panel__block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.os-skel {
+  display: grid;
+  gap: var(--sp-2);
+}
+.os-note {
+  margin: 0;
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.os-warn-line {
+  margin: 0;
+  color: var(--saffron-text);
+  font-size: var(--fs-sm);
+}
+.os-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+}
+@media (min-width: 640px) {
+  .os-fields[data-cols='2'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.os-result[data-ok='1'] {
+  color: var(--green-text);
+}
+.os-result {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}

@@ -3,18 +3,9 @@
 import Link from 'next/link';
 import type { ReactElement } from 'react';
 import type { OrderView } from '@skydrop/api-client';
-import {
-  Card,
-  CardBody,
-  Money,
-  Section,
-  TBody,
-  THead,
-  Table,
-  Td,
-  Th,
-  Tr,
-} from '@skydrop/ui/components';
+import { Money } from '@skydrop/ui/components';
+import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
+import { Facts, OoCard, OoSection } from './order-ops-parts';
 
 const SHARES: ReadonlyArray<readonly [keyof OrderView, string]> = [
   ['resellerDeliveryFeeStorePercent', 'Delivery fee'],
@@ -41,57 +32,50 @@ function timing(trigger: string | null | undefined, days: number | null | undefi
 export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElement | null {
   if (order.storeKind !== 'RESELLER') return null;
   return (
-    <Section
+    <OoSection
       title="Reseller store"
-      subtitle="Placed by a reseller store under the terms below — snapshotted when it was placed, so later edits never re-price it."
+      note="Placed by a reseller store under the terms below — snapshotted when it was placed, so later edits never re-price it."
     >
-      <Card>
-        <CardBody>
-          <dl className="grid grid-cols-[minmax(84px,36%)_1fr] gap-x-3 gap-y-1.5 text-sm sm:grid-cols-[180px_1fr] sm:gap-x-6">
-            <dt className="text-text-muted">Store</dt>
-            <dd className="text-text-body">
-              {order.storeId === null ? (
+      <Facts
+        items={[
+          {
+            label: 'Store',
+            value:
+              order.storeId === null ? (
                 (order.storeNameSnapshot ?? '—')
               ) : (
-                <Link
-                  href={`/reseller-stores/${order.storeId}`}
-                  className="text-accent hover:underline"
-                >
+                <Link href={`/reseller-stores/${order.storeId}`} className="oo-link">
                   {order.storeNameSnapshot ?? 'Reseller store'}
                 </Link>
-              )}
-            </dd>
-            <dt className="text-text-muted">Terms version</dt>
-            <dd className="text-text-body">
-              {order.resellerTermsVersionNumber === null ||
+              ),
+          },
+          {
+            label: 'Terms version',
+            value:
+              order.resellerTermsVersionNumber === null ||
               order.resellerTermsVersionNumber === undefined
                 ? '—'
-                : `Version ${order.resellerTermsVersionNumber}`}
-            </dd>
-            {SHARES.map(([key, label]) => {
-              const value = order[key];
-              return (
-                <div key={key} className="contents">
-                  <dt className="text-text-muted">{label} — store pays</dt>
-                  <dd className="text-text-body">
-                    {typeof value === 'string' ? `${value}%` : '—'}
-                  </dd>
-                </div>
-              );
-            })}
-            <dt className="text-text-muted">Store credited</dt>
-            <dd className="text-text-body">
-              {timing(order.resellerStoreCreditTrigger, order.resellerStoreCreditDays)}
-            </dd>
-            <dt className="text-text-muted">Seller credited</dt>
-            <dd className="text-text-body">
-              {timing(order.resellerSellerCreditTrigger, order.resellerSellerCreditDays)}
-            </dd>
-          </dl>
-        </CardBody>
-      </Card>
-      <div className="mt-3">
-        <Table>
+                : `Version ${order.resellerTermsVersionNumber}`,
+          },
+          ...SHARES.map(([key, label]) => {
+            const value = order[key];
+            return {
+              label: `${label} — store pays`,
+              value: typeof value === 'string' ? `${value}%` : '—',
+            };
+          }),
+          {
+            label: 'Store credited',
+            value: timing(order.resellerStoreCreditTrigger, order.resellerStoreCreditDays),
+          },
+          {
+            label: 'Seller credited',
+            value: timing(order.resellerSellerCreditTrigger, order.resellerSellerCreditDays),
+          },
+        ]}
+      />
+      <OoCard flush>
+        <Table caption="Reseller lines">
           <THead>
             <Tr>
               <Th>Line</Th>
@@ -106,10 +90,12 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
             {order.items.map((i) => (
               <Tr key={i.id}>
                 <Td>
-                  <div className="text-text-body">{i.productName}</div>
-                  <div className="text-text-faint font-mono text-xs">{i.skuCode}</div>
+                  <span className="oo-body">{i.productName}</span>
+                  <span className="oo-sub sk-ident">{i.skuCode}</span>
                 </Td>
-                <Td align="right">{i.quantity}</Td>
+                <Td align="right">
+                  <span className="sk-figure">{i.quantity}</span>
+                </Td>
                 <Td align="right">
                   {i.resellerTransferPriceInr ? (
                     <Money amount={i.resellerTransferPriceInr} convert={false} />
@@ -124,7 +110,7 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
                     '—'
                   )}
                 </Td>
-                <Td className="text-text-muted text-xs">
+                <Td className="oo-muted">
                   {(i.resellerMinRetailInr ?? null) === null &&
                   (i.resellerMaxRetailInr ?? null) === null ? (
                     'Any price'
@@ -144,7 +130,7 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
                     </>
                   )}
                 </Td>
-                <Td className="text-text-muted text-xs">
+                <Td className="oo-muted">
                   {i.resellerStockMode === 'SET_ASIDE'
                     ? 'Set aside'
                     : i.resellerStockMode === 'SHARED'
@@ -155,7 +141,7 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
             ))}
           </TBody>
         </Table>
-      </div>
-    </Section>
+      </OoCard>
+    </OoSection>
   );
 }
