@@ -135,8 +135,10 @@ describe('the seller card is reachable', () => {
     expect(page).toContain('<TopupCard');
     // Money in before money out: a seller whose balance is short needs
     // the top-up, not the withdrawal form. Still true now the two are tabs
-    // rather than stacked cards — the tab order carries it.
-    expect(page.indexOf("['topups'")).toBeLessThan(page.indexOf("['withdrawals'"));
+    // rather than stacked cards — the tab order carries it. (Tabs are
+    // declared as `{ id: … }` items since the apps restyle, Phase 3.)
+    expect(page.indexOf("id: 'topups'")).toBeGreaterThan(-1);
+    expect(page.indexOf("id: 'topups'")).toBeLessThan(page.indexOf("id: 'withdrawals'"));
     expect(page.indexOf('<TopupCard')).toBeLessThan(page.indexOf('<WithdrawalsCard'));
   });
 
