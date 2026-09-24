@@ -5,7 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import {
   Activity,
   AlertTriangle,
-  ArrowRight,
+  Info,
   Banknote,
   Landmark,
   Receipt,
@@ -18,6 +18,7 @@ import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { KpiCard, Odometer, type KpiTone } from '@skydrop/ui/app/kpi-card';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
+import { TooltipCard } from '@skydrop/ui/app/tooltip-card';
 import { useOrdersList, useReportSummary } from '@/lib/api-hooks';
 import { useTicketsList, useWithdrawalsList } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -114,13 +115,16 @@ function AttentionCard({
   //
   // A card at zero keeps every one of them at neutral and goes quiet.
   // Two loud layers cancel; seven do nothing at all.
+  //
+  // The WHOLE card opens its page: the label is a link whose ::after
+  // covers the card (a button cannot sit inside a link, and the (i) needs
+  // to be one). The (i) sits above that cover, so it explains without
+  // navigating; the explanation lives there, not as a line on the card.
   return (
-    <Link
-      href={href}
+    <div
       className="db-attn"
       data-tone={active ? tone : undefined}
       data-active={active ? '1' : undefined}
-      aria-label={`${area}: ${label}`}
     >
       <div className="db-attn__top">
         <span className="db-attn__area">{area}</span>
@@ -142,18 +146,17 @@ function AttentionCard({
         <span className="db-attn__unit">{label.toLowerCase()}</span>
       </div>
 
-      <div className="db-attn__label">{label}</div>
-      <p className="db-attn__hint">{hint}</p>
-      <div className="db-attn__cta">
-        {active ? (
-          <span className="db-attn__open">
-            Open <ArrowRight size={13} aria-hidden />
-          </span>
-        ) : (
-          <span className="db-attn__clear">Clear</span>
-        )}
+      <div className="db-attn__label-row">
+        <Link href={href} className="db-attn__link" aria-label={`${area}: ${label}`}>
+          {label}
+        </Link>
+        <TooltipCard title="What this counts" description={hint}>
+          <button type="button" className="db-attn__info" aria-label={`About ${label}`}>
+            <Info size={14} aria-hidden />
+          </button>
+        </TooltipCard>
       </div>
-    </Link>
+    </div>
   );
 }
 
