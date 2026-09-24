@@ -81,6 +81,7 @@
   }
 }
 .db-attn {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
@@ -101,7 +102,7 @@
   border-color: var(--line-strong);
   transform: translateY(-2px);
 }
-.db-attn:focus-visible {
+.db-attn:has(.db-attn__link:focus-visible) {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
@@ -175,46 +176,18 @@
 .db-attn[data-active='1'] .db-attn__figure {
   color: var(--blue-text);
 }
-.db-attn[data-tone='warn'] .db-attn__figure,
-.db-attn[data-tone='warn'] .db-attn__open {
+.db-attn[data-tone='warn'] .db-attn__figure {
   color: var(--st-pending-fg);
 }
-.db-attn[data-tone='bad'] .db-attn__figure,
-.db-attn[data-tone='bad'] .db-attn__open {
+.db-attn[data-tone='bad'] .db-attn__figure {
   color: var(--st-failed-fg);
 }
-.db-attn[data-tone='info'] .db-attn__figure,
-.db-attn[data-tone='info'] .db-attn__open {
+.db-attn[data-tone='info'] .db-attn__figure {
   color: var(--st-confirmed-fg);
 }
 .db-attn__unit {
   color: var(--fg-muted);
   font-size: var(--fs-xs);
-}
-.db-attn__label {
-  color: var(--fg-strong);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-}
-.db-attn__hint {
-  margin: 0;
-  color: var(--fg-muted);
-  font-size: var(--fs-xs);
-  line-height: 1.4;
-}
-.db-attn__cta {
-  margin-top: var(--sp-1);
-  font-size: var(--fs-xs);
-  font-weight: var(--fw-semibold);
-}
-.db-attn__open {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--sky);
-}
-.db-attn__clear {
-  color: var(--fg-faint);
 }
 
 /* ── Performance ──────────────────────────────────────────────────────── */
@@ -292,4 +265,57 @@
   gap: 6px;
   color: var(--fg-faint);
   font-size: var(--fs-xs);
+}
+.db-attn__label-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.db-attn__link {
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+  text-decoration: none;
+}
+/* The label's link covers the whole card, so a click anywhere opens it. */
+.db-attn__link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.db-attn__link:focus-visible {
+  outline: none;
+}
+/* Above the cover: the (i) explains, it does not navigate. */
+.db-attn__info {
+  position: relative;
+  z-index: 1;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: help;
+}
+.db-attn__info:hover,
+.db-attn__info:focus-visible {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.db-attn__info:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+@media (pointer: coarse) {
+  .db-attn__info {
+    width: 44px;
+    height: 44px;
+    margin: -14px -8px;
+  }
 }
