@@ -41,14 +41,18 @@ import './needs-attention.css';
  * after its attempts is the opposite: nobody but the seller can decide
  * what happens to it, and it was reaching them nowhere. It ended in
  * REJECTED_NDR, or paused at AWAITING_SELLER_DECISION and surfaced only
- * on `/holds` — a page called "Held stock", which is not where anybody
- * looks for "the customer never answered".
+ * on `/holds` — a page then called "Held stock", which is not where
+ * anybody looks for "the customer never answered". That page is now
+ * "Unreachable customers" and sits beside this one (2026-09-27).
  *
  * So this page answers "does anything of mine need ME" first, and "is
  * anything of mine stuck" second. Both lists link to the order, where
- * the actions already live — "Ask us to call again" for a rejection,
- * "Raise an issue" for anything else. No action is reimplemented here;
- * two ways to perform one write is how they come to disagree.
+ * the actions already live — the keep-trying / let-it-go decision for a
+ * paused order, "Ask us to call again" for a rejection, "Raise an issue"
+ * for anything else. No action is reimplemented here; two ways to
+ * perform one write is how they come to disagree. **The row's own
+ * sentence has to match what the order page offers for THAT status** —
+ * it did not, and a seller following it found no such button.
  *
  * ── WHAT THE TILES COUNT ────────────────────────────────────────────
  * Exactly the rows below them, and nothing else. There is no
@@ -212,7 +216,7 @@ export function NeedsAttentionIndex(): ReactElement {
               into the note beside it; the sentence belongs in the note. */}
           <SectionHeading
             title="Could not reach"
-            note="Our agents rang and nobody answered. Open one to ask us to try again, or leave it."
+            note="Our agents rang and nobody answered. Open one to decide what happens to it."
           />
           <ListRows label="Orders we could not confirm">
             {unconfirmed.map((o) => {
@@ -234,9 +238,28 @@ export function NeedsAttentionIndex(): ReactElement {
                       <span className="nat-line nat-faint">
                         Placed {new Date(o.placedAt).toLocaleDateString('en-IN')}
                       </span>
+                      {/* THE SENTENCE FOLLOWS THE CARD (2026-09-27).
+                          It was one fixed string — "open the order, you
+                          can ask us to call again" — and on an
+                          AWAITING_SELLER_DECISION order that was FALSE:
+                          the order page offers the re-attempt request
+                          only on the rejected statuses, so a seller sent
+                          here found Cancel and nothing else. Each kind
+                          now says what the order page will actually
+                          offer. */}
                       <span className="nat-next">
-                        <span className="nat-next__lead">Open the order</span> — from there you can
-                        ask us to call again, or raise an issue.
+                        {waiting ? (
+                          <>
+                            <span className="nat-next__lead">Open the order</span> — tell us to keep
+                            trying, or let it go. If you leave it, we let it go for you after a few
+                            days.
+                          </>
+                        ) : (
+                          <>
+                            <span className="nat-next__lead">Open the order</span> — from there you
+                            can ask us to call again, or raise an issue.
+                          </>
+                        )}
                       </span>
                     </>
                   }

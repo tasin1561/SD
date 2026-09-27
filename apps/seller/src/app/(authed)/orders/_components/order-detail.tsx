@@ -52,6 +52,7 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
 import { ConsigneePanel } from '../[id]/_components/consignee-panel';
 import { ResellerMoneyPanel } from '../[id]/_components/reseller-money-panel';
+import { UnreachableCustomerPanel } from '../[id]/_components/unreachable-customer-panel';
 
 /** The public tracking site. Env-driven so a domain change is a deploy
  *  variable rather than a code edit. */
@@ -93,6 +94,12 @@ const FAILED_STATUSES: ReadonlySet<string> = new Set([
   'REJECTED_BY_CUSTOMER',
   'REJECTED_NDR',
   'REJECTED',
+  // AWAITING_SELLER_DECISION is deliberately NOT here (2026-09-27). R5b's
+  // pause is answered by `UnreachableCustomerPanel` — "Keep trying" puts
+  // the order back in the call queue AND closes the review that is
+  // holding the stock. A re-attempt request would make the same
+  // transition and leave that review OPEN, so the TTL sweep would later
+  // reject the order it had just re-queued. One button, not two.
 ]);
 
 const CANCELLABLE: ReadonlySet<string> = new Set([
@@ -413,6 +420,16 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               hint={`Last moved ${tileDate(detail.data.updatedAt)}.`}
             />
           </div>
+
+          {/* THE PAUSE COMES FIRST. R5b holds the order at
+              AWAITING_SELLER_DECISION and nothing moves until the seller
+              answers — which, until 2026-09-27, they could only do on a
+              page called "Held stock" under the Stock nav group, while
+              /needs-attention told them to come here. Above the
+              re-attempt notices because this one has a deadline. */}
+          {detail.data.status === 'AWAITING_SELLER_DECISION' && (
+            <UnreachableCustomerPanel orderId={orderId} orderNumber={detail.data.orderNumber} />
+          )}
 
           {pendingRequest !== null && (
             // The ORDER is still REJECTED_BY_CUSTOMER and the chip above

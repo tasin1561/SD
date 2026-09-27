@@ -298,6 +298,13 @@
   color: var(--fg-strong);
   font-weight: var(--fw-semibold);
 }
+/* An action inside a notice. `ord-notice__body` is a 2px-gap grid, which
+   is right for two lines of prose and too tight for a control, so the
+   button gets its own row with real space above it. */
+.ord-notice__act {
+  display: flex;
+  margin-top: var(--sp-2);
+}
 .ord-notice[data-tone='info'] {
   border-color: var(--blue-line);
   background: var(--blue-tint);

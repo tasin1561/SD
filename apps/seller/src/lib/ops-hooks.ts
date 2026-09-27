@@ -485,9 +485,17 @@ export function useRequestWithdrawal(): UseMutationResult<
 
 // ───────── At-placement hold reviews (R5) ─────────
 
-export function useHoldReviews(query: { status?: string }): UseQueryResult<readonly ReviewView[]> {
+export function useHoldReviews(
+  query: { status?: string },
+  opts?: { readonly enabled?: boolean },
+): UseQueryResult<readonly ReviewView[]> {
   const client = useApiClient();
   return useQuery({
+    // Additive and defaulting to ON, so the register page's bare call is
+    // unchanged. The ORDER page passes it: this endpoint is behind
+    // `holds.manage`, and a request nobody may make should never be sent
+    // rather than sent and its 403 hidden (the `useMyNsaOrders` shape).
+    enabled: opts?.enabled ?? true,
     queryKey: ['seller-hold-reviews', 'list', query],
     queryFn: () =>
       client.request<readonly ReviewView[]>(

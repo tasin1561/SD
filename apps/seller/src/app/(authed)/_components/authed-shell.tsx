@@ -22,11 +22,11 @@ import {
   LayoutDashboard,
   LifeBuoy,
   Inbox,
-  Lock,
   KeyRound,
   Package,
   PackageOpen,
   PackageSearch,
+  PhoneOff,
   Settings,
   Store,
   Tags,
@@ -106,6 +106,17 @@ export function AuthedShell({
           label: 'Needs attention',
           icon: <AlertTriangle size={15} />,
         },
+        // 2026-09-27 — was "Held stock" under Stock, which is not where
+        // anybody looks for "the customer did not answer". It is the
+        // decision queue for orders the call centre could not confirm,
+        // so it sits beside Needs attention (which surfaces the same
+        // orders) and is named for the situation. The ROUTE stays
+        // /holds — bookmarks, and page-access.ts keys on it.
+        {
+          href: '/holds',
+          label: 'Unreachable customers',
+          icon: <PhoneOff size={15} />,
+        },
         { href: '/customers', label: 'Customers', icon: <Users size={15} /> },
         { href: '/tickets', label: 'Tickets', icon: <LifeBuoy size={15} /> },
       ],
@@ -117,7 +128,6 @@ export function AuthedShell({
         { href: '/products', label: 'Products', icon: <Boxes size={15} /> },
         { href: '/inventory', label: 'Inventory', icon: <Warehouse size={15} /> },
         { href: '/inbound', label: 'Add stock', icon: <PackageOpen size={15} /> },
-        { href: '/holds', label: 'Held stock', icon: <Lock size={15} /> },
       ],
     },
     {

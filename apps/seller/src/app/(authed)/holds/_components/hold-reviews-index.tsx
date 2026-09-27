@@ -4,20 +4,15 @@ import { useMemo, useState, type ReactElement } from 'react';
 import Link from 'next/link';
 import { Ident, Num } from '@skydrop/ui/components';
 import { earlyReviewStatusKind, statusLabel } from '@skydrop/ui/status';
-import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Button } from '@skydrop/ui/app/button';
-import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
 import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
-import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
 import { EmptyState } from '@skydrop/ui/app/empty-state';
 import { KpiCard } from '@skydrop/ui/app/kpi-card';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Tabs } from '@skydrop/ui/app/tabs';
-import { TextArea } from '@skydrop/ui/app/text-field';
-import { useToast } from '@skydrop/ui/app/toast';
-import { Gavel, Lock, PackageCheck, PhoneCall, RotateCw, Unlock } from 'lucide-react';
+import { Gavel, Lock, PackageCheck, PhoneCall } from 'lucide-react';
 import {
   AreaPage,
   AreaSection,
@@ -28,37 +23,50 @@ import {
   MetaFacts,
   Panel,
   PanelPad,
-  mutationPhase,
   rawCount,
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { EarlyReservationReviewStatus } from '@skydrop/db';
-import { useDecideHoldReview, useHoldReviews, type ReviewView } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { HoldDecisionDialog } from '@/components/hold-decision-dialog';
+import { useHoldReviews, type ReviewView } from '@/lib/ops-hooks';
 import { useRouter } from 'next/navigation';
 
 /**
- * Held stock awaiting the seller's call.
+ * Orders our agents could not confirm on the phone, waiting on the seller.
  *
- * When an order comes in, stock can be held immediately — before anyone
- * has spoken to the customer. If the call centre then exhausts its
- * attempts without reaching them, that stock is still held against an
- * order that may never happen, and only the seller can say whether to
- * keep holding it.
+ * ── WHY THIS IS NOT CALLED "HELD STOCK" ANY MORE (2026-09-27) ────────
+ * It was, under the Stock group, subtitled "Orders where we held your
+ * stock at placement but could not reach the customer" — and a seller
+ * looking for "the customer did not answer, what do I do?" would never
+ * open it. Worse, the page LED with the held-unit count, and an
+ * at-placement hold is opt-in (RES-2): for a seller who has not turned
+ * it on, `heldQty` is 0 on every row, so the one thing waiting on them
+ * rendered as "0 units" under a title about stock. The review is raised
+ * whatever the hold setting says, because the question is about CALLING.
  *
- * Doing nothing has a cost, so the screen leads with how much is held.
+ * So: named for the situation, grouped under Selling beside Needs
+ * attention, and every sentence about units is conditional on there
+ * being units. The stock framing SURVIVES where it is true — a seller
+ * who does hold stock still sees the units held, because for them that
+ * is the cost of doing nothing.
  *
- * ── WHAT THE CONSOLE COMPS SHOW THAT IS NOT HERE ────────────────────
+ * The decision itself lives on the ORDER page too, from the same
+ * `HoldDecisionDialog` (one component, two mounts). This page is the
+ * register: the open ones, and what was decided before.
+ *
+ * ── WHAT IS NOT HERE, AND WHY ───────────────────────────────────────
  *   VALUE OF HELD STOCK   the review carries a held QUANTITY and the
  *                         order it belongs to; it carries no cost, and
  *                         a per-unit cost is not on this endpoint. A
- *                         rupee figure would have to be invented, on a
- *                         screen whose whole job is to make the cost of
- *                         doing nothing legible.
- *   HOW LONG IT HAS SAT   there is a TTL sweep behind this (72h by
- *                         default), but the deadline is not returned,
- *                         and `updatedAt` is not when the hold started
- *                         (rule 4b). The date the review was raised is
- *                         what IS true, so that is the column.
+ *                         rupee figure would have to be invented.
+ *   THE DEADLINE          there IS a TTL sweep (`inventory.
+ *                         early_reservation_review_ttl_hours`, 72 by
+ *                         default) but it is SELLER-OVERRIDABLE and no
+ *                         seller endpoint exposes it, so a date here
+ *                         would be a guess printed as a fact. The
+ *                         consequence is stated in words instead. And
+ *                         `updatedAt` is not when the review was raised
+ *                         (rule 4b) — `createdAt` is, so that is the
+ *                         column.
  */
 export function HoldReviewsIndex(): ReactElement {
   const router = useRouter();
@@ -79,19 +87,28 @@ export function HoldReviewsIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Stock' }, { label: 'Held stock' }]}
+        breadcrumbs={[
+          { label: 'Seller console' },
+          { label: 'Selling' },
+          { label: 'Unreachable customers' },
+        ]}
         Link={Link}
-        title="Held stock"
-        subtitle="Orders where we held your stock at placement but could not reach the customer. Release it, or ask us to keep trying."
+        title="Unreachable customers"
+        subtitle="Orders our agents rang without reaching anybody. Tell us to keep trying, or let the order go — nothing happens to these until you say."
         meta={
           !loaded ? undefined : openRows.length > 0 ? (
             <MetaFacts>
               <MetaFact tone="warn" dot>
                 {openRows.length} waiting on you
               </MetaFact>
-              <MetaFact>
-                {heldUnits} {heldUnits === 1 ? 'unit' : 'units'} held
-              </MetaFact>
+              {/* Only when something IS held. "0 units held" beside a
+                  list of orders that need a decision reads as an empty
+                  screen, and for most sellers it is always 0. */}
+              {heldUnits > 0 && (
+                <MetaFact>
+                  {heldUnits} {heldUnits === 1 ? 'unit' : 'units'} held
+                </MetaFact>
+              )}
             </MetaFacts>
           ) : (
             <MetaFact tone="good">Nothing waiting on you</MetaFact>
@@ -99,37 +116,35 @@ export function HoldReviewsIndex(): ReactElement {
         }
       />
 
-      {/* ── What is actually being held ─────────────────────────────
-             Three tiles, each counted off the rows below. The units
-             figure counts OPEN reviews only, because a decided one is
-             no longer holding anything — totalling every row would
-             report stock back on the shelf as still locked away. */}
+      {/* ── What is waiting, and what it is costing ─────────────────
+             AWAITING YOU LEADS. It used to be the held-unit count, and
+             for a seller who has not turned at-placement holds on that
+             is 0 on every row — so the page opened with a zero while
+             orders sat undecided underneath it.
+
+             The units tile is rendered ONLY when something is held. An
+             absent tile says "no stock is tied up in this"; a tile
+             reading 0 says "this screen is empty", which was the whole
+             defect. Counted off OPEN reviews only — a decided one is no
+             longer holding anything. */}
       <KpiGrid>
-        <KpiCard
-          label="Units held pending your decision"
-          icon={<Lock size={14} />}
-          figure={loaded ? <Num value={heldUnits} /> : <Dash />}
-          {...(loaded ? { unit: heldUnits === 1 ? 'unit' : 'units' } : {})}
-          tone={loaded && heldUnits > 0 ? 'pending' : 'neutral'}
-          hint="Unavailable to your other orders until you decide."
-        />
         {loaded ? (
           <KpiCard
-            label="Awaiting you"
+            label="Waiting on your decision"
             icon={<PackageCheck size={14} />}
             value={openRows.length}
             format={rawCount}
             unit={openRows.length === 1 ? 'order' : 'orders'}
             tone={openRows.length > 0 ? 'pending' : 'neutral'}
-            hint="Each one needs release, or another round of calls."
+            hint="Each one needs another round of calls, or letting go."
           />
         ) : (
           <KpiCard
-            label="Awaiting you"
+            label="Waiting on your decision"
             icon={<PackageCheck size={14} />}
             figure={<Dash />}
             tone="neutral"
-            hint="Each one needs release, or another round of calls."
+            hint="Each one needs another round of calls, or letting go."
           />
         )}
         <KpiCard
@@ -144,10 +159,20 @@ export function HoldReviewsIndex(): ReactElement {
               : 'Across every review shown.'
           }
         />
+        {loaded && heldUnits > 0 && (
+          <KpiCard
+            label="Units held pending your decision"
+            icon={<Lock size={14} />}
+            figure={<Num value={heldUnits} />}
+            unit={heldUnits === 1 ? 'unit' : 'units'}
+            tone="pending"
+            hint="Unavailable to your other orders until you decide."
+          />
+        )}
       </KpiGrid>
 
       <AreaSection
-        title="Held stock register"
+        title="Decision register"
         note={loaded ? `${rows.length} ${rows.length === 1 ? 'review' : 'reviews'}` : undefined}
       >
         <Panel flush>
@@ -170,7 +195,7 @@ export function HoldReviewsIndex(): ReactElement {
           {list.isError ? (
             <PanelPad>
               <InlineError
-                message={list.error?.message ?? 'Failed to load held stock.'}
+                message={list.error?.message ?? 'Failed to load these orders.'}
                 retry={() => void list.refetch()}
               />
             </PanelPad>
@@ -190,7 +215,7 @@ export function HoldReviewsIndex(): ReactElement {
                 }
                 description={
                   status === EarlyReservationReviewStatus.OPEN
-                    ? 'No stock is being held against an unreachable customer right now.'
+                    ? 'Every order our agents rang was answered. Nothing is waiting on a decision from you.'
                     : 'Try a different status.'
                 }
                 action={
@@ -207,7 +232,7 @@ export function HoldReviewsIndex(): ReactElement {
               />
             </PanelPad>
           ) : (
-            <Table caption="Held stock register">
+            <Table caption="Unreachable-customer decisions">
               <THead>
                 <Tr>
                   <Th>Order</Th>
@@ -228,9 +253,11 @@ export function HoldReviewsIndex(): ReactElement {
                         {new Date(r.createdAt).toLocaleDateString()}
                       </span>
                     </Td>
-                    <Td align="right">
-                      <Num value={r.heldQty} />
-                    </Td>
+                    {/* A dash, not a zero: the column is meaningful for
+                        a seller who holds stock at placement, and 0 on a
+                        row that never held any is a figure rather than
+                        the absence of one. */}
+                    <Td align="right">{r.heldQty > 0 ? <Num value={r.heldQty} /> : <Dash />}</Td>
                     <Td align="right">
                       <Num value={r.attemptCount} />
                     </Td>
@@ -268,149 +295,23 @@ export function HoldReviewsIndex(): ReactElement {
 
         {loaded && rows.length > 0 && (
           <MetaFacts>
-            <MetaFact tone={heldUnits > 0 ? 'warn' : 'good'}>
-              Units held <Num value={heldUnits} />
+            <MetaFact tone={openRows.length > 0 ? 'warn' : 'good'}>
+              Awaiting you {openRows.length}
             </MetaFact>
-            <MetaFact>Awaiting you {openRows.length}</MetaFact>
-            <MetaFact>Shown {`${rows.length} reviews`}</MetaFact>
+            {heldUnits > 0 && (
+              <MetaFact tone="warn">
+                Units held <Num value={heldUnits} />
+              </MetaFact>
+            )}
+            <MetaFact>
+              Shown {`${rows.length} ${rows.length === 1 ? 'review' : 'reviews'}`}
+            </MetaFact>
           </MetaFacts>
         )}
       </AreaSection>
 
-      <DecideModal review={selected} onClose={() => setSelected(null)} />
+      <HoldDecisionDialog review={selected} onClose={() => setSelected(null)} />
     </AreaPage>
-  );
-}
-
-function DecideModal({
-  review,
-  onClose,
-}: {
-  readonly review: ReviewView | null;
-  readonly onClose: () => void;
-}): ReactElement {
-  const toast = useToast();
-  const decide = useDecideHoldReview();
-  const [decision, setDecision] = useState<'RELEASE' | 'REQUEST_MORE_ATTEMPTS'>('RELEASE');
-  const [note, setNote] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(): Promise<void> {
-    if (review === null) return;
-    setError(null);
-    try {
-      const result = await decide.mutateAsync({
-        reviewId: review.id,
-        decision,
-        ...(note.trim() === '' ? {} : { note: note.trim() }),
-      });
-      toast.success(
-        decision === 'RELEASE'
-          ? `${review.heldQty} unit${review.heldQty === 1 ? '' : 's'} released back to available stock.`
-          : result.orderMoved
-            ? 'We will keep trying to reach the customer.'
-            : 'Recorded. The order had already moved on, so calling did not restart.',
-      );
-      setNote('');
-      onClose();
-    } catch (err) {
-      setError(serverVerdict(err));
-    }
-  }
-
-  // It already asked; it now RESTATES the order and the units, above
-  // the two choices, so a release is never made without seeing which
-  // order's stock goes back on the shelf.
-  return (
-    <Dialog
-      open={review !== null}
-      onOpenChange={(next) => {
-        if (!next) {
-          setError(null);
-          onClose();
-        }
-      }}
-      size="md"
-      icon={<Lock size={18} />}
-      locked={decide.isPending}
-      title="Keep holding this stock?"
-      description={
-        review === null ? undefined : (
-          <>
-            We held {review.heldQty} unit
-            {review.heldQty === 1 ? '' : 's'} when this order came in, and have tried the customer{' '}
-            {review.attemptCount} time
-            {review.attemptCount === 1 ? '' : 's'} without reaching them.
-          </>
-        )
-      }
-      footer={
-        <DialogFooter>
-          <Button variant="ghost" size="md" onClick={onClose} disabled={decide.isPending}>
-            Cancel
-          </Button>
-          <AsyncButton
-            variant={decision === 'RELEASE' ? 'destructive' : 'primary'}
-            size="md"
-            icon={decision === 'RELEASE' ? <Unlock size={16} /> : <RotateCw size={16} />}
-            labels={{
-              idle: decision === 'RELEASE' ? 'Release stock' : 'Keep trying',
-              busy: 'Saving…',
-            }}
-            state={mutationPhase(decide)}
-            disabled={decide.isPending}
-            onClick={() => void submit()}
-          />
-        </DialogFooter>
-      }
-    >
-      <div className="inv-stack">
-        {review !== null && (
-          <div className="inv-callout" data-tone="warn">
-            <span>
-              Order <Ident value={`${review.orderId.slice(0, 8)}…`} /> ·{' '}
-              <Num value={review.heldQty} /> {review.heldQty === 1 ? 'unit' : 'units'} held
-            </span>
-          </div>
-        )}
-
-        <ChoiceCards
-          label="Decision"
-          hideLegend
-          name="hold-decision"
-          columns={1}
-          value={decision}
-          onChange={(v) => setDecision(v as 'RELEASE' | 'REQUEST_MORE_ATTEMPTS')}
-          options={[
-            {
-              value: 'RELEASE',
-              title: 'Release the stock',
-              description:
-                'Returns the units to available stock so other orders can use them. This order stays closed.',
-              icon: <Unlock size={16} />,
-            },
-            {
-              value: 'REQUEST_MORE_ATTEMPTS',
-              title: 'Keep trying',
-              description:
-                'We keep the hold and put the order back in the call queue. The units stay unavailable to your other orders in the meantime.',
-              icon: <RotateCw size={16} />,
-            },
-          ]}
-        />
-
-        <TextArea
-          label="Note"
-          id="hold-note"
-          hint="Optional."
-          rows={2}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-
-        {error !== null && <InlineError message={error} />}
-      </div>
-    </Dialog>
   );
 }
 
