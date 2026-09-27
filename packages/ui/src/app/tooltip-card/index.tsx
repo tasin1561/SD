@@ -15,6 +15,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import './tooltip-card.css';
 
 export interface TooltipCardProps {
@@ -29,6 +30,20 @@ export interface TooltipCardProps {
   /** One action (a link to the full explanation). Keyboard reachable: Tab from the trigger. */
   action?: ReactNode;
   className?: string | undefined;
+  /**
+   * `inline` (default) positions the card inside the trigger's box. `fixed`
+   * renders it in a layer above the page, for a trigger inside something
+   * that clips — a scrolling table would otherwise cut the card off. A
+   * fixed card closes when the page scrolls, since it does not follow.
+   */
+  layer?: 'inline' | 'fixed';
+}
+
+interface FixedPosition {
+  left: number;
+  arrowLeft: number;
+  top?: number;
+  bottom?: number;
 }
 
 /**
@@ -51,11 +66,15 @@ export function TooltipCard({
   points,
   action,
   className,
+  layer = 'inline',
 }: TooltipCardProps): ReactElement {
   const [open, setOpen] = useState(false);
   const [below, setBelow] = useState(false);
   const [dx, setDx] = useState(0);
+  const [fixed, setFixed] = useState<FixedPosition | null>(null);
   const root = useRef<HTMLSpanElement>(null);
+  const card = useRef<HTMLSpanElement>(null);
+  const isFixed = layer === 'fixed';
   const wasOpen = useRef(false);
   const id = useId();
   const interactive = action !== undefined && action !== null;
@@ -63,18 +82,23 @@ export function TooltipCard({
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: PointerEvent): void => {
-      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (card.current?.contains(target)) return;
+      if (root.current && !root.current.contains(target)) setOpen(false);
     };
+    const onScroll = (): void => setOpen(false);
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setOpen(false);
     };
     document.addEventListener('pointerdown', onDoc);
     document.addEventListener('keydown', onKey);
+    if (isFixed) window.addEventListener('scroll', onScroll, { capture: true, passive: true });
     return () => {
       document.removeEventListener('pointerdown', onDoc);
       document.removeEventListener('keydown', onKey);
+      if (isFixed) window.removeEventListener('scroll', onScroll, { capture: true });
     };
-  }, [open]);
+  }, [open, isFixed]);
 
   const show = (): void => {
     const r = root.current?.getBoundingClientRect();
@@ -88,9 +112,43 @@ export function TooltipCard({
       const left = r.left + r.width / 2 - cw / 2;
       const clamped = Math.min(Math.max(left, 8), vw - 8 - cw);
       setDx(Math.round(clamped - left));
+      if (isFixed) {
+        const vh = document.documentElement.clientHeight;
+        const centre = r.left + r.width / 2;
+        setFixed({
+          left: Math.round(clamped),
+          arrowLeft: Math.round(centre - clamped),
+          ...(r.top < 240
+            ? { top: Math.round(r.bottom + 10) }
+            : { bottom: Math.round(vh - r.top + 10) }),
+        });
+      }
     }
     setOpen(true);
   };
+
+  const body = (
+    <>
+      <span className="sk-tipcard__top">
+        <span className="sk-tipcard__chip" aria-hidden>
+          {icon ?? <Info size={16} />}
+        </span>
+        <span className="sk-tipcard__title">{title}</span>
+      </span>
+      <span className="sk-tipcard__desc">{description}</span>
+      {points && points.length > 0 ? (
+        <span className="sk-tipcard__list">
+          {points.map((p) => (
+            <span key={p} className="sk-tipcard__point">
+              <Check size={13} strokeWidth={3} aria-hidden />
+              {p}
+            </span>
+          ))}
+        </span>
+      ) : null}
+      {interactive ? <span className="sk-tipcard__action">{action}</span> : null}
+    </>
+  );
 
   const trigger = cloneElement(children, {
     'aria-describedby': open && !interactive ? id : children.props['aria-describedby'],
@@ -133,32 +191,40 @@ export function TooltipCard({
       }}
     >
       {trigger}
-      <span
-        className="sk-tipcard__card"
-        id={id}
-        role={interactive ? 'group' : 'tooltip'}
-        aria-label={interactive ? title : undefined}
-      >
-        <span className="sk-tipcard__arrow" aria-hidden />
-        <span className="sk-tipcard__top">
-          <span className="sk-tipcard__chip" aria-hidden>
-            {icon ?? <Info size={16} />}
-          </span>
-          <span className="sk-tipcard__title">{title}</span>
+      {isFixed
+        ? open && fixed !== null && typeof document !== 'undefined'
+          ? createPortal(
+              <span
+                ref={card}
+                className="sk-tipcard__card sk-tipcard__card--fixed"
+                data-below={below || undefined}
+                id={id}
+                role={interactive ? 'group' : 'tooltip'}
+                aria-label={interactive ? title : undefined}
+                style={{
+                  left: fixed.left,
+                  ...(fixed.top !== undefined ? { top: fixed.top } : {}),
+                  ...(fixed.bottom !== undefined ? { bottom: fixed.bottom } : {}),
+                }}
+              >
+                <span className="sk-tipcard__arrow" aria-hidden style={{ left: fixed.arrowLeft }} />
+                {body}
+              </span>,
+              document.body,
+            )
+          : null
+        : null}
+      {isFixed ? null : (
+        <span
+          className="sk-tipcard__card"
+          id={id}
+          role={interactive ? 'group' : 'tooltip'}
+          aria-label={interactive ? title : undefined}
+        >
+          <span className="sk-tipcard__arrow" aria-hidden />
+          {body}
         </span>
-        <span className="sk-tipcard__desc">{description}</span>
-        {points && points.length > 0 ? (
-          <span className="sk-tipcard__list">
-            {points.map((p) => (
-              <span key={p} className="sk-tipcard__point">
-                <Check size={13} strokeWidth={3} aria-hidden />
-                {p}
-              </span>
-            ))}
-          </span>
-        ) : null}
-        {interactive ? <span className="sk-tipcard__action">{action}</span> : null}
-      </span>
+      )}
     </span>
   );
 }

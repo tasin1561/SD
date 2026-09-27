@@ -55,6 +55,35 @@
     transform: translate(-50%, -6px) scale(0.98);
   }
 }
+/* layer="fixed": the card lives in a layer above the page (a portal on
+   <body>), placed by the component, so a clipping ancestor cannot cut it. */
+.sk-tipcard__card--fixed {
+  position: fixed;
+  bottom: auto;
+  z-index: 1000;
+  margin-left: 0;
+  display: grid;
+  opacity: 1;
+  transform: none;
+}
+.sk-tipcard__card--fixed[data-below] .sk-tipcard__arrow {
+  bottom: auto;
+  top: -6px;
+  transform: translateX(-50%) rotate(-135deg);
+}
+.sk-tipcard__card--fixed[data-below]::before {
+  top: auto;
+  bottom: 100%;
+}
+@starting-style {
+  .sk-tipcard__card--fixed {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  .sk-tipcard__card--fixed[data-below] {
+    transform: translateY(-6px) scale(0.98);
+  }
+}
 /* The gap between trigger and card stays hoverable. */
 .sk-tipcard__card::before {
   content: '';

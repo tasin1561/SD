@@ -9,7 +9,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
-import { RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { Info, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
@@ -19,9 +19,17 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { TBody, Table, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
+import { TooltipCard } from '@skydrop/ui/app/tooltip-card';
 import { AcAlert, AcSection } from '../../settings/_components/ac-parts';
 import { FEE_CURRENCY_OPTIONS, isFeeCurrencyKey } from '@/lib/fee-currency';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  SELLER_SETTING_GUIDE,
+  SETTING_GROUP_ORDER,
+  fallbackSettingName,
+  settingGuide,
+} from '@/lib/seller-setting-guide';
+import './seller-settings-section.css';
 
 /**
  * Per-seller setting overrides (SET-1).
@@ -39,6 +47,10 @@ import { serverVerdict } from '@/lib/server-verdict';
  * value is outside the key's allowed range the server refuses and its
  * verdict is shown verbatim. Mirroring the bounds client-side would be
  * a second copy of the policy to drift.
+ *
+ * Each row leads with a plain-English name from `seller-setting-guide`
+ * and keeps the key underneath for whoever needs to search for it; the
+ * (i) beside the name says what the setting decides, with an example.
  */
 
 interface ResolvedSetting {
@@ -89,9 +101,11 @@ function useClearOverride(sellerId: string): UseMutationResult<unknown, Error, {
   });
 }
 
-function render(value: unknown): string {
+function render(value: unknown, key?: string): string {
   if (value === null || value === undefined) return '—';
-  if (typeof value === 'boolean') return value ? 'yes' : 'no';
+  const named = key === undefined ? undefined : settingGuide(key)?.values?.[String(value)];
+  if (named !== undefined) return named;
+  if (typeof value === 'boolean') return value ? 'On' : 'Off';
   if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 }
@@ -101,7 +115,7 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
   const clear = useClearOverride(sellerId);
   const [editing, setEditing] = useState<ResolvedSetting | null>(null);
 
-  const items = list.data ?? [];
+  const items = sortByGroup(list.data ?? []);
   const overridden = items.filter((s) => s.source === 'SELLER_OVERRIDE');
 
   return (
@@ -139,13 +153,13 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
             {items.map((s) => (
               <Tr key={s.key}>
                 <Td>
-                  <code className="sk-ident ac-code">{s.key}</code>
+                  <SettingName settingKey={s.key} />
                 </Td>
                 <Td>
-                  <span className="ac-strong">{render(s.value)}</span>
+                  <span className="ac-strong">{render(s.value, s.key)}</span>
                 </Td>
                 <Td>
-                  <span className="ac-faint">{render(s.systemDefault)}</span>
+                  <span className="ac-faint">{render(s.systemDefault, s.key)}</span>
                 </Td>
                 <Td>
                   <StatusChip
@@ -194,6 +208,55 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
   );
 }
 
+/** Rows in the guide's group order, and within a group in the guide's own order. */
+const GUIDE_ORDER = new Map(Object.keys(SELLER_SETTING_GUIDE).map((key, i) => [key, i]));
+
+function sortByGroup(items: readonly ResolvedSetting[]): readonly ResolvedSetting[] {
+  const group = (key: string): number => {
+    const guide = settingGuide(key);
+    return guide === null ? SETTING_GROUP_ORDER.length : SETTING_GROUP_ORDER.indexOf(guide.group);
+  };
+  const within = (key: string): number => GUIDE_ORDER.get(key) ?? GUIDE_ORDER.size;
+  return [...items].sort(
+    (a, b) =>
+      group(a.key) - group(b.key) || within(a.key) - within(b.key) || a.key.localeCompare(b.key),
+  );
+}
+
+function SettingName({ settingKey }: { readonly settingKey: string }): ReactElement {
+  const guide = settingGuide(settingKey);
+  const name = guide?.name ?? fallbackSettingName(settingKey);
+  return (
+    <div className="sss-name">
+      <div className="sss-name__line">
+        <span className="ac-cell-main">{name}</span>
+        {guide !== null && (
+          <TooltipCard
+            layer="fixed"
+            title={guide.name}
+            description={
+              <>
+                <span className="sss-tip__what">{guide.what}</span>
+                <span className="sss-tip__example">
+                  <strong>Example:</strong> {guide.example}
+                </span>
+              </>
+            }
+          >
+            <button type="button" className="sss-info" aria-label={`What "${name}" means`}>
+              <Info size={14} aria-hidden />
+            </button>
+          </TooltipCard>
+        )}
+      </div>
+      <span className="sss-name__meta">
+        {guide !== null && <span>{guide.group} · </span>}
+        <code className="sk-ident">{settingKey}</code>
+      </span>
+    </div>
+  );
+}
+
 function OverrideDialog({
   sellerId,
   setting,
@@ -233,7 +296,9 @@ function OverrideDialog({
     }
   }
 
-  const current = setting === null ? '' : render(setting.value);
+  const current = setting === null ? '' : render(setting.value, setting.key);
+  const guide = setting === null ? null : settingGuide(setting.key);
+  const choices = guide?.values;
 
   return (
     <Dialog
@@ -241,14 +306,19 @@ function OverrideDialog({
       onOpenChange={(next) => {
         if (!next) close();
       }}
-      title="Override for this seller"
+      title={
+        setting === null
+          ? 'Override for this seller'
+          : `${guide?.name ?? fallbackSettingName(setting.key)} — this seller`
+      }
       icon={<SlidersHorizontal size={18} />}
       locked={save.isPending}
       description={
         setting === null ? undefined : (
           <span>
-            <code className="sk-ident">{setting.key}</code> — currently {current} (
-            {setting.source === 'SELLER_OVERRIDE' ? 'overridden' : 'system default'})
+            Currently <strong>{current}</strong> (
+            {setting.source === 'SELLER_OVERRIDE' ? 'set for this seller' : 'the system default'}).{' '}
+            <code className="sk-ident">{setting.key}</code>
           </span>
         )
       }
@@ -292,6 +362,14 @@ function OverrideDialog({
     >
       {setting !== null && (
         <div className="ac-form">
+          {guide !== null && (
+            <div className="sss-explain">
+              <p className="ac-text">{guide.what}</p>
+              <p className="ac-muted">
+                <strong>Example:</strong> {guide.example}
+              </p>
+            </div>
+          )}
           {setting.valueType === 'BOOLEAN' ? (
             <Select
               label="Value"
@@ -300,8 +378,22 @@ function OverrideDialog({
               onChange={(e) => setRaw(e.target.value)}
             >
               <option value="">Choose…</option>
-              <option value="true">yes</option>
-              <option value="false">no</option>
+              <option value="true">On</option>
+              <option value="false">Off</option>
+            </Select>
+          ) : setting.valueType === 'STRING' && choices !== undefined ? (
+            <Select
+              label="Value"
+              id="ov-value"
+              value={raw}
+              onChange={(e) => setRaw(e.target.value)}
+            >
+              <option value="">Choose…</option>
+              {Object.entries(choices).map(([code, label]) => (
+                <option key={code} value={code}>
+                  {label}
+                </option>
+              ))}
             </Select>
           ) : setting.valueType === 'JSON' ? (
             <TextArea

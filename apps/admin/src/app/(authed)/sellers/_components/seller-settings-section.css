@@ -1,0 +1,66 @@
+/* Seller settings: the plain-English name, its (i) and the key beneath. */
+.sss-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.sss-name__line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.sss-name__meta {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.sss-name__meta code {
+  color: var(--fg-faint);
+  font-size: inherit;
+}
+.sss-info {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: help;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.sss-info:hover,
+.sss-info:focus-visible {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.sss-info:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+@media (pointer: coarse) {
+  .sss-info {
+    width: 44px;
+    height: 44px;
+    margin: -14px -8px;
+  }
+}
+.sss-tip__what,
+.sss-tip__example {
+  display: block;
+}
+.sss-tip__example {
+  margin-top: var(--sp-2);
+}
+.sss-explain {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
