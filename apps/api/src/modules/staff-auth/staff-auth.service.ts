@@ -76,6 +76,10 @@ export class StaffAuthService {
     });
 
     if (!staff) {
+      // Pay the argon2 cost a real account would have cost, so an unknown
+      // address is not distinguishable from a wrong password by how long
+      // the refusal took.
+      await this.password.verifyDummy(input.password);
       await this.audit.log({
         actorType: ActorType.SYSTEM,
         action: 'staff.login.failure',
@@ -92,6 +96,9 @@ export class StaffAuthService {
     }
 
     if (staff.deletedAt !== null) {
+      // Same cost again: this address DOES exist, and skipping the work
+      // here would leak "exists but closed".
+      await this.password.verifyDummy(input.password);
       await this.audit.log({
         actorType: ActorType.STAFF,
         staffUserId: staff.id,
@@ -325,13 +332,24 @@ export class StaffAuthService {
     const newHash = await this.password.hash(input.newPassword);
 
     await this.prisma.client.$transaction(async (tx) => {
+      // CLAIM the token on the state we read, FIRST. The lookup above ran
+      // outside this transaction, so two tabs submitting the same link
+      // both see `usedAt: null`; an unconditional update lets both set a
+      // password, and the second one wins silently. Matching the store
+      // equivalent, which has always done it this way.
+      const claimed = await tx.staffPasswordResetToken.updateMany({
+        where: { id: row.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException({
+          code: 'INVALID_RESET_TOKEN',
+          message: 'Reset link is invalid or has expired',
+        });
+      }
       await tx.staffUser.update({
         where: { id: row.staffUserId },
         data: { passwordHash: newHash },
-      });
-      await tx.staffPasswordResetToken.update({
-        where: { id: row.id },
-        data: { usedAt: new Date() },
       });
       // Revoke every active refresh session — password change forces re-login.
       await tx.staffRefreshToken.updateMany({
@@ -488,13 +506,17 @@ export class StaffAuthService {
     }
 
     await this.prisma.client.$transaction(async (tx) => {
+      // Claimed on the state we read (see confirmPasswordReset). A second
+      // submission of the same link is a no-op rather than an error —
+      // the address is already verified, which is what the caller wanted.
+      const claimed = await tx.staffEmailVerificationToken.updateMany({
+        where: { id: row.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) return;
       await tx.staffUser.update({
         where: { id: row.staffUserId },
         data: { emailVerifiedAt: new Date() },
-      });
-      await tx.staffEmailVerificationToken.update({
-        where: { id: row.id },
-        data: { usedAt: new Date() },
       });
       await this.audit.log(
         {

@@ -34,6 +34,10 @@ function makeSut(opts: {
   /** Make the notification_logs write throw, to exercise the
    *  already-sent-but-unrecorded path. */
   ledgerWriteFails?: boolean;
+  /** Override the rendered text/html — the redaction tests need a body
+   *  that actually carries a `?token=` link. */
+  body?: string;
+  html?: string | null;
 }) {
   const captured: CapturedCreate[] = [];
   let nextId = 0;
@@ -68,8 +72,9 @@ function makeSut(opts: {
       // nothing in this suite depends on which value it is.
       category: NotificationCategory.OPERATIONAL,
       subject,
-      body: 'Hi Alex, click https://example.com to reset.',
-      htmlBody: opts.templateHasHtml ? '<p>Hi Alex</p>' : null,
+      body: opts.body ?? 'Hi Alex, click https://example.com to reset.',
+      htmlBody:
+        opts.html !== undefined ? opts.html : opts.templateHasHtml ? '<p>Hi Alex</p>' : null,
     })),
   } as unknown as TemplateRenderService;
 
@@ -414,6 +419,72 @@ describe('EmailDispatchService', () => {
           recipient: { type: NotificationRecipientType.CUSTOMER, email: 'buyer@x.io' },
         }),
       ).rejects.toThrow();
+    });
+  });
+
+  describe('the STORED copy carries no live credential link', () => {
+    // The plaintext of a reset / verification / invitation token is
+    // deliberately stored nowhere: the token tables hold only its
+    // SHA-256, and a reset one expires in 30 minutes. Persisting the
+    // rendered body put the live secret in a table with no expiry — the
+    // one copy that outlives the token it names. Nothing returns those
+    // columns today, so this is backup and blast radius; it becomes live
+    // the day somebody builds a notification-log viewer.
+    const TOKEN = 'zS3cr3t-plaintext-value';
+    const LINK = `https://admin.skydrop.online/auth/reset-password?token=${TOKEN}`;
+
+    function resetEmailSut(ledger: 'create' | 'update') {
+      const sut = makeSut({
+        providerResponse: { ok: true, providerMessageId: 'msg-1' },
+        body: `Reset your password: ${LINK} — expires in 30 minutes.`,
+        html: `<p><a href="${LINK}">Reset your password</a></p>`,
+      });
+      const send = (): Promise<unknown> =>
+        sut.svc.send({
+          templateCode: 'staff.password_reset.email',
+          recipient: { type: NotificationRecipientType.STAFF, id: 'staff-1', email: 'a@x.io' },
+          variables: { name: 'Alex', reset_url: LINK },
+          ...(ledger === 'update' ? { existingNotificationLogId: 'pre-created-row' } : {}),
+        });
+      return { ...sut, send };
+    }
+
+    it('the RECIPIENT still gets a working link; the ledger row does not', async () => {
+      const sut = resetEmailSut('create');
+      await sut.send();
+
+      // What left the building is untouched — the whole point.
+      const sent = sut.providerSendMock.mock.calls[0]![0] as unknown as Record<string, string>;
+      expect(sent['text']).toContain(TOKEN);
+      expect(sent['html']).toContain(TOKEN);
+
+      const row = sut.captured[0]!.data;
+      expect(String(row['body'])).not.toContain(TOKEN);
+      expect(String(row['body'])).toContain('token=[redacted]');
+      expect(String(row['htmlBody'])).not.toContain(TOKEN);
+      expect(String(row['htmlBody'])).toContain('token=[redacted]');
+
+      // And `variables`, which holds the same link in its own right.
+      // Redacting the body alone would leave the secret in the same row.
+      const variables = row['variables'] as Record<string, string>;
+      expect(variables['reset_url']).not.toContain(TOKEN);
+      expect(variables['reset_url']).toContain('token=[redacted]');
+      expect(variables['name']).toBe('Alex');
+
+      // Everything else about the row is unchanged.
+      expect(row['subject']).toBe('Reset your password');
+      expect(row['status']).toBe(NotificationStatus.SENT);
+    });
+
+    it('the M11 update path redacts too', async () => {
+      const sut = resetEmailSut('update');
+      await sut.send();
+
+      const update = sut.capturedUpdates[0]!;
+      expect(update.where.id).toBe('pre-created-row');
+      expect(String(update.data['body'])).not.toContain(TOKEN);
+      expect(String(update.data['body'])).toContain('token=[redacted]');
+      expect(String(update.data['htmlBody'])).not.toContain(TOKEN);
     });
   });
 });

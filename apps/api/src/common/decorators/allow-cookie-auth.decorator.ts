@@ -23,6 +23,12 @@ export const ALLOW_COOKIE_AUTH_KEY = 'auth:allow-refresh-cookie';
  * mutating endpoint reachable by navigation is a CSRF target: the
  * cookie is SameSite=Strict, which is the reason this is merely
  * unwise rather than a hole, but the rule is not worth testing.
+ *
+ * `MethodDecorator` ALONE, deliberately. The guard resolves the flag
+ * with `getAllAndOverride([handler, class])`, so a class-level copy
+ * would open every handler on that controller at once — including the
+ * POSTs that sit beside the one download link this exists for. The
+ * rule above is then enforced by the type rather than remembered:
+ * putting it on a controller no longer compiles.
  */
-export const AllowCookieAuth = (): MethodDecorator & ClassDecorator =>
-  SetMetadata(ALLOW_COOKIE_AUTH_KEY, true);
+export const AllowCookieAuth = (): MethodDecorator => SetMetadata(ALLOW_COOKIE_AUTH_KEY, true);

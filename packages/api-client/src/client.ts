@@ -188,12 +188,65 @@ export class ApiClient {
   }
 
   /**
+   * Refresh, SERIALISED ACROSS TABS.
+   *
+   * `SingleFlightRefresh` coalesces per `ApiClient` instance, which
+   * covers one document and nothing else. Two tabs of the admin app
+   * opened together both boot with an EMPTY token store (FE-1: the
+   * access token is memory-only, so a page load starts with nothing),
+   * both 401 on their first call, and both present the SAME refresh
+   * cookie — one of them loses and the API's reuse detection burns the
+   * whole family, logging a legitimate user out of everything and
+   * writing a HIGH `security.refresh_replay_detected`.
+   *
+   * Web Locks are per-ORIGIN and cross-tab, and store nothing, so FE-1
+   * is untouched. The loser waits, and by the time it runs the browser's
+   * cookie jar holds the cookie the WINNER minted — so its own rotation
+   * presents a live token and succeeds on its own terms. **Nothing is
+   * broadcast between tabs**: the access token never leaves the memory
+   * of the document that fetched it.
+   *
+   * The store re-check covers the other shape — two `ApiClient`
+   * instances inside ONE document sharing a store, where the loser can
+   * simply adopt the winner's token instead of rotating again.
+   *
+   * No `navigator.locks` (a non-browser runtime, an opaque origin, an
+   * old browser) falls back to the unserialised rotation — the exact
+   * behaviour before this existed.
+   */
+  private async doRefresh(): Promise<RefreshOutcome> {
+    const locks = lockManager();
+    const seen = this.tokenStore.get().token;
+    if (locks === null) return this.refreshUnderLock(seen);
+    try {
+      return await locks.request(`skydrop-refresh-${this.identityKind}`, () =>
+        this.refreshUnderLock(seen),
+      );
+    } catch {
+      // The lock itself could not be held. Re-entering is safe: if the
+      // callback had already run, the store now carries its token and
+      // the check below short-circuits.
+      return this.refreshUnderLock(seen);
+    }
+  }
+
+  private async refreshUnderLock(seen: string | null): Promise<RefreshOutcome> {
+    const current = this.tokenStore.get();
+    if (current.token !== null && current.token !== seen && this.tokenStore.isFresh()) {
+      // Somebody sharing this store rotated while we waited. Take their
+      // result rather than spending our (now superseded) cookie.
+      return 'OK';
+    }
+    return this.rotateRefreshToken();
+  }
+
+  /**
    * The raw refresh call — does NOT go through `request()` (no
    * interceptor; the refresh response shouldn't trigger another
    * refresh on its own 401). Updates the token store on success;
    * clears it on failure.
    */
-  private async doRefresh(): Promise<RefreshOutcome> {
+  private async rotateRefreshToken(): Promise<RefreshOutcome> {
     try {
       const res = await this.fetchImpl(`${this.baseUrl}/api/auth/${this.identityKind}/refresh`, {
         method: 'POST',
@@ -219,6 +272,24 @@ export class ApiClient {
   private toEpoch(iso: string): number {
     return Date.parse(iso);
   }
+}
+
+/**
+ * The slice of the Web Locks API we use, declared structurally rather
+ * than taken from the DOM lib: this package is built for both a browser
+ * and a Node (SSR) runtime, and `navigator` is absent in the second.
+ */
+interface RefreshLockManager {
+  request<T>(name: string, callback: () => Promise<T>): Promise<T>;
+}
+
+function lockManager(): RefreshLockManager | null {
+  const nav = (globalThis as { navigator?: { locks?: unknown } }).navigator;
+  const locks = nav?.locks;
+  if (typeof locks !== 'object' || locks === null) return null;
+  const request = (locks as { request?: unknown }).request;
+  if (typeof request !== 'function') return null;
+  return locks as RefreshLockManager;
 }
 
 function safeParse(text: string): unknown {

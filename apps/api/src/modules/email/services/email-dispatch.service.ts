@@ -6,6 +6,7 @@ import { EmailProviderRouter } from './email-provider-router.service';
 import type { EmailRouteResult } from './email-provider-router.service';
 import { resolveSender } from '../sender-resolver';
 import type { EmailDispatchInput, EmailSendResult } from '../email.types';
+import { redactTokens, redactTokensInVariables, redactTokensOrNull } from '../redact-tokens';
 
 /** Recorded on a still-QUEUED row whose template could not be found. */
 export const EMAIL_TEMPLATE_NOT_FOUND = 'TEMPLATE_NOT_FOUND';
@@ -213,8 +214,10 @@ export class EmailDispatchService {
             templateCode: rendered.templateCode,
             templateVersion: rendered.templateVersion,
             subject,
-            body: rendered.body,
-            htmlBody: rendered.htmlBody,
+            // The STORED copy is redacted; the recipient's message went
+            // out above with its link intact (see ../redact-tokens).
+            body: redactTokens(rendered.body),
+            htmlBody: redactTokensOrNull(rendered.htmlBody),
             provider: route.provider,
             providerMessageId: sendResult.ok ? sendResult.providerMessageId : null,
             status,
@@ -235,9 +238,11 @@ export class EmailDispatchService {
             recipientId: input.recipient.id ?? null,
             toEmail: input.recipient.email,
             subject,
-            body: rendered.body,
-            htmlBody: rendered.htmlBody,
-            variables: (input.variables ?? Prisma.DbNull) as Prisma.InputJsonValue,
+            body: redactTokens(rendered.body),
+            htmlBody: redactTokensOrNull(rendered.htmlBody),
+            variables: (input.variables
+              ? redactTokensInVariables(input.variables)
+              : Prisma.DbNull) as Prisma.InputJsonValue,
             orderId: input.orderId ?? null,
             shipmentId: input.shipmentId ?? null,
             callAttemptId: input.callAttemptId ?? null,

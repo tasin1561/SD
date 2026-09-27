@@ -52,6 +52,21 @@ interface TokenRow {
   revokedAt: Date | null;
 }
 
+/**
+ * Thrown INSIDE the happy-path rotation transaction when the guarded
+ * revoke matched nothing — i.e. the row we read as live was revoked by
+ * somebody else between the read and the write. It never leaves this
+ * file: `rotate()` catches it, lets the transaction roll back, and
+ * routes the caller into the reuse-detection branch (which needs its
+ * own transaction, because that one must COMMIT before we throw).
+ */
+class RotationRaceLost extends Error {
+  constructor() {
+    super('refresh rotation lost the revoke claim');
+    this.name = 'RotationRaceLost';
+  }
+}
+
 function actorTypeFor(subject: SubjectKind): ActorType {
   switch (subject) {
     case 'staff':
@@ -77,8 +92,11 @@ function actorTypeFor(subject: SubjectKind): ActorType {
  *                  severity HIGH **before** returning the error, so the event
  *                  survives even if the response fails downstream,
  *               4. throw UnauthorizedException.
- *             Otherwise: revoke the presented row, insert a fresh one, return
- *             the new plaintext. Whole rotate path is wrapped in a tx.
+ *             Otherwise: revoke the presented row GUARDED on it still being
+ *             live, insert a fresh one, return the new plaintext. Whole
+ *             rotate path is wrapped in a tx; a guard that matches nothing
+ *             means a concurrent rotation consumed the token first and lands
+ *             in the same reuse branch.
  *
  * The three subjects keep SEPARATE tables (staff / seller / store refresh
  * tokens): a token is only ever looked up in its own subject's table, so
@@ -169,8 +187,39 @@ export class RefreshTokenService {
     }
 
     // Happy path — revoke this row, mint a new one, audit. All in one tx.
+    //
+    // The revoke is GUARDED on the state we read (`revokedAt: null`).
+    // The lookup above happens outside any transaction, so under READ
+    // COMMITTED two concurrent rotations of the same presented token
+    // both see a live row; an unconditional `update` would let BOTH
+    // revoke it and mint a chain, leaving ONE presented token with TWO
+    // live descendants and reuse detection permanently unable to fire.
+    // Whoever loses the claim gets `count === 0` and is routed to the
+    // reuse branch below — the token really has been consumed by
+    // somebody else, which is exactly what that branch is for.
+    try {
+      return await this.rotateClaimed(input, existing);
+    } catch (err) {
+      if (!(err instanceof RotationRaceLost)) throw err;
+    }
+
+    // Lost the claim. The presented token was consumed between our read
+    // and our write; treat it as the reuse it is — burn the family in a
+    // transaction that COMMITS, then refuse.
+    await this.prisma.client.$transaction(async (tx) => {
+      await this.handleReuseDetected(tx, input.subject, existing.userId, {
+        presentedRecordId: existing.id,
+        userAgent: input.userAgent ?? null,
+        ipAddress: input.ipAddress ?? null,
+      });
+    });
+    throw this.unauthorized();
+  }
+
+  private async rotateClaimed(input: RotateInput, existing: TokenRow): Promise<RotateOutput> {
     return this.prisma.client.$transaction(async (tx) => {
-      await this.revokeById(tx, input.subject, existing.id);
+      const claimed = await this.claimRevoke(tx, input.subject, existing.id);
+      if (claimed === 0) throw new RotationRaceLost();
 
       const issued = await this.issue({
         subject: input.subject,
@@ -315,22 +364,29 @@ export class RefreshTokenService {
     }
   }
 
-  private async revokeById(
+  /**
+   * Revoke ONE row, guarded on it still being live. Returns how many
+   * rows matched — 0 means somebody else consumed the token first, and
+   * the caller must NOT mint a replacement for it.
+   *
+   * `updateMany` rather than `update`: the predicate is the whole point.
+   * An `update({ where: { id } })` succeeds against an already-revoked
+   * row and reports nothing.
+   */
+  private async claimRevoke(
     tx: Prisma.TransactionClient,
     subject: SubjectKind,
     id: string,
-  ): Promise<void> {
+  ): Promise<number> {
+    const where = { id, revokedAt: null };
     const data = { revokedAt: new Date() };
     switch (subject) {
       case 'staff':
-        await tx.staffRefreshToken.update({ where: { id }, data });
-        return;
+        return (await tx.staffRefreshToken.updateMany({ where, data })).count;
       case 'seller':
-        await tx.sellerRefreshToken.update({ where: { id }, data });
-        return;
+        return (await tx.sellerRefreshToken.updateMany({ where, data })).count;
       case 'store':
-        await tx.storeRefreshToken.update({ where: { id }, data });
-        return;
+        return (await tx.storeRefreshToken.updateMany({ where, data })).count;
     }
   }
 

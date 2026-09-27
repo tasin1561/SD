@@ -7,6 +7,7 @@ import {
 } from '@skydrop/db';
 import { emailRetired } from '../../../common/notifications/retired-email-templates';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { redactTokensInVariables } from '../../email/redact-tokens';
 import { EmailQueue } from '../../email/queue/email.queue';
 import type { EmailDispatchInput, EmailVariables } from '../../email/email.types';
 
@@ -148,7 +149,14 @@ export class NotificationLedgerService {
       return this.insertSkipped(input);
     }
 
-    const variablesPayload = (input.variables ?? Prisma.DbNull) as Prisma.InputJsonValue;
+    // Redacted on the way IN: `variables` is the other place a live
+    // `…?token=` link would outlive the token it names (see
+    // ../../email/redact-tokens). No credential template reaches this
+    // path today (NOTIF-9 keeps them EMAIL-only and off the ledger),
+    // and holding that here means one added later cannot change it.
+    const variablesPayload = (
+      input.variables ? redactTokensInVariables(input.variables) : Prisma.DbNull
+    ) as Prisma.InputJsonValue;
     try {
       const log = await this.prisma.client.notificationLog.create({
         data: {
@@ -253,7 +261,10 @@ export class NotificationLedgerService {
   }
 
   private async insertSkipped(input: NotificationLedgerInput): Promise<NotificationLedgerResult> {
-    const variablesPayload = (input.variables ?? Prisma.DbNull) as Prisma.InputJsonValue;
+    // Redacted the same way `enqueue` does — same column, same reason.
+    const variablesPayload = (
+      input.variables ? redactTokensInVariables(input.variables) : Prisma.DbNull
+    ) as Prisma.InputJsonValue;
     try {
       const log = await this.prisma.client.notificationLog.create({
         data: {

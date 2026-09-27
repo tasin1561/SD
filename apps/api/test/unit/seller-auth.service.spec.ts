@@ -137,11 +137,13 @@ interface FakeClient {
     create: jest.Mock;
     findFirst: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
   };
   sellerEmailVerificationToken: {
     create: jest.Mock;
     findFirst: jest.Mock;
     update: jest.Mock;
+    updateMany: jest.Mock;
   };
   sellerRefreshToken: {
     create: jest.Mock;
@@ -386,6 +388,17 @@ function buildClient(): FakeClient {
         Object.assign(row, data);
         return row;
       }),
+      // APPLIES the predicate. A fake that ignored `usedAt: null` would
+      // report a claim on an already-spent link as a success, which is
+      // the exact bug the guarded consume exists to stop.
+      updateMany: jest.fn(
+        async ({ where, data }: { where: { id: string; usedAt: null }; data: Partial<PrtRow> }) => {
+          const row = tables.prts.find((r) => r.id === where.id && r.usedAt === null);
+          if (!row) return { count: 0 };
+          Object.assign(row, data);
+          return { count: 1 };
+        },
+      ),
     },
     sellerEmailVerificationToken: {
       create: jest.fn(async ({ data }: { data: Omit<EvtRow, 'id' | 'usedAt'> }) => {
@@ -417,6 +430,15 @@ function buildClient(): FakeClient {
         Object.assign(row, data);
         return row;
       }),
+      /** APPLIES the predicate — see sellerPasswordResetToken.updateMany. */
+      updateMany: jest.fn(
+        async ({ where, data }: { where: { id: string; usedAt: null }; data: Partial<EvtRow> }) => {
+          const row = tables.evts.find((r) => r.id === where.id && r.usedAt === null);
+          if (!row) return { count: 0 };
+          Object.assign(row, data);
+          return { count: 1 };
+        },
+      ),
     },
     sellerRefreshToken: {
       create: jest.fn(async ({ data }: { data: Omit<RtRow, 'id' | 'revokedAt'> }) => {
@@ -446,11 +468,15 @@ function buildClient(): FakeClient {
           where,
           data,
         }: {
-          where: { sellerId?: string; tokenHash?: string; revokedAt: null };
+          where: { id?: string; sellerId?: string; tokenHash?: string; revokedAt: null };
           data: { revokedAt: Date };
         }) => {
           let count = 0;
           for (const r of tables.rts) {
+            // `id` matters: the rotation claim revokes ONE row by id, and a
+            // fake that ignored it would revoke the whole family and call
+            // that a success.
+            if (where.id && r.id !== where.id) continue;
             if (where.sellerId && r.sellerId !== where.sellerId) continue;
             if (where.tokenHash && r.tokenHash !== where.tokenHash) continue;
             if (r.revokedAt !== null) continue;
@@ -586,6 +612,28 @@ describe('SellerAuthService — login', () => {
     expect(data.action).toBe('seller.login.failure');
     expect(data.entityId).toBeNull();
     expect(data.metadata.reason).toBe('user_not_found');
+  });
+
+  it('a refusal without a real hash STILL pays the argon2 cost (no exists-oracle by timing)', async () => {
+    // Generic MESSAGE, generic TIMING. An unknown email returned before
+    // argon2 ran, so the refusal came back ~50 ms sooner than a real
+    // account with a wrong password — measurable over HTTP. Asserted as a
+    // call rather than a stopwatch: a wall-clock assertion on argon2 is
+    // exactly the test that goes flaky on a loaded CI runner.
+    const sut = makeSut();
+    const spy = jest.spyOn(sut.password, 'verifyDummy');
+
+    await expect(
+      sut.svc.login({ email: 'ghost@example.com', password: 'pw' }, ctx),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // The soft-deleted branch too — that address DOES exist.
+    const seller = await seedSeller(sut, { deletedAt: new Date() });
+    await expect(
+      sut.svc.login({ email: seller.email, password: 'Seller-Secret-123' }, ctx),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 
   it('wrong password → generic + audit reason=wrong_password', async () => {
@@ -801,6 +849,48 @@ describe('SellerAuthService — password reset', () => {
     expect(sut.enqueueMock).toHaveBeenCalled();
     const data = sut.client.auditLog.create.mock.calls[0]![0].data;
     expect(data.metadata.status).toBe(SellerStatus.SUSPENDED);
+  });
+
+  it('a link spent between the read and the write sets NO password', async () => {
+    // The lookup runs OUTSIDE the transaction, so under READ COMMITTED two
+    // tabs submitting the same link both see `usedAt: null`. Model that
+    // honestly: hand back the pre-race snapshot, then let the other tab
+    // commit. An unconditional `update` on the token accepted the second
+    // submission and set a password from it.
+    const sut = makeSut();
+    const seller = await seedSeller(sut);
+    const user = sut.client.tables.sellerUsers[0];
+    if (!user) throw new Error('fixture: no seller user');
+    const originalHash = user.passwordHash;
+
+    const plaintext = sut.hashes.generatePasswordResetToken();
+    const tokenRow = {
+      id: 'prt-race',
+      sellerUserId: user.id,
+      tokenHash: sut.hashes.sha256Hex(plaintext),
+      ipAddress: '1.2.3.4',
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      usedAt: null as Date | null,
+    };
+    sut.client.tables.prts.push(tokenRow);
+
+    const readThrough = sut.client.sellerPasswordResetToken.findFirst
+      .getMockImplementation()
+      ?.bind(null);
+    if (!readThrough) throw new Error('fixture: prt findFirst has no implementation');
+    sut.client.sellerPasswordResetToken.findFirst.mockImplementation(async (args: unknown) => {
+      const snapshot = await readThrough(args);
+      tokenRow.usedAt = new Date(); // the other tab commits, here
+      return snapshot; // ...and we still believe the link is unused
+    });
+
+    await expect(
+      sut.svc.confirmPasswordReset({ token: plaintext, newPassword: 'Second-Tab-Wins!99' }, ctx),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(user.passwordHash).toBe(originalHash);
+    expect(await sut.password.verify(user.passwordHash, 'Second-Tab-Wins!99')).toBe(false);
+    expect(seller.email).toBe(user.email);
   });
 });
 

@@ -129,6 +129,11 @@ export class StoreAuthService {
     });
 
     if (!user || user.deletedAt !== null) {
+      // Pay the argon2 cost a real account would have cost. `storeUser.email`
+      // is globally unique, so without this the refusal's TIMING answers
+      // "is this address a store login anywhere in the system" — and the
+      // soft-deleted case, where the address does exist, leaks the same way.
+      await this.password.verifyDummy(input.password);
       await this.audit.log({
         actorType: ActorType.SYSTEM,
         action: 'store.login.failure',

@@ -423,6 +423,10 @@ export class SellerAuthService {
     });
 
     if (!user) {
+      // Pay the argon2 cost a real account would have cost, so an unknown
+      // address is not distinguishable from a wrong password by how long
+      // the refusal took.
+      await this.password.verifyDummy(input.password);
       await this.audit.log({
         actorType: ActorType.SYSTEM,
         action: 'seller.login.failure',
@@ -446,6 +450,9 @@ export class SellerAuthService {
     };
 
     if (user.deletedAt !== null || seller.deletedAt !== null) {
+      // Same cost again: this address DOES exist, and skipping the work
+      // here would leak "exists but closed".
+      await this.password.verifyDummy(input.password);
       await this.audit.log({
         actorType: ActorType.SELLER,
         sellerId: seller.id,
@@ -741,13 +748,24 @@ export class SellerAuthService {
     const sellerId = row.sellerUser.seller.id;
 
     await this.prisma.client.$transaction(async (tx) => {
+      // CLAIM the token on the state we read, FIRST. The lookup above ran
+      // outside this transaction, so two tabs submitting the same link
+      // both see `usedAt: null`; an unconditional update lets both set a
+      // password, and the second one wins silently. Matching the store
+      // equivalent, which has always done it this way.
+      const claimed = await tx.sellerPasswordResetToken.updateMany({
+        where: { id: row.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException({
+          code: 'INVALID_RESET_TOKEN',
+          message: 'Reset link is invalid or has expired',
+        });
+      }
       await tx.sellerUser.update({
         where: { id: row.sellerUserId },
         data: { passwordHash: newHash },
-      });
-      await tx.sellerPasswordResetToken.update({
-        where: { id: row.id },
-        data: { usedAt: new Date() },
       });
       await tx.sellerRefreshToken.updateMany({
         where: { sellerUserId: row.sellerUserId, revokedAt: null },
@@ -912,13 +930,17 @@ export class SellerAuthService {
     const sellerId = row.sellerUser.seller.id;
 
     await this.prisma.client.$transaction(async (tx) => {
+      // Claimed on the state we read (see confirmPasswordReset). A second
+      // submission of the same link is a no-op rather than an error —
+      // the address is already verified, which is what the caller wanted.
+      const claimed = await tx.sellerEmailVerificationToken.updateMany({
+        where: { id: row.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) return;
       await tx.sellerUser.update({
         where: { id: row.sellerUserId },
         data: { emailVerifiedAt: new Date() },
-      });
-      await tx.sellerEmailVerificationToken.update({
-        where: { id: row.id },
-        data: { usedAt: new Date() },
       });
       await this.audit.log(
         {

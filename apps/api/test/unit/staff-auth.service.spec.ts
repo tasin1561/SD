@@ -144,6 +144,22 @@ class FakePrtTable {
     Object.assign(row, data);
     return row;
   }
+
+  /** APPLIES the predicate — a fake that ignored `usedAt: null` would
+   *  report a claim on an already-spent token as a success, which is the
+   *  exact bug the guarded consume exists to stop. */
+  async updateMany({
+    where,
+    data,
+  }: {
+    where: { id: string; usedAt: null };
+    data: Partial<PrtRow>;
+  }): Promise<{ count: number }> {
+    const row = this.rows.find((r) => r.id === where.id && r.usedAt === null);
+    if (!row) return { count: 0 };
+    Object.assign(row, data);
+    return { count: 1 };
+  }
 }
 
 class FakeEvtTable {
@@ -179,6 +195,19 @@ class FakeEvtTable {
     if (!row) throw new Error('evt not found');
     Object.assign(row, data);
     return row;
+  }
+  /** APPLIES the predicate — see FakePrtTable.updateMany. */
+  async updateMany({
+    where,
+    data,
+  }: {
+    where: { id: string; usedAt: null };
+    data: Partial<EvtRow>;
+  }): Promise<{ count: number }> {
+    const row = this.rows.find((r) => r.id === where.id && r.usedAt === null);
+    if (!row) return { count: 0 };
+    Object.assign(row, data);
+    return { count: 1 };
   }
 }
 
@@ -356,6 +385,33 @@ describe('StaffAuthService — login', () => {
     expect(data.metadata.reason).toBe('soft_deleted');
   });
 
+  it('a refusal without a real hash STILL pays the argon2 cost (no exists-oracle by timing)', async () => {
+    // The messages were always generic; the TIMING was not. An unknown
+    // email returned before argon2 ran, so the refusal came back ~50 ms
+    // sooner than for a real account with a wrong password — measurable
+    // over HTTP, and an answer to "does this address have an account".
+    //
+    // Asserted as a CALL rather than a stopwatch: a wall-clock assertion
+    // on an argon2 hash is exactly the test that goes flaky on a loaded
+    // CI runner, and the regression to catch is somebody deleting the
+    // line.
+    const sut = makeSut();
+    const spy = jest.spyOn(sut.password, 'verifyDummy');
+
+    await expect(
+      sut.svc.login({ email: 'ghost@example.com', password: 'anything' }, ctx),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // And the soft-deleted branch too: that address DOES exist, so
+    // skipping the work there re-opens the oracle for closed accounts.
+    const deleted = await seedStaff(sut, { deletedAt: new Date() });
+    await expect(
+      sut.svc.login({ email: deleted.email, password: 'CorrectHorseBattery!12' }, ctx),
+    ).rejects.toThrow(UnauthorizedException);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
   it('email is normalized (lowercased, trimmed) for the lookup', async () => {
     const sut = makeSut();
     await seedStaff(sut, { email: 'admin@skydrop.online' });
@@ -515,6 +571,38 @@ describe('StaffAuthService — password reset confirm', () => {
 
     const audit = sut.client.auditLog.create.mock.calls.at(-1)?.[0].data;
     expect(audit.action).toBe('staff.password_reset.completed');
+  });
+
+  it('a link spent between the read and the write sets NO password', async () => {
+    // The lookup runs OUTSIDE the transaction, so under READ COMMITTED two
+    // tabs submitting the same link both see `usedAt: null`. Model that
+    // honestly: hand back the pre-race snapshot, then let the other tab
+    // commit. An unconditional `update` on the token would accept the
+    // second submission and set a password from it.
+    const sut = makeSut();
+    const { staff, plaintext } = await seedResetToken(sut);
+    const originalHash = staff.passwordHash;
+    const tokenRow = sut.client.staffPasswordResetToken.rows[0];
+    if (!tokenRow) throw new Error('fixture: no reset token');
+
+    const table = sut.client.staffPasswordResetToken;
+    const readThrough = table.findFirst.bind(table);
+    table.findFirst = async (args: {
+      where: { tokenHash: string };
+      select?: Record<string, unknown>;
+    }) => {
+      const snapshot = await readThrough(args);
+      tokenRow.usedAt = new Date(); // the other tab commits, here
+      return snapshot; // ...and we still believe the link is unused
+    };
+
+    await expect(
+      sut.svc.confirmPasswordReset({ token: plaintext, newPassword: 'Second-Tab-Wins!99' }, ctx),
+    ).rejects.toThrow(BadRequestException);
+
+    const row = sut.client.staffUser.rows[0];
+    expect(row?.passwordHash).toBe(originalHash);
+    expect(await sut.password.verify(row?.passwordHash ?? '', 'Second-Tab-Wins!99')).toBe(false);
   });
 });
 

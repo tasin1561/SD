@@ -268,6 +268,53 @@ describe('RefreshTokenService', () => {
     });
   });
 
+  it('rotate: a rotation that loses the revoke claim mints NOTHING and burns the family', async () => {
+    const { svc, client } = makeSut();
+    const first = await svc.issue({ subject: 'staff', userId: 'u1' });
+    const row = client.staffRefreshToken.rows[0];
+    if (!row) throw new Error('fixture: no issued row');
+
+    // READ COMMITTED, honestly. `rotate()` looks the row up OUTSIDE any
+    // transaction, so a concurrent rotation of the SAME presented token
+    // can commit between our read and our write: the snapshot we hold
+    // says `revokedAt: null` while the committed row says otherwise.
+    //
+    // Model exactly that — hand back the pre-race snapshot, then move the
+    // world on. Interleaving two real `rotate()` calls and hoping the
+    // microtask order lands the right way would be a test that passes
+    // for the wrong reason.
+    const table = client.staffRefreshToken;
+    const readThrough = table.findFirst.bind(table);
+    table.findFirst = async (args: { where: { tokenHash: string } }) => {
+      const snapshot = await readThrough(args);
+      row.revokedAt = new Date(); // the other rotation commits, here
+      return snapshot; // ...and we still believe the token is live
+    };
+
+    await expect(
+      svc.rotate({
+        subject: 'staff',
+        presentedToken: first.token,
+        ipAddress: '9.9.9.9',
+        userAgent: 'second tab',
+      }),
+    ).rejects.toThrow(UnauthorizedException);
+
+    // NO replacement was minted. An unconditional `update` would have
+    // revoked the already-revoked row, reported success, and left ONE
+    // presented token with TWO live descendants — after which reuse
+    // detection can never fire, because neither chain is ever replayed.
+    expect(client.staffRefreshToken.rows).toHaveLength(1);
+
+    // And the loss is reported as the reuse it is: the token really was
+    // consumed by somebody else.
+    const actions = client.auditLog.create.mock.calls.map(
+      (c) => (c[0] as { data: { action: string } }).data.action,
+    );
+    expect(actions).toContain('security.refresh_replay_detected');
+    expect(actions).not.toContain('staff.refresh.rotated');
+  });
+
   it('rotate: seller subject is supported in parallel with staff', async () => {
     const { svc, client } = makeSut();
     const issued = await svc.issue({ subject: 'seller', userId: 'seller-1' });

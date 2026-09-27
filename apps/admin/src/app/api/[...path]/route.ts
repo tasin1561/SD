@@ -49,6 +49,19 @@ const REQUEST_DROP = new Set([
   // handle its own client info from the original request; if needed
   // we can add an explicit forward-for chain later.
   'content-length', // Node sets this from the body automatically
+  // The CLIENT does not get to say who it is.
+  //
+  // `client-info.decorator.ts` reads the LEFTMOST value of
+  // `x-forwarded-for` for `audit_logs.metadata.ipAddress`, and Caddy
+  // rewrites that header from `CF-Connecting-IP` on the real hop — so a
+  // browser-supplied copy arriving through this proxy would be prepended
+  // to the chain and become the address every audit row records. The
+  // throttler is unaffected (it uses `req.ip` with `trust proxy: 1`),
+  // which is exactly why this would be silent: the forged address only
+  // shows up in the trail somebody reads afterwards.
+  'x-forwarded-for',
+  'x-real-ip',
+  'forwarded',
   // The BROWSER's accept-encoding, not ours.
   //
   // We strip `content-encoding` off the response below on the grounds
@@ -70,6 +83,20 @@ const RESPONSE_DROP = new Set([
   'transfer-encoding',
   'content-encoding', // Node already decompressed
   'content-length',
+  // CORS is the UPSTREAM's answer to a question this proxy never asked.
+  //
+  // Every browser request here is same-origin (FE-3), so the browser
+  // enforces nothing from these headers — but relaying them publishes
+  // the API's cross-origin policy on OUR origin, where it is neither
+  // checked nor meant to apply, and an `Allow-Origin: *` alongside
+  // `Allow-Credentials` would be read as this app's own posture. The
+  // proxy does no `Origin` check of its own and should not appear to.
+  'access-control-allow-origin',
+  'access-control-allow-credentials',
+  'access-control-allow-methods',
+  'access-control-allow-headers',
+  'access-control-expose-headers',
+  'access-control-max-age',
 ]);
 
 async function forward(req: Request, params: { path: string[] }): Promise<Response> {
