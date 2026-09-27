@@ -15,6 +15,11 @@ import { EmailQueue } from '../../email/queue/email.queue';
 import type { ClientContext } from '../../staff-auth/staff-auth.service';
 import type { CreateStaffInvitationDto } from '../dto/create-staff-invitation.dto';
 import { staffRoleKeyForEnum } from '../../../common/auth/staff-role-key';
+import {
+  assertMayGrantRole,
+  type GrantableRole,
+  type GrantingActor,
+} from '../../../common/auth/assert-may-grant-role';
 
 /** The seven seeded roles, whose keys mirror the legacy enum's spelling. */
 const LEGACY_ROLE_KEYS = new Set([
@@ -97,11 +102,62 @@ export class StaffInvitationService {
     }
   }
 
+  /**
+   * What the person doing the granting can themselves do.
+   *
+   * Read from the database rather than taken from the caller: the guard
+   * already resolved it onto the request, but a service that trusts a
+   * permission list handed to it is one refactor away from trusting one
+   * that came from a body. One indexed lookup on a path that invites a
+   * colleague is not a cost worth arguing about.
+   */
+  private async grantingActor(staffId: string): Promise<GrantingActor> {
+    const me = await this.prisma.client.staffUser.findFirst({
+      where: { id: staffId, deletedAt: null },
+      select: {
+        staffRole: {
+          select: { isSuperAdmin: true, permissions: { select: { permission: true } } },
+        },
+      },
+    });
+    if (me === null) {
+      // Their own account went away mid-request. Refusing is the only
+      // safe answer: an unknown actor holds nothing we can check against.
+      throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff user not found' });
+    }
+    return {
+      isSuperuser: me.staffRole.isSuperAdmin,
+      permissions: me.staffRole.permissions.map((p) => p.permission),
+    };
+  }
+
+  /** The seeded role an invitation's enum value names, as a grant target. */
+  private async invitedRole(role: StaffRole): Promise<GrantableRole> {
+    const key = staffRoleKeyForEnum(role);
+    const found = await this.prisma.client.staffRoleDefinition.findFirst({
+      where: { key, deletedAt: null },
+      select: { name: true, isSuperAdmin: true, permissions: { select: { permission: true } } },
+    });
+    if (found === null) {
+      throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+    }
+    return {
+      name: found.name,
+      isSuperuser: found.isSuperAdmin,
+      permissions: found.permissions.map((p) => p.permission),
+    };
+  }
+
   async create(
     input: CreateStaffInvitationDto,
     actor: { staffId: string },
     ctx: ClientContext,
   ): Promise<CreatedInvitation> {
+    // BEFORE anything is written or emailed: an invitation carries the
+    // role, and accepting it connects that role for real, so the
+    // escalation happens here even though the privilege lands later.
+    assertMayGrantRole(await this.grantingActor(actor.staffId), await this.invitedRole(input.role));
+
     const emailLower = input.email.trim().toLowerCase();
 
     // Refuse if a staff account already exists.
@@ -515,7 +571,13 @@ export class StaffInvitationService {
       }),
       this.prisma.client.staffRoleDefinition.findFirst({
         where: { id: newRoleId, deletedAt: null },
-        select: { id: true, key: true, name: true, isSuperAdmin: true },
+        select: {
+          id: true,
+          key: true,
+          name: true,
+          isSuperAdmin: true,
+          permissions: { select: { permission: true } },
+        },
       }),
     ]);
     if (!before || before.deletedAt !== null) {
@@ -527,6 +589,16 @@ export class StaffInvitationService {
     if (before.roleId === target.id) {
       return { id: before.id, roleId: target.id, roleName: target.name };
     }
+
+    // The guards above are both about not LOSING access — your own role,
+    // and the last super admin. This one is about not GAINING it: a
+    // `staff.manage` holder must not be able to promote a colleague past
+    // themselves and then use that account.
+    assertMayGrantRole(await this.grantingActor(actor.staffId), {
+      name: target.name,
+      isSuperuser: target.isSuperAdmin,
+      permissions: target.permissions.map((p) => p.permission),
+    });
 
     // Somebody must be left who can put things back. Counting inside the
     // update's transaction so two concurrent demotions cannot both see a

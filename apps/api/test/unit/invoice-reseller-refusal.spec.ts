@@ -55,8 +55,8 @@ function makeInvoiceService(kind: SellerStoreKind): {
 describe('InvoiceService — RS-10 no tax invoice for a reseller-store order', () => {
   it('refuses generateForOrder by name, before it touches any invoice row', async () => {
     const { svc, invoiceFindUnique } = makeInvoiceService(SellerStoreKind.RESELLER);
-    await expect(svc.generateForOrder('o1')).rejects.toBeInstanceOf(ConflictException);
-    await expect(svc.generateForOrder('o1')).rejects.toMatchObject({
+    await expect(svc.generateForOrder('o1', null)).rejects.toBeInstanceOf(ConflictException);
+    await expect(svc.generateForOrder('o1', null)).rejects.toMatchObject({
       response: { code: RESELLER_ORDER_NO_INVOICE },
     });
     expect(invoiceFindUnique).not.toHaveBeenCalled();
@@ -64,7 +64,7 @@ describe('InvoiceService — RS-10 no tax invoice for a reseller-store order', (
 
   it('a CHANNEL order is unaffected: the existing invoice comes back as before', async () => {
     const { svc } = makeInvoiceService(SellerStoreKind.CHANNEL);
-    await expect(svc.generateForOrder('o1')).resolves.toMatchObject({
+    await expect(svc.generateForOrder('o1', null)).resolves.toMatchObject({
       invoiceNumber: 'INV-1',
       alreadyExisted: true,
     });
@@ -133,7 +133,14 @@ describe('OrderDeliveredInvoiceListener — RS-10 skips a reseller-store order q
     expect(await deliver(true)).not.toHaveBeenCalled();
   });
 
-  it('still generates for every other order', async () => {
-    expect(await deliver(false)).toHaveBeenCalledWith('o1');
+  it('still generates for every other order, with NO seller scope', async () => {
+    // The second argument is load-bearing: `null` says "no
+    // caller-supplied seller id to check against", which is the honest
+    // answer here — the trigger is the order's own lifecycle event, not
+    // somebody asking for an invoice. The seller's own button passes
+    // their id instead, and the service refuses an order that is not
+    // theirs. Asserted rather than left off so a future change that
+    // starts passing a seller id here has to be deliberate.
+    expect(await deliver(false)).toHaveBeenCalledWith('o1', null);
   });
 });

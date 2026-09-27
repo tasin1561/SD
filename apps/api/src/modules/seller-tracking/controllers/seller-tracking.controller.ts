@@ -4,7 +4,6 @@ import { SellerCapability, ShipmentStatus } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
-import { SellerViewerReadable } from '../../../common/decorators/seller-viewer-readable.decorator';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { SellerRestrictionService } from '../../seller-restriction/services/seller-restriction.service';
@@ -17,9 +16,9 @@ import {
 /**
  * Where a seller's parcels are.
  *
- * `@SellerViewerReadable` because tracking is the same kind of thing as
- * the order list a VIEWER already sees — where a parcel is, for orders
- * they can already read. It adds no new class of data to that role.
+ * Behind `orders.view` because tracking is the same kind of thing as the
+ * order list that key already opens — where a parcel is, for orders the
+ * caller can already read. It adds no new class of data.
  *
  * Every handler asks the restriction service first (TRACKING_VIEW). The
  * capability existed in the enum before this page did and was
@@ -33,7 +32,6 @@ import {
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
 @RequireSellerPermissions('orders.view')
-@SellerViewerReadable()
 @Controller('seller/tracking')
 export class SellerTrackingController {
   constructor(

@@ -25,9 +25,9 @@ import { AddTicketNoteDto } from '../dto/add-ticket-note.dto';
 import { SellerIssueEscalationService } from '../../courier-escalation/services/seller-issue-escalation.service';
 
 /**
- * R7 — seller-facing parcel-issue tickets. Raising one is an OPS-domain
- * action (class-level @SellerRoles = the WRITE allow-list); reads stay
- * open to every company role including VIEWER, per the R0 RBAC policy.
+ * R7 — seller-facing parcel-issue tickets. Reads are behind
+ * `tickets.view` at the class; raising one or replying declares
+ * `tickets.create` at the handler.
  */
 @ApiTags('seller-tickets')
 @ApiBearerAuth('seller-jwt')

@@ -146,12 +146,33 @@ export class InvoiceService {
    * bus listener (post-DELIVERED) OR the seller's "Download invoice"
    * button (manual trigger).
    */
-  async generateForOrder(orderId: string): Promise<{
+  async generateForOrder(
+    orderId: string,
+    /**
+     * The seller the request is being made AS, or `null` for the
+     * DELIVERED listener, which is reacting to the order's own lifecycle
+     * event and has no caller-supplied id to check. Required rather than
+     * optional so a future caller has to state which it is — this mints
+     * an invoice NUMBER from a per-financial-year sequence, so an
+     * unscoped call on somebody else's order burns one on their books.
+     */
+    sellerId: string | null,
+  ): Promise<{
     id: string;
     invoiceNumber: string;
     pdfUrl: string;
     alreadyExisted: boolean;
   }> {
+    if (sellerId !== null) {
+      const owned = await this.prisma.client.order.findFirst({
+        where: { id: orderId, sellerId, deletedAt: null },
+        select: { id: true },
+      });
+      if (owned === null) {
+        throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
+      }
+    }
+
     // RS-10 / decision 8: a reseller-store order gets no tax invoice.
     // Before the idempotency gate, so no path through here can hand one
     // out — whoever asks (the seller's button, the DELIVERED listener).

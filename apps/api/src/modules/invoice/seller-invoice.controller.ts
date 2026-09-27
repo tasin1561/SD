@@ -133,8 +133,9 @@ export class SellerInvoiceController {
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
   ) {
-    await this.assertOwned(seller.id, id);
-    return this.svc.generateForOrder(id);
+    // Scoped inside the service now, which is where the invoice number
+    // is minted — no second check here.
+    return this.svc.generateForOrder(id, seller.id);
   }
 
   private async assertOwned(sellerId: string, orderId: string): Promise<void> {

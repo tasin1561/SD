@@ -33,24 +33,32 @@ import {
  * SUSPENDED sellers (read-only endpoints — profile view, addresses list,
  * notification preferences view). PENDING/REJECTED are always rejected.
  *
- * RBAC (Phase 1B seller-team roles): this guard is also where
- * SellerUserRole is enforced, because doing it per-controller left ~110
- * endpoints ungated — a VIEWER could call every seller write endpoint.
- * Policy, in precedence order:
- *   1. `@SellerRoles(...)` on the HANDLER — absolute, applies to reads
- *      and writes alike (use it to lock down one specific endpoint, or
- *      to open a self-service POST to every role).
- *   2. Read-only methods (GET/HEAD/OPTIONS) with no handler-level
- *      declaration — open to every role EXCEPT VIEWER. VIEWER's reads
- *      are an allow-list: the controller opts in with
- *      `@SellerViewerReadable()`, and anything unmarked is closed.
- *   3. `@SellerRoles(...)` on the CLASS — the domain's WRITE allow-list
- *      (e.g. catalog controllers add INVENTORY, order controllers add
- *      OPS). Declaring it does NOT restrict that controller's GETs.
- *   4. Nothing declared, mutating method — OWNER + ADMIN only.
- * Rule 4 is deliberately FAIL-CLOSED: an endpoint that forgets the
- * decorator is over-restrictive, never accidentally open. Widening is
- * always the explicit act.
+ * RBAC (RBAC-1): this guard is where a seller's PERMISSIONS are enforced,
+ * because doing it per-controller left ~110 endpoints ungated. The policy
+ * is two rules and no precedence table:
+ *   1. `@SellerSelfService()` — the endpoint is about the caller
+ *      themselves (their session, their password, their own inbox), and
+ *      the token has already answered the question a permission would
+ *      ask. It SHORT-CIRCUITS the whole gate, so a class carrying it has
+ *      no gated handlers.
+ *   2. Otherwise the handler's `@RequireSellerPermissions(...)` — else
+ *      the class's. Holding ANY of the listed keys passes. An OWNER role
+ *      (`seller_roles.is_owner`) holds the whole catalogue implicitly, so
+ *      a key added next release reaches it with no backfill.
+ * Anything that declares NEITHER is refused — reads and writes alike —
+ * with `ENDPOINT_NOT_AUTHORIZED`. That is deliberately FAIL-CLOSED in
+ * BOTH directions: an endpoint somebody forgot to annotate is unreachable
+ * rather than open, and widening is always the explicit act.
+ *
+ * It replaced a fixed six-role enum (`@SellerRoles` / `@SellerViewerReadable`,
+ * both now deleted) that was fail-closed on WRITES only — reads stayed
+ * open to five of the six roles, so a company could not express "may not
+ * SEE the wallet", only "may not change it". Both halves are closed now.
+ * The leftovers of that model are worth remembering: the decorators
+ * outlived their reader, and `customer-lookup` lost its gate in the
+ * migration while the comment and the spec pinning it both still named a
+ * decorator nothing consulted. A deleted mechanism has to lose its
+ * scaffolding in the same change.
  */
 @Injectable()
 export class SellerJwtGuard implements CanActivate {

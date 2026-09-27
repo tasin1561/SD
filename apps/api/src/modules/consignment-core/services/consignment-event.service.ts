@@ -52,9 +52,17 @@ export class ConsignmentEventService {
   }
 
   /** Oldest first — a timeline is read in the order things happened. */
+  /**
+   * `sellerId` narrows the query to that seller's own consignment, in
+   * the WHERE clause. Its callers already check ownership immediately
+   * beforehand, which makes this defence-in-depth rather than the fix —
+   * but "safe because of what the line above it happens to do" is the
+   * shape that put another tenant's order number on a ticket, so the
+   * scope belongs where the read is.
+   */
   async listForConsignment(
     consignmentId: string,
-    opts: { readonly sellerVisibleOnly?: boolean } = {},
+    opts: { readonly sellerVisibleOnly?: boolean; readonly sellerId?: string } = {},
   ): Promise<
     Array<{
       id: string;
@@ -68,6 +76,7 @@ export class ConsignmentEventService {
       where: {
         consignmentId,
         ...(opts.sellerVisibleOnly === true ? { isVisibleToSeller: true } : {}),
+        ...(opts.sellerId === undefined ? {} : { consignment: { sellerId: opts.sellerId } }),
       },
       orderBy: { createdAt: 'asc' },
       select: { id: true, type: true, description: true, data: true, createdAt: true },

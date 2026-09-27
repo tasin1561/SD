@@ -382,7 +382,7 @@ export class AdminCourierEscalationController {
     @Param('escalationId', new ParseUUIDPipe({ version: '7' })) escalationId: string,
   ): Promise<EscalationView & { readonly desk: SupportDeskView }> {
     // No sellerId: an operator sees every conversation.
-    return this.withDesk(await this.escalations.thread(escalationId));
+    return this.withDesk(await this.escalations.thread(escalationId, null));
   }
 
   @Post('escalations/:escalationId/reply')
@@ -407,7 +407,7 @@ export class AdminCourierEscalationController {
     @Param('ticketId', new ParseUUIDPipe({ version: '7' })) ticketId: string,
   ): Promise<(EscalationView & { readonly desk: SupportDeskView }) | null> {
     // No seller scope: an operator sees every conversation.
-    const view = await this.escalations.forTicket(ticketId);
+    const view = await this.escalations.forTicket(ticketId, null);
     return view === null ? null : this.withDesk(view);
   }
 

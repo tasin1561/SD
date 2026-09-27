@@ -10,7 +10,6 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
-import { SellerViewerReadable } from '../../../common/decorators/seller-viewer-readable.decorator';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
@@ -22,11 +21,10 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 /**
  * The seller's view of everything that has happened to an order.
  *
- * `@SellerViewerReadable` because this is a READ of the seller's own
- * order — the same surface `SellerOrderController` already opens to the
- * VIEWER role (RBAC-1), and a journey that VIEWER could not see would
- * make the order page render half-empty for them rather than
- * read-only.
+ * Behind `orders.view` because this is a READ of the seller's own order
+ * — the same surface `SellerOrderController` already opens, and a
+ * journey somebody could not see would render the order page half-empty
+ * for them rather than read-only.
  */
 @ApiTags('seller-orders')
 @ApiBearerAuth('seller-jwt')
@@ -35,7 +33,6 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 // The same gate the order itself is behind — a journey readable by
 // someone who may not read the order would be a way around it.
 @RequireSellerPermissions('orders.view')
-@SellerViewerReadable()
 @Controller('seller/orders')
 export class SellerOrderJourneyController {
   constructor(private readonly journey: OrderJourneyService) {}

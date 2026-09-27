@@ -157,6 +157,48 @@ describe('staff permission surface', () => {
     expect(orphaned).toEqual([]);
   });
 
+  it('no staff WRITE is gated only on a `.view` permission', () => {
+    // `store-permission-surface.spec.ts` has had an assertion of this
+    // shape since RS-2; the staff and seller surfaces did not, and three
+    // handlers had drifted onto a READ key — minting an invoice number,
+    // posting a ticket note that EMAILS the seller, and acknowledging a
+    // system issue. A key whose label and description say "see" must not
+    // also mean "change": what an operator is told when they tick the box
+    // is all they have to go on.
+    //
+    // The store's version demands a `.manage` key. That is right for a
+    // catalogue of fifteen keys and wrong for this one, which names the
+    // ACT — `orders.force`, `warehouse.rto.finalize`,
+    // `money.settlements.record` — so requiring `.manage` would mean
+    // listing forty verbs and re-listing every new one. The rule that
+    // actually catches the defect is narrower and needs no upkeep: a
+    // write may not rest on a `.view` key alone.
+    //
+    // Exceptions are named WITH THEIR REASON, so a second has to be
+    // argued for rather than added.
+    //
+    //   admin-system-issue.controller.ts acknowledge → system.settings.view
+    //     "Record that somebody is on it." The LIST is deliberately on
+    //     `view`, and the controller says why: an issue can come from
+    //     anywhere — a courier login, a cost sync, a stalled poll — and a
+    //     board only some people can see is a board where the rest get
+    //     missed. Whoever can see it must be able to say they are on it;
+    //     `.manage` would leave a warehouse supervisor staring at a
+    //     problem they cannot claim. It closes nothing and moves no money.
+    const VIEW_GATED_WRITES = new Set(['admin-system-issue.controller.ts acknowledge']);
+
+    const loose = STAFF_HANDLERS.filter(
+      (h) =>
+        h.method !== 'Get' &&
+        h.permissions !== 'self-service' &&
+        h.permissions !== null &&
+        h.permissions.length > 0 &&
+        !VIEW_GATED_WRITES.has(`${h.file} ${h.name}`) &&
+        h.permissions.every((p) => p.endsWith('.view')),
+    ).map((h) => `${h.file} ${h.method} ${h.name}() → ${(h.permissions as string[]).join('|')}`);
+    expect(loose).toEqual([]);
+  });
+
   it('a reserved permission is declared by no endpoint (drop the flag when one arrives)', () => {
     const reserved = new Set(RESERVED_PERMISSION_KEYS);
     const declaring = STAFF_HANDLERS.filter(

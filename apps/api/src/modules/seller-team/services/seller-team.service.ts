@@ -24,6 +24,11 @@ const LEGACY_SELLER_ROLE_KEYS = new Set([
 ]);
 
 import { sellerRoleIdForEnum } from '../../../common/auth/seller-role-provisioning';
+import {
+  assertMayGrantRole,
+  type GrantableRole,
+  type GrantingActor,
+} from '../../../common/auth/assert-may-grant-role';
 
 const DEFAULT_EXPIRES_IN_DAYS = 7;
 
@@ -83,12 +88,61 @@ export class SellerTeamService {
 
   // ── Invitations ────────────────────────────────────────────────────
 
+  /**
+   * What the person doing the granting can themselves do, within this
+   * company.
+   *
+   * Read from the database rather than taken from the caller — the same
+   * argument as the staff side: a service that trusts a permission list
+   * handed to it is one refactor away from trusting one off a body.
+   */
+  private async grantingActor(sellerId: string, sellerUserId: string): Promise<GrantingActor> {
+    const me = await this.prisma.client.sellerUser.findFirst({
+      where: { id: sellerUserId, sellerId, deletedAt: null },
+      select: {
+        sellerRole: { select: { isOwner: true, permissions: { select: { permission: true } } } },
+      },
+    });
+    if (me === null) {
+      throw new NotFoundException({ code: 'MEMBER_NOT_FOUND', message: 'Team member not found' });
+    }
+    return {
+      isSuperuser: me.sellerRole.isOwner,
+      permissions: me.sellerRole.permissions.map((p) => p.permission),
+    };
+  }
+
+  /** The default role an invitation's enum value names, within this company. */
+  private async invitedRole(sellerId: string, role: SellerUserRole): Promise<GrantableRole> {
+    const found = await this.prisma.client.sellerRoleDefinition.findFirst({
+      where: { sellerId, key: String(role).toLowerCase(), deletedAt: null },
+      select: { name: true, isOwner: true, permissions: { select: { permission: true } } },
+    });
+    if (found === null) {
+      throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+    }
+    return {
+      name: found.name,
+      isSuperuser: found.isOwner,
+      permissions: found.permissions.map((p) => p.permission),
+    };
+  }
+
   async invite(
     sellerId: string,
     input: CreateTeamInvitationDto,
     actor: { sellerUserId: string },
     ctx: ClientContext,
   ): Promise<CreatedTeamInvitation> {
+    // BEFORE anything is written or emailed: the invitation carries the
+    // role and accepting it connects that role for real, so a
+    // `team.manage` holder inviting an address they control as OWNER is
+    // refused here rather than at the moment the privilege lands.
+    assertMayGrantRole(
+      await this.grantingActor(sellerId, actor.sellerUserId),
+      await this.invitedRole(sellerId, input.role),
+    );
+
     const emailLower = input.email.trim().toLowerCase();
 
     // Refuse if a SellerUser with this email already exists ANYWHERE
@@ -453,7 +507,14 @@ export class SellerTeamService {
       // assignable, and the id is not a secret.
       this.prisma.client.sellerRoleDefinition.findFirst({
         where: { id: newRoleId, sellerId, deletedAt: null },
-        select: { id: true, key: true, name: true, isOwner: true, isSystem: true },
+        select: {
+          id: true,
+          key: true,
+          name: true,
+          isOwner: true,
+          isSystem: true,
+          permissions: { select: { permission: true } },
+        },
       }),
     ]);
     if (!target || target.deletedAt !== null) {
@@ -465,6 +526,16 @@ export class SellerTeamService {
     if (target.roleId === role.id) {
       return { id: target.id, roleId: role.id, roleName: role.name };
     }
+
+    // The LAST_OWNER guard below is about not losing access. This one is
+    // about not gaining it: `team.manage` covered assigning ANY role,
+    // OWNER included, so somebody could promote a colleague past
+    // themselves and then borrow that login.
+    assertMayGrantRole(await this.grantingActor(sellerId, actor.sellerUserId), {
+      name: role.name,
+      isSuperuser: role.isOwner,
+      permissions: role.permissions.map((p) => p.permission),
+    });
 
     await this.prisma.client.$transaction(async (tx) => {
       // Somebody must be left who can get back in. Counted INSIDE the

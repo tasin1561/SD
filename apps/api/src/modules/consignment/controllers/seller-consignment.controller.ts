@@ -107,7 +107,7 @@ export class SellerConsignmentController {
     // Ownership first: the event list carries counts and warehouse names,
     // so it must not be readable for somebody else's consignment.
     await this.svc.getForSeller(seller.id, id);
-    return this.events.listForConsignment(id, { sellerVisibleOnly: true });
+    return this.events.listForConsignment(id, { sellerVisibleOnly: true, sellerId: seller.id });
   }
 
   @Post(':id/cancel')

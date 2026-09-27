@@ -50,9 +50,11 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @ApiBearerAuth('seller-jwt')
 @UseGuards(SellerJwtGuard)
 @ThrottleKey('auth-user')
-// The orders surface is the ONE area a VIEWER may read: the list, an
-// order's detail, and its event timeline — which is what the tracking
-// view is built from. Writes here remain OWNER / ADMIN / OPS.
+// `orders.view` opens the reads on this controller: the list, an order's
+// detail, and its event timeline — which is what the tracking view is
+// built from. Every WRITE declares its own key at the handler, and so
+// does `customer-lookup`, which is a platform-wide lookup rather than a
+// view of this seller's own orders.
 @RequireSellerPermissions('orders.view')
 @Controller('seller/orders')
 export class SellerOrderController {
@@ -127,14 +129,26 @@ export class SellerOrderController {
   // a parameterised route declared first would swallow this path as an
   // order id and 400 on the UUID pipe.
   @Get('customer-lookup')
-  @SellerAuthAllowSuspended()
-  // The ONE GET on this controller a VIEWER may not make. The class
-  // carries @SellerViewerReadable() so a VIEWER can read orders, and
-  // this endpoint inherited that by being a GET on the same controller
-  // — which nobody decided. It is not an order they already have: it
-  // takes an arbitrary phone number and answers questions about it,
-  // which is a lookup TOOL rather than a view of their own data.
-  // Handler-level @SellerRoles wins over the class opt-in (rule 1).
+  // The ONE GET on this controller that `orders.view` does NOT open, and
+  // the gate is the ONLY thing standing between a read-only login and
+  // platform-wide customer intelligence: the counts inside span EVERY
+  // seller, so this answers "who else has this person ordered from, and
+  // did it go wrong" for an arbitrary phone number. It is a lookup TOOL,
+  // not a view of the caller's own data, and nobody decided it should be
+  // readable by the narrowest role there is — it inherited that by being
+  // a GET on the orders controller.
+  //
+  // `orders.create` is the gate because it reproduces the surface this
+  // endpoint has always been meant to have — owner / admin / ops, and no
+  // other seeded role — and because it names the act the lookup is FOR:
+  // deciding whether to accept an order before you ship it. A dedicated
+  // key would have reached no role that already exists, so every ops
+  // login in production would have seen the field and then been refused.
+  //
+  // Deliberately NOT @SellerAuthAllowSuspended: a suspended seller may
+  // still read their own history (that is a record), but a platform-wide
+  // lookup is a live service and stops with the account.
+  @RequireSellerPermissions('orders.create')
   // Tighter than the 100/min baseline. Entering an order is one lookup;
   // even a fast operator does a handful a minute. The platform-wide
   // counts are a deliberate disclosure, but disclosing them one number

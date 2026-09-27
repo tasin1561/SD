@@ -3,7 +3,6 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
-import { SellerViewerReadable } from '../../../common/decorators/seller-viewer-readable.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { OrderAttentionService } from '../services/order-attention.service';
 
@@ -26,7 +25,6 @@ import { OrderAttentionService } from '../services/order-attention.service';
 @ApiBearerAuth()
 @UseGuards(SellerJwtGuard)
 @RequireSellerPermissions('orders.view')
-@SellerViewerReadable()
 @Controller('seller/nsa')
 export class SellerNsaController {
   constructor(private readonly attention: OrderAttentionService) {}

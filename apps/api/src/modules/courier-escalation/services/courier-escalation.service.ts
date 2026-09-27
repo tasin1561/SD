@@ -206,8 +206,14 @@ export class CourierEscalationService {
    * `sellerId` scopes it when a seller is asking — ownership is checked
    * through the ticket, not passed in by the caller, because a
    * seller-supplied id is exactly what an IDOR is.
+   *
+   * REQUIRED, and `null` for an operator, deliberately: as an optional
+   * parameter every current caller happened to pass it and a future one
+   * that forgot would read across tenants with nothing failing. Saying
+   * `null` out loud is the one-word difference between "no scope" and
+   * "nobody decided".
    */
-  async thread(escalationId: string, sellerId?: string): Promise<EscalationView> {
+  async thread(escalationId: string, sellerId: string | null): Promise<EscalationView> {
     const row = await this.prisma.client.courierEscalation.findUnique({
       where: { id: escalationId },
       select: {
@@ -245,7 +251,7 @@ export class CourierEscalationService {
         message: 'No such escalation.',
       });
     }
-    if (sellerId !== undefined && row.ticket.sellerId !== sellerId) {
+    if (sellerId !== null && row.ticket.sellerId !== sellerId) {
       // Same body as a miss would give: whether an escalation exists is
       // not something another seller should be able to probe.
       throw new NotFoundException({
@@ -269,7 +275,7 @@ export class CourierEscalationService {
   }
 
   /** The escalation for a ticket, or null. Used to link from a ticket view. */
-  async forTicket(ticketId: string, sellerId?: string): Promise<EscalationView | null> {
+  async forTicket(ticketId: string, sellerId: string | null): Promise<EscalationView | null> {
     const row = await this.prisma.client.courierEscalation.findUnique({
       where: { ticketId },
       select: { id: true },
@@ -323,7 +329,9 @@ export class CourierEscalationService {
         message: 'A message needs some text.',
       });
     }
-    const view = await this.thread(input.escalationId);
+    // `null`: an operator typing in what the courier said, so there is no
+    // seller scope to apply (the method takes a `staffId`, not a seller).
+    const view = await this.thread(input.escalationId, null);
     // When they said it, not when it was typed up — an operator may be
     // catching up on yesterday's replies, and a timeline that reorders
     // itself around data entry is not a record of the conversation.
@@ -372,8 +380,10 @@ export class CourierEscalationService {
       });
     }
 
-    // Ownership via the ticket, and it throws the generic not-found.
-    const view = await this.thread(input.escalationId, input.sellerId);
+    // Ownership via the ticket, and it throws the generic not-found. An
+    // absent `sellerId` means an operator is replying, which is the
+    // unscoped case — spelled `null` because `thread` requires it said.
+    const view = await this.thread(input.escalationId, input.sellerId ?? null);
 
     const occurredAt = new Date();
     const message = await this.prisma.client.courierEscalationMessage.create({

@@ -69,6 +69,19 @@ export class AdminTicketController {
   }
 
   @Post(':ticketId/notes')
+  // `tickets.resolve`, not the class's `tickets.view`. A note here is not
+  // an internal scribble: TKT-3 emails it to the seller and puts it in
+  // their inbox, so on `tickets.view` a read-only support account could
+  // message any seller on the platform. The relayed-mark handler below
+  // already states the rule this now follows — "the same permission as
+  // replying, because it is the same class of act: an operator stating on
+  // the record that they did something for this seller" — and replying
+  // was the one thing that had not been moved onto it.
+  //
+  // No seeded staff role holds either ticket key (super admin holds
+  // everything implicitly), so this locks nobody out; for a custom role
+  // granted view-but-not-resolve the narrowing is the intent.
+  @RequirePermissions('tickets.resolve')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'Tell the seller what we found out, without moving the ticket',

@@ -203,6 +203,115 @@ describe('cross-tenant isolation (e2e)', () => {
     expectDenied(res.status, res.body, 'a ticket');
   });
 
+  it('cannot ATTACH another seller’s order to its own ticket', async () => {
+    // The ticket above proves the ROW is scoped. This proves what goes ON
+    // the row is too, which is a different question and was the hole:
+    // `orderId` came straight off the request body, so a ticket
+    // legitimately owned by beta could carry alpha's order. The ticket
+    // views then project the attached order's NUMBER back — to beta on
+    // their own list, and to the operator judging the claim — and a
+    // settled refund credits beta's wallet against a ledger row pointing
+    // at alpha's order.
+    const store = await defaultStoreFor(h.prisma, alpha.sellerId);
+    const alphaOrder = await h.prisma.order.create({
+      data: {
+        sellerId: alpha.sellerId,
+        storeId: store.id,
+        storeNameSnapshot: store.name,
+        orderNumber: `SD-2026-98-${Math.floor(Math.random() * 900000 + 100000)}`,
+        status: 'PENDING_CONFIRMATION',
+        paymentMode: 'PREPAID',
+        recipientName: 'Alpha Customer',
+        recipientPhoneE164: '+919812345678',
+        recipientAddressLine1: '1 Private Road',
+        recipientAddressLine2: 'Near City Hospital',
+        recipientCity: 'Bengaluru',
+        recipientStateProvince: 'Karnataka',
+        recipientPostalCode: '560001',
+        recipientCountryCode: 'IN',
+        declaredValueInr: '100.00',
+      },
+      select: { id: true },
+    });
+
+    const res = await request(h.baseUrl).post('/seller/tickets').set(beta.auth).send({
+      subject: 'About a parcel',
+      description: 'attaching a stranger’s order',
+      orderId: alphaOrder.id,
+    });
+    expectDenied(res.status, res.body, 'another seller’s order on a ticket');
+
+    // And nothing was written: a refusal that still left the row behind
+    // would leak the order number on every later read of beta's list.
+    const leaked = await h.prisma.ticket.count({ where: { orderId: alphaOrder.id } });
+    expect(leaked).toBe(0);
+
+    // The check must be a SCOPE, not a blanket refusal of `orderId` —
+    // otherwise this test would pass on a service that simply stopped
+    // accepting the field at all.
+    const own = await request(h.baseUrl)
+      .post('/seller/tickets')
+      .set(alpha.auth)
+      .send({ subject: 'About my own parcel', orderId: alphaOrder.id })
+      .expect(201);
+    expect(
+      await h.prisma.ticket.count({ where: { id: own.body.id, orderId: alphaOrder.id } }),
+    ).toBe(1);
+  });
+
+  it('cannot ATTACH another seller’s parcel to its own ticket', async () => {
+    // Same shape one column over: `shipmentId` was written unchecked too,
+    // and the ticket views project the parcel NUMBER beside the order's.
+    const store = await defaultStoreFor(h.prisma, alpha.sellerId);
+    const alphaOrder = await h.prisma.order.create({
+      data: {
+        sellerId: alpha.sellerId,
+        storeId: store.id,
+        storeNameSnapshot: store.name,
+        orderNumber: `SD-2026-97-${Math.floor(Math.random() * 900000 + 100000)}`,
+        status: 'CONFIRMED',
+        paymentMode: 'PREPAID',
+        recipientName: 'Alpha Customer',
+        recipientPhoneE164: '+919812345678',
+        recipientAddressLine1: '1 Private Road',
+        recipientAddressLine2: 'Near City Hospital',
+        recipientCity: 'Bengaluru',
+        recipientStateProvince: 'Karnataka',
+        recipientPostalCode: '560001',
+        recipientCountryCode: 'IN',
+        declaredValueInr: '100.00',
+      },
+      select: { id: true },
+    });
+    const wh = await h.prisma.warehouse.findFirstOrThrow({ select: { id: true } });
+    const alphaShipment = await h.prisma.shipment.create({
+      data: {
+        shipmentNumber: `SH-2026-97-${Math.floor(Math.random() * 900000 + 100000)}`,
+        courierCode: 'delhivery',
+        status: 'CREATED',
+        originWarehouseId: wh.id,
+        totalWeightGrams: 250,
+        declaredValueInr: '100.00',
+        destRecipientName: 'Alpha Customer',
+        destRecipientPhoneE164: '+919812345678',
+        destAddressLine1: '1 Private Road',
+        destCity: 'Bengaluru',
+        destStateProvince: 'Karnataka',
+        destPostalCode: '560001',
+        destCountryCode: 'IN',
+        orderShipments: { create: { orderId: alphaOrder.id } },
+      },
+      select: { id: true },
+    });
+
+    const res = await request(h.baseUrl)
+      .post('/seller/tickets')
+      .set(beta.auth)
+      .send({ subject: 'About a parcel', shipmentId: alphaShipment.id });
+    expectDenied(res.status, res.body, 'another seller’s parcel on a ticket');
+    expect(await h.prisma.ticket.count({ where: { shipmentId: alphaShipment.id } })).toBe(0);
+  });
+
   it('cannot read another seller’s addresses', async () => {
     const created = await request(h.baseUrl)
       .post('/seller/addresses')

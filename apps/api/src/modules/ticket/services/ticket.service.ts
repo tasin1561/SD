@@ -619,11 +619,74 @@ export class TicketService {
     return { ticket: result.ticket, created: result.created };
   }
 
+  /**
+   * Prove the order and the parcel on a new ticket belong to the seller
+   * it is being raised FOR.
+   *
+   * Unconditional, and HERE rather than beside each opener, because the
+   * seller path is exactly how the hole was found: `open` took both ids
+   * straight from a request body and wrote them, so a ticket
+   * legitimately owned by the caller could carry ANOTHER tenant's order.
+   * `TICKET_NAMES` then projected that order's NUMBER and the parcel's
+   * back — to the raiser on their own list, and to the operator judging
+   * the claim — and a settled refund credited the raiser's wallet
+   * against a ledger row pointing at somebody else's order.
+   *
+   * Every sibling opener already resolved its order scoped
+   * (`openStoreIssue`, `openStoreDispute`); the seller one was the
+   * omission. Putting the check in the one method they all funnel
+   * through is what makes the NEXT opener unable to forget it — the cost
+   * is one or two indexed lookups on a path that opens a ticket, which
+   * is not a hot one.
+   *
+   * The ORDER must be live (`deletedAt: null`) — a discarded draft is
+   * not something to raise a ticket about. The SHIPMENT is scoped only
+   * by tenancy: a parcel voided when its order was cancelled (CUR-10
+   * amendment #4 stamps `deletedAt`) is still a legitimate thing to
+   * raise a ticket on, and the auto-raised RTO and NDR paths attach one.
+   */
+  private async assertAttachmentsBelongToSeller(
+    client: Prisma.TransactionClient,
+    sellerId: string,
+    input: OpenTicketInput,
+  ): Promise<void> {
+    if (typeof input.orderId === 'string') {
+      const order = await client.order.findFirst({
+        where: { id: input.orderId, sellerId, deletedAt: null },
+        select: { id: true },
+      });
+      if (order === null) {
+        // Scoped in the WHERE clause, so another seller's order is
+        // indistinguishable from one that does not exist.
+        throw new NotFoundException({
+          code: 'ORDER_NOT_FOUND',
+          message: 'No such order of yours.',
+        });
+      }
+    }
+    if (typeof input.shipmentId === 'string') {
+      const shipment = await client.shipment.findFirst({
+        where: {
+          id: input.shipmentId,
+          orderShipments: { some: { order: { sellerId } } },
+        },
+        select: { id: true },
+      });
+      if (shipment === null) {
+        throw new NotFoundException({
+          code: 'SHIPMENT_NOT_FOUND',
+          message: 'No such parcel of yours.',
+        });
+      }
+    }
+  }
+
   private async openIn(
     client: Prisma.TransactionClient,
     input: OpenTicketInput,
     actor: TicketActor,
   ): Promise<OpenResult> {
+    await this.assertAttachmentsBelongToSeller(client, input.sellerId, input);
     if (input.shipmentItemId) {
       const existing = await client.ticket.findUnique({
         where: {

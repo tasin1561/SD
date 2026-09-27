@@ -14,7 +14,6 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { RequireSellerPermissions } from '../../../common/auth/require-seller-permissions.decorator';
-import { SellerViewerReadable } from '../../../common/decorators/seller-viewer-readable.decorator';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
@@ -47,7 +46,6 @@ import { CreateStoreDto, SetStoreActiveDto, UpdateStoreDto } from '../dto/seller
   an order one.
 */
 @RequireSellerPermissions('orders.view')
-@SellerViewerReadable()
 @Controller('seller/stores')
 export class SellerStoreController {
   constructor(private readonly stores: SellerStoreService) {}

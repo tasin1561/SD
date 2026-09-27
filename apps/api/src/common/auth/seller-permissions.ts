@@ -69,8 +69,14 @@ export const SELLER_PERMISSIONS = [
   {
     key: 'orders.create',
     label: 'Place an order',
-    description: 'Enter a new order by hand, and edit one that has not been confirmed yet.',
+    description:
+      'Enter a new order by hand, and edit one that has not been confirmed yet. Also the ' +
+      'customer check before you ship: how many orders that phone number has had across the ' +
+      'whole platform, and how many came back.',
     group: 'Orders',
+    // The platform-wide half is why this is sensitive. `orders.view` is
+    // not: it opens this company's own orders and nothing beyond them.
+    sensitive: true,
   },
   {
     key: 'orders.cancel',
@@ -246,7 +252,10 @@ export const SELLER_PERMISSIONS = [
   {
     key: 'team.manage',
     label: 'Manage the team',
-    description: 'Invite a colleague, change what somebody may do, or remove their access.',
+    description:
+      'Invite a colleague, change what somebody may do, or remove their access. Roles can only ' +
+      'be handed out up to what the person granting them already holds — nobody can create a ' +
+      'login more powerful than their own.',
     group: 'Company',
     sensitive: true,
   },

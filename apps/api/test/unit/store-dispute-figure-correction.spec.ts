@@ -118,6 +118,11 @@ function makeSut(opts: {
   const ticketFindFirst = jest.fn(async () => created);
 
   const tx = {
+    // `openIn` proves the order and parcel on a new ticket belong to the
+    // seller it is raised for, on the TRANSACTION client — so the fake tx
+    // needs the same lookup the fake client has.
+    order: { findFirst: orderFindFirst },
+    shipment: { findFirst: jest.fn(async () => ({ id: 'shipment-1' })) },
     ticket: { findUnique: jest.fn(async () => null), create: ticketCreate },
     ticketEvent: { create: jest.fn(async () => ({ id: 'event-1' })) },
     $executeRawUnsafe: jest.fn(async () => 1),

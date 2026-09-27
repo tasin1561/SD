@@ -77,6 +77,8 @@ export class OrderDeliveredInvoiceListener implements OnApplicationBootstrap, On
     // Skipped quietly here — the refusal is the rule working, not an
     // error worth a log line on every delivery.
     if (await this.invoices.isResellerOrder(event.orderId)) return;
-    await this.invoices.generateForOrder(event.orderId);
+    // `null`: the trigger is the order's own lifecycle event, so there
+    // is no caller-supplied seller id to validate against.
+    await this.invoices.generateForOrder(event.orderId, null);
   }
 }

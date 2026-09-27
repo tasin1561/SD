@@ -172,7 +172,8 @@ describe('CourierEscalationService.thread', () => {
 
   it('lets an operator read any conversation', async () => {
     const { svc } = make();
-    await expect(svc.thread('esc-1')).resolves.toMatchObject({ id: 'esc-1' });
+    // `null` is the operator scope — stated rather than omitted.
+    await expect(svc.thread('esc-1', null)).resolves.toMatchObject({ id: 'esc-1' });
   });
 });
 

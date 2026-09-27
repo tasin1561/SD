@@ -64,7 +64,15 @@ export class ConsignmentCancelService {
     reason: string,
     ctx: ClientContext,
   ): Promise<CancelResult> {
-    const consignment = await this.consignments.requireById(consignmentId);
+    // Scoped HERE when a seller is asking, rather than relying on the
+    // controller having checked the line before: this method removes
+    // stock and can refund a freight bill, and "safe because of its
+    // caller" is the shape that let another tenant's order onto a
+    // ticket. An operator (`staffId`) reads unscoped, as before.
+    const consignment =
+      actor.sellerId === undefined
+        ? await this.consignments.requireById(consignmentId)
+        : await this.consignments.getForSeller(actor.sellerId, consignmentId);
     await this.consignments.assertCancellable(consignment);
 
     const actorType = actor.staffId !== undefined ? ActorType.STAFF : ActorType.SELLER;

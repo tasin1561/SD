@@ -671,7 +671,10 @@ export const PERMISSIONS = [
   {
     key: 'staff.manage',
     label: 'Manage staff',
-    description: 'Invite a colleague, change someone’s role, or deactivate an account.',
+    description:
+      'Invite a colleague, change someone’s role, or deactivate an account. Roles can only ' +
+      'be handed out up to what the person granting them already holds — nobody can create an ' +
+      'account more powerful than their own.',
     group: 'System',
     dangerous: true,
   },
