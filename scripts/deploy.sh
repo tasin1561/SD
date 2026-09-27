@@ -223,6 +223,13 @@ pm2 save
 # pm2 restart returns the moment the new process is spawned, but the
 # Next.js servers take ~3-10s to actually bind their port. Poll each
 # URL up to ~30s before giving up.
+#
+# `/health` answers 503 — not 200 with a "degraded" body — when the API
+# cannot reach Postgres or Redis. So this smoke now FAILS the deploy on
+# an API that came up but cannot serve a request, instead of reporting
+# success and writing .last-deployed-sha. That is deliberate: the 30s of
+# retries cover a slow first connection, and anything still degraded
+# after them is a broken deploy, not a slow one.
 echo "── health smoke ──"
 check_url() {
   local url="$1"

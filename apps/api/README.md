@@ -31,9 +31,12 @@ pnpm --filter @skydrop/api start:dev
 
 The API is listening on **http://localhost:4000**.
 
-- `GET /health` — aggregate DB + Redis check
+- `GET /health` — aggregate DB + Redis check; **503 when either is unreachable**
 - `GET /health/live` — process liveness (always 200 when running)
-- `GET /health/ready` — readiness with detailed checks
+- `GET /health/ready` — the same check under its own name; **503 when degraded**,
+  with a per-dependency body naming what failed. This is the endpoint to point
+  external uptime monitoring at: a monitor reads the HTTP status, so 200 with
+  `{"status":"degraded"}` would report a database outage as healthy.
 - `GET /api/docs` — Swagger UI (dev only)
 
 ### Create a staff user for smoke testing
