@@ -38,6 +38,10 @@ jobs:
           username: ${{ secrets.DROPLET_USER }}
           key: ${{ secrets.DROPLET_SSH_KEY }}
           port: 22
+          # The action's own default is 10m, below the job's 15m budget; a
+          # full build (seven apps) passed 10m on 2026-09-27 and was killed
+          # mid-build. Keep this just under timeout-minutes.
+          command_timeout: 14m
           envs: SHA
           # Single shell session. The droplet has scripts/deploy.sh
           # checked in — it's the source of truth for build/seed/restart.
