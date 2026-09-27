@@ -244,7 +244,6 @@ export function AuthedShell({
           // one control that says something needs you, and the inbox has
           // no other route on a phone.
           headerAlways={<NotificationBellContainer />}
-          footerNote="Phase 1A"
           pathname={pathname}
           Link={Link}
           onSignOut={() => {
