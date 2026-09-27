@@ -5,7 +5,7 @@ Two workflows:
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `.github/workflows/ci.yml` | every PR + every push to `main` | Postgres 18 + Redis services, `pnpm install`, typecheck + lint + unit tests for every package + app, then a full Next build of all 4 apps |
-| `.github/workflows/deploy.yml` | after CI succeeds on `main` (or manual via Actions tab) | SSH to the droplet, run `scripts/deploy.sh`, which `git pull`s, builds, runs `prisma migrate deploy`, reseeds only if the seed file changed, restarts only the apps whose code changed, and smoke-tests `/health` / `/login` / `/` |
+| `.github/workflows/deploy.yml` | after CI succeeds on `main` (or manual via Actions tab) | SSH to the droplet, run `scripts/deploy.sh`, which `git pull`s, builds every app, runs `prisma migrate deploy`, reseeds only if the seed file changed, restarts every app, and smoke-tests `/health` / `/login` / `/` plus one `/_next/static/*.js` per app |
 
 The deploy is **auto-on-merge-to-main** but the **CI gate is the merge bar**. A PR opener sees CI run before merge; main never advances past a red CI. Manual deploys are still available from the Actions tab (`workflow_dispatch`).
 
@@ -44,9 +44,9 @@ Add the droplet's IP to a firewall allow list if you want SSH only from GitHub's
 3. Build `packages/db`, `packages/api-client`, `packages/ui` (apps consume `dist/`).
 4. `prisma migrate deploy` — no-op if no new migrations.
 5. `prisma db seed` ONLY if `prisma/seed.ts` or `schema.prisma` changed.
-6. Build all four apps (`api`, `admin`, `seller`, `track`).
-7. `pm2 restart` only the apps whose code changed. If any package changed, restart all four. Saves the pm2 process list.
-8. Smoke `curl` against each of the four local ports — exit non-zero if any returns 5xx.
+6. Build every app (`api`, `admin`, `seller`, `track`, `reseller`, `marketing`) — unconditionally.
+7. `pm2 restart` EVERY process, through the ecosystem file. Saves the pm2 process list. **This matches step 6 on purpose, and the two must stay matched.** `next build` wipes `.next` and names chunks by content hash, so any app whose rebuild differs — including one changed only through `packages/*` — gets new chunk filenames and loses the old ones, while a process left running keeps serving HTML that names the deleted files. Every script tag 400s and the page never hydrates, with the deploy reporting success and pm2 reporting `online`. A per-app restart list needs a dependency table that rots; matching the build does not. To restart selectively again, make step 6 selective first.
+8. Smoke `curl` against each local port — exit non-zero if any returns 5xx — and then, per Next app, pull one `/_next/static/*.js` out of the page's own HTML and fetch it. That second half is what catches the stale-process failure in step 7: the HTML is fine, so a page check alone cannot see it.
 
 The script is committed to the repo so changes to the deploy process go through CI / PR review like any other change.
 

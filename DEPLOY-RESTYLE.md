@@ -21,10 +21,10 @@ run**; this file only says what to run.
    described here.
 
 2. **The pipeline deploys `main`, whole.** `Deploy` runs only after `CI`
-   passes on a push to `main`; `scripts/deploy.sh` builds all four apps from
-   one checkout, and because `packages/ui` changes at every stage it restarts
-   **all six** pm2 processes each time (api, portal, admin, seller, track,
-   reseller). So "deploy one app" means: move `main` to a commit where only
+   passes on a push to `main`; `scripts/deploy.sh` builds every app from
+   one checkout and restarts **all six** pm2 processes each time (api,
+   portal, admin, seller, track, reseller) — unconditionally, because the
+   build is unconditional. So "deploy one app" means: move `main` to a commit where only
    that app has changed *visibly*. The apps not yet restyled are rebuilt and
    restarted too, but render exactly as before: Phase 1 only added hook
    class names (`sd-badge`, `sd-thead`, …) to the legacy components, and those
