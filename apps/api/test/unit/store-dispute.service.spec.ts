@@ -64,6 +64,10 @@ function makeSut(opts: {
   claimed?: number;
   cap?: Prisma.Decimal | null;
   order?: { id: string; sellerId: string } | null;
+  // What the CHANNEL-order cap reads, narrowest evidence first.
+  shipmentItem?: Record<string, unknown> | null;
+  orderItems?: Record<string, unknown>[];
+  declaredValueInr?: string;
 }) {
   const settle = jest.fn(async () => ({
     sellerEntryId: 'seller-entry-1',
@@ -83,16 +87,27 @@ function makeSut(opts: {
     ticketEvent: { create: eventCreate },
   };
   const orderFindFirst = jest.fn(async () => opts.order ?? null);
+  const shipmentItemFindUnique = jest.fn(async () => opts.shipmentItem ?? null);
+  const orderItemFindMany = jest.fn(async () => opts.orderItems ?? []);
+  const orderFindUnique = jest.fn(async () =>
+    opts.declaredValueInr === undefined
+      ? null
+      : { declaredValueInr: new Prisma.Decimal(opts.declaredValueInr) },
+  );
   const client = {
     ticket: { findUnique: jest.fn(async () => (opts.ticket === undefined ? row() : opts.ticket)) },
-    order: { findFirst: orderFindFirst },
+    order: { findFirst: orderFindFirst, findUnique: orderFindUnique },
+    shipmentItem: { findUnique: shipmentItemFindUnique },
+    orderItem: { findMany: orderItemFindMany },
     $transaction: async (fn: (t: unknown) => unknown) => fn(tx),
   };
   const svc = new TicketService(
     { client } as unknown as PrismaService,
     { log: auditLog } as unknown as AuditLogService,
     {
-      applyEntry: jest.fn(),
+      // A refund that is ALLOWED reaches the credit, so the entry it
+      // returns has to be real enough to be stamped on the ticket.
+      applyEntry: jest.fn(async () => ({ id: 'wallet-entry-1' })),
       recomputeCacheAfterCommit: jest.fn(async () => undefined),
     } as unknown as WalletService,
     machine,
@@ -101,7 +116,19 @@ function makeSut(opts: {
     // RS-7 (2026-09-19) — the figures a FIGURE_CORRECTION stamps.
     { forOrder: jest.fn() } as never,
   );
-  return { svc, settle, cap, updateMany, update, eventCreate, auditLog, orderFindFirst };
+  return {
+    svc,
+    settle,
+    cap,
+    updateMany,
+    update,
+    eventCreate,
+    auditLog,
+    orderFindFirst,
+    shipmentItemFindUnique,
+    orderItemFindMany,
+    orderFindUnique,
+  };
 }
 
 describe('RS-7 — settling a store dispute moves money between the store and the seller', () => {
@@ -221,5 +248,125 @@ describe('RS-7 — a store raises a dispute only on its own reseller order', () 
       orderFindFirst.mock.calls[0] as unknown as [{ where: Record<string, unknown> }]
     )[0].where;
     expect(where).toMatchObject({ id: 'someone-elses', storeId: 'store-1', storeKind: 'RESELLER' });
+  });
+});
+
+/**
+ * A CHANNEL order's refund had NO upper bound — `> 0` and nothing else —
+ * so `tickets.resolve` could write an arbitrary SCRAP_REFUND out of our
+ * money, and it would read as an ordinary resolution afterwards. The
+ * reseller path has capped itself since RS-7; these pin the same rule for
+ * the other kind of order, and pin that it reads a SNAPSHOT (ORD-6)
+ * rather than the live catalogue.
+ */
+describe('a channel order: at most what the GOODS were worth', () => {
+  const channel = (over: Record<string, unknown> = {}): Record<string, unknown> =>
+    row({ ticketType: TicketType.SCRAP_DAMAGE, storeId: null, store: null, ...over });
+
+  const refund = (amount: string): never =>
+    ({ to: TicketStatus.RESOLVED_REFUND, refundAmountInr: amount }) as never;
+  const staff = { type: ActorType.STAFF, staffId: 'staff-1' } as const;
+
+  it('caps at the LINE the ticket names — declared value × the quantity that shipped', async () => {
+    const { svc, updateMany } = makeSut({
+      ticket: channel({ shipmentItemId: 'si-1' }),
+      shipmentItem: {
+        quantity: 3,
+        unitDeclaredValueInr: new Prisma.Decimal('250'),
+        unitPriceInr: new Prisma.Decimal('900'),
+        orderItem: { unitDeclaredValueInr: null, unitPriceInr: null },
+      },
+    });
+    await expect(svc.transition('id', refund('750.01'), staff)).rejects.toMatchObject({
+      response: { code: 'REFUND_ABOVE_GOODS_VALUE' },
+    });
+    // Nothing was claimed, so the ticket is still there to resolve properly.
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it('allows the cap exactly, and the line beats the order total', async () => {
+    const { svc, updateMany, orderItemFindMany } = makeSut({
+      ticket: channel({ shipmentItemId: 'si-1' }),
+      shipmentItem: {
+        quantity: 3,
+        unitDeclaredValueInr: new Prisma.Decimal('250'),
+        unitPriceInr: null,
+        orderItem: { unitDeclaredValueInr: null, unitPriceInr: null },
+      },
+      orderItems: [
+        { quantity: 1, unitDeclaredValueInr: new Prisma.Decimal('1'), unitPriceInr: null },
+      ],
+    });
+    await svc.transition('id', refund('750.00'), staff);
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    expect(orderItemFindMany).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the ORDER ITEM snapshot when the shipment line carries no figure', async () => {
+    const { svc } = makeSut({
+      ticket: channel({ shipmentItemId: 'si-1' }),
+      shipmentItem: {
+        quantity: 2,
+        unitDeclaredValueInr: null,
+        unitPriceInr: null,
+        orderItem: { unitDeclaredValueInr: null, unitPriceInr: new Prisma.Decimal('100') },
+      },
+    });
+    await expect(svc.transition('id', refund('200.01'), staff)).rejects.toMatchObject({
+      response: { code: 'REFUND_ABOVE_GOODS_VALUE' },
+    });
+  });
+
+  it('with no line named, adds the order up — but only when EVERY line is priced', async () => {
+    const priced = makeSut({
+      ticket: channel(),
+      orderItems: [
+        { quantity: 2, unitDeclaredValueInr: new Prisma.Decimal('100'), unitPriceInr: null },
+        { quantity: 1, unitDeclaredValueInr: null, unitPriceInr: new Prisma.Decimal('50') },
+      ],
+    });
+    await expect(priced.svc.transition('id', refund('250.01'), staff)).rejects.toMatchObject({
+      response: { code: 'REFUND_ABOVE_GOODS_VALUE' },
+    });
+
+    // One unpriced line makes the sum LOWER than the truth, which would
+    // refuse a correct refund — so the parcel's declared value answers.
+    const partial = makeSut({
+      ticket: channel(),
+      orderItems: [
+        { quantity: 2, unitDeclaredValueInr: new Prisma.Decimal('100'), unitPriceInr: null },
+        { quantity: 1, unitDeclaredValueInr: null, unitPriceInr: null },
+      ],
+      declaredValueInr: '5000',
+    });
+    await partial.svc.transition('id', refund('4000'), staff);
+    expect(partial.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it('a ticket naming NO order is not capped — a receipt shortfall has no order value', async () => {
+    const { svc, updateMany, shipmentItemFindUnique, orderFindUnique } = makeSut({
+      ticket: channel({
+        ticketType: TicketType.RECEIPT_SHORTFALL,
+        orderId: null,
+        order: null,
+        goodsReceiptId: 'gr-1',
+      }),
+    });
+    await svc.transition('id', refund('999999'), staff);
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    expect(shipmentItemFindUnique).not.toHaveBeenCalled();
+    expect(orderFindUnique).not.toHaveBeenCalled();
+  });
+
+  it('a RESELLER order still answers on its transfer price, not on goods value', async () => {
+    const { svc, orderFindUnique } = makeSut({
+      ticket: channel({ shipmentItemId: 'si-1' }),
+      cap: new Prisma.Decimal('700'),
+      declaredValueInr: '99999',
+    });
+    await expect(svc.transition('id', refund('700.01'), staff)).rejects.toMatchObject({
+      response: { code: 'REFUND_ABOVE_TRANSFER_PRICE' },
+    });
+    expect(orderFindUnique).not.toHaveBeenCalled();
   });
 });

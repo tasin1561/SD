@@ -65,6 +65,27 @@ export function isUniqueViolation(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
+/**
+ * A money-moving operator form arriving with NO idempotency key.
+ *
+ * IDEM-1 was opt-in: every DTO marked the key `@IsOptional()`, so a
+ * caller that simply left it out got no replay protection at all. For
+ * most flows a second guard limits the damage (a balance, our capital,
+ * a status claim), but the staff wallet CREDIT and the plain expense have
+ * none — the reason is free prose and the amount is operator-supplied, so
+ * a second identical POST posts it twice and moves the cash twice with it.
+ * Refused by name rather than defaulted to null, so the failure is a
+ * message about a missing field instead of a duplicate nobody notices.
+ */
+export function idempotencyKeyRequired(what: string): BadRequestException {
+  return new BadRequestException({
+    code: 'IDEMPOTENCY_KEY_REQUIRED',
+    message:
+      `Send an idempotencyKey with this ${what} — it is what stops a retry ` +
+      'moving the money twice. Reopen the form to get one.',
+  });
+}
+
 /** The same idempotency key sent with a DIFFERENT request. Refused, never replayed. */
 export function idempotencyKeyReused(what: string): ConflictException {
   return new ConflictException({

@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -21,15 +22,27 @@ export class PresignTopupProofDto {
   mimeType!: string;
 }
 
+/**
+ * The column behind this is `Decimal(14, 2)`, so twelve digits before the
+ * point is everything it can hold. A claim beyond that used to pass every
+ * validator and fail inside Postgres as a numeric overflow — a 500 on a
+ * seller's own form, with a stack trace rather than a sentence, for a
+ * figure nobody could have meant. Ten crore is far above any real
+ * transfer and well inside the column, so the refusal is a 400 that says
+ * what the limit is.
+ */
+const MAX_TOPUP_INR = 100_000_000;
+
 export class SubmitTopupDto {
   @ApiProperty({ description: 'Which of our accounts you sent the money to' })
   @IsUUID('7')
   bankAccountId!: string;
 
-  @ApiProperty({ minimum: 0.01 })
+  @ApiProperty({ minimum: 0.01, maximum: MAX_TOPUP_INR })
   @Type(() => Number)
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.01)
+  @Max(MAX_TOPUP_INR)
   amount!: number;
 
   @ApiPropertyOptional({

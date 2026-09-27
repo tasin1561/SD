@@ -5,11 +5,19 @@ import {
   Currency,
   OrderChargeStatus,
   Prisma,
+  SystemIssueKind,
+  SystemIssueSeverity,
   WalletEntryDirection,
 } from '@skydrop/db';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+
+/** One open issue per order whose delivery fee the index will not let us re-bill. */
+export function chargesNotRebillableKey(orderId: string): string {
+  return `order-charges-not-rebillable:${orderId}`;
+}
 
 /**
  * R1c (revised-plan roadmap) — the shared ORDER_CHARGES debit,
@@ -35,6 +43,7 @@ export class OrderChargesAccrualService {
   constructor(
     private readonly wallet: WalletService,
     private readonly resellerMoney: ResellerOrderMoneyService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   async debitIfNeeded(
@@ -67,6 +76,45 @@ export class OrderChargesAccrualService {
       }),
     ]);
     if (charged > refunded) return false;
+
+    // …but the DATABASE refuses the second charge, and the index WINS.
+    //
+    // `seller_wallet_entries_once_per_order_uq` covers `(linked_order_id,
+    // direction)` for nine directions INCLUDING `order_charges`, so
+    // "charged once, refunded once" reaches the gate above saying "bill
+    // it again" and `applyEntry`'s bare create then raises P2002 —
+    // aborting the WHOLE delivered-money transaction, which also carries
+    // the Instant Pay COD front and credit and the inbound-freight share
+    // (`AccrualExecutionService`). WAL-8's remedy for the resulting
+    // `delivered-accrual-failed:<orderId>` is "re-run `handle`", and every
+    // re-run hits the identical P2002, so that issue could never clear.
+    //
+    // The index is the guard against paying an order twice and is NOT
+    // weakened (CLAUDE.md says so in bold). A P2002 aborts the whole
+    // Postgres transaction, so it cannot be caught and carried on from
+    // either — the check has to come FIRST. So: skip the charge, let the
+    // COD credit and the freight share commit, and be LOUD, because the
+    // fee really is owed and only a person can take it now (TRE-8b's
+    // staff wallet transfer is exactly that instrument).
+    if (charged > 0) {
+      await this.issues.raise({
+        kind: SystemIssueKind.MONEY,
+        severity: SystemIssueSeverity.HIGH,
+        title: 'A delivery fee could not be re-billed',
+        detail:
+          `This order was billed its delivery fee, refunded it (lost in transit, or called ` +
+          `off), and has now been delivered — so the fee is owed again. The database allows ` +
+          `only ONE order-charges entry per order, so it cannot be taken automatically and ` +
+          `nothing further will try.\n\n` +
+          `Take it by hand on /wallet-transfers as a debit on this seller, with the order ` +
+          `number in the reason. Everything else the delivery owed (the COD credit, the ` +
+          `inbound-freight share) was charged normally.`,
+        source: 'OrderChargesAccrualService',
+        dedupeKey: chargesNotRebillableKey(orderId),
+        metadata: { orderId, sellerId, chargeEntries: charged, refundEntries: refunded },
+      });
+      return false;
+    }
 
     const charges = await tx.orderCharge.findMany({
       where: { orderId, deletedAt: null },

@@ -84,6 +84,9 @@ const credit = (over: Partial<StaffTransferInput> = {}): StaffTransferInput => (
   bankAccountId: ACCOUNT,
   reason: REASON,
   staffId: 'staff-1',
+  // IDEM-1 REQUIRES one on every money-moving operator form, so the
+  // default input carries one; the test below omits it deliberately.
+  idempotencyKey: '0190a000-0000-4000-8000-0000000000de',
   ...over,
 });
 
@@ -103,6 +106,21 @@ describe('StaffWalletTransferService — refusals', () => {
     const w = build();
     await expect(w.svc.execute(credit(over))).rejects.toMatchObject({ response: { code } });
     expect(w.tx['$transaction']).not.toHaveBeenCalled();
+    expect(w.wallet.applyEntry).not.toHaveBeenCalled();
+  });
+
+  it('refuses a transfer with NO idempotency key — here it is the ONLY guard', async () => {
+    // Everything else on this form is operator-supplied: a free-prose
+    // reason and a typed amount. With the key optional, a second
+    // identical POST credited the seller twice and posted the cash twice,
+    // and nothing anywhere would have said so.
+    const w = build();
+    // OMITTED, not set to undefined: `exactOptionalPropertyTypes` refuses
+    // the latter, and omitting it is what a caller that forgot looks like.
+    const { idempotencyKey: _omitted, ...noKey } = credit();
+    await expect(w.svc.execute(noKey)).rejects.toMatchObject({
+      response: { code: 'IDEMPOTENCY_KEY_REQUIRED' },
+    });
     expect(w.wallet.applyEntry).not.toHaveBeenCalled();
   });
 

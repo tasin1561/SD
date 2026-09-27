@@ -869,6 +869,27 @@ export class TicketService {
             `at most ₹${cap.toFixed(2)} here — not the retail price the store charged.`,
         });
       }
+      if (cap === null) {
+        // A CHANNEL order had NO upper bound at all: `> 0` and nothing
+        // else, so `tickets.resolve` could write an arbitrary
+        // SCRAP_REFUND out of our money — a typo of ₹950000 for ₹9500
+        // commits, credits, posts the cash and reads as a legitimate
+        // resolution afterwards. The reseller path has capped itself
+        // since RS-7; this is the same rule for the other kind of order,
+        // and the same argument: we compensate what the GOODS were
+        // worth, not whatever figure is typed.
+        const bound = await this.channelCompensationCap(existing);
+        if (bound !== null && refundAmount.gt(bound.cap)) {
+          throw new BadRequestException({
+            code: 'REFUND_ABOVE_GOODS_VALUE',
+            message:
+              `The goods on this ticket are worth ₹${bound.cap.toFixed(2)} (${bound.basis}), ` +
+              `so that is the most that can be refunded here. Anything beyond it is a ` +
+              `commercial decision, not compensation — take it on /wallet-transfers, ` +
+              `where the reason is recorded against the seller.`,
+          });
+        }
+      }
     } else if (input.refundAmountInr) {
       // Guard against a caller passing an amount with the wrong target
       // status and assuming money moved.
@@ -1451,6 +1472,88 @@ export class TicketService {
         totalInr: f.totalInr,
       })),
     };
+  }
+
+  /**
+   * What the goods on a CHANNEL order's ticket were worth, in rupees —
+   * the ceiling on a `RESOLVED_REFUND` when the reseller transfer-price
+   * cap does not apply.
+   *
+   * Narrowest evidence first, and every step is a value SNAPSHOTTED on
+   * the order (ORD-6), never re-read from the live catalogue: a seller
+   * who raised a price after we lost their parcel must not thereby be
+   * owed more, and one who cut it must not be owed less.
+   *
+   *   1. the line the ticket names — its own declared value, else its
+   *      unit price, times the quantity that actually shipped;
+   *   2. the order's lines added up, when the ticket names no line or
+   *      that line carries no figure;
+   *   3. `orders.declaredValueInr`, the customs value of the whole
+   *      parcel, which is NOT NULL and therefore always answers for an
+   *      order-bearing ticket.
+   *
+   * Returns null only when the ticket names NO order — a receipt
+   * shortfall against a consignment has no order value to be capped
+   * against, and inventing one would refuse a legitimate settlement.
+   * That is a deliberate hole, not an oversight: it is the one case
+   * where no snapshot on our side says what the goods were worth.
+   */
+  private async channelCompensationCap(existing: {
+    orderId: string | null;
+    shipmentItemId: string | null;
+  }): Promise<{ cap: Prisma.Decimal; basis: string } | null> {
+    if (existing.orderId === null) return null;
+
+    if (existing.shipmentItemId !== null) {
+      const item = await this.prisma.client.shipmentItem.findUnique({
+        where: { id: existing.shipmentItemId },
+        select: {
+          quantity: true,
+          unitDeclaredValueInr: true,
+          unitPriceInr: true,
+          orderItem: { select: { unitDeclaredValueInr: true, unitPriceInr: true } },
+        },
+      });
+      if (item !== null) {
+        const unit =
+          item.unitDeclaredValueInr ??
+          item.unitPriceInr ??
+          item.orderItem.unitDeclaredValueInr ??
+          item.orderItem.unitPriceInr;
+        if (unit !== null) {
+          return {
+            cap: unit.mul(item.quantity),
+            basis: `${item.quantity} × ₹${unit.toFixed(2)} on this line`,
+          };
+        }
+      }
+    }
+
+    const lines = await this.prisma.client.orderItem.findMany({
+      where: { orderId: existing.orderId },
+      select: { quantity: true, unitDeclaredValueInr: true, unitPriceInr: true },
+    });
+    // Every line must carry a figure, or the sum is not the order's value
+    // — it is the value of the lines that happen to have one, which is
+    // LOWER than the truth and would refuse a correct refund.
+    const priced = lines.map((l) => ({
+      qty: l.quantity,
+      unit: l.unitDeclaredValueInr ?? l.unitPriceInr,
+    }));
+    if (priced.length > 0 && priced.every((l) => l.unit !== null)) {
+      const total = priced.reduce(
+        (sum, l) => sum.add((l.unit as Prisma.Decimal).mul(l.qty)),
+        new Prisma.Decimal(0),
+      );
+      if (total.gt(0)) return { cap: total, basis: 'the whole order’s lines' };
+    }
+
+    const order = await this.prisma.client.order.findUnique({
+      where: { id: existing.orderId },
+      select: { declaredValueInr: true },
+    });
+    if (order === null) return null;
+    return { cap: order.declaredValueInr, basis: 'the parcel’s declared value' };
   }
 
   /**

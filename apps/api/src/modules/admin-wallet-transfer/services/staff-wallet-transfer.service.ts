@@ -22,6 +22,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import {
   BankLedgerService,
+  idempotencyKeyRequired,
   idempotencyKeyReused,
   isUniqueViolation,
 } from '../../treasury/services/bank-ledger.service';
@@ -142,6 +143,20 @@ export class StaffWalletTransferService {
 
   async execute(input: StaffTransferInput): Promise<StaffTransferResult> {
     const amount = this.validate(input);
+    // IDEM-1, and here it is the ONLY guard.
+    //
+    // Every other operator money form has a second one behind the key — a
+    // balance, our capital in the account, a status claim — which bounds
+    // what a duplicate can do. A staff CREDIT has none: the reason is free
+    // prose and the amount is typed, so a second identical POST credits the
+    // seller twice and posts the cash out twice with it. The key was
+    // `@IsOptional()` on the DTO and defaulted to null here, so the replay
+    // path below simply never ran for a caller that omitted it. Checked in
+    // `execute` rather than in `validate`, because `preview` shares this
+    // DTO, writes nothing, and its own form deliberately sends no key.
+    if (input.idempotencyKey === undefined || input.idempotencyKey.trim() === '') {
+      throw idempotencyKeyRequired('wallet transfer');
+    }
     const replayed = await this.replay(input, amount);
     if (replayed !== null) return replayed;
 

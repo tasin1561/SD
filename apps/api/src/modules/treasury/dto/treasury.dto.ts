@@ -22,7 +22,7 @@ export class RecordTransferDto {
   @ApiProperty({ description: 'What arrived, in the receiving account currency' })
   @IsNumberString()
   amountIn!: string;
-  @ApiPropertyOptional({ description: 'Whose money moved. Omit for our own.' })
+  @ApiProperty({ description: 'Whose money moved. Omit for our own.' })
   @IsOptional()
   @IsUUID('7')
   sellerId?: string;
@@ -43,9 +43,8 @@ export class RecordTransferDto {
       'One key per opening of the form. A retry with the same key returns the original ' +
       'transfer and moves nothing.',
   })
-  @IsOptional()
   @IsUUID()
-  idempotencyKey?: string;
+  idempotencyKey!: string;
 }
 
 export class RecordEntryDto {
@@ -69,14 +68,13 @@ export class RecordEntryDto {
   @IsDateString() occurredAt!: string;
   @IsOptional() @IsString() @Length(1, 200) reference?: string;
   @IsOptional() @IsString() @Length(1, 2000) note?: string;
-  @ApiPropertyOptional({
+  @ApiProperty({
     description:
       'One key per opening of the form. A retry with the same key returns the original ' +
       'entry and posts nothing; the same key with a different expense is 409 IDEMPOTENCY_KEY_REUSED.',
   })
-  @IsOptional()
   @IsUUID()
-  idempotencyKey?: string;
+  idempotencyKey!: string;
 }
 
 export class ReconcileAccountDto {
@@ -89,7 +87,7 @@ export class ReconcileAccountDto {
   @IsString()
   @Length(10, 2000)
   reason!: string;
-  @ApiPropertyOptional({
+  @ApiProperty({
     description:
       "This is the account's OPENING balance — money the business already had, left off " +
       'the P&L. Our own money only, and once per account.',
@@ -136,9 +134,8 @@ export class OwnerMoneyDto {
       'One key per opening of the form. A retry with the same key returns the original ' +
       'entry and posts nothing.',
   })
-  @IsOptional()
   @IsUUID()
-  idempotencyKey?: string;
+  idempotencyKey!: string;
 }
 
 export class ReclassifySellerCashDto {
@@ -159,7 +156,7 @@ export class ReclassifySellerCashDto {
   @IsString()
   @Length(10, 2000)
   reason!: string;
-  @ApiPropertyOptional({
+  @ApiProperty({
     description:
       "In a non-rupee account: what the cash is worth to the seller's wallet in rupees " +
       '(positive). Required toward the seller, optional toward capital (default: their average ' +
@@ -195,16 +192,15 @@ export class CreateInvestmentDto {
     description:
       'The client’s key for this request, generated once when the form opens. A replay with the same key returns the original investment and places nothing.',
   })
-  @IsOptional()
   @IsUUID('4')
-  idempotencyKey?: string;
+  idempotencyKey!: string;
 }
 
 export class RecordInvestmentReturnDto {
   @IsUUID('7') toAccountId!: string;
   @IsNumberString() amount!: string;
   @IsDateString() receivedAt!: string;
-  @ApiPropertyOptional({ description: 'Close the investment with this return' })
+  @ApiProperty({ description: 'Close the investment with this return' })
   @IsOptional()
   @IsBoolean()
   close?: boolean;
@@ -213,9 +209,8 @@ export class RecordInvestmentReturnDto {
     description:
       'The client’s key for this request, generated once when the form opens. A replay with the same key returns the investment as it stands and records nothing.',
   })
-  @IsOptional()
   @IsUUID('4')
-  idempotencyKey?: string;
+  idempotencyKey!: string;
 }
 
 export class RecordShipmentCostDto {

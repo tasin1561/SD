@@ -47,15 +47,25 @@ function makeService(
     sellerWalletEntry: { count },
     orderCharge: { findMany: orderChargeFindMany },
   };
-  const svc = new OrderChargesAccrualService(wallet as unknown as WalletService, NO_RESELLER_MONEY);
-  return { svc, tx, findFirst, orderChargeFindMany, applyEntry };
+  const raise = jest.fn<Promise<void>, [AnyArgs]>(async () => undefined);
+  const svc = new OrderChargesAccrualService(
+    wallet as unknown as WalletService,
+    NO_RESELLER_MONEY,
+    { raise } as never,
+  );
+  return { svc, tx, findFirst, orderChargeFindMany, applyEntry, raise };
 }
 
 describe('OrderChargesAccrualService.debitIfNeeded', () => {
-  it('bills AGAIN when the earlier charge was refunded — lost, then found and delivered', async () => {
-    // Charges and refunds pair up. A plain "a charge exists" gate left a
-    // found parcel refunded AND unbilled.
-    const { svc, tx, applyEntry } = makeService({
+  it('does NOT re-bill a refunded charge — the once-per-order index forbids it, so it is LOUD instead', async () => {
+    // Charges and refunds pair up, so the gate above says "owed again" —
+    // and `seller_wallet_entries_once_per_order_uq` refuses the second
+    // `order_charges` row. Writing it anyway aborted the whole
+    // delivered-money transaction on a P2002 and left
+    // `delivered-accrual-failed:<orderId>` un-clearable, because every
+    // re-run hit the identical violation. The index wins; the fee is
+    // taken by hand; the issue is how anybody finds out.
+    const { svc, tx, applyEntry, raise } = makeService({
       existingEntry: { id: 'e' },
       refunded: true,
       charges: [
@@ -67,11 +77,24 @@ describe('OrderChargesAccrualService.debitIfNeeded', () => {
         },
       ],
     });
-    (tx as unknown as { orderCharge: { updateMany?: unknown } }).orderCharge.updateMany = jest.fn(
-      async () => ({ count: 0 }),
-    );
-    await expect(svc.debitIfNeeded(tx as never, 'o1', 's1')).resolves.toBe(true);
-    expect(applyEntry).toHaveBeenCalledTimes(1);
+    await expect(svc.debitIfNeeded(tx as never, 'o1', 's1')).resolves.toBe(false);
+    expect(applyEntry).not.toHaveBeenCalled();
+    expect(raise).toHaveBeenCalledTimes(1);
+    const issue = raise.mock.calls[0]?.[0] ?? {};
+    expect(issue['dedupeKey']).toBe('order-charges-not-rebillable:o1');
+    expect(issue['severity']).toBe('HIGH');
+    // A NEW key, distinct from WAL-8's — that issue is retried by
+    // re-running `handle`, and this one never can be.
+    expect(issue['dedupeKey']).not.toContain('delivered-accrual-failed');
+  });
+
+  it('takes the wallet lock BEFORE deciding it cannot re-bill', async () => {
+    // The count is a read-then-decide, so it serialises like every other
+    // money guard even on the path that writes nothing (WAL-7).
+    const { svc, tx } = makeService({ existingEntry: { id: 'e' }, refunded: true });
+    lockTaken.mockClear();
+    await svc.debitIfNeeded(tx as never, 'o1', 's1');
+    expect(lockTaken).toHaveBeenCalled();
   });
 
   it('confirms exactly the ESTIMATED lines it billed, in the same transaction', async () => {

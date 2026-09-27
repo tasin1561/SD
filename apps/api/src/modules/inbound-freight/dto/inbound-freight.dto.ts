@@ -46,7 +46,7 @@ export class InboundFreightLineDto {
   @IsNumberString()
   readonly rate!: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description:
       'Chargeable weight in kg, REQUIRED for PER_KG and ignored otherwise. Use the ' +
       "forwarder's figure: volumetric weight and rounding up to the next half-kilo are both " +
@@ -147,9 +147,8 @@ export class PayForwarderDto {
     description:
       'The client’s key for this request, generated once when the form opens. A replay with the same key returns the bill as it stands and records nothing.',
   })
-  @IsOptional()
   @IsUUID('4')
-  readonly idempotencyKey?: string;
+  readonly idempotencyKey!: string;
 
   @ApiProperty({
     description:

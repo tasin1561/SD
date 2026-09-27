@@ -808,7 +808,7 @@ export class WithdrawalRequestService {
       });
     }
 
-    // Re-check the money NOW, not as it was at request time.
+    // ── Re-check the money and CLAIM it, in ONE locked transaction ─────
     //
     // The balance was validated when the seller asked, and everything
     // that happens between then and here can lower it — order charges,
@@ -821,35 +821,60 @@ export class WithdrawalRequestService {
     // APPROVED requests held: a newer pending claim must not block an
     // older one being decided; once this is approved the newer one is
     // unpayable and the sweep rejects it.
-    const available = await this.withdrawableBalance(
-      existing.sellerId,
-      existing.currency,
-      undefined,
-      undefined,
-      requestId,
-      { countOtherPending: false },
-    );
-    if (available.lt(existing.amountRequested)) {
-      throw new ConflictException({
-        code: 'WITHDRAWAL_BALANCE_NO_LONGER_COVERS',
-        message:
-          `This asked for ${existing.amountRequested.toFixed(2)} and only ` +
-          `${available.toFixed(2)} is withdrawable now. Reject it, or wait for the balance.`,
-      });
-    }
+    //
+    // WAL-7, and the reason this is a transaction rather than two awaits.
+    // The read and the claim were unlocked and unwrapped, and the guarded
+    // `updateMany` below only ever protected the SAME request from being
+    // approved twice. For TWO requests on ONE seller that is no guard at
+    // all: a ₹5,000 wallet carrying two PENDING ₹5,000 requests (both
+    // legal at create time — `createInternal` holds this very lock) is
+    // approved by two operators at once, each excludes its own amount and
+    // counts only APPROVED requests, so neither sees the other, both read
+    // ₹5,000, both pass, and each claims a DIFFERENT row. Two APPROVED
+    // requests against one ₹5,000 balance — and APPROVED is the
+    // instruction to send, so an operator wires both. Recording the
+    // second is then correctly refused by the remittance's own locked
+    // guard, AFTER the money has gone; and WAL-3b never auto-rejects an
+    // APPROVED request, so nothing takes it back.
+    //
+    // Taking the seller's WALLET lock FIRST means the loser blocks until
+    // the winner commits, re-reads a balance that now holds the winner's
+    // APPROVED amount, and is refused by name.
+    const { available, claimedCount } = await this.prisma.client.$transaction(async (tx) => {
+      await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${existing.sellerId}|${existing.currency}`);
 
-    // Guarded on PENDING rather than on id: the read above is outside
-    // any transaction, so two admins approving at once would both write
-    // and the second would overwrite the first's decision. `count === 0`
-    // is Postgres saying somebody got there first.
-    const claimed = await this.prisma.client.withdrawalRequest.updateMany({
-      where: { id: requestId, status: WithdrawalRequestStatus.PENDING },
-      data: {
-        status: WithdrawalRequestStatus.APPROVED,
-        ...(note === undefined || note.trim() === '' ? {} : { note: note.trim() }),
-      },
+      const withdrawable = await this.withdrawableBalance(
+        existing.sellerId,
+        existing.currency,
+        undefined,
+        tx,
+        requestId,
+        { countOtherPending: false },
+      );
+      if (withdrawable.lt(existing.amountRequested)) {
+        throw new ConflictException({
+          code: 'WITHDRAWAL_BALANCE_NO_LONGER_COVERS',
+          message:
+            `This asked for ${existing.amountRequested.toFixed(2)} and only ` +
+            `${withdrawable.toFixed(2)} is withdrawable now. Reject it, or wait for the balance.`,
+        });
+      }
+
+      // Guarded on PENDING rather than on id: without it two admins
+      // approving the SAME request would both write and the second would
+      // overwrite the first's decision. `count === 0` is Postgres saying
+      // somebody got there first. The lock above is what covers the other
+      // shape — two DIFFERENT requests on one seller.
+      const claim = await tx.withdrawalRequest.updateMany({
+        where: { id: requestId, status: WithdrawalRequestStatus.PENDING },
+        data: {
+          status: WithdrawalRequestStatus.APPROVED,
+          ...(note === undefined || note.trim() === '' ? {} : { note: note.trim() }),
+        },
+      });
+      return { available: withdrawable, claimedCount: claim.count };
     });
-    if (claimed.count === 0) {
+    if (claimedCount === 0) {
       throw new ConflictException({
         code: 'WITHDRAWAL_REQUEST_ALREADY_MOVED',
         message: `Withdrawal request ${requestId} was decided by someone else first`,

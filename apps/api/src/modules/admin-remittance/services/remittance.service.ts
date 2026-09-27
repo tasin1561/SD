@@ -315,6 +315,18 @@ export class RemittanceService {
         // read its balance with the payout half-posted. The order is on
         // `accountReconcileKey`.
         await lockAccountsForPosting(tx, [input.paidFromAccountId]);
+        // NOTE, for the owner to decide (2026-09-27): this is the RAW
+        // balance, NOT `WithdrawalRequestService.withdrawableBalance`, so a
+        // remittance recorded directly here can take a wallet below
+        // `wallet.minimum_balance_inr` and past what other PENDING or
+        // APPROVED requests are already holding — a payout through the
+        // withdrawal queue could not. Behaviour is UNCHANGED: a remittance
+        // records a transfer that already left our bank, and refusing one
+        // over a floor we set ourselves would leave the cash gone with no
+        // wallet entry behind it, which is worse than a wallet under its
+        // floor. If the floor should bind here too, it belongs as a
+        // REQUIRED withdrawal request rather than as a second subtraction
+        // (WAL-3: the subtraction lives in exactly one method).
         const balance = await this.wallet.balanceLive(input.sellerId, input.sourceCurrency, tx);
         if (balance.lt(sourceAmount)) {
           throw new BadRequestException({

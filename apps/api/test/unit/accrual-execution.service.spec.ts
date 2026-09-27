@@ -89,6 +89,9 @@ function makeService(
   const chargesAccrual = new OrderChargesAccrualService(
     wallet as unknown as WalletService,
     NO_RESELLER_MONEY,
+    // A refunded fee that cannot be re-billed is raised, not thrown; none
+    // of these scenarios reaches it.
+    { raise: jest.fn(async () => undefined) } as never,
   );
 
   // R3 amortisation: these fixtures cover orders whose goods came from no
@@ -274,6 +277,7 @@ describe('AccrualExecutionService.executeAccrual', () => {
     const chargesAccrual = new OrderChargesAccrualService(
       wallet as unknown as WalletService,
       NO_RESELLER_MONEY,
+      { raise: jest.fn(async () => undefined) } as never,
     );
     const freightAmortisation = {
       debitForDeliveredOrder: jest.fn(async () => ({
@@ -380,7 +384,9 @@ describe('AccrualExecutionService — Instant Pay fronts the COD', () => {
     const svc = new AccrualExecutionService(
       { client } as unknown as PrismaService,
       wallet as unknown as WalletService,
-      new OrderChargesAccrualService(wallet as unknown as WalletService, NO_RESELLER_MONEY),
+      new OrderChargesAccrualService(wallet as unknown as WalletService, NO_RESELLER_MONEY, {
+        raise: jest.fn(async () => undefined),
+      } as never),
       { debitForDeliveredOrder } as unknown as InboundFreightAmortisationService,
       codCredit as unknown as CodCreditService,
       { persistForOrderSystem } as never,

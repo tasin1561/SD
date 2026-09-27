@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   BankEntryType,
   BankOwnerKind,
@@ -413,6 +414,17 @@ function makeWorld(
   const tx: Record<string, unknown> = {
     $executeRaw: jest.fn(async () => 1),
     sellerWalletEntry: {
+      // IDEM-1's replay lookup. Every `staff()` call here carries its own
+      // key, so this answers null and the transfer proceeds — but the real
+      // service asks, so the fake has to be able to be asked.
+      findUnique: jest.fn(async (a: { where: { idempotencyKey?: string } }) => {
+        const key = a.where.idempotencyKey;
+        if (key === undefined) return null;
+        return (
+          wallet.find((w) => (w as { idempotencyKey?: string | null }).idempotencyKey === key) ??
+          null
+        );
+      }),
       findFirst: jest.fn(async (a: { where: Record<string, unknown> }) => {
         const found = wallet.filter(walletWhere(a.where));
         return found.length === 0 ? null : found[found.length - 1];
@@ -743,6 +755,11 @@ function makeWorld(
       ...(direction === 'CREDIT' ? { bankAccountId: 'hdfc' } : {}),
       reason: 'Agreed with the seller on the phone on 12 September',
       staffId: 'staff-1',
+      // IDEM-1 is REQUIRED on this form now (it is the only guard there:
+      // free-prose reason, operator-typed amount). A fresh key per call,
+      // because these scenarios post several transfers in a row and a
+      // shared one would be answered as a replay.
+      idempotencyKey: randomUUID(),
     });
   /** Our own money arriving in HDFC (an owner contribution). */
   const fundCapital = async (amount: string): Promise<void> => {

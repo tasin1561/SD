@@ -100,10 +100,27 @@ function makeService(
     $queryRawUnsafe: queryRawUnsafe,
   };
   const $transaction = jest.fn(async (fn: (t: unknown) => Promise<unknown>) => fn(tx));
+  // What the goods on a CHANNEL order's ticket were worth — the ceiling on
+  // a RESOLVED_REFUND (2026-09-27). Generous on purpose: these scenarios
+  // are about the state machine and the claim, not about the cap, which
+  // has its own tests in `store-dispute.service.spec.ts`.
+  const shipmentItemFindUnique = jest.fn(async () => ({
+    quantity: 1,
+    unitDeclaredValueInr: new Prisma.Decimal('100000'),
+    unitPriceInr: null,
+    orderItem: { unitDeclaredValueInr: null, unitPriceInr: null },
+  }));
+  const orderItemFindMany = jest.fn(async () => []);
+  const orderFindUnique = jest.fn(async () => ({
+    declaredValueInr: new Prisma.Decimal('100000'),
+  }));
   const client = {
     ticket: { findUnique, findFirst, create, update, updateMany, findMany, count },
     ticketEvent: { create: eventCreate, findMany: eventFindMany },
     courierIssueCategory: { findMany: issueCategoryFindMany },
+    shipmentItem: { findUnique: shipmentItemFindUnique },
+    orderItem: { findMany: orderItemFindMany },
+    order: { findUnique: orderFindUnique },
     $transaction,
   };
   const prisma = { client } as unknown as PrismaService;

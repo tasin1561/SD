@@ -139,7 +139,12 @@ describe('Treasury (e2e)', () => {
       await request(h.baseUrl)
         .post('/admin/treasury/entries')
         .set(auth)
-        .send({ amountCurrency: Currency.INR, occurredAt: new Date().toISOString(), ...body })
+        .send({
+          idempotencyKey: randomUUID(),
+          amountCurrency: Currency.INR,
+          occurredAt: new Date().toISOString(),
+          ...body,
+        })
         .expect(200);
       return;
     }
@@ -227,6 +232,7 @@ describe('Treasury (e2e)', () => {
       .post('/admin/treasury/entries')
       .set(auth)
       .send({
+        idempotencyKey: randomUUID(),
         accountId: inrAccount,
         type: BankEntryType.COURIER_SETTLEMENT,
         signedAmount: '100',
@@ -239,6 +245,7 @@ describe('Treasury (e2e)', () => {
       .post('/admin/treasury/entries')
       .set(auth)
       .send({
+        idempotencyKey: randomUUID(),
         accountId: inrAccount,
         type: BankEntryType.EXPENSE,
         signedAmount: '-100',
@@ -263,6 +270,7 @@ describe('Treasury (e2e)', () => {
         .post('/admin/treasury/transfers')
         .set(auth)
         .send({
+          idempotencyKey: randomUUID(),
           fromAccountId: inrAccount,
           toAccountId: bdtAccount,
           amountOut: '1000',
@@ -301,6 +309,7 @@ describe('Treasury (e2e)', () => {
         .post('/admin/treasury/transfers')
         .set(auth)
         .send({
+          idempotencyKey: randomUUID(),
           fromAccountId: inrAccount,
           toAccountId: bdtAccount,
           amountOut: '1000',
@@ -336,6 +345,7 @@ describe('Treasury (e2e)', () => {
         .post('/admin/treasury/transfers')
         .set(auth)
         .send({
+          idempotencyKey: randomUUID(),
           fromAccountId: bdtAccount,
           toAccountId: inrAccount,
           amountOut: '2000',
@@ -371,6 +381,7 @@ describe('Treasury (e2e)', () => {
         .post('/admin/treasury/transfers')
         .set(auth)
         .send({
+          idempotencyKey: randomUUID(),
           fromAccountId: inrAccount,
           toAccountId: second.id,
           amountOut: '300',
@@ -519,6 +530,7 @@ describe('Treasury (e2e)', () => {
         .post('/admin/treasury/entries')
         .set(auth)
         .send({
+          idempotencyKey: randomUUID(),
           accountId: inrAccount,
           amountCurrency: Currency.BDT,
           type: BankEntryType.EXPENSE,
@@ -635,6 +647,7 @@ describe('Treasury (e2e)', () => {
         .post('/admin/treasury/investments')
         .set(auth)
         .send({
+          idempotencyKey: randomUUID(),
           label: '6-month FD',
           counterparty: 'HDFC Bank',
           fromAccountId: inrAccount,
@@ -654,7 +667,12 @@ describe('Treasury (e2e)', () => {
       const partial = await request(h.baseUrl)
         .post(`/admin/treasury/investments/${inv.body.id as string}/return`)
         .set(auth)
-        .send({ toAccountId: inrAccount, amount: '8000', receivedAt: new Date().toISOString() })
+        .send({
+          idempotencyKey: randomUUID(),
+          toAccountId: inrAccount,
+          amount: '8000',
+          receivedAt: new Date().toISOString(),
+        })
         .expect(200);
       expect(partial.body.returned).toBe('8000.00');
       expect(partial.body.closedAt).toBeNull();
@@ -663,6 +681,7 @@ describe('Treasury (e2e)', () => {
         .post(`/admin/treasury/investments/${inv.body.id as string}/return`)
         .set(auth)
         .send({
+          idempotencyKey: randomUUID(),
           toAccountId: inrAccount,
           amount: '200000',
           receivedAt: new Date().toISOString(),
@@ -693,6 +712,7 @@ describe('Treasury (e2e)', () => {
           .post('/admin/treasury/entries')
           .set(auth)
           .send({
+            idempotencyKey: randomUUID(),
             accountId: inrAccount,
             amountCurrency: Currency.INR,
             type,
@@ -709,6 +729,7 @@ describe('Treasury (e2e)', () => {
         .post('/admin/treasury/entries')
         .set(auth)
         .send({
+          idempotencyKey: randomUUID(),
           accountId: inrAccount,
           amountCurrency: Currency.INR,
           type: BankEntryType.EXPENSE,
@@ -734,6 +755,7 @@ describe('Treasury (e2e)', () => {
         .post('/admin/treasury/investments')
         .set(auth)
         .send({
+          idempotencyKey: randomUUID(),
           label: 'Short FD',
           counterparty: 'HDFC Bank',
           fromAccountId: inrAccount,
@@ -749,7 +771,12 @@ describe('Treasury (e2e)', () => {
       await request(h.baseUrl)
         .post(`/admin/treasury/investments/${id}/return`)
         .set(auth)
-        .send({ toAccountId: bdtAccount, amount: '1000', receivedAt: new Date().toISOString() })
+        .send({
+          idempotencyKey: randomUUID(),
+          toAccountId: bdtAccount,
+          amount: '1000',
+          receivedAt: new Date().toISOString(),
+        })
         .expect(400)
         .expect((r) => expect(r.body.code).toBe('INVESTMENT_CURRENCY_MISMATCH'));
 
@@ -757,13 +784,24 @@ describe('Treasury (e2e)', () => {
       await request(h.baseUrl)
         .post(`/admin/treasury/investments/${id}/return`)
         .set(auth)
-        .send({ toAccountId: inrAccount, amount: '50500', receivedAt: closedAt, close: true })
+        .send({
+          idempotencyKey: randomUUID(),
+          toAccountId: inrAccount,
+          amount: '50500',
+          receivedAt: closedAt,
+          close: true,
+        })
         .expect(200);
 
       await request(h.baseUrl)
         .post(`/admin/treasury/investments/${id}/return`)
         .set(auth)
-        .send({ toAccountId: inrAccount, amount: '10', receivedAt: new Date().toISOString() })
+        .send({
+          idempotencyKey: randomUUID(),
+          toAccountId: inrAccount,
+          amount: '10',
+          receivedAt: new Date().toISOString(),
+        })
         .expect(409)
         .expect((r) => expect(r.body.code).toBe('INVESTMENT_CLOSED'));
 

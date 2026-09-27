@@ -16,7 +16,7 @@ export class RecordRechargeBankSideDto {
   @IsUUID()
   bankAccountId!: string;
 
-  @ApiPropertyOptional({ description: 'Anything worth saying about this payment' })
+  @ApiProperty({ description: 'Anything worth saying about this payment' })
   @IsOptional()
   @IsString()
   @MaxLength(500)
@@ -74,9 +74,8 @@ export class RecordOutgoingRechargeDto {
     description:
       'The client’s key for this request, generated once when the form opens. A replay with the same key returns the original entry and records nothing.',
   })
-  @IsOptional()
   @IsUUID('4')
-  idempotencyKey?: string;
+  idempotencyKey!: string;
 }
 
 export class ListRechargesQueryDto {
