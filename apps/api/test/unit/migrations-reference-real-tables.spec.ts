@@ -108,7 +108,22 @@ function referenced(sql: string): string[] {
   }
   // FROM / JOIN also introduce aliases and subqueries; only take the
   // shape where a bare identifier directly follows the keyword.
-  for (const m of sql.matchAll(new RegExp(String.raw`\b(?:FROM|JOIN)\s+${ident}`, 'gi'))) {
+  //
+  // The two lookaheads drop a SET-RETURNING FUNCTION — `FROM
+  // jsonb_each(...)`, `FROM unnest(...)`, `FROM generate_series(...)`.
+  // Those read exactly like a table in this position and none of them is
+  // one; without this the scanner reports `jsonb_each` as a table no
+  // migration created. A table is never followed by a paren here (an
+  // alias needs `AS` or a bare word), so the shape is unambiguous.
+  //
+  // `(?!\w)` is the load-bearing half and is NOT redundant: `\w*` inside
+  // `ident` happily gives back its last character, so `(?!\s*\()` alone
+  // matched `jsonb_eac` — a name that appears nowhere — and reported THAT
+  // as the missing table. Forbidding a word character first pins the
+  // match to the whole identifier before the paren test runs.
+  for (const m of sql.matchAll(
+    new RegExp(String.raw`\b(?:FROM|JOIN)\s+${ident}(?!\w)(?!\s*\()`, 'gi'),
+  )) {
     out.push(m[1] as string);
   }
   return out;
@@ -117,6 +132,15 @@ function referenced(sql: string): string[] {
 describe('the scanner itself', () => {
   it('does not read a FROM inside EXTRACT/SUBSTRING as a table', () => {
     expect(referenced('SELECT EXTRACT(YEAR FROM created_at) FROM "tickets"')).toEqual(['tickets']);
+  });
+
+  it('does not read a set-returning function as a table', () => {
+    expect(
+      referenced('UPDATE "courier_webhooks" AS w SET x = 1 FROM jsonb_each(w."headers") AS kv'),
+    ).toEqual(['courier_webhooks']);
+    expect(referenced('SELECT 1 FROM unnest(ARRAY[1,2]) u JOIN "orders" o ON true')).toEqual([
+      'orders',
+    ]);
   });
 
   it('knows a WITH name is local to the migration, and still flags a real unknown', () => {

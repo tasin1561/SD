@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { ActorType, CourierTemplateCandidateStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { NESTED_QUANTIFIER_MESSAGE, hasNestedQuantifier } from './regex-safety';
 
 export interface CandidateView {
   readonly id: string;
@@ -123,6 +124,18 @@ export class CourierTemplateReviewService {
         message: `That is not a valid regular expression: ${
           err instanceof Error ? err.message : String(err)
         }`,
+      });
+    }
+
+    // Refuse the one shape that can hang the process. The classifier runs
+    // this against an inbound email body of up to 500 KB, and a quantifier
+    // inside a quantified group backtracks exponentially with no timeout
+    // available — so it is refused here, where a person is present to be
+    // told what to write instead.
+    if (hasNestedQuantifier(input.pattern)) {
+      throw new BadRequestException({
+        code: 'PATTERN_UNSAFE',
+        message: NESTED_QUANTIFIER_MESSAGE,
       });
     }
 

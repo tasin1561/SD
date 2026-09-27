@@ -143,6 +143,10 @@ export class EnvService {
     return this.env.CSV_MAX_ROWS;
   }
 
+  get csvMaxBytes(): number {
+    return this.env.CSV_MAX_BYTES;
+  }
+
   get csvPresignTtlSeconds(): number {
     return this.env.CSV_PRESIGN_TTL_SECONDS;
   }

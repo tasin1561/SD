@@ -20,6 +20,23 @@ import { SystemIssueService } from '../../system-issues/services/system-issue.se
 const THUMB_WIDTH_PX = 400;
 
 /**
+ * The decode ceiling, in PIXELS.
+ *
+ * `IMAGE_MAX_SIZE_BYTES` (10 MB) bounds the bytes a seller may register
+ * and says nothing about what they decode to: a highly-compressible PNG
+ * of a few hundred KB can be 20000×20000, and sharp's own default
+ * ceiling is ~268 MP — around 1 GB of decode buffer, demanded inside the
+ * process that also serves HTTP and runs every other BullMQ worker
+ * (SCALE-1). The failure arrives as an out-of-memory, not a failed job.
+ *
+ * 50 MP is ~8600×5800 — far beyond any product photograph, so nothing a
+ * seller would legitimately upload is refused; an image above it fails
+ * its job (visible, retried, then reported) instead of taking the API
+ * with it.
+ */
+const MAX_DECODE_PIXELS = 50_000_000;
+
+/**
  * In-process worker for catalog image jobs (Phase 1A pattern, same as the
  * email worker). Two job types:
  *  - generate-thumbnail: sharp → webp, idempotent (skips if thumbnailUrl
@@ -109,8 +126,12 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
       throw new Error(`Original object missing for image ${row.id} (${row.spacesKey})`);
     }
 
-    const meta = await sharp(original).metadata();
-    const webp = await sharp(original)
+    // ONE instance, read twice: `metadata()` does not consume the
+    // pipeline, and constructing a second sharp over the same buffer
+    // decoded the image twice for no reason.
+    const image = sharp(original, { limitInputPixels: MAX_DECODE_PIXELS });
+    const meta = await image.metadata();
+    const webp = await image
       .resize({ width: THUMB_WIDTH_PX, withoutEnlargement: true })
       .webp({ quality: 80 })
       .toBuffer();

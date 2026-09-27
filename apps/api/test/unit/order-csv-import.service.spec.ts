@@ -14,7 +14,11 @@ const HEADER =
 const GOOD_CSV = `${HEADER}\nSKU-1,2,Asha,+919876543210,12 MG Road,Near City Hospital,Bengaluru,Karnataka,560001,EXT-1\n`;
 
 function makeService(opts: { object?: string | null; upload?: AnyArgs | null } = {}) {
-  const env = { csvPresignTtlSeconds: 900, csvMaxRows: 1000 } as unknown as EnvService;
+  const env = {
+    csvPresignTtlSeconds: 900,
+    csvMaxRows: 1000,
+    csvMaxBytes: 8_388_608,
+  } as unknown as EnvService;
 
   const bulkCreate = jest.fn<Promise<AnyArgs>, [AnyArgs]>(async (a) => ({
     id: 'u1',

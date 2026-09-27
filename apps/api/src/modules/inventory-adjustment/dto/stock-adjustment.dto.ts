@@ -11,6 +11,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -115,11 +116,12 @@ export class ListStockAdjustmentsQueryDto {
   @Min(1)
   page?: number;
 
-  @ApiProperty({ required: false, default: 20, minimum: 1 })
+  @ApiProperty({ required: false, default: 20, minimum: 1, maximum: 200 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
+  @Max(200)
   pageSize?: number;
 }
 

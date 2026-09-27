@@ -350,6 +350,25 @@ export class CsvImportService {
         message: 'No uploaded CSV found at spacesKey — upload before preview/process',
       });
     }
+    /*
+      The SIZE is checked here, before the download, and that ordering is
+      the whole point. CSV_MAX_ROWS is judged after parsing, so the object
+      was buffered and fully parsed before anything could say it was too
+      big — and all 17 BullMQ workers run in-process inside `skydrop-api`
+      (SCALE-1), so an out-of-memory here takes the API down with them.
+      `headObject` was already being called and its `size` read as an
+      existence check only.
+
+      This helper is the choke point for preview AND
+      `createAndEnqueue`, so an oversized object never gets an upload row
+      and the worker never meets one.
+    */
+    if (head.size > this.env.csvMaxBytes) {
+      throw new BadRequestException({
+        code: 'CSV_TOO_LARGE',
+        message: `Uploaded CSV is ${head.size} bytes; the limit is ${this.env.csvMaxBytes}`,
+      });
+    }
     const buffer = await this.spaces.getObject(spacesKey);
     if (!buffer) {
       throw new BadRequestException({

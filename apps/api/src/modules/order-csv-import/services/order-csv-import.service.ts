@@ -306,6 +306,20 @@ export class OrderCsvImportService {
         message: 'No uploaded CSV found at spacesKey — upload before preview/process',
       });
     }
+    /*
+      Size before download — CSV_MAX_ROWS is judged after parsing, so
+      without this the object is buffered and fully parsed before anything
+      says it was too big, in the process that also serves HTTP and runs
+      every BullMQ worker (SCALE-1). This helper is the choke point for
+      preview and `createAndEnqueue`, so an oversized object never gets an
+      upload row and the worker never meets one.
+    */
+    if (head.size > this.env.csvMaxBytes) {
+      throw new BadRequestException({
+        code: 'CSV_TOO_LARGE',
+        message: `Uploaded CSV is ${head.size} bytes; the limit is ${this.env.csvMaxBytes}`,
+      });
+    }
     const buffer = await this.spaces.getObject(spacesKey);
     if (!buffer) {
       throw new BadRequestException({

@@ -249,6 +249,20 @@ export class StoreOrderCsvImportService {
       });
     }
     const head = await this.spaces.headObject(spacesKey);
+    /*
+      Size before download — CSV_MAX_ROWS is judged after parsing, so
+      without this the object is buffered and fully parsed before anything
+      says it was too big, in the process that also serves HTTP and runs
+      every BullMQ worker (SCALE-1). This helper is the choke point for the
+      store's preview and process, so an oversized object never gets an
+      upload row and the worker never meets one.
+    */
+    if (head !== null && head.size > this.env.csvMaxBytes) {
+      throw new BadRequestException({
+        code: 'CSV_TOO_LARGE',
+        message: `Uploaded CSV is ${head.size} bytes; the limit is ${this.env.csvMaxBytes}`,
+      });
+    }
     const buffer = head === null ? null : await this.spaces.getObject(spacesKey);
     if (!buffer) {
       throw new BadRequestException({

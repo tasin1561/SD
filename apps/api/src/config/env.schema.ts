@@ -114,6 +114,21 @@ export const envSchema = z.object({
   // --- Catalog image + CSV limits --------------------------------------
   IMAGE_MAX_SIZE_BYTES: z.coerce.number().int().positive().default(10_485_760),
   CSV_MAX_ROWS: z.coerce.number().int().positive().default(1000),
+  /*
+    The BYTE bound, checked before the object is downloaded.
+
+    CSV_MAX_ROWS is checked AFTER parsing, which means the whole object is
+    buffered and fully parsed before anything says it was too big — and
+    all 17 BullMQ workers run in-process inside `skydrop-api` (SCALE-1),
+    so an out-of-memory there takes the API down with them. `headObject`
+    already tells us the size; this is what makes that number load-bearing
+    rather than an existence check.
+
+    8 MB against a 1000-row limit: a 1000-row order CSV is well under
+    1 MB, so this refuses nothing anybody would legitimately upload while
+    bounding what a single request can ask the process to hold.
+  */
+  CSV_MAX_BYTES: z.coerce.number().int().positive().default(8_388_608),
   CSV_PRESIGN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
 
   // --- Courier credential encryption (Module 9, CUR-1) -----------------

@@ -217,14 +217,50 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 /** Every field any of the three pushes carries the image in. */
 const IMAGE_FIELDS = new Set(['epod', 'image', 'weight_images', 'weightimages', 'qcimage']);
 
-/** Replace image bytes with a note of how big they were. */
+/**
+ * Any string this long is not a remark.
+ *
+ * The key-name list only catches a shape we have already seen. A courier
+ * that nests its push — `{data: {epod: "…"}}` — or renames the field puts
+ * the whole base64 image into the ledger row, which is exactly what this
+ * function exists to prevent, and the row simply gets large with nothing
+ * saying why. A length bound catches an image whatever it is called and
+ * wherever it sits; 2 KB leaves every real free-text field intact.
+ */
+const MAX_LEDGER_STRING = 2048;
+
+/**
+ * Replace image bytes with a note of how big they were — at ANY depth.
+ *
+ * Recursive because a top-level-only walk is a guard against one payload
+ * shape rather than against large payloads, and the shapes are the
+ * courier's to change without telling us.
+ */
 function redactImageFields(body: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(body)) {
-    out[k] =
-      IMAGE_FIELDS.has(k.toLowerCase()) && typeof v === 'string'
-        ? `[image omitted — ${v.length} chars, stored in Spaces]`
-        : v;
+  return redactNode(body, 0) as Record<string, unknown>;
+}
+
+/** Depth bound: a cheap stop for a pathological or cyclic payload. */
+const MAX_DEPTH = 8;
+
+function redactNode(value: unknown, depth: number, key?: string): unknown {
+  if (typeof value === 'string') {
+    const named = key !== undefined && IMAGE_FIELDS.has(key.toLowerCase());
+    if (named || value.length > MAX_LEDGER_STRING) {
+      return `[image omitted — ${value.length} chars, stored in Spaces]`;
+    }
+    return value;
   }
-  return out;
+  if (depth >= MAX_DEPTH) return value;
+  if (Array.isArray(value)) {
+    return value.map((v) => redactNode(v, depth + 1));
+  }
+  if (isRecord(value)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = redactNode(v, depth + 1, k);
+    }
+    return out;
+  }
+  return value;
 }

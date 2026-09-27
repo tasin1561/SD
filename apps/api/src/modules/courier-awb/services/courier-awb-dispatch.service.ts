@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { assertPublicHttpsUrl } from '../../../common/net/ssrf-guard';
 import { DelhiveryAwbService } from '../../courier-delhivery/services/delhivery-awb.service';
 import { DelhiveryLabelService } from '../../courier-delhivery/services/delhivery-label.service';
 import type { DelhiveryAwbRequest } from '../../courier-delhivery/types/delhivery.types';
@@ -280,7 +281,13 @@ export class CourierAwbDispatchService {
       if (url === null) {
         throw new Error(`SHIPROCKET_LABEL_UNAVAILABLE${message === null ? '' : `: ${message}`}`);
       }
-      const res = await fetch(url);
+      // A URL out of a courier RESPONSE, fetched from inside the droplet,
+      // whose bytes we store and later presign for a seller to open — the
+      // same shape as a seller-supplied webhook URL, so it takes the same
+      // guard. `redirect: 'error'` is the other half: the guard resolves
+      // the host it was handed, and a redirect reaches one it never saw.
+      const safe = await assertPublicHttpsUrl(url);
+      const res = await fetch(safe, { redirect: 'error' });
       if (!res.ok) {
         throw new Error(`SHIPROCKET_LABEL_FETCH_${res.status}`);
       }

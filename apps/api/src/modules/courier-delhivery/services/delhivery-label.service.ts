@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { assertPublicHttpsUrl } from '../../../common/net/ssrf-guard';
 import { DelhiveryHttpService } from './delhivery-http.service';
 import type { DelhiveryClient, DelhiveryLabelResult } from '../types/delhivery.types';
 import type { CourierCredentialActor } from '../../courier-shared/services/courier-credential.service';
@@ -52,8 +53,18 @@ export class DelhiveryLabelService implements Pick<DelhiveryClient, 'fetchLabel'
 
     // The pre-signed URL is fetched directly (no auth header — the URL
     // carries its own signature). 30s timeout for the binary.
-    const res = await fetch(link, {
+    //
+    // It is a URL from a RESPONSE, so it goes through the same guard a
+    // seller-supplied webhook URL does: the bytes are stored in our Spaces
+    // and later presigned for a seller to open, so a link answering with
+    // the droplet's metadata service would be laundered into a document.
+    // `redirect: 'error'` is the other half — the guard resolves the host
+    // it was given, and a redirect is how you get somewhere it never
+    // checked.
+    const safe = await assertPublicHttpsUrl(link);
+    const res = await fetch(safe, {
       method: 'GET',
+      redirect: 'error',
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {

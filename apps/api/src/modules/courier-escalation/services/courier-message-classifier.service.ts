@@ -26,6 +26,24 @@ export interface Classification {
 const CONFIDENCE_GATE = 0.85;
 
 /**
+ * How much of a message the patterns are matched against.
+ *
+ * An inbound body is up to 500 KB and is supplied by whoever wrote the
+ * mail — the HMAC authenticates the relaying Worker, not the sender. Every
+ * active pattern is compiled and run against it in the request thread,
+ * with no timeout available: Node's regex engine cannot be interrupted, so
+ * the only lever is how much text it is given.
+ *
+ * A screenful is the right amount because of what these patterns ARE:
+ * they identify a courier's canned reply by its opening phrase, and the
+ * rest of a message is the quoted thread beneath it. Matching the whole
+ * body buys nothing and is the part an attacker controls most freely.
+ * `courier_template_candidates` still stores the whole normalised body, so
+ * the corpus a future pattern is written from is not truncated.
+ */
+const MAX_MATCH_CHARS = 20_000;
+
+/**
  * Turn a courier message into a state label.
  *
  * ── REGEX FIRST, AND FOR NOW ONLY ────────────────────────────────────
@@ -80,7 +98,9 @@ export class CourierMessageClassifierService {
   }
 
   async classify(body: string): Promise<Classification> {
-    const text = this.normalise(body);
+    // Bounded BEFORE any pattern sees it — see MAX_MATCH_CHARS. The
+    // candidate record below still gets the whole body.
+    const text = this.normalise(body).slice(0, MAX_MATCH_CHARS);
 
     const templates = await this.prisma.client.courierMessageTemplate.findMany({
       where: { isActive: true },
@@ -166,6 +186,10 @@ export class CourierMessageClassifierService {
    * a copy that can drift.
    */
   static readonly confidenceGate = CONFIDENCE_GATE;
+
+  /** How much of a body the patterns see. Exposed so the test asserts the
+   *  bound rather than restating the number. */
+  static readonly maxMatchChars = MAX_MATCH_CHARS;
 
   /** Whether a model-sourced answer stands on its own. */
   static modelAnswerNeedsReview(confidence: number): boolean {

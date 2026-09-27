@@ -5,6 +5,15 @@ const REDACT_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
   'req.headers["x-api-key"]',
+  /*
+    The courier webhook credential. Under SHARED_SECRET — which is what
+    both couriers use — the value of this header IS the secret, and the
+    public webhook route is the highest-volume request in the estate, so
+    one logged request object is the key sitting in a log file that
+    outlives the incident. MUST NOT #2 names webhook signatures
+    explicitly; this header was the one path that could still carry one.
+  */
+  'req.headers["x-skydrop-signature"]',
   'res.headers["set-cookie"]',
   '*.password',
   '*.passwordHash',
@@ -46,6 +55,9 @@ const REDACT_PATHS = [
   '*.secret',
   '*.privateKey',
   '*.private_key',
+  // A signature is a credential under SHARED_SECRET, and it is the field
+  // name every courier-webhook code path reaches for.
+  '*.signature',
 ];
 
 export function pinoConfig(env: Env): Params {

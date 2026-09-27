@@ -319,7 +319,26 @@ export class SpacesService implements OnModuleInit {
     return this.client;
   }
 
+  /**
+   * Local-disk stand-in for an object key (mock mode only — dev and e2e).
+   *
+   * `path.join` RESOLVES `..`, so a key containing one escapes MOCK_ROOT
+   * and reads or writes anywhere the process can reach. Mock mode never
+   * runs in production, so this is a dev-only hole — but the keys here are
+   * built from seller and store ids and, on some paths, from a key the
+   * CLIENT supplied, and a developer's machine is where the real
+   * credentials for everything else sit.
+   *
+   * Refused rather than sanitised: a key with `..` in it is not a key any
+   * of our builders produces, so silently rewriting it would hide the
+   * caller that produced it. A leading `/` goes too — `path.join` treats
+   * it as an ordinary segment here, but the same string reaches S3 as a
+   * different key, and one meaning per key is the point.
+   */
   private mockPath(key: string): string {
+    if (key.split(/[\\/]/).includes('..') || key.startsWith('/')) {
+      throw new Error(`Refusing an object key that escapes its prefix: ${key}`);
+    }
     return path.join(MOCK_ROOT, this.bucket, key);
   }
 }

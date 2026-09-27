@@ -37,6 +37,7 @@ const BASE_ENV: Env = {
   SPACES_CDN_URL: '',
   IMAGE_MAX_SIZE_BYTES: 10485760,
   CSV_MAX_ROWS: 1000,
+  CSV_MAX_BYTES: 8_388_608,
   CSV_PRESIGN_TTL_SECONDS: 900,
   // 32-byte AES key (64 hex chars) — fixed test fixture for the courier
   // credential cipher; never a real key.
