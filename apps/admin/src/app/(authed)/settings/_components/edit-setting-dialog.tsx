@@ -7,20 +7,22 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { useSystemSetting, useUpdateSystemSetting } from '@/lib/api-hooks';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
-import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
-import { Select } from '@skydrop/ui/app/select';
-import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { AcAlert, AcFact, phaseOf } from './ac-parts';
-import { FEE_CURRENCY_OPTIONS, isFeeCurrencyKey } from '@/lib/fee-currency';
+import { fallbackSettingName, settingGuide } from '@/lib/system-setting-guide';
+import { SettingExplanation, SettingValueEditor } from '@/components/setting-guide-ui';
 import { usePermission } from '@/lib/use-permission';
 
 /**
- * Edit a system setting. The modal renders a type-appropriate input:
- *   - STRING / INT / DECIMAL → text or number input
- *   - BOOLEAN → checkbox
- *   - JSON → textarea (parsed before submit)
+ * Edit a system setting. The dialog opens with what the setting decides
+ * and an example (from `system-setting-guide`), then a type-appropriate
+ * input:
+ *   - BOOLEAN, or a STRING with known choices → a dropdown that says what
+ *     the selected choice does, with an example, as it changes
+ *   - a JSON list of known codes → checkboxes (saved as the same array)
+ *   - other STRING → text; INT / DECIMAL → a number input
+ *   - other JSON → textarea (parsed before submit)
  *   - DATE → datetime-local
  *
  * Sensitive settings start MASKED; the operator must click "Show
@@ -46,6 +48,11 @@ export function EditSettingDialog({
   const [boolDraft, setBoolDraft] = useState<boolean>(false);
   const [reveal, setReveal] = useState<boolean>(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const guide = settingGuide(settingKey);
+  // What is set now stays in the dropdown even if the guide does not list it.
+  const saved = detail.data?.value;
+  const initialDraft =
+    saved === null || saved === undefined || typeof saved === 'object' ? '' : String(saved);
 
   // Seed the draft once the detail loads (or when the key changes).
   useEffect(() => {
@@ -93,7 +100,7 @@ export function EditSettingDialog({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={detail.data?.displayName ?? settingKey}
+      title={guide?.name ?? detail.data?.displayName ?? fallbackSettingName(settingKey)}
       icon={<Settings2 size={18} />}
       locked={update.isPending}
       description={
@@ -112,50 +119,26 @@ export function EditSettingDialog({
         <p className="ac-muted">Setting not found.</p>
       ) : (
         <form onSubmit={handleSubmit} className="ac-form">
+          {guide !== null && <SettingExplanation guide={guide} />}
           {detail.data.helpText && <p className="ac-muted">{detail.data.helpText}</p>}
 
           {detail.data.valueType === SettingValueType.BOOLEAN ? (
-            <fieldset className="ac-fieldset">
-              <legend>Value</legend>
-              <Checkbox
-                label={boolDraft ? 'true' : 'false'}
-                checked={boolDraft}
-                onChange={(e) => setBoolDraft(e.target.checked)}
-                disabled={update.isPending || !canWrite}
-              />
-            </fieldset>
-          ) : detail.data.valueType === SettingValueType.JSON ? (
-            <TextArea
-              label="Value (JSON)"
-              hint="Must parse as a JSON object or array."
-              rows={8}
-              value={detail.data.isSensitive && !reveal ? '••••••••' : draft}
-              onChange={(e) => setDraft(e.target.value)}
-              disabled={update.isPending || (detail.data.isSensitive && !reveal)}
+            <SettingValueEditor
+              settingKey={detail.data.key}
+              valueType={detail.data.valueType}
+              value={boolDraft ? 'true' : 'false'}
+              onChange={(next) => setBoolDraft(next === 'true')}
+              disabled={update.isPending || !canWrite}
             />
-          ) : isFeeCurrencyKey(detail.data.key) ? (
-            <Select
-              label="Currency"
-              hint="The currency this fee is AGREED in. A non-INR fee is converted to rupees at the rate in force when the charge is taken."
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              disabled={update.isPending}
-            >
-              {FEE_CURRENCY_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
           ) : (
-            <TextField
-              label="Value"
-              hint={typeHint(detail.data.valueType)}
-              type={inputTypeFor(detail.data.valueType)}
-              floatLabel={inputTypeFor(detail.data.valueType) === 'datetime-local'}
-              value={detail.data.isSensitive && !reveal ? '••••••••' : draft}
-              onChange={(e) => setDraft(e.target.value)}
-              disabled={update.isPending || (detail.data.isSensitive && !reveal)}
+            <SettingValueEditor
+              settingKey={detail.data.key}
+              valueType={detail.data.valueType}
+              value={draft}
+              onChange={setDraft}
+              disabled={update.isPending}
+              keepValues={[initialDraft]}
+              masked={detail.data.isSensitive && !reveal}
             />
           )}
 
@@ -172,6 +155,13 @@ export function EditSettingDialog({
                 {reveal ? 'Mask' : 'Show value'}
               </Button>
             </div>
+          )}
+
+          {detail.data.description && (
+            <details className="sss-detail">
+              <summary>Technical detail</summary>
+              <p>{detail.data.description}</p>
+            </details>
           )}
 
           {serverError && <AcAlert message={serverError} />}
@@ -232,31 +222,5 @@ function clientParse(type: SettingValueType, draft: string, boolDraft: boolean):
       const exhaustive: never = type;
       throw new Error(`Unhandled valueType: ${String(exhaustive)}`);
     }
-  }
-}
-
-function inputTypeFor(type: SettingValueType): string {
-  switch (type) {
-    case SettingValueType.INT:
-    case SettingValueType.DECIMAL:
-      return 'text'; // 'number' rejects leading zeros etc — text + parse is safer
-    case SettingValueType.DATE:
-      return 'datetime-local';
-    default:
-      return 'text';
-  }
-}
-
-function typeHint(type: SettingValueType): string {
-  switch (type) {
-    case SettingValueType.INT:
-      return 'Integer';
-    case SettingValueType.DECIMAL:
-      return 'Decimal (e.g., 18.00)';
-    case SettingValueType.DATE:
-      return 'ISO-8601 (YYYY-MM-DDTHH:mm:ss)';
-    case SettingValueType.STRING:
-    default:
-      return 'Plain text';
   }
 }

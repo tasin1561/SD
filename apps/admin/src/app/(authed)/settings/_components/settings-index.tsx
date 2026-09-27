@@ -9,16 +9,25 @@ import { Button } from '@skydrop/ui/app/button';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { SettingName, compareByGuide } from '@/components/setting-guide-ui';
+import { SETTING_GROUP_ORDER, settingGuide, settingValueLabel } from '@/lib/system-setting-guide';
 import { AcFact, AcHeader, AcPage, AcSection } from './ac-parts';
 import { EditSettingDialog } from './edit-setting-dialog';
 
 /**
- * Admin /settings — system settings list, grouped by category. Each
- * row shows displayName / valueDisplay / type / annotations
- * (Sensitive / Restart / Read-only). Clicking "Edit" opens the
- * type-aware modal.
+ * Admin /settings — every system setting, grouped by what it is about.
+ * Each row leads with a plain-English name from `system-setting-guide`
+ * (the same words a seller's override table shows), an (i) that says
+ * what it decides with an example, and the key underneath for searching.
+ * Values read as words where the guide knows them (On/Off, a choice's
+ * name); a sensitive value stays masked exactly as the server sent it.
+ * "Edit" opens the type-aware dialog.
  *
- * FE-2 discipline: the modal surfaces server's [code] message
+ * Grouped by the guide's groups rather than the raw `category` column:
+ * `ops` and `courier` each held forty-odd unrelated settings. A key the
+ * guide does not know yet lands under its category's name, last.
+ *
+ * FE-2 discipline: the dialog surfaces the server's [code] message
  * verbatim on validation errors. The list reflects the server's
  * authoritative valueDisplay (masked for sensitive).
  */
@@ -30,7 +39,7 @@ export function SettingsIndex(): ReactElement {
     <AcPage>
       <AcHeader
         title="System settings"
-        subtitle="Runtime configuration — values consumed by the operational services. Edits audit MEDIUM with before/after."
+        subtitle="How the whole system behaves, one setting at a time. Hover or tap (i) for what a setting decides and an example. Every edit is audited with its before and after."
       />
 
       {list.isLoading ? (
@@ -46,8 +55,13 @@ export function SettingsIndex(): ReactElement {
           description="The seed should provision these — check the database."
         />
       ) : (
-        list.data.map((group) => (
-          <AcSection key={group.category} title={categoryLabel(group.category)} flush>
+        groupByGuide(list.data.flatMap((g) => g.items)).map((group) => (
+          <AcSection
+            key={group.title}
+            title={group.title}
+            note={`${group.items.length} ${group.items.length === 1 ? 'setting' : 'settings'}`}
+            flush
+          >
             <ol className="ac-rows">
               {group.items.map((s) => (
                 <SettingRow key={s.id} setting={s} onEdit={() => setEditingKey(s.key)} />
@@ -64,6 +78,29 @@ export function SettingsIndex(): ReactElement {
   );
 }
 
+interface SettingGroupView {
+  readonly title: string;
+  readonly items: readonly SystemSettingView[];
+}
+
+/** The guide's groups in page order, then any unknown key under its category. */
+function groupByGuide(items: readonly SystemSettingView[]): readonly SettingGroupView[] {
+  const byTitle = new Map<string, SystemSettingView[]>();
+  for (const s of [...items].sort((a, b) => compareByGuide(a.key, b.key))) {
+    const title = settingGuide(s.key)?.group ?? `Other — ${categoryLabel(s.category)}`;
+    const bucket = byTitle.get(title);
+    if (bucket === undefined) byTitle.set(title, [s]);
+    else bucket.push(s);
+  }
+  const order = (title: string): number => {
+    const i = (SETTING_GROUP_ORDER as readonly string[]).indexOf(title);
+    return i === -1 ? SETTING_GROUP_ORDER.length : i;
+  };
+  return [...byTitle.entries()]
+    .sort(([a], [b]) => order(a) - order(b) || a.localeCompare(b))
+    .map(([title, groupItems]) => ({ title, items: groupItems }));
+}
+
 function SettingRow({
   setting,
   onEdit,
@@ -71,11 +108,14 @@ function SettingRow({
   setting: SystemSettingView;
   onEdit: () => void;
 }): ReactElement {
+  const shown = setting.isSensitive
+    ? setting.valueDisplay
+    : settingValueLabel(setting.key, setting.valueDisplay);
   return (
     <li className="ac-row">
       <div className="ac-row__main">
         <div className="ac-row__title">
-          <span>{setting.displayName}</span>
+          <SettingName settingKey={setting.key} />
           <StatusChip
             kind={valueTypeKind(setting.valueType)}
             label={setting.valueType.toLowerCase()}
@@ -85,11 +125,7 @@ function SettingRow({
           {setting.requiresRestart && <AcFact tone="bad">Restart</AcFact>}
           {!setting.isEditableByAdmin && <AcFact>Read-only</AcFact>}
         </div>
-        {/* A key like `courier.delhivery_pickup_location` is a single
-            unbreakable token wider than a phone, so it wraps anywhere. */}
-        <span className="sk-ident ac-code">{setting.key}</span>
-        {setting.description && <span className="ac-muted">{setting.description}</span>}
-        <div className="ac-row__value">{setting.valueDisplay}</div>
+        <div className="ac-row__value">{shown}</div>
         {setting.lastEditedAt && (
           <span className="ac-faint sk-figure">
             Last edit: {new Date(setting.lastEditedAt).toISOString().replace('T', ' ').slice(0, 16)}

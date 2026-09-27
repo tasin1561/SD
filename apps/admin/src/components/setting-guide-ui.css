@@ -1,0 +1,147 @@
+/*
+ * Both setting screens (global /settings and a seller's overrides): the
+ * plain-English name, its (i) and the key beneath; the explanation box;
+ * and the choice pickers that say what each choice does.
+ */
+.sss-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.sss-name__line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.sss-name__meta {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+.sss-name__meta code {
+  color: var(--fg-faint);
+  font-size: inherit;
+}
+.sss-info {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin: -6px 0;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: help;
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+.sss-info:hover,
+.sss-info:focus-visible {
+  background: var(--surface-3);
+  color: var(--fg-strong);
+}
+.sss-info:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+@media (pointer: coarse) {
+  .sss-info {
+    width: 44px;
+    height: 44px;
+    margin: -14px -8px;
+  }
+}
+.sss-tip__what,
+.sss-tip__example {
+  display: block;
+}
+.sss-tip__example {
+  margin-top: var(--sp-2);
+}
+.sss-explain {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+/* Choice picker: the dropdown, what the selected choice does, and every choice compared. */
+.scf {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.scf-now {
+  display: grid;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border-left: 2px solid var(--accent-line);
+  border-radius: var(--r-sm);
+  background: var(--accent-tint);
+}
+.scf-now p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.scf-compare {
+  display: grid;
+  gap: var(--sp-1);
+}
+.scf-compare__title {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+summary.scf-compare__title {
+  cursor: pointer;
+}
+.scf-list {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-xs);
+}
+.scf-list li {
+  display: grid;
+  gap: 1px;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  color: var(--fg-muted);
+}
+.scf-list li[data-current] {
+  background: var(--surface-2);
+}
+.scf-list__label {
+  color: var(--fg-strong);
+  font-weight: var(--fw-medium);
+}
+.scf-list__does {
+  overflow-wrap: anywhere;
+}
+.scf-multi__grid {
+  display: grid;
+  gap: var(--sp-2);
+}
+.scf-multi[data-compact] .scf-multi__grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  max-height: 18rem;
+  overflow-y: auto;
+}
+.sss-detail {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.sss-detail summary {
+  cursor: pointer;
+}
+.sss-detail p {
+  margin: var(--sp-1) 0 0;
+  overflow-wrap: anywhere;
+}
