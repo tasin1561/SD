@@ -5,6 +5,7 @@ import {
   createTestStaff,
   flushTestRedis,
   resetAuthState,
+  sentTokenFor,
   waitFor,
   type AppHarness,
 } from './app-harness';
@@ -260,7 +261,11 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
         }),
       { description: 'seller password-reset notification_log' },
     );
-    const plaintext = /token=([A-Za-z0-9_-]+)/.exec(log.body)![1]!;
+    // The stored copy is redacted (a live reset link must not outlive
+    // its token in a table with no expiry); the plaintext comes from the
+    // message we sent, which is what the recipient would read.
+    expect(log.body).toContain('token=[redacted]');
+    const plaintext = await sentTokenFor(h.app, 'reset-password?token=');
 
     await request(h.baseUrl)
       .post('/auth/seller/password-reset/confirm')

@@ -29,6 +29,7 @@ import { OrderDeliveredAccrualListener } from '../../src/modules/seller-wallet-a
 import { DeliveryFailedListener } from '../../src/modules/delivery-action/services/delivery-failed-listener.service';
 import { TicketNotifier } from '../../src/modules/ticket/services/ticket-notifier.service';
 import { ResellerOrderMoneyListener } from '../../src/modules/reseller-order-money/services/reseller-order-money.listener';
+import { ResendService } from '../../src/modules/email/services/resend.service';
 
 export interface AppHarness {
   app: NestExpressApplication;
@@ -249,6 +250,12 @@ export async function resetAuthState(
       tenth cannot be forgotten.
     */
     await drainAll(app);
+    // The dev mail stub keeps what it "sent" so a round-trip test can
+    // read its own token (see `sentTokenFor`). Cleared here for the same
+    // reason every other cross-test remnant is: a leftover credential
+    // email would let a later test confirm with a token from an earlier
+    // one and pass for the wrong reason.
+    app.get(ResendService).clearDevSentMessages();
   }
   // Order-critical chain (CLAUDE MUST #12): Module-8 warehouse rows
   // (shipment_items FK stock_batches/warehouse_bins; shipments FK
@@ -919,6 +926,49 @@ export async function waitFor<T>(
   throw new Error(
     `waitFor timed out after ${timeoutMs}ms${opts.description ? ` (${opts.description})` : ''}`,
   );
+}
+
+/**
+ * The plaintext single-use token out of the email we actually SENT.
+ *
+ * A reset / verification / invitation token is stored NOWHERE in
+ * plaintext — the token tables hold only its SHA-256, and since the
+ * token-redaction work `notification_logs` holds `token=[redacted]`
+ * (a live credential link must not outlive its token in a table with no
+ * expiry). So the only copy of the plaintext is the message itself, and
+ * a test driving a round trip has to read it the way the RECIPIENT
+ * would, not out of our own ledger.
+ *
+ * In e2e the CREDENTIAL provider is Resend's dev stub (the router sends
+ * every CREDENTIAL message there, and `RESEND_API_KEY` is empty), which
+ * keeps what it "sent" for exactly this. Searched newest first, so a
+ * suite that has triggered two reads the one it just caused.
+ *
+ * `linkNeedle` is the link's path up to the token
+ * (`reset-password?token=`) — what tells one credential email from
+ * another when several are in flight.
+ */
+export async function sentTokenFor(
+  app: NestExpressApplication,
+  linkNeedle: string,
+): Promise<string> {
+  const resend = app.get(ResendService);
+  const found = await waitFor(
+    () =>
+      Promise.resolve(
+        [...resend.devSentMessages()].reverse().find((m) => m.text.includes(linkNeedle)) ?? null,
+      ),
+    { description: `a sent email containing "${linkNeedle}"` },
+  );
+  const token = new RegExp(`${escapeForRegExp(linkNeedle)}([A-Za-z0-9_-]+)`).exec(found.text)?.[1];
+  if (token === undefined || token.length === 0) {
+    throw new Error(`sent email contained "${linkNeedle}" but no token after it`);
+  }
+  return token;
+}
+
+function escapeForRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

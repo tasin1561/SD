@@ -31,6 +31,13 @@ export type {
 const RESEND_MAX_PER_SECOND = 2;
 
 /**
+ * How many dev-mode messages the stub keeps, for the e2e suite to read
+ * back (see `devSentMessages`). Bounded because this is a long-lived
+ * singleton and an unbounded list of rendered email bodies is a leak.
+ */
+const DEV_OUTBOX_MAX = 50;
+
+/**
  * Resend error names that decided nothing about the message — see
  * `EmailFailureKind`. Rate limits and outages are obvious; the
  * credential ones belong here too, because a key that has been revoked
@@ -57,6 +64,27 @@ export class ResendService implements EmailProvider {
   private readonly logger = new Logger(ResendService.name);
   private readonly client: Resend | null;
   private readonly devMode: boolean;
+  /**
+   * What the DEV STUB "sent", newest last. Populated ONLY in dev mode —
+   * the live branch never touches it, so a production process holds no
+   * message bodies in memory.
+   *
+   * This exists because the e2e suite has to play the RECIPIENT. A
+   * password-reset or email-verification round trip needs the plaintext
+   * token, and since the token tables store only its SHA-256 the sole
+   * place the plaintext ever appears is the message itself. The specs
+   * used to read it out of `notification_logs.body` — which is exactly
+   * the copy that is now redacted, because a live credential link must
+   * not outlive its token in a table with no expiry. The recipient's
+   * copy is unredacted by construction (the redaction runs after the
+   * provider has been handed the message), so reading it HERE is the
+   * test playing the recipient rather than reading our ledger.
+   *
+   * NOTIF-6 already makes this stub the sanctioned e2e seam; keeping the
+   * message instead of only logging it is what makes the seam usable
+   * (the log line truncates at 240 characters, which cuts the token).
+   */
+  private readonly devOutbox: SendEmailInput[] = [];
 
   constructor(private readonly env: EnvService) {
     this.devMode = !this.env.hasResendApiKey;
@@ -79,6 +107,19 @@ export class ResendService implements EmailProvider {
     return !this.devMode;
   }
 
+  /**
+   * TEST SEAM. The dev stub's outbox, newest last; always empty when
+   * live. See `devOutbox` for why the e2e suite needs it.
+   */
+  devSentMessages(): readonly SendEmailInput[] {
+    return this.devOutbox;
+  }
+
+  /** TEST SEAM. Drop what the stub has kept, between e2e tests. */
+  clearDevSentMessages(): void {
+    this.devOutbox.length = 0;
+  }
+
   async send(input: SendEmailInput): Promise<SendEmailOutcome> {
     // The staging redirect is applied by the router, above every
     // provider — see `mail-redirect.ts` for why it is not here.
@@ -86,6 +127,12 @@ export class ResendService implements EmailProvider {
       this.logger.log(
         `[DEV] Would send email: subject="${input.subject}", to="${input.to}", from="${input.from}", body="${truncate(input.text, 240)}"`,
       );
+      // Keyed on `devMode`, not on `!this.client`: a live provider that
+      // somehow reached here without a client must still retain nothing.
+      if (this.devMode) {
+        this.devOutbox.push(input);
+        if (this.devOutbox.length > DEV_OUTBOX_MAX) this.devOutbox.shift();
+      }
       return { ok: true, providerMessageId: null };
     }
 

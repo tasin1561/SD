@@ -4,6 +4,7 @@ import {
   createTestStaff,
   flushTestRedis,
   resetAuthState,
+  sentTokenFor,
   waitFor,
   type AppHarness,
 } from './app-harness';
@@ -143,8 +144,14 @@ describe('Staff auth (e2e)', () => {
     expect(log.status).toBe('SENT');
     expect(log.toEmail).toBe(staff.email);
     expect(log.body).toContain('reset-password?token=');
+    // The STORED copy carries no live token. This spec used to lift the
+    // plaintext out of `log.body`, which is precisely why that column
+    // could not keep holding one: the ledger has no expiry, so a reset
+    // link in it outlives the token it belongs to.
+    expect(log.body).toContain('reset-password?token=[redacted]');
 
-    const plaintext = /token=([A-Za-z0-9_-]+)/.exec(log.body)![1]!;
+    // Read it the way the RECIPIENT would — out of the message we sent.
+    const plaintext = await sentTokenFor(h.app, 'reset-password?token=');
 
     // Now confirm with the token.
     await request(h.baseUrl)
@@ -181,7 +188,8 @@ describe('Staff auth (e2e)', () => {
         }),
       { description: 'staff email-verification notification_log' },
     );
-    const plaintext = /token=([A-Za-z0-9_-]+)/.exec(log.body)![1]!;
+    expect(log.body).toContain('token=[redacted]');
+    const plaintext = await sentTokenFor(h.app, 'verify-email?token=');
 
     await request(h.baseUrl)
       .post('/auth/staff/email-verification/confirm')
