@@ -11,7 +11,10 @@ import { ShiprocketWalletPage } from '../pages/shiprocket-wallet.page';
 import { CourierWalletReconcileService } from './courier-wallet-reconcile.service';
 import { raiseLedgerFindings } from './ledger-findings';
 import { shiprocketDate } from './shiprocket-portal-probe.service';
-import { raiseShiprocketOpenFailure } from './shiprocket-portal-failures';
+import {
+  clearShiprocketOpenFailures,
+  raiseShiprocketOpenFailure,
+} from './shiprocket-portal-failures';
 import {
   ShiprocketPortalSessionService,
   type ShiprocketPortalHandle,
@@ -210,6 +213,14 @@ export class ShiprocketWalletSyncService {
         f.outcome === 'FAILED' ? f.message.slice(0, 300) : f.message,
       );
     }
+    // The panel opened, so every "could not open it" issue is stale —
+    // cleared through the shared helper that raises them, or it clears
+    // on whichever job happens to run first.
+    await clearShiprocketOpenFailures(
+      this.issues,
+      account.id,
+      'The Shiprocket panel opened on its own — whatever stopped it is no longer true.',
+    );
 
     const from = shiprocketDate(new Date(now.getTime() - windowDays * 86_400_000));
     const to = shiprocketDate(now);

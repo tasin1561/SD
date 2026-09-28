@@ -12,7 +12,10 @@ import {
   gotoShiprocket,
   isShiprocketLoginUrl,
 } from './shiprocket-portal-session.service';
-import { raiseShiprocketOpenFailure } from './shiprocket-portal-failures';
+import {
+  clearShiprocketOpenFailures,
+  raiseShiprocketOpenFailure,
+} from './shiprocket-portal-failures';
 
 export const ACTION_SR_PORTAL_PROBED = 'courier.shiprocket_portal.probed';
 const STATE_DIR = process.env['PORTAL_STATE_DIR'] ?? '/home/skydrop/portal-state';
@@ -177,13 +180,11 @@ export class ShiprocketPortalProbeService {
           await page.close().catch(() => undefined);
         }
       }
-      for (const key of [
-        `shiprocket-portal-login:${a.id}`,
-        `shiprocket-portal-rejected:${a.id}`,
-        `shiprocket-portal-egress:${a.id}`,
-      ]) {
-        await this.issues.resolveByKey(key, 'Signed in to the Shiprocket panel on its own.');
-      }
+      await clearShiprocketOpenFailures(
+        this.issues,
+        a.id,
+        'Signed in to the Shiprocket panel on its own.',
+      );
       return { ...base, outcome: 'READ', detail: null, artifactDir: dir, pages };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

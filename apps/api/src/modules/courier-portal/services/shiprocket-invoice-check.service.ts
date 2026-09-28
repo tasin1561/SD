@@ -17,7 +17,10 @@ import {
   type WalletMove,
 } from './shiprocket-invoice-rows';
 import { shiprocketDate } from './shiprocket-portal-probe.service';
-import { raiseShiprocketOpenFailure } from './shiprocket-portal-failures';
+import {
+  clearShiprocketOpenFailures,
+  raiseShiprocketOpenFailure,
+} from './shiprocket-portal-failures';
 import {
   ShiprocketPortalSessionService,
   type ShiprocketPortalHandle,
@@ -162,6 +165,12 @@ export class ShiprocketInvoiceCheckService {
       });
       return blank(f.outcome, f.message.slice(0, 300));
     }
+    // The panel opened, so every "could not open it" issue is stale.
+    await clearShiprocketOpenFailures(
+      this.issues,
+      account.id,
+      'The Shiprocket panel opened on its own — whatever stopped it is no longer true.',
+    );
 
     const from = shiprocketDate(new Date(now.getTime() - windowDays * DAY_MS));
     const to = shiprocketDate(now);

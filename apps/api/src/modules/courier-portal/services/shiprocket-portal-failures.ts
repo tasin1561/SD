@@ -120,3 +120,37 @@ export async function raiseShiprocketOpenFailure(
   });
   return { outcome: 'FAILED', message };
 }
+
+/**
+ * The counterpart of `raiseShiprocketOpenFailure`: the panel opened, so
+ * every issue that says it could not is no longer true.
+ *
+ * ── WHY THIS IS SHARED, AND WHY IT EXISTS AT ALL ─────────────────────
+ * These keys were raised from one place and cleared from ANOTHER — only
+ * `ShiprocketPortalProbeService` resolved them, so a wallet sync that
+ * signed in perfectly left `shiprocket-portal-rejected` open, saying
+ * HIGH and in so many words "ask Shiprocket why a successful sign-in is
+ * being bounced". Measured on 2026-09-29: the fix worked, 176 stored
+ * transactions proved it, and that issue was still on /system-issues
+ * pointing a person at their account manager. **An issue raised by a
+ * shared helper must be cleared by a shared helper** — anything else
+ * clears on whichever job happens to run, which is a coin toss.
+ *
+ * The CHALLENGE key is deliberately NOT here: an OTP or captcha stops
+ * both jobs before a browser is even opened (they short-circuit on it),
+ * so it is never reached from a success and is cleared by the probe,
+ * which is the run a person triggers after answering one.
+ */
+export async function clearShiprocketOpenFailures(
+  issues: SystemIssueService,
+  accountId: string,
+  note: string,
+): Promise<void> {
+  for (const key of [
+    `shiprocket-portal-login:${accountId}`,
+    `shiprocket-portal-rejected:${accountId}`,
+    `shiprocket-portal-egress:${accountId}`,
+  ]) {
+    await issues.resolveByKey(key, note);
+  }
+}

@@ -439,3 +439,51 @@ describe('the sign-in asks the edge before it spends anything', () => {
     );
   });
 });
+
+/**
+ * An issue raised by a shared helper must be cleared by a shared helper.
+ *
+ * These three keys were raised from `raiseShiprocketOpenFailure` and
+ * cleared ONLY by the probe, so a wallet sync that signed in perfectly
+ * left `shiprocket-portal-rejected` open — HIGH, and saying in so many
+ * words "ask Shiprocket why a successful sign-in is being bounced".
+ * Measured 2026-09-29: the fix worked, 176 stored transactions proved
+ * it, and that issue was still telling a person to ring their account
+ * manager. Whichever job runs first must be able to clear it.
+ */
+describe('a Shiprocket panel that opens clears what said it could not', () => {
+  const read = (f: string): string =>
+    readFileSync(join(__dirname, '../../src/modules/courier-portal/services', f), 'utf8');
+
+  it('every key the raiser raises is one the clearer clears', () => {
+    const raiser = read('shiprocket-portal-failures.ts');
+    const keys = [...raiser.matchAll(/`(shiprocket-portal-[a-z]+):\$\{/g)].map((m) => m[1]);
+    expect(keys).toContain('shiprocket-portal-rejected');
+    const clearer = raiser.slice(
+      raiser.indexOf('export async function clearShiprocketOpenFailures'),
+    );
+    for (const key of new Set(keys)) {
+      // A challenge is the exception, and it is argued for in the code:
+      // both jobs short-circuit on it before a browser is opened, so a
+      // success never reaches this.
+      if (key === 'shiprocket-portal-challenge') continue;
+      expect(clearer).toContain(key);
+    }
+  });
+
+  it('BOTH nightly jobs clear them, not just the probe', () => {
+    for (const f of [
+      'shiprocket-wallet-sync.service.ts',
+      'shiprocket-invoice-check.service.ts',
+      'shiprocket-portal-probe.service.ts',
+    ]) {
+      expect(read(f)).toContain('clearShiprocketOpenFailures');
+    }
+  });
+
+  it('no job keeps its own copy of the key list', () => {
+    for (const f of ['shiprocket-wallet-sync.service.ts', 'shiprocket-portal-probe.service.ts']) {
+      expect(read(f)).not.toContain('`shiprocket-portal-rejected:');
+    }
+  });
+});
