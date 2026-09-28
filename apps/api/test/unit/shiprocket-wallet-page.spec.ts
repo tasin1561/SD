@@ -165,6 +165,6 @@ describe('ShiprocketWalletPage.readTab — paging their way', () => {
     });
     await expect(
       new ShiprocketWalletPage(f.page).readTab('recharge-history', 'a', 'b'),
-    ).rejects.toThrow(/session has expired/);
+    ).rejects.toThrow(/sent us to its login page/);
   });
 });

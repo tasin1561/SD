@@ -31,7 +31,13 @@ export const SETTING_SR_INVOICES_WINDOW = 'courier.shiprocket_invoice_check_wind
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SOURCE = 'ShiprocketInvoiceCheckService';
 
-export type ShiprocketInvoiceOutcome = 'CHECKED' | 'SKIPPED' | 'CHALLENGE' | 'NO_LOGIN' | 'FAILED';
+export type ShiprocketInvoiceOutcome =
+  | 'CHECKED'
+  | 'SKIPPED'
+  | 'CHALLENGE'
+  | 'NO_LOGIN'
+  | 'REJECTED'
+  | 'FAILED';
 
 export interface ShiprocketInvoiceAccountResult {
   readonly courierAccountId: string;
@@ -201,18 +207,26 @@ export class ShiprocketInvoiceCheckService {
         { courierAccountId: account.id, err: message },
         'Shiprocket invoice check failed',
       );
+      // The failed calls, for the same reason the wallet sync carries
+      // them: "landed on login" is what this says for every cause.
+      const net = handle.networkSummary();
       await this.issues.raise({
         kind: SystemIssueKind.COURIER_COST_SYNC,
         severity: SystemIssueSeverity.MEDIUM,
         title: `Could not check ${account.label}'s Shiprocket invoices`,
         detail:
           `The nightly invoice check failed: ${message.slice(0, 400)}\n\n` +
+          (net === null ? '' : `${net}\n\n`) +
           'Costs are unaffected — they come from the wallet — but invoices are not being ' +
           'compared, and a discrepancy can only be disputed within 15 days of its invoice. It ' +
           'retries tonight; if it keeps failing their panel has probably changed.',
         source: SOURCE,
         dedupeKey: failureKey,
-        metadata: { courierAccountId: account.id, error: message.slice(0, 500) },
+        metadata: {
+          courierAccountId: account.id,
+          error: message.slice(0, 500),
+          networkFailures: net,
+        },
       });
       return blank('FAILED', message.slice(0, 300));
     } finally {

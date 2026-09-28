@@ -5,6 +5,9 @@ import {
   isShiprocketLoginUrl,
 } from '../services/shiprocket-portal-session.service';
 import { SR_INVOICE_HEADERS, isInvoiceRow } from '../services/shiprocket-invoice-rows';
+// One wording for both pages: they mean the same thing and drifting
+// apart would make the same failure read as two.
+import { LANDED_ON_LOGIN } from './shiprocket-wallet.page';
 
 export class ShiprocketInvoicesPageError extends Error {
   constructor(message: string) {
@@ -110,9 +113,7 @@ export class ShiprocketInvoicesPage {
     try {
       await view.waitForLoadState('domcontentloaded', { timeout: 30_000 }).catch(() => undefined);
       if (isShiprocketLoginUrl(view.url())) {
-        throw new ShiprocketInvoicesPageError(
-          'the Shiprocket session has expired (landed on login)',
-        );
+        throw new ShiprocketInvoicesPageError(LANDED_ON_LOGIN);
       }
       const link = view.locator('a', { hasText: /^\s*Download Now\s*$/ }).first();
       const found = await link
@@ -138,7 +139,7 @@ export class ShiprocketInvoicesPage {
 
   private assertSignedIn(): void {
     if (isShiprocketLoginUrl(this.page.url())) {
-      throw new ShiprocketInvoicesPageError('the Shiprocket session has expired (landed on login)');
+      throw new ShiprocketInvoicesPageError(LANDED_ON_LOGIN);
     }
   }
 

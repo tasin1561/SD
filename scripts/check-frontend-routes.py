@@ -310,6 +310,12 @@ EXPECTED_ORPHANS = {
     # audit row, both already on screens; the trigger is for a runbook or
     # a terminal after their billing pages change.
     'admin/courier-portal/delhivery-invoice-check',
+    # Asks Shiprocket's API what it exposes about the wallet (read-only,
+    # GET only). Its answer decides whether COST-2's browser read of
+    # their panel can ever be retired, so it is run when somebody is
+    # making that decision — not from a screen. Its findings go to one
+    # audit row.
+    'admin/shiprocket/api-probe',
     # Superseded by the pack BOX (PACK-1): the bench opens a box by
     # scanning the label, so nothing on a screen pulls "the next parcel"
     # any more. Kept because PackQueueService.pullNext is the WMS-2

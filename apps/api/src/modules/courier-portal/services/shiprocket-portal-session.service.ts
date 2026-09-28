@@ -8,10 +8,14 @@ import {
   CourierCredentialService,
   courierActor,
 } from '../../courier-shared/services/courier-credential.service';
+import { PortalNetworkWatch } from './shiprocket-portal-network';
 
 export const SR_PORTAL_ORIGIN = 'https://app.shiprocket.in';
 export const SR_PORTAL_PROXY_SETTING = 'courier.shiprocket_portal_proxy';
 const STATE_DIR = process.env['PORTAL_STATE_DIR'] ?? '/home/skydrop/portal-state';
+/** Long enough for their router to bounce a session it will not honour.
+ *  Measured at well under 4s on 2026-09-28; 6 leaves room. */
+const SETTLE_AFTER_LOGIN_MS = 6_000;
 
 export class ShiprocketPortalProxyMissingError extends Error {
   constructor() {
@@ -45,6 +49,35 @@ export class ShiprocketPortalChallengeError extends Error {
   }
 }
 
+/**
+ * Their edge accepted the sign-in and the panel still would not open.
+ *
+ * DISTINCT FROM A CHALLENGE ON PURPOSE. A challenge is a person's job
+ * and freezes everything until somebody answers it. This is Shiprocket's
+ * side refusing a session whose credentials they just accepted — nothing
+ * an operator types will fix it, and it needs their account manager
+ * rather than a fresh login. Measured on 2026-09-28: the panel's
+ * `POST apiv2.shiprocket.co/v1/auth/login` returned 200 with a valid
+ * ten-day JWT, and the app bounced straight back to `/newlogin` while
+ * every later call answered 401. Reported as an expired session for a
+ * week, which is the one thing it was not.
+ */
+export class ShiprocketPortalSignInRejectedError extends Error {
+  constructor(
+    readonly url: string,
+    /** What the browser could not load, if anything was recorded. */
+    readonly networkSummary: string | null,
+  ) {
+    super(
+      'Shiprocket accepted the sign-in and then would not open the panel — the browser was sent ' +
+        `back to ${url}. This is not an expired session and not a wrong password: their own ` +
+        'sign-in call succeeded. Logging in again will not help.' +
+        (networkSummary === null ? '' : `\n\n${networkSummary}`),
+    );
+    this.name = 'ShiprocketPortalSignInRejectedError';
+  }
+}
+
 /** Pure, so it can be tested without a browser: is this a login page? */
 export function isShiprocketLoginUrl(url: string): boolean {
   return /^https:\/\/app\.shiprocket\.in\/(newlogin|login)(?=[/?#]|$)/.test(url);
@@ -74,6 +107,14 @@ export interface ShiprocketPortalHandle {
   /** A new tab in the signed-in context. Use one per page read: a tab
    *  their router has redirected can stop painting for good. */
   newPage(): Promise<Page>;
+  /**
+   * What the browser could not load on any of this session's tabs, as
+   * lines a person can read — or null when nothing of Shiprocket's
+   * failed. Every page read that ends up on their login screen should
+   * put this in the issue it raises: the page itself cannot tell an
+   * expired session from their edge refusing it, and this can.
+   */
+  networkSummary(): string | null;
   close(): Promise<void>;
 }
 
@@ -126,7 +167,11 @@ export class ShiprocketPortalSessionService {
         timezoneId: 'Asia/Kolkata',
       });
       context.setDefaultTimeout(30_000);
+      // Attached before the first navigation: the call that explains a
+      // refusal is usually the first one the app makes.
+      const net = new PortalNetworkWatch();
       let page = await context.newPage();
+      net.watch(page);
 
       // A page that REQUIRES a session. Their redirect to the login page
       // may be client-side, so wait before judging — the Delhivery
@@ -146,13 +191,19 @@ export class ShiprocketPortalSessionService {
         // hang until they time out.
         await page.close().catch(() => undefined);
         page = await context.newPage();
-        await this.login(page, courierAccountId, runId);
+        net.watch(page);
+        await this.login(page, courierAccountId, runId, net);
         await context.storageState({ path: statePath });
       }
 
       return {
         page,
-        newPage: (): Promise<Page> => context.newPage(),
+        newPage: async (): Promise<Page> => {
+          const p = await context.newPage();
+          net.watch(p);
+          return p;
+        },
+        networkSummary: (): string | null => net.summary(),
         close: async (): Promise<void> => {
           try {
             await context.storageState({ path: statePath });
@@ -179,7 +230,12 @@ export class ShiprocketPortalSessionService {
     return v;
   }
 
-  private async login(page: Page, courierAccountId: string, runId: string): Promise<void> {
+  private async login(
+    page: Page,
+    courierAccountId: string,
+    runId: string,
+    net: PortalNetworkWatch,
+  ): Promise<void> {
     // Audited decrypt (CUR-1); the password stays in this process.
     const creds = await this.credentials.getCredentialForAccount(
       courierAccountId,
@@ -222,6 +278,26 @@ export class ShiprocketPortalSessionService {
       // Did not reach the panel. Whatever stopped it, it is not something
       // to try again automatically.
       throw await this.challenge(page, (await this.detectChallenge(page)) ?? 'UNKNOWN');
+    }
+
+    /*
+      A URL that matched ONCE is not a sign-in.
+
+      `waitForURL` resolves on the first match and returns, and their app
+      routes to `/seller/...` and can then bounce straight back to
+      `/newlogin?routestate=seller%2Fhome`. So this method returned
+      success from the login page, `open()` saved that as the session
+      state, and every later read landed on login and reported an expired
+      session. Measured on 2026-09-28: their own `/v1/auth/login`
+      answered 200 with a valid ten-day JWT on the same run.
+
+      Settle, then ask again. A session that holds stays off the login
+      page; one that does not is Shiprocket refusing us, which is a
+      different problem with a different answer (see the error).
+    */
+    await page.waitForTimeout(SETTLE_AFTER_LOGIN_MS);
+    if (isShiprocketLoginUrl(page.url())) {
+      throw new ShiprocketPortalSignInRejectedError(page.url(), net.summary());
     }
   }
 

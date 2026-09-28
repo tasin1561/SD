@@ -41,6 +41,7 @@ export type ShiprocketWalletOutcome =
   | 'SKIPPED'
   | 'CHALLENGE'
   | 'NO_LOGIN'
+  | 'REJECTED'
   | 'FAILED';
 
 export interface ShiprocketWalletAccountResult {
@@ -357,17 +358,26 @@ export class ShiprocketWalletSyncService {
         { courierAccountId: account.id, err: message },
         'Shiprocket wallet sync failed',
       );
+      // What the browser could not load. Without it every one of these
+      // says the same sentence whatever went wrong, which is how five
+      // days of nightly failures produced no diagnosis.
+      const net = handle.networkSummary();
       await this.issues.raise({
         kind: SystemIssueKind.COURIER_COST_SYNC,
         severity: SystemIssueSeverity.MEDIUM,
         title: `Could not read ${account.label}'s Shiprocket wallet`,
         detail:
           `The nightly Shiprocket wallet sync failed: ${message.slice(0, 400)}\n\n` +
+          (net === null ? '' : `${net}\n\n`) +
           'Their parcel costs are not updating and read as uncovered in the P&L — not as ' +
           'free. It retries tonight; if it keeps failing their panel has probably changed.',
         source: 'ShiprocketWalletSyncService',
         dedupeKey: `shiprocket-wallet-sync:${account.id}`,
-        metadata: { courierAccountId: account.id, error: message.slice(0, 500) },
+        metadata: {
+          courierAccountId: account.id,
+          error: message.slice(0, 500),
+          networkFailures: net,
+        },
       });
       return blank(account, 'FAILED', message.slice(0, 300));
     } finally {

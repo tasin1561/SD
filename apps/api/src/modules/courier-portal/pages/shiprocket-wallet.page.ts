@@ -7,6 +7,22 @@ import {
 
 export type ShiprocketWalletTab = 'passbook' | 'ledger' | 'recharge-history';
 
+/**
+ * What a page can honestly say when their app sends it to the login
+ * screen — and no more than that.
+ *
+ * It used to say "the Shiprocket session has expired", which is ONE of
+ * the causes and the least likely to be worth acting on. From inside a
+ * page there is no way to tell an expired session from a rotated
+ * password, from a captcha, from their edge refusing a session it had
+ * just granted (measured 2026-09-28) — every one of them ends here. The
+ * caller pairs this with `handle.networkSummary()`, which does know.
+ */
+export const LANDED_ON_LOGIN =
+  'the Shiprocket panel sent us to its login page, so nothing could be read. That is all this ' +
+  'page can tell: an expired session, a changed password and their own edge refusing a ' +
+  'sign-in all end here. The failed calls listed below say which';
+
 export class ShiprocketWalletPageError extends Error {
   constructor(message: string) {
     super(message);
@@ -148,7 +164,7 @@ export class ShiprocketWalletPage {
 
   private assertSignedIn(): void {
     if (isShiprocketLoginUrl(this.page.url())) {
-      throw new ShiprocketWalletPageError('the Shiprocket session has expired (landed on login)');
+      throw new ShiprocketWalletPageError(LANDED_ON_LOGIN);
     }
   }
 

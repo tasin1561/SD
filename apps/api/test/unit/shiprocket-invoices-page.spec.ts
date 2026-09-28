@@ -126,7 +126,7 @@ describe('ShiprocketInvoicesPage.list', () => {
   it('refuses a read that landed on their login page', async () => {
     const f = fake({ tables: [{ headers: HEADERS, rows: ROWS }], login: true });
     await expect(new ShiprocketInvoicesPage(f.page).list('a', 'b')).rejects.toThrow(
-      /session has expired/,
+      /sent us to its login page/,
     );
   });
 

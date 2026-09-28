@@ -103,6 +103,9 @@ function makeSut(opts: {
   const handle = {
     page: {},
     newPage: jest.fn(),
+    // What the browser could not load. A real session reports the failed
+    // calls here so "landed on login" stops being the whole diagnosis.
+    networkSummary: jest.fn(() => null),
     close: jest.fn(async () => undefined),
   } as unknown as ShiprocketPortalHandle;
   const session = {

@@ -9,6 +9,7 @@ import {
   ShiprocketPortalCredentialsMissingError,
   ShiprocketPortalProxyMissingError,
   ShiprocketPortalSessionService,
+  ShiprocketPortalSignInRejectedError,
   gotoShiprocket,
   isShiprocketLoginUrl,
 } from '../../src/modules/courier-portal/services/shiprocket-portal-session.service';
@@ -173,5 +174,56 @@ describe('the API and the portal worker agree on the queue', () => {
   it.each(['ACTION_SR_INVOICES_OK', 'ACTION_SR_INVOICES_FAILED'])('%s', (name) => {
     expect(pick(invoiceCheck, name)).toBeDefined();
     expect(pick(panel, name)).toBe(pick(invoiceCheck, name));
+  });
+});
+
+/**
+ * The bug this file could not have caught before: `open()` reported
+ * SUCCESS from the login page.
+ *
+ * `waitForURL(/\/seller\//)` resolves on the FIRST match and returns,
+ * and their app routes to `/seller/...` and can bounce straight back to
+ * `/newlogin?routestate=seller%2Fhome`. So a run that never signed in
+ * saved that as its session state, and every page read afterwards said
+ * "the session expired" — for five days, while their own
+ * `/v1/auth/login` was answering 200 with a valid ten-day token
+ * (measured 2026-09-28).
+ *
+ * A browser is the only way to see the bounce, so what is pinned here is
+ * the CHECK: that the settle-and-re-ask exists at all, and that the
+ * error it throws is a distinct kind. Delete the re-check and this
+ * fails.
+ */
+describe('the panel sign-in is verified, not assumed', () => {
+  const src = readFileSync(
+    join(
+      __dirname,
+      '../../src/modules/courier-portal/services/shiprocket-portal-session.service.ts',
+    ),
+    'utf8',
+  );
+
+  it('re-asks after waitForURL instead of trusting one match', () => {
+    const after = src.slice(src.indexOf('waitForURL(/\\/seller\\//'));
+    expect(after).toContain('isShiprocketLoginUrl(page.url())');
+    expect(after).toContain('ShiprocketPortalSignInRejectedError');
+  });
+
+  it('is a DIFFERENT failure from a challenge — one needs a person, the other needs them', () => {
+    const rejected = new ShiprocketPortalSignInRejectedError(
+      'https://app.shiprocket.in/newlogin?routestate=seller%2Fhome',
+      'What the browser could not load:\n  401 apiv2.shiprocket.co/v1/get/version',
+    );
+    expect(rejected).not.toBeInstanceOf(ShiprocketPortalChallengeError);
+    // It must not read as an expired session: that is the sentence that
+    // sent everybody to re-check a password that was never wrong.
+    expect(rejected.message).toContain('not an expired session');
+    expect(rejected.message).toContain('401 apiv2.shiprocket.co');
+  });
+
+  it('carries no network report when there was nothing to report', () => {
+    expect(
+      new ShiprocketPortalSignInRejectedError('https://x/newlogin', null).message,
+    ).not.toContain('could not load');
   });
 });

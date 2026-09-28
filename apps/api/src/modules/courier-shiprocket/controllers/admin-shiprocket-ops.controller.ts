@@ -1,6 +1,7 @@
-import { Controller, Get, HttpCode, HttpStatus, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 
+import { CurrentStaff } from '../../../common/decorators/current-staff.decorator';
 import { StaffJwtGuard } from '../../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import { RequirePermissions } from '../../../common/auth/require-permissions.decorator';
@@ -9,6 +10,11 @@ import { CourierEnablementService } from '../../courier-shared/services/courier-
 import { CourierWriteGuardService } from '../../courier-shared/services/courier-write-guard.service';
 import { ShiprocketClientService } from '../services/shiprocket-client.service';
 import { ShiprocketHttpService } from '../services/shiprocket-http.service';
+import {
+  ShiprocketApiProbeService,
+  type ShiprocketApiProbeFindings,
+} from '../services/shiprocket-api-probe.service';
+import type { AuthenticatedStaff } from '../../../common/types/request';
 
 const COURIER = 'shiprocket';
 
@@ -126,6 +132,7 @@ export class AdminShiprocketOpsController {
     private readonly client: ShiprocketClientService,
     private readonly writeGuard: CourierWriteGuardService,
     private readonly enablement: CourierEnablementService,
+    private readonly apiProbe: ShiprocketApiProbeService,
   ) {}
 
   @Get('status')
@@ -352,5 +359,44 @@ export class AdminShiprocketOpsController {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  }
+
+  /**
+   * A one-off, READ-ONLY look at what their API will tell us about the
+   * wallet.
+   *
+   * Its own permission (`courier.accounts.manage`, not the class's
+   * `courier.waybills.manage`): this signs in as the account and walks a
+   * list of their endpoints, which is the same kind of act as running
+   * the cost sync, and a person who may read waybill state is not
+   * thereby a person who may spend the account's rate budget.
+   *
+   * Synchronous, unlike Delhivery's billing probe, and for one reason:
+   * that one drives a browser and had to ride the wallet sync's queue so
+   * two Chromiums could not share a login. This one is HTTP through the
+   * adapter's own token cache, so there is nothing to collide with and
+   * no reason to make the caller poll. No screen — it is run from a
+   * terminal when somebody is deciding whether COST-2's browser read can
+   * be retired.
+   */
+  @Post('api-probe')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('courier.accounts.manage')
+  @ApiOperation({
+    summary: 'Ask Shiprocket’s API what it exposes about the wallet (read-only, GET only)',
+    description:
+      'Walks every money-shaped endpoint in their published collection plus the names a passbook ' +
+      'would live under, and records status, body shape and — where a list comes back — whether ' +
+      'its rows carry any content. Writes one audit row. Creates nothing on their side.',
+  })
+  @ApiQuery({ name: 'courierAccountId', required: false })
+  apiProbeRun(
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @Query('courierAccountId') courierAccountId?: string,
+  ): Promise<ShiprocketApiProbeFindings> {
+    return this.apiProbe.probe({
+      requestedByStaffId: staff.id,
+      courierAccountId: courierAccountId ?? null,
+    });
   }
 }
