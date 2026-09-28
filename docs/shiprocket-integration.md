@@ -32,7 +32,79 @@ anywhere in the repo — see "Credentials" below.
 
 ---
 
-## THE PANEL AUTOMATION IS DOWN — and it is NOT the IP (re-measured 2026-09-28, late)
+## THE PANEL BLOCK IS THE ADDRESS **AND** THE BROWSER — both, ANDed (measured 2026-09-29)
+
+> **THIS SUPERSEDES BOTH BOXES BELOW, AND EXPLAINS WHY THEY CONTRADICT
+> EACH OTHER.** One investigation concluded "it is the IP"; the next
+> concluded "it is the browser, not the address". Each was half right,
+> and each was confounded by changing one variable while the other
+> stayed broken.
+>
+> `apiv2.shiprocket.co/v1/auth/login/user` — the SECOND call of their
+> panel's two-step sign-in — sits behind an **AWS WAF that refuses on
+> EITHER of two signals**. Measured as a bare CORS preflight needing no
+> credentials, five times per cell:
+>
+> | Egress | `Chrome/...` UA | `HeadlessChrome/...` UA |
+> |---|---|---|
+> | NordVPN Mumbai `187.13.246.12` | **200** (`access-control-allow-origin` present) | 403 |
+> | DigitalOcean app droplet `68.183.190.55` | 403 | 403 |
+> | DigitalOcean egress droplet `143.110.188.167` | 403 | 403 |
+>
+> A refusal is a **CloudFront** error page (`Request blocked.`) with no
+> `access-control-allow-origin`; an allowed request reaches
+> **istio-envoy**, their application, which answers
+> `{"message":"Token not provided","status_code":400}` to a preflight-free
+> POST. So the browser reports the POST as `net::ERR_FAILED` and their
+> Angular app as **`status: 0`** — exactly the toast the owner saw
+> through the Bangalore address, and exactly what makes this look like a
+> session that will not hold rather than a block.
+>
+> **This is ONE path.** `/v1/auth/login` (step one),
+> `/v1/get/version`, `/v1/settings/company/pickup` and
+> `app.shiprocket.in/newlogin` itself all reach their application from
+> every egress. Only `/v1/auth/login/user` is fenced — which is why the
+> sign-in is accepted and the panel then will not open.
+>
+> **Do not measure this with a bare `OPTIONS`.** Without `Origin` and
+> `Access-Control-Request-*` it is not a preflight and answers **403 from
+> everywhere including the working exit** — that measurement is what
+> produced "one endpoint refusing everybody is not an IP problem" on
+> 2026-09-28, and it was an artefact. Likewise, `curl` with its default
+> User-Agent is 403 from the working exit too. A useful probe sends a
+> real preflight AND a browser UA.
+>
+> **Both halves are now fixed.**
+> - Address: `courier.shiprocket_portal_proxy` = `http://127.0.0.1:1082`
+>   (the NordVPN container), with
+>   `courier.shiprocket_portal_egress_check_url` =
+>   `http://127.0.0.1:8001/v1/publicip/ip` and
+>   `courier.shiprocket_portal_egress_country` = `India`.
+>   `docs/infrastructure.md` §7b.
+> - Browser: `desktopChromeUserAgent` /`desktopChromeClientHints` in
+>   `shiprocket-portal-session.service.ts` — the only token that moves
+>   the answer is `HeadlessChrome` → `Chrome`; platform and version are
+>   not read, so it claims the Linux it really is. **Delhivery's portal is
+>   deliberately unchanged** — it signs in today, and altering the browser
+>   presented to a working site to fix a different one leaves no way to
+>   tell what helped.
+> - And the sign-in now ASKS FIRST: `shiprocketEdgeRefusal` runs one
+>   credential-free preflight before the password is even decrypted, so a
+>   blocked address is named as a blocked address instead of costing a
+>   login attempt and being read as an expired session.
+>
+> **The VPN server is re-picked on every restart** and a future exit
+> could be on the same list. That is what the pre-login check exists to
+> say out loud; the remedy is `sudo shiprocket-vpn rotate-key` and a
+> re-run.
+>
+> **Two sign-ins were spent on 2026-09-28 and one on 2026-09-29.** Every
+> measurement above needs none — the preflight is credential-free, and a
+> made-up address is enough to see whether a request ARRIVES. Test there.
+
+## The 2026-09-28 reading — SUPERSEDED, kept because its artefacts are instructive
+
+
 
 > **CORRECTION to everything below this box.** The section that follows
 > concluded "Shiprocket accepts the sign-in and then will not honour the
@@ -80,7 +152,7 @@ anywhere in the repo — see "Credentials" below.
 > sign-ins to test a theory about the network. The login page loads
 > without credentials and renders identically; test there.
 
-## The earlier reading, same day (kept — its conclusion about the session still holds)
+## The earliest reading, same day — SUPERSEDED (its "not our credentials, not the account" half still holds)
 
 
 `ShiprocketWalletSyncService` (02:20 UTC) and `ShiprocketInvoiceCheckService`

@@ -11,8 +11,11 @@ import {
   ShiprocketPortalProxyMissingError,
   ShiprocketPortalSessionService,
   ShiprocketPortalSignInRejectedError,
+  desktopChromeClientHints,
+  desktopChromeUserAgent,
   gotoShiprocket,
   isShiprocketLoginUrl,
+  shiprocketEdgeRefusal,
 } from '../../src/modules/courier-portal/services/shiprocket-portal-session.service';
 import {
   ShiprocketPortalProbeService,
@@ -333,5 +336,106 @@ describe('the panel sign-in is verified, not assumed', () => {
     expect(
       new ShiprocketPortalSignInRejectedError('https://x/newlogin', null).message,
     ).not.toContain('could not load');
+  });
+});
+
+/**
+ * The browser half of the block their WAF applies.
+ *
+ * Measured 2026-09-29 as a credential-free CORS preflight, five times
+ * per cell: through the NordVPN exit a Chrome UA is 200 and a
+ * HeadlessChrome UA is 403; through either DigitalOcean address both are
+ * 403. Two signals, ANDed — which is why one investigation concluded
+ * "it is the browser" and another "it is the address", and each was half
+ * right. Only the `HeadlessChrome` token moves the answer, so that is
+ * the only thing these assert.
+ */
+describe('desktopChromeUserAgent', () => {
+  it('never says HeadlessChrome, whatever version the browser is', () => {
+    for (const v of ['149.0.7827.55', '140.0.0.0', '99.1.2.3']) {
+      expect(desktopChromeUserAgent(v)).not.toContain('Headless');
+    }
+  });
+
+  it('tracks the running browser rather than a version frozen at review time', () => {
+    expect(desktopChromeUserAgent('149.0.7827.55')).toContain('Chrome/149.0.0.0');
+    expect(desktopChromeUserAgent('151.0.1.2')).toContain('Chrome/151.0.0.0');
+  });
+
+  it('claims the platform it actually runs on — a Linux UA is accepted, so nothing pretends', () => {
+    expect(desktopChromeUserAgent('149.0.7827.55')).toContain('X11; Linux x86_64');
+  });
+
+  it('still produces a usable string if the version is unreadable', () => {
+    const ua = desktopChromeUserAgent('unknown');
+    expect(ua).toContain('Chrome/unknown');
+    expect(ua).not.toContain('Headless');
+  });
+
+  it('client hints agree with it, so the same word is not left in the same request', () => {
+    const hints = desktopChromeClientHints('149.0.7827.55');
+    expect(hints['sec-ch-ua']).not.toContain('Headless');
+    expect(hints['sec-ch-ua']).toContain('v="149"');
+    expect(hints['sec-ch-ua-platform']).toBe('"Linux"');
+  });
+});
+
+/**
+ * The credential-free readiness check in front of the sign-in. It exists
+ * because a refused edge looked exactly like a session that would not
+ * hold, which was diagnosed wrongly twice and retried against an account
+ * that handles COD remittance.
+ */
+describe('shiprocketEdgeRefusal', () => {
+  it('names the measured refusal: a 403 from the edge with no CORS header', () => {
+    const reason = shiprocketEdgeRefusal(403, { server: 'CloudFront' });
+    expect(reason).not.toBeNull();
+    expect(reason).toContain('CloudFront');
+    // The sentence has to stop somebody re-checking a password again.
+    expect(reason).toContain('address is blocked');
+  });
+
+  it('says nothing when their own application answered', () => {
+    expect(
+      shiprocketEdgeRefusal(200, {
+        server: 'istio-envoy',
+        'access-control-allow-origin': 'https://app.shiprocket.in',
+      }),
+    ).toBeNull();
+    expect(shiprocketEdgeRefusal(400, { server: 'istio-envoy' })).toBeNull();
+    expect(shiprocketEdgeRefusal(429, { server: 'istio-envoy' })).toBeNull();
+  });
+
+  it('a 403 THEIR application produced is not this — it carries the CORS header', () => {
+    expect(
+      shiprocketEdgeRefusal(403, {
+        server: 'istio-envoy',
+        'access-control-allow-origin': 'https://app.shiprocket.in',
+      }),
+    ).toBeNull();
+  });
+});
+
+describe('the sign-in asks the edge before it spends anything', () => {
+  const src = readFileSync(
+    join(
+      __dirname,
+      '../../src/modules/courier-portal/services/shiprocket-portal-session.service.ts',
+    ),
+    'utf8',
+  );
+
+  it('checks the edge BEFORE the credential is decrypted', () => {
+    const login = src.slice(src.indexOf('private async login('));
+    expect(login.indexOf('this.edgeRefusal(page)')).toBeLessThan(
+      login.indexOf('getCredentialForAccount'),
+    );
+  });
+
+  it('the browser presents the UA before it loads anything', () => {
+    const open = src.slice(src.indexOf('async open('), src.indexOf('private async login('));
+    expect(open.indexOf('userAgent: desktopChromeUserAgent')).toBeLessThan(
+      open.indexOf('newPage()'),
+    );
   });
 });

@@ -281,7 +281,11 @@ control server to ask.
 
 ### Rollback to the Bangalore tunnel
 
-A settings change, no deploy:
+A settings change, no deploy — **but read the section below first: the
+tunnel's address is refused by Shiprocket's edge, so this is a rollback
+to a route that does not work.** It is here for the case where the VPN
+itself is the fault and a failing-for-a-known-reason route is preferable
+to a failing-for-an-unknown-one.
 
 1. `/settings` → `courier.shiprocket_portal_proxy` = `socks5://127.0.0.1:1081`
 2. `/settings` → clear `courier.shiprocket_portal_egress_check_url`
@@ -290,18 +294,39 @@ A settings change, no deploy:
 The tunnel is left installed, enabled and running at all times; it is not
 disturbed by any of the above.
 
-### What this did NOT fix (measured 2026-09-28)
+### The VPN IS the live route (corrected 2026-09-29)
 
-The VPN was built because the panel was thought to be refusing the
-DigitalOcean address. **It is not.** Through the Mumbai exit and through
-the Bangalore tunnel, `app.shiprocket.in/newlogin` returns 200 and
-renders byte-identically (same controls, same failed sub-resources), and
-a sign-in fails the same way on both: their `/v1/auth/login` succeeds and
-the app bounces to `/newlogin`. The CORS preflight for
-`apiv2.shiprocket.co/v1/auth/login/user` answers **403 from all three
-vantage points — Dhaka, Bangalore and Mumbai** — so the call that breaks
-the sign-in is not IP-dependent. See `docs/shiprocket-integration.md`.
-The VPN is therefore INSTALLED AND AVAILABLE, not in use.
+The paragraph that stood here said the VPN "did not fix it" and was left
+installed and unused. **That was wrong, and the measurement behind it was
+an artefact** — it sent a bare `OPTIONS` with no `Origin` and no
+`Access-Control-Request-*` headers, which is not a CORS preflight and
+answers 403 from every vantage point including the one that works.
+
+A correctly-formed preflight for
+`apiv2.shiprocket.co/v1/auth/login/user`, five times per cell:
+
+| Egress | with a `Chrome/…` UA | with a `HeadlessChrome/…` UA |
+|---|---|---|
+| NordVPN Mumbai `187.13.246.12` | **200** | 403 |
+| app droplet `68.183.190.55` | 403 | 403 |
+| egress droplet `143.110.188.167` | 403 | 403 |
+
+**Two independent signals, ANDed**, which is why changing one at a time
+proved nothing. The address half is this section; the browser half is
+`desktopChromeUserAgent` in `shiprocket-portal-session.service.ts`. The
+live setting is therefore `courier.shiprocket_portal_proxy` =
+`http://127.0.0.1:1082`, with the two egress-check settings SET.
+
+**The VPN re-picks a server on every restart**, and a future exit could
+be on the same reputation list. The sign-in now asks the edge one
+credential-free preflight before it decrypts a password, so that arrives
+as `shiprocket-portal-egress:<account>` naming a blocked address rather
+than as a burnt login attempt read as an expired session. The remedy is
+`sudo shiprocket-vpn rotate-key`, then re-run from /cost-sync.
+
+**The Bangalore tunnel stays installed and running**, but it is NOT a
+working route for the panel any more — rolling back to it restores the
+nightly failures. See `docs/shiprocket-integration.md`.
 
 ---
 

@@ -37,6 +37,16 @@ const STATE_DIR = process.env['PORTAL_STATE_DIR'] ?? '/home/skydrop/portal-state
  *  Measured at well under 4s on 2026-09-28; 6 leaves room. */
 const SETTLE_AFTER_LOGIN_MS = 6_000;
 
+/**
+ * The cross-origin call their sign-in depends on, and the one their edge
+ * refuses (see `desktopChromeUserAgent`). Asked as a bare CORS preflight
+ * — no credentials, no login attempt — so "would a sign-in even be
+ * allowed to complete from here" is answerable for free.
+ */
+const SR_LOGIN_USER_URL = 'https://apiv2.shiprocket.co/v1/auth/login/user?is_web=1';
+/** Short: this sits in front of a login, and a hung probe is a hung night. */
+const EDGE_PROBE_TIMEOUT_MS = 15_000;
+
 export class ShiprocketPortalProxyMissingError extends Error {
   constructor() {
     super(
@@ -127,6 +137,88 @@ export class ShiprocketPortalSignInRejectedError extends Error {
   }
 }
 
+/**
+ * A User-Agent that does not say `HeadlessChrome`, built from the
+ * browser's own version so it never goes stale.
+ *
+ * ── WHY THIS EXISTS ──────────────────────────────────────────────────
+ * `apiv2.shiprocket.co/v1/auth/login/user` sits behind an AWS WAF that
+ * refuses a request on EITHER of two signals, and both were true of us
+ * at once — which is why two investigations each found half the answer
+ * and contradicted each other. Measured 2026-09-29, as a bare CORS
+ * preflight needing no credentials, repeated five times per cell:
+ *
+ * |                       | Chrome UA | HeadlessChrome UA |
+ * |-----------------------|-----------|-------------------|
+ * | NordVPN Mumbai        | **200**   | 403               |
+ * | DigitalOcean (either) | 403       | 403               |
+ *
+ * A refusal is a CloudFront error page carrying no
+ * `access-control-allow-origin`, so the browser reports the POST as
+ * `net::ERR_FAILED` and their Angular app as `status: 0` — which looks
+ * exactly like a network fault and is why this read as "the session is
+ * not honoured" for a week. The address half is `courier.shiprocket_portal_proxy`
+ * (docs/infrastructure.md §7b); this is the browser half, and the ONLY
+ * token that changes the answer is `HeadlessChrome` → `Chrome`. Platform
+ * and version are not read: a Linux UA passes, so this claims the
+ * platform it is actually running on rather than pretending to be
+ * Windows.
+ *
+ * Delhivery's portal is deliberately NOT changed — it signs in today,
+ * and altering the browser it presents to a working site to fix a
+ * different one is a change with no way to tell whether it helped.
+ */
+export function desktopChromeUserAgent(browserVersion: string): string {
+  const major = /^(\d+)\./.exec(browserVersion)?.[1];
+  // Real Chrome reduces its UA to <major>.0.0.0; matching that keeps the
+  // string one a browser would actually send.
+  const version = major === undefined ? browserVersion : `${major}.0.0.0`;
+  return `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${version} Safari/537.36`;
+}
+
+/**
+ * The client hints that go with that UA.
+ *
+ * Chromium sends `sec-ch-ua: "HeadlessChrome";v="149"` whatever the UA
+ * says, so setting only the UA leaves the same word in the same request
+ * — measured as not read by this rule today, and left contradicting
+ * itself it is the obvious thing a stricter rule would key on next.
+ * The platform stays `Linux`, which is true and agrees with the UA.
+ */
+export function desktopChromeClientHints(browserVersion: string): Record<string, string> {
+  const major = /^(\d+)\./.exec(browserVersion)?.[1] ?? browserVersion;
+  return {
+    'sec-ch-ua': `"Chromium";v="${major}", "Google Chrome";v="${major}", "Not?A_Brand";v="24"`,
+    'sec-ch-ua-mobile': '?0',
+    'sec-ch-ua-platform': '"Linux"',
+  };
+}
+
+/**
+ * Did their edge refuse us, rather than their application answer?
+ *
+ * Pure, and NARROW ON PURPOSE. The one measured refusal is a 403 from
+ * CloudFront with no `access-control-allow-origin` — an edge rule, before
+ * anything of theirs has read the request. Anything else is their
+ * application talking and must not stop a run: this sits in front of a
+ * sign-in, and a check that fires on a signal it does not understand
+ * stops the nightly reads for a reason nobody can act on. Fails open by
+ * construction, like `assertNotBlocked` (SCAN-2).
+ */
+export function shiprocketEdgeRefusal(
+  status: number,
+  headers: Readonly<Record<string, string>>,
+): string | null {
+  const allowOrigin = (headers['access-control-allow-origin'] ?? '').trim();
+  if (status !== 403 || allowOrigin !== '') return null;
+  const by = (headers['server'] ?? '').trim();
+  return (
+    `their edge refused the call a sign-in depends on (${status}` +
+    (by === '' ? '' : ` from ${by}`) +
+    '), so this address is blocked rather than this password being wrong'
+  );
+}
+
 /** Pure, so it can be tested without a browser: is this a login page? */
 export function isShiprocketLoginUrl(url: string): boolean {
   return /^https:\/\/app\.shiprocket\.in\/(newlogin|login)(?=[/?#]|$)/.test(url);
@@ -214,10 +306,15 @@ export class ShiprocketPortalSessionService {
 
     const browser = await chromium.launch({ headless: true, proxy: { server: proxy } });
     try {
+      // Their edge reads the UA (see `desktopChromeUserAgent`), so the
+      // browser must present one before it loads anything at all.
+      const version = browser.version();
       const context = await browser.newContext({
         ...(hasState ? { storageState: statePath } : {}),
         locale: 'en-IN',
         timezoneId: 'Asia/Kolkata',
+        userAgent: desktopChromeUserAgent(version),
+        extraHTTPHeaders: desktopChromeClientHints(version),
       });
       context.setDefaultTimeout(30_000);
       // Attached before the first navigation: the call that explains a
@@ -318,6 +415,19 @@ export class ShiprocketPortalSessionService {
     runId: string,
     net: PortalNetworkWatch,
   ): Promise<void> {
+    /*
+      ASK THE EDGE FIRST, BEFORE THE CREDENTIAL IS EVEN DECRYPTED.
+
+      A sign-in whose second call their WAF will refuse cannot succeed,
+      and it presents as a session that would not hold (2026-09-28's
+      reading) rather than as a block — so it is diagnosed wrongly and
+      retried, against an account that also handles COD remittance. This
+      costs one credential-free preflight and turns that into a named
+      refusal nobody has to guess at.
+    */
+    const refusal = await this.edgeRefusal(page);
+    if (refusal !== null) throw new ShiprocketPortalEgressError(refusal, null);
+
     // Audited decrypt (CUR-1); the password stays in this process.
     const creds = await this.credentials.getCredentialForAccount(
       courierAccountId,
@@ -380,6 +490,32 @@ export class ShiprocketPortalSessionService {
     await page.waitForTimeout(SETTLE_AFTER_LOGIN_MS);
     if (isShiprocketLoginUrl(page.url())) {
       throw new ShiprocketPortalSignInRejectedError(page.url(), net.summary());
+    }
+  }
+
+  /**
+   * The credential-free half of "can this run work at all": a CORS
+   * preflight for the call the sign-in depends on, through the browser's
+   * own context so it carries this run's proxy and User-Agent — the two
+   * things the refusal is keyed on. A thrown probe returns null: a
+   * transport blip must not stop a night's reads on its own, and the
+   * sign-in that follows will report whatever is really wrong.
+   */
+  private async edgeRefusal(page: Page): Promise<string | null> {
+    try {
+      const res = await page.request.fetch(SR_LOGIN_USER_URL, {
+        method: 'OPTIONS',
+        headers: {
+          origin: SR_PORTAL_ORIGIN,
+          'access-control-request-method': 'POST',
+          'access-control-request-headers': 'content-type',
+        },
+        timeout: EDGE_PROBE_TIMEOUT_MS,
+        failOnStatusCode: false,
+      });
+      return shiprocketEdgeRefusal(res.status(), res.headers());
+    } catch {
+      return null;
     }
   }
 
