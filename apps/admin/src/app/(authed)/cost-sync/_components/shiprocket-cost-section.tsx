@@ -19,6 +19,7 @@ import {
   useRunShiprocketWalletSync,
   useShiprocketCostPanel,
   type ShiprocketCostRunView,
+  type ShiprocketEgressView,
   type ShiprocketInvoiceAccountView,
   type ShiprocketInvoiceRowView,
   type ShiprocketInvoiceRunView,
@@ -64,6 +65,25 @@ const BROWSER_RUNS: Record<
     done: 'Queued. It signs in through Bangalore and reads three pages — refresh in two minutes.',
   },
 };
+
+/**
+ * The route the panel browser takes and the address it presents, in one
+ * sentence — because the two only mean something together. A reading
+ * from a VPN the browser does not go through vouches for nothing, and
+ * that is exactly the mistake this line exists to make visible.
+ */
+function egressLine(e: ShiprocketEgressView): string {
+  const route =
+    e.proxy === null
+      ? 'No route is set, so the website reads are stopped.'
+      : `Goes out through ${e.proxy}.`;
+  if (!e.checked) return `${route} Where it comes out is not checked.`;
+  if (e.status === 'DOWN') return `${route} Runs are refused: ${e.summary ?? 'the check failed'}.`;
+  const where = e.summary ?? 'somewhere';
+  return e.countryMismatch
+    ? `${route} Runs are refused: it comes out at ${where}, and it should be in ${e.expectedCountry ?? '—'}.`
+    : `${route} Comes out at ${where}.`;
+}
 
 function fmtWhen(iso: string): string {
   return new Date(iso).toLocaleString('en-IN', {
@@ -501,6 +521,15 @@ export function ShiprocketCostSection(): ReactElement {
               </div>
               {canRun && runButton('probe')}
             </div>
+            <p
+              className={
+                d.egress.status === 'DOWN' || d.egress.countryMismatch
+                  ? 'af-small af-bad'
+                  : 'af-small'
+              }
+            >
+              {egressLine(d.egress)}
+            </p>
             {d.portalProbe === null ? (
               <p className="af-small">Never checked.</p>
             ) : (

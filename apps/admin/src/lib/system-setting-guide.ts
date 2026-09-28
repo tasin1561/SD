@@ -1412,9 +1412,22 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'courier.shiprocket_portal_proxy': {
     name: 'Route to the Shiprocket panel',
     group: 'Courier connection',
-    what: 'The connection our browser uses to reach the Shiprocket panel, which only answers from India — the tunnel to our Bangalore server. Empty stops the panel automation; it never connects directly.',
+    what: 'The connection our browser uses to reach the Shiprocket panel. Two exist on the app server: the tunnel to our Bangalore machine, and a NordVPN container that comes out in Mumbai. Empty stops the panel automation; it never connects directly.',
     example:
-      'Set to socks5://127.0.0.1:1081: the nightly wallet read goes through the Bangalore tunnel.',
+      'socks5://127.0.0.1:1081 is the Bangalore tunnel; http://127.0.0.1:1082 is the NordVPN container.',
+  },
+  'courier.shiprocket_portal_egress_check_url': {
+    name: 'Check where the Shiprocket browser comes out',
+    group: 'Courier connection',
+    what: 'Asked before every Shiprocket panel run: is the VPN it goes through up, and where is it? Empty means no check — which is right for the Bangalore tunnel, because that route has nothing to ask. Set it only when the route above is that VPN.',
+    example:
+      'Set to http://127.0.0.1:8001/v1/publicip/ip: a run refuses to start while the VPN is down.',
+  },
+  'courier.shiprocket_portal_egress_country': {
+    name: 'The country that check must report',
+    group: 'Courier connection',
+    what: 'A VPN that is down stops the reads on its own. This catches the other case: one that is working perfectly from the wrong country. Empty accepts anywhere.',
+    example: 'Set to India: a run refuses to start if the VPN comes out anywhere else.',
   },
   'courier.portal_canary_awb': {
     name: 'Our test waybill for the portal check',
@@ -1778,6 +1791,8 @@ export const FREE_TEXT_SETTINGS: Readonly<Record<string, string>> = {
   'invoice.address': 'A postal address, free text over several lines.',
   'inventory.strict_unit_serial_prefix': 'A label prefix; any short text is valid.',
   'courier.shiprocket_portal_proxy': 'A proxy URL for the Bangalore tunnel.',
+  'courier.shiprocket_portal_egress_check_url': 'A URL on the app server, or empty.',
+  'courier.shiprocket_portal_egress_country': 'A country name, or empty for anywhere.',
   'courier.delhivery_support_email': 'An email address copied from Delhivery’s panel.',
   'courier.shiprocket_support_email': 'An email address copied from Shiprocket’s panel.',
   'courier.delhivery_api_base_url': 'A URL; empty means practice mode.',

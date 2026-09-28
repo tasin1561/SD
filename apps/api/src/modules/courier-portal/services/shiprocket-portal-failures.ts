@@ -3,10 +3,11 @@ import type { SystemIssueService } from '../../system-issues/services/system-iss
 import {
   ShiprocketPortalChallengeError,
   ShiprocketPortalCredentialsMissingError,
+  ShiprocketPortalEgressError,
   ShiprocketPortalSignInRejectedError,
 } from './shiprocket-portal-session.service';
 
-export type ShiprocketOpenFailure = 'CHALLENGE' | 'NO_LOGIN' | 'REJECTED' | 'FAILED';
+export type ShiprocketOpenFailure = 'CHALLENGE' | 'NO_LOGIN' | 'REJECTED' | 'EGRESS' | 'FAILED';
 
 /**
  * What every Shiprocket panel job does when it cannot sign in — shared so
@@ -67,6 +68,33 @@ export async function raiseShiprocketOpenFailure(
       metadata: { courierAccountId: account.id, url: err.url },
     });
     return { outcome: 'REJECTED', message: err.message };
+  }
+  if (err instanceof ShiprocketPortalEgressError) {
+    /*
+      Its own key again, for the same reason as REJECTED: the generic
+      "could not sign in" issue sends somebody to check a password and a
+      tunnel, and here neither was even reached. Nothing signed in, so
+      nothing was spent — this is the cheap failure, and it should read
+      that way.
+    */
+    await issues.raise({
+      kind: SystemIssueKind.COURIER_COST_SYNC,
+      severity: SystemIssueSeverity.HIGH,
+      title: `Shiprocket panel reads are stopped for ${account.label} — the egress is wrong`,
+      detail:
+        `${err.message}\n\nOn the app server: \`systemctl status shiprocket-vpn\` and ` +
+        '`shiprocket-vpn status`. Costs stop updating meanwhile and read as uncovered in the ' +
+        'P&L, not as free. docs/infrastructure.md has the restart and the rollback.',
+      source,
+      dedupeKey: `shiprocket-portal-egress:${account.id}`,
+      metadata: {
+        courierAccountId: account.id,
+        reason: err.reason,
+        publicIp: err.reading?.publicIp ?? null,
+        country: err.reading?.country ?? null,
+      },
+    });
+    return { outcome: 'EGRESS', message: err.message };
   }
   if (err instanceof ShiprocketPortalCredentialsMissingError) {
     await issues.raise({

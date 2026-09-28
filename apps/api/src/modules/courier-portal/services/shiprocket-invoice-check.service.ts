@@ -37,6 +37,7 @@ export type ShiprocketInvoiceOutcome =
   | 'CHALLENGE'
   | 'NO_LOGIN'
   | 'REJECTED'
+  | 'EGRESS'
   | 'FAILED';
 
 export interface ShiprocketInvoiceAccountResult {

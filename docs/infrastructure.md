@@ -210,6 +210,101 @@ belt-and-braces rather than a blocker. The reseller app itself needs only
 
 ---
 
+## 7b. Shiprocket panel egress — two routes, both loopback-only
+
+Shiprocket's SELLER PANEL (`app.shiprocket.in`) is driven by a headless
+browser in the `skydrop-portal` process for the nightly wallet sync and
+invoice check. Their API (`apiv2.shiprocket.in`, our adapter) is not
+involved and goes out normally.
+
+The browser NEVER connects directly — `courier.shiprocket_portal_proxy`
+is the single reader of which route it takes, and an empty value stops
+the panel automation outright. Two routes exist on the app server, and
+**nothing else on the droplet uses either of them**:
+
+| Route | Setting value | What it is |
+|---|---|---|
+| Bangalore SSH tunnel | `socks5://127.0.0.1:1081` | `shiprocket-egress-tunnel.service` — `ssh -D` to the egress droplet `143.110.188.167` |
+| NordVPN container | `http://127.0.0.1:1082` | `shiprocket-vpn.service` — gluetun pinned by digest, WireGuard to a NordVPN India server, exits in Mumbai |
+
+Both bind to **loopback only**. The host's own routing is untouched: the
+API, Postgres, Redis, Caddy, Cloudflare and Spaces keep the egress they
+always had, and the droplet's default route is NOT the VPN.
+
+### The NordVPN container
+
+Installed and managed by `scripts/infra/shiprocket-vpn.sh`, which also
+carries the reasoning in its header:
+
+```
+sudo bash scripts/infra/shiprocket-vpn.sh install      # first time, or to update
+sudo shiprocket-vpn status                             # is it up, and where does it come out
+sudo shiprocket-vpn rotate-key                         # re-derive from the token, pick a new server
+sudo shiprocket-vpn uninstall                          # remove it entirely
+sudo systemctl restart shiprocket-vpn                  # ordinary restart (re-picks today's server)
+sudo journalctl -u shiprocket-vpn -f                   # what it is doing
+```
+
+- **The only secret is the NordVPN ACCESS TOKEN** at
+  `/home/skydrop/.config/nordvpn/token` (0600). The WireGuard key and the
+  server are derived from it by an `ExecStartPre` on every start, into
+  `gluetun.env` beside it. The token, that env file and the unit are all
+  in the hourly off-site backup (BACKUP-1).
+- **gluetun runs as `custom`, not as its `nordvpn` provider.** As
+  `nordvpn` it picks servers from a list baked into the image whose India
+  entries (`81.17.122.x`) complete no handshake, and its healthcheck
+  restarts re-pick a server and ignore a pinned endpoint — which is how a
+  run configured for India ended up egressing in Atlanta on 2026-09-28.
+  As `custom` there is no list and no rotation; choosing the server is
+  the script's job, from NordVPN's live recommendations API.
+- **It fails closed.** gluetun's own firewall carries no traffic at all
+  while the tunnel is down or reconnecting, so a browser pointed at its
+  proxy fails rather than quietly going out directly.
+
+### Is the VPN the cause of a failure?
+
+`GET http://127.0.0.1:8001/v1/publicip/ip` on the droplet, or
+`sudo shiprocket-vpn status`. `{"public_ip":""}` means the tunnel is not
+carrying traffic.
+
+Without SSHing in: **/cost-sync**, in the "Shiprocket website access"
+card, prints the route and the address it comes out at in one line. It
+is red when a run would be refused.
+
+The API asks the same question before every panel run, via
+`courier.shiprocket_portal_egress_check_url` (the control server) and
+`courier.shiprocket_portal_egress_country` (what it must say). **Set
+those two only while the proxy IS the VPN** — pointed at a VPN the
+browser does not use, they would vouch for an egress nothing goes
+through. Both EMPTY is the correct state for the SSH tunnel, which has no
+control server to ask.
+
+### Rollback to the Bangalore tunnel
+
+A settings change, no deploy:
+
+1. `/settings` → `courier.shiprocket_portal_proxy` = `socks5://127.0.0.1:1081`
+2. `/settings` → clear `courier.shiprocket_portal_egress_check_url`
+3. optionally `sudo systemctl disable --now shiprocket-vpn`
+
+The tunnel is left installed, enabled and running at all times; it is not
+disturbed by any of the above.
+
+### What this did NOT fix (measured 2026-09-28)
+
+The VPN was built because the panel was thought to be refusing the
+DigitalOcean address. **It is not.** Through the Mumbai exit and through
+the Bangalore tunnel, `app.shiprocket.in/newlogin` returns 200 and
+renders byte-identically (same controls, same failed sub-resources), and
+a sign-in fails the same way on both: their `/v1/auth/login` succeeds and
+the app bounces to `/newlogin`. The CORS preflight for
+`apiv2.shiprocket.co/v1/auth/login/user` answers **403 from all three
+vantage points — Dhaka, Bangalore and Mumbai** — so the call that breaks
+the sign-in is not IP-dependent. See `docs/shiprocket-integration.md`.
+The VPN is therefore INSTALLED AND AVAILABLE, not in use.
+
+---
+
 ## 8. Scaling Triggers
 
 Upgrade components only when these thresholds are hit:

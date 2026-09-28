@@ -7,6 +7,7 @@ import type { CourierCredentialService } from '../../src/modules/courier-shared/
 import {
   ShiprocketPortalChallengeError,
   ShiprocketPortalCredentialsMissingError,
+  ShiprocketPortalEgressError,
   ShiprocketPortalProxyMissingError,
   ShiprocketPortalSessionService,
   ShiprocketPortalSignInRejectedError,
@@ -80,13 +81,66 @@ describe('shiprocketDate — their URL format, on the Indian calendar', () => {
   });
 });
 
+function sessionWith(settings: Record<string, string>): ShiprocketPortalSessionService {
+  const prisma = {
+    client: {
+      systemSetting: {
+        findUnique: async ({ where }: { where: { key: string } }) => ({
+          valueString: settings[where.key] ?? '',
+        }),
+        findMany: async ({ where }: { where: { key: { in: string[] } } }) =>
+          where.key.in.map((key) => ({ key, valueString: settings[key] ?? '' })),
+      },
+    },
+  } as unknown as PrismaService;
+  return new ShiprocketPortalSessionService(prisma, {} as CourierCredentialService);
+}
+
 describe('ShiprocketPortalSessionService', () => {
-  it('REFUSES to start without the Bangalore proxy — it never connects directly', async () => {
-    const prisma = {
-      client: { systemSetting: { findUnique: async () => ({ valueString: '  ' }) } },
-    } as unknown as PrismaService;
-    const svc = new ShiprocketPortalSessionService(prisma, {} as CourierCredentialService);
+  const realFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+  const answers = (body: unknown): void => {
+    globalThis.fetch = (async () => ({
+      ok: true,
+      status: 200,
+      json: async () => body,
+    })) as unknown as typeof fetch;
+  };
+
+  it('REFUSES to start without a proxy — it never connects directly', async () => {
+    const svc = sessionWith({ 'courier.shiprocket_portal_proxy': '  ' });
     await expect(svc.open('acct', 'run')).rejects.toBeInstanceOf(ShiprocketPortalProxyMissingError);
+  });
+
+  it('REFUSES to launch a browser when the egress check says the VPN is down', async () => {
+    answers({ public_ip: '' });
+    const svc = sessionWith({
+      'courier.shiprocket_portal_proxy': 'http://127.0.0.1:1082',
+      'courier.shiprocket_portal_egress_check_url': 'http://127.0.0.1:8001/v1/publicip/ip',
+    });
+    await expect(svc.open('acct', 'run')).rejects.toBeInstanceOf(ShiprocketPortalEgressError);
+  });
+
+  it('REFUSES a VPN that is perfectly healthy in the WRONG COUNTRY — the case being up cannot catch', async () => {
+    answers({ public_ip: '186.247.180.208', country: 'United States', city: 'Atlanta' });
+    const svc = sessionWith({
+      'courier.shiprocket_portal_proxy': 'http://127.0.0.1:1082',
+      'courier.shiprocket_portal_egress_check_url': 'http://127.0.0.1:8001/v1/publicip/ip',
+      'courier.shiprocket_portal_egress_country': 'India',
+    });
+    await expect(svc.open('acct', 'run')).rejects.toThrow(/Atlanta.*should be in India/s);
+  });
+
+  it('asks NOTHING when no check is configured — the SSH tunnel has no control server', async () => {
+    globalThis.fetch = (() => {
+      throw new Error('the egress check must not be called when it is unset');
+    }) as unknown as typeof fetch;
+    const svc = sessionWith({ 'courier.shiprocket_portal_proxy': 'socks5://127.0.0.1:1081' });
+    // It gets past the gate and dies at the browser, which this process has
+    // no business launching — that it is NOT an egress error is the point.
+    await expect(svc.open('acct', 'run')).rejects.not.toBeInstanceOf(ShiprocketPortalEgressError);
   });
 });
 
@@ -136,6 +190,41 @@ describe('ShiprocketPortalProbeService', () => {
     );
   });
 
+  it('a sign-in Shiprocket ACCEPTED and then refused gets its own issue, with what the browser could not load', async () => {
+    /*
+      This service used to keep its own copy of the failure mapping, which
+      predated ShiprocketPortalSignInRejectedError — so this case was filed
+      under the generic "could not open the panel" key, which sends a
+      person to check a password and a tunnel that are both fine, and its
+      message was cut at 400 characters, landing exactly on the network
+      summary that exists to diagnose it. Two runs on 2026-09-28 were read
+      from the wrong evidence because of it.
+    */
+    const p = makeProbe({
+      openError: new ShiprocketPortalSignInRejectedError(
+        'https://app.shiprocket.in/newlogin',
+        'What the browser could not load:\n  401 apiv2.shiprocket.co/v1/get/version',
+      ),
+    });
+    const [r] = await p.svc.probe('MANUAL');
+    expect(r?.outcome).toBe('REJECTED');
+    expect(p.raise).toHaveBeenCalledWith(
+      expect.objectContaining({ dedupeKey: 'shiprocket-portal-rejected:acct-sr' }),
+    );
+    expect(r?.detail).toContain('apiv2.shiprocket.co/v1/get/version');
+  });
+
+  it('an egress that is down or in the wrong place is its OWN issue — nothing was signed in', async () => {
+    const p = makeProbe({
+      openError: new ShiprocketPortalEgressError('the VPN is not reporting a public IP', null),
+    });
+    const [r] = await p.svc.probe('MANUAL');
+    expect(r?.outcome).toBe('EGRESS');
+    expect(p.raise).toHaveBeenCalledWith(
+      expect.objectContaining({ dedupeKey: 'shiprocket-portal-egress:acct-sr' }),
+    );
+  });
+
   it('a missing website login says so, and asks for it', async () => {
     const p = makeProbe({ openError: new ShiprocketPortalCredentialsMissingError() });
     const [r] = await p.svc.probe('MANUAL');
@@ -174,6 +263,25 @@ describe('the API and the portal worker agree on the queue', () => {
   it.each(['ACTION_SR_INVOICES_OK', 'ACTION_SR_INVOICES_FAILED'])('%s', (name) => {
     expect(pick(invoiceCheck, name)).toBeDefined();
     expect(pick(panel, name)).toBe(pick(invoiceCheck, name));
+  });
+
+  /*
+    The settings that say HOW the panel browser gets out are read in two
+    places — the portal worker, which acts on them, and /cost-sync, which
+    shows a person the answer. Drift would leave the page vouching for a
+    route nobody uses, which is the precise mistake the page exists to
+    make visible.
+  */
+  const session = src('courier-portal/services/shiprocket-portal-session.service.ts');
+  const panelKey = (name: string): string | undefined =>
+    new RegExp(`const ${name} = '([^']+)'`).exec(panel)?.[1];
+  it.each([
+    ['SETTING_SR_PROXY', 'SR_PORTAL_PROXY_SETTING'],
+    ['SETTING_SR_EGRESS_URL', 'SR_PORTAL_EGRESS_CHECK_SETTING'],
+    ['SETTING_SR_EGRESS_COUNTRY', 'SR_PORTAL_EGRESS_COUNTRY_SETTING'],
+  ])('%s matches %s', (inPanel, inSession) => {
+    expect(pick(session, inSession)).toBeDefined();
+    expect(panelKey(inPanel)).toBe(pick(session, inSession));
   });
 });
 

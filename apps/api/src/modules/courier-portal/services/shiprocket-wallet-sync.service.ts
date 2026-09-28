@@ -42,6 +42,7 @@ export type ShiprocketWalletOutcome =
   | 'CHALLENGE'
   | 'NO_LOGIN'
   | 'REJECTED'
+  | 'EGRESS'
   | 'FAILED';
 
 export interface ShiprocketWalletAccountResult {

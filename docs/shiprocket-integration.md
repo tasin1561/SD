@@ -32,7 +32,56 @@ anywhere in the repo — see "Credentials" below.
 
 ---
 
-## THE PANEL AUTOMATION IS DOWN — measured 2026-09-28, and it is theirs
+## THE PANEL AUTOMATION IS DOWN — and it is NOT the IP (re-measured 2026-09-28, late)
+
+> **CORRECTION to everything below this box.** The section that follows
+> concluded "Shiprocket accepts the sign-in and then will not honour the
+> session", which still holds, and the owner then found that their own
+> Chrome could not log in through the Bangalore address while it could
+> through NordVPN — which pointed at IP reputation. **A NordVPN route
+> was built, and it changes nothing.** `shiprocket-vpn.service` on the
+> app server (gluetun → NordVPN India, exit `187.13.247.153`, Mumbai,
+> verified by NordVPN's own insights endpoint) was pointed at, and:
+>
+> | Measured through | `app.shiprocket.in/newlogin` | Login page renders | Sign-in |
+> |---|---|---|---|
+> | DigitalOcean direct (Dhaka/Bangalore) | 200 | yes | accepted, then bounced to `/newlogin` |
+> | Bangalore SSH tunnel | 200 | yes, byte-identical | same |
+> | NordVPN Mumbai exit | 200 | yes, byte-identical | same |
+>
+> "Byte-identical" is literal: a headless Chromium loading the login page
+> through the tunnel and through the VPN produced the SAME control counts
+> and the SAME list of failed sub-resources (a 403 on their WordPress
+> `sprite.svg`, an APM beacon, and Google's ad pixels — all noise).
+>
+> **The call that actually breaks the sign-in is
+> `apiv2.shiprocket.co/v1/auth/login/user`, and its CORS preflight
+> answers 403 from ALL THREE vantage points.** The panel's
+> `/v1/auth/login` preflight answers 200 from all three — so the 498 this
+> file recorded earlier that day is no longer reproducible and was
+> transient or has since changed. One endpoint refusing everyone is not
+> an IP problem.
+>
+> **So the remaining difference between us and the owner's working Chrome
+> is the BROWSER, not the address** — which points at the anti-bot bundle
+> their login page loads, or at a panel rewrite our automation is driving
+> the old flow of (their login response carries `web_app_version: 1` and
+> `newpassbook: 0`). That is the thread to pull next; another egress is
+> not.
+>
+> **The VPN is installed, documented and NOT in use.**
+> `courier.shiprocket_portal_proxy` is back on the Bangalore tunnel and
+> the egress-check settings are empty. `docs/infrastructure.md` §7b has
+> what it is, how to switch to it, how to tell whether it is the cause of
+> a failure, and how to remove it.
+>
+> **Two attempts were spent on this, both failing identically**, and the
+> account is the one that handles COD remittance — do not keep trying
+> sign-ins to test a theory about the network. The login page loads
+> without credentials and renders identically; test there.
+
+## The earlier reading, same day (kept — its conclusion about the session still holds)
+
 
 `ShiprocketWalletSyncService` (02:20 UTC) and `ShiprocketInvoiceCheckService`
 (03:00 UTC) have failed every night since 21 and 22 September with one

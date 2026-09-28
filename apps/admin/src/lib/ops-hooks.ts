@@ -4706,6 +4706,24 @@ export interface ShiprocketCostPanelView {
   readonly walletSyncs: readonly ShiprocketWalletRunView[];
   /** The nightly invoice check, newest first. */
   readonly invoiceChecks: readonly ShiprocketInvoiceRunView[];
+  /** How the panel browser reaches Shiprocket, and where it comes out. */
+  readonly egress: ShiprocketEgressView;
+}
+
+/**
+ * The route the Shiprocket panel browser takes, and the address it
+ * presents — shown together, because a reading means nothing without the
+ * route it is supposed to describe.
+ */
+export interface ShiprocketEgressView {
+  readonly proxy: string | null;
+  readonly checked: boolean;
+  readonly expectedCountry: string | null;
+  readonly status: 'UP' | 'DOWN' | 'NOT_CHECKED';
+  readonly publicIp: string | null;
+  readonly country: string | null;
+  readonly summary: string | null;
+  readonly countryMismatch: boolean;
 }
 
 /** One Shiprocket invoice, compared line by line with what the wallet charged. */

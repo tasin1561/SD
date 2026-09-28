@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { ShiprocketHttpService } from '../../courier-shiprocket/services/shiprocket-http.service';
+import { describeEgress, probeEgress } from '../../../common/net/egress-probe';
 import {
   ACTION_SHIPROCKET_COST_FAILED,
   ACTION_SHIPROCKET_COST_OK,
@@ -10,6 +11,15 @@ import {
 
 /** Restated: the wallet sync (portal worker) is the only writer of a cost. */
 const SETTING_SR_WALLET_WRITES = 'courier.shiprocket_wallet_sync_writes_enabled';
+/**
+ * Restated from `ShiprocketPortalSessionService`, not imported:
+ * `CourierPortalModule` is unreachable from the API by design (it owns a
+ * browser holding a courier login). `shiprocket-portal-queue-names.spec.ts`
+ * pins these against the session service's copies.
+ */
+const SETTING_SR_PROXY = 'courier.shiprocket_portal_proxy';
+const SETTING_SR_EGRESS_URL = 'courier.shiprocket_portal_egress_check_url';
+const SETTING_SR_EGRESS_COUNTRY = 'courier.shiprocket_portal_egress_country';
 
 export interface ShiprocketCostRunView {
   readonly at: string;
@@ -84,6 +94,31 @@ export interface ShiprocketInvoiceRunView {
   readonly accounts: ReadonlyArray<Record<string, unknown>>;
 }
 
+/**
+ * How the panel browser reaches Shiprocket, and where it comes out.
+ *
+ * Both halves together, deliberately: the check belongs to ONE of the two
+ * routes, so a reading shown without the route it is meant to describe
+ * can vouch for an egress nothing goes through. Read side by side, a
+ * person can see whether they agree. It is a read — it launches no
+ * browser and signs in to nothing.
+ */
+export interface ShiprocketEgressView {
+  /** The proxy the browser is configured to use, or null when unset (which stops the automation). */
+  readonly proxy: string | null;
+  /** Whether an egress check is configured at all. */
+  readonly checked: boolean;
+  readonly expectedCountry: string | null;
+  /** 'UP' with a reading, 'DOWN' with a reason, or 'NOT_CHECKED'. */
+  readonly status: 'UP' | 'DOWN' | 'NOT_CHECKED';
+  readonly publicIp: string | null;
+  readonly country: string | null;
+  /** One line for a person: the address and where it is, or why there is none. */
+  readonly summary: string | null;
+  /** True when the check is on and the country is not the one asked for — runs REFUSE in this state. */
+  readonly countryMismatch: boolean;
+}
+
 export interface ShiprocketCostPanel {
   readonly enabled: boolean;
   readonly writesEnabled: boolean;
@@ -103,6 +138,8 @@ export interface ShiprocketCostPanel {
   readonly walletSyncs: readonly ShiprocketWalletRunView[];
   /** The nightly invoice check: newest first. */
   readonly invoiceChecks: readonly ShiprocketInvoiceRunView[];
+  /** Where the panel browser goes out — see `ShiprocketEgressView`. */
+  readonly egress: ShiprocketEgressView;
 }
 
 /** What the /cost-sync page shows for Shiprocket. Reads only. */
@@ -116,8 +153,18 @@ export class ShiprocketCostPanelService {
   async panel(limit = 20): Promise<ShiprocketCostPanel> {
     const [settings, stubMode, runs, accounts] = await Promise.all([
       this.prisma.client.systemSetting.findMany({
-        where: { key: { in: [SETTING_SR_COST_ENABLED, SETTING_SR_WALLET_WRITES] } },
-        select: { key: true, valueBoolean: true },
+        where: {
+          key: {
+            in: [
+              SETTING_SR_COST_ENABLED,
+              SETTING_SR_WALLET_WRITES,
+              SETTING_SR_PROXY,
+              SETTING_SR_EGRESS_URL,
+              SETTING_SR_EGRESS_COUNTRY,
+            ],
+          },
+        },
+        select: { key: true, valueBoolean: true, valueString: true },
       }),
       this.http.isStubMode(),
       this.prisma.client.auditLog.findMany({
@@ -132,6 +179,13 @@ export class ShiprocketCostPanelService {
       }),
     ]);
     const flag = (k: string): boolean => settings.find((s) => s.key === k)?.valueBoolean === true;
+    const text = (k: string): string =>
+      (settings.find((s) => s.key === k)?.valueString ?? '').trim();
+    const egress = await this.egress(
+      text(SETTING_SR_PROXY),
+      text(SETTING_SR_EGRESS_URL),
+      text(SETTING_SR_EGRESS_COUNTRY),
+    );
 
     const balances = [];
     for (const a of accounts) {
@@ -256,6 +310,7 @@ export class ShiprocketCostPanelService {
       walletSyncs,
       invoiceChecks,
       portalProbe,
+      egress,
       enabled: flag(SETTING_SR_COST_ENABLED),
       writesEnabled: flag(SETTING_SR_WALLET_WRITES),
       stubMode,
@@ -264,6 +319,57 @@ export class ShiprocketCostPanelService {
       last: history[0] ?? null,
       history,
       parcels,
+    };
+  }
+
+  /**
+   * The same probe the portal worker runs before it launches a browser,
+   * asked here so a person can see the answer without opening a
+   * terminal. Never throws: a failed probe IS the answer.
+   */
+  private async egress(
+    proxy: string,
+    checkUrl: string,
+    expectedCountry: string,
+  ): Promise<ShiprocketEgressView> {
+    const base = {
+      proxy: proxy === '' ? null : proxy,
+      expectedCountry: expectedCountry === '' ? null : expectedCountry,
+    };
+    if (checkUrl === '') {
+      return {
+        ...base,
+        checked: false,
+        status: 'NOT_CHECKED' as const,
+        publicIp: null,
+        country: null,
+        summary: null,
+        countryMismatch: false,
+      };
+    }
+    const result = await probeEgress(checkUrl);
+    if (result.kind === 'DOWN') {
+      return {
+        ...base,
+        checked: true,
+        status: 'DOWN' as const,
+        publicIp: null,
+        country: null,
+        summary: result.reason,
+        countryMismatch: false,
+      };
+    }
+    const country = result.reading.country;
+    return {
+      ...base,
+      checked: true,
+      status: 'UP' as const,
+      publicIp: result.reading.publicIp,
+      country,
+      summary: describeEgress(result.reading),
+      countryMismatch:
+        expectedCountry !== '' &&
+        (country ?? '').trim().toLowerCase() !== expectedCountry.toLowerCase(),
     };
   }
 }

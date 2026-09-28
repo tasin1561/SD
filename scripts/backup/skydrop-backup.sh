@@ -4,7 +4,7 @@
 # every hour (:10 past the hour, UTC) as the `skydrop` user. Recovery: docs/disaster-recovery.md.
 #
 #   db/YYYY/MM/defaultdb-<ts>.dump   pg_dump custom format (pg_restore reads it)
-#   secrets/YYYY/MM/secrets-<ts>.tar.gz   .env, Caddyfile, pm2 config, crontab
+#   secrets/YYYY/MM/secrets-<ts>.tar.gz   .env, Caddyfile, pm2 config, crontab, egress keys
 #   files/current/                   a mirror of the Spaces bucket
 #   files/changed/<ts>/              what that run overwrote or deleted there
 #
@@ -78,13 +78,22 @@ main() {
   crontab -l >"$work/crontab.txt" 2>/dev/null || true
   local -a secret_files=("$app/.env" "$app/ecosystem.config.cjs" "$work/crontab.txt")
   local f
-  # The web server, the pm2 boot unit, the Shiprocket egress tunnel and the
-  # VPC route, plus the key that opens the tunnel — what a rebuilt server
-  # needs besides the code in git.
+  # The web server, the pm2 boot unit, the two Shiprocket egress routes
+  # (the SSH tunnel and the NordVPN container) and the VPC route, plus the
+  # key that opens the tunnel and the NordVPN access token — what a
+  # rebuilt server needs besides the code in git.
+  #
+  # The NordVPN TOKEN is the durable secret: the WireGuard key beside it is
+  # DERIVED from it on every service start, so a restore that carries the
+  # token can rebuild the rest with `shiprocket-vpn.sh rotate-key`. The
+  # generated env file goes too, because a restore into a world where
+  # NordVPN's API is unreachable should still come up.
   for f in /etc/caddy/Caddyfile \
     /etc/systemd/system/pm2-skydrop.service \
     /etc/systemd/system/shiprocket-egress-tunnel.service \
+    /etc/systemd/system/shiprocket-vpn.service \
     /etc/systemd/system/vpc-peering.service \
+    "$HOME/.config/nordvpn/token" "$HOME/.config/nordvpn/gluetun.env" \
     /var/lib/cloud/scripts/peering.sh \
     "$HOME/.ssh/id_ed25519" "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/known_hosts" \
     "$HOME/.ssh/authorized_keys" "$HOME/verify/verify-run.cjs"; do

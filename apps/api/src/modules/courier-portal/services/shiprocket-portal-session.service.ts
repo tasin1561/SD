@@ -9,9 +9,29 @@ import {
   courierActor,
 } from '../../courier-shared/services/courier-credential.service';
 import { PortalNetworkWatch } from './shiprocket-portal-network';
+import {
+  describeEgress,
+  egressCountryMatches,
+  probeEgress,
+  type EgressReading,
+} from '../../../common/net/egress-probe';
 
 export const SR_PORTAL_ORIGIN = 'https://app.shiprocket.in';
 export const SR_PORTAL_PROXY_SETTING = 'courier.shiprocket_portal_proxy';
+/**
+ * The control server of the VPN the proxy above goes through, asked
+ * before a browser is launched — see `common/net/egress-probe.ts`.
+ *
+ * EMPTY means no check, and that is the honest setting for the SSH
+ * tunnel, which has no such endpoint. **Set it only when the proxy IS
+ * that VPN**: pointed at a VPN the browser does not use, it would assert
+ * confidently about an egress nothing goes through, which is worse than
+ * not asking. /cost-sync draws the proxy and this reading side by side
+ * so a person can see the two agree.
+ */
+export const SR_PORTAL_EGRESS_CHECK_SETTING = 'courier.shiprocket_portal_egress_check_url';
+/** The country that check must report. EMPTY accepts any, as long as it is up. */
+export const SR_PORTAL_EGRESS_COUNTRY_SETTING = 'courier.shiprocket_portal_egress_country';
 const STATE_DIR = process.env['PORTAL_STATE_DIR'] ?? '/home/skydrop/portal-state';
 /** Long enough for their router to bounce a session it will not honour.
  *  Measured at well under 4s on 2026-09-28; 6 leaves room. */
@@ -25,6 +45,35 @@ export class ShiprocketPortalProxyMissingError extends Error {
         'address is exactly what the tunnel exists to avoid.',
     );
     this.name = 'ShiprocketPortalProxyMissingError';
+  }
+}
+
+/**
+ * The browser's proxy is not coming out where it should, so nothing was
+ * launched.
+ *
+ * ── WHY IT IS ITS OWN ERROR ──────────────────────────────────────────
+ * A VPN that is DOWN already fails safely — the container's firewall
+ * carries no traffic while the tunnel is not up, so a browser pointed at
+ * its proxy simply cannot connect. What that cannot catch is a VPN that
+ * is perfectly healthy in the WRONG PLACE, and that is not
+ * hypothetical: on 2026-09-28 a server-rotation misconfiguration left
+ * ours connected to an Indian entry node while egressing in Atlanta, and
+ * the only sign was a 403 on the panel's own document inside a browser
+ * trace. Refusing here spends no sign-in on it and says which of the two
+ * it was.
+ */
+export class ShiprocketPortalEgressError extends Error {
+  constructor(
+    readonly reason: string,
+    readonly reading: EgressReading | null,
+  ) {
+    super(
+      `The Shiprocket panel browser was not started: ${reason}. Nothing signs in until the ` +
+        'egress is what it should be — a run from the wrong address burns a login attempt and ' +
+        'teaches us nothing.',
+    );
+    this.name = 'ShiprocketPortalEgressError';
   }
 }
 
@@ -149,6 +198,10 @@ export class ShiprocketPortalSessionService {
 
   async open(courierAccountId: string, runId: string): Promise<ShiprocketPortalHandle> {
     const proxy = await this.proxy();
+    // BEFORE the browser: a launch through an egress that is down or in
+    // the wrong country can only fail, and failing at a login page costs
+    // an attempt against an account that also handles COD remittance.
+    await this.assertEgress();
     // Lazily, so this compiles and unit-tests anywhere; Chromium lives
     // only in the portal worker.
     const { chromium } = await import('playwright');
@@ -217,6 +270,35 @@ export class ShiprocketPortalSessionService {
     } catch (err) {
       await browser.close().catch(() => undefined);
       throw err;
+    }
+  }
+
+  /**
+   * Refuse the run when the configured egress check says we are not
+   * where we should be. Unconfigured (empty url) means no check — the
+   * SSH tunnel has no control server to ask, and inventing a check for
+   * it would put an outbound call on the critical path of every run.
+   */
+  private async assertEgress(): Promise<void> {
+    const rows = await this.prisma.client.systemSetting.findMany({
+      where: {
+        key: { in: [SR_PORTAL_EGRESS_CHECK_SETTING, SR_PORTAL_EGRESS_COUNTRY_SETTING] },
+      },
+      select: { key: true, valueString: true },
+    });
+    const value = (key: string): string =>
+      (rows.find((r) => r.key === key)?.valueString ?? '').trim();
+    const url = value(SR_PORTAL_EGRESS_CHECK_SETTING);
+    if (url === '') return;
+
+    const result = await probeEgress(url);
+    if (result.kind === 'DOWN') throw new ShiprocketPortalEgressError(result.reason, null);
+    const expected = value(SR_PORTAL_EGRESS_COUNTRY_SETTING);
+    if (!egressCountryMatches(result.reading, expected)) {
+      throw new ShiprocketPortalEgressError(
+        `the egress is ${describeEgress(result.reading)}, and it should be in ${expected}`,
+        result.reading,
+      );
     }
   }
 

@@ -636,7 +636,25 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'socks5://127.0.0.1:1081',
     displayName: 'Shiprocket panel — browser proxy',
     description:
-      'Where the Shiprocket panel browser connects through. Their panel is India-only, so this is the self-restarting SSH tunnel to the Bangalore droplet (shiprocket-egress-tunnel.service on the app server). EMPTY stops the panel automation outright — it never connects directly.',
+      'Where the Shiprocket panel browser connects through. Two routes exist on the app server, both loopback-only: socks5://127.0.0.1:1081 is the SSH tunnel to the Bangalore droplet (shiprocket-egress-tunnel.service), and http://127.0.0.1:1082 is the NordVPN container (shiprocket-vpn.service), which comes out in Mumbai. EMPTY stops the panel automation outright — it never connects directly. Change the egress check below in the same breath: it belongs to the VPN route only.',
+  },
+  {
+    key: 'courier.shiprocket_portal_egress_check_url',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Shiprocket panel — where the browser comes out (check)',
+    description:
+      'The VPN control server the panel browser’s proxy goes through, asked before every run: http://127.0.0.1:8001/v1/publicip/ip for the NordVPN container on the app server. EMPTY means no check, which is right for the Bangalore SSH tunnel — it has no such endpoint. Set it ONLY when the proxy above IS that VPN; pointed at a VPN the browser does not use, it would confidently vouch for an egress nothing goes through.',
+  },
+  {
+    key: 'courier.shiprocket_portal_egress_country',
+    category: 'courier',
+    valueType: SettingValueType.STRING,
+    valueString: '',
+    displayName: 'Shiprocket panel — the country that check must report',
+    description:
+      'What the check above must say, e.g. India. A VPN that is DOWN already stops everything on its own (it carries no traffic at all); this catches the other case — a VPN that is perfectly healthy in the wrong place, which happened on 2026-09-28 and cost a sign-in attempt. EMPTY accepts any country, as long as the VPN is up.',
   },
   {
     key: 'ops.nsa_enabled',

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ActorType, SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
+import { ActorType } from '@skydrop/db';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -7,13 +7,12 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import {
   SR_PORTAL_ORIGIN,
-  ShiprocketPortalChallengeError,
-  ShiprocketPortalCredentialsMissingError,
   ShiprocketPortalProxyMissingError,
   ShiprocketPortalSessionService,
   gotoShiprocket,
   isShiprocketLoginUrl,
 } from './shiprocket-portal-session.service';
+import { raiseShiprocketOpenFailure } from './shiprocket-portal-failures';
 
 export const ACTION_SR_PORTAL_PROBED = 'courier.shiprocket_portal.probed';
 const STATE_DIR = process.env['PORTAL_STATE_DIR'] ?? '/home/skydrop/portal-state';
@@ -42,7 +41,15 @@ export interface ShiprocketProbePage {
 export interface ShiprocketProbeAccount {
   readonly courierAccountId: string;
   readonly label: string;
-  readonly outcome: 'READ' | 'SKIPPED' | 'CHALLENGE' | 'NO_LOGIN' | 'NO_PROXY' | 'FAILED';
+  readonly outcome:
+    | 'READ'
+    | 'SKIPPED'
+    | 'CHALLENGE'
+    | 'NO_LOGIN'
+    | 'NO_PROXY'
+    | 'REJECTED'
+    | 'EGRESS'
+    | 'FAILED';
   readonly detail: string | null;
   readonly artifactDir: string | null;
   readonly pages: readonly ShiprocketProbePage[];
@@ -128,7 +135,7 @@ export class ShiprocketPortalProbeService {
     try {
       handle = await this.session.open(a.id, runId);
     } catch (err) {
-      return { ...base, ...(await this.onOpenFailure(a, challengeKey, err)) };
+      return { ...base, ...(await this.onOpenFailure(a, err)) };
     }
 
     try {
@@ -170,10 +177,13 @@ export class ShiprocketPortalProbeService {
           await page.close().catch(() => undefined);
         }
       }
-      await this.issues.resolveByKey(
+      for (const key of [
         `shiprocket-portal-login:${a.id}`,
-        'Signed in to the Shiprocket panel on its own.',
-      );
+        `shiprocket-portal-rejected:${a.id}`,
+        `shiprocket-portal-egress:${a.id}`,
+      ]) {
+        await this.issues.resolveByKey(key, 'Signed in to the Shiprocket panel on its own.');
+      }
       return { ...base, outcome: 'READ', detail: null, artifactDir: dir, pages };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -184,52 +194,38 @@ export class ShiprocketPortalProbeService {
     }
   }
 
+  /**
+   * Shared with the wallet sync and the invoice check, so all three raise
+   * the SAME issues.
+   *
+   * It did not used to be. This service had its own copy that predated
+   * `ShiprocketPortalSignInRejectedError`, so a sign-in Shiprocket
+   * accepted and then refused was filed under the generic "could not
+   * open the panel" key — which tells a person to go and check the
+   * password and the tunnel, both of which are fine — and its message
+   * was cut at 400 characters, which lands exactly on the network
+   * summary that was added to diagnose this class of failure. Two runs
+   * on 2026-09-28 were diagnosed from the wrong evidence because of it.
+   */
   private async onOpenFailure(
     a: { id: string; label: string },
-    challengeKey: string,
     err: unknown,
   ): Promise<Pick<ShiprocketProbeAccount, 'outcome' | 'detail'>> {
-    if (err instanceof ShiprocketPortalChallengeError) {
-      await this.issues.raise({
-        kind: SystemIssueKind.COURIER_PORTAL_CHALLENGE,
-        severity: SystemIssueSeverity.HIGH,
-        title: `Shiprocket panel asked ${a.label} for a ${err.challenge} — automation stopped`,
-        detail:
-          `Signing in to app.shiprocket.in stopped at a ${err.challenge} challenge (${err.url}). ` +
-          'Nothing will try again until this issue is resolved. Sign in once by hand from a ' +
-          'browser using the Bangalore tunnel, then resolve this issue.' +
-          (err.artifactPath === null ? '' : ` Screenshot on the server: ${err.artifactPath}`),
-        source: 'ShiprocketPortalProbeService',
-        dedupeKey: challengeKey,
-        metadata: { courierAccountId: a.id, challenge: err.challenge, url: err.url },
-      });
-      return { outcome: 'CHALLENGE', detail: err.message };
-    }
-    if (err instanceof ShiprocketPortalCredentialsMissingError) {
-      await this.issues.raise({
-        kind: SystemIssueKind.COURIER_CREDENTIAL,
-        severity: SystemIssueSeverity.MEDIUM,
-        title: `No Shiprocket website login stored for ${a.label}`,
-        detail: err.message,
-        source: 'ShiprocketPortalProbeService',
-        dedupeKey: `shiprocket-portal-credential:${a.id}`,
-        metadata: { courierAccountId: a.id },
-      });
-      return { outcome: 'NO_LOGIN', detail: err.message };
-    }
     if (err instanceof ShiprocketPortalProxyMissingError) {
       return { outcome: 'NO_PROXY', detail: err.message };
     }
-    const message = err instanceof Error ? err.message : String(err);
-    await this.issues.raise({
-      kind: SystemIssueKind.COURIER_PORTAL_LOGIN,
-      severity: SystemIssueSeverity.HIGH,
-      title: `Could not open the Shiprocket panel for ${a.label}`,
-      detail: `${message.slice(0, 400)}. The tunnel (shiprocket-egress-tunnel.service) and the login are the usual causes.`,
+    const f = await raiseShiprocketOpenFailure(this.issues, {
       source: 'ShiprocketPortalProbeService',
-      dedupeKey: `shiprocket-portal-login:${a.id}`,
-      metadata: { courierAccountId: a.id },
+      account: a,
+      err,
+      failureKey: `shiprocket-portal-login:${a.id}`,
     });
-    return { outcome: 'FAILED', detail: message.slice(0, 300) };
+    // Only the unrecognised case is truncated: the named ones carry the
+    // reason a person acts on, and for REJECTED that is the list of calls
+    // the browser could not load.
+    return {
+      outcome: f.outcome,
+      detail: f.outcome === 'FAILED' ? f.message.slice(0, 400) : f.message,
+    };
   }
 }
