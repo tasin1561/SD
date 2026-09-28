@@ -2,6 +2,27 @@ import { Injectable, Logger, NotFoundException, type OnModuleDestroy } from '@ne
 import { Prisma, SystemIssueKind, SystemIssueSeverity } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SystemIssueNotifier } from './system-issue-notifier.service';
+import { classifyJobFailure, shouldReportRecurring } from './job-failure-signal';
+
+/**
+ * What a `failed` listener hands us, narrowed to the parts this service
+ * reads. Structurally satisfied by BullMQ's `Job`, so every call site
+ * passes one unchanged.
+ *
+ * `opts.repeat` is what says "this job is on a schedule", and
+ * `opts.repeat.count` is the iteration number BullMQ stamps on every
+ * occurrence — together they are how a failed RUN is told from a failed
+ * piece of work.
+ */
+export interface RecordedJobFailure {
+  readonly id?: string;
+  readonly name?: string;
+  readonly attemptsMade?: number;
+  readonly opts?: {
+    readonly attempts?: number;
+    readonly repeat?: { readonly count?: number };
+  };
+}
 
 export interface RaiseIssueInput {
   readonly kind: SystemIssueKind;
@@ -85,6 +106,20 @@ export class SystemIssueService implements OnModuleDestroy {
    * beneath it, which nothing was awaiting.
    */
   private readonly inFlight = new Set<Promise<unknown>>();
+
+  /**
+   * The last failed run of each scheduled job, per `worker::jobName`.
+   *
+   * In memory on purpose: it is a judgement about the last few minutes
+   * of a live process, it is re-derivable from the next few runs, and
+   * persisting it would put a write on the failure path of every sweep
+   * in the estate. SCALE-1 means exactly one process owns the queues, so
+   * there is no second copy to disagree with this one.
+   */
+  private readonly recurringFailures = new Map<
+    string,
+    { iteration: number; failedRuns: number; since: Date; reported: boolean }
+  >();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -264,10 +299,26 @@ export class SystemIssueService implements OnModuleDestroy {
    * of 5 is not a failure yet, and raising there would fill the board
    * with things that fixed themselves thirty seconds later — which is
    * how a board stops being read.
+   *
+   * ── A RECURRING SWEEP IS JUDGED ON RUNS, NOT ON ONE RUN ─────────────
+   * The paragraph above was written for a one-off job, where a failure
+   * is lost work. It is simply not true of a cron sweep: the next tick
+   * does the same idempotent work, so one failed run costs a few minutes
+   * of lag and nothing else. Reporting it anyway is how, on 24 September
+   * 2026, one brief database failover left three permanently-open alerts
+   * — `PackBoxExpiryWorker`, `StoreRequestExpiryWorker` and `PortalQueue`,
+   * all at 05:15, all 1x, all still open four days later describing a
+   * database that had been healthy the whole time. Alerts like that bury
+   * the ones that matter.
+   *
+   * So a REPEATABLE job is reported only once consecutive RUNS have
+   * failed — see `shouldReportRecurring`. A one-off job is reported on
+   * its first exhausted failure exactly as before, because nothing else
+   * is coming to do that work.
    */
   async reportJobFailure(
     workerName: string,
-    job: { id?: string; attemptsMade?: number; opts?: { attempts?: number } } | undefined,
+    job: RecordedJobFailure | undefined,
     err: unknown,
   ): Promise<void> {
     const attempts = job?.opts?.attempts ?? 1;
@@ -275,19 +326,122 @@ export class SystemIssueService implements OnModuleDestroy {
     if (made < attempts) return; // still retrying — not yet a fact
 
     const message = err instanceof Error ? err.message : String(err);
+    const cause = classifyJobFailure(message);
+    const streak = job === undefined ? null : await this.recordRecurringFailure(workerName, job);
+
+    if (streak !== null && !streak.report) {
+      // A run died and the next one will do the same work. Said in the
+      // log, where a person looking at THIS worker will find it, and not
+      // on a board everybody reads.
+      this.logger.warn(
+        { workerName, jobName: job?.name, failedRuns: streak.failedRuns, cause, err: message },
+        'A recurring job failed a run; the next run does the same work',
+      );
+      return;
+    }
+
+    const what =
+      streak === null
+        ? `A job failed ${made} time(s) and will not be retried: ${message}`
+        : `${streak.failedRuns} consecutive runs of this scheduled job have failed. The last one said: ${message}`;
+
+    const why =
+      cause === 'INFRASTRUCTURE'
+        ? 'This reads as the database, Redis or a remote host being unreachable rather than anything ' +
+          'wrong with the work itself — check the database and the process logs, not the rows.'
+        : 'Check the count — a single occurrence is usually one bad row, while a climbing count means ' +
+          'every job this worker takes is failing.';
+
+    const next =
+      streak === null
+        ? 'That work did not happen and nothing will pick it up by itself.'
+        : 'One failed run would have been left alone, because the next run repeats the work; ' +
+          'this many in a row means it is not recovering by itself. Resolve this card once the ' +
+          'runs are landing again.';
+
     await this.raise({
       kind: SystemIssueKind.INTEGRATION,
       severity: SystemIssueSeverity.MEDIUM,
-      title: `${workerName} gave up on a job`,
-      detail:
-        `A job failed ${made} time(s) and will not be retried: ${message}\n\n` +
-        'That work did not happen and nothing will pick it up by itself. Check the count — ' +
-        'a single occurrence is usually one bad row, while a climbing count means every job ' +
-        'this worker takes is failing.',
+      title:
+        streak === null
+          ? `${workerName} gave up on a job`
+          : `${workerName} has failed ${streak.failedRuns} runs in a row`,
+      detail: `${what}\n\n${next} ${why}`,
       source: workerName,
       dedupeKey: `job-failed:${workerName}`,
-      metadata: { workerName, jobId: job?.id ?? null, attemptsMade: made, error: message },
+      metadata: {
+        workerName,
+        jobId: job?.id ?? null,
+        jobName: job?.name ?? null,
+        attemptsMade: made,
+        recurring: streak !== null,
+        failedRuns: streak?.failedRuns ?? made,
+        cause,
+        error: message,
+      },
     });
+  }
+
+  /**
+   * Fold this failure into what we know about that job's recent runs,
+   * and say whether it is worth telling anybody yet.
+   *
+   * Returns null for a job that is NOT on a schedule — a one-off keeps
+   * the old behaviour by construction rather than by remembering to.
+   *
+   * ── HOW "CONSECUTIVE" IS KNOWN WITHOUT WATCHING SUCCESSES ───────────
+   * BullMQ stamps every scheduled occurrence with its iteration number
+   * (`opts.repeat.count`), so run N+1 failing after run N failed is
+   * exactly "the next run also failed" — no clock, no cron parsing, and
+   * no need for a success hook in every one of the two dozen workers
+   * (one of which this pass may not touch at all).
+   *
+   * The inverse is the useful half: if this failure is NOT the run after
+   * the last failure, then runs happened in between and did not fail —
+   * `failed` fires for every exhausted failure — so they SUCCEEDED. That
+   * is a real recovery signal derived from failures alone, and it closes
+   * the card the earlier streak opened.
+   *
+   * State is per process. A restart starts the count again, which is
+   * honest: we did not see those runs.
+   */
+  private async recordRecurringFailure(
+    workerName: string,
+    job: RecordedJobFailure,
+  ): Promise<{ readonly failedRuns: number; readonly report: boolean } | null> {
+    const repeat = job.opts?.repeat;
+    if (repeat === undefined) return null; // not on a schedule
+    const iteration = repeat.count;
+    if (typeof iteration !== 'number') {
+      // Scheduled, but BullMQ did not stamp the occurrence, so one run
+      // cannot be told from the next. Fall back to the one-off treatment
+      // — reported on the first exhausted failure, worded as a job that
+      // gave up — rather than going quieter than the behaviour this
+      // replaces on the strength of something we could not establish.
+      return null;
+    }
+
+    const key = `${workerName}::${job.name ?? ''}`;
+    const previous = this.recurringFailures.get(key);
+    const consecutive = previous !== undefined && iteration === previous.iteration + 1;
+
+    if (!consecutive && previous?.reported === true) {
+      // Runs went by without failing, so they worked. The card the old
+      // streak raised is describing a job that recovered. Awaited rather
+      // than fired-and-forgotten: an un-awaited write to `system_issues`
+      // outlives its caller and races the e2e reset's TRUNCATE (NOTIF-19),
+      // and `reportJobFailure` is already async so there is nothing to buy.
+      await this.resolveByKey(
+        `job-failed:${workerName}`,
+        'A later scheduled run of this job succeeded.',
+      );
+    }
+
+    const failedRuns = consecutive && previous !== undefined ? previous.failedRuns + 1 : 1;
+    const since = consecutive && previous !== undefined ? previous.since : new Date();
+    const report = shouldReportRecurring(failedRuns, Date.now() - since.getTime());
+    this.recurringFailures.set(key, { iteration, failedRuns, since, reported: report });
+    return { failedRuns, report };
   }
 
   async reportWorkerError(workerName: string, err: unknown): Promise<void> {

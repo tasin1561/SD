@@ -178,3 +178,148 @@ describe('raises are drainable', () => {
     await expect(svc.drainInFlight()).resolves.toBeUndefined();
   });
 });
+
+/**
+ * A recurring sweep is judged on RUNS.
+ *
+ * On 24 September 2026 one brief database failover caught three
+ * scheduled sweeps mid-run, and each of them opened a card that was
+ * still open four days later describing a database that had been
+ * healthy the whole time. A sweep loses no work to a failed run — the
+ * next tick repeats it — so one failed run is not a fact worth a
+ * permanent alert, and three permanent alerts that are not facts is how
+ * a real one gets scrolled past.
+ */
+describe('a scheduled job that failed a run', () => {
+  /** What BullMQ hands a `failed` listener for occurrence `iteration`. */
+  function tick(iteration: number) {
+    return {
+      id: `j-${iteration}`,
+      name: 'sweep-overdue-pack-boxes',
+      attemptsMade: 1,
+      opts: { attempts: 1, repeat: { count: iteration } },
+    };
+  }
+  const unreachable = new Error(
+    "Can't reach database server at `private-skydrop-db-prod-do-user-1-0.j.db.ondigitalocean.com:25060`",
+  );
+
+  it('says nothing when ONE run dies — the next run does the same work', async () => {
+    const { svc, systemIssue } = build();
+    await svc.reportJobFailure('PackBoxExpiryWorker', tick(41), unreachable);
+    expect(systemIssue.create).not.toHaveBeenCalled();
+    expect(systemIssue.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('reports once three runs in a row have failed', async () => {
+    const { svc, systemIssue } = build();
+    await svc.reportJobFailure('PackBoxExpiryWorker', tick(41), unreachable);
+    await svc.reportJobFailure('PackBoxExpiryWorker', tick(42), unreachable);
+    expect(systemIssue.create).not.toHaveBeenCalled();
+    await svc.reportJobFailure('PackBoxExpiryWorker', tick(43), unreachable);
+
+    expect(systemIssue.create).toHaveBeenCalledTimes(1);
+    const arg = systemIssue.create.mock.calls[0]?.[0] as {
+      data: { dedupeKey: string; title: string; detail: string; metadata: Record<string, unknown> };
+    };
+    expect(arg.data.dedupeKey).toBe('job-failed:PackBoxExpiryWorker');
+    expect(arg.data.title).toContain('3 runs in a row');
+    expect(arg.data.metadata.failedRuns).toBe(3);
+    expect(arg.data.metadata.recurring).toBe(true);
+  });
+
+  it('starts counting again when the failures are not consecutive runs', async () => {
+    const { svc, systemIssue } = build();
+    // Three separate blips, far apart in the schedule. Each one had
+    // successful runs on either side of it, so none of them is evidence
+    // that the sweep has stopped working.
+    await svc.reportJobFailure('PackBoxExpiryWorker', tick(41), unreachable);
+    await svc.reportJobFailure('PackBoxExpiryWorker', tick(180), unreachable);
+    await svc.reportJobFailure('PackBoxExpiryWorker', tick(900), unreachable);
+    expect(systemIssue.create).not.toHaveBeenCalled();
+  });
+
+  it('closes the card once a later run has clearly succeeded', async () => {
+    const { svc, systemIssue } = build();
+    for (const i of [41, 42, 43]) {
+      await svc.reportJobFailure('PackBoxExpiryWorker', tick(i), unreachable);
+    }
+    expect(systemIssue.create).toHaveBeenCalledTimes(1);
+
+    // Runs 44 through 99 did not reach the `failed` listener, so they did
+    // not fail — which is the only success signal available without a
+    // hook in every worker in the estate.
+    await svc.reportJobFailure('PackBoxExpiryWorker', tick(100), unreachable);
+    type UpdateManyCall = [{ where: { dedupeKey: string }; data: Record<string, unknown> }];
+    const calls = systemIssue.updateMany.mock.calls as unknown as UpdateManyCall[];
+    const resolved = calls.filter((c) => c[0].data.resolvedAt !== undefined);
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0]?.[0].where.dedupeKey).toBe('job-failed:PackBoxExpiryWorker');
+  });
+
+  it('reports a SLOW job on its second consecutive night, not its third', async () => {
+    jest.useFakeTimers();
+    try {
+      const { svc, systemIssue } = build();
+      jest.setSystemTime(new Date('2026-09-24T02:40:00Z'));
+      await svc.reportJobFailure('WalletSyncWorker', tick(9), unreachable);
+      expect(systemIssue.create).not.toHaveBeenCalled();
+      // Waiting for a third run would mean three days of silence about a
+      // nightly sync that stopped working on Monday.
+      jest.setSystemTime(new Date('2026-09-25T02:40:00Z'));
+      await svc.reportJobFailure('WalletSyncWorker', tick(10), unreachable);
+      expect(systemIssue.create).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('names the database rather than sending the reader hunting for a bad row', async () => {
+    const { svc, systemIssue } = build();
+    for (const i of [1, 2, 3]) {
+      await svc.reportJobFailure('StoreRequestExpiryWorker', tick(i), unreachable);
+    }
+    const arg = systemIssue.create.mock.calls[0]?.[0] as {
+      data: { detail: string; metadata: Record<string, unknown> };
+    };
+    expect(arg.data.metadata.cause).toBe('INFRASTRUCTURE');
+    expect(arg.data.detail).toContain('unreachable');
+    expect(arg.data.detail).not.toContain('one bad row');
+  });
+
+  it('still reports a ONE-OFF job on its first exhausted failure', async () => {
+    const { svc, systemIssue } = build();
+    // Nothing is coming to redo this. An email nobody got stays ungot.
+    await svc.reportJobFailure(
+      'EmailWorker',
+      { id: 'j1', name: 'send-email', attemptsMade: 5, opts: { attempts: 5 } },
+      new Error('SMTP refused'),
+    );
+    expect(systemIssue.create).toHaveBeenCalledTimes(1);
+    const arg = systemIssue.create.mock.calls[0]?.[0] as {
+      data: { title: string; metadata: Record<string, unknown> };
+    };
+    expect(arg.data.title).toBe('EmailWorker gave up on a job');
+    expect(arg.data.metadata.recurring).toBe(false);
+  });
+
+  it('reports a scheduled job whose iteration BullMQ did not stamp', async () => {
+    const { svc, systemIssue } = build();
+    // We cannot tell one run from the next here, so it falls back to the
+    // one-off treatment. Going quieter than the old behaviour on the
+    // strength of something we could not establish would be the wrong
+    // way to be wrong, and a card claiming "1 runs in a row" would be a
+    // sentence about evidence we do not have.
+    await svc.reportJobFailure(
+      'SomeWorker',
+      { id: 'j1', name: 'sweep', attemptsMade: 1, opts: { attempts: 1, repeat: {} } },
+      unreachable,
+    );
+    expect(systemIssue.create).toHaveBeenCalledTimes(1);
+    const arg = systemIssue.create.mock.calls[0]?.[0] as {
+      data: { title: string; metadata: Record<string, unknown> };
+    };
+    expect(arg.data.title).toBe('SomeWorker gave up on a job');
+    expect(arg.data.metadata.recurring).toBe(false);
+  });
+});
