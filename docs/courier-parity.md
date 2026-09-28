@@ -176,7 +176,43 @@ been exercised against the live account.
 
 - **Portal ticket sync and canary** for Shiprocket. Both are Playwright
   driving Delhivery's *panel*. The wallet sync and recharge reconcile
-  were in this list until 11 Sep: their API's statement endpoint returns
-  nothing, so they now run against Shiprocket's panel from India through
-  the Bangalore tunnel (`ShiprocketWalletSyncService`, COST-2), and the
+  were in this list until 11 Sep: their API has no wallet ledger, so
+  they now run against Shiprocket's panel from India through the
+  Bangalore tunnel (`ShiprocketWalletSyncService`, COST-2), and the
   recharge matching is shared with Delhivery's.
+
+  **RE-MEASURED 2026-09-28, and the earlier wording was wrong in a way
+  that mattered.** "Their statement endpoint returns nothing" suggests
+  an empty list. `GET /v1/external/account/details/statement` answers
+  **200 with ONE row** — the full statement row shape, every field the
+  empty string, `description: "Wallet Balance"` and the current balance
+  in `balance_amount`. It is the wallet-balance endpoint wearing a
+  ledger row's clothes. Their own published sample
+  (apidocs.shiprocket.in) shows exactly the same row, so it has never
+  returned transactions for anybody: not a permissions problem, not an
+  API-user problem, and not a missing date range — their documented
+  `page` / `per_page` / `from` / `to` are all accepted and change
+  nothing. **An importer that trusted the row count would have stored a
+  transaction with an empty id.** Their whole public surface is 93
+  requests, 31 of them GET, and the only money-shaped ones are
+  `account/details/wallet-balance` (which the nightly Shiprocket cost
+  sync already uses and which works), this one, and
+  `billing/discrepancy` (weight disputes; `{"data": []}` today).
+  `/v1/external/shipments` carries a per-parcel `charges` block —
+  freight, COD charge, applied and charged weight — which is a QUOTE,
+  not the ledger: COST-1's whole point is that a cost is the net of its
+  debits and credits, and a reversal is invisible there. **So the panel
+  read stays.** `POST /admin/shiprocket/api-probe` re-asks this whole
+  list on demand, so the next person deciding does not have to take this
+  paragraph's word for it.
+
+  Their official MCP server (`shiprocket-mcp.shiprocket.in/mcp`,
+  `mcp-multichannel` 1.0.0) is live and lists **13 tools** — tracking,
+  RTO performance, COD remittance, rate calculator, order list, pickup
+  addresses — and **none of them is a wallet, passbook or ledger**, so
+  it is not a route to this either. Worth knowing before anybody
+  suggests it: four of the thirteen (`order_ship`, `order_cancel`,
+  `order_edit`, `order_schedule_pickup`) are WRITES against a live
+  account, and an unauthenticated call returns `TOKEN_EXPIRED` as
+  ordinary tool *content* rather than as an error — an agent reading it
+  would see a successful call.

@@ -10,6 +10,7 @@ import { ShiprocketTrackingSourceService } from './services/shiprocket-tracking-
 import { ShiprocketNdrService } from './services/shiprocket-ndr.service';
 import { ShiprocketClientService } from './services/shiprocket-client.service';
 import { ShiprocketHttpService } from './services/shiprocket-http.service';
+import { ShiprocketApiProbeService } from './services/shiprocket-api-probe.service';
 
 /**
  * The Shiprocket adapter.
@@ -51,6 +52,8 @@ import { ShiprocketHttpService } from './services/shiprocket-http.service';
     ShiprocketNdrService,
     ShiprocketTrackingSourceService,
     ShiprocketSupportAdapterService,
+    // Read-only reconnaissance; not exported — nothing else asks it.
+    ShiprocketApiProbeService,
   ],
   exports: [
     // Exported so the AWB dispatcher can ask whether this courier is

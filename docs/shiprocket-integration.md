@@ -32,7 +32,79 @@ anywhere in the repo — see "Credentials" below.
 
 ---
 
+## THE PANEL AUTOMATION IS DOWN — measured 2026-09-28, and it is theirs
+
+`ShiprocketWalletSyncService` (02:20 UTC) and `ShiprocketInvoiceCheckService`
+(03:00 UTC) have failed every night since 21 and 22 September with one
+sentence: *"the Shiprocket session has expired (landed on login)"*, zero
+passbook rows. Costs stop moving and read as UNCOVERED in the P&L, not as
+free. **Their API side is unaffected and still runs nightly** — the
+Shiprocket cost sync read a wallet balance through
+`apiv2.shiprocket.in` on the 28th, as it has every day throughout.
+
+**What was measured, from Bangladesh with no proxy AND from the Bangalore
+egress (143.110.188.167), with identical results:**
+
+| Call | Answer |
+|---|---|
+| `POST apiv2.shiprocket.in/v1/external/auth/login` (OUR adapter) | 403 `Invalid email and password combination` for junk creds — healthy |
+| `GET app.shiprocket.in/newlogin`, `/seller/wallet-transactions/passbook` | 200 |
+| `POST apiv2.shiprocket.co/v1/auth/login` (the PANEL's own login) | **200, with a valid ten-day JWT, role `owner`, plan active, not suspended** |
+| the browser afterwards | bounced to `/newlogin?routestate=seller%2Fhome`; every later panel call `401` |
+| `OPTIONS apiv2.shiprocket.co/v1/auth/login` (the CORS preflight) | **498**, consistently, from both locations — and a run where the preflight was refused could not log in at all (`ERR_FAILED`, CORS) |
+
+**So: not our credentials, not the tunnel, not geo, not the account.**
+Shiprocket accepts the sign-in and then will not honour the session. That
+needs their account manager, not a fix here.
+
+**`apiv2.shiprocket.co` is a DIFFERENT HOST from `apiv2.shiprocket.in`,
+and confusing them wastes a day.** `.co` is what their seller panel's
+`apiPath` points at (read out of their own deployed web bundle on the
+28th); `.in` is the public API our adapter uses. `.co` is UP — its
+`/v1/auth/login` and `/v1/settings/...` answer normally. What is 503 on
+it is `/v1/external/*`, a prefix **the panel never calls**, so that 503
+is real, reproducible from everywhere, and *not the cause of anything*.
+It is an easy thing to measure and mistake for a diagnosis.
+
+**What our code did wrong, and is now fixed.**
+`ShiprocketPortalSessionService.login()` ended on
+`waitForURL(/\/seller\//)`, which resolves on the FIRST match and
+returns. Their app routes to `/seller/...` and then bounces back to
+`/newlogin`, so that match happened, `open()` reported success **from the
+login page**, saved it as the session state, and every read afterwards
+reported an expired session. It now settles and asks again, and a session
+that did not hold raises its own HIGH issue
+(`shiprocket-portal-rejected:<account>`) saying the sign-in was accepted
+and refused — because the generic one sends somebody to re-check a
+password and a tunnel that are both fine. Every panel job's failure now
+also carries **what the browser could not load**
+(`PortalNetworkWatch` → `handle.networkSummary()`), so
+"401 apiv2.shiprocket.co/v1/get/version" is in the issue instead of
+needing a terminal.
+
+**Their panel's service hosts**, for whoever picks this up (from their
+production bundle, 2026-09-28): `apiPath` `apiv2.shiprocket.co/v1/`,
+`srAuth` `sr-auth.shiprocket.in/`, `srFinanceBaseUrl`
+`sr-finance.shiprocket.in/api/v1/`, `BillingBaseUrl`
+`srbs.shiprocket.in/api/1.0/`, `BillingGoBaseUrl` `srbs-go.shiprocket.in/v1/`,
+`VasBillingBaseUrl` `sr-wallet.shiprocket.in/api/v1/`. The login response
+also carries `web_app_version: 1` and `newpassbook: 0`, which are worth
+asking them about: a panel rewrite would explain a session the old app
+will not route.
+
+---
+
 ## The two surfaces behave differently, and only one blocks us
+
+> **AMENDED 2026-09-28.** The section below is the 2026-09-08 reading and
+> its *conclusion* still holds — the API is not geo-restricted, the panel
+> needs an Indian IP. What has since been said elsewhere and is NOT
+> supported by any measurement is that a WAF blocks datacenter ranges:
+> the Bangalore droplet and a Dhaka residential line got byte-identical
+> answers from every host tested on the 28th. When the panel automation
+> broke, the tunnel and the IP were the first two things checked and
+> neither was the cause. Do not reach for the geo theory to explain a
+> panel failure without measuring from both ends first.
 
 **The seller panel (`app.shiprocket.in`) is geo-restricted.** From
 Bangladesh it loads and then the Continue button does nothing — no
@@ -234,6 +306,20 @@ proving run; read the live values from the database or from
     that would have worked. `CourierOpsDispatchService.pickupNeedsLocationName`
     is the ONE place that knows the second half; do not "fix" the two to
     agree.
+
+**What their public API exposes about MONEY, re-measured 2026-09-28.**
+Their whole published surface is 93 requests, 31 of them GET, and only
+three are money-shaped: `account/details/wallet-balance` (works; the
+nightly cost sync uses it), `account/details/statement` and
+`billing/discrepancy`. **The statement endpoint is NOT a ledger** — it
+answers 200 with ONE row carrying the current balance and empty strings
+everywhere else, exactly as their own published sample shows, whatever
+`page` / `per_page` / `from` / `to` you send. So the wallet CANNOT come
+off the browser, and COST-2's panel read stays. Their official MCP
+server is live with 13 tools and none of them is a wallet either.
+`POST /admin/shiprocket/api-probe` (`courier.accounts.manage`, GET-only,
+audited) re-asks the whole list whenever somebody needs to check again
+rather than trust this paragraph.
 
 `ShiprocketHttpService` already caches a per-account bearer for **nine
 days against their ten**, keyed on `courierAccountId` (never one shared

@@ -3,9 +3,10 @@ import type { SystemIssueService } from '../../system-issues/services/system-iss
 import {
   ShiprocketPortalChallengeError,
   ShiprocketPortalCredentialsMissingError,
+  ShiprocketPortalSignInRejectedError,
 } from './shiprocket-portal-session.service';
 
-export type ShiprocketOpenFailure = 'CHALLENGE' | 'NO_LOGIN' | 'FAILED';
+export type ShiprocketOpenFailure = 'CHALLENGE' | 'NO_LOGIN' | 'REJECTED' | 'FAILED';
 
 /**
  * What every Shiprocket panel job does when it cannot sign in — shared so
@@ -40,6 +41,32 @@ export async function raiseShiprocketOpenFailure(
       metadata: { courierAccountId: account.id, challenge: err.challenge, url: err.url },
     });
     return { outcome: 'CHALLENGE', message: err.message };
+  }
+  if (err instanceof ShiprocketPortalSignInRejectedError) {
+    /*
+      Its OWN issue, not the generic "could not sign in" one.
+
+      A person reading that one goes and checks the tunnel and the
+      password, and here both are fine — Shiprocket accepted the
+      credentials and then refused the session. Filing it under the same
+      key would send somebody to re-check the two things that are not
+      wrong, which is what happened for five days. HIGH, because nothing
+      we do makes it work: it is a call to their account manager.
+    */
+    await issues.raise({
+      kind: SystemIssueKind.COURIER_PORTAL_CHALLENGE,
+      severity: SystemIssueSeverity.HIGH,
+      title: `Shiprocket accepted ${account.label}'s login and would not open the panel`,
+      detail:
+        `${err.message}\n\nThis is theirs, not ours — the tunnel, the password and the API are ` +
+        'all fine (the nightly cost sync still reads their API every night). Ask Shiprocket ' +
+        'why a successful sign-in is being bounced for this account. Costs stop updating ' +
+        'meanwhile and read as uncovered in the P&L, not as free.',
+      source,
+      dedupeKey: `shiprocket-portal-rejected:${account.id}`,
+      metadata: { courierAccountId: account.id, url: err.url },
+    });
+    return { outcome: 'REJECTED', message: err.message };
   }
   if (err instanceof ShiprocketPortalCredentialsMissingError) {
     await issues.raise({
