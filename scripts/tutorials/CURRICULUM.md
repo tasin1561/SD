@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 8 filmed. Of the 82 left, **26 are `ready` today**, 54 need
+**90 tutorials.** 9 filmed. Of the 81 left, **25 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -304,16 +304,24 @@ import video does.
 **Covers** the presign → upload → register sequence as the seller sees it,
 several at once, and removing one.
 
-### C5. Being told before you run out · `ready`
+### C5. Being told before you run out · **FILMED** — `be-told-before-you-run-out.mp4`
 
-**Promise** — Skydrop warns you at the level you choose, per SKU where it
-matters.
-**Length** 2 min. **Prerequisites** C3.
-**Needs** nothing.
-**Covers** the account default on `/settings/stock` and the per-SKU override
-on the variant page, which beats it. The sentence that earns the tutorial is
-the one the page makes explicitly: **blank and zero are different**. Zero warns
-you only at genuinely empty; blank never warns you at all.
+Covers the account default on `/settings/stock` and the per-SKU override on the
+variant page, which beats it. The sentence that earns the tutorial is the one
+the page makes explicitly, and the video dwells on the page making it: **blank
+and zero are different**. Zero warns you only at genuinely empty; blank never
+warns you at all.
+
+Filmed ahead of C3 and C4, which it nominally depends on — the dependency is
+"has seen a product page", and the seeded catalogue supplies that without C3
+having been made.
+
+The seed clears BOTH thresholds (the seller's default and every per-SKU
+override) before each take. Null is not tidiness here, it is the state being
+filmed: `StockAlertService` resolves `variant.lowStockThreshold ??
+seller.defaultLowStockThreshold ?? null` and returns SKIPPED_NO_THRESHOLD on
+null, which is exactly what the "Off — nothing alerts by default" badge means
+and exactly what a new seller has.
 
 ### C6. Uploading a catalogue from a spreadsheet · `ready`
 
