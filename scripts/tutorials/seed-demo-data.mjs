@@ -140,6 +140,9 @@ export const TUTORIAL_EDIT_PRODUCT = {
 /** The role the roles video builds ON CAMERA. Keep in step with flows.mjs. */
 export const TUTORIAL_ROLE_NAME = 'Warehouse manager';
 
+/** The SKU the photos video uploads pictures to. Cleared before every take. */
+export const TUTORIAL_PHOTO_SKU = 'RSH-MUSLIN-ROSE';
+
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
 
@@ -422,6 +425,38 @@ async function resetCatalogueEdits(sellerId) {
     },
   });
   console.log(`  · "${TUTORIAL_EDIT_PRODUCT.name}" back to its defaults, box unset`);
+}
+
+/**
+ * Clear the pictures the PHOTOS video uploads, on disk as well as in
+ * the database.
+ *
+ * Its first two scenes are an empty drop zone and an empty gallery, and
+ * its eighth is about WHICH picture stands for the rest — which is the
+ * earliest one uploaded. Leave a previous take's three behind and the
+ * gallery opens with six in it, the delete scene removes a different
+ * one, and the "earliest" the narration points at was uploaded by a
+ * take nobody is watching.
+ *
+ * HARD delete, and the objects go too. A soft delete would leave the
+ * rows out of every read path but keep the files in mock storage
+ * forever, and the whole directory is per variant — so removing it is
+ * exactly as wide as removing the rows.
+ */
+async function clearVariantPhotos(sellerId) {
+  const variant = await prisma.productVariant.findFirst({
+    where: { skuCode: TUTORIAL_PHOTO_SKU, product: { sellerId } },
+    select: { id: true },
+  });
+  if (variant === null) return;
+
+  const images = await prisma.productImage.deleteMany({ where: { variantId: variant.id } });
+  const bucket = process.env.SPACES_BUCKET ?? 'skydrop-storage';
+  const dir = path.join(MOCK_ROOT, bucket, 'sellers', sellerId, 'variants', variant.id);
+  await fs.rm(dir, { recursive: true, force: true });
+  if (images.count > 0) {
+    console.log(`  · removed ${images.count} picture(s) from ${TUTORIAL_PHOTO_SKU}`);
+  }
 }
 
 /**
@@ -923,6 +958,7 @@ async function main() {
 
   await ensureBdIntakeWarehouse(staffToken);
 
+  await clearVariantPhotos(sellerId);
   await clearTutorialProduct(sellerId);
   await clearPreviousOrders(sellerId);
   await clearPreviousImports(sellerId);

@@ -120,6 +120,30 @@ const PRODUCT_EDIT = {
   variantWeight: '210',
 };
 
+/**
+ * The pictures the photos video uploads, and where they go.
+ *
+ * COMMITTED fixtures, like the CSV and the logo: they are drawn rather
+ * than photographed (a procedural weave — nobody owns them), and the
+ * video narrates the gallery they make, so the files and the words move
+ * together or not at all.
+ *
+ * The good shot goes up ALONE and FIRST. Ordering is `isPrimary desc,
+ * displayOrder asc, createdAt asc` and the seller UI sends neither of
+ * the first two, so the earliest registered picture is the one shown
+ * beside the SKU — and within one drop the uploads race, so "earliest"
+ * is only decidable when one is dropped on its own.
+ */
+const PHOTOS = {
+  product: 'Dhaka Muslin Dupatta',
+  sku: 'RSH-MUSLIN-ROSE',
+  first: path.join(TUTORIALS_DIR, 'fixtures', 'muslin-rose-front.jpg'),
+  rest: [
+    path.join(TUTORIALS_DIR, 'fixtures', 'muslin-rose-drape.jpg'),
+    path.join(TUTORIALS_DIR, 'fixtures', 'muslin-rose-detail.jpg'),
+  ],
+};
+
 /** What the delivery-fee video types. Anything but the seeded default. */
 const CUSTOMER_DELIVERY_FEE = '90';
 
@@ -1462,6 +1486,123 @@ export const FLOWS = {
           .first()
           .waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(1600);
+      },
+    },
+  },
+
+  'add-product-photos': {
+    // The upload is a real `fetch` to a `mock://` URL, and the gallery
+    // puts another one straight into an <img src>. Neither works in a
+    // browser without the rig — see lib/spaces-shim.mjs.
+    needsSpacesShim: true,
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-variant'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Products', exact: true }).first(), {
+          after: 1400,
+        });
+        await page.waitForURL(/\/products$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(page.getByRole('link', { name: PHOTOS.product, exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(page.getByRole('link', { name: PHOTOS.sku }).first(), { after: 1600 });
+        await page.waitForURL(/\/variants\//, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+      },
+
+      async empty({ page, stage }) {
+        const zone = page.locator('.sk-drop').first();
+        await zone.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(zone, 3000);
+      },
+
+      async first({ page, stage }) {
+        // The <input> is visually hidden inside the zone, so the file
+        // goes to the INPUT while the halo sits on what a viewer can
+        // see — the same split the profile video's logo upload makes.
+        await stage.point(page.locator('.sk-drop').first(), { settle: 600 });
+        await page.locator('.sk-drop input[type="file"]').first().setInputFiles(PHOTOS.first);
+        // The gallery is the proof, not the queue badge: a "done" badge
+        // is set before the refetch lands, so waiting on it would film
+        // an empty gallery under a narration saying otherwise.
+        await page
+          .locator('.prd-gallery__item')
+          .first()
+          .waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(1200);
+        await stage.clearHalo();
+      },
+
+      async 'upload-steps'({ page, stage }) {
+        await stage.dwellOn(page.locator('.prd-uploads').first(), 3000);
+      },
+
+      async more({ page, stage }) {
+        await stage.point(page.locator('.sk-drop').first(), { settle: 600 });
+        await page.locator('.sk-drop input[type="file"]').first().setInputFiles(PHOTOS.rest);
+        await page
+          .locator('.prd-gallery__item')
+          .nth(PHOTOS.rest.length)
+          .waitFor({ state: 'visible', timeout: 40_000 });
+        await page.waitForTimeout(1200);
+        await stage.clearHalo();
+      },
+
+      async gallery({ page, stage }) {
+        const gallery = page.locator('.prd-gallery').first();
+        await gallery.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(gallery, 3200);
+      },
+
+      async order({ page, stage }) {
+        await stage.dwellOn(page.locator('.prd-gallery__item').first(), 3000);
+      },
+
+      async delete({ page, stage }) {
+        // The LAST one, so the picture the previous scene just called
+        // the one that stands for the rest is still there afterwards.
+        const last = page.locator('.prd-gallery__item').last();
+        await stage.clickIt(last.getByRole('button', { name: 'Delete image' }), { after: 1200 });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__subject').first(), 3000);
+      },
+
+      async gone({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Delete picture' }).first(), {
+          after: 1600,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
+        // The picture actually LEAVING, not just the dialog closing —
+        // a refusal surfaces inside the dialog, so a dialog that closed
+        // is not evidence the gallery is one shorter.
+        await page
+          .locator('.prd-gallery__item')
+          .nth(PHOTOS.rest.length)
+          .waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.locator('.prd-gallery').first(), 2600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-360);
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2400);
       },
     },
   },

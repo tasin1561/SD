@@ -11,6 +11,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `place-an-order.mp4`                | A seller entering an order by hand — recipient, landmark, PIN, reference and call-centre note, picking products from the catalogue, quantity, cash-on-delivery amount, and submitting it into the call queue.                                                                                    |
 | `add-a-product-with-variations.mp4` | Adding a product that comes in more than one version — the shared weight and declared value, a Colour option, a Size option (which Skydrop asks per colour), the four variants it multiplies out, editing a SKU while it is still editable, and saving.                                          |
 | `keep-a-product-up-to-date.mp4`      | What can be changed about a product and what cannot — the defaults a variant inherits, adding a size to a product that already exists, the SKU greyed out with its reason, and the archive that cascades to variants while the restore does not.                                                             |
+| `add-product-photos.mp4`            | Pictures for a SKU — the drop zone, one file and then two at once, what the three status badges are saying, which picture stands for the rest (and why there is no way to change that), and removing one.                                                                        |
 | `upload-bulk-orders.mp4`            | A day's orders from a spreadsheet — the template, the check before importing (what we matched, rows versus orders, and the row that will not import because it has no landmark), the import running, and the four orders it placed, one of them assembled from two rows that shared a reference. |
 
 Everything here is a script. **The media is gitignored**; run one command and
@@ -40,6 +41,20 @@ fixed beat, and fails on the first step that cannot find what it reaches for. A
 moved selector is the expensive half of a re-take and this is how it is found in
 forty seconds rather than after a full render. It is also the only way to work
 on a flow whose narration does not exist yet.
+
+**What it does NOT prove is that the frame showed what the narration says.** A
+step that finds its target and then dwells on a broken image, an empty list or a
+stale panel passes exactly as loudly as one that works — the photos video passed
+twice while rendering two of its three pictures broken, because a broken `<img>`
+is still a visible `<img>`. So:
+
+```bash
+TUT_CHECK_SHOTS=1 node scripts/tutorials/record.mjs --check add-product-photos
+# → out/verify/add-product-photos-check/NN-<step>.png, one per scene
+```
+
+Off by default, because most check runs are about a moved selector and the
+shots cost wall clock. **Use it on every NEW flow, before spending a credit.**
 
 `apps/seller` must be **built and started**, not `next dev` — the dev overlay
 would be in the picture. It also needs `API_ORIGIN` pointing at the API: its

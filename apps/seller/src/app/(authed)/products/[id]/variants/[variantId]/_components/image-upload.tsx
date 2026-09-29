@@ -33,6 +33,18 @@ import { Note } from '@/app/(authed)/inventory/_components/stock-ui';
  */
 
 const MAX_UPLOAD_BATCH = 5;
+
+/**
+ * "77 KB", or an em dash.
+ *
+ * `sizeBytes` is nullable on the API's view. Register always sets it —
+ * it is checked against the stored object before the row is written —
+ * but a row from anywhere else has no size, and `Math.round(null / 1024)`
+ * renders "0 KB", which is a claim rather than an absence.
+ */
+function sizeLabel(bytes: number | null): string {
+  return bytes === null ? '—' : `${Math.round(bytes / 1024)} KB`;
+}
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 
 interface UploadItem {
@@ -61,7 +73,7 @@ export function VariantImageUpload({
   const [pendingDelete, setPendingDelete] = useState<{
     readonly id: string;
     readonly position: number;
-    readonly sizeKb: number;
+    readonly size: string;
     readonly src: string;
   } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -226,13 +238,19 @@ export function VariantImageUpload({
                 {/* Plain img — Next/Image would need a remotePatterns
                        allowlist; deferred for Phase 2 optimizations. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
+                {/* The thumbnail WHEN THERE IS ONE, the original until
+                       then. It used to read `thumbnailUrl ?? displayUrl`
+                       and the API has never returned a `displayUrl`, so
+                       a picture rendered broken from the moment it was
+                       uploaded until the thumbnail worker caught up —
+                       and for ever if that job failed. */}
                 <img
-                  src={img.thumbnailUrl ?? img.displayUrl}
+                  src={img.thumbnailUrl ?? img.url}
                   alt={img.altText ?? 'Variant image'}
                   className="prd-gallery__img"
                 />
                 <div className="prd-gallery__bar">
-                  <span className="sk-figure">{Math.round(img.sizeBytes / 1024)} KB</span>
+                  <span className="sk-figure">{sizeLabel(img.sizeBytes)}</span>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -242,8 +260,8 @@ export function VariantImageUpload({
                       setPendingDelete({
                         id: img.id,
                         position: i + 1,
-                        sizeKb: Math.round(img.sizeBytes / 1024),
-                        src: img.thumbnailUrl ?? img.displayUrl,
+                        size: sizeLabel(img.sizeBytes),
+                        src: img.thumbnailUrl ?? img.url,
                       });
                     }}
                     disabled={deleteImg.isPending}
@@ -269,7 +287,7 @@ export function VariantImageUpload({
         entity={
           pendingDelete === null
             ? ''
-            : `${skuCode ?? 'This SKU'} · picture ${pendingDelete.position} of ${total} · ${pendingDelete.sizeKb} KB`
+            : `${skuCode ?? 'This SKU'} · picture ${pendingDelete.position} of ${total} · ${pendingDelete.size}`
         }
         consequence="It is removed from this SKU and customers stop seeing it beside the product. To show it again you upload it again."
         confirmLabel="Delete picture"

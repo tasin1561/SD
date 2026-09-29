@@ -117,6 +117,20 @@ export async function record(slug, { check = false } = {}) {
   page.setDefaultTimeout(30_000);
   const stage = makeStage(page);
 
+  // CHECK MODE PROVES EVERY STEP WAS REACHED. It does not prove the
+  // frame showed what the narration says about it — a step that finds
+  // its target and dwells on a broken image, an empty list or a stale
+  // panel passes exactly as loudly as one that works. `TUT_CHECK_SHOTS=1`
+  // writes the end of every scene out, which is the cheapest way to look
+  // before spending a credit. Off by default: the shots cost wall clock
+  // and most check runs are about a moved selector.
+  const shotDir = path.join(VERIFY_DIR, `${slug}-check`);
+  const wantShots = check && process.env.TUT_CHECK_SHOTS === '1';
+  if (wantShots) {
+    await fs.rm(shotDir, { recursive: true, force: true });
+    await fs.mkdir(shotDir, { recursive: true });
+  }
+
   /** @type {{ id: string, index: number, marker: number[], wallStart: number, wallEnd: number }[]} */
   const scenes = [];
   const startedAt = Date.now();
@@ -145,6 +159,14 @@ export async function record(slug, { check = false } = {}) {
       const spent = Date.now() - wallStart;
       if (spent < needMs) await page.waitForTimeout(needMs - spent);
 
+      if (wantShots) {
+        await page
+          .screenshot({
+            path: path.join(shotDir, `${String(index + 1).padStart(2, '0')}-${step.id}.png`),
+          })
+          .catch(() => {});
+      }
+
       scenes.push({ id: step.id, index, marker: colour, wallStart, wallEnd: Date.now() });
       console.log(
         `  · ${step.id.padEnd(16)} clip ${clip.seconds.toFixed(2)}s  scene ${(
@@ -172,6 +194,7 @@ export async function record(slug, { check = false } = {}) {
 
   if (check) {
     if (failure !== null) throw failure;
+    if (wantShots) console.log(`  shots → ${shotDir}`);
     return { slug, checked: true, scenes: scenes.map((sc) => sc.id) };
   }
 

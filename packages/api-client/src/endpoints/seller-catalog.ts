@@ -178,18 +178,41 @@ export interface RegisterVariantImageRequest {
   readonly displayOrder?: number;
 }
 
+/**
+ * A registered variant picture.
+ *
+ * FOUR OF THESE FIELDS USED TO BE INVENTED. This interface declared
+ * `displayUrl`, `thumbnailSpacesKey`, `contentType` and `sortOrder`; the
+ * API's `ImageView` returns `url`, `mimeType` and `displayOrder` and has
+ * never returned the other two. `displayUrl` was the one that cost
+ * something: the gallery renders `thumbnailUrl ?? displayUrl`, so a
+ * picture whose thumbnail had not been generated yet fell back to
+ * `undefined` and the seller was shown a BROKEN IMAGE — every freshly
+ * uploaded picture for as long as the thumbnail job took, and for ever
+ * if that job failed. Nothing failed loudly: the upload succeeded, the
+ * row existed, and only the frame was wrong.
+ *
+ * So the names here are the API's own. `url` is the presigned original
+ * and is ALWAYS present; `thumbnailUrl` is null until the worker has
+ * made one. Both are short-lived presigned URLs — never store either.
+ */
 export interface SellerVariantImageView {
   readonly id: string;
   readonly variantId: string;
   readonly spacesKey: string;
-  readonly thumbnailSpacesKey: string | null;
-  readonly displayUrl: string;
+  /** Presigned original. Always present. */
+  readonly url: string;
+  /** Presigned thumbnail, or null until the worker has made one. */
   readonly thumbnailUrl: string | null;
-  readonly contentType: string;
-  readonly sizeBytes: number;
+  readonly mimeType: string | null;
+  readonly sizeBytes: number | null;
+  readonly widthPx: number | null;
+  readonly heightPx: number | null;
   readonly altText: string | null;
-  readonly sortOrder: number;
+  readonly isPrimary: boolean;
+  readonly displayOrder: number;
   readonly createdAt: string;
+  readonly updatedAt: string;
 }
 
 /**

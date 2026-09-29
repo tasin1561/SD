@@ -528,6 +528,57 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'add-product-photos',
+    title: 'Product photos',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A code tells nobody anything. A picture beside it means the packer, the call-centre agent and you all recognise the thing without decoding it.',
+      },
+      {
+        id: 'open-variant',
+        say: 'Pictures belong to a variant, not to the product — sizes share a photograph, colours do not. So open the product, then open the code itself.',
+      },
+      {
+        id: 'empty',
+        say: 'Pictures sits at the bottom of the variant. Drop files on it or browse for them — JPEGs, PNGs or WEBPs, up to five in one go.',
+      },
+      {
+        id: 'first',
+        say: 'Start with one, and make it the shot you want a customer to see. It goes up on its own, and the badge beside it keeps you posted.',
+      },
+      {
+        id: 'upload-steps',
+        say: 'Three things just happened. Skydrop found somewhere to put the file, your browser sent it straight there, and Skydrop then recorded it against this code.',
+      },
+      {
+        id: 'more',
+        say: 'Now the rest, dragged in together. Each file gets its own row and its own verdict, so one that fails does not take the others down with it.',
+      },
+      {
+        id: 'gallery',
+        say: 'And they are all here, each with the space it takes. Nothing was resized on the way in, so a phone photograph arrives at a phone photograph’s size.',
+      },
+      {
+        id: 'order',
+        say: 'One of them stands for the rest, and it is the one uploaded earliest. There is no way to promote a different one — which is why the good shot went first.',
+      },
+      {
+        id: 'delete',
+        say: 'Removing one asks first, and it names which of them it is about rather than making you count. That matters when three of them look alike.',
+      },
+      {
+        id: 'gone',
+        say: 'Gone, and customers stop seeing it. There is no recycle bin here — putting it back means uploading it again, which is exactly what the dialog said.',
+      },
+      {
+        id: 'outro',
+        say: 'That is all of it. The pictures follow this code everywhere it goes: your own catalogue, the order screen, and the call the customer takes.',
+      },
+    ],
+  },
+  {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
     subtitle: 'Skydrop for sellers',

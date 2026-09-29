@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 14 filmed. Of the 76 left, **20 are `ready` today**, 54 need
+**90 tutorials.** 15 filmed. Of the 75 left, **19 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -32,21 +32,19 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (14):** A1–A6, B1, B2, C3, C5, E1, E4, F2, F3. Every one is
+**Filmed so far (15):** A1–A6, B1, B2, C3, C4, C5, E1, E4, F2, F3. Every one is
 listed in its own entry below with what it covers and what its seeding does.
 
 **Next, in order, and all `ready`:**
 
-1. **C4 — product photos.** Needs `needsSpacesShim: true` on the flow; the
-   profile video is the worked example.
-2. **F1 — inviting someone.** The invite link revealed once, resend, revoke,
+1. **F1 — inviting someone.** The invite link revealed once, resend, revoke,
    changing a role. Pairs with F2, already filmed.
-3. **F5 — API keys and webhooks.** The secret shown once, revoked vs expired,
+2. **F5 — API keys and webhooks.** The secret shown once, revoked vs expired,
    and what auto-disabled means.
-4. **G1, G2 — reseller stores and the price they pay.**
-5. **E3 — taking money out.** Needs a positive balance: accept one seeded
+3. **G1, G2 — reseller stores and the price they pay.**
+4. **E3 — taking money out.** Needs a positive balance: accept one seeded
    top-up first.
-6. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
+5. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
    exist. An hour's work, then a 4-minute video.
 
 **Then build D0** (below) — the lifecycle seeding. It is still the single
@@ -63,6 +61,12 @@ and most of the admin side.
   video passed `--check` twice while saving a role with no permissions, because
   its step skipped quietly on a selector miss. Check mode only tests what the
   steps assert.
+- **`TUT_CHECK_SHOTS=1 node scripts/tutorials/record.mjs --check <slug>` writes
+  the end of every scene to `out/verify/<slug>-check/`.** Check mode proves a
+  step was REACHED, never that the frame showed what the narration says about
+  it — the photos video passed twice while rendering two of its three pictures
+  broken, because a broken `<img>` is still a visible `<img>`. Look at the
+  shots before spending a credit.
 - **Sign-in is throttled 5 per 15 minutes and a video costs three.** Run
   `lib/clear-login-throttle.mjs` (local Redis counters; `make-tutorials.sh` does
   it automatically). Do NOT wait it out by retrying — a refused attempt writes a
@@ -360,15 +364,47 @@ deletes the `RSH-MUSLIN-INDIGO` size it adds, and un-archives everything.
 goods receipt against an archived variant is refused, so a take left archived
 would fail the next run's stock top-up rather than the video.
 
-### C4. Product photos · `ready`
+### C4. Product photos · **FILMED** — `add-product-photos.mp4`
 
 **Promise** — your products have pictures, in the app and on the picking sheet.
-**Length** 2 min. **Prerequisites** C3.
-**Needs** a variant and an image file. The recorder's mock-storage shim already
-handles the upload — `needsSpacesShim: true` on the flow, exactly as the bulk
-import video does.
-**Covers** the presign → upload → register sequence as the seller sees it,
-several at once, and removing one.
+**Length** 2 min 20 s. **Prerequisites** C3.
+**Covers** the presign → upload → register sequence as the seller sees it, one
+file and then two at once, which picture stands for the rest, and removing one.
+`needsSpacesShim: true` on the flow.
+
+**FILMING FOUND A REAL BUG, and it is the reason to keep taking check-mode
+screenshots.** `SellerVariantImageView` in `packages/api-client` declared four
+fields the API has never returned — `displayUrl`, `thumbnailSpacesKey`,
+`contentType`, `sortOrder` against the API's `url`, `mimeType` and
+`displayOrder`. The gallery renders `thumbnailUrl ?? displayUrl`, so until the
+thumbnail worker caught up the `src` was `undefined` and the seller was shown a
+BROKEN IMAGE — on every freshly uploaded picture, and permanently if that job
+ever failed. Nothing failed loudly: the upload succeeded, the row existed, only
+the frame was wrong. Fixed by naming the fields the API actually sends and
+reading `thumbnailUrl ?? url`; the corrected type then caught a second one,
+`sizeBytes` being nullable and rendering as "0 KB".
+
+**It passed `--check` twice while showing it**, because a broken `<img>` is
+still a visible `<img>`. `TUT_CHECK_SHOTS=1` was added to `record.mjs` for
+exactly this: it writes the end of every scene to
+`out/verify/<slug>-check/`, which is the cheapest way to look before spending
+a credit. **Use it on every new flow.**
+
+**A gap worth a decision, NOT a bug:** the seller cannot choose which picture
+stands for the rest. Ordering is `isPrimary desc, displayOrder asc, createdAt
+asc`; the UI sends neither of the first two and there is no update endpoint at
+all (`presign`, `register`, `list`, `delete` is the whole surface), so the
+earliest registered picture wins — and within one drop the uploads race, so
+"earliest" is only decidable when a file is dropped on its own. The video says
+so out loud and tells the seller to upload the good shot first, which is the
+honest advice while it stays this way.
+
+**Seeding:** `clearVariantPhotos` hard-deletes the rows and removes the whole
+per-variant directory from mock storage. A soft delete would keep every take's
+files on disk for ever, and the first two scenes are an empty drop zone.
+Fixtures: three drawn fabric swatches (procedural, nobody owns them), visibly
+different from each other so a gallery of three does not read as one picture
+copied.
 
 ### C5. Being told before you run out · **FILMED** — `be-told-before-you-run-out.mp4`
 
