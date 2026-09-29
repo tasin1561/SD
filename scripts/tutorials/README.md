@@ -51,17 +51,99 @@ API_ORIGIN=http://127.0.0.1:4000
 in `apps/seller/.env.local` (gitignored) or export it before `next start`.
 Without it every call 500s and the recording fails at sign-in.
 
-The ElevenLabs key is read from `~/.config/skydrop/elevenlabs` or
-`$ELEVENLABS_API_KEY`. It is never written into a file here.
+## The keys
 
-**Mind the quota.** Narration is billed per character and the account's
-allowance is about eight tutorials' worth a month, so
+There is **more than one ElevenLabs account**, because one month's
+allowance is smaller than one section of the library. Put one key per
+line in `~/.config/skydrop/elevenlabs-keys`; blank lines and `#` comments
+are skipped, so the file can say which account is which.
+
+```
+# main
+sk_...
+# spare
+sk_...
+```
+
+The old single-key `~/.config/skydrop/elevenlabs` and `$ELEVENLABS_API_KEY`
+still work and are the fallback when the list is absent. **The list wins
+when both exist**, and that precedence is load-bearing: `make-tutorials.sh`
+used to export the single-key file into the environment unconditionally, so
+an env-first order would have run a two-key machine on one key and reported
+a quota failure that was never real.
+
+**A key is never printed** — not the key, not a prefix, not its length. Keys
+are named by POSITION ("key 1", "key 2"), which is enough to say which
+account paid for a clip. `KeyRing.redact()` is the backstop on every message
+that leaves the module, because "we never log it" is not a property anybody
+can check by reading.
+
+**Rotation** happens on exhaustion and nothing else, and it retries **the
+clip that failed** rather than moving on — anything else leaves a hole in
+the middle of a video at the moment the run looked like it had recovered.
+The three classes (`lib/elevenlabs-keys.mjs`):
+
+| Class       | What it is                                         | What happens                    |
+| ----------- | -------------------------------------------------- | ------------------------------- |
+| `EXHAUSTED` | `quota_exceeded`, `insufficient_credits`, HTTP 402 | rotate, retry the same clip     |
+| `TRANSIENT` | 429 rate limit, 5xx, a thrown `fetch`              | retry the same key, backing off |
+| `FATAL`     | **everything else**                                | stop, and touch no other key    |
+
+That last row is the important one. An unrecognised failure looks exactly
+like an exhausted one from the outside, and treating the two alike burns
+every key in the ring on one bad request. **A 401 is classified by its body,
+not its status code**: it is what an out-of-credit account returns AND what a
+key with the wrong scopes returns, and only `detail.status` tells them apart.
+The live API answers `missing_permissions` with a **401** where their own
+error reference says 403 `insufficient_permissions` — the live shape is what
+is matched, and pinned.
+
+When every key is spent the run **stops cleanly**, saying how many clips were
+made and how many are left. It is resumable by re-running the same command:
+the per-clip manifest means nothing already paid for is bought again.
+
+### Two free checks
+
+```bash
+node scripts/tutorials/generate-voice.mjs --quota        # what each key has left
+node scripts/tutorials/generate-voice.mjs --voice-check  # same narrator on every account?
+```
+
+`--quota` reads `/v1/user/subscription`; a generation run does the same thing
+**before it spends anything**, and refuses up front when every balance is
+known and the total is short. A balance it cannot read is reported as
+unknown and the run goes ahead — a key scoped to text-to-speech alone cannot
+call that endpoint, and blocking all production on a missing scope would be
+the tail wagging the dog.
+
+`--voice-check` is the guard against the library changing narrator half way
+through. `EXAVITQu4vr4xnSDxMaL` is a stock voice and should be the same
+person everywhere, but an account can clone or customise over a voice id, and
+nobody would notice until a viewer did. **With one key it cannot fail** —
+one account cannot disagree with itself — and that is correct rather than
+weak. From the second key on, a mismatch **stops the run**, and so does not
+being able to check: "we could not tell" and "it is fine" are the same
+picture from here, and only one of them is safe to act on.
+
+### Proving rotation without spending anything
+
+```bash
+node --test "scripts/tutorials/test/*.test.mjs"
+```
+
+Rotation only happens when an account runs out, which is the one condition
+you cannot arrange on purpose without spending the account — so the
+behaviour that matters most is the behaviour least likely to be exercised
+before it is needed. The tests inject a `fetch`, so exhaustion is a thing
+the test decides. They pin both silent ways it goes wrong: rotating on a
+failure that was **not** exhaustion (which spends the next account on a bad
+request), and retrying a spent key forever (which never finishes and never
+says why).
+
+**Mind the quota.** Narration is billed per character, so
 `make-tutorials.sh` with no arguments can run out part-way through. A
 clip already generated is free to re-use — the cache is keyed on the
 words — so the cost of a re-take is only the lines that changed.
-`announce-a-consignment` is in the default list with its narration
-written and its flow proven (`--check`) but **no audio yet**; it is the
-first thing to generate when the quota next resets.
 
 ## Changing the narration
 
@@ -87,7 +169,9 @@ somebody watched it.
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `seed-demo-data.mjs`               | The demo seller, its catalogue, its stock and the Bangladesh intake warehouse. Idempotent, and it removes what a previous take created — the tutorial product, the orders, the imports, the consignment, a pending bank change — so a re-take starts from the same world. Takes the video's slug, and tailors: the orientation video wants a dashboard with orders on it, every other video wants the order list cleared. Refuses a non-local `DATABASE_URL`. |
 | `narration.mjs`                    | The words, one entry per scene.                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `generate-voice.mjs`               | ElevenLabs → one mp3 per scene, plus each clip's **measured** duration from ffprobe. Cached per line, and the cache manifest is written **after every clip** — see "Why the manifest is written per clip".                                                                                                                                                                                                                                                    |
+| `generate-voice.mjs`               | ElevenLabs → one mp3 per scene, plus each clip's **measured** duration from ffprobe. Cached per line, and the cache manifest is written **after every clip** — see "Why the manifest is written per clip". Checks the budget before spending and the voice before filming.                                                                                                                                                                                    |
+| `lib/elevenlabs-keys.mjs`          | The key ring: where keys are read from, which failures rotate and which stop, and why a key is never printed. See [The keys](#the-keys).                                                                                                                                                                                                                                                                                                                      |
+| `test/key-rotation.test.mjs`       | Rotation, exhaustion and redaction against an injected `fetch` — the behaviour that costs credits to reach for real. `node --test "scripts/tutorials/test/*.test.mjs"`.                                                                                                                                                                                                                                                                                       |
 | `lib/stage.mjs`                    | The sync marker, the click ripple, the highlight, and human-rate typing.                                                                                                                                                                                                                                                                                                                                                                                      |
 | `lib/spaces-shim.mjs`              | Lets the browser finish a `mock://` upload, and lets it SEE the result. Recording rig only, armed per flow — see "Why the upload needs a shim".                                                                                                                                                                                                                                                                                                               |
 | `fixtures/rangpur-bulk-orders.csv` | The file the bulk-import video uploads. Committed, because the preview's figures are narrated word for word.                                                                                                                                                                                                                                                                                                                                                  |

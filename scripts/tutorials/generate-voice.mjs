@@ -11,38 +11,38 @@
  * re-run regenerates only the lines you changed, which keeps a re-take
  * from spending credits on nine identical clips.
  *
- * The API key is read from ~/.config/skydrop/elevenlabs or the
- * ELEVENLABS_API_KEY env var, and is never printed.
+ * KEYS. There is more than one ElevenLabs account, because one month's
+ * allowance is smaller than one section of the library. The ring, the
+ * rotation rule and the reason a key is never printed are all in
+ * `lib/elevenlabs-keys.mjs`. What lives here is when the ring is asked:
+ * a budget check BEFORE the first clip is bought, and a rotation on the
+ * clip that failed rather than on the next one.
  *
  *   node scripts/tutorials/generate-voice.mjs [slug]
+ *   node scripts/tutorials/generate-voice.mjs --quota       # spend nothing
+ *   node scripts/tutorials/generate-voice.mjs --voice-check # spend nothing
  */
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { VIDEOS, videoBySlug } from './narration.mjs';
 import { AUDIO_DIR, MIN_CLIP_SECONDS, MAX_CLIP_SECONDS } from './lib/paths.mjs';
+import { KeyRing, QuotaExhaustedError, classifyFailure, readKeys } from './lib/elevenlabs-keys.mjs';
 
 const run = promisify(execFile);
 
-const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // "Sarah"
+const API = 'https://api.elevenlabs.io/v1';
+export const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // "Sarah"
 const MODEL_ID = 'eleven_multilingual_v2';
 const VOICE_SETTINGS = { stability: 0.55, similarity_boost: 0.75, style: 0.15, speed: 0.9 };
 
-async function apiKey() {
-  const fromEnv = process.env.ELEVENLABS_API_KEY;
-  if (fromEnv !== undefined && fromEnv.trim() !== '') return fromEnv.trim();
-  const file = path.join(os.homedir(), '.config', 'skydrop', 'elevenlabs');
-  try {
-    const key = (await fs.readFile(file, 'utf8')).trim();
-    if (key !== '') return key;
-  } catch {
-    /* fall through to the error below */
-  }
-  throw new Error(`No ElevenLabs key: set ELEVENLABS_API_KEY or put it in ${file}`);
-}
+/** A transient failure is retried on the SAME key, this many times, backing off. */
+const TRANSIENT_ATTEMPTS = 4;
+const TRANSIENT_BACKOFF_MS = [2000, 5000, 12000];
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Cache key — every input that changes the audio is in it. */
 function fingerprint(text) {
@@ -70,21 +70,246 @@ export async function probeDuration(file) {
   return seconds;
 }
 
-async function synthesise(key, text, outFile) {
-  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`, {
-    method: 'POST',
-    headers: { 'xi-api-key': key, 'content-type': 'application/json', accept: 'audio/mpeg' },
-    body: JSON.stringify({ text, model_id: MODEL_ID, voice_settings: VOICE_SETTINGS }),
-  });
-  if (!res.ok) {
-    // Deliberately does not echo the request headers — the key is in them.
-    throw new Error(`ElevenLabs ${res.status}: ${(await res.text()).slice(0, 300)}`);
+/**
+ * What one key has left.
+ *
+ * `character_limit − character_count`. UNKNOWN is a first-class answer,
+ * not an error: a key scoped to text-to-speech alone cannot read
+ * `/user/subscription` at all (this project's own key answers 401
+ * `missing_permissions` there while synthesising perfectly), and
+ * refusing to film over a missing scope would be the tail wagging the
+ * dog. The caller decides what to do with not knowing — see
+ * `budgetFor`.
+ */
+export async function remainingCredits(key, { fetchImpl = fetch } = {}) {
+  let res;
+  try {
+    res = await fetchImpl(`${API}/user/subscription`, { headers: { 'xi-api-key': key } });
+  } catch (e) {
+    return { known: false, reason: `could not reach ElevenLabs (${e.message})` };
   }
-  await fs.writeFile(outFile, Buffer.from(await res.arrayBuffer()));
+  if (!res.ok) {
+    const body = await res.text();
+    const why = body.includes('missing_permissions')
+      ? 'the key is not scoped for user_read'
+      : `HTTP ${res.status}`;
+    return { known: false, reason: why };
+  }
+  const sub = await res.json();
+  const limit = sub.character_limit;
+  const used = sub.character_count;
+  if (typeof limit !== 'number' || typeof used !== 'number') {
+    return { known: false, reason: 'the subscription response carried no character counts' };
+  }
+  return { known: true, remaining: limit - used, limit, used, tier: sub.tier ?? null };
 }
 
-export async function voiceFor(video, { adopt = false } = {}) {
-  const key = await apiKey();
+/**
+ * The voice, as THIS key's account sees it.
+ *
+ * `EXAVITQu4vr4xnSDxMaL` is a stock voice and should be the same person
+ * on every account — but an account can clone or customise over a voice
+ * id, and if one of them has, the library changes narrator half way
+ * through and nobody finds out until a viewer does. So it is checked
+ * rather than assumed. UNKNOWN again is its own answer: the check needs
+ * `voices_read`, which a text-to-speech-only key does not carry.
+ */
+export async function voiceIdentity(key, { fetchImpl = fetch } = {}) {
+  let res;
+  try {
+    res = await fetchImpl(`${API}/voices/${VOICE_ID}`, { headers: { 'xi-api-key': key } });
+  } catch (e) {
+    return { known: false, reason: `could not reach ElevenLabs (${e.message})` };
+  }
+  if (!res.ok) {
+    const body = await res.text();
+    const why = body.includes('missing_permissions')
+      ? 'the key is not scoped for voices_read'
+      : `HTTP ${res.status}`;
+    return { known: false, reason: why };
+  }
+  const v = await res.json();
+  return {
+    known: true,
+    name: v.name ?? null,
+    category: v.category ?? null,
+    settings: v.settings ?? null,
+  };
+}
+
+/**
+ * Refuse to film if the accounts do not agree about who is speaking.
+ *
+ * WITH ONE KEY THIS CANNOT FAIL, and that is correct rather than a
+ * weakness: a single account cannot disagree with itself, so there is
+ * nothing to compare and nothing at risk. The check has teeth only from
+ * the second key onward — which is also the moment the risk appears.
+ *
+ * With two or more keys an UNVERIFIABLE answer is treated as a stop,
+ * not a shrug. The whole point is that a mid-library narrator change is
+ * invisible; "we could not check" and "it is fine" are the same picture
+ * from here, and only one of them is safe to act on.
+ */
+export async function assertSameVoice(ring, { fetchImpl = fetch, log = console.log } = {}) {
+  const seen = [];
+  for (const { position, key } of ring.all) {
+    const id = await voiceIdentity(key, { fetchImpl });
+    seen.push({ position, ...id });
+    log(
+      id.known
+        ? `  · key ${position}: "${id.name}" (${id.category})`
+        : `  · key ${position}: not readable — ${id.reason}`,
+    );
+  }
+
+  if (ring.size === 1) {
+    const only = seen[0];
+    if (!only.known) {
+      log('  one key, so there is nothing to compare — the check is moot, not skipped.');
+    }
+    return { agreed: true, compared: false, voices: seen };
+  }
+
+  const unreadable = seen.filter((s) => !s.known);
+  if (unreadable.length > 0) {
+    throw new Error(
+      `Cannot confirm the voice is the same on every account: ` +
+        `${unreadable.map((u) => `key ${u.position} (${u.reason})`).join(', ')}. ` +
+        `Grant those keys voices_read, or film with one key. ` +
+        `A narrator that changes mid-library is invisible until somebody watches it.`,
+    );
+  }
+
+  const shape = (s) => JSON.stringify({ name: s.name, category: s.category, settings: s.settings });
+  const first = shape(seen[0]);
+  const differing = seen.filter((s) => shape(s) !== first);
+  if (differing.length > 0) {
+    throw new Error(
+      `Voice ${VOICE_ID} is NOT the same on every account — ` +
+        `key 1 has "${seen[0].name}" (${seen[0].category}) but ` +
+        `${differing.map((d) => `key ${d.position} has "${d.name}" (${d.category})`).join(', ')}. ` +
+        `Filming would change narrator part way through the library.`,
+    );
+  }
+
+  log(`  the same voice on all ${ring.size} keys.`);
+  return { agreed: true, compared: true, voices: seen };
+}
+
+/**
+ * Buy one clip, moving through the ring as accounts run out.
+ *
+ * The rotation retries THE SAME CLIP on the next key. Anything else
+ * would leave a hole in the middle of a video at exactly the moment the
+ * run looked like it had recovered.
+ */
+export async function synthesise(ring, text, outFile, { fetchImpl = fetch, sleep = wait } = {}) {
+  for (;;) {
+    let transientAttempts = 0;
+
+    for (;;) {
+      let res;
+      try {
+        res = await fetchImpl(`${API}/text-to-speech/${VOICE_ID}`, {
+          method: 'POST',
+          headers: {
+            'xi-api-key': ring.current,
+            'content-type': 'application/json',
+            accept: 'audio/mpeg',
+          },
+          body: JSON.stringify({ text, model_id: MODEL_ID, voice_settings: VOICE_SETTINGS }),
+        });
+      } catch (e) {
+        // A thrown fetch is the network, never the account.
+        transientAttempts += 1;
+        if (transientAttempts >= TRANSIENT_ATTEMPTS) {
+          throw new Error(
+            ring.redact(`ElevenLabs unreachable after ${transientAttempts} tries: ${e.message}`),
+          );
+        }
+        await sleep(TRANSIENT_BACKOFF_MS[transientAttempts - 1] ?? 12000);
+        continue;
+      }
+
+      if (res.ok) {
+        await fs.writeFile(outFile, Buffer.from(await res.arrayBuffer()));
+        return { keyPosition: ring.position };
+      }
+
+      // Deliberately does not echo the request headers — the key is in
+      // them — and everything that IS echoed goes through `redact`.
+      const body = await res.text();
+      const kind = classifyFailure(res.status, body);
+
+      if (kind === 'TRANSIENT') {
+        transientAttempts += 1;
+        if (transientAttempts >= TRANSIENT_ATTEMPTS) {
+          throw new Error(
+            ring.redact(
+              `ElevenLabs kept failing on key ${ring.position} after ` +
+                `${transientAttempts} tries — ${res.status}: ${body.slice(0, 300)}`,
+            ),
+          );
+        }
+        await sleep(TRANSIENT_BACKOFF_MS[transientAttempts - 1] ?? 12000);
+        continue;
+      }
+
+      if (kind === 'EXHAUSTED') {
+        console.log(`    key ${ring.position} is out of quota — moving on`);
+        if (!ring.rotate())
+          throw new QuotaExhaustedError({ done: 0, remaining: 0, keys: ring.size });
+        break; // same clip, next key
+      }
+
+      throw new Error(ring.redact(`ElevenLabs ${res.status}: ${body.slice(0, 300)}`));
+    }
+  }
+}
+
+/**
+ * What this run will cost, and whether the ring can pay for it.
+ *
+ * Asked BEFORE the first clip, because finding out half way through
+ * leaves a video with a gap in it and a manifest that has to be reasoned
+ * about. It refuses only when EVERY key's balance is known and the total
+ * is short — a partially-unknown ring warns and goes ahead, since the
+ * alternative is a missing scope blocking all production.
+ */
+export async function budgetFor(ring, characters, { fetchImpl = fetch, log = console.log } = {}) {
+  const balances = [];
+  for (const { position, key } of ring.all) {
+    balances.push({ position, ...(await remainingCredits(key, { fetchImpl })) });
+  }
+
+  const known = balances.filter((b) => b.known);
+  const total = known.reduce((a, b) => a + b.remaining, 0);
+  const allKnown = known.length === balances.length;
+
+  for (const b of balances) {
+    log(
+      b.known
+        ? `  · key ${b.position}: ${b.remaining.toLocaleString('en-IN')} of ${b.limit.toLocaleString('en-IN')} credits left`
+        : `  · key ${b.position}: balance unknown — ${b.reason}`,
+    );
+  }
+  log(`  this run needs ${characters.toLocaleString('en-IN')} credits of new narration.`);
+
+  if (allKnown && total < characters) {
+    throw new Error(
+      `Not enough credits: ${total.toLocaleString('en-IN')} left across ${ring.size} key(s), ` +
+        `${characters.toLocaleString('en-IN')} needed. Nothing has been spent. ` +
+        `Generate a shorter video, or wait for an allowance to reset.`,
+    );
+  }
+  if (!allKnown) {
+    log('  not every balance is readable, so this run may still stop part way — it is resumable.');
+  }
+  return { balances, total, allKnown, characters };
+}
+
+export async function voiceFor(video, { adopt = false, fetchImpl = fetch, ring = null } = {}) {
+  const keyRing = ring ?? new KeyRing(await readKeys());
   const dir = path.join(AUDIO_DIR, video.slug);
   await fs.mkdir(dir, { recursive: true });
 
@@ -97,8 +322,34 @@ export async function voiceFor(video, { adopt = false } = {}) {
     /* first run */
   }
 
-  const clips = {};
+  // Work out what is actually going to be BOUGHT before asking whether
+  // there is money for it: a re-take of one line must not be refused for
+  // want of the whole video's credits.
+  const toBuy = [];
   for (const step of video.steps) {
+    const fp = fingerprint(step.say);
+    const file = path.join(dir, `${step.id}.mp3`);
+    const hit = cached[step.id];
+    const exists = await fs
+      .access(file)
+      .then(() => true)
+      .catch(() => false);
+    const reusable =
+      (hit !== undefined && hit.fingerprint === fp && exists) ||
+      (hit === undefined && exists && adopt);
+    if (!reusable) toBuy.push(step);
+  }
+  if (toBuy.length > 0) {
+    await budgetFor(
+      keyRing,
+      toBuy.reduce((a, s) => a + s.say.length, 0),
+      { fetchImpl },
+    );
+  }
+
+  const clips = {};
+  let bought = 0;
+  for (const [index, step] of video.steps.entries()) {
     const fp = fingerprint(step.say);
     const file = path.join(dir, `${step.id}.mp3`);
     const hit = cached[step.id];
@@ -130,29 +381,44 @@ export async function voiceFor(video, { adopt = false } = {}) {
       continue;
     }
 
-    await synthesise(key, step.say, file);
-    const seconds = await probeDuration(file);
-    clips[step.id] = { fingerprint: fp, seconds, file };
+    try {
+      const { keyPosition } = await synthesise(keyRing, step.say, file, { fetchImpl });
+      bought += 1;
+      const seconds = await probeDuration(file);
+      clips[step.id] = { fingerprint: fp, seconds, file };
 
-    // WRITTEN PER CLIP, not once at the end. The manifest is what makes
-    // a clip re-usable — a clip whose duration and fingerprint were
-    // never recorded is regenerated on the next run, and regenerating
-    // costs credits. Writing it only after the whole loop meant a run
-    // that died on its last line threw away every clip it had just paid
-    // for, which is how ten of them were lost and this was found.
-    await writeManifest(manifestFile, video.slug, clips);
+      // WRITTEN PER CLIP, not once at the end. The manifest is what makes
+      // a clip re-usable — a clip whose duration and fingerprint were
+      // never recorded is regenerated on the next run, and regenerating
+      // costs credits. Writing it only after the whole loop meant a run
+      // that died on its last line threw away every clip it had just paid
+      // for, which is how ten of them were lost and this was found.
+      await writeManifest(manifestFile, video.slug, clips);
 
-    const flag =
-      seconds < MIN_CLIP_SECONDS
-        ? '  ← SHORT, under the 8s floor'
-        : seconds > MAX_CLIP_SECONDS
-          ? '  ← LONG, over the 15s ceiling'
-          : '';
-    console.log(`  · ${step.id.padEnd(16)} ${seconds.toFixed(2)}s${flag}`);
+      const flag =
+        seconds < MIN_CLIP_SECONDS
+          ? '  ← SHORT, under the 8s floor'
+          : seconds > MAX_CLIP_SECONDS
+            ? '  ← LONG, over the 15s ceiling'
+            : '';
+      console.log(`  · ${step.id.padEnd(16)} ${seconds.toFixed(2)}s  [key ${keyPosition}]${flag}`);
+    } catch (e) {
+      // Stopping CLEANLY is the requirement: the manifest already holds
+      // every clip bought so far, so the same command finishes the job
+      // when an allowance resets.
+      if (e instanceof QuotaExhaustedError) {
+        throw new QuotaExhaustedError({
+          done: index,
+          remaining: video.steps.length - index,
+          keys: keyRing.size,
+        });
+      }
+      throw e;
+    }
   }
 
   await writeManifest(manifestFile, video.slug, clips);
-  return clips;
+  return { clips, bought, keysSpent: keyRing.spentPositions, lastKey: keyRing.position };
 }
 
 /** The manifest, rewritten whole. Small enough that atomicity is not worth the temp file. */
@@ -172,12 +438,37 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // `--adopt` takes mp3s that are on disk with no manifest entry and
   // records them rather than buying them again. See the adoption branch.
   const adopt = args.includes('--adopt');
-  const named = args.find((a) => !a.startsWith('--'));
-  const wanted = named === undefined ? VIDEOS : [videoBySlug(named)];
-  for (const video of wanted) {
-    console.log(`\n${video.title} (${video.slug})`);
-    const clips = await voiceFor(video, { adopt });
-    const total = Object.values(clips).reduce((a, c) => a + c.seconds, 0);
-    console.log(`  total narration ${total.toFixed(1)}s across ${Object.keys(clips).length} clips`);
+  const ring = new KeyRing(await readKeys());
+
+  if (args.includes('--quota')) {
+    console.log(`\n${ring.size} key(s):`);
+    for (const { position, key } of ring.all) {
+      const q = await remainingCredits(key);
+      console.log(
+        q.known
+          ? `  · key ${position}: ${q.remaining.toLocaleString('en-IN')} of ${q.limit.toLocaleString('en-IN')} left (${q.tier})`
+          : `  · key ${position}: unknown — ${q.reason}`,
+      );
+    }
+  } else if (args.includes('--voice-check')) {
+    console.log(`\nVoice ${VOICE_ID} across ${ring.size} key(s):`);
+    await assertSameVoice(ring);
+  } else {
+    const named = args.find((a) => !a.startsWith('--'));
+    const wanted = named === undefined ? VIDEOS : [videoBySlug(named)];
+    // Checked ONCE for the whole run, not per video: it is a property of
+    // the accounts, and asking per video would be several free calls
+    // saying the same thing.
+    console.log(`\nVoice ${VOICE_ID} across ${ring.size} key(s):`);
+    await assertSameVoice(ring);
+    for (const video of wanted) {
+      console.log(`\n${video.title} (${video.slug})`);
+      const { clips, bought, lastKey } = await voiceFor(video, { adopt, ring });
+      const total = Object.values(clips).reduce((a, c) => a + c.seconds, 0);
+      console.log(
+        `  total narration ${total.toFixed(1)}s across ${Object.keys(clips).length} clips ` +
+          `(${bought} bought this run, on key ${lastKey})`,
+      );
+    }
   }
 }

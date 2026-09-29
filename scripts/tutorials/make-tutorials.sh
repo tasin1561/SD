@@ -56,7 +56,17 @@ up() {
 up "$API_URL/health" || { echo "apps/api is not answering on $API_URL — start it first."; exit 1; }
 up "$SELLER_URL/login" || { echo "apps/seller is not answering on $SELLER_URL — start it first."; exit 1; }
 
-if [ -z "${ELEVENLABS_API_KEY:-}" ] && [ -f "$HOME/.config/skydrop/elevenlabs" ]; then
+# The key LIST wins, and this order is load-bearing. There is more than
+# one ElevenLabs account because one month's allowance is smaller than one
+# section of the library, and `generate-voice.mjs` reads the list itself.
+# Exporting the old single-key file unconditionally — which is what this
+# did — would put ELEVENLABS_API_KEY in the environment of a two-key
+# machine and quietly run the whole batch on one account, reporting a
+# quota failure that was never real.
+if [ ! -f "$HOME/.config/skydrop/elevenlabs-keys" ] \
+  && [ -z "${ELEVENLABS_API_KEYS:-}" ] \
+  && [ -z "${ELEVENLABS_API_KEY:-}" ] \
+  && [ -f "$HOME/.config/skydrop/elevenlabs" ]; then
   ELEVENLABS_API_KEY="$(cat "$HOME/.config/skydrop/elevenlabs")"
   export ELEVENLABS_API_KEY
 fi

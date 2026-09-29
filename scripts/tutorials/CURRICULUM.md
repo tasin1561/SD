@@ -1269,18 +1269,47 @@ to four months for one person doing nothing else. Plus these one-offs first:
 
 ### The voice budget
 
-**This is a real constraint and it is the one that stopped this run.** Narration
-is ElevenLabs, billed per character, and the account's monthly quota is 10,000
-credits — roughly **eight tutorials' worth**. It ran out part-way through the
-third video of this batch.
+**This was the constraint that stopped the first run, and it is now a much
+smaller one.** Narration is ElevenLabs, billed per character. The first batch
+ran against a single 10,000-credit allowance — roughly **eight tutorials'
+worth** — and ran out part-way through the third video.
 
-Two things follow, and both are worth deciding before committing to a section:
+There are now **two accounts of 121,000 credits, 242,000 in total**, and
+`generate-voice.mjs` moves between them: it spends the first until it answers
+`quota_exceeded`, then retries **that same clip** on the second. See
+[The keys](README.md#the-keys) for the rotation rule and the two ways it can
+go silently wrong.
 
-- **A ninety-video library needs about eleven times the current monthly quota**,
-  or a year spread across monthly allowances. Re-takes cost again, though only
-  for the lines that changed — the per-clip cache is what makes that true.
-- **Budget the words, not the videos.** A tutorial is 10–16 lines of 120–180
-  characters, so roughly 2,000 credits. That is the unit to plan in.
+**Budget the words, not the videos.** A tutorial is 10–16 lines of 120–180
+characters, so **roughly 2,000 credits**. That is the unit to plan in, and at
+242,000 credits it makes the arithmetic straightforward:
+
+| Scope                         | Lines  | Credits  | Fits in 242,000? |
+| ----------------------------- | ------ | -------- | ---------------- |
+| One tutorial                  | 10–16  | ~2,000   | yes, 120× over   |
+| Sections A + B (13, 5 filmed) | ~100   | ~16,000  | yes              |
+| Whole seller app (A–G, 44)    | ~560   | ~88,000  | yes              |
+| The whole library (90)        | ~1,150 | ~180,000 | yes, once        |
+
+So **the voice is no longer what limits this** — the 14-to-18 working weeks
+of writing flows and seeding demo data above is. The one thing to keep in
+view is that the figure is a **one-off**, not a rate: re-takes cost again
+(only for the lines that changed — the per-clip cache is what makes that
+true), and a library that is re-shot every quarter spends a fresh slice each
+time. Plan the allowance against the maintenance cycle, not against the
+build.
+
+**Two free checks before spending anything.**
+`generate-voice.mjs --quota` prints what each key has left, and a generation
+run does the same check before its first clip, refusing up front when the
+total is known to be short. `--voice-check` confirms both accounts see the
+same narrator for `EXAVITQu4vr4xnSDxMaL`: it is a stock voice and should be
+identical everywhere, but an account can clone over a voice id, and a library
+that changes narrator half way through is invisible until a viewer notices.
+**Both need scopes the current key does not carry** (`user_read` and
+`voices_read`); a key scoped to text-to-speech alone reports "unknown" and
+the run goes ahead, which is why the voice check has teeth only from the
+second key onward.
 
 A partial failure used to be worse than it looked: the clip manifest was written
 only after the whole run, so a run that died on its last line **discarded every
