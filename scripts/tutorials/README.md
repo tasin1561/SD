@@ -23,7 +23,15 @@ scripts/tutorials/make-tutorials.sh place-an-order  # just one
 ```
 
 `apps/seller` must be **built and started**, not `next dev` — the dev overlay
-would be in the picture.
+would be in the picture. It also needs `API_ORIGIN` pointing at the API: its
+own default is port 3000 while apps/api runs on 4000, so put
+
+```
+API_ORIGIN=http://127.0.0.1:4000
+```
+
+in `apps/seller/.env.local` (gitignored) or export it before `next start`.
+Without it every call 500s and the recording fails at sign-in.
 
 The ElevenLabs key is read from `~/.config/skydrop/elevenlabs` or
 `$ELEVENLABS_API_KEY`. It is never written into a file here.

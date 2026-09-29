@@ -75,6 +75,16 @@ const CATALOGUE = [
  */
 export const TUTORIAL_PRODUCT = { name: 'Rajshahi Silk Kurti', externalRef: 'RSH-KURTI' };
 
+/**
+ * The customer the ORDER video ships to. Named here so a previous take's
+ * order and customer row can be removed — the app warns about a
+ * duplicate order to the same number with the same items (correctly),
+ * and a returning customer draws a history panel that a first-time one
+ * does not. Both would make the second take a different video.
+ * Keep in step with `flows.mjs`.
+ */
+export const TUTORIAL_CUSTOMER = { phoneE164: '+919845017722' };
+
 async function call(path, init = {}) {
   const res = await fetch(`${API}${path}`, {
     method: init.method ?? 'GET',
@@ -173,11 +183,24 @@ async function ensureSeller(staffToken) {
     data: { passwordHash: await hash(DEMO_SELLER.password), emailVerifiedAt: new Date() },
   });
 
-  const login = await call('/auth/seller/login', {
-    method: 'POST',
-    body: { email: DEMO_SELLER.email, password: DEMO_SELLER.password },
-  });
-  return { token: login.accessToken, id: seller.id };
+  // LAZY. Seller login is throttled at 5 attempts per 15 minutes per
+  // email+IP, and the recorder needs one of those for every take — so a
+  // steady-state re-seed, which has no catalogue work to do, must not
+  // spend one just to hold a token it never uses.
+  let token = null;
+  return {
+    id: seller.id,
+    async token() {
+      if (token === null) {
+        const login = await call('/auth/seller/login', {
+          method: 'POST',
+          body: { email: DEMO_SELLER.email, password: DEMO_SELLER.password },
+        });
+        token = login.accessToken;
+      }
+      return token;
+    },
+  };
 }
 
 /** One product, one variant, and enough stock that the order form is never short. */
@@ -191,12 +214,12 @@ async function ensureStockedVariant(sellerToken, staffToken, binId, item) {
   if (variant === null) {
     const product = await call('/seller/products', {
       method: 'POST',
-      token: sellerToken,
+      token: await sellerToken(),
       body: { name: item.name, externalRef: item.sku },
     });
     const created = await call(`/seller/products/${product.id}/variants`, {
       method: 'POST',
-      token: sellerToken,
+      token: await sellerToken(),
       body: { skuCode: item.sku, weightGrams: item.weightGrams, declaredValueInr: item.valueInr },
     });
     variantId = created.id;
@@ -219,7 +242,7 @@ async function ensureStockedVariant(sellerToken, staffToken, binId, item) {
 
   const gr = await call('/seller/goods-receipts', {
     method: 'POST',
-    token: sellerToken,
+    token: await sellerToken(),
     body: { lines: [{ variantId, expectedQty: want }] },
   });
   await call(`/admin/goods-receipts/${gr.id}/start-receiving`, {
@@ -281,6 +304,56 @@ async function clearTutorialProduct(sellerId) {
   );
 }
 
+/**
+ * Remove the orders a previous take placed, and the customer they
+ * created. Hard delete, for the same reason the tutorial product is:
+ * these rows are minutes old, nothing has shipped, and what is wanted is
+ * a world identical to the one the first take filmed.
+ *
+ * Only PRE-DISPATCH orders are removable. Anything further along has
+ * stock movements and money behind it and is left alone with a warning —
+ * on a local dev box that means somebody has been using this seller for
+ * something else, and quietly deleting their work would be worse than a
+ * duplicate-order dialog on camera.
+ */
+const REMOVABLE_STATUSES = ['DRAFT', 'PENDING_CONFIRMATION', 'CONFIRMED', 'AWAITING_COURIER'];
+
+async function clearPreviousOrders(sellerId) {
+  const orders = await prisma.order.findMany({
+    where: { sellerId },
+    select: { id: true, orderNumber: true, status: true },
+  });
+  if (orders.length === 0) return;
+
+  const removable = orders.filter((o) => REMOVABLE_STATUSES.includes(o.status));
+  const kept = orders.filter((o) => !REMOVABLE_STATUSES.includes(o.status));
+  if (kept.length > 0) {
+    console.log(
+      `  · leaving ${kept.length} order(s) past dispatch alone: ${kept
+        .map((o) => `${o.orderNumber} (${o.status})`)
+        .join(', ')}`,
+    );
+  }
+  if (removable.length === 0) return;
+
+  const ids = removable.map((o) => o.id);
+  await prisma.$transaction([
+    prisma.orderCharge.deleteMany({ where: { orderId: { in: ids } } }),
+    prisma.callQueueEntry.deleteMany({ where: { orderId: { in: ids } } }),
+    prisma.orderItem.deleteMany({ where: { orderId: { in: ids } } }),
+    prisma.orderEvent.deleteMany({ where: { orderId: { in: ids } } }),
+    prisma.order.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+  console.log(`  · removed a previous take's ${removable.length} order(s)`);
+
+  // The customer row outlives the order and makes the recipient panel
+  // show a history the first take did not have.
+  const gone = await prisma.customer.deleteMany({
+    where: { sellerId, phoneE164: TUTORIAL_CUSTOMER.phoneE164 },
+  });
+  if (gone.count > 0) console.log('  · removed the demo customer record');
+}
+
 async function main() {
   assertLocal();
   console.log(`Seeding tutorial demo data against ${API}`);
@@ -304,6 +377,7 @@ async function main() {
   }
 
   await clearTutorialProduct(sellerId);
+  await clearPreviousOrders(sellerId);
 
   console.log('\nReady.');
   console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);

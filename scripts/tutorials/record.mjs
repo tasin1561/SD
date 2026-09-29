@@ -17,8 +17,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from '@playwright/test';
-import { videoBySlug } from './narration.mjs';
-import { SCENE_TAIL_SECONDS } from './narration.mjs';
+import { SCENE_TAIL_SECONDS, videoBySlug } from './narration.mjs';
 import { FLOWS } from './flows.mjs';
 import { loadClips } from './generate-voice.mjs';
 import { makeStage, markerFor, MARKER_IDLE, stageInitScript } from './lib/stage.mjs';
