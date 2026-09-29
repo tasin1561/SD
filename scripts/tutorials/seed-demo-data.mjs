@@ -24,8 +24,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { prisma, argon2 } from './lib/deps.mjs';
 import { MOCK_ROOT } from './lib/spaces-shim.mjs';
-
-const API = process.env.SKYDROP_API_URL ?? 'http://127.0.0.1:4000';
+import { API, call } from './lib/api.mjs';
+import { ensureLifecycleParcels, lifecycleReport, LIFECYCLE_PARCELS } from './lib/lifecycle.mjs';
 
 /** The staff account the seeding needs — goods receipts are received by ops, not by the seller. */
 const OPS = { email: 'tutorial-ops@skydrop.local', password: 'Tutorial-Ops-2026' };
@@ -224,6 +224,19 @@ export const CATALOGUE_IMPORT = {
   mappingName: 'Our stock sheet',
 };
 
+/**
+ * The videos that need a parcel to have MOVED, and therefore the ones
+ * that pay for the lifecycle pass. Anything in section D, plus the
+ * money and reporting videos that read a delivered order.
+ *
+ * Passing `--lifecycle` runs it whatever the slug, which is how it is
+ * built the first time.
+ */
+const LIFECYCLE_SLUGS = new Set([]);
+
+/** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
+const LIFECYCLE_REFS = LIFECYCLE_PARCELS.map((p) => p.ref);
+
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
 
@@ -238,22 +251,6 @@ const TOUR_ORDERS = [
   { name: 'Divya Menon', phone: '+919845030013', ref: 'RSH-TOUR-03', qty: 1 },
   { name: 'Rohit Sharma', phone: '+919845030014', ref: 'RSH-TOUR-04', qty: 3 },
 ];
-
-async function call(path, init = {}) {
-  const res = await fetch(`${API}${path}`, {
-    method: init.method ?? 'GET',
-    headers: {
-      'content-type': 'application/json',
-      ...(init.token === undefined ? {} : { authorization: `Bearer ${init.token}` }),
-    },
-    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`${init.method ?? 'GET'} ${path} → ${res.status} ${text.slice(0, 400)}`);
-  }
-  return text === '' ? {} : JSON.parse(text);
-}
 
 function assertLocal() {
   const url = process.env.DATABASE_URL ?? '';
@@ -1006,7 +1003,13 @@ const REMOVABLE_STATUSES = ['DRAFT', 'PENDING_CONFIRMATION', 'CONFIRMED', 'AWAIT
 
 async function clearPreviousOrders(sellerId) {
   const orders = await prisma.order.findMany({
-    where: { sellerId },
+    // The LIFECYCLE parcels are the seeded world, not a previous take's
+    // leftovers, and two of them (CONFIRMED and AWAITING_SELLER_DECISION)
+    // sit in statuses this function would otherwise delete. Rebuilding
+    // them costs a real courier booking and a warehouse run; leaving them
+    // costs nothing, because each is keyed on its own reference and the
+    // lifecycle pass skips one it finds already in the right state.
+    where: { sellerId, NOT: { sellerOrderRef: { in: LIFECYCLE_REFS } } },
     select: { id: true, orderNumber: true, status: true },
   });
   if (orders.length === 0) return;
@@ -1433,10 +1436,19 @@ async function main() {
   const { token: sellerToken, id: sellerId } = await ensureSeller(staffToken);
   console.log(`  · seller "${DEMO_SELLER.companyName}" ready (${DEMO_SELLER.email})`);
 
+  // The one that FULFILS, by name rather than by being first in a list.
+  // `ensureBdIntakeWarehouse` adds a Bangladesh warehouse that does not
+  // (CNS-2), and `/admin/warehouses` does not promise an order — so
+  // `warehouses[0]` was a coin toss between the right answer and a
+  // putaway refused as "must be a non-hold bin in the receipt warehouse",
+  // which names neither the warehouse nor the cause.
   const warehouses = await call('/admin/warehouses', { token: staffToken });
-  const warehouse = warehouses[0];
+  const warehouse = warehouses.find((w) => w.fulfilsOrders === true);
   if (warehouse === undefined) {
-    throw new Error('No warehouse in this database — run the db seed first.');
+    throw new Error(
+      `No order-fulfilling warehouse in this database (${warehouses.length} found) — ` +
+        'run the db seed first.',
+    );
   }
   const bins = await call(`/admin/warehouses/${warehouse.id}/bins`, { token: staffToken });
   // A bin is optional when the warehouse is not bin-tracking; BinPolicy
@@ -1468,6 +1480,23 @@ async function main() {
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
   await integrationsWorldFor(slug, sellerId);
   await resellingWorldFor(slug, sellerId);
+
+  // D0 — the parcels sections D, E and K are about. EXPENSIVE (a real
+  // courier booking and a warehouse run per parcel) and IDEMPOTENT, so
+  // it runs only for the videos that need it, or when asked by name.
+  if (LIFECYCLE_SLUGS.has(slug ?? '') || process.argv.includes('--lifecycle')) {
+    console.log('\nDriving the lifecycle parcels (this takes a couple of minutes)…');
+    await ensureLifecycleParcels({ sellerId, sellerToken, staffToken, log: (m) => console.log(m) });
+    const report = await lifecycleReport(sellerId);
+    console.log('\nLifecycle parcels:');
+    for (const r of report) {
+      console.log(`  ${r.ok ? '\u2713' : '\u2717'} ${r.ref.padEnd(22)} ${r.got ?? 'missing'}`);
+    }
+    const bad = report.filter((r) => !r.ok);
+    if (bad.length > 0) {
+      throw new Error(`${bad.length} lifecycle parcel(s) are not in the state they should be.`);
+    }
+  }
 
   console.log('\nReady.');
   console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);

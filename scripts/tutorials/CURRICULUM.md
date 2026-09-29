@@ -36,11 +36,16 @@ a third section and roughly another fifteen tutorials.
 F5, G1, G2. Every one is listed in its own entry below with what it covers and
 what its seeding does.
 
-**NEXT: build D0** (below). Every seller-app tutorial that can be filmed
-without the parcel lifecycle has now been filmed. What is left in sections A–G
-is either small (B3, B4, C1, C2, C7, E5, F4) or waiting on D0, and D0 unlocks
-20+ entries across D, E and K plus most of the admin half. It is the single
-highest-leverage thing in this document and has been since it was written.
+**D0 IS BUILT** (see its entry below) — six parcels in six states, one command,
+idempotent. So the next agent films SECTION D, which is now unblocked: D1
+(where is my parcel), D2 (the customer was not there), D3 (it is coming back),
+D5 (the call cap), D6 (damaged in our hands). Read D0's entry first — it says
+what the world contains, and the three faults the build uncovered.
+
+**Add the slug to `LIFECYCLE_SLUGS` in `seed-demo-data.mjs`** when you film one,
+or its take will run against a box that has never been driven.
+
+Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
 **Then build D0** (below) — the lifecycle seeding. It is still the single
 highest-leverage thing in this document: it unblocks 20+ entries in D, E and K
@@ -483,31 +488,103 @@ invalidates. Cosmetic; the video does not point at that column.
 This is the section the lifecycle seeding exists for. Film D0's seeding once
 and every tutorial here becomes `ready`.
 
-### D0. (not a tutorial) The lifecycle seeding
+### D0. (not a tutorial) The lifecycle seeding · **BUILT** — `lib/lifecycle.mjs`
 
-`scripts/tutorials/seed-demo-data.mjs` grows a `--lifecycle` pass that drives
-the demo seller's orders through the simulator to the states below, exactly as
-`scripts/sim-e2e.ts` does — call confirmation, pick, the pack bench, the
-handover scan, then simulator advances. One command, re-runnable, local-only.
+```bash
+node scripts/tutorials/seed-demo-data.mjs --lifecycle
+```
 
-| State wanted                    | How                                               | Used by        |
-| ------------------------------- | ------------------------------------------------- | -------------- |
-| DELIVERED                       | advance IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED | B5, D1, E2, D6 |
-| DELIVERY_FAILED                 | … → NDR                                           | D1, D2         |
-| RTO_IN_TRANSIT                  | NDR → RTO_INITIATED → RTO_IN_TRANSIT              | D1, D3         |
-| RTO_RESTOCKED + a damage ticket | receive + inspect at the warehouse                | D6, E2         |
-| AWAITING_SELLER_DECISION        | record attempts to the cap (see note below)       | D5             |
-| CONFIRMED with a live waybill   | stop after confirmation                           | B7, D4         |
+Six parcels, driven the whole way by the real path: an order placed by the
+seller, confirmed on a CALL, a waybill booked against the local Delhivery
+simulator, picked, packed at the bench with the box ritual, scanned at handover,
+then advanced by the simulator — which fires the same signed webhooks the real
+courier does. Takes about two minutes from cold. **Verified 2026-09-30, all six
+green, and idempotent: a second run says "already" six times and changes
+nothing.**
 
-**One state needs checking before its seeding is written.**
-`AWAITING_SELLER_DECISION` is the R5b pause at the call cap, and it happens only
-when `inventory.early_reservation_ndr_action` is `MANUAL_REVIEW` — which it
-already is by default. But `inventory.early_reservation_enabled` is seeded
-`false`, and whether `handleNdrCap` still raises a review with holds switched
-off is a question for the code rather than for this document. (CLAUDE.md says it
-raises one "even with ZERO holds", which suggests yes; that sentence is about
-holds, not about the switch.) Settle it before writing D0's last row, because
-D5 is unfilmable if the answer is no.
+| Ref                  | State                    | Used by        |
+| -------------------- | ------------------------ | -------------- |
+| `RSH-LIFE-DELIVERED` | DELIVERED                | B5, D1, E2, D6 |
+| `RSH-LIFE-FAILED`    | DELIVERY_FAILED          | D1, D2         |
+| `RSH-LIFE-RETURNING` | RTO_IN_TRANSIT           | D1, D3         |
+| `RSH-LIFE-RESTOCKED` | RTO_RESTOCKED + a ticket | D6, E2         |
+| `RSH-LIFE-REVIEW`    | AWAITING_SELLER_DECISION | D5             |
+| `RSH-LIFE-CONFIRMED` | CONFIRMED, live waybill  | B7, D4         |
+
+It also leaves behind what those states imply and the videos will want: a
+`SCRAP_DAMAGE` ticket, an OPEN early-reservation review, delivery attempts,
+tracking events, and `ORDER_CHARGES` and `RTO_FEE` wallet entries.
+
+**Wiring:** `LIFECYCLE_SLUGS` in `seed-demo-data.mjs` is EMPTY. A D-section
+video adds its slug there, and the pass then runs before that video's take —
+it is expensive (a courier booking and a warehouse run per parcel) so it does
+not run for videos that do not need it. `--lifecycle` forces it, which is how
+it is built the first time.
+
+**The open question is settled: yes, D5 is filmable.** `handleNdrCap` resolves
+`inventory.early_reservation_ndr_action` (MANUAL_REVIEW by default) and nothing
+else — it never reads `inventory.early_reservation_enabled`. The enable switch
+governs whether stock is booked AT PLACEMENT; the pause at the cap is a
+question about whether to keep CALLING, and every seller gets to answer it. The
+seeded review carries `heldQty: 0`, which is the honest number.
+
+#### What the build found, and what it refuses to do
+
+**IT NEVER REWINDS, BUT IT DOES RESUME.** These parcels carry stock, money and
+a courier booking, so a seed that unwound a delivered one to re-film a video
+would be the most dangerous thing in this directory. But the first build has to
+survive a crash halfway through — which it did not, twice — so a parcel found
+short of its state is carried FORWARD from where it is
+(`RESUMABLE_FROM`: PENDING_CONFIRMATION, CONFIRMED, DISPATCHED). One abandoned
+mid-warehouse is named and left, because picking up a half-made allocation
+blind is how a seed corrupts stock.
+
+**It refuses any courier that is not the simulator.** `assertSimulator` demands
+a loopback `courier.delhivery_api_base_url` AND the simulator's own route
+answering on it. This is the one script here that would book REAL PARCELS
+against the real base URL with live writes on — which is the configuration
+production runs.
+
+**A stale call-queue entry can block the whole call centre, for ever.** CC-6's
+dequeue is post-commit and best-effort, and CLAUDE.md says the recovery is "an
+admin re-enqueue / out-of-band reconciler". There is no such reconciler, so on
+this box an entry left by an abandoned simulator run sat at the head of the
+queue pointing at an order that had reached RTO_RESTOCKED — and because the
+FIFO is `(scheduled_attempts > 0) DESC, available_at ASC` and forty-four
+reschedules had accumulated on it, it OUTRANKED every genuine call. Releasing
+it put it straight back at the front. **Nothing on the box could be confirmed
+through the call centre at all.** `reconcileStaleCallQueue` closes entries
+whose order is no longer PENDING_CONFIRMATION — the rule itself, which is why
+it is safe across every seller. **Worth considering as a real background
+sweep**: on production the same leak would quietly starve the call queue.
+
+**A crash between `pick_started_at` and the PENDING_PICK transition makes a
+parcel invisible.** `PickExecutionService.start` stamps the claim and THEN
+transitions, and the pick queue filters on `pick_started_at IS NULL` — so the
+queue answers "empty" to an order sitting plainly at CONFIRMED.
+`releaseStalePickClaim` uses WMS-5's own supervisor override
+(`POST /admin/warehouse/picks/:id/expire`), which is the product's recovery
+path rather than a seeding shortcut.
+
+**`warehouses[0]` was a coin toss.** The seed picked the first warehouse the
+admin list returned, and `ensureBdIntakeWarehouse` adds one that does not
+fulfil orders (CNS-2) — so a putaway was refused as "must be a non-hold bin in
+the receipt warehouse", which names neither the warehouse nor the cause. It
+picks the one with `fulfilsOrders` now.
+
+**The restocked parcel carries TWO units, and that is the point.** The
+curriculum wanted it RTO_RESTOCKED *and* carrying a damage ticket, which on a
+one-unit line is a contradiction — a restock means the unit was GOOD. WMS-8d is
+exactly the answer, so the line is inspected BY QUANTITY: one unit back on the
+shelf, one written off. Order status RTO_RESTOCKED, scrap ticket beside it.
+
+**Consequence for every OTHER video:** once this has been run on a box, the
+demo seller has delivered and returned parcels for good — `clearPreviousOrders`
+excludes the lifecycle refs deliberately, because rebuilding one costs a real
+courier booking and a warehouse run. A re-take of an earlier video therefore
+films a fuller order list than the first take did. That is an improvement, not
+a regression, but it is the kind of thing worth knowing before staring at a
+diff between two takes.
 
 ### D1. Where is my parcel · `needs demo data`
 
