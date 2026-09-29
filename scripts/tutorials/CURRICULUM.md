@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 13 filmed. Of the 77 left, **21 are `ready` today**, 54 need
+**90 tutorials.** 14 filmed. Of the 76 left, **20 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -32,23 +32,21 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (13):** A1–A6, B1, B2, C5, E1, E4, F2, F3. Every one is listed
-in its own entry below with what it covers and what its seeding does.
+**Filmed so far (14):** A1–A6, B1, B2, C3, C5, E1, E4, F2, F3. Every one is
+listed in its own entry below with what it covers and what its seeding does.
 
 **Next, in order, and all `ready`:**
 
-1. **C3 — keeping a product up to date.** Inline edit, adding a variant to an
-   existing product, archiving, and the SKU read-only with its reason.
-2. **C4 — product photos.** Needs `needsSpacesShim: true` on the flow; the
+1. **C4 — product photos.** Needs `needsSpacesShim: true` on the flow; the
    profile video is the worked example.
-3. **F1 — inviting someone.** The invite link revealed once, resend, revoke,
+2. **F1 — inviting someone.** The invite link revealed once, resend, revoke,
    changing a role. Pairs with F2, already filmed.
-4. **F5 — API keys and webhooks.** The secret shown once, revoked vs expired,
+3. **F5 — API keys and webhooks.** The secret shown once, revoked vs expired,
    and what auto-disabled means.
-5. **G1, G2 — reseller stores and the price they pay.**
-6. **E3 — taking money out.** Needs a positive balance: accept one seeded
+4. **G1, G2 — reseller stores and the price they pay.**
+5. **E3 — taking money out.** Needs a positive balance: accept one seeded
    top-up first.
-7. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
+6. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
    exist. An hour's work, then a 4-minute video.
 
 **Then build D0** (below) — the lifecycle seeding. It is still the single
@@ -334,16 +332,33 @@ be sold. Ends on value at cost and the honest "uncovered" count for batches
 that have no unit cost recorded, which is the consequence of skipping that
 field back in A4.
 
-### C3. Keeping a product up to date · `ready`
+### C3. Keeping a product up to date · **FILMED** — `keep-a-product-up-to-date.mp4`
 
 **Promise** — you can change anything about a product except the things that
 must never change.
-**Length** 3 min. **Prerequisites** A3.
-**Needs** a product. Today's seed has four.
-**Covers** `/products/[id]`: inline edit, adding a variant to a product that
-already exists, and archiving. Then `/products/[id]/variants/[variantId]` for
-the variant's own fields — and the SKU sitting there read-only, with the reason
-stated: every order, every pick and every stock count refers to it by that code.
+**Length** 2 min 42 s. **Prerequisites** A3.
+**Covers** `/products/[id]`: the four default tiles and what inheriting means,
+inline edit (the box dimensions, which is where volumetric weight gets
+explained), adding a variant to a product that already exists, then
+`/products/[id]/variants/[variantId]` — the SKU greyed out with its reason,
+and a weight override that beats the inherited one.
+
+**The sentence that earns the tutorial is the last one.** Archiving a product
+CASCADES to its variants (`CatalogProductService.archive` updates them in the
+same transaction); restoring does NOT (`unarchive` audits the note "variants
+left as-is"). So a seller who archives and then restores has a live product
+whose every SKU is still archived — and the dialog says so in one line nobody
+reads. The video archives and restores on camera so that line is read out.
+
+**Seeding:** the shared catalogue puts weight and value on the VARIANT, so
+every product's own defaults were null and the tiles read "Not set" — which
+would have made the third scene's whole subject absent. `resetCatalogueEdits`
+sets them on this one product, clears the box dimensions the video fills in,
+deletes the `RSH-MUSLIN-INDIGO` size it adds, and un-archives everything.
+
+**It runs BEFORE the catalogue loop, and that ordering is load-bearing:** a
+goods receipt against an archived variant is refused, so a take left archived
+would fail the next run's stock top-up rather than the video.
 
 ### C4. Product photos · `ready`
 

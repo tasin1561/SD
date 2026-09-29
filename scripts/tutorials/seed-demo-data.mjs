@@ -115,6 +115,28 @@ export const TUTORIAL_CONSIGNMENT_REF = 'RSH-CN-2026-07';
 /** The shopfront the store video adds ON CAMERA. Keep in step with flows.mjs. */
 export const TUTORIAL_STORE_NAME = 'Dhaka Boutique';
 
+/**
+ * The product the C3 video edits ON CAMERA, and the size it adds to it.
+ *
+ * A product with DEFAULTS is the point of that video, and the seeded
+ * catalogue does not have one: `ensureStockedVariant` sets weight and
+ * value on the VARIANT, so every product's own defaults are null and
+ * the tiles read "Not set". The video's whole third scene is those
+ * tiles and its ninth is a new size INHERITING them, so the defaults
+ * are put on this one product here rather than the narration being
+ * written around their absence.
+ *
+ * The dimensions are deliberately left null: filling them in is what
+ * the video does, and it is the scene that explains volumetric weight.
+ */
+export const TUTORIAL_EDIT_PRODUCT = {
+  name: 'Dhaka Muslin Dupatta',
+  defaultWeightGrams: 180,
+  defaultDeclaredValueInr: '1300',
+  /** The size added on camera. Deleted before every take — a SKU is permanent. */
+  newVariantSku: 'RSH-MUSLIN-INDIGO',
+};
+
 /** The role the roles video builds ON CAMERA. Keep in step with flows.mjs. */
 export const TUTORIAL_ROLE_NAME = 'Warehouse manager';
 
@@ -312,6 +334,94 @@ async function ensureStockedVariant(sellerToken, staffToken, binId, item) {
   });
   await call(`/admin/goods-receipts/${gr.id}/complete`, { method: 'POST', token: staffToken });
   console.log(`  · ${item.name} (${item.sku}) — received ${want}, now ${have + want}`);
+}
+
+/**
+ * Put the catalogue back the way the C3 video finds it.
+ *
+ * That video does four things on camera that outlive it, and all four
+ * make the second take a different video from the first:
+ *
+ *  1. It ARCHIVES a product, and archiving CASCADES to every variant
+ *     (`CatalogProductService.archive` updates them in the same tx).
+ *     Restoring does NOT cascade back — the service says so in its own
+ *     audit note, "variants left as-is" — which is the single most
+ *     useful thing the video teaches and the reason this function
+ *     cannot just trust the on-camera restore. Left alone, the whole
+ *     seeded catalogue product is unsellable and the ORDER video's
+ *     picker would not list it.
+ *  2. It adds a size. A SKU is permanent, so a second take collides on
+ *     it (the same reason `clearTutorialProduct` exists).
+ *  3. It fills in the product's box dimensions, which is the scene that
+ *     explains volumetric weight — true only from a standing start.
+ *  4. It may override the new size's own weight, which goes with it.
+ *
+ * It also SETS the defaults the video's third scene is about, because
+ * the shared seeding does not: `ensureStockedVariant` puts weight and
+ * value on the variant, leaving the product's own defaults null.
+ *
+ * Runs BEFORE the catalogue loop, not with the other clears: a goods
+ * receipt against an archived variant is refused, so an archived
+ * catalogue left over from a previous take would fail the top-up.
+ */
+async function resetCatalogueEdits(sellerId) {
+  const product = await prisma.product.findFirst({
+    where: { sellerId, name: TUTORIAL_EDIT_PRODUCT.name, deletedAt: null },
+    select: { id: true },
+  });
+
+  // Archiving cascades and restoring does not, so BOTH halves are put
+  // back — and across the whole catalogue rather than just this one
+  // product, because an archived SKU anywhere is a row the order
+  // video's picker silently stops offering.
+  const products = await prisma.product.updateMany({
+    where: { sellerId, status: 'ARCHIVED' },
+    data: { status: 'ACTIVE' },
+  });
+  const variants = await prisma.productVariant.updateMany({
+    where: { product: { sellerId }, status: 'ARCHIVED', deletedAt: null },
+    data: { status: 'ACTIVE' },
+  });
+  if (products.count > 0 || variants.count > 0) {
+    console.log(
+      `  · restored ${products.count} archived product(s) and ${variants.count} archived SKU(s)`,
+    );
+  }
+
+  const added = await prisma.productVariant.findFirst({
+    where: { skuCode: TUTORIAL_EDIT_PRODUCT.newVariantSku, product: { sellerId } },
+    select: { id: true },
+  });
+  if (added !== null) {
+    // Same guard as the tutorial product: a variant with order lines
+    // against it is somebody else's work, and a video is not a reason
+    // to delete it.
+    const referenced = await prisma.orderItem.count({ where: { variantId: added.id } });
+    if (referenced > 0) {
+      throw new Error(
+        `"${TUTORIAL_EDIT_PRODUCT.newVariantSku}" has order lines against it — refusing to delete.`,
+      );
+    }
+    await prisma.$transaction([
+      prisma.productImage.deleteMany({ where: { variantId: added.id } }),
+      prisma.stockLevel.deleteMany({ where: { variantId: added.id } }),
+      prisma.productVariant.delete({ where: { id: added.id } }),
+    ]);
+    console.log(`  · removed a previous take's "${TUTORIAL_EDIT_PRODUCT.newVariantSku}" size`);
+  }
+
+  if (product === null) return;
+  await prisma.product.update({
+    where: { id: product.id },
+    data: {
+      defaultWeightGrams: TUTORIAL_EDIT_PRODUCT.defaultWeightGrams,
+      defaultDeclaredValueInr: TUTORIAL_EDIT_PRODUCT.defaultDeclaredValueInr,
+      defaultLengthCm: null,
+      defaultWidthCm: null,
+      defaultHeightCm: null,
+    },
+  });
+  console.log(`  · "${TUTORIAL_EDIT_PRODUCT.name}" back to its defaults, box unset`);
 }
 
 /**
@@ -804,6 +914,8 @@ async function main() {
   // A bin is optional when the warehouse is not bin-tracking; BinPolicy
   // self-heals a missing FLOOR bin on first putaway (BIN-1).
   const binId = bins.find((b) => b.type === 'STORAGE' || b.type === 'FLOOR')?.id ?? null;
+
+  await resetCatalogueEdits(sellerId);
 
   for (const item of CATALOGUE) {
     await ensureStockedVariant(sellerToken, staffToken, binId, item);

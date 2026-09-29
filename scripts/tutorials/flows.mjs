@@ -107,6 +107,19 @@ const STOCK_ALERTS = {
   sku: 'RSH-JAMDANI-IVORY',
 };
 
+/** What the product-edit video changes. Keep in step with seed-demo-data.mjs. */
+const PRODUCT_EDIT = {
+  product: 'Dhaka Muslin Dupatta',
+  // Blank in the seed on purpose — filling them in IS the scene about
+  // volumetric weight.
+  box: { length: '30', width: '22', height: '6' },
+  newSku: 'RSH-MUSLIN-INDIGO',
+  newLabel: 'Indigo',
+  // Heavier than the product default, so the override is visibly an
+  // override rather than a value that happens to match.
+  variantWeight: '210',
+};
+
 /** What the delivery-fee video types. Anything but the seeded default. */
 const CUSTOMER_DELIVERY_FEE = '90';
 
@@ -1266,6 +1279,189 @@ export const FLOWS = {
         await stage.dwellOn(page.getByLabel('Low-stock alert at'), 2400);
         await stage.glide(-240);
         await page.waitForTimeout(1400);
+      },
+    },
+  },
+
+  'keep-a-product-up-to-date': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-product'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Products', exact: true }).first(), {
+          after: 1400,
+        });
+        await page.waitForURL(/\/products$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(
+          page.getByRole('link', { name: PRODUCT_EDIT.product, exact: true }).first(),
+          { after: 1800 },
+        );
+        await page.waitForURL(/\/products\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+      },
+
+      async defaults({ page, stage }) {
+        // The tiles, not the fields: this scene is about what a variant
+        // inherits, and the tiles are where those four values are
+        // stated as facts rather than as inputs.
+        await stage.dwellOn(page.locator('.inv-kpis').first(), 3200);
+      },
+
+      async edit({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Edit product' }).first(), {
+          after: 1200,
+        });
+        await page.getByLabel('Default length (cm)').waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+      },
+
+      async 'box-size'(ctx) {
+        const { page, stage } = ctx;
+        await stage.typeIn(page.getByLabel('Default length (cm)'), PRODUCT_EDIT.box.length, {
+          clear: true,
+          after: 300,
+        });
+        await stage.typeIn(page.getByLabel('Default width (cm)'), PRODUCT_EDIT.box.width, {
+          clear: true,
+          after: 300,
+        });
+        await stage.typeIn(page.getByLabel('Default height (cm)'), PRODUCT_EDIT.box.height, {
+          clear: true,
+          after: 600,
+        });
+      },
+
+      async saved({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Save changes/ }).first(), {
+          after: 1600,
+        });
+        // The form closing is what proves the save landed; waiting on
+        // the tile's text alone would pass on the stale render.
+        await page
+          .getByRole('button', { name: 'Edit product' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.inv-kpis').first(), 2600);
+      },
+
+      async 'add-variant'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Add variant' }).first(), {
+          after: 1200,
+        });
+        // Not `exact`: the field is required, so its accessible name
+        // carries the asterisk and reads "SKU *".
+        await page
+          .getByLabel(/^SKU\b/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+      },
+
+      async sku({ page, stage }) {
+        await stage.typeIn(page.getByLabel(/^SKU\b/).first(), PRODUCT_EDIT.newSku, {
+          after: 400,
+        });
+        await stage.typeIn(page.getByLabel('Variant label'), PRODUCT_EDIT.newLabel, { after: 800 });
+      },
+
+      async added({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Add variant/ }).last(), {
+          after: 1800,
+        });
+        // The new row, waited for by its own code — it is what the
+        // narration points at, and the list refetches after the POST.
+        const row = page.getByRole('link', { name: PRODUCT_EDIT.newSku }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(page.locator('tr').filter({ has: row }).first(), 2600);
+      },
+
+      async 'open-variant'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: PRODUCT_EDIT.newSku }).first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/variants\//, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+      },
+
+      async 'sku-immutable'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Edit variant' }).first(), {
+          after: 1200,
+        });
+        const sku = page.locator('#sku');
+        await sku.waitFor({ state: 'visible', timeout: 20_000 });
+        await sku.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(sku, 3000);
+      },
+
+      async inherit({ page, stage }) {
+        await stage.typeIn(page.getByLabel('Weight (g)'), PRODUCT_EDIT.variantWeight, {
+          clear: true,
+          after: 600,
+        });
+        await stage.clickIt(page.getByRole('button', { name: /^Save changes/ }).first(), {
+          after: 1800,
+        });
+        await page
+          .getByRole('button', { name: 'Edit variant' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+      },
+
+      async archive({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: PRODUCT_EDIT.product }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/products\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(page.getByRole('button', { name: 'Archive product' }).first(), {
+          after: 1200,
+        });
+        // The dialog RESTATES what follows, which is what the narration
+        // reads out — so it is held open here and confirmed in the next
+        // scene rather than dismissed on the same breath.
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3000);
+      },
+
+      async restore({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Archive product' }).first(), {
+          after: 1800,
+        });
+        // Archived, and the chip says so. Waited for by the RESTORE
+        // button appearing — the same control, relabelled.
+        await page
+          .getByRole('button', { name: 'Restore product' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1200);
+        await stage.clickIt(page.getByRole('button', { name: 'Restore product' }).first(), {
+          after: 1000,
+        });
+        const back = page.locator('.sk-dialog').first();
+        await back.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(back.locator('.sk-confirm__consequence').first(), 2600);
+        await stage.clickIt(back.getByRole('button', { name: 'Restore product' }).first(), {
+          after: 2000,
+        });
+        await page
+          .getByRole('button', { name: 'Archive product' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1600);
       },
     },
   },

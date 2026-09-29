@@ -465,6 +465,69 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'keep-a-product-up-to-date',
+    title: 'Keeping a product up to date',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A product is never finished. Sizes get added, a box turns out bigger than you thought, and some things stop selling. All of that happens on one screen.',
+      },
+      {
+        id: 'open-product',
+        say: 'Open Products and pick one. Everything about it is here — what it weighs, what box it ships in, what it is worth, and every version of it you sell.',
+      },
+      {
+        id: 'defaults',
+        say: 'These four are the product’s defaults. Every variant inherits them unless it says otherwise, so filling them in once here saves typing them on every size you add.',
+      },
+      {
+        id: 'edit',
+        say: 'Edit product opens the same facts up to be changed. The name, your own reference, the weight, the box and the declared value are all yours to correct.',
+      },
+      {
+        id: 'box-size',
+        say: 'The box was never filled in, and it is worth doing. Couriers charge on the space a parcel takes as well as its weight, and they bill whichever comes out higher.',
+      },
+      {
+        id: 'saved',
+        say: 'Save, and the tile reads it back. From now on any size that sets no box of its own ships in that one.',
+      },
+      {
+        id: 'add-variant',
+        say: 'A new size goes in from the same page. Add variant opens right where the list is, because that is the thing you are already looking at.',
+      },
+      {
+        id: 'sku',
+        say: 'It asks two things. The SKU is the code everything else points at — every order line, every pick, every stock count — so it has to be unique across your catalogue.',
+      },
+      {
+        id: 'added',
+        say: 'Add it, and it joins the list. It set no weight of its own, so it is showing the product’s. That is the inheriting, working.',
+      },
+      {
+        id: 'open-variant',
+        say: 'Click the code to open the variant itself. Weight, box, declared value, tax rate and barcode can all be set here, one variant at a time.',
+      },
+      {
+        id: 'sku-immutable',
+        say: 'Edit it, and the SKU is the one field greyed out. It is permanent on purpose — change it, and every order and stock count still pointing at the old code loses its thread.',
+      },
+      {
+        id: 'inherit',
+        say: 'Leave a field blank and it inherits. Fill one in and this variant alone differs — a heavier version, a bigger carton — without touching any of its siblings.',
+      },
+      {
+        id: 'archive',
+        say: 'When something stops selling, archive it. Skydrop asks first and says what follows: no new orders, no more stock taken in, and everything already shipped left exactly as it is.',
+      },
+      {
+        id: 'restore',
+        say: 'Restoring brings the product back — but read that line carefully. Its variants stay archived. Bringing a product back is not the same as bringing back everything you once sold under it.',
+      },
+    ],
+  },
+  {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
     subtitle: 'Skydrop for sellers',
