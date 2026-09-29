@@ -148,6 +148,14 @@ async function setupOrder(): Promise<SetupResult> {
   // ── 2. Staff + seller ─────────────────────────────────────────────
   const stamp = Date.now();
   const staffEmail = `sim-staff-${stamp}@skydrop.local`;
+  // RBAC-1 is a ROW, not only the legacy `role` enum: a staff user
+  // without a `staffRole` cannot be created at all, and one created with
+  // the enum alone would hold no permissions. This script predated that
+  // change and failed here on its first line of real work.
+  const superAdminRole = await prisma.staffRoleDefinition.findFirstOrThrow({
+    where: { key: 'super_admin' },
+    select: { id: true },
+  });
   await prisma.staffUser.create({
     data: {
       email: staffEmail,
@@ -159,6 +167,7 @@ async function setupOrder(): Promise<SetupResult> {
         parallelism: 1,
       }),
       role: StaffRole.SUPER_ADMIN,
+      staffRole: { connect: { id: superAdminRole.id } },
     },
   });
   const staffLogin = await call('/auth/staff/login', {
@@ -305,6 +314,10 @@ async function setupOrder(): Promise<SetupResult> {
       recipientName: 'Simulator Customer',
       recipientPhoneE164: `+9198${String(stamp).slice(-8)}`,
       recipientAddressLine1: '12 Test Road',
+      // ORD-5 (2026-08-07): line 2 carries the LANDMARK and is required —
+      // it is the field that decides whether a rural address is findable,
+      // and the Delhivery payload is built from line 1 + line 2 only.
+      recipientAddressLine2: 'Opposite the simulator, next to nothing real',
       recipientCity: 'New Delhi',
       recipientStateProvince: 'Delhi',
       recipientPostalCode: '110001',
@@ -331,6 +344,17 @@ async function setupOrder(): Promise<SetupResult> {
   // the OLDEST entry — and confirming that one instead is a bug that
   // looks like success: the script reports "confirmed" while the order
   // it created sits untouched. Anything else is released, not consumed.
+  //
+  // The SERVER decides who may take work: `pullNext` refuses an agent who
+  // is not marked available (AGENT_NOT_AVAILABLE), and a fresh staff user
+  // is not. Say so before asking for a call, or the script dies on its
+  // own operator rather than on anything it is testing.
+  await call('/agent/settings', {
+    method: 'PATCH',
+    token: staffToken,
+    body: { isAvailable: true },
+  });
+
   let assignmentId: string | null = null;
   for (let i = 0; i < 25 && assignmentId === null; i += 1) {
     const pulled = await call('/agent/calls/next', { method: 'POST', token: staffToken });
@@ -448,45 +472,72 @@ async function driveToDispatched(orderId: string, token: string): Promise<void> 
     if (!pack) throw new Error('Pack queue empty — the shipment should be eligible once PICKED');
     if (pack.shipmentId === shipmentId) packed = true;
   }
-  await call(`/warehouse/packs/${shipmentId}/complete`, { method: 'POST', token, body: {} });
-  line('   packed');
-
-  // MANIFEST. Packing auto-attached the shipment to a DRAFT manifest for
-  // its (courier, warehouse) pair (WMS-7); closing it moves every
-  // shipment on it to PENDING_DISPATCH and enqueues AWB generation.
-  const manifests = (await call('/admin/warehouse/manifests?status=DRAFT', { token })) as {
-    items: Array<{ id: string }>;
-  };
-  const manifestId = manifests.items[0]?.id;
-  if (!manifestId) throw new Error('No DRAFT manifest — the pack auto-attach (WMS-7) did not run');
-  await call(`/admin/warehouse/manifests/${manifestId}/close`, { method: 'POST', token });
-  line('   manifest closed');
-
-  // Closing the manifest enqueues AWB generation for it (CUR-2); the
-  // manifest only becomes CONFIRMED once that job has run, and handoff
-  // refuses until then. The AWB itself already exists — it was issued at
-  // order confirmation (CUR-2b) — so this is the job reconciling the
-  // manifest, not a second call to the courier.
-  let manifestReady = false;
-  for (let i = 0; i < 40 && !manifestReady; i += 1) {
-    await new Promise((r) => setTimeout(r, 500));
-    const m = await prisma.manifest.findUniqueOrThrow({
-      where: { id: manifestId },
-      select: { status: true },
-    });
-    if (m.status === 'CONFIRMED' || m.status === 'DISPATCHED') manifestReady = true;
-    if (m.status === 'FAILED') {
-      throw new Error('Manifest AWB generation FAILED — check the API log for the reason');
+  // LBL-4 (2026-09-04): a parcel cannot be packed unless its contents
+  // were scanned. `complete` refuses without a CLOSED pack box, and the
+  // escape hatch (`force-complete`) is deliberately NOT used here — it
+  // would leave the box ritual, which is the thing production runs, the
+  // one path this script never exercises. So drive the real bench:
+  // scan the label to open a box, scan each unit in by its SKU code,
+  // scan the label again to close (closing calls `complete` itself).
+  const shipment = await prisma.shipment.findUniqueOrThrow({
+    where: { id: shipmentId },
+    select: { awbNumber: true },
+  });
+  const labelAwb = shipment.awbNumber;
+  if (labelAwb === null) {
+    throw new Error('Shipment carries no waybill — there is no label to scan at the bench');
+  }
+  const opened = await call('/warehouse/packs/boxes/open', {
+    method: 'POST',
+    token,
+    body: { awbNumber: labelAwb },
+  });
+  const packBoxId = (opened['box'] as Json | undefined)?.['id'] ?? opened['packBoxId'];
+  if (typeof packBoxId !== 'string') {
+    throw new Error(`Opening the box returned no id: ${JSON.stringify(opened).slice(0, 200)}`);
+  }
+  // One scan PER UNIT — the contents are checked as a SET at close, and
+  // a quantity of two needs the code twice.
+  const lines = await prisma.shipmentItem.findMany({
+    where: { shipmentId },
+    select: { quantity: true, orderItem: { select: { variant: { select: { skuCode: true } } } } },
+  });
+  for (const packLine of lines) {
+    const code = packLine.orderItem?.variant?.skuCode;
+    if (typeof code !== 'string') throw new Error('A pack line resolved to no SKU code');
+    for (let unit = 0; unit < packLine.quantity; unit += 1) {
+      await call(`/warehouse/packs/boxes/${packBoxId}/scan`, {
+        method: 'POST',
+        token,
+        body: { code },
+      });
     }
   }
-  if (!manifestReady)
-    throw new Error('Manifest never reached CONFIRMED — is the AWB worker running?');
+  await call(`/warehouse/packs/boxes/${packBoxId}/close`, {
+    method: 'POST',
+    token,
+    body: { awbNumber: labelAwb },
+  });
+  line('   packed (scanned at the bench)');
 
-  // HANDOFF. The supervisor confirming the courier physically took the
-  // parcels is what makes them DISPATCHED — and CUR-3's one and only
-  // decrement of qtyOnHand.
-  await call(`/admin/courier/manifests/${manifestId}/confirm-handoff`, { method: 'POST', token });
-  line('   handed to courier → DISPATCHED');
+  // HANDOVER. CUR-4 (amended 2026-09-03): THE SCAN IS THE HANDOVER. A
+  // parcel scanned at the bench goes DISPATCHED there and then, and the
+  // manifest — created for us at pack (WMS-7) — closes ITSELF once its
+  // last live parcel has gone. So there is no manifest step to drive and
+  // nothing to wait for: this script used to close the manifest and then
+  // wait for it to reach CONFIRMED, which was the pre-CUR-2b world where
+  // closing the manifest was what generated the AWB. The waybill has
+  // existed since order confirmation (printed above), so that wait could
+  // only ever time out.
+  //
+  // Stock is NOT decremented here either (Model C, CUR-3): it left at
+  // PACK, on the closing scan above.
+  await call('/admin/courier/handover-scan', {
+    method: 'POST',
+    token,
+    body: { awbNumber: labelAwb },
+  });
+  line('   scanned at the handover bench → DISPATCHED');
 }
 
 /** Move the parcel in the simulator. Each advance fires a signed webhook. */
