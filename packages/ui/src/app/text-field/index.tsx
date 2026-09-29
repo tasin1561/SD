@@ -24,6 +24,7 @@ export {
   describedBy,
   fieldIds,
   hasContent,
+  hasLeadContent,
   useFieldText,
   useMergedRef,
   type FieldMessages,
@@ -33,7 +34,9 @@ export {
 
 /**
  * TextField (u33). The label rests inside the field and floats up into a
- * notch in the border on focus or once there is a value; the leading icon
+ * notch in the border on focus, once there is a value, or as soon as the
+ * field carries a `lead` (which stands where the resting label would be);
+ * the leading icon
  * sits in a chip that takes the accent tint while focused; the helper line
  * carries the hint, a notice or the error (with its icon, announced, and
  * wired through `aria-describedby`); `showCount` with a `maxLength` adds a
@@ -62,7 +65,11 @@ interface FieldExtras extends FieldMessages {
   readonly status?: FieldStatus | undefined;
   /** Keep the label floated even when empty. */
   readonly floatLabel?: boolean | undefined;
-  /** Before the input, after the icon chip. */
+  /**
+   * Before the input, after the icon chip — a dial code, a seller code, a
+   * `₹`. It stands where a RESTING label is drawn, so a lead floats the
+   * label from the start; nothing at the call site needs to say so.
+   */
   readonly lead?: ReactNode;
   /** After the input (a button, a unit). */
   readonly trail?: ReactNode;

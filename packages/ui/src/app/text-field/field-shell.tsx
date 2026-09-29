@@ -3,6 +3,9 @@
 import { clsx } from 'clsx';
 import { CircleAlert, CircleCheck, TriangleAlert } from 'lucide-react';
 import {
+  Children,
+  Fragment,
+  isValidElement,
   useCallback,
   useEffect,
   useRef,
@@ -44,6 +47,25 @@ export interface FieldMessages {
 
 export function hasContent(node: ReactNode): boolean {
   return node !== undefined && node !== null && node !== false && node !== '';
+}
+
+/**
+ * Whether a `lead` will actually draw something.
+ *
+ * The one shape that looks like a lead and is not is a fragment with no
+ * children — how a caller renders a variable-length adornment (the
+ * multi-select's chips). `hasContent` sees the fragment element itself and
+ * would report a lead that draws nothing. Only ONE level is unwrapped, and
+ * only a fragment: any real element is a box, and an empty box still stands
+ * in the padding edge.
+ */
+export function hasLeadContent(lead: ReactNode): boolean {
+  if (!hasContent(lead)) return false;
+  if (isValidElement(lead) && lead.type === Fragment) {
+    const { children } = lead.props as { readonly children?: ReactNode };
+    return Children.count(children) > 0;
+  }
+  return true;
 }
 
 /** The ids a field's messages carry, and the `aria-describedby` they make. */
@@ -131,7 +153,10 @@ export interface FieldShellProps extends FieldMessages {
   readonly id: string;
   readonly required?: boolean | undefined;
   readonly disabled?: boolean | undefined;
-  /** Keep the label floated (a placeholder, a select, a date, a prefix). */
+  /**
+   * Keep the label floated (a placeholder, a select, a date). A `lead`
+   * floats it on its own — the caller need not ask.
+   */
   readonly float: boolean;
   readonly status?: FieldStatus | undefined;
   readonly counter?: { readonly count: number; readonly max: number } | undefined;
@@ -175,10 +200,20 @@ export function FieldShell({
   const near = counter !== undefined && counter.max > 0 && counter.count >= counter.max * 0.9;
   // Only a display-only counter can go over; it says so, it does not block.
   const over = counter !== undefined && counter.count > counter.max;
+  // A lead — "+91", a seller code, a ₹ — is laid out in EXACTLY the slot a
+  // resting label is drawn in: the padding edge, inside the control, out of
+  // the flex flow the label never joined. On an empty field the two print on
+  // top of each other ("Full name" over "MSt" reads as "FGłt name"). So a
+  // field carrying a lead floats its label from the start — which is also
+  // what the lead MEANS: a dial code or a currency sign already says the
+  // field is occupied. The alternative, offsetting the resting label by the
+  // lead's width, needs the lead measured on every render and still pushes a
+  // long lead's label off the end of the field.
+  const floated = float || hasLeadContent(lead);
   return (
     <div
       className={clsx('sk-field', variant, className)}
-      data-float={float || undefined}
+      data-float={floated || undefined}
       data-invalid={invalid || undefined}
       data-disabled={disabled === true || undefined}
       data-multiline={multiline === true || undefined}
