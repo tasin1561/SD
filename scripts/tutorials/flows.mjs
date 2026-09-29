@@ -788,9 +788,16 @@ export const FLOWS = {
       },
 
       async 'bank-approval'({ page, stage }) {
-        await stage.clickIt(page.getByRole('button', { name: /Save details/i }).first(), {
-          after: 1400,
-        });
+        // BOTH labels. The submit button says "Save details" for a first
+        // account and "Send for approval" once one is on file, and
+        // matching only the first is how a re-take hangs on a button
+        // that is no longer there. The seed clears the account so the
+        // take films the first-time path; this is the backstop, and the
+        // narration for this scene describes both outcomes anyway.
+        await stage.clickIt(
+          page.getByRole('button', { name: /Save details|Send for approval/i }).first(),
+          { after: 1400 },
+        );
         // Saving asks first, and WHICH question it asks is the lesson:
         // a first set of details is stored, a change to an account
         // already on file goes to Skydrop for approval.

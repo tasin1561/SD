@@ -556,6 +556,28 @@ async function clearTutorialConsignments(sellerId) {
     console.log(`  · removed ${changes.count} pending bank change request(s)`);
   }
 
+  // The bank details the profile video ENTERS on camera. This one is
+  // not cosmetic: with an account already on file the form takes the
+  // approval branch, and its submit button stops saying "Save details"
+  // and starts saying "Send for approval" — so the second take hangs
+  // waiting for a button that is no longer there. (It did: a re-take
+  // timed out on exactly this while the first take had looked fine.)
+  // The video films the FIRST-TIME path, and the narration describes
+  // it, so every take has to start from no account.
+  await prisma.seller.updateMany({
+    where: { id: sellerId, NOT: { bankAccountNumber: null } },
+    data: {
+      bankName: null,
+      bankBranchName: null,
+      bankAccountName: null,
+      bankAccountNumber: null,
+      bankAccountNumberMasked: null,
+      bankAccountNumberKeyVersion: null,
+      bankRoutingNumber: null,
+      bankSwiftCode: null,
+    },
+  });
+
   // The logo the profile video uploads ON CAMERA. Left in place, the
   // next take opens on a logo already there and a Remove button beside
   // it — a different picture from the one the narration describes, and
