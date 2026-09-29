@@ -654,15 +654,24 @@ function patchableOrder(over: AnyArgs = {}): AnyArgs {
     recipientPostalCode: '560001',
     recipientCountryCode: 'IN',
     codAmountInr: new Prisma.Decimal(999),
+    paymentMode: PaymentMode.COD,
+    advanceAmountInr: null,
+    discountInr: null,
+    // Derived from the one line (500g × 2, ₹200 × 2) so that an
+    // identical re-upload recomputes to the same figures and stays a
+    // genuine no-op.
+    totalWeightGrams: 1000,
+    declaredValueInr: new Prisma.Decimal(400),
     customerId: 'c1',
-    items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+    items: [{ id: 'oi1', variantId: 'v1', quantity: 2, unitPriceInr: null }],
     ...over,
   };
 }
 
 const PATCH = {
-  productSku: 'SKU-1',
-  quantity: 2,
+  // One CSV order may carry several lines since 2026-09-29 (ORD-9
+  // widened): rows sharing a reference are LINES of one order.
+  lines: [{ productSku: 'SKU-1', quantity: 2 }],
   customerName: 'Asha',
   customerPhone: '+919876543210',
   addressLine1: '12 MG Road',
@@ -735,13 +744,120 @@ describe('OrderService.applyBulkPatch — ORD-9 (commit 21 gap-fill)', () => {
   });
 
   it('re-snapshots the line when the SKU moves', async () => {
-    const { svc, orderItemUpdate, catalog } = makeService({ existing: patchableOrder() });
-    (catalog.getVariantBySku as jest.Mock).mockResolvedValueOnce(
-      resolvedVariant({ variantId: 'v2', skuCode: 'SKU-2' }),
+    const v2 = resolvedVariant({ variantId: 'v2', skuCode: 'SKU-2' });
+    const { svc, orderItemDeleteMany, orderUpdate, catalog } = makeService({
+      existing: patchableOrder(),
+      variants: new Map([['v2', v2]]),
+    });
+    (catalog.getVariantBySku as jest.Mock).mockResolvedValueOnce(v2);
+    const r = await svc.applyBulkPatch(
+      's1',
+      'o1',
+      { ...PATCH, lines: [{ productSku: 'SKU-2', quantity: 2 }] },
+      ACTOR,
     );
-    const r = await svc.applyBulkPatch('s1', 'o1', { ...PATCH, productSku: 'SKU-2' }, ACTOR);
     expect(r).toBe('PATCHED');
-    expect(orderItemUpdate).toHaveBeenCalledTimes(1);
+    // A full REPLACE, as `edit` does it — the patch has to be able to add
+    // a line, drop one and move a SKU in one pass now that a CSV order
+    // may carry several. Safe only here: this method admits DRAFT and
+    // PENDING_CONFIRMATION alone, and nothing is reserved before
+    // confirmation (ORD-10).
+    expect(orderItemDeleteMany).toHaveBeenCalledTimes(1);
+    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
+    const created = (data.items as { create: AnyArgs[] }).create;
+    expect(created).toHaveLength(1);
+    expect(created[0]?.variantId).toBe('v2');
+  });
+
+  it('places the SECOND line of a two-line CSV order rather than overwriting the first', async () => {
+    // The bug this closes: Delhivery's template expresses a two-item
+    // order by repeating its Sale Order Number, and the second row used
+    // to find the first order by that reference and replace its only
+    // line. A two-item order silently became a one-item order carrying
+    // the LAST row's SKU.
+    const v2 = resolvedVariant({ variantId: 'v2', skuCode: 'SKU-2' });
+    const { svc, orderUpdate, catalog } = makeService({
+      existing: patchableOrder(),
+      variants: new Map([
+        ['v1', resolvedVariant()],
+        ['v2', v2],
+      ]),
+    });
+    (catalog.getVariantBySku as jest.Mock)
+      .mockResolvedValueOnce(resolvedVariant())
+      .mockResolvedValueOnce(v2);
+    const r = await svc.applyBulkPatch(
+      's1',
+      'o1',
+      {
+        ...PATCH,
+        lines: [
+          { productSku: 'SKU-1', quantity: 2 },
+          { productSku: 'SKU-2', quantity: 1 },
+        ],
+      },
+      ACTOR,
+    );
+    expect(r).toBe('PATCHED');
+    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
+    const created = (data.items as { create: AnyArgs[] }).create;
+    expect(created.map((c) => c.variantId)).toEqual(['v1', 'v2']);
+    // ...and the order's derived figures follow the whole set.
+    expect((data.declaredValueInr as Prisma.Decimal).toNumber()).toBe(600);
+    expect(data.totalWeightGrams).toBe(1500);
+  });
+
+  it('treats a REORDERED re-upload as unchanged', async () => {
+    // Comparing the line SETS, sorted — a file whose rows moved is not a
+    // change, and writing an event for it would make every re-upload
+    // look like an edit.
+    const v2 = resolvedVariant({ variantId: 'v2', skuCode: 'SKU-2' });
+    const { svc, orderUpdate, orderItemDeleteMany, catalog } = makeService({
+      existing: patchableOrder({
+        items: [
+          { id: 'oi1', variantId: 'v1', quantity: 2, unitPriceInr: null },
+          { id: 'oi2', variantId: 'v2', quantity: 1, unitPriceInr: null },
+        ],
+        declaredValueInr: new Prisma.Decimal(600),
+        totalWeightGrams: 1500,
+      }),
+      variants: new Map([
+        ['v1', resolvedVariant()],
+        ['v2', v2],
+      ]),
+    });
+    (catalog.getVariantBySku as jest.Mock)
+      .mockResolvedValueOnce(v2)
+      .mockResolvedValueOnce(resolvedVariant());
+    const r = await svc.applyBulkPatch(
+      's1',
+      'o1',
+      {
+        ...PATCH,
+        lines: [
+          { productSku: 'SKU-2', quantity: 1 },
+          { productSku: 'SKU-1', quantity: 2 },
+        ],
+      },
+      ACTOR,
+    );
+    expect(r).toBe('UNCHANGED');
+    expect(orderItemDeleteMany).not.toHaveBeenCalled();
+    expect(orderUpdate).not.toHaveBeenCalled();
+  });
+
+  it('a stated Prepaid clears the collectable rather than leaving a COD behind', async () => {
+    const { svc, orderUpdate } = makeService({ existing: patchableOrder() });
+    const r = await svc.applyBulkPatch(
+      's1',
+      'o1',
+      { ...PATCH, paymentMode: PaymentMode.PREPAID },
+      ACTOR,
+    );
+    expect(r).toBe('PATCHED');
+    const data = orderUpdate.mock.calls[0]![0].data as AnyArgs;
+    expect(data.paymentMode).toBe(PaymentMode.PREPAID);
+    expect(data.codAmountInr).toBeNull();
   });
 
   it('refuses to patch a CONFIRMED+ order', async () => {

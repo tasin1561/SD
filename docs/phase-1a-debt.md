@@ -368,12 +368,18 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   view (likely a separate aggregate keyed by phone, computed read-side,
   not by re-globalizing the `customers` row).
 
-- **CSV order imports are single-line only.** CSV order imports support
-  one row → one order with single line item only. Multi-line orders
-  (multiple SKUs in one order) require manual entry via
-  `POST /seller/orders`. Phase 2 work: parent-row grouping logic for
-  multi-line CSV imports.
-  **Pick up:** Phase 2.
+- ~~**CSV order imports are single-line only.**~~ **CLOSED 2026-09-29**
+  (owner, with the Delhivery bulk-format work). Rows sharing an
+  `External Ref` are now LINES OF ONE ORDER —
+  `OrderCsvParserService.groupRows`, and `applyBulkPatch` replaces the
+  whole line set. It turned out not to be Phase-2 work at all:
+  `CreateOrderDto.items` has always taken 1–200 lines and the portal form
+  places multi-line orders every day, so only the importer was narrower
+  than the system behind it. And what it actually did was worse than
+  refusing — Delhivery's bulk template repeats `*Sale Order Number` to
+  express a two-item order, so the second row found the first by that
+  reference and PATCHED it, silently shipping one item where the file
+  said two. See ORD-9/ORD-9b in CLAUDE.md.
 
 - **Cross-module facade is convention, not compile-time.** `OrderModule`
   exports exactly `OrderReadService` + `OrderWriteService`; the rest

@@ -38,8 +38,13 @@ interface UploadRow {
 
 interface Preview {
   readonly rowCount: number;
+  /** Rows sharing a reference are LINES of one order (ORD-9), so these differ. */
+  readonly orderCount: number;
   readonly headers: readonly string[];
   readonly missingRequired: readonly string[];
+  /** Rows the importer's own grouping says will fail, and the first few reasons. */
+  readonly rowsWithProblems: number;
+  readonly problems: ReadonlyArray<{ rowNumber: number; field: string; reason: string }>;
   readonly exceedsRowLimit: boolean;
   readonly rowLimit: number;
 }
@@ -185,7 +190,7 @@ export default function StoreOrderImportPage(): ReactElement {
       </BackLink>
       <PageHeader
         title="Upload orders"
-        subtitle="One row is one order. Retail Price is what you sell the product for; leave it blank and we use your seller’s suggested price. Re-upload a row with the same reference to correct an order you have not had confirmed yet."
+        subtitle="One row is one product line — give two rows the same reference and they become one order with two items. Retail Price is what you sell the product for; leave it blank and we use your seller’s suggested price. Re-upload a reference to correct an order you have not had confirmed yet."
       />
 
       <RoSection
@@ -237,8 +242,23 @@ export default function StoreOrderImportPage(): ReactElement {
                 <p className="ro-body">
                   <span className="ro-file-name">{pending.fileName}</span>:{' '}
                   {pending.preview.rowCount} row
-                  {pending.preview.rowCount === 1 ? '' : 's'}.
+                  {pending.preview.rowCount === 1 ? '' : 's'}
+                  {pending.preview.orderCount !== pending.preview.rowCount
+                    ? `, making ${pending.preview.orderCount} order${pending.preview.orderCount === 1 ? '' : 's'}`
+                    : ''}
+                  .
                 </p>
+                {pending.preview.rowsWithProblems > 0 && (
+                  <Notice tone="warn" icon={<FileWarning size={15} />}>
+                    <span>
+                      {pending.preview.rowsWithProblems} row
+                      {pending.preview.rowsWithProblems === 1 ? '' : 's'} will not import ·{' '}
+                      {pending.preview.problems
+                        .map((p) => `Row ${p.rowNumber}: ${p.reason}`)
+                        .join(' · ')}
+                    </span>
+                  </Notice>
+                )}
                 {pending.preview.missingRequired.length > 0 ? (
                   <Notice tone="bad" icon={<FileWarning size={16} />}>
                     <span>
@@ -257,7 +277,7 @@ export default function StoreOrderImportPage(): ReactElement {
                       icon={<FileSpreadsheet size={15} />}
                       state={busy === 'importing' ? 'busy' : undefined}
                       labels={{
-                        idle: `Import ${pending.preview.rowCount} orders`,
+                        idle: `Import ${pending.preview.orderCount} orders`,
                         busy: 'Importing…',
                       }}
                       onClick={() => setConfirmImport(true)}
@@ -365,10 +385,10 @@ export default function StoreOrderImportPage(): ReactElement {
         amount={
           pending === null
             ? undefined
-            : `${pending.preview.rowCount} ${pending.preview.rowCount === 1 ? 'order' : 'orders'}`
+            : `${pending.preview.orderCount} ${pending.preview.orderCount === 1 ? 'order' : 'orders'}`
         }
         consequence="Each row becomes one of your orders and goes to Skydrop’s call centre to be confirmed. A row that fails lands in the error report; nothing else is changed."
-        confirmLabel={pending === null ? 'Import' : `Import ${pending.preview.rowCount} orders`}
+        confirmLabel={pending === null ? 'Import' : `Import ${pending.preview.orderCount} orders`}
         cancelLabel="Not yet"
         // Closes at once: the import button on the page carries the busy
         // state (importIt() never throws — it reports on the page).

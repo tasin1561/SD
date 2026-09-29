@@ -21,24 +21,39 @@ import type {
 
 const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
 
-/** Canonical template columns (header → example value). */
-const TEMPLATE_COLUMNS: Array<[string, string]> = [
-  ['Product SKU', 'TSHIRT-001-RED-M'],
-  ['Quantity', '2'],
-  ['Customer Name', 'Asha Verma'],
-  ['Customer Phone', '+919876543210'],
-  ['Customer Email', 'asha@example.com'],
-  ['Address Line1', '12 MG Road'],
+/**
+ * Canonical template columns (header → example value).
+ *
+ * Our own shape, deliberately narrower than Delhivery's 36-column bulk
+ * template — but the importer ACCEPTS that template as it comes (see
+ * `ORDER_CSV_ALIAS_MAP` and `ORDER_CSV_IGNORED_HEADERS`), so this file
+ * and that one must not drift apart in meaning. `Payment Mode` is here
+ * because the importer used to INFER it from the COD amount, which is
+ * wrong on any file that states it.
+ *
+ * The two rows share `SD-1001`: one order, two lines. Rows carrying the
+ * same reference are lines of one order (ORD-9), and a template that
+ * never showed that left every seller believing otherwise.
+ */
+const TEMPLATE_COLUMNS: Array<[string, string, string]> = [
+  ['Product SKU', 'TSHIRT-001-RED-M', 'CAP-001-NAVY'],
+  ['Quantity', '2', '1'],
+  ['Payment Mode', 'COD', 'COD'],
+  ['Customer Name', 'Asha Verma', 'Asha Verma'],
+  ['Customer Phone', '+919876543210', '+919876543210'],
+  ['Customer Email', 'asha@example.com', 'asha@example.com'],
+  ['Address Line1', '12 MG Road', '12 MG Road'],
   // Line 2 is the LANDMARK and is required — the courier address is
   // line 1 + line 2, so this is the field that makes a rural address
   // findable. City/State stay as supported columns but are optional:
   // Delhivery resolves the locality from the PIN.
-  ['Address Line2', 'Near City Hospital'],
-  ['City', 'Bengaluru'],
-  ['State', 'Karnataka'],
-  ['Pin Code', '560001'],
-  ['COD Amount', '999'],
-  ['External Ref', 'SELLER-ORD-1001'],
+  ['Address Line2', 'Near City Hospital', 'Near City Hospital'],
+  ['City', 'Bengaluru', 'Bengaluru'],
+  ['State', 'Karnataka', 'Karnataka'],
+  ['Pin Code', '560001', '560001'],
+  ['Unit Price', '499', '299'],
+  ['COD Amount', '1297', '1297'],
+  ['External Ref', 'SD-1001', 'SD-1001'],
 ];
 
 export interface CsvPresignResult {
@@ -49,14 +64,38 @@ export interface CsvPresignResult {
 
 export interface OrderCsvPreviewResult {
   rowCount: number;
+  /**
+   * How many ORDERS those rows make. Rows sharing a reference are lines
+   * of one order (ORD-9), so "50 rows" and "43 orders" are both true and
+   * only one of them is what gets placed.
+   */
+  orderCount: number;
   headers: string[];
   sampleRows: Array<Record<string, string>>;
   mapping: Partial<Record<OrderCsvField, string>>;
   missingRequired: OrderCsvField[];
   unmatchedHeaders: Array<{ header: string; suggestion: OrderCsvField | null }>;
+  /** Columns we recognise and deliberately do not use, with the reason. */
+  ignoredHeaders: Array<{ header: string; reason: string }>;
+  /**
+   * Rows this file would FAIL on, found by running the importer's own
+   * grouping over the whole file rather than guessing from the headers.
+   *
+   * Column mapping was the only thing preview ever checked, and that is
+   * not what a file from another system gets wrong: Delhivery's template
+   * maps every required column and then leaves `Shipping Address Line2`
+   * — our landmark, required — empty on most rows, so the upload
+   * previewed perfectly and failed every row. A preview that cannot see
+   * that is not honest about what pressing Import will do.
+   */
+  rowsWithProblems: number;
+  problems: Array<{ rowNumber: number; field: string; reason: string }>;
   exceedsRowLimit: boolean;
   rowLimit: number;
 }
+
+/** At most this many problem rows come back — it is a warning, not the report. */
+const PREVIEW_PROBLEM_LIMIT = 10;
 
 export interface BulkOrderUploadView {
   id: string;
@@ -104,9 +143,11 @@ export class OrderCsvImportService {
   ) {}
 
   buildTemplate(): string {
+    const cell = (v: string): string => (v.includes(',') ? `"${v}"` : v);
     const headers = TEMPLATE_COLUMNS.map(([h]) => h).join(',');
-    const example = TEMPLATE_COLUMNS.map(([, v]) => (v.includes(',') ? `"${v}"` : v)).join(',');
-    return `${headers}\n${example}\n`;
+    const first = TEMPLATE_COLUMNS.map(([, a]) => cell(a)).join(',');
+    const second = TEMPLATE_COLUMNS.map(([, , b]) => cell(b)).join(',');
+    return `${headers}\n${first}\n${second}\n`;
   }
 
   async presign(sellerId: string, _input: PresignOrderCsvDto): Promise<CsvPresignResult> {
@@ -138,13 +179,22 @@ export class OrderCsvImportService {
     const detected = this.parser.detectMapping(parsed.headers);
     const mapping = this.resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
     const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
+    const dry = this.parser.groupRows(parsed.rows, mapping);
     return {
       rowCount: parsed.rowCount,
+      orderCount: dry.groups.length,
       headers: parsed.headers,
       sampleRows: parsed.rows.slice(0, 5),
       mapping,
       missingRequired,
       unmatchedHeaders: detected.unmatchedHeaders,
+      ignoredHeaders: detected.ignoredHeaders,
+      rowsWithProblems: dry.rowErrors.length,
+      problems: dry.rowErrors.slice(0, PREVIEW_PROBLEM_LIMIT).map((r) => ({
+        rowNumber: r.rowNumber,
+        field: r.errors[0]?.field ?? '',
+        reason: r.errors[0]?.reason ?? 'This row could not be read',
+      })),
       exceedsRowLimit: parsed.rowCount > this.env.csvMaxRows,
       rowLimit: this.env.csvMaxRows,
     };

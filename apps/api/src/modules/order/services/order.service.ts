@@ -231,8 +231,17 @@ export interface AdminListOrdersQuery extends ListOrdersQuery {
 /** Neutral CSV-patch shape (processor maps CoercedOrderRow → this, so
  *  the order module never depends on the csv-import module). */
 export interface BulkOrderPatchInput {
-  productSku: string;
-  quantity: number;
+  /**
+   * The order's lines, in file order — the set REPLACES what is on the
+   * order.
+   *
+   * A CSV order may carry several since 2026-09-29 (ORD-9 widened): rows
+   * sharing a reference are LINES OF ONE ORDER, which is how Delhivery's
+   * bulk template expresses a multi-item order. This was a single
+   * `productSku` + `quantity`, so the second row of such an order found
+   * the first by its reference and overwrote its only line.
+   */
+  lines: ReadonlyArray<{ productSku: string; quantity: number; unitPriceInr?: number }>;
   customerName: string;
   customerPhone: string;
   customerEmail?: string | null;
@@ -245,6 +254,12 @@ export interface BulkOrderPatchInput {
   state?: string;
   pinCode: string;
   codAmount?: number | null;
+  /** Stated `*Payment Mode`. Absent leaves the order's own mode alone. */
+  paymentMode?: PaymentMode;
+  /** The figures the collectable was built from — readback only, never re-applied. */
+  advanceAmount?: number | null;
+  discountInr?: number | null;
+  totalWeightGrams?: number | null;
 }
 
 /** Per-line snapshot resolved from the catalog before the write tx. */
@@ -1905,9 +1920,19 @@ export class OrderService {
         recipientPostalCode: true,
         recipientCountryCode: true,
         codAmountInr: true,
+        paymentMode: true,
+        advanceAmountInr: true,
+        discountInr: true,
+        totalWeightGrams: true,
+        declaredValueInr: true,
         customerId: true,
         storeKind: true,
-        items: { select: { id: true, variantId: true, quantity: true }, take: 1 },
+        // Every line, not the first: a CSV order may have several
+        // (ORD-9 widened 2026-09-29) and the patch replaces the set.
+        items: {
+          select: { id: true, variantId: true, quantity: true, unitPriceInr: true },
+          orderBy: { createdAt: 'asc' },
+        },
       },
     });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
@@ -1974,44 +1999,121 @@ export class OrderService {
     }
     setIf(order.recipientPostalCode, patch.pinCode.trim(), 'recipientPostalCode');
 
+    // A stated `*Payment Mode` is authoritative; absent, the order keeps
+    // the mode it was placed with. A PREPAID order carries no collectable
+    // — `create` writes null there for the same reason.
+    const nextMode = patch.paymentMode ?? order.paymentMode;
+    if (nextMode !== order.paymentMode) {
+      data.paymentMode = nextMode;
+      changed.push('paymentMode');
+    }
     const curCod = order.codAmountInr === null ? null : Number(order.codAmountInr);
-    const nextCod = patch.codAmount ?? null;
+    const nextCod = nextMode === PaymentMode.COD ? (patch.codAmount ?? null) : null;
     if (curCod !== nextCod) {
       data.codAmountInr = nextCod === null ? null : new Prisma.Decimal(nextCod);
       changed.push('codAmountInr');
     }
+    // The figures the collectable was built from — recorded, never
+    // re-applied (the same contract `create` states at the write).
+    const setDecimalIf = (
+      cur: Prisma.Decimal | null,
+      next: number | null | undefined,
+      key: 'advanceAmountInr' | 'discountInr',
+    ): void => {
+      if (next === undefined) return;
+      const curNum = cur === null ? null : Number(cur);
+      if (curNum === next) return;
+      (data as Record<string, unknown>)[key] = next === null ? null : new Prisma.Decimal(next);
+      changed.push(key);
+    };
+    setDecimalIf(order.advanceAmountInr, patch.advanceAmount, 'advanceAmountInr');
+    setDecimalIf(order.discountInr, patch.discountInr, 'discountInr');
 
     const phoneChanged = patch.customerPhone.trim() !== order.recipientPhoneE164;
 
-    // Single CSV line: sync quantity and (if the SKU moved) re-snapshot.
-    const line = order.items[0];
-    let lineUpdate: { id: string; data: Prisma.OrderItemUpdateInput } | null = null;
-    if (line) {
-      const resolved = await this.catalog.getVariantBySku(sellerId, patch.productSku);
+    /*
+      Lines: a full REPLACE, exactly as `edit` does it.
+
+      This used to sync one line in place, which was right while a CSV row
+      was a whole order. It is not any more: rows sharing a reference are
+      lines of ONE order (ORD-9 widened 2026-09-29), so a re-upload has to
+      be able to add a line, drop one and move a SKU in the same pass.
+
+      Replacing is safe HERE and only here: the gate above admits DRAFT
+      and PENDING_CONFIRMATION only, and no stock is reserved before
+      confirmation (ORD-10), so there is nothing keyed to these rows to
+      reconcile. A reseller order never reaches this method at all (the
+      refusal above), so no line carries terms a replace would lose.
+    */
+    const resolvedBySku = new Map<
+      string,
+      Awaited<ReturnType<CatalogReadService['getVariantBySku']>>
+    >();
+    for (const l of patch.lines) {
+      if (resolvedBySku.has(l.productSku)) continue;
+      const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
       if (!resolved || resolved.sellerId !== sellerId) {
         throw new BadRequestException({
           code: 'VARIANT_NOT_FOUND',
-          message: `Variant SKU "${patch.productSku}" not found for this seller`,
+          message: `Variant SKU "${l.productSku}" not found for this seller`,
         });
       }
-      const liData: Prisma.OrderItemUpdateInput = {};
-      if (resolved.variantId !== line.variantId) {
-        liData.variant = { connect: { id: resolved.variantId } };
-        liData.skuCode = resolved.skuCode;
-        liData.productName = resolved.productName;
-        liData.variantLabel = resolved.variantLabel;
-        liData.imageUrl = resolved.imageUrl;
-        liData.unitWeightGrams = resolved.weightGrams;
-        liData.unitDeclaredValueInr = resolved.declaredValueInr;
-        changed.push('lineVariant');
-      }
-      if (patch.quantity !== line.quantity) {
-        liData.quantity = patch.quantity;
-        changed.push('lineQuantity');
-      }
-      if (Object.keys(liData).length > 0) {
-        lineUpdate = { id: line.id, data: liData };
-      }
+      resolvedBySku.set(l.productSku, resolved);
+    }
+    const replacementLines = await this.resolveLines(
+      sellerId,
+      patch.lines.map((l) => {
+        const v = resolvedBySku.get(l.productSku);
+        const item: CreateOrderDto['items'][number] = {
+          // Present by construction: every SKU was resolved just above.
+          variantId: v?.variantId ?? '',
+          quantity: l.quantity,
+        };
+        if (l.unitPriceInr !== undefined) item.unitPriceInr = l.unitPriceInr;
+        return item;
+      }),
+    );
+
+    // A reordered file is not a change. Compare the line SETS, sorted, so
+    // re-uploading the same rows in another order writes nothing.
+    const signature = (
+      rows: ReadonlyArray<{
+        variantId: string;
+        quantity: number;
+        unitPriceInr: Prisma.Decimal | null;
+      }>,
+    ): string =>
+      rows
+        .map(
+          (r) =>
+            `${r.variantId}|${r.quantity}|${r.unitPriceInr === null ? '' : r.unitPriceInr.toFixed(2)}`,
+        )
+        .sort()
+        .join(';');
+    const linesChanged = signature(order.items) !== signature(replacementLines);
+    if (linesChanged) changed.push('items');
+
+    // Derived from the lines exactly as `create` and `edit` derive them.
+    if (linesChanged) {
+      const nextDeclared = replacementLines.reduce(
+        (sum, l) => sum.add((l.unitDeclaredValueInr ?? new Prisma.Decimal(0)).mul(l.quantity)),
+        new Prisma.Decimal(0),
+      );
+      if (!nextDeclared.equals(order.declaredValueInr)) data.declaredValueInr = nextDeclared;
+    }
+    // A stated packed weight wins over the catalogue sum: it is the weight
+    // of the parcel that will actually be handed over, packaging included.
+    const nextWeight =
+      patch.totalWeightGrams !== undefined
+        ? patch.totalWeightGrams
+        : linesChanged
+          ? replacementLines.every((l) => l.unitWeightGrams !== null)
+            ? replacementLines.reduce((t, l) => t + (l.unitWeightGrams ?? 0) * l.quantity, 0)
+            : null
+          : order.totalWeightGrams;
+    if (nextWeight !== order.totalWeightGrams) {
+      data.totalWeightGrams = nextWeight;
+      changed.push('totalWeightGrams');
     }
 
     if (changed.length === 0) return 'UNCHANGED';
@@ -2026,11 +2128,24 @@ export class OrderService {
         });
         data.customer = { connect: { id: customer.id } };
       }
+      if (linesChanged) {
+        await tx.orderItem.deleteMany({ where: { orderId: order.id } });
+        data.items = {
+          create: replacementLines.map((l) => ({
+            variantId: l.variantId,
+            skuCode: l.skuCode,
+            productName: l.productName,
+            variantLabel: l.variantLabel,
+            imageUrl: l.imageUrl,
+            quantity: l.quantity,
+            unitWeightGrams: l.unitWeightGrams,
+            unitDeclaredValueInr: l.unitDeclaredValueInr,
+            unitPriceInr: l.unitPriceInr,
+          })),
+        };
+      }
       if (Object.keys(data).length > 0) {
         await tx.order.update({ where: { id: order.id }, data });
-      }
-      if (lineUpdate) {
-        await tx.orderItem.update({ where: { id: lineUpdate.id }, data: lineUpdate.data });
       }
       await this.events.note(
         tx,

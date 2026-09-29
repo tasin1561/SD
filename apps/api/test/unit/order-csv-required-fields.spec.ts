@@ -58,14 +58,19 @@ describe('the CSV required-field list tracks the create DTO', () => {
     expect(ORDER_CSV_REQUIRED_FIELDS).not.toContain('state');
   });
 
-  it('the per-row check is DERIVED from the list, not a second copy of it', () => {
+  it('the order-level check is DERIVED from the list, not a second copy of it', () => {
     // The drift that caused this: a literal array inside coerceRow.
+    //
+    // The check now has TWO grains (ORD-9 widened 2026-09-29): three
+    // fields every ROW must carry, and the rest judged on the assembled
+    // ORDER. Only the row three are written out — the order list is the
+    // full one MINUS those, so the two can never disagree about a field
+    // the create DTO started or stopped needing.
     const src = readFileSync(
       join(__dirname, '../../src/modules/order-csv-import/services/order-csv-parser.service.ts'),
       'utf8',
     );
-    expect(src).toContain('ORDER_CSV_REQUIRED_FIELDS.filter(');
-    // No hand-written required list survives in there.
+    expect(src).toMatch(/ORDER_REQUIRED_FIELDS[\s\S]{0,120}ORDER_CSV_REQUIRED_FIELDS\.filter\(/);
     expect(src).not.toMatch(/const required: OrderCsvField\[\] = \[/);
   });
 });
@@ -79,12 +84,26 @@ describe('OrderCsvParserService.coerceRow', () => {
     expect(row?.addressLine2).toBe('Near City Hospital');
   });
 
-  it('rejects a row with no landmark, naming the field', () => {
+  it('a one-row file is still one complete order', () => {
+    const { groups, rowErrors } = svc.groupRows([fullRow()], MAPPING);
+    expect(rowErrors).toEqual([]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.lines).toEqual([{ productSku: 'SKU-1', quantity: 2 }]);
+  });
+
+  it('rejects an order with no landmark, naming it and saying why', () => {
+    // The check moved from the ROW to the assembled ORDER when a CSV row
+    // stopped being a whole order (ORD-9 widened). The guarantee is
+    // unchanged and is what matters: a file with no landmark does not
+    // import, and it says what a landmark is for — Delhivery's own
+    // template leaves that column optional, so a file from one will
+    // routinely arrive with it blank.
     const raw = fullRow();
     raw['Address Line2'] = '';
-    const { row, errors } = svc.coerceRow(raw, MAPPING);
-    expect(row).toBeNull();
-    expect(errors.map((e) => e.field)).toContain('addressLine2');
+    const { groups, rowErrors } = svc.groupRows([raw], MAPPING);
+    expect(groups).toEqual([]);
+    expect(rowErrors[0]?.errors.map((e) => e.field)).toContain('addressLine2');
+    expect(rowErrors[0]?.errors[0]?.reason).toMatch(/landmark/i);
   });
 
   it('accepts a row with no city or state', () => {

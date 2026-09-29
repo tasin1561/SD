@@ -12,7 +12,7 @@ import { StagedOrderRowService } from './staged-order-row.service';
 import type { CreateOrderDto } from '../../order/dto/create-order.dto';
 import type { CreateStoreOrderDto } from '../../order/dto/create-store-order.dto';
 import type { UpdateOrderDto } from '../../order/dto/update-order.dto';
-import { OrderCsvParserService, type CoercedOrderRow } from './order-csv-parser.service';
+import { OrderCsvParserService, type CoercedOrderGroup } from './order-csv-parser.service';
 import type { OrderCsvField } from '../order-csv-fields';
 import { orderErrorReportKeyFor } from '../order-csv-key';
 
@@ -113,35 +113,44 @@ export class OrderCsvImportProcessorService {
     const storeId = upload.resellerStoreId ?? null;
     const storeUserId = upload.uploadedByStoreUserId ?? null;
 
-    for (let i = 0; i < parsed.rows.length; i++) {
-      const raw = parsed.rows[i];
-      if (!raw) continue;
-      const rowNumber = i + 2; // 1 header + 1-based
+    /*
+      ORD-9, widened 2026-09-29: rows sharing a reference are LINES OF ONE
+      ORDER, not several orders and not one order overwritten by the last
+      row that mentioned it. Delhivery's bulk template expresses a
+      two-item order by repeating `*Sale Order Number`, and that is the
+      file sellers already have.
+    */
+    const { groups, rowErrors } = this.parser.groupRows(parsed.rows, mapping);
 
-      const { row, errors } = this.parser.coerceRow(raw, mapping);
-      if (!row || errors.length > 0) {
-        for (const e of errors) {
-          errorRows.push({
-            rowNumber,
-            errorField: e.field ?? '',
-            errorReason: e.reason,
-            original: raw,
-          });
-        }
-        // ...and park it somewhere the seller can actually fix it. The
-        // error CSV stays for bulk triage; this is the queue.
-        if (storeId === null) {
-          await this.staged.stage({
-            uploadId,
-            sellerId,
-            rowNumber,
-            data: this.mappedValues(raw, mapping),
-            problems: errors.map((e) => ({ field: e.field ?? '', reason: e.reason })),
-          });
-        }
-        counters.rowsFailed += 1;
-        continue;
+    for (const bad of rowErrors) {
+      for (const e of bad.errors) {
+        errorRows.push({
+          rowNumber: bad.rowNumber,
+          errorField: e.field ?? '',
+          errorReason: e.reason,
+          original: bad.raw,
+        });
       }
+      // ...and park it somewhere the seller can actually fix it. The
+      // error CSV stays for bulk triage; this is the queue.
+      if (storeId === null) {
+        await this.staged.stage({
+          uploadId,
+          sellerId,
+          rowNumber: bad.rowNumber,
+          data: this.mappedValues(bad.raw, mapping),
+          problems: bad.errors.map((e) => ({ field: e.field ?? '', reason: e.reason })),
+        });
+      }
+      counters.rowsFailed += 1;
+    }
+
+    for (const row of groups) {
+      // Every row of the order points at the same failure, so the report
+      // and the counters stay per ROW while the work is per ORDER.
+      const rowNumber = row.rowNumbers[0] ?? 0;
+      const raw = parsed.rows[rowNumber - 2] ?? {};
+      const rowsInOrder = row.rowNumbers.length;
 
       if (storeId !== null) {
         /*
@@ -173,7 +182,7 @@ export class OrderCsvImportProcessorService {
             existing.status === OrderStatus.PENDING_CONFIRMATION
           ) {
             await this.patchStoreOrder(sellerId, storeId, storeUserId, existing.id, row, ctx);
-            counters.rowsSkipped += 1; // matched an existing order (patched/unchanged)
+            counters.rowsSkipped += rowsInOrder; // matched an existing order (patched/unchanged)
           } else {
             errorRows.push({
               rowNumber,
@@ -181,7 +190,7 @@ export class OrderCsvImportProcessorService {
               errorReason: `externalRef "${row.externalRef}" matches an order of this store in ${existing.status}; a CSV cannot change a confirmed-or-later order`,
               original: raw,
             });
-            counters.rowsFailed += 1;
+            counters.rowsFailed += rowsInOrder;
           }
         } catch (err) {
           errorRows.push({
@@ -190,7 +199,7 @@ export class OrderCsvImportProcessorService {
             errorReason: err instanceof Error ? err.message : 'Unexpected error importing row',
             original: raw,
           });
-          counters.rowsFailed += 1;
+          counters.rowsFailed += rowsInOrder;
         }
         continue;
       }
@@ -205,7 +214,7 @@ export class OrderCsvImportProcessorService {
           existing.status === OrderStatus.PENDING_CONFIRMATION
         ) {
           await this.orders.applyBulkPatch(sellerId, existing.id, this.toPatch(row), actor);
-          counters.rowsSkipped += 1; // matched an existing order (patched/unchanged)
+          counters.rowsSkipped += rowsInOrder; // matched an existing order (patched/unchanged)
         } else {
           errorRows.push({
             rowNumber,
@@ -213,7 +222,7 @@ export class OrderCsvImportProcessorService {
             errorReason: `externalRef "${row.externalRef}" matches an order in ${existing.status}; CSV cannot update a confirmed-or-later order`,
             original: raw,
           });
-          counters.rowsFailed += 1;
+          counters.rowsFailed += rowsInOrder;
         }
       } catch (err) {
         // A suspected duplicate is not a malformed row — it is a
@@ -242,7 +251,7 @@ export class OrderCsvImportProcessorService {
               ],
           ...(dup ? { duplicateOf: dup } : {}),
         });
-        counters.rowsFailed += 1;
+        counters.rowsFailed += rowsInOrder;
       }
     }
 
@@ -293,13 +302,27 @@ export class OrderCsvImportProcessorService {
     storeId: string,
     storeUserId: string,
     uploadId: string,
-    row: CoercedOrderRow,
+    row: CoercedOrderGroup,
     ctx: { ipAddress: null; userAgent: null; requestId: string },
   ): Promise<void> {
-    const resolved = await this.catalog.getVariantBySku(sellerId, row.productSku);
-    if (!resolved || resolved.sellerId !== sellerId) {
-      throw new Error(`Variant SKU "${row.productSku}" is not in this store's catalogue`);
-    }
+    const items = await Promise.all(
+      row.lines.map(async (l) => {
+        const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
+        if (!resolved || resolved.sellerId !== sellerId) {
+          throw new Error(`Variant SKU "${l.productSku}" is not in this store's catalogue`);
+        }
+        return {
+          variantId: resolved.variantId,
+          quantity: l.quantity,
+          // A line with no selling price falls back to the seller's
+          // SUGGESTED RETAIL for this store, inside `ResellerOrderService`
+          // — the one place that decides it for every door (2026-09-19).
+          // Passing 0 here would price the goods at nothing and pass
+          // every range check that has no minimum.
+          ...(l.retailUnitPrice === undefined ? {} : { retailUnitPriceInr: l.retailUnitPrice }),
+        };
+      }),
+    );
     const dto: CreateStoreOrderDto = {
       sellerOrderRef: row.externalRef,
       recipientName: row.customerName,
@@ -309,19 +332,11 @@ export class OrderCsvImportProcessorService {
       recipientPostalCode: row.pinCode,
       // A store order is cash on delivery (prepaid waits for the store
       // wallet, RS-5); with no COD Amount the row collects its retail total.
+      // A stated `*Payment Mode` of Prepaid is therefore NOT honoured here
+      // and the file's COD figure still applies — the refusal lives in
+      // `ResellerOrderService`, not in a second copy of the rule here.
       paymentMode: PaymentMode.COD,
-      items: [
-        {
-          variantId: resolved.variantId,
-          quantity: row.quantity,
-          // A row with no selling price falls back to the seller's
-          // SUGGESTED RETAIL for this store, inside `ResellerOrderService`
-          // — the one place that decides it for every door (2026-09-19).
-          // Passing 0 here would price the goods at nothing and pass
-          // every range check that has no minimum.
-          ...(row.retailUnitPrice === undefined ? {} : { retailUnitPriceInr: row.retailUnitPrice }),
-        },
-      ],
+      items,
     } as CreateStoreOrderDto;
     if (row.customerEmail !== undefined) dto.recipientEmail = row.customerEmail;
     if (row.landmark !== undefined) dto.recipientLandmark = row.landmark;
@@ -373,29 +388,32 @@ export class OrderCsvImportProcessorService {
     storeId: string,
     storeUserId: string,
     orderId: string,
-    row: CoercedOrderRow,
+    row: CoercedOrderGroup,
     ctx: { ipAddress: null; userAgent: null; requestId: string },
   ): Promise<void> {
-    const resolved = await this.catalog.getVariantBySku(sellerId, row.productSku);
-    if (!resolved || resolved.sellerId !== sellerId) {
-      throw new Error(`Variant SKU "${row.productSku}" is not in this store's catalogue`);
-    }
+    const items = await Promise.all(
+      row.lines.map(async (l) => {
+        const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
+        if (!resolved || resolved.sellerId !== sellerId) {
+          throw new Error(`Variant SKU "${l.productSku}" is not in this store's catalogue`);
+        }
+        return {
+          variantId: resolved.variantId,
+          quantity: l.quantity,
+          // The RETAIL on a reseller order. Omitted, the reterm service
+          // keeps what the line was placed at (or the catalogue's
+          // suggestion for a line that is new to the order).
+          ...(l.retailUnitPrice === undefined ? {} : { unitPriceInr: l.retailUnitPrice }),
+        };
+      }),
+    );
     const dto: UpdateOrderDto = {
       recipientName: row.customerName,
       recipientPhoneE164: row.customerPhone,
       recipientAddressLine1: row.addressLine1,
       recipientAddressLine2: row.addressLine2,
       recipientPostalCode: row.pinCode,
-      items: [
-        {
-          variantId: resolved.variantId,
-          quantity: row.quantity,
-          // The RETAIL on a reseller order. Omitted, the reterm service
-          // keeps what the line was placed at (or the catalogue's
-          // suggestion for a line that is new to the order).
-          ...(row.retailUnitPrice === undefined ? {} : { unitPriceInr: row.retailUnitPrice }),
-        },
-      ],
+      items,
     };
     if (row.customerEmail !== undefined) dto.recipientEmail = row.customerEmail;
     if (row.landmark !== undefined) dto.recipientLandmark = row.landmark;
@@ -432,15 +450,39 @@ export class OrderCsvImportProcessorService {
   private async createOrder(
     sellerId: string,
     uploadId: string,
-    row: CoercedOrderRow,
+    row: CoercedOrderGroup,
     actor: { type: ActorType; id: string },
     ctx: { ipAddress: null; userAgent: null; requestId: string },
   ): Promise<void> {
-    const resolved = await this.catalog.getVariantBySku(sellerId, row.productSku);
-    if (!resolved || resolved.sellerId !== sellerId) {
-      throw new Error(`Variant SKU "${row.productSku}" not found for this seller`);
-    }
-    const isCod = row.codAmount !== undefined && row.codAmount > 0;
+    const items = await Promise.all(
+      row.lines.map(async (l) => {
+        const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
+        if (!resolved || resolved.sellerId !== sellerId) {
+          throw new Error(`Variant SKU "${l.productSku}" not found for this seller`);
+        }
+        return {
+          variantId: resolved.variantId,
+          quantity: l.quantity,
+          // Delhivery's `*Unit Item Price`. Recorded as-is on the line;
+          // it feeds no money path, and dropping a figure the seller
+          // stated was the worse of the two options.
+          ...(l.retailUnitPrice === undefined ? {} : { unitPriceInr: l.retailUnitPrice }),
+        };
+      }),
+    );
+    /*
+      A STATED `*Payment Mode` is authoritative; the old inference from
+      the COD amount survives only as the fallback for a file with no
+      such column (our own template had none). The inference is wrong in
+      both directions on a file that states it — a row marked COD with an
+      empty amount became a PREPAID order for a parcel the courier will
+      still try to collect on. The two disagreeing is an error row, not a
+      guess: `groupRows` refuses it by name before we get here.
+    */
+    const isCod =
+      row.paymentMode !== undefined
+        ? row.paymentMode === PaymentMode.COD
+        : row.codAmount !== undefined && row.codAmount > 0;
     const dto: CreateOrderDto = {
       sellerOrderRef: row.externalRef,
       recipientName: row.customerName,
@@ -449,7 +491,7 @@ export class OrderCsvImportProcessorService {
       recipientAddressLine2: row.addressLine2,
       recipientPostalCode: row.pinCode,
       paymentMode: isCod ? PaymentMode.COD : PaymentMode.PREPAID,
-      items: [{ variantId: resolved.variantId, quantity: row.quantity }],
+      items,
     } as CreateOrderDto;
     if (row.customerEmail !== undefined) dto.recipientEmail = row.customerEmail;
     if (row.landmark !== undefined) dto.recipientLandmark = row.landmark;
@@ -459,6 +501,13 @@ export class OrderCsvImportProcessorService {
     if (row.city !== undefined) dto.recipientCity = row.city;
     if (row.state !== undefined) dto.recipientStateProvince = row.state;
     if (isCod && row.codAmount !== undefined) dto.codAmountInr = row.codAmount;
+    // The figures the collectable was built from — `create` records them
+    // whatever the payment mode and re-applies none of them.
+    if (row.advanceAmount !== undefined) dto.advanceAmountInr = row.advanceAmount;
+    if (row.discountInr !== undefined) dto.discountInr = row.discountInr;
+    // A stated PACKED weight beats our Σ(catalogue unit weight × qty)
+    // default: it is the parcel that will actually be handed over.
+    if (row.totalWeightGrams !== undefined) dto.totalWeightGrams = row.totalWeightGrams;
 
     await this.orders.create(sellerId, dto, actor, ctx, {
       source: OrderSource.BULK_UPLOAD,
@@ -467,10 +516,13 @@ export class OrderCsvImportProcessorService {
     });
   }
 
-  private toPatch(row: CoercedOrderRow): BulkOrderPatchInput {
+  private toPatch(row: CoercedOrderGroup): BulkOrderPatchInput {
     const patch: BulkOrderPatchInput = {
-      productSku: row.productSku,
-      quantity: row.quantity,
+      lines: row.lines.map((l) => ({
+        productSku: l.productSku,
+        quantity: l.quantity,
+        ...(l.retailUnitPrice === undefined ? {} : { unitPriceInr: l.retailUnitPrice }),
+      })),
       customerName: row.customerName,
       customerPhone: row.customerPhone,
       addressLine1: row.addressLine1,
@@ -482,6 +534,10 @@ export class OrderCsvImportProcessorService {
     if (row.city !== undefined) patch.city = row.city;
     if (row.state !== undefined) patch.state = row.state;
     if (row.codAmount !== undefined) patch.codAmount = row.codAmount;
+    if (row.paymentMode !== undefined) patch.paymentMode = row.paymentMode;
+    if (row.advanceAmount !== undefined) patch.advanceAmount = row.advanceAmount;
+    if (row.discountInr !== undefined) patch.discountInr = row.discountInr;
+    if (row.totalWeightGrams !== undefined) patch.totalWeightGrams = row.totalWeightGrams;
     return patch;
   }
 

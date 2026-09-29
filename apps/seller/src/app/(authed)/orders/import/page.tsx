@@ -12,6 +12,10 @@ import { CsvImportPanel } from '../_components/csv-import-panel';
  *   5. Poll the job's status from the "Recent imports" table
  *
  * Errors (per-row) are surfaced via the error-report CSV download.
+ *
+ * One row is one LINE, not one order: rows sharing an External Ref are
+ * lines of one order (ORD-9). Delhivery's own bulk template imports as
+ * it comes — see ORD-9b.
  */
 export default function OrderImportPage(): ReactElement {
   return (
@@ -25,7 +29,7 @@ export default function OrderImportPage(): ReactElement {
         ]}
         Link={Link}
         title="Bulk order import"
-        subtitle="Upload a CSV of orders. One row is one order, and re-uploading a row you have already sent updates it rather than placing it twice."
+        subtitle="Upload a CSV of orders. One row is one product line — give two rows the same reference and they become one order with two items. Re-uploading a reference you have already sent updates that order rather than placing it twice."
       />
       <CsvImportPanel
         kind="orders"

@@ -32,20 +32,20 @@ import type {
  * stays on the template because stating it is the common case and a
  * column nobody can see is a column nobody fills in.
  */
-const STORE_TEMPLATE_COLUMNS: Array<[string, string]> = [
-  ['Product SKU', 'TSHIRT-001-RED-M'],
-  ['Quantity', '2'],
-  ['Retail Price', '499'],
-  ['Customer Name', 'Asha Verma'],
-  ['Customer Phone', '+919876543210'],
-  ['Customer Email', 'asha@example.com'],
-  ['Address Line1', '12 MG Road'],
-  ['Address Line2', 'Near City Hospital'],
-  ['City', 'Bengaluru'],
-  ['State', 'Karnataka'],
-  ['Pin Code', '560001'],
-  ['COD Amount', '998'],
-  ['External Ref', 'STORE-ORD-1001'],
+const STORE_TEMPLATE_COLUMNS: Array<[string, string, string]> = [
+  ['Product SKU', 'TSHIRT-001-RED-M', 'CAP-001-NAVY'],
+  ['Quantity', '2', '1'],
+  ['Retail Price', '499', '299'],
+  ['Customer Name', 'Asha Verma', 'Asha Verma'],
+  ['Customer Phone', '+919876543210', '+919876543210'],
+  ['Customer Email', 'asha@example.com', 'asha@example.com'],
+  ['Address Line1', '12 MG Road', '12 MG Road'],
+  ['Address Line2', 'Near City Hospital', 'Near City Hospital'],
+  ['City', 'Bengaluru', 'Bengaluru'],
+  ['State', 'Karnataka', 'Karnataka'],
+  ['Pin Code', '560001', '560001'],
+  ['COD Amount', '1297', '1297'],
+  ['External Ref', 'STORE-1001', 'STORE-1001'],
 ];
 
 const UPLOAD_VIEW_SELECT = {
@@ -85,11 +85,12 @@ export class StoreOrderCsvImportService {
   ) {}
 
   buildTemplate(): string {
+    const cell = (v: string): string => (v.includes(',') ? `"${v}"` : v);
     const headers = STORE_TEMPLATE_COLUMNS.map(([h]) => h).join(',');
-    const example = STORE_TEMPLATE_COLUMNS.map(([, v]) => (v.includes(',') ? `"${v}"` : v)).join(
-      ',',
-    );
-    return `${headers}\n${example}\n`;
+    // Two rows sharing `STORE-1001`: one order, two lines (ORD-9).
+    const first = STORE_TEMPLATE_COLUMNS.map(([, a]) => cell(a)).join(',');
+    const second = STORE_TEMPLATE_COLUMNS.map(([, , b]) => cell(b)).join(',');
+    return `${headers}\n${first}\n${second}\n`;
   }
 
   async presign(user: StoreUserRef, _input: PresignOrderCsvDto): Promise<CsvPresignResult> {
@@ -104,13 +105,24 @@ export class StoreOrderCsvImportService {
     const parsed = this.parser.parse(buffer);
     const detected = this.parser.detectMapping(parsed.headers);
     const mapping = resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
+    // The importer's OWN grouping, over the whole file — the only way a
+    // preview can promise that a clean check means a clean import.
+    const dry = this.parser.groupRows(parsed.rows, mapping);
     return {
       rowCount: parsed.rowCount,
+      orderCount: dry.groups.length,
       headers: parsed.headers,
       sampleRows: parsed.rows.slice(0, 5),
       mapping,
       missingRequired: ORDER_CSV_STORE_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined),
       unmatchedHeaders: detected.unmatchedHeaders,
+      ignoredHeaders: detected.ignoredHeaders,
+      rowsWithProblems: dry.rowErrors.length,
+      problems: dry.rowErrors.slice(0, 10).map((r) => ({
+        rowNumber: r.rowNumber,
+        field: r.errors[0]?.field ?? '',
+        reason: r.errors[0]?.reason ?? 'This row could not be read',
+      })),
       exceedsRowLimit: parsed.rowCount > this.env.csvMaxRows,
       rowLimit: this.env.csvMaxRows,
     };

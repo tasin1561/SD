@@ -9,6 +9,96 @@ const PIN_RE = /^[1-9][0-9]{5}$/;
 /** E.164 (CLAUDE.md: +91…, +880…). Same shape CustomerService enforces. */
 const E164_RE = /^\+[1-9]\d{6,14}$/;
 
+/**
+ * The same state, written the way India actually writes it.
+ *
+ * `ops.allowed_indian_states` holds the 36 canonical modern names, and
+ * the check was an exact (case-insensitive) match against them. That was
+ * fine while nothing supplied a state — the seller form stopped asking
+ * in 2026-08 (ORD-5). It stopped being fine when the importer started
+ * accepting Delhivery's bulk template, where `*Shipping State` is
+ * MANDATORY and is therefore populated on every single row: a file
+ * saying `Orissa`, `Pondicherry`, `J&K` or `KA` would have failed every
+ * order in it, for a state we serve, written a way half the country
+ * still writes it.
+ *
+ * These are RENAMES and abbreviations of states we already allow — never
+ * a way in for one we do not. The canonical name is what gets persisted,
+ * exactly as a canonical match does. Punctuation and `&` are handled by
+ * `normalizeStateKey` rather than by an entry each, so `Jammu & Kashmir`,
+ * `Jammu and Kashmir` and `JAMMU-AND-KASHMIR` are one key.
+ */
+const STATE_ALIASES: Record<string, string> = {
+  // Renames the Union of India has made, still in wide use.
+  orissa: 'Odisha',
+  pondicherry: 'Puducherry',
+  puduchery: 'Puducherry',
+  uttaranchal: 'Uttarakhand',
+  // Delhi, in its several administrative spellings.
+  'new delhi': 'Delhi',
+  'nct of delhi': 'Delhi',
+  'delhi nct': 'Delhi',
+  'national capital territory of delhi': 'Delhi',
+  // The 2020 merger — either half alone still names the merged UT.
+  'dadra and nagar haveli': 'Dadra and Nagar Haveli and Daman and Diu',
+  'daman and diu': 'Dadra and Nagar Haveli and Daman and Diu',
+  // Common shortenings.
+  'andaman and nicobar': 'Andaman and Nicobar Islands',
+  'andaman nicobar': 'Andaman and Nicobar Islands',
+  'jammu kashmir': 'Jammu and Kashmir',
+  'j k': 'Jammu and Kashmir',
+  // Two-letter codes, as a spreadsheet column often carries them.
+  ap: 'Andhra Pradesh',
+  ar: 'Arunachal Pradesh',
+  as: 'Assam',
+  br: 'Bihar',
+  cg: 'Chhattisgarh',
+  ga: 'Goa',
+  gj: 'Gujarat',
+  hr: 'Haryana',
+  hp: 'Himachal Pradesh',
+  jh: 'Jharkhand',
+  ka: 'Karnataka',
+  kl: 'Kerala',
+  mp: 'Madhya Pradesh',
+  mh: 'Maharashtra',
+  mn: 'Manipur',
+  ml: 'Meghalaya',
+  mz: 'Mizoram',
+  nl: 'Nagaland',
+  od: 'Odisha',
+  or: 'Odisha',
+  pb: 'Punjab',
+  rj: 'Rajasthan',
+  sk: 'Sikkim',
+  tn: 'Tamil Nadu',
+  tg: 'Telangana',
+  ts: 'Telangana',
+  tr: 'Tripura',
+  up: 'Uttar Pradesh',
+  uk: 'Uttarakhand',
+  ut: 'Uttarakhand',
+  wb: 'West Bengal',
+  an: 'Andaman and Nicobar Islands',
+  ch: 'Chandigarh',
+  dn: 'Dadra and Nagar Haveli and Daman and Diu',
+  dd: 'Dadra and Nagar Haveli and Daman and Diu',
+  dl: 'Delhi',
+  jk: 'Jammu and Kashmir',
+  la: 'Ladakh',
+  ld: 'Lakshadweep',
+  py: 'Puducherry',
+};
+
+/** Case-, punctuation- and `&`-insensitive key for a state name. */
+function normalizeStateKey(raw: string): string {
+  return raw
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 export interface RecipientAddressInput {
   recipientPhoneE164: string;
   recipientAltPhoneE164?: string | null;
@@ -53,7 +143,16 @@ export class AddressValidationService {
     const raw = row?.valueJson;
     if (Array.isArray(raw)) {
       for (const s of raw) {
-        if (typeof s === 'string') byLower.set(s.toLowerCase().trim(), s);
+        if (typeof s === 'string') byLower.set(normalizeStateKey(s), s);
+      }
+    }
+    // An alias only ever resolves to a state the LIST already allows —
+    // it is another spelling of something we serve, never a way in for
+    // something we do not.
+    if (byLower.size > 0) {
+      for (const [alias, canonical] of Object.entries(STATE_ALIASES)) {
+        const known = byLower.get(normalizeStateKey(canonical));
+        if (known !== undefined && !byLower.has(alias)) byLower.set(alias, known);
       }
     }
     if (byLower.size === 0) {
@@ -104,7 +203,7 @@ export class AddressValidationService {
       // path keep the guard.
       normalizedState = '';
     } else if (states.size > 0) {
-      const canonical = states.get(suppliedState.toLowerCase());
+      const canonical = states.get(normalizeStateKey(suppliedState));
       if (canonical) {
         normalizedState = canonical;
       } else {

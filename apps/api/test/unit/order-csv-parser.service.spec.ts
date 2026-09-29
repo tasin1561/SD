@@ -112,10 +112,21 @@ describe('OrderCsvParserService', () => {
   });
 
   it('flags every missing required field', () => {
+    // `coerceRow` judges what ONE ROW must carry: the reference, the SKU
+    // and the quantity. A continuation row of a multi-line order states
+    // nothing else (ORD-9 widened 2026-09-29), so demanding the customer
+    // block here would refuse every file that blanks it after the first
+    // row of an order. The rest is judged on the assembled ORDER, below.
     const { row, errors } = svc.coerceRow({ SKU: 'A', Qty: '1' }, fullMap);
     expect(row).toBeNull();
-    expect(errors.map((e) => e.field)).toEqual(
-      expect.arrayContaining(['customerName', 'customerPhone', 'externalRef']),
+    expect(errors.map((e) => e.field)).toEqual(expect.arrayContaining(['externalRef']));
+  });
+
+  it('flags the order-level required fields on the assembled ORDER', () => {
+    const { groups, rowErrors } = svc.groupRows([{ SKU: 'A', Qty: '1', Ref: 'R-1' }], fullMap);
+    expect(groups).toEqual([]);
+    expect(rowErrors[0]?.errors.map((e) => e.field)).toEqual(
+      expect.arrayContaining(['customerName', 'customerPhone', 'addressLine1', 'pinCode']),
     );
   });
 

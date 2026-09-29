@@ -3,6 +3,7 @@ import {
   ActorType,
   BulkUploadStatus,
   OrderStatus,
+  PaymentMode,
   ReservationStatus,
   ShipmentStatus,
 } from '@skydrop/db';
@@ -289,6 +290,89 @@ describe('Order flow (e2e)', () => {
     });
     expect(orders).toHaveLength(1);
     expect(orders[0]!.status).toBe(OrderStatus.PENDING_CONFIRMATION);
+  });
+
+  it("CSV import: Delhivery's own template, with a repeated order number as ONE order", async () => {
+    /*
+      The format sellers already have. Two things this proves that a
+      mocked Prisma cannot: that rows sharing a reference really do
+      become ONE order with two `order_items` rows (before grouping the
+      second row found the first and REPLACED its only line, so a
+      two-item order silently shipped one), and that a file whose phone
+      column is ten bare digits and whose state is written `KL` gets
+      through address validation at all.
+    */
+    const spaces = h.app.get(SpacesService);
+    const header =
+      '*Sale Order Number,*Pickup Location Name,*Transport Mode,*Payment Mode,COD Amount,' +
+      '*Customer Name,*Customer Phone,*Shipping Address Line1,Shipping Address Line2,' +
+      '*Shipping City,*Shipping State,*Shipping Pincode,*Item Sku Code,*Item Sku Name,' +
+      '*Quantity Ordered,*Unit Item Price,Packaged Product Weight (gm),Product Weight (gm),' +
+      'Fragile Shipment,Tax Class Code,Customer Email,Seller Name';
+    const row = (sku: string, qty: string, price: string): string =>
+      `SO-DLV-1,Bangalore WH,Surface,COD,1497,Asha Verma,9999999999,12 MG Road,` +
+      `Near City Hospital,Kochi,KL,682005,${sku},Cotton Kurta,${qty},${price},850,400,` +
+      `No,GST18,asha@example.com,Someone Else Entirely`;
+    const csv = `${header}\n${row(skuCode, '2', '499')}\n${row(skuCode, '1', '499')}\n`;
+
+    const presign = await request(h.baseUrl)
+      .post('/seller/order-imports/presign')
+      .set(sellerAuth)
+      .send({ fileName: 'delhivery.csv' })
+      .expect(200);
+    await spaces.putObject(presign.body.spacesKey, Buffer.from(csv, 'utf8'), 'text/csv');
+
+    // Preview is honest about the difference between rows and orders.
+    const preview = await request(h.baseUrl)
+      .post('/seller/order-imports/preview')
+      .set(sellerAuth)
+      .send({ spacesKey: presign.body.spacesKey })
+      .expect(200);
+    expect(preview.body.rowCount).toBe(2);
+    expect(preview.body.orderCount).toBe(1);
+    expect(preview.body.missingRequired).toEqual([]);
+    expect(preview.body.rowsWithProblems).toBe(0);
+    // Their account-level columns are recognised, not shrugged at.
+    expect(preview.body.ignoredHeaders.map((i: { header: string }) => i.header)).toEqual(
+      expect.arrayContaining(['*Pickup Location Name', 'Seller Name']),
+    );
+
+    const proc = await request(h.baseUrl)
+      .post('/seller/order-imports/process')
+      .set(sellerAuth)
+      .send({ spacesKey: presign.body.spacesKey, fileName: 'delhivery.csv' })
+      .expect(202);
+    const upload = await waitFor(
+      async () => {
+        const u = await h.prisma.bulkOrderUpload.findUnique({ where: { id: proc.body.id } });
+        return u &&
+          u.status !== BulkUploadStatus.PENDING &&
+          u.status !== BulkUploadStatus.PROCESSING
+          ? u
+          : null;
+      },
+      { description: 'delhivery bulk upload terminal', timeoutMs: 15000 },
+    );
+    expect(upload.status).toBe(BulkUploadStatus.COMPLETED);
+    expect(upload.ordersCreated).toBe(1);
+    expect(upload.rowsFailed).toBe(0);
+
+    const orders = await h.prisma.order.findMany({
+      where: { sellerId, sellerOrderRef: 'SO-DLV-1' },
+      include: { items: true },
+    });
+    expect(orders).toHaveLength(1);
+    // TWO lines, three units — the whole point.
+    expect(orders[0]!.items).toHaveLength(2);
+    expect(orders[0]!.items.reduce((t, i) => t + i.quantity, 0)).toBe(3);
+    // Ten bare digits became E.164, and `KL` resolved to the canonical name.
+    expect(orders[0]!.recipientPhoneE164).toBe('+919999999999');
+    expect(orders[0]!.recipientStateProvince).toBe('Kerala');
+    // A stated Payment Mode is authoritative, and the packed weight beats
+    // our catalogue sum.
+    expect(orders[0]!.paymentMode).toBe(PaymentMode.COD);
+    expect(orders[0]!.codAmountInr?.toNumber()).toBe(1497);
+    expect(orders[0]!.totalWeightGrams).toBe(850);
   });
 
   it('god mode: force DRAFT→DISPATCHED — flag + CRITICAL audit + event, no reservation', async () => {

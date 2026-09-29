@@ -150,3 +150,86 @@ describe('AddressValidationService', () => {
     });
   });
 });
+
+/**
+ * The state a CSV from another system actually carries.
+ *
+ * `ops.allowed_indian_states` holds the 36 canonical modern names, and
+ * the membership check was an exact match. That was harmless while
+ * nothing supplied a state — the seller form stopped asking in 2026-08
+ * (ORD-5). It stopped being harmless when the importer began accepting
+ * Delhivery's bulk template, where `*Shipping State` is MANDATORY and is
+ * therefore populated on every single row: a file saying `Orissa`,
+ * `J & K` or `KA` would have failed every order in it, for states we
+ * serve, written the way half the country still writes them.
+ */
+describe('AddressValidationService — the same state, written another way', () => {
+  const FULL_LIST = [
+    'Karnataka',
+    'Odisha',
+    'Puducherry',
+    'Delhi',
+    'Jammu and Kashmir',
+    'Tamil Nadu',
+    'Dadra and Nagar Haveli and Daman and Diu',
+    'Andaman and Nicobar Islands',
+    'Uttarakhand',
+  ];
+
+  async function normalized(supplied: string): Promise<{ ok: boolean; state?: string }> {
+    const { svc } = makeService(FULL_LIST);
+    const r = await svc.validate({ ...VALID, recipientStateProvince: supplied });
+    return r.normalizedState === undefined ? { ok: r.ok } : { ok: r.ok, state: r.normalizedState };
+  }
+
+  it('accepts renames the country has made and still persists the canonical name', async () => {
+    expect(await normalized('Orissa')).toEqual({ ok: true, state: 'Odisha' });
+    expect(await normalized('Pondicherry')).toEqual({ ok: true, state: 'Puducherry' });
+    expect(await normalized('Uttaranchal')).toEqual({ ok: true, state: 'Uttarakhand' });
+  });
+
+  it("accepts Delhi's several administrative spellings", async () => {
+    expect(await normalized('New Delhi')).toEqual({ ok: true, state: 'Delhi' });
+    expect(await normalized('NCT of Delhi')).toEqual({ ok: true, state: 'Delhi' });
+  });
+
+  it('treats & and punctuation as the word they stand for', async () => {
+    expect(await normalized('Jammu & Kashmir')).toEqual({ ok: true, state: 'Jammu and Kashmir' });
+    expect(await normalized('JAMMU-AND-KASHMIR')).toEqual({
+      ok: true,
+      state: 'Jammu and Kashmir',
+    });
+    expect(await normalized('Andaman & Nicobar Islands')).toEqual({
+      ok: true,
+      state: 'Andaman and Nicobar Islands',
+    });
+  });
+
+  it('accepts the two-letter codes a spreadsheet column often carries', async () => {
+    expect(await normalized('KA')).toEqual({ ok: true, state: 'Karnataka' });
+    expect(await normalized('tn')).toEqual({ ok: true, state: 'Tamil Nadu' });
+    expect(await normalized('DL')).toEqual({ ok: true, state: 'Delhi' });
+  });
+
+  it('accepts either half of the 2020 merger as the merged territory', async () => {
+    expect(await normalized('Daman and Diu')).toEqual({
+      ok: true,
+      state: 'Dadra and Nagar Haveli and Daman and Diu',
+    });
+  });
+
+  it('is NOT a way in for a state the list does not allow', async () => {
+    // The whole safety argument: an alias only ever resolves to a
+    // canonical name the list already holds. Drop Odisha from the list
+    // and "Orissa" must stop resolving too.
+    const { svc } = makeService(['Karnataka']);
+    const r = await svc.validate({ ...VALID, recipientStateProvince: 'Orissa' });
+    expect(r.ok).toBe(false);
+    expect(r.errors.join()).toMatch(/not an allowed Indian state/);
+  });
+
+  it('still refuses something that is not a state at all', async () => {
+    const r = await normalized('Atlantis');
+    expect(r.ok).toBe(false);
+  });
+});
