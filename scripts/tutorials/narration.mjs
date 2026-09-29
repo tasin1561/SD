@@ -605,6 +605,45 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'sign-out-everywhere',
+    title: 'Sign-in and sessions',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A laptop left at a desk, a phone sold, someone who has left the company. This is the page for the moment you need every session on the account to end.',
+      },
+      {
+        id: 'open-security',
+        say: 'Settings, then Sign-in and sessions. It is first in the list on purpose — it is the one somebody comes looking for in a hurry.',
+      },
+      {
+        id: 'this-session',
+        say: 'The top half is just this browser: who you are signed in as, whether that address is verified, and the role you hold on this account.',
+      },
+      {
+        id: 'no-list',
+        say: 'And there is no list of your other sessions. We could draw a table here, but we would be inventing it — nothing in Skydrop records where else you are signed in.',
+      },
+      {
+        id: 'what-it-does',
+        say: 'So the action is all or nothing, and the page is careful about what that means. Every browser and app signed in as this account, including the one you are reading this on.',
+      },
+      {
+        id: 'not-touched',
+        say: 'What it does not do matters just as much. Your password is unchanged, and your API keys keep working — a key is a separate credential, revoked on its own page.',
+      },
+      {
+        id: 'confirm',
+        say: 'It asks once, naming the account, because this is the kind of action people click while thinking about something else.',
+      },
+      {
+        id: 'done',
+        say: 'And it tells you what the server actually did, rather than simply claiming success. Sign in again, and every other device has to do the same.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

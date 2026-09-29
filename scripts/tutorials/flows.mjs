@@ -1572,4 +1572,77 @@ export const FLOWS = {
       },
     },
   },
+
+  'sign-out-everywhere': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-security'(ctx) {
+        const { page, stage } = ctx;
+        await openSettingsHub(ctx);
+        await stage.clickIt(page.locator('a[href="/settings/security"]').first(), { after: 1400 });
+        await page.waitForURL(/\/settings\/security/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+      },
+
+      async 'this-session'({ page, stage }) {
+        await stage.dwellOn(page.locator('.set-dl').first(), 3000);
+      },
+
+      async 'no-list'({ page, stage }) {
+        // An ABSENCE, so there is nothing to point at. The page header
+        // is what the narration is really talking about — "who this
+        // browser is signed in as", singular.
+        await stage.dwellOn(page.getByRole('heading', { name: 'This session' }).first(), 2600);
+      },
+
+      async 'what-it-does'({ page, stage }) {
+        const heading = page.getByRole('heading', { name: 'Sign out everywhere' }).first();
+        await heading.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.locator('.set-card[data-tone="danger"] p').first(), 3000);
+      },
+
+      async 'not-touched'({ page, stage }) {
+        await stage.dwellOn(page.locator('.set-card[data-tone="danger"] .set-muted').first(), 3000);
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Sign out everywhere' }).last(), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2600);
+
+        // Answered HERE, in this scene's tail, so the next one opens on
+        // the RESULT rather than on this dialog dismissing — the same
+        // correction the roles video needed. A scene should open on the
+        // thing it is about.
+        await stage.clickIt(page.getByRole('button', { name: 'Sign out everywhere' }).last(), {
+          after: 1200,
+        });
+        await page
+          .getByText(/Sessions ended/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(600);
+      },
+
+      async done({ page, stage }) {
+        // THE LAST SCENE, and it has to be: the click in the scene above
+        // ended the session this recording is running in. Anything after
+        // it would be filmed signed out.
+        await stage.dwellOn(page.locator('.set-card[aria-live="polite"]').first(), 3400);
+      },
+    },
+  },
 };

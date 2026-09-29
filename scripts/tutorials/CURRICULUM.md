@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 12 filmed. Of the 78 left, **22 are `ready` today**, 54 need
+**90 tutorials.** 13 filmed. Of the 77 left, **21 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -558,15 +558,26 @@ choosing permissions, filming a form where none were chosen. It now throws. A
 step that cannot do its job must say so, or check mode is only testing that the
 browser opened.
 
-### F3. Sign-in and sessions · `ready`
+### F3. Sign-in and sessions · **FILMED** — `sign-out-everywhere.mp4`
 
-**Promise** — you can end every session on the account at once.
-**Length** 2 min. **Prerequisites** A1.
-**Needs** nothing.
-**Covers** `/settings/security`: the single destructive action, for a laptop
-left at a desk or a phone sold — and why signing out of this browser does
-nothing about them. Says out loud that there is no session list, because the
-API exposes no such read and a table here would be invented.
+Covers `/settings/security`: the single destructive action, for a laptop left at
+a desk or a phone sold. Says out loud that there is **no session list**, because
+the API exposes no such read and a table here would be invented — an absence, so
+the scene points at the "This session" heading and lets the narration carry it.
+Also what the action does NOT do: the password is unchanged and API keys keep
+working, which is the half people assume the other way round.
+
+The last scene lands on the server's own count, which on the demo account reads
+**"no active sessions to revoke"** — the zero branch the component was
+deliberately written for ("Zero is reported as zero rather than dressed up as
+success"). The narration is written to that: _it tells you what the server
+actually did, rather than simply claiming success._ A seeded second session
+would make the number bigger and the lesson smaller.
+
+**Its last scene must stay last.** The confirm click ends the session the
+recording is running in, so anything after it is filmed signed out. The click
+sits in the PREVIOUS scene's tail, so the final scene opens on the result rather
+than on a dialog dismissing.
 
 ### F4. What Skydrop tells you, and how to quieten it · `ready`
 
