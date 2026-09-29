@@ -73,7 +73,7 @@ describe('narrowNdrGate — a seller override NARROWS, and can never widen', () 
   it('no combination of inputs can produce more than the global permits', () => {
     // Exhaustive over the small space, because "it narrows" is a claim
     // about EVERY input, not about the examples above.
-    const sellerLists: (readonly string[] | null)[] = [
+    const lists: (readonly ('RE-ATTEMPT' | 'PICKUP_RESCHEDULE')[] | null)[] = [
       null,
       [],
       ['RE-ATTEMPT'],
@@ -81,14 +81,12 @@ describe('narrowNdrGate — a seller override NARROWS, and can never widen', () 
       ['RE-ATTEMPT', 'PICKUP_RESCHEDULE'],
     ];
     for (const gEnabled of [true, false]) {
-      for (const gList of sellerLists.filter((l) => l !== null)) {
+      for (const gList of lists) {
+        if (gList === null) continue;
         for (const sEnabled of [true, false, null]) {
-          for (const sList of sellerLists) {
-            const global = { enabled: gEnabled, autoActions: gList } as NdrGate;
-            const out = narrowNdrGate(global, {
-              enabled: sEnabled,
-              autoActions: sList as never,
-            });
+          for (const sList of lists) {
+            const global: NdrGate = { enabled: gEnabled, autoActions: gList };
+            const out = narrowNdrGate(global, { enabled: sEnabled, autoActions: sList });
             expect(out.enabled === true && global.enabled === false).toBe(false);
             for (const a of out.autoActions) expect(global.autoActions).toContain(a);
           }
