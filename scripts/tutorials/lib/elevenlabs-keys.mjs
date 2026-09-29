@@ -130,6 +130,33 @@ export function classifyFailure(httpStatus, bodyText) {
  * One key per line. Blank lines and `#` comments are skipped, so the
  * file can say which account is which without the note becoming a key.
  */
+/**
+ * The balance, read out of a refusal.
+ *
+ * A quota refusal states the account's position in prose:
+ *
+ *   "This request exceeds your quota of 10000. You have 27 credits
+ *    remaining, while 148 credits are required for this request."
+ *
+ * That is the only balance a text-to-speech-scoped key can ever report —
+ * `/v1/user/subscription` needs `user_read`, which such a key does not
+ * carry — and it arrives for free, on a request that was refused and so
+ * spent nothing. Worth keeping: "out of quota" and "27 short of this one
+ * line" are very different things to be told, and only the second says
+ * whether waiting for the monthly reset is the answer.
+ *
+ * Prose, so it is parsed defensively; an unreadable message yields null.
+ */
+export function balanceFromRefusal(bodyText) {
+  const num = (m) => (m === null ? null : Number(m[1].replaceAll(',', '')));
+  const out = {
+    remaining: num(/you have\s+([\d,]+)\s+credits?\s+remaining/i.exec(bodyText)),
+    required: num(/([\d,]+)\s+credits?\s+are\s+required/i.exec(bodyText)),
+    limit: num(/quota of\s+([\d,]+)/i.exec(bodyText)),
+  };
+  return out.remaining === null && out.required === null && out.limit === null ? null : out;
+}
+
 export function parseKeyList(text) {
   return text
     .split('\n')

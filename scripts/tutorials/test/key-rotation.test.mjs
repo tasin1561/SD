@@ -23,6 +23,7 @@ import path from 'node:path';
 import {
   KeyRing,
   QuotaExhaustedError,
+  balanceFromRefusal,
   classifyFailure,
   parseKeyList,
 } from '../lib/elevenlabs-keys.mjs';
@@ -88,6 +89,23 @@ describe('classifyFailure', () => {
     assert.equal(classifyFailure(500, 'not json at all'), 'TRANSIENT');
     assert.equal(classifyFailure(400, '{"detail":"text is required"}'), 'FATAL');
     assert.equal(classifyFailure(404, ''), 'FATAL');
+  });
+});
+
+describe('balanceFromRefusal', () => {
+  it('reads the balance out of the refusal that carried it', () => {
+    // Captured live from this project's own key on 2026-09-30. The only
+    // balance a text-to-speech-scoped key can report, and it cost
+    // nothing — the request it came from was refused.
+    const body =
+      'This request exceeds your quota of 10000. You have 27 credits remaining, ' +
+      'while 148 credits are required for this request.';
+    assert.deepEqual(balanceFromRefusal(body), { remaining: 27, required: 148, limit: 10000 });
+  });
+
+  it('copes with grouped figures and with prose it cannot read', () => {
+    assert.equal(balanceFromRefusal('You have 121,000 credits remaining').remaining, 121000);
+    assert.equal(balanceFromRefusal('something else entirely'), null);
   });
 });
 

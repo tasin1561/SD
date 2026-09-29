@@ -29,7 +29,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { VIDEOS, videoBySlug } from './narration.mjs';
 import { AUDIO_DIR, MIN_CLIP_SECONDS, MAX_CLIP_SECONDS } from './lib/paths.mjs';
-import { KeyRing, QuotaExhaustedError, classifyFailure, readKeys } from './lib/elevenlabs-keys.mjs';
+import {
+  KeyRing,
+  QuotaExhaustedError,
+  balanceFromRefusal,
+  classifyFailure,
+  readKeys,
+} from './lib/elevenlabs-keys.mjs';
 
 const run = promisify(execFile);
 
@@ -256,7 +262,19 @@ export async function synthesise(ring, text, outFile, { fetchImpl = fetch, sleep
       }
 
       if (kind === 'EXHAUSTED') {
-        console.log(`    key ${ring.position} is out of quota — moving on`);
+        // The refusal states the balance, and it is the only balance a
+        // text-to-speech-scoped key can report. Free, and it says whether
+        // waiting for the monthly reset is the answer.
+        const left = balanceFromRefusal(body);
+        const detail =
+          left === null || left.remaining === null
+            ? ''
+            : ` (${left.remaining.toLocaleString('en-IN')} credits left` +
+              (left.required === null
+                ? ''
+                : `, ${left.required.toLocaleString('en-IN')} needed for this line`) +
+              ')';
+        console.log(`    key ${ring.position} is out of quota${detail} — moving on`);
         if (!ring.rotate())
           throw new QuotaExhaustedError({ done: 0, remaining: 0, keys: ring.size });
         break; // same clip, next key
