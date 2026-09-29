@@ -88,7 +88,17 @@ and most of the admin side.
   against the wrong Prisma model looked like it had worked.
 - **Keep hard numbers out of narration** wherever the screen prints them. This
   document said "41 permissions" when there are 35; in a doc that is a small
-  thing, in a voice clip it is a re-take nobody notices is needed.
+  thing, in a voice clip it is a re-take nobody notices is needed. It nearly
+  happened twice more: "ten in the morning" over a 09:00 dropdown, and "the one
+  ABOVE it reads Expired" over a list sorted the other way.
+- **A video costs about 800 credits all in**, measured over nine of them
+  (2026-09-30). The pre-flight estimate over-states it. At that rate the
+  remaining balance is worth well over a hundred videos, so **a re-take to fix a
+  line that misreads the screen is nearly free and shipping a wrong one is
+  not.**
+- **Budget time for FIXING as well as filming.** Six real bugs in one session,
+  every one on a path nothing else exercises. If a screen behaves oddly during a
+  `--check`, that is the finding — do not narrate around it.
 - **A scene must open on the thing it is about.** Put a dialog dismissal in the
   PREVIOUS scene's tail, or the frame check shows the next scene opening on a
   closing modal.
@@ -584,6 +594,24 @@ curriculum wanted it RTO_RESTOCKED *and* carrying a damage ticket, which on a
 one-unit line is a contradiction — a restock means the unit was GOOD. WMS-8d is
 exactly the answer, so the line is inspected BY QUANTITY: one unit back on the
 shelf, one written off. Order status RTO_RESTOCKED, scrap ticket beside it.
+
+#### The one thing D0 does NOT produce, and what D3 needs
+
+**A parcel stuck with a courier.** `/needs-attention` has two lists — orders
+the call centre could not confirm, and parcels that went out for delivery
+**three nights or more** ago and never arrived. D0 gives the first
+(`RSH-LIFE-REVIEW`) and cannot give the second: the simulator moves a parcel
+through every scan in seconds, so nothing is ever three days old. D3's video is
+therefore half a screen until somebody adds it.
+
+It is a small addition and the shape is already legal. TRK-3 is explicit that
+`eventAt` is the SCAN time and never `now()`, that past-dated scans stay
+past-dated, and that `ManualTrackingService.recordScan` **requires the operator
+to supply `eventAtIso`** precisely so a backfill lands in the right place on the
+timeline. So: a seventh parcel, driven to DISPATCHED like the others, then one
+OUT_FOR_DELIVERY scan recorded through the admin manual-scan endpoint with an
+`eventAt` four days ago. No column is written that the product does not write
+itself.
 
 **Consequence for every OTHER video:** once this has been run on a box, the
 demo seller has delivered and returned parcels for good — `clearPreviousOrders`
