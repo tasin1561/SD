@@ -250,6 +250,33 @@ export class CsvMappingService {
     return this.coerceColumnMap(row.columnMap);
   }
 
+  /**
+   * The seller's DEFAULT mapping for this import type, or null.
+   *
+   * THE "default" CHIP MEANT NOTHING UNTIL THIS EXISTED.
+   * `CsvImportService.resolveMapping` applied a saved mapping only when
+   * the caller passed a `mappingId`, the import panel has never passed
+   * one, and there is no screen that lets a seller pick one — so a
+   * mapping could be saved, marked default, shown with a chip saying so,
+   * and change nothing about any import the seller ran. The whole point
+   * of the feature is not renaming your own headers, and it did not do
+   * that for anybody.
+   *
+   * Returns the id as well, so the caller can stamp `lastUsedAt` on the
+   * mapping that actually drove the import.
+   */
+  async resolveDefaultColumnMap(
+    sellerId: string,
+    importType: CsvImportType,
+  ): Promise<{ id: string; columnMap: Partial<Record<CsvTargetField, string>> } | null> {
+    const row = await this.prisma.client.sellerCsvMapping.findFirst({
+      where: { sellerId, importType, isDefault: true, deletedAt: null },
+      select: { id: true, columnMap: true },
+    });
+    if (row === null) return null;
+    return { id: row.id, columnMap: this.coerceColumnMap(row.columnMap) };
+  }
+
   /** Bump lastUsedAt when a saved mapping actually drives an import. */
   async markUsed(sellerId: string, mappingId: string): Promise<void> {
     await this.prisma.client.sellerCsvMapping.updateMany({

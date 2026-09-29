@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 20 filmed. Of the 70 left, **14 are `ready` today**, 54 need
+**90 tutorials.** 21 filmed. Of the 69 left, **13 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -32,19 +32,15 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (20):** A1–A6, B1, B2, C3, C4, C5, E1, E3, E4, F1, F2, F3, F5,
-G1, G2. Every one is listed in its own entry below with what it covers and what
-its seeding does.
+**Filmed so far (21):** A1–A6, B1, B2, C3, C4, C5, C6, E1, E3, E4, F1, F2, F3,
+F5, G1, G2. Every one is listed in its own entry below with what it covers and
+what its seeding does.
 
-**Next, and the last `ready` one of any size:**
-
-1. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
-   exist. An hour's work, then a 4-minute video. Model it on
-   `fixtures/rangpur-bulk-orders.csv` — committed, because the preview's
-   figures are narrated word for word, and the same will be true here.
-
-**After that, build D0** (below). Everything else `ready` is small; D0 is what
-unlocks the rest of the library.
+**NEXT: build D0** (below). Every seller-app tutorial that can be filmed
+without the parcel lifecycle has now been filmed. What is left in sections A–G
+is either small (B3, B4, C1, C2, C7, E5, F4) or waiting on D0, and D0 unlocks
+20+ entries across D, E and K plus most of the admin half. It is the single
+highest-leverage thing in this document and has been since it was written.
 
 **Then build D0** (below) — the lifecycle seeding. It is still the single
 highest-leverage thing in this document: it unblocks 20+ entries in D, E and K
@@ -429,17 +425,56 @@ seller.defaultLowStockThreshold ?? null` and returns SKIPPED_NO_THRESHOLD on
 null, which is exactly what the "Off — nothing alerts by default" badge means
 and exactly what a new seller has.
 
-### C6. Uploading a catalogue from a spreadsheet · `ready`
+### C6. Uploading a catalogue from a spreadsheet · **FILMED** — `upload-a-catalogue.mp4`
 
 **Promise** — you can load hundreds of products at once, and you never have to
 rename your own column headers again.
-**Length** 4 min. **Prerequisites** A3, and B2 for the shape.
-**Needs** a products CSV fixture, which does not exist yet — one file, the
-same commitment the bulk-orders fixture already is.
-**Covers** `/products/import`, which is a **different importer with different
-columns** from the order import, and then the feature no tutorial touches:
-**saved column mappings**. Teach it once and the seller never renames a header
-again. Ends on the history at `/products/import/jobs` and the error report.
+**Length** 2 min 18 s. **Prerequisites** A3, and B2 for the shape.
+**Covers** `/products/import` — a **different importer with different columns**
+from the order import — and the feature no tutorial touched: **saved column
+mappings**. The arc is auto-detection getting three columns, the import being
+BLOCKED because the seller's sheet calls the product name `Item`, a mapping
+being saved and made default, the same untouched file being uploaded again, and
+the import running.
+
+**IT WAS UNFILMABLE, AND TWO SEPARATE FAULTS MADE IT SO.**
+
+**1. The preview step CRASHED on a catalogue file.** `CsvImportPanel` is shared
+with the order importer and its `CsvPreview` declared `orderCount`,
+`ignoredHeaders`, `rowsWithProblems` and `problems` as required, above a comment
+saying both importers return identical fields. The catalogue preview returns
+none of the four. So the panel read `preview.ignoredHeaders.length` on
+`undefined`, which THREW DURING RENDER and took the whole "Check before
+importing" step down — on the only screen that imports a catalogue. The button
+beneath it read "Import undefined orders". Nothing caught it: the fetch casts
+`as CsvPreview`, so typecheck believed the declaration, and no test uploads a
+catalogue CSV. The four are optional now, defaulted where read, and the two
+sentences that differ are chosen by `kind`.
+
+**2. Saved column mappings were applied to nothing.** `resolveMapping` used one
+only when the caller passed a `mappingId`; the panel has never passed one and no
+screen lets one be picked. A mapping could be saved, marked default, listed with
+a chip reading "default", and change nothing about any import — which is the
+whole feature. It now falls back to the seller's default for the import type,
+laid OVER auto-detection so a header we already recognise keeps working, and
+stamps `lastUsedAt` on whichever mapping drove it.
+`csv-default-mapping-applies.spec.ts` pins all three properties.
+
+**Also removed: a dead column in the template Skydrop hands out.** `HS Code`
+was still in `TEMPLATE_COLUMNS` although `hsCode` left the schema on
+2026-08-18 and is not a `CsvTargetField` — so a seller who downloaded the
+official template, filled it in and uploaded it was told one of OUR OWN columns
+would be ignored.
+
+**Fixture:** `fixtures/rangpur-catalogue.csv`, 12 rows over 5 products, with the
+SELLER's headers (`Item`, `Style code`, `Net wt (g)`, `MRP`, `Box L/W/H`) —
+none of which is in an alias list, which is what makes the mapping the lesson
+rather than a detail. Committed, because the preview's figures are narrated.
+
+**Known and left:** the mapping row still reads "Last used: never" straight
+after driving an import — `markUsed` writes it at PREVIEW time and the
+`SavedMappings` list is a sibling component with its own query that nothing
+invalidates. Cosmetic; the video does not point at that column.
 
 ---
 

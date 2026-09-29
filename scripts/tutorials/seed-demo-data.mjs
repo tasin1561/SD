@@ -214,6 +214,16 @@ export const RESELLING = {
   priceSku: 'RSH-SCARF-EMERALD',
 };
 
+/**
+ * What the CATALOGUE IMPORT video uploads. Keep in step with
+ * `fixtures/rangpur-catalogue.csv` — the preview's figures are narrated
+ * word for word, so the file and the words move together or not at all.
+ */
+export const CATALOGUE_IMPORT = {
+  productRefs: ['RSH-HALFSILK', 'RSH-TANGAIL', 'RSH-MONIPURI', 'RSH-ENDI', 'RSH-KATAN'],
+  mappingName: 'Our stock sheet',
+};
+
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
 
@@ -878,6 +888,71 @@ async function resellingWorldFor(slug, sellerId) {
 }
 
 /**
+ * Undo the CATALOGUE IMPORT video, which leaves more behind than any
+ * other: products, variants, an import job, a saved column mapping and
+ * an object in mock storage.
+ *
+ * Its whole subject is a file whose headers are the SELLER's rather than
+ * ours, so a second take must find none of those products and no mapping
+ * — a saved mapping is applied to every later import by default, which
+ * would make the second take's preview match columns the first take had
+ * to teach it.
+ *
+ * Products go by their own reference, which is what the importer matches
+ * on (`productExternalRef`), and only when nothing has been ordered
+ * against them.
+ */
+async function clearCatalogueImport(sellerId) {
+  const products = await prisma.product.findMany({
+    where: { sellerId, externalRef: { in: CATALOGUE_IMPORT.productRefs } },
+    select: { id: true, variants: { select: { id: true } } },
+  });
+  if (products.length > 0) {
+    const variantIds = products.flatMap((p) => p.variants.map((v) => v.id));
+    const referenced =
+      variantIds.length === 0
+        ? 0
+        : await prisma.orderItem.count({ where: { variantId: { in: variantIds } } });
+    if (referenced > 0) {
+      console.log(
+        `  · leaving the imported catalogue alone — ${referenced} order line(s) point at it`,
+      );
+    } else {
+      await prisma.$transaction([
+        prisma.productImage.deleteMany({ where: { variantId: { in: variantIds } } }),
+        prisma.stockLevel.deleteMany({ where: { variantId: { in: variantIds } } }),
+        prisma.productVariant.deleteMany({ where: { id: { in: variantIds } } }),
+        prisma.product.deleteMany({ where: { id: { in: products.map((p) => p.id) } } }),
+      ]);
+      console.log(
+        `  · removed a previous take's ${products.length} imported product(s), ${variantIds.length} SKU(s)`,
+      );
+    }
+  }
+
+  const uploads = await prisma.bulkProductUpload.deleteMany({ where: { sellerId } });
+  if (uploads.count > 0) {
+    console.log(`  · removed ${uploads.count} catalogue import job(s) from a previous take`);
+  }
+
+  const mappings = await prisma.sellerCsvMapping.deleteMany({
+    where: { sellerId, name: CATALOGUE_IMPORT.mappingName },
+  });
+  if (mappings.count > 0) {
+    console.log(`  · removed a previous take's "${CATALOGUE_IMPORT.mappingName}" column mapping`);
+  }
+
+  // Keep in step with `buildCsvKey` (`sellers/<id>/csv-imports/...`).
+  const bucket = process.env.SPACES_BUCKET ?? 'skydrop-storage';
+  const dir = path.join(MOCK_ROOT, bucket, 'sellers', sellerId, 'csv-imports');
+  const files = await fs.readdir(dir).catch(() => null);
+  if (files !== null && files.length > 0) {
+    await fs.rm(dir, { recursive: true, force: true });
+    console.log(`  · removed ${files.length} stale catalogue CSV object(s)`);
+  }
+}
+
+/**
  * Remove the product the second video creates, so the take can create it
  * again. Hard delete: these rows are minutes old, carry no stock and no
  * order, and a soft delete would leave the SKU's unique key occupied —
@@ -1380,6 +1455,7 @@ async function main() {
   await clearTutorialProduct(sellerId);
   await clearPreviousOrders(sellerId);
   await clearPreviousImports(sellerId);
+  await clearCatalogueImport(sellerId);
   await clearTutorialConsignments(sellerId);
   await clearTutorialSettings(sellerId);
 

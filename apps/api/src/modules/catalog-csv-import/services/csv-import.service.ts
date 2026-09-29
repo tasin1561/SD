@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, BulkUploadStatus, type Prisma } from '@skydrop/db';
+import { ActorType, BulkUploadStatus, CsvImportType, type Prisma } from '@skydrop/db';
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
@@ -28,7 +28,12 @@ const TEMPLATE_COLUMNS: Array<[string, string]> = [
   ['Width (cm)', '20'],
   ['Height (cm)', '2'],
   ['Declared Value', '499'],
-  ['HS Code', '6109'],
+  // NO "HS Code". `hsCode` was removed from the schema, the product
+  // defaults and the order and shipment snapshots on 2026-08-18, and it
+  // is not a `CsvTargetField` — so the column survived in the template we
+  // hand sellers while the importer had nowhere to put it. A seller who
+  // downloaded the official template, filled it in and uploaded it was
+  // told one of OUR OWN columns would be ignored.
   ['Barcode', '8901234567890'],
   ['Attributes', 'color=Red;size=M'],
 ];
@@ -120,6 +125,24 @@ export class CsvImportService {
     };
     if (mappingId) {
       apply(await this.mappings.resolveColumnMap(sellerId, mappingId));
+      await this.mappings.markUsed(sellerId, mappingId);
+    } else {
+      // NO id NAMED ⇒ THE SELLER'S DEFAULT, and without this branch the
+      // feature had no consumer at all: the import panel never passes a
+      // `mappingId`, and no screen lets one be picked. A mapping could be
+      // saved, marked default, and shown with a chip saying "default"
+      // while every import went on auto-detecting. Auto-detection still
+      // runs first and the saved map is laid OVER it, so a header we
+      // already recognise keeps working and the mapping only has to name
+      // the ones we do not.
+      const fallback = await this.mappings.resolveDefaultColumnMap(
+        sellerId,
+        CsvImportType.PRODUCT_VARIANT,
+      );
+      if (fallback !== null) {
+        apply(fallback.columnMap);
+        await this.mappings.markUsed(sellerId, fallback.id);
+      }
     }
     if (override) apply(override);
     return mapping;

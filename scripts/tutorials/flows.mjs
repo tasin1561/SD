@@ -50,6 +50,39 @@ const NEW_PRODUCT = {
   editedSku: 'RSH-KURTI-EMR-M',
 };
 
+/**
+ * The catalogue the C6 video uploads, and the mapping it teaches.
+ *
+ * A COMMITTED fixture with the SELLER's OWN HEADERS, which is the whole
+ * subject: `Item`, `Style code`, `Net wt (g)`, `MRP` and the three `Box`
+ * columns are in no alias list, so auto-detection gets the SKU, the
+ * barcode and the options and nothing else — and `productName` is
+ * REQUIRED, so the import is blocked until the mapping exists. The
+ * preview's figures are narrated word for word.
+ */
+const CATALOGUE_CSV = path.join(TUTORIALS_DIR, 'fixtures', 'rangpur-catalogue.csv');
+
+const CATALOGUE_MAPPING = {
+  name: 'Our stock sheet',
+  // Our field name on the left, the sheet's header on the right — the
+  // dialog's own description, in that order.
+  json: JSON.stringify(
+    {
+      productName: 'Item',
+      productExternalRef: 'Style code',
+      weightGrams: 'Net wt (g)',
+      lengthCm: 'Box L',
+      widthCm: 'Box W',
+      heightCm: 'Box H',
+      declaredValueInr: 'MRP',
+    },
+    null,
+    2,
+  ),
+  /** One of the products the file creates, to prove it landed. */
+  checkProduct: 'Katan Silk Panjabi',
+};
+
 /** The logo the profile video uploads. Committed, like the CSV fixture. */
 const LOGO_FILE = path.join(TUTORIALS_DIR, 'fixtures', 'rangpur-silk-logo.png');
 
@@ -2427,6 +2460,178 @@ export const FLOWS = {
           .waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(1000);
         await stage.dwellOn(page.locator('.rs-strip').first(), 2400);
+      },
+    },
+  },
+
+  'upload-a-catalogue': {
+    // The CSV goes up by a real `fetch` to a `mock://` presigned URL,
+    // exactly as the order import's does.
+    needsSpacesShim: true,
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-import'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Products', exact: true }).first(), {
+          after: 1400,
+        });
+        await page.waitForURL(/\/products$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(page.locator('a[href="/products/import"]').first(), { after: 1600 });
+        await page.waitForURL(/\/products\/import$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2800);
+      },
+
+      async template({ page, stage }) {
+        await stage.dwellOn(page.getByRole('button', { name: 'Download template' }).first(), 3000);
+      },
+
+      async upload({ page, stage }) {
+        await stage.point(page.locator('.sk-drop').first(), { settle: 600 });
+        await page.locator('.sk-drop input[type="file"]').first().setInputFiles(CATALOGUE_CSV);
+        await page.waitForTimeout(900);
+        await stage.clearHalo();
+        await stage.clickIt(page.getByRole('button', { name: 'Upload and check' }).first(), {
+          after: 1400,
+        });
+        // The preview section, which is the whole point of this step —
+        // and the step that would have CRASHED before the 2026-09-30 fix
+        // (the panel read four fields the catalogue preview does not
+        // return, so `ignoredHeaders.length` threw during render).
+        const check = page.locator('.ord-mapping').first();
+        await check.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(800);
+      },
+
+      async matched({ page, stage }) {
+        await stage.dwellOn(page.locator('.ord-mapping').first(), 3200);
+      },
+
+      async missing({ page, stage }) {
+        const notice = page
+          .locator('.sk-notice, .ord-notice')
+          .filter({ hasText: 'Missing' })
+          .first();
+        await notice.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(notice, 3400);
+      },
+
+      async mapping({ page, stage }) {
+        await stage.glide(600);
+        await page.waitForTimeout(600);
+        await stage.clickIt(page.getByRole('button', { name: 'Save a mapping' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.typeIn(dialog.locator('#cm-name'), CATALOGUE_MAPPING.name, { after: 600 });
+        // FILLED, not typed: the JSON is ~250 characters and human-rate
+        // typing would put fourteen seconds of keystrokes under a
+        // fourteen-second line. The halo still goes on first, so a
+        // viewer sees which box is being filled.
+        const json = dialog.locator('#cm-json');
+        await stage.point(json, { settle: 500 });
+        await json.fill(CATALOGUE_MAPPING.json);
+        await page.waitForTimeout(1200);
+        await stage.clearHalo();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Save mapping' }).first(), {
+          after: 1600,
+        });
+        await page
+          .getByRole('row')
+          .filter({ hasText: CATALOGUE_MAPPING.name })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+      },
+
+      async default({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: CATALOGUE_MAPPING.name }).first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.clickIt(row.getByRole('button', { name: 'Make default' }).first(), {
+          after: 1600,
+        });
+        // The CHIP, not the button going away: this is what makes the
+        // mapping apply to an import that names no mapping at all, and
+        // until the 2026-09-30 fix it applied to nothing.
+        await row
+          .locator('.sk-chip')
+          .filter({ hasText: 'default' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(row, 2200);
+      },
+
+      async 're-upload'({ page, stage }) {
+        await stage.glide(-900);
+        await page.waitForTimeout(600);
+        await stage.point(page.locator('.sk-drop').first(), { settle: 600 });
+        await page.locator('.sk-drop input[type="file"]').first().setInputFiles(CATALOGUE_CSV);
+        await page.waitForTimeout(900);
+        await stage.clearHalo();
+        await stage.clickIt(page.getByRole('button', { name: 'Upload and check' }).first(), {
+          after: 1400,
+        });
+        // The IMPORT button being enabled is the proof the mapping took —
+        // it is disabled while anything required is missing.
+        await page
+          .getByRole('button', { name: /^Import \d+ row/ })
+          .first()
+          .waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(900);
+      },
+
+      async import({ page, stage }) {
+        await stage.dwellOn(page.locator('.ord-mapping').first(), 2600);
+        await stage.dwellOn(page.getByRole('button', { name: /^Import \d+ row/ }).first(), 2200);
+      },
+
+      async running({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Import \d+ row/ }).first(), {
+          after: 2000,
+        });
+        // The run's own row reaching a terminal state. The worker is
+        // in-process, so this is seconds — but waiting on the TEXT is
+        // what stops the scene filming a spinner.
+        await page
+          .getByRole('row')
+          .filter({ hasText: /Completed|Failed|Partial/i })
+          .first()
+          .waitFor({ state: 'visible', timeout: 60_000 });
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.getByRole('table').first(), 2800);
+      },
+
+      async catalogue({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Products', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/products$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(
+          page.getByRole('row').filter({ hasText: CATALOGUE_MAPPING.checkProduct }).first(),
+          3000,
+        );
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('table').first(), 2800);
+        await stage.glide(-240);
+        await page.waitForTimeout(1200);
       },
     },
   },

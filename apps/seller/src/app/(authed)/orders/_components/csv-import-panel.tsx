@@ -59,23 +59,48 @@ interface UploadsResponse {
 /**
  * What the server says about a file BEFORE any of it is imported.
  *
- * The same shape for both importers — order and catalog previews return
- * identical fields, so one panel serves both.
+ * THE TWO IMPORTERS DO NOT RETURN THE SAME SHAPE, and this comment said
+ * they did. The ORDERS preview groups rows into orders and runs the
+ * importer's own row checks, so it carries `orderCount`, `ignoredHeaders`,
+ * `rowsWithProblems` and `problems`. The CATALOGUE preview has no such
+ * notion — one row is one product or variant — and returns none of the
+ * four (`CsvImportService.preview` in apps/api/src/modules/catalog-csv-import).
+ *
+ * Declaring them required made the panel read `preview.ignoredHeaders.length`
+ * on a value that was `undefined`, which THREW DURING RENDER and took the
+ * whole "Check before importing" step down with it — on the only screen
+ * that imports a catalogue. The button beneath it read "Import undefined
+ * orders". Nothing caught it: the cast at the fetch is `as CsvPreview`, so
+ * typecheck believed the declaration, and no test uploads a catalogue CSV.
+ *
+ * So the four are OPTIONAL, defaulted where they are read, and the two
+ * sentences that differ are chosen by `kind` rather than pretending one
+ * fits both.
  */
 interface CsvPreview {
   readonly rowCount: number;
-  /** Rows sharing a reference are LINES of one order, so these differ. */
-  readonly orderCount: number;
+  /** ORDERS ONLY. Rows sharing a reference are LINES of one order. */
+  readonly orderCount?: number;
   readonly headers: readonly string[];
   readonly sampleRows: ReadonlyArray<Record<string, string>>;
   readonly mapping: Readonly<Record<string, string | undefined>>;
   readonly missingRequired: readonly string[];
   readonly unmatchedHeaders: ReadonlyArray<{ header: string; suggestion: string | null }>;
-  readonly ignoredHeaders: ReadonlyArray<{ header: string; reason: string }>;
-  readonly rowsWithProblems: number;
-  readonly problems: ReadonlyArray<{ rowNumber: number; field: string; reason: string }>;
+  /** ORDERS ONLY. */
+  readonly ignoredHeaders?: ReadonlyArray<{ header: string; reason: string }>;
+  /** ORDERS ONLY. */
+  readonly rowsWithProblems?: number;
+  /** ORDERS ONLY. */
+  readonly problems?: ReadonlyArray<{ rowNumber: number; field: string; reason: string }>;
   readonly exceedsRowLimit: boolean;
   readonly rowLimit: number;
+}
+
+/** "12 orders" for the order importer, "12 rows" for the catalogue one. */
+function importLabel(kind: Kind, preview: CsvPreview): string {
+  const n = kind === 'orders' ? (preview.orderCount ?? preview.rowCount) : preview.rowCount;
+  const noun = kind === 'orders' ? 'order' : 'row';
+  return `Import ${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
 export function CsvImportPanel({
@@ -378,7 +403,8 @@ export function CsvImportPanel({
             <span>
               <span className="sk-ident">{pending.fileName}</span> · {pending.preview.rowCount} row
               {pending.preview.rowCount === 1 ? '' : 's'}
-              {pending.preview.orderCount !== pending.preview.rowCount
+              {pending.preview.orderCount !== undefined &&
+              pending.preview.orderCount !== pending.preview.rowCount
                 ? ` · ${pending.preview.orderCount} order${pending.preview.orderCount === 1 ? '' : 's'}`
                 : ''}
             </span>
@@ -411,32 +437,34 @@ export function CsvImportPanel({
                 from another system does not get the columns wrong — it
                 leaves a cell we need empty. Delhivery's template maps
                 every required column and leaves our landmark blank. */}
-            {pending.preview.rowsWithProblems > 0 && (
+            {(pending.preview.rowsWithProblems ?? 0) > 0 && (
               <Notice
                 tone="warn"
                 icon={<FileWarning size={16} />}
                 title={`${pending.preview.rowsWithProblems} row${pending.preview.rowsWithProblems === 1 ? '' : 's'} will not import`}
               >
                 <span>
-                  {pending.preview.problems
+                  {(pending.preview.problems ?? [])
                     .map((p) => `Row ${p.rowNumber}: ${p.reason}`)
                     .join(' · ')}
-                  {pending.preview.rowsWithProblems > pending.preview.problems.length
-                    ? ` · and ${pending.preview.rowsWithProblems - pending.preview.problems.length} more`
+                  {(pending.preview.rowsWithProblems ?? 0) > (pending.preview.problems ?? []).length
+                    ? ` · and ${(pending.preview.rowsWithProblems ?? 0) - (pending.preview.problems ?? []).length} more`
                     : ''}
                   . The rest will import; you can fix these afterwards from the import’s own page.
                 </span>
               </Notice>
             )}
 
-            {pending.preview.ignoredHeaders.length > 0 && (
+            {(pending.preview.ignoredHeaders ?? []).length > 0 && (
               <p className="ord-p">
                 {/* A column we KNOW and do not want is a different fact
                     from one we have never seen, and saying so stops
                     somebody mapping "Pickup Location Name" onto a name
                     field because a guess sat next to it. */}
                 <strong className="ord-strong">Columns we recognise and do not need:</strong>{' '}
-                {pending.preview.ignoredHeaders.map((u) => `${u.header} — ${u.reason}`).join(' · ')}
+                {(pending.preview.ignoredHeaders ?? [])
+                  .map((u) => `${u.header} — ${u.reason}`)
+                  .join(' · ')}
               </p>
             )}
 
@@ -473,10 +501,7 @@ export function CsvImportPanel({
                 variant="primary"
                 icon={<FileSpreadsheet size={15} />}
                 state={busy === 'processing' ? 'busy' : undefined}
-                labels={{
-                  idle: `Import ${pending.preview.orderCount} order${pending.preview.orderCount === 1 ? '' : 's'}`,
-                  busy: 'Queuing…',
-                }}
+                labels={{ idle: importLabel(kind, pending.preview), busy: 'Queuing…' }}
                 disabled={
                   busy !== null ||
                   pending.preview.missingRequired.length > 0 ||

@@ -862,6 +862,65 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'upload-a-catalogue',
+    title: 'Uploading a catalogue from a spreadsheet',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Your products are already in a spreadsheet somewhere. This is how they get into Skydrop without anybody typing them in twice.',
+      },
+      {
+        id: 'open-import',
+        say: 'Bulk catalogue import, from the Products screen. Read the line under the title: uploading the same file again updates what is there rather than making a second copy of it.',
+      },
+      {
+        id: 'template',
+        say: 'The template is worth downloading once, just to see what Skydrop calls each column. You do not have to use it — and the rest of this video is about not using it.',
+      },
+      {
+        id: 'upload',
+        say: 'Here is the file as it actually comes out of our own stock sheet. Upload and check reads it and tells us what it made of it. Nothing is imported yet.',
+      },
+      {
+        id: 'matched',
+        say: 'Some of it it worked out by itself. The SKU column, the barcode and the options were all recognised without being told anything.',
+      },
+      {
+        id: 'missing',
+        say: 'And the rest it will ignore, including the one it cannot do without. Our sheet calls the product name Item, and Skydrop will not import a single row until it knows that.',
+      },
+      {
+        id: 'mapping',
+        say: 'You could rename the columns in the spreadsheet every month. Or you tell Skydrop once: a saved mapping is our field name on the left, your header on the right.',
+      },
+      {
+        id: 'default',
+        say: 'Make it the default and it is applied to every catalogue file you upload from now on, over the top of whatever was recognised anyway.',
+      },
+      {
+        id: 're-upload',
+        say: 'So upload the same untouched file again. Nothing about it changed — the only thing that changed is that Skydrop now speaks your spreadsheet.',
+      },
+      {
+        id: 'import',
+        say: 'Everything is matched, nothing is missing, and the button will import. Twelve rows, and each one is a product or one version of a product.',
+      },
+      {
+        id: 'running',
+        say: 'It runs in the background, and reports what it did rather than just that it finished — products made, versions made, and anything it could not use.',
+      },
+      {
+        id: 'catalogue',
+        say: 'And they are in your catalogue, with the weight and the box size the spreadsheet carried. Nothing here was typed into Skydrop by hand.',
+      },
+      {
+        id: 'outro',
+        say: 'Next month you export the same sheet, upload it, and the prices and weights update in place. The mapping is saved; you only ever teach it once.',
+      },
+    ],
+  },
+  {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
     subtitle: 'Skydrop for sellers',
