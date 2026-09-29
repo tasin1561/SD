@@ -32,9 +32,29 @@ function makeSource(over: Partial<CourierTrackingSource> & { courierCode: string
   return { src, fetchTracking };
 }
 
-function makeService(rows: Row[], sources: CourierTrackingSource[]) {
-  const findMany = jest.fn(async (args: AnyArgs) =>
-    rows
+function makeService(
+  rows: Row[],
+  sources: CourierTrackingSource[],
+  /** Which couriers have an active account — the token a lookup needs. */
+  accountsByCourier: Record<string, string | null> = {},
+) {
+  const findMany = jest.fn(async (args: AnyArgs) => {
+    // `lookup` asks for a LIST of waybills; `pollAll` asks by courier
+    // code with `awbNumber: { not: null }`. One fake, two shapes,
+    // because both go through the same table — discriminate on `in`,
+    // not on the key being present, or the poll takes the wrong branch.
+    if (args.where.awbNumber?.in !== undefined) {
+      const wanted: string[] = args.where.awbNumber.in;
+      return rows
+        .filter((r) => wanted.includes(r.awbNumber))
+        .map((r) => ({
+          id: r.id,
+          awbNumber: r.awbNumber,
+          courierCode: r.courierCode,
+          courierAccountId: r.courierAccountId,
+        }));
+    }
+    return rows
       .filter((r) => r.courierCode === args.where.courierCode)
       .map((r) => ({
         id: r.id,
@@ -42,12 +62,17 @@ function makeService(rows: Row[], sources: CourierTrackingSource[]) {
         status: ShipmentStatus.HANDED_TO_COURIER,
         courierAccountId: r.courierAccountId,
         orderShipments: [{ orderId: `order-${r.id}` }],
-      })),
-  );
+      }));
+  });
   const count = jest.fn(async () => 0);
   const upsert = jest.fn(async () => ({}));
+  const accountFindFirst = jest.fn(async (args: AnyArgs) => {
+    const id = accountsByCourier[args.where.courier.code];
+    return id === undefined || id === null ? null : { id };
+  });
   const client = {
     shipment: { findMany, count },
+    courierAccount: { findFirst: accountFindFirst },
     systemSetting: { upsert, findUnique: jest.fn(async () => null) },
   };
   const svc = new TrackingPollService(
@@ -126,6 +151,74 @@ describe('TrackingPollService — multiple couriers', () => {
     expect(dl.fetchTracking).toHaveBeenCalled();
     expect(sr.fetchTracking).toHaveBeenCalled();
     expect(summary.shipmentsExamined).toBe(2);
+  });
+
+  /**
+   * `lookup` is the "is realtime tracking working" tool, and it passed a
+   * NULL account to every source. Shiprocket's `fetchTracking` refuses
+   * that outright, and lookup's catch — written for "that waybill is not
+   * mine" — swallowed the refusal, so every Shiprocket waybill came back
+   * `known: false` with no scans, from a call that never happened.
+   * Measured on production 2026-09-29 against three waybills their own
+   * webhooks were reporting on that hour.
+   */
+  describe('lookup asks a per-account courier WITH an account', () => {
+    it('uses the account that booked the parcel when the parcel is ours', async () => {
+      const dl = makeSource({ courierCode: 'delhivery' });
+      const sr = makeSource({ courierCode: 'shiprocket', perAccount: true });
+      const { svc } = makeService(
+        [{ id: 's2', awbNumber: 'SR1', courierCode: 'shiprocket', courierAccountId: 'sr-1' }],
+        [dl.src, sr.src],
+        { shiprocket: 'sr-default', delhivery: null },
+      );
+
+      const out = await svc.lookup(['SR1']);
+
+      expect(sr.fetchTracking).toHaveBeenCalledWith(['SR1'], 'sr-1');
+      // Delhivery has one estate credential, so null is right for it.
+      expect(dl.fetchTracking).toHaveBeenCalledWith(['SR1'], null);
+      expect(out.unaskedCouriers).toEqual([]);
+    });
+
+    it('falls back to the courier’s first active account for a waybill that is not ours', async () => {
+      const sr = makeSource({ courierCode: 'shiprocket', perAccount: true });
+      const { svc } = makeService([], [sr.src], { shiprocket: 'sr-default' });
+
+      await svc.lookup(['SOMEBODY-ELSES']);
+
+      expect(sr.fetchTracking).toHaveBeenCalledWith(['SOMEBODY-ELSES'], 'sr-default');
+    });
+
+    it('NAMES a courier it could not ask, rather than reporting silence as “unknown waybill”', async () => {
+      const sr = makeSource({ courierCode: 'shiprocket', perAccount: true });
+      const { svc } = makeService([], [sr.src], { shiprocket: null });
+
+      const out = await svc.lookup(['SR1']);
+
+      expect(sr.fetchTracking).not.toHaveBeenCalled();
+      expect(out.unaskedCouriers).toEqual(['shiprocket']);
+      // The waybill still reads as unknown — but the caller now has the
+      // one fact that makes that reading honest.
+      expect(out.results[0]?.known).toBe(false);
+    });
+
+    it('splits one call per account when the waybills were booked on different ones', async () => {
+      const sr = makeSource({ courierCode: 'shiprocket', perAccount: true });
+      const { svc } = makeService(
+        [
+          { id: 'a', awbNumber: 'SR1', courierCode: 'shiprocket', courierAccountId: 'acc-A' },
+          { id: 'b', awbNumber: 'SR2', courierCode: 'shiprocket', courierAccountId: 'acc-B' },
+        ],
+        [sr.src],
+        { shiprocket: 'acc-A' },
+      );
+
+      await svc.lookup(['SR1', 'SR2']);
+
+      const calls = sr.fetchTracking.mock.calls.map((c) => [c[0], c[1]]);
+      expect(calls).toContainEqual([['SR1'], 'acc-A']);
+      expect(calls).toContainEqual([['SR2'], 'acc-B']);
+    });
   });
 
   it('reports stub mode only when EVERY courier is stubbed', async () => {

@@ -758,7 +758,7 @@ export class TrackingPollService {
   }
 
   /**
-   * What does Delhivery say about these AWBs, and what would we do with
+   * What do our couriers say about these AWBs, and what would we do with
    * it — WITHOUT doing any of it.
    *
    * A poll cycle answers the same question but only for parcels we
@@ -772,13 +772,29 @@ export class TrackingPollService {
    * the unzoned IST timestamps, and the (leg, status) mapping — against
    * real data, which is the part no stub can tell you about.
    *
-   * Reads are free and side-effect-free at Delhivery's end (unlike a
+   * Reads are free and side-effect-free at both couriers' ends (unlike a
    * manifest, a cancel or an NDR action), so this is safe to point at a
    * waybill that is not ours.
+   *
+   * ── IT HAS TO ASK WITH AN ACCOUNT, AND IT DID NOT ────────────────
+   * A `perAccount` source has no estate-wide credential: Shiprocket's
+   * bearer token belongs to ONE account, so `fetchTracking` refuses a
+   * null account outright (`SHIPROCKET_TRACKING_NEEDS_ACCOUNT`). This
+   * passed null for every source, and the catch below — written for the
+   * ordinary "that waybill is not mine" — swallowed the refusal. The
+   * result was a tool that answered "nothing known about this waybill"
+   * for every Shiprocket parcel, confidently, having never asked.
+   * Measured on production 2026-09-29: three Shiprocket waybills that
+   * their own webhooks were actively reporting on came back `known:
+   * false` with no scans. So the account is resolved BEFORE the call,
+   * and a courier that could not be asked at all is NAMED rather than
+   * reported as silence.
    */
   async lookup(awbNumbers: readonly string[]): Promise<{
     results: TrackingLookupResult[];
     stubMode: boolean;
+    /** Couriers that could not be asked, so their silence means nothing. */
+    unaskedCouriers: string[];
   }> {
     // An AWB on its own does not say who issued it, so every source is
     // asked and the first that recognises it answers. Reads are free and
@@ -788,26 +804,39 @@ export class TrackingPollService {
     const stubFlags = await Promise.all(this.sources.map((src) => src.isStubMode()));
     const stubMode = stubFlags.length > 0 && stubFlags.every((f) => f);
     const awbs = awbNumbers.map((a) => a.trim()).filter((a) => a !== '');
-    if (awbs.length === 0) return { results: [], stubMode };
+    if (awbs.length === 0) return { results: [], stubMode, unaskedCouriers: [] };
 
-    const [fetchedPerSource, ours] = await Promise.all([
-      Promise.all(
-        this.sources.map(async (src) => {
-          try {
-            return await src.fetchTracking([...awbs], null);
-          } catch {
-            // One courier refusing a lookup must not lose the other's
-            // answer — a Shiprocket AWB is expected to be unknown to
-            // Delhivery and vice versa.
-            return [];
-          }
-        }),
-      ),
-      this.prisma.client.shipment.findMany({
-        where: { awbNumber: { in: [...awbs] }, deletedAt: null },
-        select: { id: true, awbNumber: true },
+    // Read first: a per-account source needs a token, and the best one
+    // is whichever account booked the parcel, when the parcel is ours.
+    const ours = await this.prisma.client.shipment.findMany({
+      where: { awbNumber: { in: [...awbs] }, deletedAt: null },
+      select: { id: true, awbNumber: true, courierCode: true, courierAccountId: true },
+    });
+    const unaskedCouriers: string[] = [];
+    const fetchedPerSource = await Promise.all(
+      this.sources.map(async (src) => {
+        const groups = await this.lookupGroups(src, awbs, ours);
+        if (groups.length === 0) {
+          unaskedCouriers.push(src.courierCode);
+          return [];
+        }
+        const perGroup = await Promise.all(
+          groups.map(async (g) => {
+            try {
+              return await src.fetchTracking(g.awbs, g.courierAccountId);
+            } catch {
+              // One courier refusing a lookup must not lose the other's
+              // answer — a Shiprocket AWB is expected to be unknown to
+              // Delhivery and vice versa. This is the ORDINARY miss; a
+              // source that could not be asked at all is handled above,
+              // because silence from an unasked courier is not a fact.
+              return [];
+            }
+          }),
+        );
+        return perGroup.flat();
       }),
-    ]);
+    );
     const oursByAwb = new Map(ours.map((s) => [s.awbNumber ?? '', s.id]));
     // First source that returned scans for an AWB wins; an empty result
     // is not an answer, so it does not shadow a later source's.
@@ -869,7 +898,58 @@ export class TrackingPollService {
       };
     });
 
-    return { results, stubMode };
+    return { results, stubMode, unaskedCouriers };
+  }
+
+  /**
+   * Which account to ask each waybill with, for ONE source.
+   *
+   * Delhivery has one credential for the estate, so it is a single group
+   * keyed on null. Shiprocket's token belongs to an account, and asking
+   * with the wrong one answers "not found" — which reads exactly like a
+   * parcel that has not moved (the same trap `pollSource` groups to
+   * avoid). So a waybill WE hold is asked with the account that booked
+   * it, and anything else with the courier's first active account, which
+   * is the only sensible guess for a waybill that is not ours.
+   *
+   * An EMPTY result means this source cannot be asked at all — no active
+   * account, therefore no token. The caller names the courier rather
+   * than letting an unasked source look like one that answered nothing.
+   */
+  private async lookupGroups(
+    source: CourierTrackingSource,
+    awbs: readonly string[],
+    ours: readonly {
+      awbNumber: string | null;
+      courierCode: string;
+      courierAccountId: string | null;
+    }[],
+  ): Promise<{ courierAccountId: string | null; awbs: string[] }[]> {
+    if (!source.perAccount) return [{ courierAccountId: null, awbs: [...awbs] }];
+
+    const known = new Map<string, string>();
+    for (const s of ours) {
+      if (s.courierCode !== source.courierCode) continue;
+      if (s.awbNumber === null || s.courierAccountId === null) continue;
+      known.set(s.awbNumber, s.courierAccountId);
+    }
+    const fallback = await this.prisma.client.courierAccount.findFirst({
+      where: { courier: { code: source.courierCode }, isActive: true, deletedAt: null },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const byAccount = new Map<string, string[]>();
+    for (const awb of awbs) {
+      const accountId = known.get(awb) ?? fallback?.id;
+      // No account anywhere: this waybill simply cannot be asked about
+      // on this courier, and pretending otherwise is what this fixes.
+      if (accountId === undefined) continue;
+      const bucket = byAccount.get(accountId);
+      if (bucket === undefined) byAccount.set(accountId, [awb]);
+      else bucket.push(awb);
+    }
+    return [...byAccount].map(([courierAccountId, group]) => ({ courierAccountId, awbs: group }));
   }
 
   /**

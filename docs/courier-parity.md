@@ -45,8 +45,8 @@ production are test parcels copied from real Shiprocket orders on 11 Sep
 | Book a customer RETURN (reverse pickup) | ✅ `payment_mode: 'Pickup'` | ✅ **built 19 Sep** — `/orders/create/return` | was `REVERSE_NOT_SUPPORTED`, so a Shiprocket parcel's return could never be collected: the booking raised a HIGH issue and the goods stayed with the customer. Their return create spells out BOTH ends (`pickup_*` is the CUSTOMER, `shipping_*` is US) and so needs `courier.shiprocket_return_address`, seeded EMPTY and refused by name when unset. **NOT proven on the wire** — no return has been booked on this account |
 | Serviceability check | ✅ | ✅ verified live | reactive only (CUR-5) |
 | Request pickup | ✅ built, auto ON — not yet reached | ✅ built, auto ON (unexercised) — **fixed 19 Sep** | `courier_pickup_requests` is EMPTY because no Delhivery or Shiprocket box has been PACKED since auto-pickup existed (3 Sep): the 22 Delhivery rows were seeded straight to DISPATCHED and every box packed since was a manual parcel (skipped on purpose). SD-2026-26-000004 (PICKED since 8 Sep, real Delhivery waybill) will be the first. Hardened 12 Sep: a box left without a van raises HIGH `auto-pickup:<courier>:<warehouse>`, the location resolves as booking does, a late box asks for tomorrow |
-| Tracking — poll | ✅ live | ✅ live — 7 test parcels polled | every Delhivery status in production came from the poll (582 scans, 11 Sep) |
-| Tracking — webhook | ⚠️ built, secret set — **Delhivery has never sent one** | ✅ **receiving** — 706 authenticated | Delhivery: 0 webhooks ever. Shiprocket: 706 — 7 `processed` (the test parcels now match), 699 `ignored` (parcels that aren't ours) |
+| Tracking — poll | ✅ live | ✅ live — 7 test parcels polled | every Delhivery status in production came from the poll (582 scans, 11 Sep). **The manual `POST /admin/tracking/poll/lookup` was blind to Shiprocket until 29 Sep** — see the audit below |
+| Tracking — webhook | ⚠️ built, secret set — **Delhivery has never sent one** | ✅ **receiving** — 2,162 authenticated (29 Sep) | Delhivery: 0 webhooks ever. Shiprocket: 2,162, every one with a valid signature — 74 `processed`, 2,081 `ignored` (parcels that aren't ours), and **7 stuck at `received` since 12–13 Sep**: scans that were dropped and which nothing looked at again until the watchdog added 29 Sep |
 | NDR re-attempt | ✅ built, operator-only | ✅ synchronous (unexercised) | `ndr_action_requests` is still EMPTY; `ndr_runner_enabled` = false, auto categories `[]` (11 Sep) |
 | NDR list | n/a — read off the NSL scan | ✅ `/v1/external/ndr/all` | |
 | Edit consignee on a live parcel | ✅ | ⚠️ consignee yes, description no | their `update/adhoc` refuses a description change once a waybill exists |
@@ -62,6 +62,64 @@ production are test parcels copied from real Shiprocket orders on 11 Sep
 | Portal ticket sync | ⏸ OFF | ❌ not built | `courier_portal_runs` is EMPTY — never ran in production |
 | Portal session / canary | ⏸ OFF | ⚠️ session only — used by the wallet and invoice syncs | `courier.portal_canary_awb` is empty; Shiprocket's panel session runs nightly through the Bangalore tunnel for COST-2 only |
 | Waybill pool | ⚠️ refill OFF | n/a — AWB issued at assign | `delhivery_waybill_pool_refill_enabled` = false; each booking gets its AWB directly |
+
+## What the 2026-09-29 verification found
+
+A surface-by-surface check of everything Shiprocket-shaped, after the
+panel egress and User-Agent fixes landed. Both nightly panel jobs now
+work — the invoice check ran for the first time through the new route and
+every itemized Freight and VAS invoice matched the wallet to the paisa —
+and the API side had never stopped. Two real defects, both of the same
+family: something reported silence as an answer.
+
+1. **`POST /admin/tracking/poll/lookup` could never ask Shiprocket, and
+   said so as "unknown waybill".** It passed a NULL account to every
+   tracking source. Shiprocket's token belongs to ONE account, so its
+   `fetchTracking` refuses a null outright — and lookup's catch, written
+   for the ordinary "that waybill is not mine", swallowed the refusal.
+   Measured: three Shiprocket waybills their own webhooks were reporting
+   on that hour came back `known: false` with zero scans, from a call
+   that never happened. The account is resolved before the call now (the
+   one that booked the parcel when it is ours, the courier's first active
+   account otherwise), and a courier that could not be asked at all is
+   NAMED in the response and on the panel rather than counted as a miss.
+   The panel still lives on `/delhivery`, which is its own small lie.
+
+2. **A webhook accepted and never processed was invisible.** TRK-2's
+   master gate is `status !== RECEIVED`, so only a webhook's own BullMQ
+   job moves it out of RECEIVED; when that job dies for good the row sits
+   there and nothing looks at it again — a courier scan dropped in
+   silence, which is the one thing the ingest ledger exists to prevent.
+   Production held seven, Shiprocket, since 12–13 September, from TRK-3's
+   Invalid-Date window. The parser was fixed; those seven were never
+   applied and nothing said so. Found by counting rows.
+   `OrderAttentionService.checkUnprocessedWebhooks` raises ONE HIGH issue
+   for the estate (`webhooks-unprocessed`) naming the count, the couriers
+   and the oldest few, and clears itself. It deliberately does NOT
+   re-queue: a payload the processor cannot handle is a parser bug, and
+   retrying it on a timer is how one bad body becomes a job that fails
+   for ever.
+
+What was verified working, by a live read rather than by reading a doc:
+the API's auth and token cache, serviceability and rate options (5
+carriers, cheapest ₹46.02 on 700128 → 110001, `reachedLiveApi: true`),
+the pickup-location list, per-shipment insight (live TAT and cost),
+`document` (POD answered, and a SIGNATURE_URL request refused BY NAME as
+this file says it should be), the e-way-bill threshold check, NDR
+readiness, the nightly API cost sync, webhook authentication (every one
+of 2,162 rows `signature_valid`), and COST-1 netting — all seven parcels'
+stored cost equals the net of their transactions to the paisa, no
+negatives, no `missing_from_export_at` stamps, no mutated rows. The
+egress health check is pinned by unit tests for a VPN that is down and
+for one that is healthy in the wrong country, and `/cost-sync` reports
+the route and the address truthfully.
+
+Still owner-shaped, not engineering: `courier.shiprocket_return_address`
+and `courier.shiprocket_support_email` are both empty (a customer return
+and a support escalation are refused by name until they are filled), and
+four Shiprocket money items are open — an unrecorded ₹5,000 recharge, an
+unrecorded COD top-up, a ₹1,600 ledger credit note the passbook never
+saw, and 59 VAS charges (₹348.10) on no invoice.
 
 ## What the 2026-09-19 code audit found
 

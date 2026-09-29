@@ -149,6 +149,9 @@ export interface NsaSweepSummary {
   /** Pre-dispatch waybills still without a stored label after an hour,
    *  having been asked for again on this run. */
   readonly labelless: number;
+  /** Courier webhooks accepted and never processed — scans that were
+   *  dropped, and which nothing else in the estate looks at. */
+  readonly stuckWebhooks: number;
   /** Reseller orders whose money is still not re-worked-out after this
    *  run asked again — the ones a person will have to look at. */
   readonly staleResellerMoney: number;
@@ -169,6 +172,34 @@ const LABEL_RETRY_AFTER_MS = 10 * 60_000;
 const LABEL_ALERT_AFTER_MS = 60 * 60_000;
 /** Per run; the sweep is hourly and a backlog drains over a few runs. */
 const LABEL_SWEEP_LIMIT = 50;
+
+/**
+ * A webhook that arrived, authenticated, and was never processed.
+ *
+ * TRK-2's master gate is `courier_webhooks.status !== RECEIVED`, so a
+ * row only ever leaves RECEIVED when its BullMQ job runs. When that job
+ * dies for good — its retries exhausted, or the process restarted with
+ * the job lost — the row sits at RECEIVED forever and NOTHING looks at
+ * it again. A scan the courier told us about is simply dropped, in
+ * silence, which is the one failure mode the whole ingest ledger exists
+ * to make impossible.
+ *
+ * It is not hypothetical: on 2026-09-29 production held SEVEN Shiprocket
+ * webhooks stuck at RECEIVED since 12–13 September, from the window when
+ * their day-first timestamps became an Invalid Date and failed the job
+ * (TRK-3). The parser was fixed; those seven scans were never applied
+ * and nothing anywhere said so. Found by counting rows, which is not a
+ * thing anybody does on a schedule.
+ *
+ * This RAISES rather than re-queues, deliberately. A stuck row means the
+ * processor could not handle that payload, and re-queueing it on a timer
+ * is how one bad body becomes a job that fails forever; the useful act
+ * is to name it once and stop. It clears itself the moment the rows
+ * leave RECEIVED.
+ */
+const STUCK_WEBHOOK_KEY = 'webhooks-unprocessed';
+/** Two BullMQ retry windows and a restart's worth of slack. */
+const STUCK_WEBHOOK_AFTER_MS = 60 * 60_000;
 
 /**
  * NSA — Needs Seller Attention.
@@ -302,6 +333,7 @@ export class OrderAttentionService {
       labelless: 0,
       staleResellerMoney: 0,
       staleFeeFxRate: 0,
+      stuckWebhooks: 0,
     };
 
     // Runs even when the NSA half is switched off, and before the
@@ -347,6 +379,11 @@ export class OrderAttentionService {
     // time, so a stale rate is no longer a display problem — it silently
     // decides what every seller is billed.
     summary.staleFeeFxRate = await this.checkStaleFeeFxRate(now);
+
+    // Also unconditional: a courier scan we accepted and never applied
+    // is a parcel whose timeline is wrong on every screen that reads it,
+    // and nothing else in the estate looks at an unprocessed webhook.
+    summary.stuckWebhooks = await this.checkUnprocessedWebhooks(now);
 
     if (!enabled) return summary;
 
@@ -1384,6 +1421,90 @@ export class OrderAttentionService {
       this.logger.warn(
         { err: err instanceof Error ? err.message : String(err) },
         'Label watchdog failed this run; the rest of the sweep continues',
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Webhooks that authenticated and never processed (see
+   * `STUCK_WEBHOOK_KEY`).
+   *
+   * ONE issue for the estate, not one per row: a processor that has
+   * stopped handling a shape produces many at once, and a list that
+   * grows a row per webhook is a list people stop reading — the same
+   * argument `SystemIssue.dedupeKey` is built on. The oldest few are
+   * named in the detail so somebody has somewhere to start.
+   */
+  private async checkUnprocessedWebhooks(now: Date): Promise<number> {
+    try {
+      const stuck = await this.prisma.client.courierWebhook.findMany({
+        where: {
+          status: 'RECEIVED',
+          receivedAt: { lt: new Date(now.getTime() - STUCK_WEBHOOK_AFTER_MS) },
+        },
+        select: {
+          id: true,
+          courierCode: true,
+          awbNumber: true,
+          receivedAt: true,
+          retryCount: true,
+          errorMessage: true,
+        },
+        orderBy: { receivedAt: 'asc' },
+        take: 20,
+      });
+      if (stuck.length === 0) {
+        await this.issues.resolveByKey(
+          STUCK_WEBHOOK_KEY,
+          'Every webhook that arrived has been processed.',
+        );
+        return 0;
+      }
+
+      const byCourier = new Map<string, number>();
+      for (const w of stuck) byCourier.set(w.courierCode, (byCourier.get(w.courierCode) ?? 0) + 1);
+      const oldest = stuck[0];
+      const lines = stuck
+        .slice(0, 5)
+        .map(
+          (w) =>
+            `  ${w.receivedAt.toISOString().slice(0, 16)} ${w.courierCode} ` +
+            `${w.awbNumber ?? '(no waybill in the row)'} — ${w.errorMessage ?? 'no error recorded'}`,
+        )
+        .join('\n');
+
+      await this.issues.raise({
+        kind: SystemIssueKind.INTEGRATION,
+        severity: SystemIssueSeverity.HIGH,
+        title:
+          `${stuck.length === 20 ? '20+' : stuck.length} courier webhook(s) were accepted and ` +
+          'never processed',
+        detail:
+          'These arrived, passed their HMAC and were stored, and their processing job never ' +
+          'finished. Each one is a courier scan that was DROPPED: the order did not move, the ' +
+          'public timeline does not have it, and nothing else in the system looks at an ' +
+          'unprocessed webhook.\n\n' +
+          `Oldest: ${oldest?.receivedAt.toISOString().slice(0, 16) ?? 'unknown'}. By courier: ` +
+          `${[...byCourier].map(([c, n]) => `${c} ${n}`).join(', ')}.\n\n${lines}\n\n` +
+          'Read `error_message` on those rows for why the job failed. A payload the processor ' +
+          'cannot handle is a parser bug, not something to retry — this names it once and does ' +
+          'not re-queue anything. It clears itself when the rows are processed.',
+        source: 'OrderAttentionService',
+        dedupeKey: STUCK_WEBHOOK_KEY,
+        metadata: {
+          count: stuck.length,
+          truncated: stuck.length === 20,
+          byCourier: Object.fromEntries(byCourier),
+          oldestReceivedAt: oldest?.receivedAt.toISOString() ?? null,
+          webhookIds: stuck.map((w) => w.id),
+        },
+      });
+      return stuck.length;
+    } catch (err) {
+      this.logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Unprocessed-webhook watchdog failed this run; the rest of the sweep continues',
       );
       return 0;
     }

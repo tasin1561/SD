@@ -129,6 +129,15 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     openLabelKeys?: string[];
     /** Whether the label query returned fewer rows than its limit. */
     labelSawEverything?: boolean;
+    /** Webhooks stored, authenticated, and never processed. */
+    stuckWebhooks?: Array<{
+      id: string;
+      courierCode: string;
+      awbNumber: string | null;
+      receivedAt: Date;
+      retryCount: number;
+      errorMessage: string | null;
+    }>;
     /** Of unexamined label issues, the shipments STILL missing a label. */
     labelStillMissing?: string[];
     /** Confirmed orders with no live shipment. */
@@ -271,6 +280,10 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
         findMany: shipmentFindMany,
       },
       orderDeliveryActionRequest: { findMany: jest.fn(async () => []) },
+      // Webhooks accepted and never processed. Empty by default: most
+      // cases are about other watchdogs, and an empty list is the
+      // healthy estate.
+      courierWebhook: { findMany: jest.fn(async () => opts.stuckWebhooks ?? []) },
     };
 
     const svc = new OrderAttentionService(
@@ -781,6 +794,68 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
       const out = await h.svc.sweep(new Date('2026-09-19T12:00:00Z'));
       expect(out.staleResellerMoney).toBe(1);
       expect(out.ranAt).toBeInstanceOf(Date);
+    });
+  });
+
+  /**
+   * TRK-2's master gate is `status !== RECEIVED`, so only a webhook's own
+   * job can move it out of RECEIVED. A job that dies for good leaves the
+   * row there forever and NOTHING looks at it again — a courier scan
+   * dropped in silence. Production held seven such rows for a fortnight
+   * (Shiprocket, 12–13 Sep 2026, TRK-3's Invalid Date window), found by
+   * counting rows rather than by anything telling anyone.
+   */
+  describe('webhooks accepted and never processed', () => {
+    const stuck = (n: number): NonNullable<Parameters<typeof makeService>[0]['stuckWebhooks']> =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `wh-${i}`,
+        courierCode: 'shiprocket',
+        awbNumber: `SR${i}`,
+        receivedAt: new Date('2026-09-13T09:22:06Z'),
+        retryCount: 0,
+        errorMessage: null,
+      }));
+
+    it('raises HIGH naming how many and which couriers', async () => {
+      const { svc, raise } = makeService({ stuckWebhooks: stuck(7) });
+      const summary = await svc.sweep();
+
+      expect(summary.stuckWebhooks).toBe(7);
+      const calls = (raise.mock.calls as unknown as Array<[Record<string, unknown>]>).filter(
+        ([i]) => i['dedupeKey'] === 'webhooks-unprocessed',
+      );
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.[0]).toMatchObject({
+        severity: 'HIGH',
+        metadata: { byCourier: { shiprocket: 7 } },
+      });
+      expect(String(calls[0]?.[0]['title'])).toContain('7');
+    });
+
+    it('is ONE issue for the estate, not one per dropped scan', async () => {
+      const { svc, raise } = makeService({ stuckWebhooks: stuck(12) });
+      await svc.sweep();
+
+      const keys = (raise.mock.calls as unknown as Array<[Record<string, unknown>]>)
+        .map(([i]) => i['dedupeKey'])
+        .filter((k) => k === 'webhooks-unprocessed');
+      expect(keys).toHaveLength(1);
+    });
+
+    it('clears itself when nothing is stuck', async () => {
+      const { svc, raise, resolveByKey } = makeService({});
+      const summary = await svc.sweep();
+
+      expect(summary.stuckWebhooks).toBe(0);
+      expect(
+        (raise.mock.calls as unknown as Array<[Record<string, unknown>]>).some(
+          ([i]) => i['dedupeKey'] === 'webhooks-unprocessed',
+        ),
+      ).toBe(false);
+      expect(resolveByKey).toHaveBeenCalledWith(
+        'webhooks-unprocessed',
+        expect.stringContaining('processed'),
+      );
     });
   });
 });

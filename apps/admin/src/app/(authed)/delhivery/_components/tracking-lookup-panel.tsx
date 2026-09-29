@@ -52,12 +52,21 @@ export function TrackingLookupPanel(): ReactElement | null {
       const r = await lookup.mutateAsync(awbNumbers);
       setResults(r.results);
       if (r.stubMode) {
-        toast.error('Stub mode is on — nothing was asked of Delhivery. Set the API base URL.');
+        toast.error('Stub mode is on — no courier was asked anything. Set the API base URLs.');
         return;
       }
       const known = r.results.filter((x) => x.known).length;
+      // A courier that could not be asked has not said anything, so its
+      // silence must not be reported as "unknown waybill".
+      const unasked = r.unaskedCouriers ?? [];
+      if (unasked.length > 0) {
+        toast.error(
+          `${unasked.join(', ')} could not be asked — no active courier account, so no token. ` +
+            'A waybill of theirs will read as unknown whatever its real state.',
+        );
+      }
       toast.success(
-        `${known} of ${r.results.length} known to Delhivery.` +
+        `${known} of ${r.results.length} known to the couriers asked.` +
           (known < r.results.length ? ' The rest returned no scans.' : ''),
       );
     } catch (err) {
@@ -69,7 +78,7 @@ export function TrackingLookupPanel(): ReactElement | null {
   return (
     <AfSection
       title="Look up a waybill"
-      note="What Delhivery knows about an AWB, and what our mapping makes of it. Reads only — no tracking event is written and no order moves."
+      note="What our couriers know about an AWB, and what our mapping makes of it. Every integrated courier is asked — Delhivery with the estate credential, Shiprocket with the account that booked the parcel. Reads only — no tracking event is written and no order moves."
     >
       <AfCard>
         <div className="dl-awbs">

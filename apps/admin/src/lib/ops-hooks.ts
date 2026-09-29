@@ -1183,18 +1183,26 @@ export interface TrackingLookupResult {
   readonly scans: readonly TrackingLookupScan[];
 }
 
-export function useTrackingLookup(): UseMutationResult<
-  { results: TrackingLookupResult[]; stubMode: boolean },
-  Error,
-  string[]
-> {
+export interface TrackingLookupResponse {
+  readonly results: TrackingLookupResult[];
+  readonly stubMode: boolean;
+  /**
+   * Couriers that could not be asked at all — no active account, so no
+   * token. Their silence is not "that waybill is unknown", and the panel
+   * says so: reading an unasked courier as an answer is exactly what
+   * made this tool lie about every Shiprocket parcel until 2026-09-29.
+   */
+  readonly unaskedCouriers?: readonly string[];
+}
+
+export function useTrackingLookup(): UseMutationResult<TrackingLookupResponse, Error, string[]> {
   const client = useApiClient();
   return useMutation({
     mutationFn: (awbNumbers) =>
-      client.request<{ results: TrackingLookupResult[]; stubMode: boolean }>(
-        '/api/admin/tracking/poll/lookup',
-        { method: 'POST', body: { awbNumbers } },
-      ),
+      client.request<TrackingLookupResponse>('/api/admin/tracking/poll/lookup', {
+        method: 'POST',
+        body: { awbNumbers },
+      }),
   });
 }
 
