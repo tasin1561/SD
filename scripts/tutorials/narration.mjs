@@ -756,6 +756,112 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'open-a-reseller-store',
+    title: 'Opening a reseller store',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A reseller store is another business selling your stock under its own name. Their customers, their shopfront — your goods, your warehouse, your courier, and your money at risk.',
+      },
+      {
+        id: 'open-stores',
+        say: 'They live under Reselling. The four figures here are the whole picture: how many stores, how many are selling, how many are waiting on you, and how many people can sign in.',
+      },
+      {
+        id: 'open-form',
+        say: 'Opening one is a single form, and read the line under the title: a store you open is active straight away. There is nobody to approve it, because you are the somebody.',
+      },
+      {
+        id: 'names',
+        say: 'Two names, and the difference matters. The first is what you call them. The second is what a customer reads on their parcel and on the tracking page.',
+      },
+      {
+        id: 'contact',
+        say: 'An address and a phone number, both required. The email carries their invitation and every notice after it; the phone is how anybody rings them about a parcel that is already moving.',
+      },
+      {
+        id: 'wallet',
+        say: 'Then who runs their wallet. Keep it yourself and you top them up and pay them out directly; hand it to Skydrop and they do both through us, like you do.',
+      },
+      {
+        id: 'invite',
+        say: 'And their first person, which is not optional. A store with nobody able to sign in is a row that looks open and can do nothing, so Skydrop will not make one.',
+      },
+      {
+        id: 'created',
+        say: 'Open, and selling. The figures at the top have moved, and their owner has an email with a link that gives them a login of their own.',
+      },
+      {
+        id: 'detail',
+        say: 'The store’s own page gathers everything about it. Its orders and its reports are a click away, and the four tabs cover what it may sell, on what terms, and what it may do.',
+      },
+      {
+        id: 'details',
+        say: 'Details is the record of what you just typed, plus who opened it and when its status last changed. History underneath keeps every change, oldest last, and is never edited.',
+      },
+      {
+        id: 'pause',
+        say: 'Pausing stops it taking new orders while everything already placed carries on. Skydrop asks first, because this is somebody else’s trading day.',
+      },
+      {
+        id: 'outro',
+        say: 'And only from paused can it be closed for good — which is final, and refused while it still has parcels moving, credits to run or money in its wallet.',
+      },
+    ],
+  },
+  {
+    slug: 'set-a-reseller-price',
+    title: 'The price a reseller store pays',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A reseller store sells your goods, so two prices matter: what they pay you for each one, and what they are allowed to charge their customer for it.',
+      },
+      {
+        id: 'open-list',
+        say: 'The reseller price list is your whole catalogue with those two answers beside it. The figures at the top say how much of it is priced and how much is actually being sold.',
+      },
+      {
+        id: 'table',
+        say: 'A product with no price here cannot be sold by a store on your terms. That is the default and it is the safe one — nothing reaches a shelf until you have said what it costs.',
+      },
+      {
+        id: 'open-form',
+        say: 'Set price opens four figures. They are all about one unit, and none of them is what you paid for it — your cost stays yours.',
+      },
+      {
+        id: 'transfer',
+        say: 'The transfer price is what the store owes you for every unit it sells. This is the one that has to be right; the others are guidance and guard rails.',
+      },
+      {
+        id: 'range',
+        say: 'Then the range they may sell inside. A floor stops them undercutting you into your own customers; a ceiling stops your name on a parcel somebody feels overcharged for.',
+      },
+      {
+        id: 'suggested',
+        say: 'And a suggested price, which is the number their screen fills in for them. Most stores take it, which is quietly how a range stays a range rather than an argument.',
+      },
+      {
+        id: 'saved',
+        say: 'Saved, and the row now carries all four. Every store you have sees this price from now on, unless one of them has been given a price of its own.',
+      },
+      {
+        id: 'override',
+        say: 'And that is the sentence at the top worth reading twice. A price for one particular store is set on that store’s own page, not here. This screen is everybody.',
+      },
+      {
+        id: 'remove',
+        say: 'Removing a price takes the product back off the shelf — and Skydrop names any store already selling it at this price, because they need one of their own first.',
+      },
+      {
+        id: 'outro',
+        say: 'That is the whole arrangement. One price you set once, a range you are comfortable with, and a catalogue where anything you have not priced simply is not for sale.',
+      },
+    ],
+  },
+  {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
     subtitle: 'Skydrop for sellers',

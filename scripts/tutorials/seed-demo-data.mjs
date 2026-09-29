@@ -208,6 +208,12 @@ export const INTEGRATIONS = {
   events: ['order.confirmed', 'shipment.dispatched', 'shipment.delivered'],
 };
 
+/** What the two RESELLING videos create on camera. Keep in step with flows.mjs. */
+export const RESELLING = {
+  storeName: 'Kolkata Silk Room',
+  priceSku: 'RSH-SCARF-EMERALD',
+};
+
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
 
@@ -819,6 +825,59 @@ async function integrationsWorldFor(slug, sellerId) {
 }
 
 /**
+ * Undo what the two RESELLING videos do on camera.
+ *
+ * G1 opens a store and invites its first user; G2 puts a price on a
+ * product. Both are "there was none, now there is one" scenes, and both
+ * are refused on a second take — a store name is unique per seller
+ * (`STORE_NAME_TAKEN`), and a priced row's button reads Edit rather
+ * than Set price.
+ *
+ * The store goes with a HARD delete, which is safe here for a reason
+ * worth stating: almost everything hanging off `seller_stores` is
+ * `onDelete: Cascade` (its roles, invitations, users, events, wallet,
+ * terms, tickets, webhooks), and the things that are NOT — orders above
+ * all — are exactly what this refuses to delete around. A store with an
+ * order against it is somebody's real work, and a video is not a reason
+ * to take it.
+ */
+async function resellingWorldFor(slug, sellerId) {
+  if (slug !== 'open-a-reseller-store' && slug !== 'set-a-reseller-price') return;
+
+  const store = await prisma.sellerStore.findFirst({
+    where: { sellerId, name: RESELLING.storeName },
+    select: { id: true },
+  });
+  if (store !== null) {
+    const orders = await prisma.order.count({ where: { storeId: store.id } });
+    if (orders > 0) {
+      console.log(
+        `  · leaving the "${RESELLING.storeName}" store alone — ${orders} order(s) are filed under it`,
+      );
+    } else {
+      await prisma.sellerStore.delete({ where: { id: store.id } });
+      console.log(`  · removed a previous take's "${RESELLING.storeName}" store`);
+    }
+  }
+
+  // The price the G2 video sets. Its fourth scene is a row whose button
+  // says "Set price" — a priced row says "Edit" and opens a form with
+  // the figures already in it, which is a different video.
+  const variant = await prisma.productVariant.findFirst({
+    where: { skuCode: RESELLING.priceSku, product: { sellerId } },
+    select: { id: true },
+  });
+  if (variant !== null) {
+    const priced = await prisma.resellerPriceListItem.deleteMany({
+      where: { sellerId, variantId: variant.id },
+    });
+    if (priced.count > 0) {
+      console.log(`  · cleared the reseller price of ${RESELLING.priceSku}`);
+    }
+  }
+}
+
+/**
  * Remove the product the second video creates, so the take can create it
  * again. Hard delete: these rows are minutes old, carry no stock and no
  * order, and a soft delete would leave the SKU's unique key occupied —
@@ -1332,6 +1391,7 @@ async function main() {
   if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
   await integrationsWorldFor(slug, sellerId);
+  await resellingWorldFor(slug, sellerId);
 
   console.log('\nReady.');
   console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);

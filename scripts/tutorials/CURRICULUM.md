@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 18 filmed. Of the 72 left, **16 are `ready` today**, 54 need
+**90 tutorials.** 20 filmed. Of the 70 left, **14 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -32,19 +32,19 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (18):** A1–A6, B1, B2, C3, C4, C5, E1, E3, E4, F1, F2, F3, F5.
-Every one is listed in its own entry below with what it covers and what its
-seeding does.
+**Filmed so far (20):** A1–A6, B1, B2, C3, C4, C5, E1, E3, E4, F1, F2, F3, F5,
+G1, G2. Every one is listed in its own entry below with what it covers and what
+its seeding does.
 
-**Next, in order, and all `ready`:**
+**Next, and the last `ready` one of any size:**
 
-1. **G1, G2 — reseller stores and the price they pay.** Everything needed is
-   surveyed in G1's entry below: a seller-created store lands ACTIVE at once
-   (only an admin-created one is PENDING), `reseller.orders_enabled` gates
-   ORDER PLACEMENT and not store creation, and all of contact email, contact
-   phone and a first-user invitation are required on create.
-2. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
-   exist. An hour's work, then a 4-minute video.
+1. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
+   exist. An hour's work, then a 4-minute video. Model it on
+   `fixtures/rangpur-bulk-orders.csv` — committed, because the preview's
+   figures are narrated word for word, and the same will be true here.
+
+**After that, build D0** (below). Everything else `ready` is small; D0 is what
+unlocks the rest of the library.
 
 **Then build D0** (below) — the lifecycle seeding. It is still the single
 highest-leverage thing in this document: it unblocks 20+ entries in D, E and K
@@ -806,24 +806,51 @@ claims nothing about the box being checked.
 Seven tutorials, and the order matters more here than anywhere else: each one
 is the prerequisite for the next being non-empty.
 
-### G1. What a reseller store is · `ready`
+### G1. What a reseller store is · **FILMED** — `open-a-reseller-store.mp4`
 
 **Promise** — you can open a store for someone who will sell your stock under
 their own name.
-**Length** 3 min. **Prerequisites** A1.
-**Needs** nothing. Creating a store is filmable cold.
-**Covers** `/reseller-stores`, creating one, inviting its first user, and the
-frame for everything after: their own login on `reseller.skydrop.online`, your
-stock, your warehouse, your courier, your money at risk.
+**Length** 2 min 20 s. **Prerequisites** A1.
+**Covers** `/reseller-stores`, opening one end to end, and then its own page:
+the four tabs, the details record, pausing, and the fact that closing for good
+is reachable only from paused.
 
-### G2. The price they pay · `ready`
+**Three things the video says because the screens only half say them.** A store
+the SELLER opens is ACTIVE at once — `initialStatusFor` maps SELLER → ACTIVE
+and ADMIN → PENDING_SELLER_APPROVAL, derived from the actor and not from the
+body, so a seller cannot create a pending store and never sees the approve /
+reject card. The two names are different things: one is what you call them, the
+other is what a customer reads on a parcel. And the invitation is REQUIRED —
+"a store with nobody able to sign in is a row that looks open and can do
+nothing", which is the DTO comment's own reasoning.
+
+**Closing is named and not clicked.** It is final, and the page states its
+conditions in one sentence the narration follows rather than restates.
+
+**Seeding:** a store name is unique per seller (`STORE_NAME_TAKEN`), so a take
+left behind refuses the next one. The delete is HARD and safe for a stated
+reason: nearly everything hanging off `seller_stores` is `onDelete: Cascade`
+(roles, invitations, users, events, wallet, terms, tickets, webhooks), and the
+thing that is not — orders — is exactly what the cleanup refuses to delete
+around.
+
+### G2. The price they pay · **FILMED** — `set-a-reseller-price.mp4`
 
 **Promise** — every store has a default transfer price and a retail range.
-**Length** 3 min. **Prerequisites** A3 (products), G1.
-**Needs** products only — this page does **not** need a store to exist, which
-makes it filmable earlier than its position suggests.
-**Covers** `/reseller-stores/price-list`: the per-unit price every store pays
-unless it has one of its own, and the retail range it may sell inside.
+**Length** 2 min 5 s. **Prerequisites** A3 (products).
+**Covers** `/reseller-stores/price-list`: an unpriced row and what that means,
+the four figures, and removing a price again. **It needs no store to exist** —
+G1 is not really a prerequisite, and the video is filmed against a catalogue
+alone.
+
+**The sentence it makes sure lands** is the page's own subtitle: a price for
+one particular store is set on THAT STORE'S page, not here. The screen says it
+once, in small type, above three tiles that pull the eye — so the video scrolls
+back up and dwells on it.
+
+**The video removes the price it set**, which leaves the world clean and
+teaches the guard on removal (a store already selling at your default price
+must be given one of its own first). The seed clears it anyway, as the backstop.
 
 ### G3. What one store sells · `needs demo data`
 

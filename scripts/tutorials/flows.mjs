@@ -185,6 +185,48 @@ const INTEGRATIONS = {
   brokenName: 'Warehouse screen (old)',
 };
 
+/**
+ * The reseller store the G1 video opens. Keep in step with
+ * seed-demo-data.mjs, which removes it before every take.
+ *
+ * Nothing here is a real business or a real address.
+ */
+const RESELLER = {
+  storeName: 'Kolkata Silk Room',
+  displayName: 'Silk Room',
+  contactEmail: 'hello@kolkatasilkroom.test',
+  contactPhone: '+919833014477',
+  inviteEmail: 'priya@kolkatasilkroom.test',
+  inviteName: 'Priya Bose',
+};
+
+/**
+ * The reseller price the G2 video sets, on one SKU. Keep in step with
+ * seed-demo-data.mjs, which clears it before every take.
+ *
+ * The figures hang together on purpose: the transfer price is what the
+ * store pays, and the suggested retail sits inside the range — the
+ * server refuses a suggestion outside it (`SUGGESTED_OUTSIDE_RANGE`)
+ * and an inverted range (`RETAIL_RANGE_INVERTED`).
+ */
+const RESELLER_PRICE = {
+  sku: 'RSH-SCARF-EMERALD',
+  transfer: '620',
+  min: '850',
+  max: '1100',
+  suggested: '950',
+};
+
+/**
+ * The price list's row for that SKU.
+ *
+ * Found by the SKU rather than the product name: the list is one row per
+ * VARIANT, and a product with several would put the name on all of them.
+ */
+function priceRow(page) {
+  return page.getByRole('row').filter({ hasText: RESELLER_PRICE.sku }).first();
+}
+
 /** What the delivery-fee video types. Anything but the seeded default. */
 const CUSTOMER_DELIVERY_FEE = '90';
 
@@ -2142,6 +2184,249 @@ export const FLOWS = {
         await stage.dwellOn(page.locator('.set-endpoints').first(), 2600);
         await stage.glide(-300);
         await page.waitForTimeout(1200);
+      },
+    },
+  },
+
+  'open-a-reseller-store': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-stores'({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Reseller stores', exact: true }).first(),
+          { after: 1600 },
+        );
+        await page.waitForURL(/\/reseller-stores$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.rs-kpis').first(), 3000);
+      },
+
+      async 'open-form'({ page, stage }) {
+        // `.first()`: with no stores the empty state carries a second
+        // button of the same name, and the header's is the one on screen.
+        await stage.clickIt(page.getByRole('button', { name: 'Open a reseller store' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 2600);
+      },
+
+      async names({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.typeIn(dialog.getByLabel('Store name'), RESELLER.storeName, { after: 500 });
+        await stage.typeIn(dialog.getByLabel('Name customers see'), RESELLER.displayName, {
+          after: 800,
+        });
+      },
+
+      async contact({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.typeIn(dialog.getByLabel('Contact email'), RESELLER.contactEmail, {
+          after: 400,
+        });
+        await stage.typeIn(dialog.getByLabel('Contact phone'), RESELLER.contactPhone, {
+          after: 800,
+        });
+      },
+
+      async wallet({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.dwellOn(dialog.getByLabel(/wallet/i).first(), 3000);
+      },
+
+      async invite({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.typeIn(dialog.getByLabel('Their email'), RESELLER.inviteEmail, { after: 400 });
+        await stage.typeIn(dialog.getByLabel('Their name'), RESELLER.inviteName, { after: 800 });
+      },
+
+      async created({ page, stage }) {
+        await stage.clickIt(
+          page.locator('.sk-dialog').getByRole('button', { name: 'Open the store' }).first(),
+          { after: 1800 },
+        );
+        // The ROW, not the dialog closing: a refusal (a name already
+        // taken, an address already registered) stays in the form.
+        const link = page.getByRole('link', { name: RESELLER.storeName }).first();
+        await link.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.rs-kpis').first(), 2400);
+      },
+
+      async detail({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: RESELLER.storeName }).first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/reseller-stores\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.getByRole('tablist').first(), 2600);
+      },
+
+      async details({ page, stage }) {
+        const facts = page.locator('.rs-facts-list').first();
+        await facts.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(facts, 3200);
+      },
+
+      async pause({ page, stage }) {
+        await stage.glide(-600);
+        await page.waitForTimeout(600);
+        await stage.clickIt(page.getByRole('button', { name: 'Pause', exact: true }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2600);
+        await stage.clickIt(dialog.getByRole('button', { name: 'Pause', exact: true }).first(), {
+          after: 1800,
+        });
+        // Resume appearing is the proof it paused. The dialog closes on
+        // a refusal too, and the card only offers Resume when it did.
+        await page
+          .getByRole('button', { name: 'Resume', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+      },
+
+      async outro({ page, stage }) {
+        // Named and NOT clicked: closing is final, and the video says so
+        // rather than demonstrating it.
+        await stage.dwellOn(page.getByRole('button', { name: 'Close for good' }).first(), 3000);
+        await stage.dwellOn(page.locator('.rs-card[data-tone="open"]').first(), 2400);
+      },
+    },
+  },
+
+  'set-a-reseller-price': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-list'({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Reseller price list', exact: true }).first(),
+          { after: 1600 },
+        );
+        await page.waitForURL(/\/reseller-stores\/price-list/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.locator('.rs-kpis').first(), 2800);
+      },
+
+      async table({ page, stage }) {
+        const row = priceRow(page);
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 3000);
+      },
+
+      async 'open-form'({ page, stage }) {
+        await stage.clickIt(priceRow(page).getByRole('button', { name: 'Set price' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // The four fields, which is what the narration is about — the
+        // dialog's own description is about overrides, and that is the
+        // `override` scene two further on.
+        await stage.dwellOn(dialog.locator('.rs-grid-2').first(), 2400);
+      },
+
+      async transfer({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.typeIn(dialog.getByLabel('Transfer price (₹)'), RESELLER_PRICE.transfer, {
+          clear: true,
+          after: 900,
+        });
+      },
+
+      async range({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.typeIn(dialog.getByLabel('Lowest retail (₹)'), RESELLER_PRICE.min, {
+          clear: true,
+          after: 400,
+        });
+        await stage.typeIn(dialog.getByLabel('Highest retail (₹)'), RESELLER_PRICE.max, {
+          clear: true,
+          after: 800,
+        });
+      },
+
+      async suggested({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.typeIn(dialog.getByLabel('Suggested retail (₹)'), RESELLER_PRICE.suggested, {
+          clear: true,
+          after: 900,
+        });
+      },
+
+      async saved({ page, stage }) {
+        await stage.clickIt(
+          page.locator('.sk-dialog').getByRole('button', { name: 'Save price' }).first(),
+          { after: 1800 },
+        );
+        // The button's LABEL flipping is the proof: an unpriced row says
+        // "Set price" and a priced one says "Edit". The dialog closes on
+        // a refusal too, and the row is what the narration reads.
+        const row = priceRow(page);
+        await row
+          .getByRole('button', { name: 'Edit', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(row, 3000);
+      },
+
+      async override({ page, stage }) {
+        await stage.glide(-500);
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+
+      async remove({ page, stage }) {
+        const row = priceRow(page);
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.clickIt(row.getByRole('button', { name: 'Remove', exact: true }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3000);
+      },
+
+      async outro({ page, stage }) {
+        await stage.clickIt(
+          page.locator('.sk-dialog').getByRole('button', { name: 'Remove', exact: true }).first(),
+          { after: 1800 },
+        );
+        // Back to unpriced, proved by the button's label going back.
+        const row = priceRow(page);
+        await row
+          .getByRole('button', { name: 'Set price' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.rs-strip').first(), 2400);
       },
     },
   },
