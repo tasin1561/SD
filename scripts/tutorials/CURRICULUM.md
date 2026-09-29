@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 15 filmed. Of the 75 left, **19 are `ready` today**, 54 need
+**90 tutorials.** 16 filmed. Of the 74 left, **18 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -32,19 +32,18 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (15):** A1–A6, B1, B2, C3, C4, C5, E1, E4, F2, F3. Every one is
-listed in its own entry below with what it covers and what its seeding does.
+**Filmed so far (16):** A1–A6, B1, B2, C3, C4, C5, E1, E4, F1, F2, F3. Every
+one is listed in its own entry below with what it covers and what its seeding
+does.
 
 **Next, in order, and all `ready`:**
 
-1. **F1 — inviting someone.** The invite link revealed once, resend, revoke,
-   changing a role. Pairs with F2, already filmed.
-2. **F5 — API keys and webhooks.** The secret shown once, revoked vs expired,
+1. **F5 — API keys and webhooks.** The secret shown once, revoked vs expired,
    and what auto-disabled means.
-3. **G1, G2 — reseller stores and the price they pay.**
-4. **E3 — taking money out.** Needs a positive balance: accept one seeded
+2. **G1, G2 — reseller stores and the price they pay.**
+3. **E3 — taking money out.** Needs a positive balance: accept one seeded
    top-up first.
-5. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
+4. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
    exist. An hour's work, then a 4-minute video.
 
 **Then build D0** (below) — the lifecycle seeding. It is still the single
@@ -613,15 +612,42 @@ settled from the wallet.
 
 ## F — Your team, and your account
 
-### F1. Inviting someone · `ready`
+### F1. Inviting someone · **FILMED** — `invite-a-colleague.mp4`
 
 **Promise** — a colleague can sign in, with only the access you meant to give.
-**Length** 3 min. **Prerequisites** A1.
-**Needs** nothing.
-**Covers** `/team`: the invite modal, the link revealed **once**, resending,
-revoking, and changing somebody's role. Worth showing that a non-admin sees the
-buttons and gets the server's refusal verbatim rather than a hidden control —
-the UI does not pretend to be the boundary.
+**Length** 2 min 10 s. **Prerequisites** A1.
+**Covers** `/team`: the invite modal, the link revealed **once**, resending
+(which issues a NEW link and kills the one already sent — the video says so,
+because a seller who resends without reading will wonder why the first link
+stopped working), revoking, and changing somebody's role through the confirm
+that restates who moves from what to what. Ends on the two things the page
+refuses to let you do to yourself, and on deactivation leaving history alone.
+
+**The narration says the invite dropdown offers only the six roles every account
+begins with, and that a role you BUILT is given after somebody joins.** That is
+true and worth saying: `CreateTeamInvitationDto.role` is the `SellerUserRole`
+enum, `sellerRoleIdForEnum` maps it onto one of the six seeded `seller_roles`
+rows, and a custom role has no enum value to be invited under. F2 teaches that
+roles are data you invent; without this sentence a seller looks for their own
+role in that box and does not find it.
+
+**Seeding:** the demo seller is ONE person, and that person is `You` — the row
+with a chip instead of a role select and no Deactivate button, which is exactly
+the row a video about changing somebody's role cannot use.
+`ensureTeamColleague` adds Shahidul Islam through the REAL invite-and-accept
+path rather than inserting a `seller_users` row, because the enum→role mapping
+is what makes the row one the product could have made. It also puts his role
+back (the confirm dialog restates "moves from Inventory to…", so a second take
+starting on Operations would read backwards) and hard-deletes the invitation
+written on camera — the table lists revoked ones too, so a soft delete would
+grow it by a row per take.
+
+**One thing to fix before this is published.** The invitation link on screen
+reads `http://localhost:3001/auth/accept-team-invitation?token=…` — the API
+builds it from `SELLER_APP_URL` in `apps/api/.env`, which is a local default
+pointing at a port nothing listens on. It is the only place in the library
+where a viewer reads a localhost URL. Set that variable to the real seller host,
+restart the API, and re-run this ONE video (about 800 credits).
 
 ### F2. Building a role · **FILMED** — `build-a-role.mp4`
 

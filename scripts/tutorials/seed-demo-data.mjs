@@ -140,6 +140,25 @@ export const TUTORIAL_EDIT_PRODUCT = {
 /** The role the roles video builds ON CAMERA. Keep in step with flows.mjs. */
 export const TUTORIAL_ROLE_NAME = 'Warehouse manager';
 
+/**
+ * The colleague the TEAM video changes the role of, and the person it
+ * invites on camera. Keep in step with flows.mjs.
+ *
+ * `role` is the invitation's enum; `roleKey` is the `seller_roles` row
+ * it maps to, which is what the seed resets to. The two must name the
+ * same role or the reset puts them somewhere the video does not expect.
+ */
+export const TEAM_COLLEAGUE = {
+  email: 'shahidul@rangpursilk.test',
+  fullName: 'Shahidul Islam',
+  password: 'Skydrop-Demo-2026',
+  role: 'INVENTORY',
+  roleKey: 'inventory',
+};
+
+/** Invited ON CAMERA. Removed before every take — an email may be invited once. */
+export const TEAM_INVITEE = { email: 'nusrat@rangpursilk.test' };
+
 /** The SKU the photos video uploads pictures to. Cleared before every take. */
 export const TUTORIAL_PHOTO_SKU = 'RSH-MUSLIN-ROSE';
 
@@ -456,6 +475,82 @@ async function clearVariantPhotos(sellerId) {
   await fs.rm(dir, { recursive: true, force: true });
   if (images.count > 0) {
     console.log(`  · removed ${images.count} picture(s) from ${TUTORIAL_PHOTO_SKU}`);
+  }
+}
+
+/**
+ * Give the TEAM video a colleague, and take away the ones it invited.
+ *
+ * The demo seller is one person, so `/team` opens on a Members list
+ * with a single row — and that row is YOU, which is exactly the row
+ * that has no role control and no Deactivate button (you may not
+ * change your own role, and the page says so with a chip instead of a
+ * select). A video about changing somebody's role needs somebody else.
+ *
+ * So one colleague is seeded through the REAL invite-and-accept path
+ * rather than inserted: `sellerRoleIdForEnum` maps the invitation's
+ * enum role onto one of the seller's own `seller_roles` rows, and an
+ * inserted user with a hand-picked `roleId` would be a row the product
+ * never makes.
+ *
+ * Everything the video CREATES goes: the invitation it writes on camera
+ * (twice over, since the resend re-issues it), and the colleague's role
+ * is put back — the video changes it, and the fourth scene's tile and
+ * the confirm dialog both name the role being moved FROM.
+ */
+async function ensureTeamColleague(sellerId, sellerToken) {
+  const existing = await prisma.sellerUser.findFirst({
+    where: { sellerId, email: TEAM_COLLEAGUE.email },
+    select: { id: true },
+  });
+
+  if (existing === null) {
+    const invite = await call('/seller/team/invitations', {
+      method: 'POST',
+      token: await sellerToken(),
+      body: {
+        email: TEAM_COLLEAGUE.email,
+        fullName: TEAM_COLLEAGUE.fullName,
+        role: TEAM_COLLEAGUE.role,
+      },
+    });
+    await call('/auth/seller/accept-team-invitation', {
+      method: 'POST',
+      body: {
+        token: invite.token,
+        password: TEAM_COLLEAGUE.password,
+        fullName: TEAM_COLLEAGUE.fullName,
+      },
+    });
+    console.log(`  · added "${TEAM_COLLEAGUE.fullName}" to the team`);
+  }
+
+  // Back to the role the video moves them OFF. The confirm dialog
+  // restates "moves from X to Y", so a second take starting on Y would
+  // film a sentence that reads backwards.
+  const role = await prisma.sellerRoleDefinition.findFirst({
+    where: { sellerId, key: TEAM_COLLEAGUE.roleKey },
+    select: { id: true, name: true },
+  });
+  if (role !== null) {
+    const reset = await prisma.sellerUser.updateMany({
+      where: { sellerId, email: TEAM_COLLEAGUE.email, roleId: { not: role.id } },
+      data: { roleId: role.id, role: TEAM_COLLEAGUE.role, deletedAt: null },
+    });
+    if (reset.count > 0) {
+      console.log(`  · put ${TEAM_COLLEAGUE.fullName} back on "${role.name}"`);
+    }
+  }
+
+  // The invitation the video writes on camera. HARD delete: the page
+  // lists revoked and expired ones too, so a soft delete would leave
+  // the Invitations table growing by a row per take while the
+  // narration calls it "the one you just made".
+  const invites = await prisma.sellerUserInvitation.deleteMany({
+    where: { sellerId, email: TEAM_INVITEE.email },
+  });
+  if (invites.count > 0) {
+    console.log(`  · removed ${invites.count} invitation(s) to ${TEAM_INVITEE.email}`);
   }
 }
 
@@ -970,6 +1065,7 @@ async function main() {
   // records against.
   const slug = process.argv[2];
   if (slug === 'find-your-way-around') await placeTourOrders(sellerToken);
+  if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
 
   console.log('\nReady.');
   console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);

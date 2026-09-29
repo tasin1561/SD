@@ -579,6 +579,61 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'invite-a-colleague',
+    title: 'Inviting someone',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'You are not going to run this alone. Somebody packs, somebody answers the phone, somebody watches the money — and each of them should see their part and no more.',
+      },
+      {
+        id: 'open-team',
+        say: 'Team, in the sidebar. Who is already here, who has been invited and not turned up yet, and how many different kinds of access you have defined.',
+      },
+      {
+        id: 'invite',
+        say: 'Invite member asks three things: their name, the address they will sign in with, and what they are able to do from the moment they arrive.',
+      },
+      {
+        id: 'role',
+        say: 'The list here is the six roles every account starts with. A role you built yourself on the Roles screen is given after they join, not from this box.',
+      },
+      {
+        id: 'create',
+        say: 'Create it, and two things happen. Skydrop emails them a link that sets their password, and it shows you that same link here.',
+      },
+      {
+        id: 'link-once',
+        say: 'This is the only time you will see it. Copy it now if you would rather send it yourself — leave this page and it is gone for good.',
+      },
+      {
+        id: 'outstanding',
+        say: 'The invitation is on the list underneath now, with the day it stops working. Until somebody uses it, it counts against the outstanding figure at the top.',
+      },
+      {
+        id: 'resend',
+        say: 'If it goes astray, resend. That issues a fresh link and shows it to you again — and the one you sent before stops working, which is rather the point.',
+      },
+      {
+        id: 'revoke',
+        say: 'Revoke is for one you should not have sent: a typo in the address, or somebody who left before they started. The link dies the moment you confirm.',
+      },
+      {
+        id: 'role-change',
+        say: 'Somebody already here changes role from their own row. Skydrop restates the move before making it — who, from what, to what — because this is access, not a preference.',
+      },
+      {
+        id: 'yourself',
+        say: 'Your own row has no dropdown and no remove button. You cannot take your own access away, and that is what stops this screen being a mistake nobody can undo.',
+      },
+      {
+        id: 'outro',
+        say: 'Deactivating somebody stops them signing in and leaves everything they did exactly where it is. Nothing about the past changes — only what happens next.',
+      },
+    ],
+  },
+  {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
     subtitle: 'Skydrop for sellers',

@@ -144,6 +144,22 @@ const PHOTOS = {
   ],
 };
 
+/**
+ * Who the team video invites, and whose role it changes.
+ *
+ * `role` is the invite modal's enum value; `newRoleName` is a role
+ * NAME, because the member row's select lists the seller's own
+ * `seller_roles` by name and their ids are uuids. Keep both in step with
+ * seed-demo-data.mjs, which puts the colleague back afterwards.
+ */
+const TEAM = {
+  fullName: 'Nusrat Jahan',
+  email: 'nusrat@rangpursilk.test',
+  role: 'FINANCE',
+  colleague: 'Shahidul Islam',
+  newRoleName: 'Operations',
+};
+
 /** What the delivery-fee video types. Anything but the seeded default. */
 const CUSTOMER_DELIVERY_FEE = '90';
 
@@ -1603,6 +1619,142 @@ export const FLOWS = {
         await stage.glide(-360);
         await page.waitForTimeout(1200);
         await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2400);
+      },
+    },
+  },
+
+  'invite-a-colleague': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-team'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Team', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/team$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.set-kpis').first(), 2600);
+      },
+
+      async invite({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Invite member' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.typeIn(dialog.getByLabel(/^Full name/), TEAM.fullName, { after: 400 });
+        await stage.typeIn(dialog.getByLabel(/^Email/), TEAM.email, { after: 700 });
+      },
+
+      async role({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        const select = dialog.getByLabel(/^Role/);
+        await stage.point(select, { settle: 700 });
+        await select.selectOption(TEAM.role);
+        await page.waitForTimeout(900);
+        await stage.clearHalo();
+      },
+
+      async create({ page, stage }) {
+        const dialog = page.locator('.sk-dialog').first();
+        await stage.clickIt(dialog.getByRole('button', { name: /^Create invitation/ }).first(), {
+          after: 1600,
+        });
+        // The reveal card IS the proof the invitation was written — the
+        // dialog closes either way, and a refusal stays inside it.
+        await page.locator('.set-reveal').first().waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+      },
+
+      async 'link-once'({ page, stage }) {
+        const reveal = page.locator('.set-reveal').first();
+        await reveal.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(reveal, 3400);
+      },
+
+      async outstanding({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: TEAM.email }).first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 3000);
+      },
+
+      async resend({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: TEAM.email }).first();
+        await stage.clickIt(row.getByRole('button', { name: /Resend/ }).first(), { after: 1600 });
+        // A NEW link, which is the whole lesson — waited for by the
+        // reveal card coming back, since the take dismissed nothing.
+        const reveal = page.locator('.set-reveal').first();
+        await reveal.waitFor({ state: 'visible', timeout: 25_000 });
+        await reveal.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(reveal, 2400);
+      },
+
+      async revoke({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: TEAM.email }).first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.clickIt(row.getByRole('button', { name: 'Revoke', exact: true }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2200);
+        await stage.clickIt(dialog.getByRole('button', { name: 'Revoke invitation' }).first(), {
+          after: 1800,
+        });
+        // Revoked, not gone: the row stays and its chip changes. Waited
+        // for by the Revoke button leaving, which only a real revoke does.
+        await page
+          .getByRole('row')
+          .filter({ hasText: TEAM.email })
+          .first()
+          .getByRole('button', { name: 'Revoke', exact: true })
+          .waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForTimeout(900);
+      },
+
+      async 'role-change'({ page, stage }) {
+        const member = page.locator('.team-member').filter({ hasText: TEAM.colleague }).first();
+        await member.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        const select = member.locator('select').first();
+        await stage.point(select, { settle: 700 });
+        await select.selectOption({ label: TEAM.newRoleName });
+        await page.waitForTimeout(700);
+        await stage.clearHalo();
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2600);
+        await stage.clickIt(dialog.getByRole('button', { name: 'Change role' }).first(), {
+          after: 2000,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
+        await page.waitForTimeout(1000);
+      },
+
+      async yourself({ page, stage }) {
+        const you = page.locator('.team-member').filter({ hasText: 'You' }).first();
+        await you.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(you, 3200);
+      },
+
+      async outro({ page, stage }) {
+        const member = page.locator('.team-member').filter({ hasText: TEAM.colleague }).first();
+        await stage.dwellOn(member.getByRole('button', { name: 'Deactivate' }).first(), 2800);
+        await stage.glide(-320);
+        await page.waitForTimeout(1200);
       },
     },
   },
