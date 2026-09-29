@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 10 filmed. Of the 80 left, **24 are `ready` today**, 54 need
+**90 tutorials.** 11 filmed. Of the 79 left, **23 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -436,16 +436,27 @@ with the money and linking through to where it now sits in the wallet.
 
 ## E — Money
 
-### E1. Paying money in · `ready`
+### E1. Paying money in · **FILMED** — `pay-money-in.mp4`
 
-**Promise** — you can record a bank transfer so your wallet is credited.
-**Length** 3 min. **Prerequisites** A2.
-**Needs** nothing. The wizard is a claim form and works on a blank account.
-**Covers** the three-step top-up wizard: the bank accounts in full, the amount
-**in that bank's currency** with the rupee equivalent beside it, and the proof
-upload. The sentence that has to land: **a top-up is a claim, not a payment.**
-Nothing is credited until somebody at Skydrop has seen it in the bank, which is
-why the Top-ups tab fills and the ledger does not.
+Covers the three-step top-up wizard: the bank accounts in full, the amount **in
+that bank's currency** with the rupee equivalent beside it, and the reference.
+The sentence that has to land is said twice, by the page and by the narration:
+**a top-up is a claim, not a payment.** The last frame is the proof — the
+Top-ups tab carrying one pending row while the balance still reads ₹0.00 and
+"No activity yet".
+
+It picks the **taka** account deliberately. An INR account shows no conversion,
+so the "rupee equivalent underneath" the narration points at would be the same
+number printed twice.
+
+**The receipt drop zone is pointed at, not used.** A transaction reference or a
+receipt satisfies the requirement, and uploading would mean inventing a bank
+document to put on camera. The narration says the two are alternatives, which is
+what the page says too.
+
+The seed removes PENDING claims before each take — ACCEPTED ones are left, since
+a wallet entry sits behind them and the ledger is append-only, so deleting the
+claim would leave a credit with nothing explaining it.
 
 ### E2. Reading your wallet · `needs demo data`
 

@@ -82,6 +82,13 @@ const NEW_STORE = {
   note: 'Instagram shop — same stock, different name',
 };
 
+/** What the top-up video records. A real bank account of ours, a reference that is not. */
+const TOPUP = {
+  bank: 'BRAC Bank',
+  amount: '25000',
+  reference: 'TXN-BRAC-778120394',
+};
+
 /** What the stock-alert video types. Keep in step with seed-demo-data.mjs. */
 const STOCK_ALERTS = {
   accountDefault: '10',
@@ -1312,6 +1319,88 @@ export const FLOWS = {
         await stage.dwellOn(page.locator('.wal-setting__desc').first(), 2400);
         await stage.glide(-320);
         await page.waitForTimeout(1400);
+      },
+    },
+  },
+
+  'pay-money-in': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-wallet'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Wallet', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/wallet$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+      },
+
+      async 'choose-account'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /Top-up wallet/i }).first(), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.locator('.wal-bank').first().waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.wal-banks').first(), 2600);
+      },
+
+      async 'pick-bd'({ page, stage }) {
+        // The TAKA account on purpose. It is the one that makes the next
+        // scene mean anything — an INR account shows no conversion, so
+        // the "rupee equivalent underneath" the narration points at
+        // would be the same number twice.
+        await stage.clickIt(page.locator('.wal-bank').filter({ hasText: TOPUP.bank }).first(), {
+          after: 1800,
+        });
+        await page.waitForTimeout(900);
+      },
+
+      async amount({ page, stage }) {
+        await stage.typeIn(page.getByLabel(/Amount you paid/i), TOPUP.amount, { after: 1200 });
+      },
+
+      async evidence({ page, stage }) {
+        await stage.typeIn(page.getByLabel(/Transaction ID/i), TOPUP.reference, { after: 800 });
+        // The receipt drop zone is POINTED AT, not used. Either one
+        // satisfies the requirement, and uploading would mean inventing
+        // a bank document to put on camera — a fabricated record is not
+        // something to put in a tutorial, and the narration says the two
+        // are alternatives anyway.
+        await stage.dwellOn(page.locator('.sk-dropzone, [class*="drop"]').first(), 1800);
+      },
+
+      async submit({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /Record|Submit/i }).last(), {
+          after: 2400,
+        });
+      },
+
+      async claim({ page, stage }) {
+        await page
+          .getByRole('heading', { name: /We have your top-up/i })
+          .waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.locator('.wal-done__body').first(), 2600);
+        await stage.dwellOn(page.locator('.wal-done__aside').first(), 2200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Done|^Close/i }).last(), {
+          after: 1800,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.getByRole('table').first(), 2600);
       },
     },
   },

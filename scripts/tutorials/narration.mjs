@@ -503,6 +503,49 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'pay-money-in',
+    title: 'Putting money into your wallet',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Your wallet pays for deliveries, and it is topped up by bank transfer. The one thing to understand first: recording a transfer here is a claim, not a payment.',
+      },
+      {
+        id: 'open-wallet',
+        say: 'Wallet, under Money. Your balance, what is on its way, and every movement that has ever happened — and the button to record a transfer you have made.',
+      },
+      {
+        id: 'choose-account',
+        say: 'First, which of our accounts you paid into. They are shown in full — bank, account name, account number — because you pay from your own banking app, not from here.',
+      },
+      {
+        id: 'pick-bd',
+        say: 'Pick the one you actually used. We hold accounts in both countries, so a Bangladeshi seller transfers taka at home rather than paying to send rupees.',
+      },
+      {
+        id: 'amount',
+        say: 'Then what you paid, in that bank\u2019s own currency. Skydrop shows the rupee equivalent underneath, because your wallet is kept in rupees whatever you sent.',
+      },
+      {
+        id: 'evidence',
+        say: 'And something we can match it against — your bank\u2019s transaction reference, or the receipt itself. One of the two is required; without either there is nothing to find on our statement.',
+      },
+      {
+        id: 'submit',
+        say: 'Record it, and that is your part done. It goes to whoever checks our statements, and they either match it or come back to you.',
+      },
+      {
+        id: 'claim',
+        say: 'Read this carefully, because it is the sentence people are surprised by. Nothing has been added to your balance. We check every transfer by hand, and that usually takes a day or two.',
+      },
+      {
+        id: 'outro',
+        say: 'Which is why it appears under Top-ups, still pending, and your ledger has not moved. Money reaches the ledger when somebody has seen it in the bank, and not before.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

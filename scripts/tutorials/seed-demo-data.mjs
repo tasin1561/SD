@@ -686,6 +686,22 @@ async function clearTutorialSettings(sellerId) {
   // ?? seller.defaultLowStockThreshold ?? null` and returns
   // SKIPPED_NO_THRESHOLD on null, which is exactly what "nothing alerts"
   // means and exactly what a new seller has.
+  // The top-up video RECORDS a transfer on camera, and its last scene is
+  // the Top-ups tab showing exactly one pending row. Left in place, take
+  // two shows two rows and take three shows three — and the narration
+  // says "it appears under Top-ups", singular, pointing at a list that
+  // is mostly previous takes.
+  //
+  // PENDING only. An ACCEPTED one has a wallet entry behind it and the
+  // ledger is append-only, so deleting the claim would leave a credit
+  // with nothing explaining it — worse than a second row on screen.
+  const topups = await prisma.walletTopupRequest.deleteMany({
+    where: { sellerId, status: 'PENDING' },
+  });
+  if (topups.count > 0) {
+    console.log(`  · removed ${topups.count} pending top-up claim(s) from a previous take`);
+  }
+
   const account = await prisma.seller.updateMany({
     where: { id: sellerId, NOT: { defaultLowStockThreshold: null } },
     data: { defaultLowStockThreshold: null },
