@@ -119,7 +119,7 @@ Covers `/products/new`: the shared weight and declared value, options as axes
 rather than a tree, the four variants multiplied out, and the SKU being
 permanent once saved.
 
-### A4. Announcing your first consignment · `ready` — **written, proven, awaiting voice**
+### A4. Announcing your first consignment · **FILMED** — `announce-a-consignment.mp4`
 
 **Promise** — you have told Skydrop stock is coming, and you chose the route
 that decides what you are billed.
@@ -130,9 +130,7 @@ not obvious and is the reason this entry said `ready` when it was not:
 declaration is refused rather than quietly routed to India — so the more
 interesting half of the form could not be filmed at all. `seed-demo-data.mjs`
 now provisions one (`fulfilsOrders: false`, which the resolver re-checks).
-**Status:** narration and flow are written, and the flow has been driven end to
-end with `record.mjs --check`. The only thing missing is the audio — see
-[the voice budget](#the-voice-budget).
+**Status:** FILMED (2026-09-30). 12 scenes, 2 min 11 s.
 **Covers** the question the whole page turns on — **Dhaka or India?** Send it
 to Dhaka and Skydrop moves it across the border and bills the freight; send it
 to India and you did that yourself and owe nothing. Then the contents, picked
@@ -140,16 +138,25 @@ with the variant picker, with expected quantity and optional unit cost (and
 what an absent unit cost costs you later on the inventory valuation). Ends on
 the register and on correcting a declaration while it is still PENDING.
 
-### A5. The shopfronts you sell under · `ready`
+### A5. The shopfronts you sell under · **FILMED** — `add-a-shopfront.mp4`
 
-**Promise** — you can add a second brand without splitting your stock.
-**Length** 2 min. **Prerequisites** A1.
-**Needs** nothing.
-**Covers** `/settings/stores`: create, rename, make default, close and reopen —
-each asking first. The load-bearing sentence is the one the page itself leads
-with: a store decides **only which brand an order belongs to**. Products,
-stock, wallet and couriers are shared. "Store" is a word that invites the
-opposite assumption, which is exactly why this needs saying out loud.
+Covers `/settings/stores`: create, close, reopen and make default — each asking
+first, and each confirmation filmed for what it restates. The load-bearing
+sentence is the one the page itself leads with: a store decides **only which
+brand an order belongs to**. Products, stock, wallet and couriers are shared.
+"Store" is a word that invites the opposite assumption, which is why the video
+dwells on the page saying so in its own words rather than only narrating it.
+
+Rename is the one action not filmed — it is the same dialog as create, and a
+scene whose only content is re-opening a form already shown earns nothing.
+
+**Its seeding is the interesting part.** The take adds "Dhaka Boutique" and ends
+with it as the default, so a second take would open on a register that already
+has it, fail the add on a duplicate name, and film a store the narration calls
+"not the default" while it is. `clearTutorialSettings` removes it and puts the
+original store back as default — moving the flag BEFORE the delete, because the
+partial unique index allows exactly one default per seller and deleting the
+default first would leave order create with nothing to pre-select.
 
 ### A6. The delivery fee your customer pays · `ready`
 

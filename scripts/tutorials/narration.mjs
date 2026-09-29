@@ -327,6 +327,96 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'add-a-shopfront',
+    title: 'Selling under more than one name',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Say you sell under two names — your own label, and a boutique brand. Skydrop calls each one a store, and this is how you add the second.',
+      },
+      {
+        id: 'open-settings',
+        say: 'Stores live under Settings, at the bottom of the Account group. Everything about how your account behaves is on this one hub.',
+      },
+      {
+        id: 'open-stores',
+        say: 'The Stores tile, under Account. And its description is the whole lesson in a sentence: a store decides which brand an order belongs to, and nothing else.',
+      },
+      {
+        id: 'shared',
+        say: 'Read that twice, because the word invites the opposite. Products, stock, your wallet and your couriers are shared across every store — the same goods on the same shelf.',
+      },
+      {
+        id: 'tiles',
+        say: 'Three standing facts. How many shopfronts you have, how many orders are filed across all of them, and the one that matters most — where a new order goes by default.',
+      },
+      {
+        id: 'add',
+        say: 'Add a store. Read what it promises before you have typed anything: a new store never becomes the default, so adding one cannot move where your orders are filed.',
+      },
+      {
+        id: 'name',
+        say: 'Give it a name — this is the brand your customer sees, not a code — and a note to yourself about which channel it is.',
+      },
+      {
+        id: 'saved',
+        say: 'And there it is. Open, no orders yet, and not the default. Nothing about the orders you have already placed moved, because nothing about them was asked to.',
+      },
+      {
+        id: 'close',
+        say: 'Closing one asks first. New orders stop being filed under it, the orders already there are untouched, and you can reopen it whenever you like.',
+      },
+      {
+        id: 'make-default',
+        say: 'Making it the default asks too, and names both stores — because this is what decides where an order with no store named on it lands, including every row of a spreadsheet upload.',
+      },
+      {
+        id: 'outro',
+        say: 'So a store is a name on an order, not a separate business. One catalogue, one shelf, one wallet — and as many brands standing in front of them as you need.',
+      },
+    ],
+  },
+  {
+    slug: 'set-your-delivery-fee',
+    title: 'The delivery fee your customer pays',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Most customers in India pay cash when the parcel arrives, and part of what they hand over is delivery. This is where you set what that normally comes to.',
+      },
+      {
+        id: 'open-settings',
+        say: 'Settings again, and this time the second group — the answers you would otherwise type on every single order you place.',
+      },
+      {
+        id: 'open-defaults',
+        say: 'Order defaults is one field, and the page leads with the reason: everything here stays editable on the order itself. It only saves you typing the usual answer.',
+      },
+      {
+        id: 'whose-figure',
+        say: 'Look at the badge beside the heading first. Skydrop default means nobody here has chosen this number — and an inherited figure and one you picked look identical in the box.',
+      },
+      {
+        id: 'not-ours',
+        say: 'The line underneath draws the distinction the field exists for. This is what you charge your customer. It is not what Skydrop charges you to move the parcel.',
+      },
+      {
+        id: 'type',
+        say: 'So type what you normally charge. It is added to the collectable amount on every new order from here on, and nothing else in Skydrop reads it.',
+      },
+      {
+        id: 'save',
+        say: 'Save, and the badge changes to say it is your own figure. New orders start there, and any single order that needs a different number can still have one.',
+      },
+      {
+        id: 'outro',
+        say: 'That is the whole page. A default is not a rule — it is the answer you would have typed anyway, filled in for you, and overridable every time.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

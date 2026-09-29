@@ -112,6 +112,12 @@ export const TUTORIAL_CSV_CUSTOMERS = [
  */
 export const TUTORIAL_CONSIGNMENT_REF = 'RSH-CN-2026-07';
 
+/** The shopfront the store video adds ON CAMERA. Keep in step with flows.mjs. */
+export const TUTORIAL_STORE_NAME = 'Dhaka Boutique';
+
+/** The per-seller key the delivery-fee video writes. Cleared before every take. */
+const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
+
 /**
  * Orders placed so the ORIENTATION video has a dashboard with something
  * on it. Only that video wants them: every other seed run clears the
@@ -597,6 +603,79 @@ async function clearTutorialConsignments(sellerId) {
 }
 
 /**
+ * Undo what the two SETTINGS videos do on camera.
+ *
+ * Both of them film a FIRST-TIME path, and both leave the account in a
+ * state where the second take would film something else — the same
+ * lesson the profile video taught the expensive way, where a saved bank
+ * account changed the submit button's label and the re-take hung on a
+ * button that was no longer there.
+ *
+ * The store video adds "Dhaka Boutique" and makes it the default. Left
+ * in place, the next take opens on a register that already has it, the
+ * add fails on a duplicate name, and the store the narration says is
+ * "not the default" is the default. So it goes, and the original store
+ * is put back as the default — which also matters to every OTHER video,
+ * since an order with no store named on it is filed under whatever the
+ * default currently is.
+ *
+ * The delivery-fee video's whole fourth scene is the badge reading
+ * "Skydrop default". That is TRUE only while the seller has no override
+ * of their own, and the video's own save is what creates one. Clearing
+ * it is what makes the take repeatable.
+ *
+ * A store with orders against it is left alone and said out loud: on a
+ * dev box that means somebody used this seller for something else, and
+ * deleting their work to tidy a video would be worse than a second row.
+ */
+async function clearTutorialSettings(sellerId) {
+  const store = await prisma.sellerStore.findFirst({
+    where: { sellerId, name: TUTORIAL_STORE_NAME },
+    select: { id: true, isDefault: true },
+  });
+  if (store !== null) {
+    const orders = await prisma.order.count({ where: { storeId: store.id } });
+    if (orders > 0) {
+      console.log(
+        `  · leaving the "${TUTORIAL_STORE_NAME}" store alone — ${orders} order(s) are filed under it`,
+      );
+    } else {
+      // The default moves FIRST. A partial unique index allows exactly
+      // one default per seller, so promoting the original while the
+      // tutorial store still holds the flag would be refused — and
+      // deleting the default first would leave order create with
+      // nothing to pre-select in between.
+      if (store.isDefault) {
+        const original = await prisma.sellerStore.findFirst({
+          where: { sellerId, kind: 'CHANNEL', deletedAt: null, id: { not: store.id } },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, name: true },
+        });
+        if (original === null) {
+          throw new Error(
+            `"${TUTORIAL_STORE_NAME}" is the only store left — refusing to delete the default.`,
+          );
+        }
+        await prisma.$transaction([
+          prisma.sellerStore.update({ where: { id: store.id }, data: { isDefault: false } }),
+          prisma.sellerStore.update({ where: { id: original.id }, data: { isDefault: true } }),
+        ]);
+        console.log(`  · put "${original.name}" back as the default store`);
+      }
+      await prisma.sellerStore.delete({ where: { id: store.id } });
+      console.log(`  · removed a previous take's "${TUTORIAL_STORE_NAME}" store`);
+    }
+  }
+
+  const fee = await prisma.sellerSettingOverride.deleteMany({
+    where: { sellerId, key: DELIVERY_FEE_KEY },
+  });
+  if (fee.count > 0) {
+    console.log("  · cleared the seller's own delivery fee, back to the Skydrop default");
+  }
+}
+
+/**
  * Give the ORIENTATION video a dashboard worth looking at.
  *
  * Runs only for that slug. The tour narrates a recent-orders list and a
@@ -667,6 +746,7 @@ async function main() {
   await clearPreviousOrders(sellerId);
   await clearPreviousImports(sellerId);
   await clearTutorialConsignments(sellerId);
+  await clearTutorialSettings(sellerId);
 
   // Per-video tailoring, AFTER the clearing. The slug is optional: with
   // none, this is the shared world every video that needs nothing extra

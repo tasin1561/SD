@@ -76,6 +76,31 @@ const CONSIGNMENT = {
   reference: 'RSH-CN-2026-07',
 };
 
+/** The shopfront the store video adds. Keep in step with seed-demo-data.mjs. */
+const NEW_STORE = {
+  name: 'Dhaka Boutique',
+  note: 'Instagram shop — same stock, different name',
+};
+
+/** What the delivery-fee video types. Anything but the seeded default. */
+const CUSTOMER_DELIVERY_FEE = '90';
+
+/**
+ * Open the Settings hub from the sidebar.
+ *
+ * Shared by the two settings videos. The hub is the only way in to
+ * either page — neither has a sidebar link of its own — so this is the
+ * step both of them have to take and the one place it is written.
+ */
+async function openSettingsHub({ page, stage }) {
+  await stage.clickIt(page.getByRole('link', { name: 'Settings', exact: true }).first(), {
+    after: 1400,
+  });
+  await page.waitForURL(/\/settings$/, { timeout: 30_000 });
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(1200);
+}
+
 /**
  * Sign in off camera.
  *
@@ -915,6 +940,183 @@ export const FLOWS = {
         );
         await stage.glide(220);
         await page.waitForTimeout(1600);
+      },
+    },
+  },
+
+  'add-a-shopfront': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-settings'(ctx) {
+        await openSettingsHub(ctx);
+      },
+
+      async 'open-stores'({ page, stage }) {
+        // The tile by HREF, not by accessible name. A ListRow puts the
+        // title AND the description inside one <a>, so a name match is
+        // matching a paragraph — and the paragraph is the thing most
+        // likely to be reworded.
+        const tile = page.locator('a[href="/settings/stores"]').first();
+        await stage.dwellOn(tile, 2200);
+        await stage.clickIt(tile, { after: 1400 });
+        await page.waitForURL(/\/settings\/stores/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+      },
+
+      async shared({ page, stage }) {
+        // The sentence the whole video exists to say, in the app's own
+        // words. Filming the page saying it is worth more than the
+        // narration saying it alone.
+        await stage.dwellOn(page.locator('.set-card__lead').first(), 2600);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(page.locator('.set-kpis').first(), 3000);
+      },
+
+      async add({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Add a store' }).first(), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // The dialog's own description makes the promise the narration
+        // is about — a new store never becomes the default.
+        await stage.dwellOn(dialog.locator('p').first(), 2200);
+      },
+
+      async name({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel('Name'), NEW_STORE.name, { after: 500 });
+        await stage.typeIn(dialog.getByLabel('Note'), NEW_STORE.note, {
+          delay: 34,
+          after: 500,
+        });
+      },
+
+      async saved({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Add store' }).first(), {
+          after: 1800,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 30_000 });
+        const row = page.getByRole('row').filter({ hasText: NEW_STORE.name });
+        await row.first().waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(row.first(), 2400);
+      },
+
+      async close({ page, stage }) {
+        // Close and REOPEN in one scene: the narration says both in one
+        // breath ("you can reopen it whenever you like"), and splitting
+        // them would leave a scene whose only content is undoing the
+        // previous one.
+        const row = () => page.getByRole('row').filter({ hasText: NEW_STORE.name }).first();
+        await stage.clickIt(row().getByRole('button', { name: 'Close' }), { after: 900 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2200);
+        await stage.clickIt(page.getByRole('button', { name: 'Close store' }).first(), {
+          after: 1600,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForTimeout(900);
+
+        await stage.clickIt(row().getByRole('button', { name: 'Reopen' }), { after: 900 });
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.clickIt(page.getByRole('button', { name: 'Reopen store' }).first(), {
+          after: 1400,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForTimeout(900);
+      },
+
+      async 'make-default'({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: NEW_STORE.name }).first();
+        await stage.clickIt(row.getByRole('button', { name: 'Make default' }), { after: 900 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2600);
+        await stage.clickIt(page.getByRole('button', { name: 'Make default' }).last(), {
+          after: 1800,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForTimeout(1200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.set-kpis').first(), 2600);
+        await stage.dwellOn(page.getByRole('table').first(), 2200);
+      },
+    },
+  },
+
+  'set-your-delivery-fee': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-settings'(ctx) {
+        await openSettingsHub(ctx);
+      },
+
+      async 'open-defaults'({ page, stage }) {
+        const tile = page.locator('a[href="/settings/orders"]').first();
+        await stage.dwellOn(tile, 2000);
+        await stage.clickIt(tile, { after: 1400 });
+        await page.waitForURL(/\/settings\/orders/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+      },
+
+      async 'whose-figure'({ page, stage }) {
+        // The badge, not the field. It is the one thing about this page
+        // a glance cannot tell you, and the seed clears the seller's
+        // override precisely so this take opens on "Skydrop default".
+        await stage.dwellOn(page.locator('.sk-sh__note .set-fact').first(), 3000);
+      },
+
+      async 'not-ours'({ page, stage }) {
+        await stage.dwellOn(page.locator('.set-form-grid p.set-muted').first(), 3000);
+      },
+
+      async type({ page, stage }) {
+        await stage.typeIn(page.getByLabel(/Delivery fee charged/i), CUSTOMER_DELIVERY_FEE, {
+          clear: true,
+          after: 800,
+        });
+      },
+
+      async save({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Save/ }).first(), { after: 2000 });
+        // The badge FLIPS on success, which is the proof the save landed
+        // and the thing the narration points at. Waited for by text
+        // rather than by a fixed pause.
+        await page
+          .locator('.sk-sh__note .set-fact')
+          .filter({ hasText: 'Your own figure' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.sk-sh__note .set-fact').first(), 2400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2400);
+        await stage.dwellOn(page.getByLabel(/Delivery fee charged/i), 2000);
       },
     },
   },
