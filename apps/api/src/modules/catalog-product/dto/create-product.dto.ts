@@ -34,10 +34,6 @@ export class CreateProductDto {
   @MaxLength(120)
   externalRef?: string;
 
-  @ApiProperty({ required: false, maxLength: 120 })
-  @IsOptional()
-  @IsString()
-  @MaxLength(120)
   @ApiProperty({ required: false, minimum: 0, description: 'Default weight in grams' })
   @IsOptional()
   @IsInt()

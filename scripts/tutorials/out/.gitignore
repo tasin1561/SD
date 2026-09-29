@@ -1,0 +1,5 @@
+# Generated media. The SCRIPTS are committed; the mp4s, the webm
+# recordings, the narration audio and the verification frames are not —
+# they are rebuilt by `make-tutorials.sh` and they are large.
+*
+!.gitignore
