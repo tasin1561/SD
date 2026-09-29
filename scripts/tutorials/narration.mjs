@@ -417,6 +417,53 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'be-told-before-you-run-out',
+    title: 'Being told before you run out',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'The worst way to find out a product has run out is a customer ordering one. Skydrop can warn you first, and this is where you say when.',
+      },
+      {
+        id: 'open-settings',
+        say: 'Settings, then Stock alerts — in the same group as the order defaults, because it is the same kind of thing: a standing answer you set once.',
+      },
+      {
+        id: 'state',
+        say: 'And read the badge before anything else. Off means exactly that: no product you sell will warn you about anything, however low it gets.',
+      },
+      {
+        id: 'blank-vs-zero',
+        say: 'Which is the distinction this page turns on. An empty box never warns you. Zero warns you — but only once the product is completely gone, which is usually too late.',
+      },
+      {
+        id: 'set-default',
+        say: 'So pick a number you could still reorder from. Ten units means every product tells you when it drops below ten, without you setting anything per product.',
+      },
+      {
+        id: 'saved',
+        say: 'Saved, and the badge now says what it will do. That covers everything in your catalogue that has no opinion of its own.',
+      },
+      {
+        id: 'open-variant',
+        say: 'Some products need their own number though. Open Products, pick one, and open the SKU itself — the code underneath the product name.',
+      },
+      {
+        id: 'per-sku',
+        say: 'Stock handling, on the SKU. The same three states, said the same way: blank means use your default, zero means warn me only when it is empty.',
+      },
+      {
+        id: 'override',
+        say: 'Set twenty-five here and this SKU ignores your default entirely. Worth doing for anything slow to restock — a product six weeks from Dhaka needs more warning than one you can reprint.',
+      },
+      {
+        id: 'outro',
+        say: 'That is the whole mechanism. One number for the catalogue, a different one wherever it matters, and a warning that reaches you before a customer does.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

@@ -258,10 +258,18 @@ the file are still the words in `narration.mjs`.
 
 ## Gotchas worth knowing before a re-take
 
-- **Seller login is throttled at 5 attempts per 15 minutes** per email + IP. A
-  re-take straight after a run of probes fails at sign-in; `flows.mjs` reports
-  the page's own verdict rather than a bare timeout, so it is obvious. Wait the
-  window out.
+- **Seller login is throttled at 5 attempts per 15 minutes** per email + IP, and
+  a video costs THREE sign-ins — two `--check` passes and the take — so the
+  fourth video in any quarter of an hour is refused. `flows.mjs` reports the
+  page's own verdict rather than a bare timeout, so it is obvious.
+  **Do not wait it out by retrying.** A refused attempt writes its own
+  `blocked` key with a fresh TTL, so each retry pushes the window further out
+  (observed at 839 s remaining after a few). Run
+  `node scripts/tutorials/lib/clear-login-throttle.mjs`, which
+  `make-tutorials.sh` now does before every video: the counter lives in Redis,
+  clearing it changes no product code, and the helper refuses a non-local
+  `REDIS_URL` — on a real deployment that counter is the brute-force protection
+  on seller accounts.
 - **Seed before each video, not once.** `make-tutorials.sh` does. The product
   video creates `Rajshahi Silk Kurti` on camera; if the order video runs after
   it, that product is in its catalogue as four out-of-stock rows.

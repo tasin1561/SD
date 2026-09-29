@@ -673,6 +673,33 @@ async function clearTutorialSettings(sellerId) {
   if (fee.count > 0) {
     console.log("  · cleared the seller's own delivery fee, back to the Skydrop default");
   }
+
+  // The stock-alert video's third scene is the badge reading "Off —
+  // nothing alerts by default", and its whole lesson is that blank and
+  // zero are different. Both are true only from a standing start: the
+  // video's own two saves set the account default AND a per-SKU
+  // override, and a second take would open on "Warning below 10 units"
+  // and on a SKU that already says 25.
+  //
+  // Cleared to NULL rather than to a number, because null IS the state
+  // being filmed — `StockAlertService` resolves `variant.lowStockThreshold
+  // ?? seller.defaultLowStockThreshold ?? null` and returns
+  // SKIPPED_NO_THRESHOLD on null, which is exactly what "nothing alerts"
+  // means and exactly what a new seller has.
+  const account = await prisma.seller.updateMany({
+    where: { id: sellerId, NOT: { defaultLowStockThreshold: null } },
+    data: { defaultLowStockThreshold: null },
+  });
+  const perSku = await prisma.productVariant.updateMany({
+    where: { product: { sellerId }, NOT: { lowStockThreshold: null } },
+    data: { lowStockThreshold: null },
+  });
+  if (account.count > 0 || perSku.count > 0) {
+    console.log(
+      `  · cleared low-stock thresholds — account default${account.count > 0 ? '' : ' (already off)'}` +
+        `, ${perSku.count} per-SKU override(s)`,
+    );
+  }
 }
 
 /**

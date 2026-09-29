@@ -24,3 +24,6 @@ const requireFromApi = createRequire(path.join(REPO_ROOT, 'apps', 'api', 'packag
 const db = requireFromApi('@skydrop/db');
 export const prisma = db.prisma;
 export const argon2 = requireFromApi('argon2');
+
+/** The SAME client apps/api throttles with, so the keys are read the same way. */
+export const Redis = requireFromApi('ioredis').default ?? requireFromApi('ioredis');

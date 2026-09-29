@@ -96,6 +96,11 @@ for slug in "${SLUGS[@]}"; do
   # The slug is passed so the seed can tailor the world per video — the
   # orientation video wants a dashboard with orders on it, and every
   # other video wants the order list cleared.
+  # Sign-in is throttled 5 per 15 minutes per email+IP, and a video costs
+  # three sign-ins (two checks and the take) — so the fourth video in any
+  # quarter of an hour is refused at the login screen. A LOCAL counter,
+  # cleared locally; the helper refuses a non-local Redis.
+  node scripts/tutorials/lib/clear-login-throttle.mjs
   node scripts/tutorials/seed-demo-data.mjs "$slug"
   node scripts/tutorials/generate-voice.mjs "$slug"
   node scripts/tutorials/record.mjs "$slug"

@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 5 filmed. Of the 85 left, **29 are `ready` today**, 54 need
+**90 tutorials.** 8 filmed. Of the 82 left, **26 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -158,16 +158,19 @@ original store back as default — moving the flag BEFORE the delete, because th
 partial unique index allows exactly one default per seller and deleting the
 default first would leave order create with nothing to pre-select.
 
-### A6. The delivery fee your customer pays · `ready`
+### A6. The delivery fee your customer pays · **FILMED** — `set-your-delivery-fee.mp4`
 
-**Promise** — new orders start with the right collectable amount.
-**Length** 2 min. **Prerequisites** A1.
-**Needs** nothing. `/settings/orders` is one field.
-**Covers** the distinction the field exists to draw: this is what **your
-customer** pays for delivery, added to the collectable amount. It is not what
-Skydrop charges you to move the parcel — that is on `/wallet/limits`. Also why
-the note says whose figure it currently is, since an inherited default and a
-number you chose look identical in the box.
+Covers the distinction the field exists to draw: this is what **your customer**
+pays for delivery, added to the collectable amount. It is not what Skydrop
+charges you to move the parcel — that is on `/wallet/limits`. The video opens
+on the badge rather than the field, because an inherited default and a number
+you chose look identical in the box, and closes on the badge flipping to "Your
+own figure" — which is the proof the save landed and the only visible
+difference the page makes.
+
+The seed clears the seller's override before every take, or the second one
+films a page that already says "Your own figure" while the narration is
+explaining what "Skydrop default" means.
 
 ---
 

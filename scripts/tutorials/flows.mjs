@@ -82,6 +82,14 @@ const NEW_STORE = {
   note: 'Instagram shop — same stock, different name',
 };
 
+/** What the stock-alert video types. Keep in step with seed-demo-data.mjs. */
+const STOCK_ALERTS = {
+  accountDefault: '10',
+  perSku: '25',
+  product: 'Jamdani Cotton Saree',
+  sku: 'RSH-JAMDANI-IVORY',
+};
+
 /** What the delivery-fee video types. Anything but the seeded default. */
 const CUSTOMER_DELIVERY_FEE = '90';
 
@@ -1117,6 +1125,110 @@ export const FLOWS = {
       async outro({ page, stage }) {
         await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2400);
         await stage.dwellOn(page.getByLabel(/Delivery fee charged/i), 2000);
+      },
+    },
+  },
+
+  'be-told-before-you-run-out': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-settings'(ctx) {
+        const { page, stage } = ctx;
+        await openSettingsHub(ctx);
+        const tile = page.locator('a[href="/settings/stock"]').first();
+        await stage.clickIt(tile, { after: 1400 });
+        await page.waitForURL(/\/settings\/stock/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+      },
+
+      async state({ page, stage }) {
+        // The seed clears the seller's default precisely so this opens
+        // on "Off — nothing alerts by default", which is the state the
+        // narration describes and the one a new seller is actually in.
+        await stage.dwellOn(page.locator('.sk-sh__note .set-fact').first(), 3000);
+      },
+
+      async 'blank-vs-zero'({ page, stage }) {
+        await stage.dwellOn(page.locator('form.set-form-grid p.set-muted').first(), 3200);
+      },
+
+      async 'set-default'({ page, stage }) {
+        await stage.typeIn(page.getByLabel('Default threshold'), STOCK_ALERTS.accountDefault, {
+          clear: true,
+          after: 800,
+        });
+      },
+
+      async saved({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Save/ }).first(), { after: 1800 });
+        // The badge flipping is the proof the save landed, and it is
+        // what the narration points at. Waited for by its text.
+        await page
+          .locator('.sk-sh__note .set-fact')
+          .filter({ hasText: /Warning below/ })
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.sk-sh__note .set-fact').first(), 2400);
+      },
+
+      async 'open-variant'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Products', exact: true }).first(), {
+          after: 1400,
+        });
+        await page.waitForURL(/\/products/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(
+          page.getByRole('link', { name: STOCK_ALERTS.product, exact: true }).first(),
+          { after: 1600 },
+        );
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The SKU code IS the link to the variant — there is no other
+        // control on the row that opens it.
+        await stage.clickIt(page.getByRole('link', { name: STOCK_ALERTS.sku }).first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/variants\//, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+      },
+
+      async 'per-sku'({ page, stage }) {
+        const field = page.getByLabel('Low-stock alert at');
+        await field.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(field, 2800);
+      },
+
+      async override({ page, stage }) {
+        await stage.typeIn(page.getByLabel('Low-stock alert at'), STOCK_ALERTS.perSku, {
+          clear: true,
+          after: 700,
+        });
+        // The Save beside the field, not the page's other buttons —
+        // scoped to the panel that owns it.
+        await stage.clickIt(
+          page
+            .locator('.inv-lookup')
+            .filter({ has: page.getByLabel('Low-stock alert at') })
+            .getByRole('button', { name: /^Save/ })
+            .first(),
+          { after: 2000 },
+        );
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.getByLabel('Low-stock alert at'), 2400);
+        await stage.glide(-240);
+        await page.waitForTimeout(1400);
       },
     },
   },
