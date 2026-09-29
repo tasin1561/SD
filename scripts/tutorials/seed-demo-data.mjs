@@ -232,7 +232,7 @@ export const CATALOGUE_IMPORT = {
  * Passing `--lifecycle` runs it whatever the slug, which is how it is
  * built the first time.
  */
-const LIFECYCLE_SLUGS = new Set([]);
+const LIFECYCLE_SLUGS = new Set(['where-is-my-parcel']);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
 const LIFECYCLE_REFS = LIFECYCLE_PARCELS.map((p) => p.ref);

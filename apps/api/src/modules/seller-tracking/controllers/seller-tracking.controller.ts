@@ -1,4 +1,13 @@
-import { Controller, Get, HttpCode, HttpStatus, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SellerCapability, ShipmentStatus } from '@skydrop/db';
 import { CurrentSeller } from '../../../common/decorators/current-seller.decorator';
@@ -44,13 +53,26 @@ export class SellerTrackingController {
   @ApiOperation({ summary: 'Parcels on their way, newest first' })
   async list(
     @CurrentSeller() seller: AuthenticatedSeller,
-    @Query('status') status?: ShipmentStatus,
+    @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('limit') limit?: string,
   ): Promise<{ items: TrackedShipmentRow[] }> {
     await this.restrictions.assertAllowed(seller.id, SellerCapability.TRACKING_VIEW);
+    // `@Query('status') status?: ShipmentStatus` is a TYPE, and a query
+    // string is whatever the caller sent — so an unknown value went
+    // straight into a `where` on an enum column and came back as a 500.
+    // The seller's own screen did exactly that for months, sending an
+    // ORDER status where a shipment one belongs. A bad query parameter
+    // should never be an internal error: it should say which value and
+    // what was allowed.
+    if (status !== undefined && !(status in ShipmentStatus)) {
+      throw new BadRequestException({
+        code: 'INVALID_SHIPMENT_STATUS',
+        message: `"${status}" is not a shipment status. One of: ${Object.keys(ShipmentStatus).join(', ')}`,
+      });
+    }
     const items = await this.svc.list(seller.id, {
-      ...(status === undefined ? {} : { status }),
+      ...(status === undefined ? {} : { status: status as ShipmentStatus }),
       ...(search === undefined ? {} : { search }),
       ...(limit === undefined ? {} : { limit: Number(limit) }),
     });

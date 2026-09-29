@@ -6,8 +6,9 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 21 filmed. Of the 69 left, **13 are `ready` today**, 54 need
-demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
+**90 tutorials.** 22 filmed, and D0 is built — so section D is no longer
+blocked. Of the 68 left, 12 are `ready` without any lifecycle at all, most of
+D / E / K is `ready` now that D0 exists, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,20 +33,26 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (21):** A1–A6, B1, B2, C3, C4, C5, C6, E1, E3, E4, F1, F2, F3,
-F5, G1, G2. Every one is listed in its own entry below with what it covers and
-what its seeding does.
+**Filmed so far (22):** A1–A6, B1, B2, C3, C4, C5, C6, D1, E1, E3, E4, F1, F2,
+F3, F5, G1, G2. Every one is listed in its own entry below with what it covers
+and what its seeding does.
 
-**D0 IS BUILT** (see its entry below) — six parcels in six states, one command,
-idempotent. So the next agent films SECTION D, which is now unblocked: D1
-(where is my parcel), D2 (the customer was not there), D3 (it is coming back),
-D5 (the call cap), D6 (damaged in our hands). Read D0's entry first — it says
-what the world contains, and the three faults the build uncovered.
+**D0 IS BUILT** and D1 is filmed against it, which proves the world end to end.
+So the next agent carries on through SECTION D: **D2** (the customer was not
+there), **D3** (it is coming back), **D5** (the call cap), **D6** (damaged in
+our hands). Read D0's entry first — it says what the world contains and the
+three faults the build uncovered.
 
 **Add the slug to `LIFECYCLE_SLUGS` in `seed-demo-data.mjs`** when you film one,
-or its take will run against a box that has never been driven.
+or its take runs against a box that has never been driven.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
+
+**Filming these screens is finding real bugs at a steady rate** — five so far,
+each one on a path nothing else exercises: a gallery that rendered every fresh
+picture broken, a webhook switch that was a silent dead end, a catalogue
+importer whose preview crashed, saved column mappings that drove nothing, and a
+tracking filter that 500'd. **Budget time for the fix as well as the film.**
 
 **Then build D0** (below) — the lifecycle seeding. It is still the single
 highest-leverage thing in this document: it unblocks 20+ entries in D, E and K
@@ -586,16 +593,40 @@ films a fuller order list than the first take did. That is an improvement, not
 a regression, but it is the kind of thing worth knowing before staring at a
 diff between two takes.
 
-### D1. Where is my parcel · `needs demo data`
+### D1. Where is my parcel · **FILMED** — `where-is-my-parcel.mp4`
 
 **Promise** — you can answer a customer asking where their parcel is, without
 ringing anyone.
-**Length** 3 min. **Prerequisites** B5. **Needs** D0.
-**Covers** `/tracking`: every parcel carrying a waybill, the search, the three
-tiles (on the move / delivery failed / coming back), and the row expanding in
-place to show the scan history. Entirely read-only, and that is worth saying —
-there is no button here because there is nothing the seller can make the
-courier do from this screen.
+**Length** 1 min 47 s. **Prerequisites** B5. **Needs** D0, and it is in
+`LIFECYCLE_SLUGS`.
+**Covers** `/tracking`: every parcel carrying a waybill, the three tiles and
+the small print under them (they count the parcels SHOWN, not the fleet), the
+two filters a seller actually comes for, the scan history, the search, and the
+fact that nothing on the screen is a button. **The history opens BENEATH the
+table, not inside the row** — this entry said "expanding in place" and it does
+not.
+
+**FILMING FOUND A 500 ON THE ONE FILTER A SELLER COMES HERE FOR.** The
+component's `FILTERS` list said `DELIVERY_FAILED`, which is an ORDER status;
+the shipment enum's value is `DELIVERY_ATTEMPTED`. So the tab sent Prisma a
+value the column cannot hold and the whole screen came back `API 500
+(INTERNAL_ERROR)`. The KPI tile counted the same non-existent value and
+therefore read **0 failed deliveries for ever**, beside a parcel that had
+plainly failed one. Two faults, one mistake, both invisible to typecheck
+because a query string is a string.
+
+Fixed, and pinned twice: `tracking-filters-are-shipment-statuses.test.ts`
+reads the FILTERS list out of the source and checks every value against the
+enum, and `seller-tracking-status-filter.spec.ts` makes an unknown `?status=`
+a **400 that names the value and lists what was allowed** rather than a 500 —
+a bad query parameter should never be an internal error.
+
+**And a third: a delivery attempt was drawn against every scan.** The timeline
+joined attempts to scans on the minute alone, which is right when scans are
+hours apart and wrong the moment a parcel moves quickly — five simulator scans
+inside one minute all matched the single attempt, so "In Transit — Attempt 1 —
+Failed" appeared against a parcel that was simply moving. An attempt now
+attaches only to a `DELIVERY_ATTEMPTED` scan, which is the scan that caused it.
 
 ### D2. The customer was not there · `needs demo data`
 

@@ -37,9 +37,28 @@ export function ParcelTimeline({
   readonly parcel: TrackedShipmentDetail;
   readonly header?: TimelineHeader | undefined;
 }): ReactElement {
+  /**
+   * A delivery attempt belongs to the scan that CAUSED it, and that scan
+   * is a DELIVERY_ATTEMPTED one. Nothing else.
+   *
+   * This was keyed on the minute alone, which is right most of the time
+   * (real scans are hours apart) and wrong exactly when a parcel moves
+   * quickly: five scans inside one minute all matched the single
+   * attempt, so "In Transit — Attempt 1 — Failed" appeared against a
+   * parcel that was simply moving. The minute stays as the tie-break
+   * between SEVERAL attempts; the status is what decides whether a scan
+   * gets one at all.
+   */
   const attemptsByTime = new Map(
     parcel.attempts.map((a) => [new Date(a.attemptedAt).toISOString().slice(0, 16), a]),
   );
+  const attemptFor = (e: {
+    eventAt: Date | string;
+    status: string;
+  }): (typeof parcel.attempts)[number] | undefined =>
+    e.status === 'DELIVERY_ATTEMPTED'
+      ? attemptsByTime.get(new Date(e.eventAt).toISOString().slice(0, 16))
+      : undefined;
 
   if (parcel.events.length === 0) {
     return (
@@ -58,7 +77,7 @@ export function ParcelTimeline({
       : shipmentStatusKind(newestFirst[0].status as ShipmentStatus);
 
   const steps: TimelineStep[] = [...newestFirst].reverse().map((e, i, all): TimelineStep => {
-    const attempt = attemptsByTime.get(new Date(e.eventAt).toISOString().slice(0, 16));
+    const attempt = attemptFor(e);
     const kind = shipmentStatusKind(e.status as ShipmentStatus);
     const tone: TimelineTone =
       kind === 'failed' ? 'failed' : kind === 'rto' ? 'returning' : 'default';

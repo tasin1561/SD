@@ -921,6 +921,53 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'where-is-my-parcel',
+    title: 'Where is my parcel',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A customer messages asking where their order is. You can answer that yourself, in about ten seconds, without ringing anybody.',
+      },
+      {
+        id: 'open-tracking',
+        say: 'Tracking is every parcel that has actually left. One still being picked is not here — it has not been handed to anyone, so there is nothing yet to track.',
+      },
+      {
+        id: 'tiles',
+        say: 'Three figures, and read the small print under them: they count the parcels shown, not your whole fleet. Filter the list and they follow it.',
+      },
+      {
+        id: 'register',
+        say: 'Each row is a parcel: its waybill, the order it belongs to, who it is going to, and the last thing the courier scanned, with when and where.',
+      },
+      {
+        id: 'failed',
+        say: 'Delivery failed is the filter you will come here for. The courier went and could not hand it over — which is not the same as lost, and not yet the same as coming back.',
+      },
+      {
+        id: 'coming-back',
+        say: 'Coming back is the other one. Once a parcel turns round it is on its way to our warehouse, and the note says the part that costs you money: you pay the leg home.',
+      },
+      {
+        id: 'history',
+        say: 'History opens the whole scan trail underneath. This is what you read to the customer — every place it has been, in order, with the courier’s own words.',
+      },
+      {
+        id: 'search',
+        say: 'And when they give you a number rather than a story, search takes the waybill, our own parcel number, or just the name on the box.',
+      },
+      {
+        id: 'read-only',
+        say: 'Notice there is nothing to press. This screen only tells you things — there is no button here that makes a courier do anything, because there is no such button.',
+      },
+      {
+        id: 'outro',
+        say: 'Acting on a parcel happens on its order, which is one click from every row. This screen is for the question the customer actually asked.',
+      },
+    ],
+  },
+  {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
     subtitle: 'Skydrop for sellers',

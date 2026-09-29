@@ -2636,6 +2636,116 @@ export const FLOWS = {
     },
   },
 
+  'where-is-my-parcel': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-tracking'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Tracking', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/tracking$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2400);
+      },
+
+      async tiles({ page, stage }) {
+        // The tiles render only on the UNFILTERED view and only with
+        // rows — see the component's own note about why they say "of the
+        // parcels shown". A take against a seller with no dispatched
+        // parcel would open on nothing at all, which is why this video
+        // is in LIFECYCLE_SLUGS.
+        const kpis = page.locator('.ord-kpis').first();
+        await kpis.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(kpis, 3200);
+      },
+
+      async register({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: 'Lakshmi Raghavan' }).first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 3200);
+      },
+
+      async failed({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: 'Delivery failed' }).first(), {
+          after: 1600,
+        });
+        // The parcel D0 drove to NDR. Waiting on the ROW rather than the
+        // tab's own state is what proves the filter did something.
+        await page
+          .getByRole('row')
+          .filter({ hasText: 'Vikram Desai' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('table').first(), 2600);
+      },
+
+      async 'coming-back'({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: 'Coming back' }).first(), {
+          after: 1600,
+        });
+        await page
+          .getByRole('row')
+          .filter({ hasText: 'Sneha Pillai' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('table').first(), 2600);
+      },
+
+      async history({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: 'Sneha Pillai' }).first();
+        await stage.clickIt(row.getByRole('button', { name: /History/ }).first(), { after: 1600 });
+        // The timeline is fetched only when asked for, so the scene must
+        // wait for it rather than for the button's label to flip.
+        const timeline = page.locator('.ord-section').filter({ hasText: 'Parcel history' }).first();
+        await timeline.waitFor({ state: 'visible', timeout: 25_000 });
+        await timeline.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(timeline, 3400);
+      },
+
+      async search({ page, stage }) {
+        await stage.glide(-700);
+        await page.waitForTimeout(500);
+        await stage.clickIt(page.getByRole('tab', { name: 'All parcels' }).first(), {
+          after: 1200,
+        });
+        await stage.typeIn(page.getByLabel('Search parcels'), 'Anil', { after: 1400 });
+        await page
+          .getByRole('row')
+          .filter({ hasText: 'Anil Varma' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.getByRole('table').first(), 2400);
+      },
+
+      async 'read-only'({ page, stage }) {
+        await stage.typeIn(page.getByLabel('Search parcels'), '', { clear: true, after: 1200 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('table').first(), 3000);
+      },
+
+      async outro({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: 'Lakshmi Raghavan' }).first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(row.locator('a.ord-link').first(), 3000);
+      },
+    },
+  },
+
   'what-skydrop-charges': {
     async prologue(ctx) {
       await signIn(ctx);

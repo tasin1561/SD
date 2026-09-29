@@ -39,9 +39,23 @@ import { ParcelTimeline } from './parcel-timeline';
  * one out of a page of rows is exactly the reading a seller would act
  * on.
  */
+/**
+ * The value is a `ShipmentStatus`; the label is what a seller calls it.
+ *
+ * THIS LIST SAID `DELIVERY_FAILED`, WHICH IS AN ORDER STATUS AND NOT A
+ * SHIPMENT ONE. The shipment enum's value is `DELIVERY_ATTEMPTED`, so
+ * the tab sent Prisma a value the column cannot hold and the whole
+ * screen came back `API 500 (INTERNAL_ERROR)` — on the one filter a
+ * seller comes to this page for. The tile below counted the same
+ * non-existent value and therefore read 0 for ever, which is the
+ * quieter half of the same mistake.
+ *
+ * Keep the LABEL: "delivery attempted" is the courier's word for it and
+ * "delivery failed" is the seller's, and the seller is who is reading.
+ */
 const FILTERS: ReadonlyArray<readonly [string, string]> = [
   ['', 'All parcels'],
-  ['DELIVERY_FAILED', 'Delivery failed'],
+  ['DELIVERY_ATTEMPTED', 'Delivery failed'],
   ['RTO_IN_TRANSIT', 'Coming back'],
   ['IN_TRANSIT', 'In transit'],
   ['OUT_FOR_DELIVERY', 'Out for delivery'],
@@ -59,7 +73,7 @@ export function TrackingIndex(): ReactElement {
   // chip on, every row is that status by construction and a breakdown
   // of it is a tautology.
   const unfiltered = status === '' && search.trim() === '';
-  const failed = rows.filter((r) => r.status === 'DELIVERY_FAILED').length;
+  const failed = rows.filter((r) => r.status === 'DELIVERY_ATTEMPTED').length;
   const comingBack = rows.filter((r) => r.status.startsWith('RTO_')).length;
   const moving = rows.filter(
     (r) => r.status === 'IN_TRANSIT' || r.status === 'OUT_FOR_DELIVERY',
