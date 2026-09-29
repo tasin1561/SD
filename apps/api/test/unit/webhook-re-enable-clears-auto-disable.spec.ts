@@ -49,11 +49,7 @@ describe('re-enabling a webhook endpoint', () => {
   describe.each([
     [
       'seller',
-      (captured: Captured[]) =>
-        new SellerWebhookService(
-          fakePrisma(captured) as never,
-          { assertPublicHttpsUrl: () => Promise.resolve() } as never,
-        ),
+      (captured: Captured[]) => new SellerWebhookService(fakePrisma(captured) as never),
       (svc: unknown, isActive: boolean) =>
         (svc as SellerWebhookService).update('seller-1', 'ep-1', { isActive } as never),
     ],

@@ -60,6 +60,11 @@ and most of the admin side.
   video passed `--check` twice while saving a role with no permissions, because
   its step skipped quietly on a selector miss. Check mode only tests what the
   steps assert.
+- **Run `pnpm typecheck` after ADDING A SPEC, not only after touching src.**
+  `apps/api`'s tsconfig covers `test/`, and neither the jest run nor `pnpm
+  lint` does. A spec constructing a service with the wrong number of arguments
+  passed the whole unit suite here and turned CI red on the commit after it
+  (82fb69f4) — the same shape as the "gate a subset" trap, one directory over.
 - **`TUT_CHECK_SHOTS=1 node scripts/tutorials/record.mjs --check <slug>` writes
   the end of every scene to `out/verify/<slug>-check/`.** Check mode proves a
   step was REACHED, never that the frame showed what the narration says about
