@@ -188,6 +188,26 @@ const WITHDRAWAL_SCHEDULE_KEYS = [
   'wallet.auto_withdraw_keep_balance_inr',
 ];
 
+/**
+ * What the INTEGRATIONS video creates on camera, and the endpoint it
+ * finds already broken. Keep in step with flows.mjs.
+ *
+ * The URLs use `example.com` on purpose: the SSRF guard resolves a
+ * webhook host and FAILS CLOSED on one that does not
+ * (`assertPublicHttpsUrl`), so an invented domain would be refused at
+ * create — and `example.com` is the address reserved for exactly this,
+ * which is also what the form's own placeholder suggests.
+ */
+export const INTEGRATIONS = {
+  keyName: 'Rangpur order sync',
+  expiredKeyName: 'Stocktake script (2025)',
+  endpointUrl: 'https://example.com/skydrop/orders',
+  endpointName: 'Order sync',
+  brokenUrl: 'https://example.com/skydrop/old-warehouse',
+  brokenName: 'Warehouse screen (old)',
+  events: ['order.confirmed', 'shipment.dispatched', 'shipment.delivered'],
+};
+
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
 
@@ -713,6 +733,92 @@ async function walletWorldFor(slug, sellerId, sellerToken, staffToken) {
 }
 
 /**
+ * The world the INTEGRATIONS video needs: nothing it is about to make,
+ * and one endpoint that has already failed.
+ *
+ * Both screens it films are "issue a thing, see its secret once" —
+ * so a second take must start with neither the key nor the endpoint the
+ * first one created. A key cannot be deleted through the product at all
+ * (the controller has create, list and revoke, and nothing else), so a
+ * take left behind would pile up a revoked row per run under a
+ * narration calling the list "your keys".
+ *
+ * The auto-disabled endpoint is SEEDED rather than produced, because
+ * producing one means fifty consecutive failed deliveries. Every column
+ * written here is one `OutboundWebhookDispatchService` writes itself,
+ * with its own wording for the reason, so the row is the one the
+ * pipeline would have made — and it is the state a seller meets at
+ * three in the morning and understands least, which is why the video
+ * spends a scene on it rather than describing it.
+ */
+async function integrationsWorldFor(slug, sellerId) {
+  if (slug !== 'keys-and-webhooks') return;
+
+  const keys = await prisma.sellerApiKey.deleteMany({
+    where: { sellerId, name: { in: [INTEGRATIONS.keyName, INTEGRATIONS.expiredKeyName] } },
+  });
+  if (keys.count > 0) {
+    console.log(`  · removed ${keys.count} previous take's API key(s)`);
+  }
+
+  // An EXPIRED key, so the scene about the two dead states has both on
+  // screen instead of one and a description of the other. Expiry is
+  // judged in the BROWSER (`keyState()` compares `expiresAt` against
+  // `Date.now()`), so a date in the past is the whole of it — there is
+  // no column and no job that marks a key expired.
+  await prisma.sellerApiKey.create({
+    data: {
+      sellerId,
+      name: INTEGRATIONS.expiredKeyName,
+      keyPrefix: 'skd_b_TutExp',
+      // Never a usable key: `ApiKeyGuard` looks a caller up by the
+      // SHA-256 of what they present, and nothing hashes to this.
+      keyHash: `tutorial-expired-key-${sellerId}`,
+      lastUsedAt: new Date(Date.now() - 40 * 86_400_000),
+      expiresAt: new Date(Date.now() - 9 * 86_400_000),
+      createdAt: new Date(Date.now() - 100 * 86_400_000),
+    },
+  });
+  console.log(`  · seeded the expired "${INTEGRATIONS.expiredKeyName}" API key`);
+
+  // Deliveries first: they FK the endpoint, and a soft delete would
+  // leave the row on nobody's screen while still holding the URL.
+  const stale = await prisma.sellerWebhookEndpoint.findMany({
+    where: { sellerId, url: { in: [INTEGRATIONS.endpointUrl, INTEGRATIONS.brokenUrl] } },
+    select: { id: true },
+  });
+  if (stale.length > 0) {
+    await prisma.$transaction([
+      prisma.outboundWebhookDelivery.deleteMany({
+        where: { endpointId: { in: stale.map((e) => e.id) } },
+      }),
+      prisma.sellerWebhookEndpoint.deleteMany({ where: { id: { in: stale.map((e) => e.id) } } }),
+    ]);
+    console.log(`  · removed ${stale.length} previous take's webhook endpoint(s)`);
+  }
+
+  const failedAt = new Date(Date.now() - 3 * 3_600_000);
+  await prisma.sellerWebhookEndpoint.create({
+    data: {
+      sellerId,
+      url: INTEGRATIONS.brokenUrl,
+      name: INTEGRATIONS.brokenName,
+      secretKey: 'seeded-for-the-tutorial-not-a-real-secret',
+      subscribedEvents: INTEGRATIONS.events,
+      isActive: false,
+      lastSuccessAt: new Date(Date.now() - 6 * 86_400_000),
+      lastFailureAt: failedAt,
+      consecutiveFailureCount: 50,
+      autoDisabledAt: failedAt,
+      // The dispatcher's own wording, so the paragraph on screen is the
+      // one a real auto-disable writes.
+      autoDisabledReason: 'consecutive failures reached threshold (50)',
+    },
+  });
+  console.log(`  · seeded the auto-disabled "${INTEGRATIONS.brokenName}" endpoint`);
+}
+
+/**
  * Remove the product the second video creates, so the take can create it
  * again. Hard delete: these rows are minutes old, carry no stock and no
  * order, and a soft delete would leave the SKU's unique key occupied —
@@ -1225,6 +1331,7 @@ async function main() {
   if (slug === 'find-your-way-around') await placeTourOrders(sellerToken);
   if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
+  await integrationsWorldFor(slug, sellerId);
 
   console.log('\nReady.');
   console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);

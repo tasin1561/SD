@@ -16,14 +16,17 @@ import type { UpdateWebhookEndpointDto } from '../dto/update-webhook-endpoint.dt
  *     end without missed signatures (`previousSecretKey` +
  *     `previousSecretKeyValidUntil`).
  *
- * Deferred (Phase 1B):
- *   - The actual outbound DELIVERY pipeline (BullMQ worker that fires
- *     POSTs at configured endpoints with HMAC-SHA256 over the payload,
- *     respects retry policy, auto-disables after N failures). The
- *     schema rows (`OutboundWebhookDelivery`) exist for this; the
- *     worker does not.
- *   - The "test fire" button in the UI is a no-op stub until the
- *     worker lands.
+ * DELIVERY IS LIVE, and this comment said otherwise for a long time.
+ * `SellerWebhookDeliveryModule` is registered in `app.module.ts`;
+ * `OutboundWebhookListenerService` subscribes to the order lifecycle
+ * bus and `OutboundWebhookDispatchService` sends the HMAC-SHA256
+ * signed POSTs, retries them and auto-disables an endpoint after
+ * `WEBHOOK_AUTO_DISABLE_THRESHOLD` consecutive failures.
+ *
+ * Still absent: any "test fire" control. `lastTestedAt` /
+ * `lastTestStatus` are columns nothing writes and no view selects, and
+ * there is no endpoint behind them — do not surface either as a
+ * feature.
  *
  * Soft-delete only: secrets are kept indefinitely (audit trail).
  */
@@ -163,7 +166,28 @@ export class SellerWebhookService {
     if (body.name !== undefined) data.name = body.name;
     if (body.description !== undefined) data.description = body.description;
     if (body.subscribedEvents !== undefined) data.subscribedEvents = body.subscribedEvents;
-    if (body.isActive !== undefined) data.isActive = body.isActive;
+    if (body.isActive !== undefined) {
+      data.isActive = body.isActive;
+      // Switching an endpoint back on after the pipeline turned it off is a
+      // person saying "try again": the failure streak starts over.
+      //
+      // WITHOUT THIS THE SWITCH IS A DEAD END, silently. Auto-disable sets
+      // `isActive = false` AND stamps `autoDisabledAt`, and the delivery
+      // listener selects on `isActive: true AND autoDisabledAt: null` — so
+      // re-enabling alone flips the switch to on, leaves the row's chip
+      // reading "Auto-disabled", and sends nothing, for ever. The only way
+      // out was to delete the endpoint and add it again, which issues a new
+      // secret the seller then has to redeploy.
+      //
+      // `StoreWebhookService.update` has done this since it was written; the
+      // two callers share this table, this dispatcher and this listener, and
+      // only one of them was right. Keep them in step.
+      if (body.isActive) {
+        data.autoDisabledAt = null;
+        data.autoDisabledReason = null;
+        data.consecutiveFailureCount = 0;
+      }
+    }
 
     return this.prisma.client.sellerWebhookEndpoint.update({
       where: { id },

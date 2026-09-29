@@ -75,7 +75,7 @@ export function WebhooksIndex(): ReactElement {
       <SetPageHeader
         crumbs={CRUMBS}
         title="Outbound webhooks"
-        subtitle="Wire Skydrop events into your own systems via HMAC-signed HTTPS POSTs. Configure here; the delivery worker will fire once it ships in Phase 1B."
+        subtitle="Wire Skydrop events into your own systems via HMAC-signed HTTPS POSTs. Each endpoint gets its own secret, and every delivery is signed with it."
         /*
           The comps show a delivery success rate and a p95 latency. We
           store neither — `consecutiveFailureCount` and the two last-*

@@ -173,6 +173,18 @@ const WITHDRAWAL = {
   keep: '5000',
 };
 
+/**
+ * What the integrations video issues. Keep in step with
+ * seed-demo-data.mjs, which clears both and seeds the broken endpoint.
+ */
+const INTEGRATIONS = {
+  keyName: 'Rangpur order sync',
+  keyDays: '90',
+  endpointUrl: 'https://example.com/skydrop/orders',
+  endpointName: 'Order sync',
+  brokenName: 'Warehouse screen (old)',
+};
+
 /** What the delivery-fee video types. Anything but the seeded default. */
 const CUSTOMER_DELIVERY_FEE = '90';
 
@@ -1934,6 +1946,201 @@ export const FLOWS = {
       async outro({ page, stage }) {
         await stage.dwellOn(page.locator('.wal-settings').first(), 2800);
         await stage.glide(-280);
+        await page.waitForTimeout(1200);
+      },
+    },
+  },
+
+  'keys-and-webhooks': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-keys'(ctx) {
+        const { page, stage } = ctx;
+        await openSettingsHub(ctx);
+        // By href, not by name: a settings tile's accessible name is its
+        // title AND its description run together, so an exact-name
+        // lookup finds nothing and a loose one is a paragraph.
+        await stage.clickIt(page.locator('a[href="/settings/api-keys"]').first(), { after: 1600 });
+        await page.waitForURL(/\/settings\/api-keys/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+      },
+
+      async issue({ page, stage }) {
+        await stage.typeIn(page.getByLabel('Key name'), INTEGRATIONS.keyName, { after: 500 });
+        await stage.typeIn(page.getByLabel('Expires in days'), INTEGRATIONS.keyDays, {
+          after: 900,
+        });
+      },
+
+      async 'confirm-create'({ page, stage }) {
+        // The FORM's button, scoped away from the dialog's — the confirm
+        // carries the same accessible name, and both are in the DOM
+        // together the moment it opens.
+        await stage.clickIt(
+          page.locator('form').getByRole('button', { name: 'Create key' }).first(),
+          { after: 1200 },
+        );
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3000);
+      },
+
+      async once({ page, stage }) {
+        await stage.clickIt(
+          page.locator('.sk-dialog').getByRole('button', { name: 'Create key' }).first(),
+          { after: 1600 },
+        );
+        const reveal = page.locator('.set-reveal').first();
+        await reveal.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(reveal, 3200);
+      },
+
+      async list({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: "I've copied it" }).first(), {
+          after: 1400,
+        });
+        const row = page.getByRole('row').filter({ hasText: INTEGRATIONS.keyName }).first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 3000);
+      },
+
+      async revoke({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: INTEGRATIONS.keyName }).first();
+        await stage.clickIt(row.getByRole('button', { name: 'Revoke', exact: true }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3000);
+      },
+
+      async revoked({ page, stage }) {
+        await stage.clickIt(
+          page.locator('.sk-dialog').getByRole('button', { name: 'Revoke key' }).first(),
+          { after: 1800 },
+        );
+        // The Revoke button LEAVING is the proof. This dialog closes on a
+        // refusal too (the verdict goes to the page-level callout), so
+        // waiting for it to hide would pass on a failed revoke.
+        const row = page.getByRole('row').filter({ hasText: INTEGRATIONS.keyName }).first();
+        await row
+          .getByRole('button', { name: 'Revoke', exact: true })
+          .waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(row, 2600);
+      },
+
+      async 'open-webhooks'(ctx) {
+        const { page, stage } = ctx;
+        await openSettingsHub(ctx);
+        await stage.clickIt(page.locator('a[href="/settings/webhooks"]').first(), { after: 1600 });
+        await page.waitForURL(/\/settings\/webhooks/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+      },
+
+      async endpoint({ page, stage }) {
+        // `.first()`: the empty state carries a second button of the same
+        // name, and this seller has one endpoint already so it does not —
+        // but a take against an empty account would otherwise be strict.
+        await stage.clickIt(page.getByRole('button', { name: 'New endpoint' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // `clear`: the field is pre-seeded with the literal "https://",
+        // so typing would append to it and save a malformed URL.
+        await stage.typeIn(dialog.getByLabel('URL'), INTEGRATIONS.endpointUrl, {
+          clear: true,
+          after: 400,
+        });
+        await stage.typeIn(dialog.getByLabel('Display name'), INTEGRATIONS.endpointName, {
+          after: 400,
+        });
+        await stage.dwellOn(dialog.getByLabel(/^Subscribed events/), 1600);
+      },
+
+      async secret({ page, stage }) {
+        await stage.clickIt(
+          page.locator('.sk-dialog').getByRole('button', { name: 'Create endpoint' }).first(),
+          { after: 1600 },
+        );
+        const reveal = page.locator('.set-reveal').first();
+        await reveal.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(reveal, 3200);
+      },
+
+      async rotate({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: "I've copied it" }).first(), {
+          after: 1200,
+        });
+        const row = page
+          .locator('.set-endpoint')
+          .filter({ hasText: INTEGRATIONS.endpointName })
+          .first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.clickIt(row.getByRole('button', { name: 'Rotate secret' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2600);
+        await stage.clickIt(dialog.getByRole('button', { name: 'Rotate secret' }).first(), {
+          after: 1800,
+        });
+        await page.locator('.set-reveal').first().waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+      },
+
+      async 'auto-disabled'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: "I've copied it" }).first(), {
+          after: 1200,
+        });
+        const broken = page
+          .locator('.set-endpoint')
+          .filter({ hasText: INTEGRATIONS.brokenName })
+          .first();
+        await broken.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(broken, 2400);
+        await stage.dwellOn(broken.locator('.set-endpoint__facts').first(), 2600);
+      },
+
+      async 'back-on'({ page, stage }) {
+        const broken = page
+          .locator('.set-endpoint')
+          .filter({ hasText: INTEGRATIONS.brokenName })
+          .first();
+        await stage.clickIt(broken.locator('button[role="switch"]').first(), { after: 1800 });
+        // The CHIP clearing is the whole point of the scene, and until
+        // the 2026-09-30 fix it never did: re-enabling wrote `isActive`
+        // alone, so the stamp stayed and delivery never resumed. Waiting
+        // on the switch's own state would have passed either way.
+        await broken
+          .locator('.sk-chip')
+          .filter({ hasText: 'Active' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(broken, 2400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.set-endpoints').first(), 2600);
+        await stage.glide(-300);
         await page.waitForTimeout(1200);
       },
     },

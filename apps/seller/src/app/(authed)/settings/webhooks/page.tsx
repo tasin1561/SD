@@ -5,10 +5,11 @@ import { WebhooksIndex } from './_components/webhooks-index';
  * Outbound webhook configuration — sellers wire Skydrop events into
  * their own systems via HMAC-signed HTTPS POSTs.
  *
- * Phase 1A scope: CRUD + secret rotation (this page). The actual
- * delivery worker is deferred to Phase 1B — endpoints configured
- * here will start firing once the worker lands; the configuration
- * shape is stable.
+ * DELIVERY IS LIVE. This comment, the page subtitle and two more in
+ * apps/api all said the worker was "deferred to Phase 1B" long after
+ * `SellerWebhookDeliveryModule` was registered and
+ * `OutboundWebhookListenerService` began firing real signed POSTs. A
+ * seller reading the page was told their endpoint would do nothing.
  */
 export default function WebhooksPage(): ReactElement {
   return <WebhooksIndex />;

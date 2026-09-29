@@ -689,6 +689,73 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'keys-and-webhooks',
+    title: 'API keys and webhooks',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'If you have a system of your own, these two screens connect it. A key lets your software ask Skydrop things; a webhook lets Skydrop tell your software things.',
+      },
+      {
+        id: 'open-keys',
+        say: 'Both live under Settings, in Integrations. API keys first — one key per thing that calls us, so you can switch one off without switching off the rest.',
+      },
+      {
+        id: 'issue',
+        say: 'A key needs a name you will recognise later, and optionally a life. Leave the days blank and it never expires, which is convenient and not what you want.',
+      },
+      {
+        id: 'confirm-create',
+        say: 'Skydrop restates it before issuing, including whether it expires — and warns you now that the key itself is shown exactly once, straight afterwards.',
+      },
+      {
+        id: 'once',
+        say: 'And there it is. Copy it into your system before you leave this page, because we keep only a fingerprint of it. Lose it and you issue another.',
+      },
+      {
+        id: 'list',
+        say: 'What survives is the first few characters, so you can tell one key from another, and when it was last used — which is how you find the one nobody needs any more.',
+      },
+      {
+        id: 'revoke',
+        say: 'Revoking is the switch-off, and Skydrop says plainly what it costs: everything using that key stops at once, and there is no bringing it back.',
+      },
+      {
+        id: 'revoked',
+        say: 'Revoked keys stay on the list with no actions left. The one below ran out of days by itself and reads Expired — a different word, because only one of them was a decision.',
+      },
+      {
+        id: 'open-webhooks',
+        say: 'Webhooks are the other direction. Instead of your system asking us what happened, we post to an address of yours the moment it does.',
+      },
+      {
+        id: 'endpoint',
+        say: 'An endpoint is an https address of yours and the list of events you want. It must be reachable from the internet — Skydrop checks before saving it.',
+      },
+      {
+        id: 'secret',
+        say: 'Every endpoint gets a secret, shown once like the key. We sign every message we send with it, so your system can prove the message really came from us.',
+      },
+      {
+        id: 'rotate',
+        say: 'Rotating issues a new one and keeps the old working for a day, so you can change it on your side without dropping anything in between.',
+      },
+      {
+        id: 'auto-disabled',
+        say: 'And this is the one to know about. If an endpoint keeps refusing our messages, Skydrop stops sending — and says so, with when it last worked.',
+      },
+      {
+        id: 'back-on',
+        say: 'Fix your end, switch it back on, and the failure count starts again from nothing. Skydrop is not holding the old run against you — only what happens next.',
+      },
+      {
+        id: 'outro',
+        say: 'That is the whole integration surface. One key per caller, one endpoint per listener, a secret for each, and both of them revocable the moment you need them to be.',
+      },
+    ],
+  },
+  {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
     subtitle: 'Skydrop for sellers',

@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 17 filmed. Of the 73 left, **17 are `ready` today**, 54 need
+**90 tutorials.** 18 filmed. Of the 72 left, **16 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -32,16 +32,18 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (17):** A1–A6, B1, B2, C3, C4, C5, E1, E3, E4, F1, F2, F3.
+**Filmed so far (18):** A1–A6, B1, B2, C3, C4, C5, E1, E3, E4, F1, F2, F3, F5.
 Every one is listed in its own entry below with what it covers and what its
 seeding does.
 
 **Next, in order, and all `ready`:**
 
-1. **F5 — API keys and webhooks.** The secret shown once, revoked vs expired,
-   and what auto-disabled means.
-2. **G1, G2 — reseller stores and the price they pay.**
-3. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
+1. **G1, G2 — reseller stores and the price they pay.** Everything needed is
+   surveyed in G1's entry below: a seller-created store lands ACTIVE at once
+   (only an admin-created one is PENDING), `reseller.orders_enabled` gates
+   ORDER PLACEMENT and not store creation, and all of contact email, contact
+   phone and a first-user invitation are required on create.
+2. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
    exist. An hour's work, then a 4-minute video.
 
 **Then build D0** (below) — the lifecycle seeding. It is still the single
@@ -743,15 +745,59 @@ page: **your own** per-topic silences, and **your company's** per-category email
 preferences. These were two screens and people changed the wrong one. Also:
 switches with no Save button, because each flip is a request.
 
-### F5. Letting another system place your orders · `ready`
+### F5. Letting another system place your orders · **FILMED** — `keys-and-webhooks.mp4`
 
 **Promise** — your own software can create orders and be told when they move.
-**Length** 4 min. **Prerequisites** B1.
-**Needs** an endpoint to point a webhook at; any request bin works offline.
-**Covers** `/settings/api-keys` — create, the secret shown **once**, revoke,
-and why revoked and expired are drawn as different things — and then
-`/settings/webhooks`: an HTTPS endpoint, the signing secret, rotating it, and
-what **auto-disabled** means after repeated failures.
+**Length** 2 min 47 s. **Prerequisites** B1.
+**Covers** `/settings/api-keys` — issue, the plaintext shown **once**, the
+prefix and last-used that survive it, revoke, and revoked beside expired so the
+two words are seen to mean different things — and then `/settings/webhooks`:
+an https endpoint, the signing secret, rotating it with the old one live for a
+day, and **auto-disabled**, which is the state a seller meets at three in the
+morning and understands least.
+
+**FILMING FOUND A DEAD END AND IT IS FIXED.** Auto-disable sets `isActive =
+false` AND stamps `autoDisabledAt`; the delivery listener selects on `isActive:
+true AND autoDisabledAt: null`; and `SellerWebhookService.update` wrote
+`isActive` alone. So a seller who fixed their end and switched the endpoint
+back on got a switch reading "on", a chip still reading "Auto-disabled", and
+no events, for ever — nothing in the codebase ever cleared that column. The
+only way out was to delete the endpoint and add it again, which issues a new
+secret they then have to redeploy. `StoreWebhookService.update` had done it
+right since the day it was written, with a comment saying why; the two callers
+share this table, this dispatcher and this listener, and only one of them was
+correct. `webhook-re-enable-clears-auto-disable.spec.ts` now pins BOTH.
+
+The video's fourteenth scene is that switch clearing the chip, and it waits on
+the chip rather than on the switch — before the fix, waiting on the switch
+would have passed while filming the bug.
+
+**Three stale "Phase 1B" claims went with it.** The page subtitle told sellers
+"the delivery worker will fire once it ships in Phase 1B" long after
+`SellerWebhookDeliveryModule` was registered and sending real signed POSTs.
+
+**Seeding:** an API key cannot be deleted through the product at all (create,
+list, revoke is the whole controller), so a take left behind piles up a revoked
+row per run. `integrationsWorldFor` removes both, seeds an EXPIRED key so the
+scene about the two dead states has both on screen rather than one and a
+description of the other, and seeds the auto-disabled endpoint — every column
+written the way `OutboundWebhookDispatchService` writes it, including its own
+wording for the reason, because producing one honestly means fifty consecutive
+failed deliveries.
+
+**The URLs are `example.com` on purpose.** `assertPublicHttpsUrl` resolves a
+webhook host and FAILS CLOSED on one that does not, so an invented domain is
+refused at create.
+
+**A gap left alone, deliberately:** the seller's subscribed-events box is free
+text with no vocabulary check (`IsString({each:true})`, `ArrayUnique()`), while
+the store's path runs `assertKnownEvents` against `WEBHOOK_EVENT_CATALOGUE`. A
+typo saves cleanly and then matches nothing, silently. Validating the seller
+path too is a two-line change — but it would refuse a save of any existing row
+whose codes are outside the catalogue, which is a decision about live data
+rather than a bug fix, and the better answer is probably the store's
+checkboxes. The narration says "copy a code exactly as Skydrop writes it" and
+claims nothing about the box being checked.
 
 ---
 
