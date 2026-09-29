@@ -110,6 +110,26 @@ async function openSettingsHub({ page, stage }) {
 }
 
 /**
+ * Outline one or more wallet rules by their LABEL.
+ *
+ * `/wallet/limits` renders whatever `GET /seller/wallet/settings`
+ * returns, so the list is server-driven and its order is not ours. A
+ * scene pointing at "the fourth row" would keep working and start
+ * describing a different rule the day one is added — which is the
+ * quietest way a tutorial goes wrong. A rule that has been removed
+ * upstream is SKIPPED rather than failing the take: the narration would
+ * be wrong either way, and a missing row is visible in the frame check
+ * while a hard failure costs the whole recording.
+ */
+async function dwellOnTerms(page, stage, labels, ms = 1800) {
+  for (const label of labels) {
+    const row = page.locator('.wal-term').filter({ hasText: label }).first();
+    if ((await row.count()) === 0) continue;
+    await stage.dwellOn(row, ms);
+  }
+}
+
+/**
  * Sign in off camera.
  *
  * Shared by both videos, and it reports a REFUSAL rather than a timeout:
@@ -1228,6 +1248,69 @@ export const FLOWS = {
       async outro({ page, stage }) {
         await stage.dwellOn(page.getByLabel('Low-stock alert at'), 2400);
         await stage.glide(-240);
+        await page.waitForTimeout(1400);
+      },
+    },
+  },
+
+  'what-skydrop-charges': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-limits'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Wallet', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/wallet$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.clickIt(page.locator('a[href="/wallet/limits"]').first(), { after: 1600 });
+        await page.waitForURL(/\/wallet\/limits/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+      },
+
+      async framing({ page, stage }) {
+        // The page's own subtitle says who sets these and invites the
+        // question the last scene answers.
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 1400);
+        await stage.dwellOn(page.locator('.wal-terms').first(), 2600);
+      },
+
+      // Each of the next four dwells on the RULES it is about, found by
+      // their labels rather than by position: the list is server-driven
+      // (`GET /seller/wallet/settings`), so a rule added or reordered
+      // upstream must not silently make a scene point at a different row.
+      async withdrawals({ page, stage }) {
+        await dwellOnTerms(page, stage, ['Minimum balance', 'Smallest withdrawal']);
+        await dwellOnTerms(page, stage, ['Withdrawals per day', 'Withdrawals per month']);
+      },
+
+      async 'cod-timing'({ page, stage }) {
+        await dwellOnTerms(page, stage, ['COD credited'], 2600);
+        await dwellOnTerms(page, stage, ['Instant-pay fee'], 2000);
+      },
+
+      async deductions({ page, stage }) {
+        await dwellOnTerms(page, stage, ['GST withheld on COD'], 2600);
+        await dwellOnTerms(page, stage, ['COD collection fee'], 2200);
+      },
+
+      async charges({ page, stage }) {
+        await dwellOnTerms(page, stage, ['Delivery fee charged'], 2400);
+        await dwellOnTerms(page, stage, ['Inbound freight terms', 'Pay-later service charge']);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.wal-setting__desc').first(), 2400);
+        await stage.glide(-320);
         await page.waitForTimeout(1400);
       },
     },

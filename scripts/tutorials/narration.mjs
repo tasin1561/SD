@@ -464,6 +464,45 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'what-skydrop-charges',
+    title: 'What Skydrop charges, and what it lets you take out',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Every wallet has rules behind it — what you can take out, when money reaches you, what is deducted. They are all on one page, and this is it.',
+      },
+      {
+        id: 'open-limits',
+        say: 'Wallet, under Money. The balance and the history are here, and the rules behind both are one link away, at the top.',
+      },
+      {
+        id: 'framing',
+        say: 'Notice there are no big number tiles. Every figure on this page is a threshold — a cap, a floor, a percentage — not a position, and a tile would read like a balance.',
+      },
+      {
+        id: 'withdrawals',
+        say: 'The withdrawal rules first. A minimum you must leave behind, a smallest request we will accept, and how often you may ask — which is a count, not an amount.',
+      },
+      {
+        id: 'cod-timing',
+        say: 'Then the one that decides your cash flow: when cash on delivery reaches you. On settlement means when the courier pays us; instantly at delivery is the other option, and it carries a fee.',
+      },
+      {
+        id: 'deductions',
+        say: 'What comes off that cash before it lands in your wallet, as a percentage, so you can work out any order yourself rather than reverse-engineering a credit.',
+      },
+      {
+        id: 'charges',
+        say: 'And what we charge to move a parcel. When the delivery fee is taken, how inbound freight from Bangladesh is billed, and what paying later costs if you do.',
+      },
+      {
+        id: 'outro',
+        say: 'None of this is yours to change — that is the point of writing it down. But every one is set per account, so if a rule looks wrong for your business, ask us.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

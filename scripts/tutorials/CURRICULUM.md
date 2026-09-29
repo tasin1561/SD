@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 9 filmed. Of the 81 left, **25 are `ready` today**, 54 need
+**90 tutorials.** 10 filmed. Of the 80 left, **24 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -467,15 +467,23 @@ then the schedule: the automatic switch, the hour in your own timezone, and the
 balance to keep. Every schedule change is confirmed on a second screen that
 restates it, which is worth showing rather than clicking past.
 
-### E4. What Skydrop charges · `ready`
+### E4. What Skydrop charges · **FILMED** — `what-skydrop-charges.mp4`
 
-**Promise** — you can answer "why was I charged this?" from one page.
-**Length** 2 min. **Prerequisites** E2.
-**Needs** nothing — every figure on `/wallet/limits` is a platform term, not
-account activity. One of the very few pages filmable on a blank account.
-**Covers** the delivery fee, the return fee, when COD reaches you, and the
-withdrawal limits. Deliberately has no stat tiles because every number is a
-threshold, not a position — and that is the framing to narrate.
+Covers the withdrawal rules, when COD reaches you, what is deducted from it,
+and what moving a parcel costs. The framing is narrated as well as shown: the
+page deliberately has no stat tiles because every number on it is a
+**threshold, not a position**, and a tile would put a rule where the console
+puts a balance.
+
+Filmed ahead of E2, which it nominally depends on — every figure is a platform
+term rather than account activity, so it needs no wallet history. One of the
+very few pages filmable on a blank account.
+
+**Its flow points at rules by LABEL, never by position** (`dwellOnTerms`). The
+list is whatever `GET /seller/wallet/settings` returns, so a scene aimed at
+"the fourth row" would keep working and start describing a different rule the
+day one is added upstream — the quietest way a tutorial goes wrong. A rule
+removed upstream is skipped rather than failing the take.
 
 ### E5. What the freight cost · `needs demo data`
 
