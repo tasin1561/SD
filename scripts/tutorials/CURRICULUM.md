@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 16 filmed. Of the 74 left, **18 are `ready` today**, 54 need
+**90 tutorials.** 17 filmed. Of the 73 left, **17 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -32,18 +32,16 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (16):** A1–A6, B1, B2, C3, C4, C5, E1, E4, F1, F2, F3. Every
-one is listed in its own entry below with what it covers and what its seeding
-does.
+**Filmed so far (17):** A1–A6, B1, B2, C3, C4, C5, E1, E3, E4, F1, F2, F3.
+Every one is listed in its own entry below with what it covers and what its
+seeding does.
 
 **Next, in order, and all `ready`:**
 
 1. **F5 — API keys and webhooks.** The secret shown once, revoked vs expired,
    and what auto-disabled means.
 2. **G1, G2 — reseller stores and the price they pay.**
-3. **E3 — taking money out.** Needs a positive balance: accept one seeded
-   top-up first.
-4. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
+3. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
    exist. An hour's work, then a 4-minute video.
 
 **Then build D0** (below) — the lifecycle seeding. It is still the single
@@ -569,15 +567,40 @@ resolved refund put real entries in the ledger) plus one pending top-up.
 landed. Then the entries themselves — delivery charges, COD credit, a refund —
 and the balance shown in both rupees and taka.
 
-### E3. Taking money out · `ready`
+### E3. Taking money out · **FILMED** — `take-money-out.mp4`
 
 **Promise** — you can request a payout, and set one to happen by itself.
-**Length** 3 min. **Prerequisites** E2.
-**Needs** a positive balance above the minimum. One seeded top-up acceptance.
-**Covers** requesting a withdrawal — again **a request, not a movement** — and
-then the schedule: the automatic switch, the hour in your own timezone, and the
-balance to keep. Every schedule change is confirmed on a second screen that
-restates it, which is worth showing rather than clicking past.
+**Length** 2 min 30 s. **Prerequisites** E2.
+**Covers** requesting a withdrawal — again **a request, not a movement**, which
+the video proves by going back to the Ledger tab afterwards and showing it
+unchanged — and then the schedule on `/wallet/limits`: the automatic switch,
+the hour in the seller's own timezone, and the balance to keep. All three
+changes are confirmed separately and the video reads each restatement out
+rather than clicking past it.
+
+**Seeding — and it is slug-tailored in BOTH directions, which is the
+interesting part.** E1 films a transfer being DECLARED and closes on "your
+ledger has not moved"; E3 needs a balance, which only exists because somebody
+accepted a top-up. Each video's world is the other's contradiction, so
+`walletWorldFor(slug, …)` builds one and dismantles the other: for
+`take-money-out` it puts the bank details back (the profile video's clearing
+takes them off, and a withdrawal is refused without them —
+`NO_BANK_ACCOUNT_ON_FILE`) and tops the wallet to a floor through the REAL
+claim-and-accept endpoints; for `pay-money-in` it removes the accepted claim
+AND its ledger row together, so no credit is ever left with nothing explaining
+it. **It refuses to touch a wallet carrying anything that is not a top-up** —
+on a dev box an order charge means somebody was using this seller for
+something, and rewriting a money ledger to tidy a video would be the worst
+thing in that file.
+
+It also clears the three `wallet.auto_withdraw_*` overrides between takes: the
+switch being OFF is what makes the confirm dialog say "Turn ON", and a second
+take starting from on would film the opposite sentence. Withdrawal REQUESTS are
+deleted outright, which is safe precisely because of the rule the video teaches
+— a request moves no money.
+
+**The narration names no hour and no figure the screen prints.** An earlier
+draft said "ten in the morning" while the flow selected 09:00.
 
 ### E4. What Skydrop charges · **FILMED** — `what-skydrop-charges.mp4`
 

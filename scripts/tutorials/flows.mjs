@@ -160,6 +160,19 @@ const TEAM = {
   newRoleName: 'Operations',
 };
 
+/**
+ * What the withdrawal video asks for. Comfortably inside the balance
+ * the seed puts in the wallet, so the scene about what is AVAILABLE is
+ * about the rule and not about a refusal.
+ */
+const WITHDRAWAL = {
+  amount: '40000',
+  note: 'September payout — please send to the BRAC account.',
+  /** The `<option>` value, which is the hour as a number. */
+  hour: '9',
+  keep: '5000',
+};
+
 /** What the delivery-fee video types. Anything but the seeded default. */
 const CUSTOMER_DELIVERY_FEE = '90';
 
@@ -1754,6 +1767,173 @@ export const FLOWS = {
         const member = page.locator('.team-member').filter({ hasText: TEAM.colleague }).first();
         await stage.dwellOn(member.getByRole('button', { name: 'Deactivate' }).first(), 2800);
         await stage.glide(-320);
+        await page.waitForTimeout(1200);
+      },
+    },
+  },
+
+  'take-money-out': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-wallet'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Wallet', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/wallet$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.wal-strip').first(), 2600);
+      },
+
+      async request({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Request a withdrawal' }).first(), {
+          after: 1400,
+        });
+        // The availability panel, not the dialog: it is what the
+        // narration points at, and it only renders once the eligibility
+        // call has answered — so waiting on the dialog alone would open
+        // the scene on a form with a hole in it.
+        const avail = page.locator('.wal-avail').first();
+        await avail.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(avail, 3000);
+      },
+
+      async amount({ page, stage }) {
+        await stage.typeIn(page.locator('#wd-amount'), WITHDRAWAL.amount, {
+          clear: true,
+          after: 500,
+        });
+        await stage.typeIn(page.locator('#wd-note'), WITHDRAWAL.note, { after: 800 });
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(
+          page.locator('.sk-dialog').getByRole('button', { name: 'Request withdrawal' }).first(),
+          { after: 1200 },
+        );
+        // The CONFIRM dialog, told from the form it replaced by the
+        // sentence only it carries.
+        const confirmed = page
+          .locator('.sk-dialog')
+          .filter({ hasText: 'Request this withdrawal?' })
+          .first();
+        await confirmed.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(confirmed.locator('.sk-confirm__consequence').first(), 3000);
+      },
+
+      async requested({ page, stage }) {
+        const confirmed = page
+          .locator('.sk-dialog')
+          .filter({ hasText: 'Request this withdrawal?' })
+          .first();
+        await stage.clickIt(confirmed.getByRole('button', { name: 'Request withdrawal' }).first(), {
+          after: 1800,
+        });
+        // The ROW is the proof, not the dialog closing: a refusal stays
+        // inside the dialog, and the table is what the narration reads.
+        const table = page.getByRole('table').first();
+        await table.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(table, 3000);
+      },
+
+      async ledger({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: 'Ledger' }).first(), { after: 1600 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.wal-panel').first(), 3000);
+      },
+
+      async 'open-limits'({ page, stage }) {
+        await stage.clickIt(page.locator('a[href="/wallet/limits"]').first(), { after: 1600 });
+        await page.waitForURL(/\/wallet\/limits/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+        const settings = page.locator('.wal-settings').first();
+        await settings.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(settings, 2200);
+      },
+
+      async auto({ page, stage }) {
+        const row = page
+          .locator('.wal-setting')
+          .filter({ hasText: 'Automatic withdrawals' })
+          .first();
+        await stage.clickIt(row.locator('button[role="switch"]').first(), { after: 1200 });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3000);
+        await stage.clickIt(dialog.getByRole('button', { name: /^(Turn on|Save)/ }).first(), {
+          after: 1800,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
+        // The switch actually FLIPPING, not just the dialog closing — a
+        // refusal stays in the dialog, and this scene is the claim that
+        // it is now on.
+        await page
+          .locator('.wal-setting')
+          .filter({ hasText: 'Automatic withdrawals' })
+          .first()
+          .locator('button[role="switch"][aria-checked="true"]')
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+      },
+
+      async hour({ page, stage }) {
+        const row = page
+          .locator('.wal-setting')
+          .filter({ hasText: 'Automatic withdrawal hour' })
+          .first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        const select = row.locator('select').first();
+        await stage.point(select, { settle: 700 });
+        await select.selectOption(WITHDRAWAL.hour);
+        await page.waitForTimeout(700);
+        await stage.clearHalo();
+        await stage.clickIt(row.getByRole('button', { name: 'Save' }).first(), { after: 1200 });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.clickIt(dialog.getByRole('button', { name: /^(Change|Save)/ }).first(), {
+          after: 1800,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
+        await page.waitForTimeout(800);
+      },
+
+      async keep({ page, stage }) {
+        const row = page
+          .locator('.wal-setting')
+          .filter({ hasText: 'Keep this much in the wallet' })
+          .first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.typeIn(row.getByLabel('Balance to keep'), WITHDRAWAL.keep, {
+          clear: true,
+          after: 600,
+        });
+        await stage.clickIt(row.getByRole('button', { name: 'Save' }).first(), { after: 1200 });
+        const dialog = page.locator('.sk-dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2200);
+        await stage.clickIt(dialog.getByRole('button', { name: /^(Change|Save)/ }).first(), {
+          after: 1800,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
+        await page.waitForTimeout(900);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.wal-settings').first(), 2800);
+        await stage.glide(-280);
         await page.waitForTimeout(1200);
       },
     },

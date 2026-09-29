@@ -634,6 +634,61 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'take-money-out',
+    title: 'Taking money out',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Money reaches your wallet as parcels are delivered and couriers settle up. Getting it into your own bank is a request, and this is where you make one.',
+      },
+      {
+        id: 'open-wallet',
+        say: 'The wallet leads with what you have, and the strip along the bottom keeps the same figure in front of you wherever you go next.',
+      },
+      {
+        id: 'request',
+        say: 'Request a withdrawal opens the form on the tab where the request will appear. It shows what is actually available, which is not always the whole balance.',
+      },
+      {
+        id: 'amount',
+        say: 'Type what you want sent. You do not choose where it goes — it is paid to the bank account on your profile, and that is the only account it can reach.',
+      },
+      {
+        id: 'confirm',
+        say: 'Skydrop asks once more, and the sentence to read is the last one. Your balance does not move now. It moves when the transfer is actually recorded.',
+      },
+      {
+        id: 'requested',
+        say: 'So the request is on the list, pending, and the outcome column is empty because nothing has happened to it yet. Somebody at Skydrop reviews it next.',
+      },
+      {
+        id: 'ledger',
+        say: 'And the ledger has not moved. That is the whole distinction: a request is a thing you asked for, and the ledger is money that genuinely changed hands.',
+      },
+      {
+        id: 'open-limits',
+        say: 'Doing that by hand every week is a chore, so it can be arranged to happen on its own. The wallet rules page is where that lives.',
+      },
+      {
+        id: 'auto',
+        say: 'Turn automatic withdrawals on and Skydrop raises the request for you. It confirms that separately, because this is a standing instruction rather than a one-off click.',
+      },
+      {
+        id: 'hour',
+        say: 'Pick the hour, and note whose clock it runs on. Yours, not ours — the page names your own timezone beside it, and the sweep reads it there.',
+      },
+      {
+        id: 'keep',
+        say: 'And say what to leave behind. The automatic withdrawal stops at this figure instead of emptying the wallet — your own working float, on top of whatever minimum Skydrop sets.',
+      },
+      {
+        id: 'outro',
+        say: 'Each automatic request then passes exactly the same checks as one you make by hand. Nothing is approved differently because a machine asked for it.',
+      },
+    ],
+  },
+  {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
     subtitle: 'Skydrop for sellers',

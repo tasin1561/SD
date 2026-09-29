@@ -162,6 +162,32 @@ export const TEAM_INVITEE = { email: 'nusrat@rangpursilk.test' };
 /** The SKU the photos video uploads pictures to. Cleared before every take. */
 export const TUTORIAL_PHOTO_SKU = 'RSH-MUSLIN-ROSE';
 
+/**
+ * What the WITHDRAWAL video needs in the wallet, and where a payout
+ * would go. Nothing here is a real bank.
+ *
+ * The floor is a round number well clear of `wallet.minimum_balance_inr`
+ * so the withdrawable figure on screen is the balance itself, and the
+ * amount the video types is comfortably inside it.
+ */
+const WALLET_FLOOR_INR = 60000;
+
+const WALLET_PAYOUT_BANK = {
+  name: 'BRAC Bank',
+  branch: 'Rangpur Branch',
+  holder: 'Rangpur Silk House',
+  account: '1501204536789012',
+  routing: '060851726',
+  swift: 'BRAKBDDH',
+};
+
+/** The three the withdrawal-schedule card writes. Cleared before every take. */
+const WITHDRAWAL_SCHEDULE_KEYS = [
+  'wallet.auto_withdraw_enabled',
+  'wallet.auto_withdraw_hour_local',
+  'wallet.auto_withdraw_keep_balance_inr',
+];
+
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
 
@@ -552,6 +578,138 @@ async function ensureTeamColleague(sellerId, sellerToken) {
   if (invites.count > 0) {
     console.log(`  · removed ${invites.count} invitation(s) to ${TEAM_INVITEE.email}`);
   }
+}
+
+/**
+ * The world the two WALLET videos need, and neither of them leaves.
+ *
+ * E1 films a transfer being DECLARED, and its closing sentence is "your
+ * ledger has not moved". E3 films money going OUT, which needs a
+ * balance to take it from — and a balance only exists because somebody
+ * accepted a top-up. Each video's world is the other's contradiction,
+ * so this is slug-tailored in BOTH directions rather than left to
+ * whichever ran last.
+ *
+ * Neither half writes anything the product could not have written: the
+ * balance comes from a real claim accepted through the real review
+ * endpoint, and the removal takes the CLAIM AND ITS LEDGER ROW
+ * together, so no credit is ever left with nothing explaining it. That
+ * is the whole reason `clearTutorialSettings` deletes only PENDING
+ * claims; this one may go further because it undoes both sides.
+ *
+ * It REFUSES to touch a wallet carrying anything else. On a dev box an
+ * order charge or a COD credit means somebody has been using this
+ * seller for something, and quietly rewriting a money ledger to tidy a
+ * video would be the worst thing in this file.
+ */
+async function walletWorldFor(slug, sellerId, sellerToken, staffToken) {
+  // A request moves no money (WAL-3: the balance changes when the
+  // remittance is recorded), so these are free to remove — and the
+  // video's closing shot is a table with exactly the one it just made.
+  const reqs = await prisma.withdrawalRequest.deleteMany({ where: { sellerId } });
+  if (reqs.count > 0) {
+    console.log(`  · removed ${reqs.count} withdrawal request(s) from a previous take`);
+  }
+
+  // The schedule the video changes on camera. Its third scene is the
+  // switch being OFF and its confirm dialog says "Turn ON"; a second
+  // take starting from ON would film the opposite sentence.
+  const sched = await prisma.sellerSettingOverride.deleteMany({
+    where: { sellerId, key: { in: WITHDRAWAL_SCHEDULE_KEYS } },
+  });
+  if (sched.count > 0) {
+    console.log(`  · put the withdrawal schedule back to the Skydrop default`);
+  }
+
+  const entries = await prisma.sellerWalletEntry.findMany({
+    where: { sellerId, currency: 'INR' },
+    select: { id: true, direction: true },
+  });
+  const onlyTopups = entries.every((e) => e.direction === 'TOPUP');
+
+  if (slug === 'pay-money-in') {
+    if (entries.length === 0) return;
+    if (!onlyTopups) {
+      console.log(
+        `  · leaving the wallet alone — ${entries.length} entries and not all of them top-ups`,
+      );
+      return;
+    }
+    // BOTH sides, in one transaction: the claim that explains the
+    // credit and the credit itself. Either alone is worse than both.
+    const accepted = await prisma.walletTopupRequest.findMany({
+      where: { sellerId, status: 'ACCEPTED' },
+      select: { id: true, walletEntryId: true },
+    });
+    await prisma.$transaction([
+      prisma.walletTopupRequest.deleteMany({ where: { id: { in: accepted.map((a) => a.id) } } }),
+      prisma.sellerWalletEntry.deleteMany({ where: { id: { in: entries.map((e) => e.id) } } }),
+    ]);
+    console.log(`  · emptied the wallet — ${accepted.length} accepted top-up(s) and their ledger`);
+    return;
+  }
+
+  if (slug !== 'take-money-out') return;
+
+  // A withdrawal is refused without somewhere to send it
+  // (NO_BANK_ACCOUNT_ON_FILE), and the clearing above has just taken
+  // the bank details off — the profile video films the first-time path
+  // and needs them gone. So they go back on, for this video only.
+  await prisma.seller.update({
+    where: { id: sellerId },
+    data: {
+      bankName: WALLET_PAYOUT_BANK.name,
+      bankBranchName: WALLET_PAYOUT_BANK.branch,
+      bankAccountName: WALLET_PAYOUT_BANK.holder,
+      bankAccountNumber: WALLET_PAYOUT_BANK.account,
+      bankAccountNumberMasked: `••••${WALLET_PAYOUT_BANK.account.slice(-4)}`,
+      bankRoutingNumber: WALLET_PAYOUT_BANK.routing,
+      bankSwiftCode: WALLET_PAYOUT_BANK.swift,
+    },
+  });
+
+  const last = await prisma.sellerWalletEntry.findFirst({
+    where: { sellerId, currency: 'INR' },
+    orderBy: { id: 'desc' },
+    select: { runningBalanceAfter: true },
+  });
+  const balance = Number(last?.runningBalanceAfter ?? 0);
+  if (balance >= WALLET_FLOOR_INR) {
+    console.log(`  · wallet holds ₹${balance.toLocaleString('en-IN')}, nothing to top up`);
+    return;
+  }
+  if (entries.length > 0 && !onlyTopups) {
+    throw new Error(
+      'This wallet carries entries that are not top-ups — refusing to add money to it for a video.',
+    );
+  }
+
+  // A RUPEE account, by name: the claim's amount is in the account's
+  // own currency (which is what the top-up video's fourth scene is
+  // about), so topping up against the taka one would credit a different
+  // figure from the one asked for.
+  const { accounts } = await call('/seller/wallet/topups/bank-accounts', {
+    token: await sellerToken(),
+  });
+  const account = (accounts ?? []).find((a) => a.currency === 'INR');
+  if (account === undefined) {
+    throw new Error('No active rupee platform bank account — run the db seed first.');
+  }
+  const claim = await call('/seller/wallet/topups', {
+    method: 'POST',
+    token: await sellerToken(),
+    body: {
+      bankAccountId: account.id,
+      amount: WALLET_FLOOR_INR - balance,
+      transactionRef: `TXN-SEED-${Date.now()}`,
+    },
+  });
+  await call(`/admin/wallet/topups/${claim.id}/accept`, {
+    method: 'POST',
+    token: staffToken,
+    body: { note: 'Seeded for the withdrawal tutorial.' },
+  });
+  console.log(`  · wallet topped up to ₹${WALLET_FLOOR_INR.toLocaleString('en-IN')}`);
 }
 
 /**
@@ -1066,6 +1224,7 @@ async function main() {
   const slug = process.argv[2];
   if (slug === 'find-your-way-around') await placeTourOrders(sellerToken);
   if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
+  await walletWorldFor(slug, sellerId, sellerToken, staffToken);
 
   console.log('\nReady.');
   console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);
