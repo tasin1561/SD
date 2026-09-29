@@ -264,6 +264,111 @@ describe('SettingsResolverService.setOverride', () => {
     });
   });
 
+  /**
+   * JSON overrides were SHAPE-checked and never content-checked.
+   *
+   * `parseAndClamp` refused anything that was not "an object or an
+   * array", which catches a bare string and nothing else — so a list
+   * holding the wrong words saved cleanly, showed on the seller's screen
+   * as a real value, and was silently discarded at the far end by a
+   * reader that only recognises the courier's own vocabulary. For
+   * `courier.ndr_auto_categories` that means an action a seller believes
+   * is switched on and which never fires.
+   */
+  describe('courier.ndr_auto_categories — a JSON list drawn from a fixed set', () => {
+    const ndrRow = makeSystemRow({
+      key: 'courier.ndr_auto_categories',
+      valueType: SettingValueType.JSON,
+      valueJson: [],
+      valueInt: null,
+      overrideMinInt: null,
+      overrideMaxInt: null,
+    });
+
+    const set = (svc: SettingsResolverService, value: unknown) =>
+      svc.setOverride(
+        'seller-qa',
+        'courier.ndr_auto_categories',
+        { valueType: SettingValueType.JSON, value },
+        'staff-1',
+      );
+
+    it('accepts a valid list, trimmed and in the code-owned order', async () => {
+      const { svc, overrideUpsert } = makeService({ systemRow: ndrRow });
+      const r = await set(svc, [' PICKUP_RESCHEDULE ', 'RE-ATTEMPT']);
+      expect((overrideUpsert.mock.calls[0]![0].create as AnyArgs).valueJson).toEqual([
+        'RE-ATTEMPT',
+        'PICKUP_RESCHEDULE',
+      ]);
+      expect(r.value).toEqual(['RE-ATTEMPT', 'PICKUP_RESCHEDULE']);
+    });
+
+    it('accepts an empty list — "none of them" is a real decision', async () => {
+      const { svc } = makeService({ systemRow: ndrRow });
+      await expect(set(svc, [])).resolves.toMatchObject({ value: [] });
+    });
+
+    it('refuses a misspelt action by NAME, and writes nothing', async () => {
+      // The underscore-for-hyphen typo is the whole reason this exists.
+      const { svc, overrideUpsert } = makeService({ systemRow: ndrRow });
+      await expect(set(svc, ['RE_ATTEMPT'])).rejects.toMatchObject({
+        response: { code: 'INVALID_SETTING_VALUE' },
+      });
+      expect(overrideUpsert).not.toHaveBeenCalled();
+    });
+
+    it('refuses an object where a list was meant', async () => {
+      // `{"RE-ATTEMPT": true}` passed the old shape check outright.
+      const { svc, overrideUpsert } = makeService({ systemRow: ndrRow });
+      await expect(set(svc, { 'RE-ATTEMPT': true })).rejects.toMatchObject({
+        response: { code: 'INVALID_SETTING_VALUE' },
+      });
+      expect(overrideUpsert).not.toHaveBeenCalled();
+    });
+
+    it('refuses a non-string entry', async () => {
+      const { svc, overrideUpsert } = makeService({ systemRow: ndrRow });
+      await expect(set(svc, ['RE-ATTEMPT', 7])).rejects.toMatchObject({
+        response: { code: 'INVALID_SETTING_VALUE' },
+      });
+      expect(overrideUpsert).not.toHaveBeenCalled();
+    });
+
+    it('audits HIGH, not the ordinary MEDIUM — this decides whether a van goes out', async () => {
+      const { svc, auditLog } = makeService({ systemRow: ndrRow });
+      await set(svc, ['RE-ATTEMPT']);
+      expect(auditLog.mock.calls[0]![0]!.severity).toBe('HIGH');
+    });
+
+    it('the kill switch override audits HIGH too, set and cleared', async () => {
+      const killRow = makeSystemRow({
+        key: 'courier.ndr_runner_enabled',
+        valueType: SettingValueType.BOOLEAN,
+        valueBoolean: false,
+        valueInt: null,
+        overrideMinInt: null,
+        overrideMaxInt: null,
+      });
+      const a = makeService({ systemRow: killRow });
+      await a.svc.setOverride(
+        'seller-qa',
+        'courier.ndr_runner_enabled',
+        { valueType: SettingValueType.BOOLEAN, value: false },
+        'staff-1',
+      );
+      expect(a.auditLog.mock.calls[0]![0]!.severity).toBe('HIGH');
+
+      // Clearing stops the narrowing, which returns the seller to
+      // whatever the global pair permits — the same class of act.
+      const b = makeService({
+        systemRow: killRow,
+        overrideRow: makeOverrideRow({ key: 'courier.ndr_runner_enabled' }),
+      });
+      await b.svc.clearOverride('seller-qa', 'courier.ndr_runner_enabled', 'staff-1');
+      expect(b.auditLog.mock.calls[0]![0]!.severity).toBe('HIGH');
+    });
+  });
+
   it('rejects NOT_SELLER_OVERRIDABLE with LOW audit + no upsert', async () => {
     const { svc, overrideUpsert, auditLog } = makeService({
       systemRow: makeSystemRow({ sellerOverridable: false }),

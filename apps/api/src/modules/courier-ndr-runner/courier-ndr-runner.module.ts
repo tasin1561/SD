@@ -6,6 +6,7 @@ import { CourierDelhiveryModule } from '../courier-delhivery/courier-delhivery.m
 import { CourierEscalationModule } from '../courier-escalation/courier-escalation.module';
 import { CourierSharedModule } from '../courier-shared/courier-shared.module';
 import { EmailModule } from '../email/email.module';
+import { SettingsModule } from '../settings/settings.module';
 import { TicketModule } from '../ticket/ticket.module';
 import { NdrQueue } from './queue/ndr.queue';
 import { NdrWorker } from './queue/ndr.worker';
@@ -52,6 +53,7 @@ import { NdrUplPollerService } from './services/ndr-upl-poller.service';
     TicketModule, // the escalation path for a failed request
     CourierEscalationModule, // opens the courier conversation on that ticket
     EmailModule, // the M11 substrate the reconciliation alert goes through
+    SettingsModule, // SET-1 — the per-seller narrowing of the two gates
     AuthCommonModule, // audit
   ],
   providers: [

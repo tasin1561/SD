@@ -1078,7 +1078,8 @@ const systemSettings: SystemSettingSeed[] = [
     valueBoolean: false,
     displayName: 'NDR Nightly Runner Enabled',
     description:
-      'The KILL SWITCH for automated NDR re-attempts. OFF by default. CUR-10 as amended permits a runner to fire courier writes only on a channel an operator explicitly enabled — this is that channel. Turning it off stops the runner at its next tick without a deploy; in-flight UPL polling and reconciliation continue, because abandoning requests already sent would be worse than finishing them.',
+      'The KILL SWITCH for automated NDR re-attempts. OFF by default. CUR-10 as amended permits a runner to fire courier writes only on a channel an operator explicitly enabled — this is that channel. Turning it off stops the runner at its next tick without a deploy; in-flight UPL polling and reconciliation continue, because abandoning requests already sent would be worse than finishing them. Seller-overridable, but ONE-DIRECTIONALLY: a seller override is ANDed with this value, never substituted for it, so OFF here means nothing fires for anybody whatever a seller row says.',
+    sellerOverridable: true,
   },
   {
     key: 'courier.ndr_runner_cron',
@@ -1096,7 +1097,8 @@ const systemSettings: SystemSettingSeed[] = [
     valueJson: [],
     displayName: 'NDR Auto-Action Allow List',
     description:
-      "Which NDR actions the runner may fire unattended: a JSON array of 'RE-ATTEMPT' and/or 'PICKUP_RESCHEDULE'. EMPTY by default, which means the runner prepares and logs but sends nothing — the only safe initial state while the write contract has never been exercised. Widen one entry at a time.",
+      "Which NDR actions the runner may fire unattended: a JSON array of 'RE-ATTEMPT' and/or 'PICKUP_RESCHEDULE'. EMPTY by default, which means the runner prepares and logs but sends nothing — the only safe initial state while the write contract has never been exercised. Widen one entry at a time. Seller-overridable, but this list is the CEILING: a seller's list is INTERSECTED with it, so an action absent here can never be fired for one seller.",
+    sellerOverridable: true,
   },
   {
     key: 'courier.ndr_batch_max',

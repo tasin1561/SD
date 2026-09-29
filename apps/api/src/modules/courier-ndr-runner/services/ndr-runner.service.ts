@@ -10,12 +10,15 @@ import { ShiprocketNdrService } from '../../courier-shiprocket/services/shiprock
 import { DelhiveryTrackingFetchService } from '../../courier-delhivery/services/delhivery-tracking-fetch.service';
 import { CourierWriteGuardService } from '../../courier-shared/services/courier-write-guard.service';
 import { NdrSettingsService } from './ndr-settings.service';
+import type { NdrGate } from './ndr-gate';
 
 interface NdrCandidate {
   readonly shipmentId: string;
   readonly awbNumber: string;
   readonly courierCode: string;
   readonly courierAccountId: string | null;
+  /** Whose parcel it is — the grain the per-seller gate is resolved at. */
+  readonly sellerId: string | null;
 }
 
 /**
@@ -36,8 +39,23 @@ export interface NdrRunSummary {
   readonly failed: number;
   /** Prepared but NOT sent because the action is not on the auto list. */
   readonly heldForOperator: number;
+  /**
+   * Parcels NOT ACTIONED because their seller's own switch is off.
+   *
+   * Deliberately its own number rather than folded into `skipped` or
+   * reported as `dryRun`. A dry run means "we would have sent this and
+   * the write guard stopped us"; this means "we are never sending this
+   * for this seller". An operator reading one as the other would either
+   * think the runner was in planning mode when it was live for everybody
+   * else, or go looking for a courier refusal that never happened.
+   */
+  readonly notActionedForSeller: number;
   readonly reasons: Readonly<Record<string, number>>;
-  /** True when live writes are off: everything ran except the submission. */
+  /**
+   * True when live writes are off for any courier in the sweep:
+   * everything ran except the submission. It says NOTHING about the
+   * per-seller switches — see `notActionedForSeller`.
+   */
   readonly dryRun: boolean;
   /** Per-parcel decisions. The record that makes the selection rule
    *  auditable against real parcels before anything is enabled. */
@@ -56,6 +74,8 @@ export interface NdrPlanEntry {
     | 'WOULD_SUBMIT'
     | 'SUBMITTED'
     | 'HELD_NOT_ON_AUTO_LIST'
+    /** This seller's own kill switch is off. Not a dry run — never sent. */
+    | 'NOT_ENABLED_FOR_SELLER'
     | 'SKIPPED'
     | 'FAILED';
   readonly reason: string | null;
@@ -84,6 +104,22 @@ export interface NdrPlanEntry {
  * "only this much", and the write guard is the system's "not against
  * production without a deliberate act". Collapsing them would mean
  * turning one thing on turns everything on.
+ *
+ * ── AND A FOURTH, PER SELLER ─────────────────────────────────────────
+ * Both settings above are seller-overridable (SET-1), and a seller's
+ * override may only ever NARROW: `enabled` is ANDed with the global,
+ * the action list is INTERSECTED with it. So gates 1 and 2 keep meaning
+ * exactly what they meant — an operator's global "no" cannot be undone
+ * by a row on a seller — and a seller may additionally opt out, wholly
+ * or per action. The arithmetic lives in `narrowNdrGate` (`ndr-gate.ts`)
+ * and nothing here reimplements it.
+ *
+ * It is resolved PER PARCEL'S SELLER inside the sweep, not once at the
+ * top: this is one nightly batch over many sellers' parcels, and reading
+ * the switch once would apply whichever seller was asked first to every
+ * other seller in the run. Cached per DISTINCT seller for the life of a
+ * run, so a sweep of two hundred parcels for four sellers costs four
+ * resolutions rather than two hundred.
  *
  * ── THE FRESH-NSL RULE ───────────────────────────────────────────────
  * Every candidate has its tracking RE-READ from Delhivery immediately
@@ -124,9 +160,18 @@ export class NdrRunnerService {
       reasons[r] = (reasons[r] ?? 0) + 1;
     };
 
-    if (!(await this.settings.runnerEnabled())) {
+    // The GLOBAL ceiling, read once for the whole sweep so every seller
+    // is judged against the same one (see `gateForSeller`).
+    const globalGate = await this.settings.globalGate();
+
+    if (!globalGate.enabled) {
       // Not an error, and deliberately not silent: "why did nothing
       // happen last night" must be answerable without reading code.
+      //
+      // This early return is the strongest form of the narrowing rule:
+      // a global "off" is not merely ANDed away per seller, the sweep
+      // does not happen at all. No seller override is even read, so
+      // there is no path by which one could matter.
       this.logger.log('NDR runner is disabled (courier.ndr_runner_enabled) — nothing submitted');
       return {
         enabled: false,
@@ -135,6 +180,7 @@ export class NdrRunnerService {
         skipped: 0,
         failed: 0,
         heldForOperator: 0,
+        notActionedForSeller: 0,
         reasons: {},
         dryRun: false,
         plan: [],
@@ -180,17 +226,70 @@ export class NdrRunnerService {
     this.ndrListCache.clear();
 
     let anyDryRun = false;
-    const autoActions = await this.settings.autoActions();
     const cap = await this.settings.batchMax();
     const candidates = await this.candidates(cap);
+
+    // Once per DISTINCT seller, not once per parcel — a sweep is many
+    // parcels for few sellers, and two settings reads apiece would be
+    // hundreds of round trips to learn a handful of answers.
+    const gateBySeller = new Map<string, NdrGate>();
+    const gateFor = async (sellerId: string): Promise<NdrGate> => {
+      const cached = gateBySeller.get(sellerId);
+      if (cached !== undefined) return cached;
+      const gate = await this.settings.gateForSeller(sellerId, globalGate);
+      gateBySeller.set(sellerId, gate);
+      return gate;
+    };
 
     let submitted = 0;
     let skipped = 0;
     let failed = 0;
     let held = 0;
+    let notActionedForSeller = 0;
     const plan: NdrPlanEntry[] = [];
 
     for (const c of candidates) {
+      // ── GATE 4, PER SELLER — BEFORE the tracking read ──────────────
+      // Placed first because it is the only verdict that is definite
+      // whatever the parcel turns out to be: this seller's parcels are
+      // not actioned tonight, so spending a rate-limited tracking call
+      // to confirm it would buy nothing and comes out of a budget whose
+      // exhaustion has the WAF block our whole egress IP.
+      //
+      // A parcel whose seller cannot be established is SKIPPED, never
+      // given the global gate — the shipment reaches its order through
+      // `order_shipments`, and an absent join is a data anomaly, not
+      // permission.
+      if (c.sellerId === null) {
+        skipped += 1;
+        bump('SELLER_UNKNOWN');
+        plan.push({
+          shipmentId: c.shipmentId,
+          awbNumber: c.awbNumber,
+          nslCode: null,
+          attemptCount: -1,
+          action: 'RE-ATTEMPT',
+          disposition: 'SKIPPED',
+          reason: 'SELLER_UNKNOWN',
+        });
+        continue;
+      }
+      const gate = await gateFor(c.sellerId);
+      if (!gate.enabled) {
+        notActionedForSeller += 1;
+        bump('NOT_ENABLED_FOR_SELLER');
+        plan.push({
+          shipmentId: c.shipmentId,
+          awbNumber: c.awbNumber,
+          nslCode: null,
+          attemptCount: -1,
+          action: 'RE-ATTEMPT',
+          disposition: 'NOT_ENABLED_FOR_SELLER',
+          reason: 'this seller has automatic re-attempts switched off',
+        });
+        continue;
+      }
+
       // FRESH NSL — re-read from the courier, not from our rows.
       const fresh = await this.freshContext(c);
       if (fresh === null) {
@@ -245,13 +344,20 @@ export class NdrRunnerService {
           attemptCount: fresh.attemptCount,
           action,
           disposition: 'WOULD_SUBMIT',
-          reason: autoActions.includes(action) ? null : 'would also be held: not on the auto list',
+          // Judged on the SELLER-NARROWED list, not the global one: a
+          // dry-run plan that said "would submit" for an action this
+          // seller has opted out of would be a plan of something that
+          // is never going to happen.
+          reason: gate.autoActions.includes(action)
+            ? null
+            : 'would also be held: not on the auto list',
         });
         continue;
       }
 
-      // GATE 2 — the allow list. Prepared, logged, NOT sent.
-      if (!autoActions.includes(action)) {
+      // GATE 2 — the allow list, INTERSECTED with this seller's own.
+      // Prepared, logged, NOT sent.
+      if (!gate.autoActions.includes(action)) {
         held += 1;
         bump('HELD_NOT_ON_AUTO_LIST');
         plan.push({
@@ -261,7 +367,7 @@ export class NdrRunnerService {
           attemptCount: fresh.attemptCount,
           action,
           disposition: 'HELD_NOT_ON_AUTO_LIST',
-          reason: 'action is not in courier.ndr_auto_categories',
+          reason: 'action is not in courier.ndr_auto_categories (as narrowed for this seller)',
         });
         await this.audit.log({
           actorType: ActorType.SYSTEM,
@@ -274,7 +380,8 @@ export class NdrRunnerService {
             ndrAction: action,
             nslCode: fresh.nslCode,
             attemptCount: fresh.attemptCount,
-            reason: 'action is not in courier.ndr_auto_categories',
+            sellerId: c.sellerId,
+            reason: 'action is not in courier.ndr_auto_categories (as narrowed for this seller)',
           },
         });
         continue;
@@ -375,6 +482,7 @@ export class NdrRunnerService {
       skipped,
       failed,
       heldForOperator: held,
+      notActionedForSeller,
       reasons,
       // TRUE when any courier in this sweep was in dry run. A summary
       // claiming the run was live while half of it only planned would
@@ -414,6 +522,16 @@ export class NdrRunnerService {
         // A run that submitted to both should say so, and a run that
         // touched only one is worth being able to notice.
         couriers: [...new Set(candidates.map((x) => x.courierCode))],
+        // The global ceiling this run was judged against, so a plan read
+        // weeks later says what the operator's switches held at the time
+        // rather than what they hold now.
+        globalGate: { ...globalGate, autoActions: [...globalGate.autoActions] },
+        // Which sellers were narrowed out, by name. "Nothing went for
+        // seller X" is the question a seller asks, and a count cannot
+        // answer it.
+        sellersNotActioned: [...gateBySeller.entries()]
+          .filter(([, g]) => !g.enabled)
+          .map(([id]) => id),
         ...summary,
         reasons: summary.reasons as Prisma.InputJsonValue,
         plan: plan as unknown as Prisma.InputJsonValue,
@@ -458,6 +576,12 @@ export class NdrRunnerService {
         awbNumber: true,
         courierCode: true,
         courierAccountId: true,
+        // WHOSE parcel it is. Selected here rather than looked up in the
+        // loop so the per-seller gate costs no extra query per parcel —
+        // a shipment reaches its order through `order_shipments`, not a
+        // column, because that join is what lets a superseded shipment
+        // keep its history (the UPL poller resolves it the same way).
+        orderShipments: { select: { order: { select: { sellerId: true } } }, take: 1 },
       },
       orderBy: { updatedAt: 'asc' },
       take: cap,
@@ -471,6 +595,7 @@ export class NdrRunnerService {
               awbNumber: r.awbNumber,
               courierCode: r.courierCode,
               courierAccountId: r.courierAccountId,
+              sellerId: r.orderShipments[0]?.order.sellerId ?? null,
             },
           ],
     );

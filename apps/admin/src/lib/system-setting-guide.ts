@@ -1138,15 +1138,18 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'courier.ndr_runner_enabled': {
     name: 'Nightly automatic re-attempts',
     group: 'Failed deliveries',
-    what: 'The on/off switch for the nightly run that asks the courier to re-attempt failed deliveries. Off stops it at its next run without a deploy; requests already sent are still followed up.',
-    example: 'Off: nothing is asked of the courier at night; re-attempts are requested by hand.',
+    what:
+      'The on/off switch for the nightly run that asks the courier to re-attempt failed deliveries. Off stops it at its next run without a deploy; requests already sent are still followed up. ' +
+      'Set for one seller, this can only switch it OFF for them — never on. The system-wide switch is the one that decides whether anything runs at all, so with it off nothing is sent for anybody, whatever a seller is set to.',
+    example:
+      'Off: nothing is asked of the courier at night; re-attempts are requested by hand. Set to On for one seller while the system-wide switch is Off: still nothing is sent for them.',
     values: onOff(
       [
-        'Each night the runner asks the courier to re-attempt eligible failed deliveries, for the actions allowed.',
+        'Each night the runner asks the courier to re-attempt eligible failed deliveries, for the actions allowed — provided the system-wide switch is also on.',
         'At 9:35 pm Dhaka time 18 failed parcels are submitted for another attempt.',
       ],
       [
-        'The nightly runner sends nothing; requests already sent are still followed up.',
+        'The nightly runner sends nothing; requests already sent are still followed up. Set for one seller, only that seller’s parcels are left alone.',
         'Failed deliveries are re-attempted only when a person asks.',
       ],
     ),
@@ -1160,18 +1163,21 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'courier.ndr_auto_categories': {
     name: 'Actions the nightly run may take',
     group: 'Failed deliveries',
-    what: 'Which actions the nightly run may send on its own, as a list: "RE-ATTEMPT" and/or "PICKUP_RESCHEDULE". Empty means it prepares and logs but sends nothing.',
+    what:
+      'Which actions the nightly run may send on its own, as a list: "RE-ATTEMPT" and/or "PICKUP_RESCHEDULE". Empty means it prepares and logs but sends nothing. ' +
+      'Set for one seller, this can only take actions AWAY — the system-wide list is the ceiling, and the seller gets whichever actions appear on both lists.',
     example:
-      'Tick only "Re-attempt delivery": failed deliveries are re-attempted automatically; pickup reschedules still need a person. Nothing ticked: the run prepares and logs but sends nothing.',
+      'Tick only "Re-attempt delivery": failed deliveries are re-attempted automatically; pickup reschedules still need a person. Nothing ticked: the run prepares and logs but sends nothing. ' +
+      'System-wide list has only "Re-attempt delivery" and a seller is set to both: that seller still only gets re-attempts.',
     multi: {
       'RE-ATTEMPT': opt(
         'Re-attempt delivery',
-        'The nightly run may ask the courier to try delivering a failed parcel again, unattended.',
+        'The nightly run may ask the courier to try delivering a failed parcel again, unattended — provided this is also ticked system-wide.',
         'A parcel whose customer was out on Tuesday is submitted at 9:35 pm for another attempt on Wednesday.',
       ),
       PICKUP_RESCHEDULE: opt(
         'Reschedule pickup',
-        'The nightly run may ask the courier to reschedule a failed reverse pickup, unattended.',
+        'The nightly run may ask the courier to reschedule a failed reverse pickup, unattended — provided this is also ticked system-wide.',
         'A return collection that failed today is rebooked for tomorrow without anyone asking.',
       ),
     },

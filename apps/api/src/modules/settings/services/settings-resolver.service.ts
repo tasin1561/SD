@@ -39,6 +39,48 @@ export const ENUM_VALUED_STRING_KEYS: Readonly<Record<string, readonly string[]>
   ],
 };
 
+/**
+ * JSON settings whose value is a LIST drawn from a FIXED, code-owned set.
+ *
+ * `parseAndClamp` checks a JSON value's SHAPE — "an object or an array" —
+ * and nothing about its CONTENTS, which was enough to refuse a bare
+ * string but not a list holding the wrong words. So a seller override of
+ * `courier.ndr_auto_categories` reading `["RE_ATTEMPT"]` (an underscore
+ * where the courier's vocabulary has a hyphen) saved cleanly, appeared
+ * on the seller's settings screen as a real value, and then narrowed
+ * that seller's allow list to EMPTY at the far end — the runner drops
+ * anything it does not recognise. The symptom would be re-attempts
+ * quietly never happening for one seller, with a screen showing the
+ * setting switched on.
+ *
+ * Same argument as `ENUM_VALUED_STRING_KEYS`, one type along. Values are
+ * restated here rather than imported, because this service is
+ * dependency-free by design (R0/R3) and must not reach into a courier
+ * module; `ndr-seller-gate.spec.ts` pins this list against the runner's
+ * own `KNOWN_NDR_ACTIONS` in both directions, which is drift caught at
+ * build time rather than by a seller.
+ */
+export const JSON_VALUED_ENUM_LIST_KEYS: Readonly<Record<string, readonly string[]>> = {
+  'courier.ndr_auto_categories': ['RE-ATTEMPT', 'PICKUP_RESCHEDULE'],
+};
+
+/**
+ * Overrides whose consequence is PHYSICAL, so setting one is audited
+ * HIGH rather than the ordinary MEDIUM.
+ *
+ * The two NDR runner gates decide whether a van is dispatched on this
+ * seller's behalf, unattended, overnight. That is not the same class of
+ * act as widening their call-attempt cap, and "who turned this on for
+ * this seller, and when" has to be findable at the severity somebody
+ * actually filters on. Clearing one is here too: a cleared override
+ * stops narrowing, which returns the seller to whatever the global pair
+ * permits.
+ */
+const PHYSICAL_CONSEQUENCE_OVERRIDE_KEYS: ReadonlySet<string> = new Set([
+  'courier.ndr_runner_enabled',
+  'courier.ndr_auto_categories',
+]);
+
 export const COD_FEE_KEYS = [
   'wallet.cod_collection_fee_percent',
   'wallet.instant_pay_fee_percent',
@@ -344,7 +386,7 @@ export class SettingsResolverService {
           entityType: 'seller_setting_override',
           entityId: updated.id,
           changes: { key, sellerId, value: this.jsonSafe(parsed) },
-          severity: 'MEDIUM',
+          severity: PHYSICAL_CONSEQUENCE_OVERRIDE_KEYS.has(key) ? 'HIGH' : 'MEDIUM',
         },
         tx,
       );
@@ -372,7 +414,7 @@ export class SettingsResolverService {
           entityType: 'seller_setting_override',
           entityId: existing.id,
           changes: { key, sellerId },
-          severity: 'MEDIUM',
+          severity: PHYSICAL_CONSEQUENCE_OVERRIDE_KEYS.has(key) ? 'HIGH' : 'MEDIUM',
         },
         tx,
       );
@@ -550,6 +592,35 @@ export class SettingsResolverService {
       }
       return value;
     }
+
+    // A fixed-list JSON setting must be an ARRAY of the known codes, with
+    // no duplicates. Refused by NAME — "expected a JSON object or array"
+    // is true of `{"RE-ATTEMPT": true}` and tells whoever typed it
+    // nothing about why the list they meant does not work.
+    const allowedItems = JSON_VALUED_ENUM_LIST_KEYS[key];
+    if (allowedItems !== undefined) {
+      if (!Array.isArray(parsed)) {
+        throw new BadRequestException({
+          code: 'INVALID_SETTING_VALUE',
+          message: `Setting '${key}' expects a JSON array of: ${allowedItems.join(', ')}`,
+        });
+      }
+      const items = parsed.map((v) => (typeof v === 'string' ? v.trim() : v));
+      const bad = items.filter((v) => typeof v !== 'string' || !allowedItems.includes(v));
+      if (bad.length > 0) {
+        throw new BadRequestException({
+          code: 'INVALID_SETTING_VALUE',
+          message:
+            `Setting '${key}': ${bad.map((v) => JSON.stringify(v)).join(', ')} ` +
+            `${bad.length === 1 ? 'is not a' : 'are not'} valid entr${bad.length === 1 ? 'y' : 'ies'}. ` +
+            `Allowed: ${allowedItems.join(', ')}`,
+        });
+      }
+      // Deduped and stored in the code-owned order, so two lists holding
+      // the same permissions cannot read as different ones.
+      return allowedItems.filter((a) => items.includes(a));
+    }
+
     if (key !== 'ops.default_courier_code' || typeof parsed !== 'string') return parsed;
     const code = parsed.trim();
     const known = await tx.courier.findMany({

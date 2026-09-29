@@ -805,6 +805,46 @@ The canonical reference implementation is `OrderWriteService.transitionStatus()`
 
     > **CUR-10 amendment, 2026-08-05.** The original wording was absolute: *"never fired from a lifecycle transition, a cron, or a customer-facing handler."* The courier-escalation work needs a nightly NDR batch runner — Delhivery only accepts re-attempt actions after 21:00 IST, so the action is inherently scheduled and cannot be operator-triggered at the moment it must happen. Rather than let a cron quietly violate a written invariant, the invariant is widened DELIBERATELY and narrowly: a runner may fire courier writes **only** when an operator has explicitly enabled that write channel, and every such call still passes the live-write guard, an explicit per-category auto list (default EMPTY), and a one-click kill switch. **A lifecycle transition and a customer-facing handler remain forbidden triggers — that half of the original rule is unchanged.** CUR-11 is untouched: whatever a runner fires, the courier's own scans remain the sole authority on order status.
 
+    > **Amendment, 2026-09-29 — the two gates are now PER SELLER, and a
+    > seller override may only ever NARROW.** `courier.ndr_runner_enabled`
+    > and `courier.ndr_auto_categories` are seller-overridable (SET-1);
+    > the other NDR keys — the cron lines, the batch cap, the UPL poll and
+    > the reconciliation window — stay global, being properties of ONE
+    > sweep on ONE schedule. **SET-1's ordinary `sellerOverride ??
+    > systemDefault` is exactly the shape that must NOT be used for these
+    > two**: one seller row saying `true` would fire vans on a night an
+    > operator had switched the runner off, and a seller list naming an
+    > action the global list has never permitted would send it. So
+    > `narrowNdrGate` (`courier-ndr-runner/services/ndr-gate.ts`, pure) is
+    > the ONE place the two pairs are combined — `enabled` is **ANDed**,
+    > the action list is **INTERSECTED** with the global CEILING — and
+    > `NdrSettingsService` is its only caller (`runnerEnabled` /
+    > `autoActions` are private, so nothing outside can read a global
+    > switch and act on it as the answer for a parcel). A global "off"
+    > additionally returns before any seller override is read at all.
+    > Resolution is per PARCEL'S SELLER inside the sweep, cached per
+    > distinct seller, and FAILS CLOSED — an unreadable setting narrows
+    > that seller to nothing, because not firing a van we meant to costs a
+    > day while firing one we did not costs money and a customer's
+    > afternoon. A seller switched off is reported as
+    > `notActionedForSeller`, NEVER as `dryRun`: a dry run means the write
+    > guard stopped a submission, this means there was never going to be
+    > one, and reading one as the other tells an operator the whole run
+    > was planning when it was live for everybody else. **SET-1 also
+    > gained JSON content validation** (`JSON_VALUED_ENUM_LIST_KEYS`):
+    > `parseAndClamp` checked only that a JSON value was an object or an
+    > array, so a list holding `RE_ATTEMPT` saved cleanly, showed on the
+    > seller's screen, and was silently discarded by the runner — an
+    > action a seller believed was on and which never fired. Both keys'
+    > overrides audit **HIGH** rather than the ordinary MEDIUM
+    > (`PHYSICAL_CONSEQUENCE_OVERRIDE_KEYS`), set and cleared, because
+    > this decides whether a van is dispatched on that seller's behalf.
+    > Pinned by `ndr-seller-gate.spec.ts` (the narrowing in both
+    > directions, the intersection, fail-closed, and the resolver's
+    > vocabulary against the runner's own) and the per-seller block of
+    > `ndr-runner.service.spec.ts` (a mixed batch, one resolution per
+    > distinct seller, no tracking read for a seller switched off).
+
     > **CUR-10 amendment #2, 2026-09-01 — the seller may return their OWN parcel.**
     > The original rule forbade a customer-facing handler from firing a courier
     > write outright. That is widened, narrowly, for exactly ONE action: a seller

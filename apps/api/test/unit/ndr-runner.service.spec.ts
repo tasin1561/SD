@@ -12,11 +12,14 @@ type Ctx = {
   enabled?: boolean;
   liveWrites?: boolean;
   autoActions?: string[];
+  /** Per-seller NARROWING, by seller id. Absent ⇒ that seller inherits. */
+  sellerGates?: Record<string, { enabled: boolean; autoActions: string[] }>;
   candidates?: {
     id: string;
     awbNumber: string | null;
     courierCode?: string;
     courierAccountId?: string | null;
+    orderShipments?: { order: { sellerId: string } }[];
   }[];
   scans?: { nslCode?: string | null }[];
   attemptCount?: number;
@@ -37,14 +40,20 @@ function make(ctx: Ctx = {}) {
     client: {
       shipment: {
         findMany: jest.fn().mockResolvedValue(
-          ctx.candidates ?? [
-            {
-              id: 'ship-1',
-              awbNumber: 'AWB1',
-              courierCode: 'delhivery',
-              courierAccountId: 'dl-1',
-            },
-          ],
+          (
+            ctx.candidates ?? [
+              {
+                id: 'ship-1',
+                awbNumber: 'AWB1',
+                courierCode: 'delhivery',
+                courierAccountId: 'dl-1',
+              },
+            ]
+          ).map((c) => ({
+            // A shipment reaches its seller through `order_shipments`.
+            orderShipments: [{ order: { sellerId: 'seller-1' } }],
+            ...c,
+          })),
         ),
       },
       ndrActionRequest: {
@@ -64,11 +73,31 @@ function make(ctx: Ctx = {}) {
 
   const listNdr = jest.fn().mockResolvedValue([]);
 
+  const globalGate = {
+    enabled: ctx.enabled ?? true,
+    autoActions: ctx.autoActions ?? ['RE-ATTEMPT'],
+  };
+  // The real narrowing is `narrowNdrGate`, pinned in its own spec. Here
+  // the fixture just answers per seller, so the RUNNER's half — asking
+  // per seller, caching per seller, and acting on the answer — is what
+  // these tests exercise.
+  const gateForSeller = jest.fn((sellerId: string) => {
+    const narrowing = ctx.sellerGates?.[sellerId];
+    return Promise.resolve(
+      narrowing === undefined
+        ? globalGate
+        : {
+            enabled: globalGate.enabled && narrowing.enabled,
+            autoActions: globalGate.autoActions.filter((a) => narrowing.autoActions.includes(a)),
+          },
+    );
+  });
+
   const svc = new NdrRunnerService(
     prisma as never,
     {
-      runnerEnabled: jest.fn().mockResolvedValue(ctx.enabled ?? true),
-      autoActions: jest.fn().mockResolvedValue(ctx.autoActions ?? ['RE-ATTEMPT']),
+      globalGate: jest.fn().mockResolvedValue(globalGate),
+      gateForSeller,
       batchMax: jest.fn().mockResolvedValue(50),
     } as never,
     {
@@ -105,7 +134,16 @@ function make(ctx: Ctx = {}) {
     { log: jest.fn().mockResolvedValue(undefined) } as never,
   );
 
-  return { svc, takeAction, fetchTracking, created, listNdr, updates, candidateQuery };
+  return {
+    svc,
+    takeAction,
+    fetchTracking,
+    created,
+    listNdr,
+    updates,
+    candidateQuery,
+    gateForSeller,
+  };
 }
 
 describe('NdrRunnerService — the gates', () => {
@@ -188,6 +226,130 @@ describe('NdrRunnerService — the gates', () => {
     const where = (candidateQuery.mock.calls[0]?.[0] as { where: Record<string, unknown> }).where;
     expect(where['courierCode']).toEqual({ in: ['delhivery', 'shiprocket'] });
     expect(where['isManualCourier']).toBe(false);
+  });
+});
+
+/**
+ * GATE 4 — the per-seller switches.
+ *
+ * The sweep is ONE nightly batch over MANY sellers' parcels, so the
+ * answer has to be resolved per parcel's seller. Reading it once at the
+ * top would apply whichever seller was asked first to everybody.
+ */
+describe('NdrRunnerService — the per-seller gate', () => {
+  const A = {
+    id: 'ship-a',
+    awbNumber: 'AWB1',
+    courierCode: 'delhivery',
+    courierAccountId: 'dl-1',
+    orderShipments: [{ order: { sellerId: 'seller-a' } }],
+  };
+  const B = {
+    id: 'ship-b',
+    awbNumber: 'AWB1',
+    courierCode: 'delhivery',
+    courierAccountId: 'dl-1',
+    orderShipments: [{ order: { sellerId: 'seller-b' } }],
+  };
+
+  it('a MIXED batch actions one seller and leaves the other alone', async () => {
+    const { svc, takeAction } = make({
+      candidates: [A, B],
+      sellerGates: { 'seller-b': { enabled: false, autoActions: [] } },
+    });
+
+    const out = await svc.run();
+
+    expect(out.submitted).toBe(1);
+    expect(out.notActionedForSeller).toBe(1);
+    expect((takeAction.mock.calls[0]?.[0] as { awbNumber: string }).awbNumber).toBe('AWB1');
+    expect(out.plan.map((p) => [p.shipmentId, p.disposition])).toEqual([
+      ['ship-a', 'SUBMITTED'],
+      ['ship-b', 'NOT_ENABLED_FOR_SELLER'],
+    ]);
+  });
+
+  it('a seller switched OFF is NOT reported as a dry run', async () => {
+    // A dry run means "we would have sent this and the guard stopped
+    // us". This means "we are never sending this for this seller". An
+    // operator reading one as the other would think the whole run was in
+    // planning mode when it was live for everybody else.
+    const { svc } = make({
+      candidates: [B],
+      sellerGates: { 'seller-b': { enabled: false, autoActions: [] } },
+    });
+
+    const out = await svc.run();
+
+    expect(out.dryRun).toBe(false);
+    expect(out.notActionedForSeller).toBe(1);
+    expect(out.skipped).toBe(0);
+    expect(out.reasons['NOT_ENABLED_FOR_SELLER']).toBe(1);
+  });
+
+  it('a seller switched off costs NO tracking read', async () => {
+    // The verdict is definite whatever the parcel turns out to be, and
+    // the read comes out of a budget whose exhaustion has the WAF block
+    // our whole egress IP.
+    const { svc, fetchTracking } = make({
+      candidates: [B],
+      sellerGates: { 'seller-b': { enabled: false, autoActions: [] } },
+    });
+    await svc.run();
+    expect(fetchTracking).not.toHaveBeenCalled();
+  });
+
+  it('a seller who narrowed the action list has that parcel HELD, not sent', async () => {
+    const { svc, takeAction } = make({
+      candidates: [B],
+      sellerGates: { 'seller-b': { enabled: true, autoActions: ['PICKUP_RESCHEDULE'] } },
+    });
+
+    const out = await svc.run();
+
+    expect(takeAction).not.toHaveBeenCalled();
+    expect(out.heldForOperator).toBe(1);
+    expect(out.plan[0]?.disposition).toBe('HELD_NOT_ON_AUTO_LIST');
+  });
+
+  it('a seller override can never open a globally-closed gate', async () => {
+    // The global kill switch returns before any seller is even read —
+    // the strongest form of the rule. `narrowNdrGate` holds the same
+    // line arithmetically; this pins that the runner never gets a chance
+    // to ask.
+    const { svc, takeAction, gateForSeller } = make({
+      enabled: false,
+      candidates: [A],
+      sellerGates: { 'seller-a': { enabled: true, autoActions: ['RE-ATTEMPT'] } },
+    });
+
+    const out = await svc.run();
+
+    expect(out.enabled).toBe(false);
+    expect(takeAction).not.toHaveBeenCalled();
+    expect(gateForSeller).not.toHaveBeenCalled();
+  });
+
+  it('resolves ONCE per distinct seller, not once per parcel', async () => {
+    const { svc, gateForSeller } = make({
+      candidates: [A, { ...A, id: 'ship-a2' }, B],
+    });
+
+    await svc.run();
+
+    // Three parcels, two sellers.
+    expect(gateForSeller).toHaveBeenCalledTimes(2);
+  });
+
+  it('SKIPS a parcel whose seller cannot be established rather than using the global', async () => {
+    // An absent `order_shipments` join is a data anomaly, not
+    // permission to send a van on nobody's behalf.
+    const { svc, takeAction } = make({ candidates: [{ ...A, orderShipments: [] }] });
+
+    const out = await svc.run();
+
+    expect(takeAction).not.toHaveBeenCalled();
+    expect(out.reasons['SELLER_UNKNOWN']).toBe(1);
   });
 });
 
