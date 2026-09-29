@@ -30,6 +30,57 @@ a third section and roughly another fifteen tutorials.
 
 ---
 
+## Where to pick up
+
+**Filmed so far (13):** A1–A6, B1, B2, C5, E1, E4, F2, F3. Every one is listed
+in its own entry below with what it covers and what its seeding does.
+
+**Next, in order, and all `ready`:**
+
+1. **C3 — keeping a product up to date.** Inline edit, adding a variant to an
+   existing product, archiving, and the SKU read-only with its reason.
+2. **C4 — product photos.** Needs `needsSpacesShim: true` on the flow; the
+   profile video is the worked example.
+3. **F1 — inviting someone.** The invite link revealed once, resend, revoke,
+   changing a role. Pairs with F2, already filmed.
+4. **F5 — API keys and webhooks.** The secret shown once, revoked vs expired,
+   and what auto-disabled means.
+5. **G1, G2 — reseller stores and the price they pay.**
+6. **E3 — taking money out.** Needs a positive balance: accept one seeded
+   top-up first.
+7. **C6 — uploading a catalogue.** Needs a products CSV fixture, which does not
+   exist. An hour's work, then a 4-minute video.
+
+**Then build D0** (below) — the lifecycle seeding. It is still the single
+highest-leverage thing in this document: it unblocks 20+ entries in D, E and K
+and most of the admin side.
+
+### What a following agent needs to know that is not obvious
+
+- **Run `record.mjs --check <slug>` TWICE before spending a credit**, with
+  `seed-demo-data.mjs <slug>` in between. The seed IS the between-takes step, so
+  running it between the two checks is what proves the take is repeatable. Three
+  videos in this library have needed a seeding fix found exactly this way.
+- **A flow step that cannot find its target must THROW, never skip.** The roles
+  video passed `--check` twice while saving a role with no permissions, because
+  its step skipped quietly on a selector miss. Check mode only tests what the
+  steps assert.
+- **Sign-in is throttled 5 per 15 minutes and a video costs three.** Run
+  `lib/clear-login-throttle.mjs` (local Redis counters; `make-tutorials.sh` does
+  it automatically). Do NOT wait it out by retrying — a refused attempt writes a
+  fresh `blocked` TTL and pushes the window further out.
+- **Never pipe the seed through `grep`.** It reports failure on stderr and via
+  exit code, and a pipe takes the exit status from grep — a cleanup written
+  against the wrong Prisma model looked like it had worked.
+- **Keep hard numbers out of narration** wherever the screen prints them. This
+  document said "41 permissions" when there are 35; in a doc that is a small
+  thing, in a voice clip it is a re-take nobody notices is needed.
+- **A scene must open on the thing it is about.** Put a dialog dismissal in the
+  PREVIOUS scene's tail, or the frame check shows the next scene opening on a
+  closing modal.
+
+---
+
 ## How to read an entry
 
 - **Promise** — what the viewer can do afterwards. If it cannot be written as
