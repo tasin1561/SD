@@ -1,0 +1,7 @@
+Product SKU,Quantity,Payment Mode,Customer Name,Customer Phone,Customer Email,Address Line1,Address Line2,City,State,Pin Code,Unit Price,COD Amount,External Ref
+RSH-JAMDANI-IVORY,1,COD,Meera Nair,+919845011021,meera.nair@example.in,"28 Kasturba Road, Sampangi Rama Nagar",Opposite Cubbon Park gate 3,Bengaluru,Karnataka,560001,2400,4300,RSH-2026-0501
+RSH-SCARF-EMERALD,2,COD,Meera Nair,+919845011021,meera.nair@example.in,"28 Kasturba Road, Sampangi Rama Nagar",Opposite Cubbon Park gate 3,Bengaluru,Karnataka,560001,950,4300,RSH-2026-0501
+RSH-KANTHA-BLUE,1,COD,Devika Menon,+919845011034,devika.menon@example.in,"Flat 4B, Ashwini Residency, 7th Cross Koramangala",Above the Canara Bank branch,Bengaluru,Karnataka,560034,1850,1850,RSH-2026-0502
+RSH-MUSLIN-ROSE,2,COD,Anjali Pillai,+919845011047,anjali.pillai@example.in,"16 Nataraja Layout, JP Nagar 6th Phase",Behind Sarakki Lake park gate,Bengaluru,Karnataka,560078,1300,2600,RSH-2026-0503
+RSH-SCARF-EMERALD,1,COD,Rohit Sharma,+919845011052,rohit.sharma@example.in,"91 Ejipura Main Road, Vivek Nagar",Next to the Reliance Fresh,Bengaluru,Karnataka,560095,950,950,RSH-2026-0504
+RSH-JAMDANI-IVORY,1,COD,Kavya Reddy,+919845011068,kavya.reddy@example.in,"307 Whitefield Main Road, Hoodi",,Bengaluru,Karnataka,560066,2400,2400,RSH-2026-0505

@@ -21,6 +21,7 @@ import { SCENE_TAIL_SECONDS, videoBySlug } from './narration.mjs';
 import { FLOWS } from './flows.mjs';
 import { loadClips } from './generate-voice.mjs';
 import { makeStage, markerFor, MARKER_IDLE, stageInitScript } from './lib/stage.mjs';
+import { armMockSpaces } from './lib/spaces-shim.mjs';
 import { CANVAS_HEIGHT, FRAME_WIDTH, MARKER_STRIP, RAW_DIR, VERIFY_DIR } from './lib/paths.mjs';
 
 const BASE_URL = process.env.SELLER_APP_URL ?? 'http://127.0.0.1:3003';
@@ -72,6 +73,15 @@ export async function record(slug) {
     timezoneId: 'Asia/Dhaka',
   });
   await context.addInitScript(stageInitScript(MARKER_STRIP));
+
+  // Only the flow that uploads a file gets the `mock://` PUT shim, so
+  // the other videos record against a stock `fetch`. See
+  // `lib/spaces-shim.mjs` for why a JS override and not `page.route`.
+  if (flow.needsSpacesShim === true) {
+    await armMockSpaces(context, {
+      onStored: (file) => console.log(`  · stored mock object ${file}`),
+    });
+  }
 
   const page = await context.newPage();
   page.setDefaultTimeout(30_000);

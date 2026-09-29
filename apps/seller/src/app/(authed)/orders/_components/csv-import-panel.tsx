@@ -178,23 +178,41 @@ export function CsvImportPanel({
     if (!ok) throw new Error('Template download failed');
   }
 
+  /**
+   * Save what the API returned as a file. The request carried the BEARER
+   * token, which is the only thing that authenticates here.
+   *
+   * Both downloads on this panel were a raw `fetch(..., { credentials:
+   * 'include' })` with no Authorization header, so every one of them
+   * 401'd — for every seller, always, on both importers, since the panel
+   * is shared with the catalogue one. The access token lives in JS
+   * memory and nowhere else (FE-1), so `credentials` has nothing to
+   * send: the `__Host-sellerRefresh` cookie goes up and `SellerJwtGuard`
+   * is bearer-only. The panel then painted a red "Template download
+   * failed: 401" that stayed until the next upload cleared it.
+   *
+   * `@AllowCookieAuth` is deliberately NOT the fix. It exists for a
+   * browser NAVIGATION — an `<a href>` or a `window.open`, which cannot
+   * send a header — and its own docblock says to put it only there.
+   * This is a `fetch`, so it can carry the token, and apps/reseller's
+   * copy of this screen has always done exactly that.
+   */
+  function save(text: string, fileName: string): void {
+    const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   async function downloadTemplate(): Promise<boolean> {
     setError(null);
     try {
-      const res = await fetch(`${endpointBase}/template`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error(`Template download failed: ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = templateFileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const body = await client.request<unknown>(`${endpointBase}/template`);
+      save(typeof body === 'string' ? body : JSON.stringify(body), templateFileName);
       return true;
     } catch (err) {
       setError(fmtError(err));
@@ -278,21 +296,10 @@ export function CsvImportPanel({
   }
 
   async function downloadErrorReport(uploadId: string): Promise<void> {
+    // Same shape, same 401, same fix — see `downloadTemplate` above.
     try {
-      const res = await fetch(`${endpointBase}/${uploadId}/error-report`, {
-        method: 'GET',
-        credentials: 'include',
-      });
-      if (!res.ok) throw new Error(`Error report download failed: ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `error-report-${uploadId}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const body = await client.request<unknown>(`${endpointBase}/${uploadId}/error-report`);
+      save(typeof body === 'string' ? body : JSON.stringify(body), `error-report-${uploadId}.csv`);
     } catch (err) {
       setError(fmtError(err));
     }
@@ -305,7 +312,15 @@ export function CsvImportPanel({
     <div className="ord-stack">
       <OrdSection
         title="Upload"
-        note={`One row is one ${kind === 'orders' ? 'order' : 'product or variant'}.`}
+        note={
+          // A row is a LINE on the orders importer since 2026-09-29
+          // (ORD-9 widened) — the product importer is still one row per
+          // thing, so the two say different words rather than one
+          // sentence that is half true.
+          kind === 'orders'
+            ? 'One row is one product line. Rows sharing a reference are one order.'
+            : 'One row is one product or variant.'
+        }
         action={
           <AsyncButton
             variant="ghost"

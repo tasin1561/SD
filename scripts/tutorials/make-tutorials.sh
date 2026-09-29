@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Make both tutorial videos, end to end.
+# Make every tutorial video, end to end.
 #
-#   scripts/tutorials/make-tutorials.sh                     # both
+#   scripts/tutorials/make-tutorials.sh                     # all of them
 #   scripts/tutorials/make-tutorials.sh place-an-order      # just one
 #
 # Prerequisites (it checks, and says which one is missing):
@@ -14,8 +14,9 @@
 #   - an ElevenLabs key in ~/.config/skydrop/elevenlabs or $ELEVENLABS_API_KEY
 #
 # The seed runs BEFORE EACH video, not once: the product video creates a
-# product on camera, and the order video's catalogue must not show it.
-# Seeding per video is what makes either one re-takeable on its own.
+# product on camera, the bulk-import video creates four orders and an
+# import record, and neither must be in the world the next one films.
+# Seeding per video is what makes any one of them re-takeable on its own.
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -31,6 +32,16 @@ if [ -z "${DATABASE_URL:-}" ] && [ -f "$ROOT/apps/api/.env" ]; then
   . "$ROOT/apps/api/.env"
   set +a
 fi
+
+# EXPORT what the checks above resolved, AFTER the .env sourcing —
+# `apps/api/.env` carries a `SELLER_APP_URL` of its own (port 3001, the
+# API's idea of where the seller app lives for link-building), and `set -a`
+# exports it into everything below. The health check ran before that and
+# passed against 3003; `record.mjs` ran after it and drove a browser at
+# 3001, where nothing was listening. Resolving the two names in one place
+# is what stops the checker and the camera looking at different apps.
+export SKYDROP_API_URL="$API_URL"
+export SELLER_APP_URL="$SELLER_URL"
 
 need() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing $1 on PATH."; exit 1; }
@@ -57,7 +68,7 @@ export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
 
 SLUGS=("$@")
 if [ ${#SLUGS[@]} -eq 0 ]; then
-  SLUGS=(place-an-order add-a-product-with-variations)
+  SLUGS=(place-an-order add-a-product-with-variations upload-bulk-orders)
 fi
 
 for slug in "${SLUGS[@]}"; do

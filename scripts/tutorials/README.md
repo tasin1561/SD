@@ -1,11 +1,12 @@
 # Seller-app tutorial videos
 
-Two narrated screen recordings of `apps/seller`, at 1920×1080:
+Three narrated screen recordings of `apps/seller`, at 1920×1080:
 
 | Video | What it covers |
 |---|---|
 | `place-an-order.mp4` | A seller entering an order by hand — recipient, landmark, PIN, reference and call-centre note, picking products from the catalogue, quantity, cash-on-delivery amount, and submitting it into the call queue. |
 | `add-a-product-with-variations.mp4` | Adding a product that comes in more than one version — the shared weight and declared value, a Colour option, a Size option (which Skydrop asks per colour), the four variants it multiplies out, editing a SKU while it is still editable, and saving. |
+| `upload-bulk-orders.mp4` | A day's orders from a spreadsheet — the template, the check before importing (what we matched, rows versus orders, and the row that will not import because it has no landmark), the import running, and the four orders it placed, one of them assembled from two rows that shared a reference. |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -18,7 +19,7 @@ pnpm db:up
 pnpm --filter @skydrop/api build && (cd apps/api && node dist/main.js &)
 pnpm --filter @skydrop/seller build && (cd apps/seller && npx next start -p 3003 &)
 
-scripts/tutorials/make-tutorials.sh                 # both videos
+scripts/tutorials/make-tutorials.sh                 # all of them
 scripts/tutorials/make-tutorials.sh place-an-order  # just one
 ```
 
@@ -62,6 +63,8 @@ somebody watched it.
 | `narration.mjs` | The words, one entry per scene. |
 | `generate-voice.mjs` | ElevenLabs → one mp3 per scene, plus each clip's **measured** duration from ffprobe. Cached per line. |
 | `lib/stage.mjs` | The sync marker, the click ripple, the highlight, and human-rate typing. |
+| `lib/spaces-shim.mjs` | Lets the browser finish a `mock://` upload. Recording rig only, armed per flow — see "Why the upload needs a shim". |
+| `fixtures/rangpur-bulk-orders.csv` | The file the bulk-import video uploads. Committed, because the preview's figures are narrated word for word. |
 | `flows.mjs` | What the camera does, one function per scene. |
 | `record.mjs` | Playwright drives the real app; each scene is held open for at least its clip plus a tail. |
 | `lib/markers.mjs` | Reads the markers back out of the recording. |
@@ -92,6 +95,29 @@ The measured drift is printed on every compose. On the machine this was built
 on it came out at ≈1.000×; the mechanism is what makes that a *measurement*
 rather than an assumption.
 
+## Why the upload needs a shim
+
+Local object storage is a stub: `DEV_MOCK_SPACES=true` makes
+`SpacesService.presignPutUrl` return a `mock://<bucket>/<key>` string and
+keeps objects on disk under `/tmp/skydrop-spaces-mock`. The seller's CSV
+panel then does a real `fetch(uploadUrl, { method: 'PUT', body: file })`,
+which is right against DigitalOcean and cannot work here for two separate
+reasons: Chromium cannot fetch an unknown scheme at all, and `next start`
+serves the real CSP, whose `connect-src` would not admit an arbitrary host
+even if the URL were a real one.
+
+`lib/spaces-shim.mjs` wraps `window.fetch` in an init script so a
+`mock://` PUT never becomes a request: the bytes go to Node through an
+exposed binding, Node writes them where `SpacesService` would have, and
+the page gets a synthetic `200`. Everything else reaches the page's own
+`fetch` untouched. A JS-level override rather than `page.route` because
+there is no request to intercept and a CSP refusal happens before routing.
+
+**Nothing in the app changes for this.** A video is not a reason to widen
+a CSP or to teach a service a second upload path. It is armed per flow
+(`needsSpacesShim: true` in `flows.mjs`), so the other two videos record
+against a stock `fetch`.
+
 ## Gotchas worth knowing before a re-take
 
 - **Seller login is throttled at 5 attempts per 15 minutes** per email + IP. A
@@ -103,6 +129,11 @@ rather than an assumption.
   it, that product is in its catalogue as four out-of-stock rows.
 - **A SKU is permanent once saved.** That is why the seed deletes the tutorial
   product rather than letting the take collide on it.
+- **The bulk-import video leaves four orders, an import record, a staged row
+  and two objects in mock storage.** The seed removes all of them, so the
+  fixture's `External Ref`s are re-usable on every take. Without that, the
+  "Recent imports" table opens on the last take's run and the second take
+  films a different page.
 - The recorder writes `out/verify/<slug>-failure.png` when a flow breaks. It is
   usually enough on its own — the failures during this build were all visible
   in it.

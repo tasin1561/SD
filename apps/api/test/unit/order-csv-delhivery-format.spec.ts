@@ -11,6 +11,30 @@ import {
   normalizeIndianPhone,
   parsePaymentMode,
 } from '../../src/modules/order-csv-import/services/order-csv-parser.service';
+import { OrderCsvImportService } from '../../src/modules/order-csv-import/services/order-csv-import.service';
+import { StoreOrderCsvImportService } from '../../src/modules/order-csv-import/services/store-order-csv-import.service';
+
+/**
+ * `buildTemplate` reads nothing off its dependencies — it is a constant
+ * list of columns joined with commas — so the real services are built
+ * with unused stubs rather than the template being copied into this file,
+ * which is the drift the round-trip below exists to catch.
+ */
+/** `never` is assignable to every parameter, so nothing here claims a shape. */
+const UNUSED = undefined as never;
+function buildSellerTemplateForTest(): string {
+  return new OrderCsvImportService(UNUSED, UNUSED, UNUSED, UNUSED, UNUSED, UNUSED).buildTemplate();
+}
+function buildStoreTemplateForTest(): string {
+  return new StoreOrderCsvImportService(
+    UNUSED,
+    UNUSED,
+    UNUSED,
+    UNUSED,
+    UNUSED,
+    UNUSED,
+  ).buildTemplate();
+}
 
 /**
  * Delhivery One's "Bulk Upload Orders" template, verbatim — the file
@@ -380,5 +404,43 @@ describe('parsePaymentMode', () => {
     expect(parsePaymentMode('Prepaid')).toBe(PaymentMode.PREPAID);
     expect(parsePaymentMode('PRE-PAID')).toBe(PaymentMode.PREPAID);
     expect(parsePaymentMode('maybe')).toBeNull();
+  });
+});
+
+/**
+ * A template that disagrees with the parser is how this breaks again.
+ *
+ * Both importers hand the seller a file and then read it back with the
+ * same machinery, so the round trip is checkable and there is no excuse
+ * for shipping a template whose own example row does not import.
+ */
+describe('the templates we hand out import cleanly through the parser', () => {
+  const parser = new OrderCsvParserService();
+
+  function roundTrip(csv: string): ReturnType<OrderCsvParserService['groupRows']> {
+    const parsed = parser.parse(Buffer.from(csv, 'utf8'));
+    const detected = parser.detectMapping(parsed.headers);
+    expect(detected.missingRequired).toEqual([]);
+    return parser.groupRows(parsed.rows, detected.mapping);
+  }
+
+  it("the seller's template is one order of two lines, with nothing to fix", () => {
+    const csv = buildSellerTemplateForTest();
+    const { groups, rowErrors } = roundTrip(csv);
+    expect(rowErrors).toEqual([]);
+    // Two rows sharing one reference — the whole point of shipping two.
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.lines).toHaveLength(2);
+    expect(groups[0]?.paymentMode).toBe(PaymentMode.COD);
+  });
+
+  it("the store's template is one order of two lines, with nothing to fix", () => {
+    const csv = buildStoreTemplateForTest();
+    const { groups, rowErrors } = roundTrip(csv);
+    expect(rowErrors).toEqual([]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.lines).toHaveLength(2);
+    // The store's retail per line, which is what that column means (RS-5).
+    expect(groups[0]?.lines.map((l) => l.retailUnitPrice)).toEqual([499, 299]);
   });
 });

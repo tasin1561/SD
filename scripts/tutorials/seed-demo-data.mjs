@@ -20,7 +20,10 @@
  *
  *   node scripts/tutorials/seed-demo-data.mjs
  */
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { prisma, argon2 } from './lib/deps.mjs';
+import { MOCK_ROOT } from './lib/spaces-shim.mjs';
 
 const API = process.env.SKYDROP_API_URL ?? 'http://127.0.0.1:4000';
 
@@ -84,6 +87,21 @@ export const TUTORIAL_PRODUCT = { name: 'Rajshahi Silk Kurti', externalRef: 'RSH
  * Keep in step with `flows.mjs`.
  */
 export const TUTORIAL_CUSTOMER = { phoneE164: '+919845017722' };
+
+/**
+ * The customers the BULK IMPORT video's CSV ships to — the fixture at
+ * `fixtures/rangpur-bulk-orders.csv`, one entry per row. Same reason as
+ * `TUTORIAL_CUSTOMER`: a returning customer draws a panel a first-time one
+ * does not, so leaving these behind makes the second take a different
+ * video from the first. Keep in step with the fixture.
+ */
+export const TUTORIAL_CSV_CUSTOMERS = [
+  '+919845011021',
+  '+919845011034',
+  '+919845011047',
+  '+919845011052',
+  '+919845011068',
+];
 
 async function call(path, init = {}) {
   const res = await fetch(`${API}${path}`, {
@@ -349,9 +367,61 @@ async function clearPreviousOrders(sellerId) {
   // The customer row outlives the order and makes the recipient panel
   // show a history the first take did not have.
   const gone = await prisma.customer.deleteMany({
-    where: { sellerId, phoneE164: TUTORIAL_CUSTOMER.phoneE164 },
+    where: {
+      sellerId,
+      phoneE164: { in: [TUTORIAL_CUSTOMER.phoneE164, ...TUTORIAL_CSV_CUSTOMERS] },
+    },
   });
-  if (gone.count > 0) console.log('  · removed the demo customer record');
+  if (gone.count > 0) console.log(`  · removed ${gone.count} demo customer record(s)`);
+}
+
+/**
+ * Remove the bulk imports a previous take ran, and the CSVs they were
+ * run from.
+ *
+ * The orders those imports CREATED are already gone: `clearPreviousOrders`
+ * above removes every pre-dispatch order of this seller, and a
+ * freshly-imported order is PENDING_CONFIRMATION — the first entry in
+ * `REMOVABLE_STATUSES`. So the references are cleared before this runs and
+ * nothing here has to reason about them. What it removes is the IMPORT
+ * RECORD itself, which the "Recent imports" table on camera lists newest
+ * first: leave it and the second take opens on a table already holding the
+ * first take's run, and the scene that says "no imports yet" is a lie.
+ *
+ * `staged_order_rows` cascade from the upload, but they are deleted
+ * EXPLICITLY here: they FK `sellers` with RESTRICT as well, so leaving
+ * them to the cascade would make this depend on delete order rather than
+ * saying what it means.
+ *
+ * The CSV itself lives in local object storage (DEV_MOCK_SPACES), under
+ * the seller's own `order-imports/` prefix — the uploaded file AND the
+ * error report the worker writes beside it. Both go, because the external
+ * references in the fixture are re-used by every take and an orphaned
+ * object is the one piece of a previous run nothing else would clear.
+ */
+async function clearPreviousImports(sellerId) {
+  const uploads = await prisma.bulkOrderUpload.findMany({
+    where: { sellerId },
+    select: { id: true, fileName: true },
+  });
+  if (uploads.length > 0) {
+    const ids = uploads.map((u) => u.id);
+    await prisma.$transaction([
+      prisma.stagedOrderRow.deleteMany({ where: { uploadId: { in: ids } } }),
+      prisma.bulkOrderUpload.deleteMany({ where: { id: { in: ids } } }),
+    ]);
+    console.log(`  \u00b7 removed a previous take's ${uploads.length} bulk import(s)`);
+  }
+
+  // Keep in step with SpacesService (`MOCK_ROOT/<bucket>/<key>`) and with
+  // `buildOrderCsvKey` (`sellers/<id>/order-imports/...`).
+  const bucket = process.env.SPACES_BUCKET ?? 'skydrop-storage';
+  const dir = path.join(MOCK_ROOT, bucket, 'sellers', sellerId, 'order-imports');
+  const files = await fs.readdir(dir).catch(() => null);
+  if (files !== null && files.length > 0) {
+    await fs.rm(dir, { recursive: true, force: true });
+    console.log(`  \u00b7 removed ${files.length} stale upload object(s) from ${dir}`);
+  }
 }
 
 async function main() {
@@ -378,6 +448,7 @@ async function main() {
 
   await clearTutorialProduct(sellerId);
   await clearPreviousOrders(sellerId);
+  await clearPreviousImports(sellerId);
 
   console.log('\nReady.');
   console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);

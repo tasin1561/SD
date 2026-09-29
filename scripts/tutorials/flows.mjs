@@ -13,6 +13,19 @@
  * would otherwise record a still frame and nobody would notice until the
  * video was watched.
  */
+import path from 'node:path';
+import { TUTORIALS_DIR } from './lib/paths.mjs';
+
+/**
+ * The CSV the bulk-import video uploads. A COMMITTED fixture rather than
+ * a file written at record time: what the preview says about it — six
+ * rows, four orders, one that will not import — is narrated word for
+ * word, so the file and the words have to move together or not at all.
+ */
+const BULK_CSV = path.join(TUTORIALS_DIR, 'fixtures', 'rangpur-bulk-orders.csv');
+
+/** The two rows of that file which share one reference, hence one order. */
+const BULK_MULTI_LINE_REF = 'RSH-2026-0501';
 
 /** Who the demo order goes to. Plausible, and nobody real. */
 const CUSTOMER = {
@@ -320,6 +333,176 @@ export const FLOWS = {
         await page.waitForTimeout(1500);
         await stage.glide(380);
         await page.waitForTimeout(1200);
+      },
+    },
+  },
+
+  'upload-bulk-orders': {
+    /**
+     * The `mock://` PUT shim. Local object storage is a stub, so the
+     * panel's own upload cannot complete in a browser without it — see
+     * `lib/spaces-shim.mjs`. The flag is read by `record.mjs`, so the
+     * other two videos keep a stock `fetch`.
+     */
+    needsSpacesShim: true,
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1200);
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1400,
+        });
+        await page.waitForURL(/\/orders(\?|$)/, { timeout: 30_000 });
+        await page.waitForTimeout(1800);
+      },
+
+      async 'open-import'({ page, stage }) {
+        const link = page.getByRole('link', { name: /^CSV import$/ }).first();
+        await stage.point(link, { settle: 900 });
+        await stage.clickIt(link, { settle: 260, after: 1500 });
+        await page.waitForURL(/\/orders\/import/, { timeout: 30_000 });
+        await page.waitForTimeout(1200);
+      },
+
+      async template({ page, stage }) {
+        // A rolling-label button: Download template → Downloading… →
+        // Downloaded, which is the only sign on screen that a file came
+        // down, so the dwell after the press is the point of the scene.
+        //
+        // WHY THIS IS WORTH A NOTE. It could not be pressed until
+        // 2026-09-29: `downloadTemplate` fetched the endpoint with a raw
+        // `fetch` and `credentials: 'include'` and no Authorization
+        // header, while `SellerJwtGuard` is bearer-only — FE-1 keeps the
+        // access token in memory and never in a cookie, so `credentials`
+        // had nothing to send. It answered 401 for every seller, every
+        // time, on both importers (the panel is shared with the
+        // catalogue one), and the panel painted a red "Template download
+        // failed: 401" that stayed up until the next upload cleared it.
+        // An early take of this video filmed exactly that, under a line
+        // about starting from the template — which is how it was found.
+        // `downloadErrorReport` was the same shape and the same 401; both
+        // go through the ApiClient now. **A screen existing is not
+        // evidence its endpoint does**, and a recording is a surprisingly
+        // good way to find out which.
+        await stage.clickIt(page.getByRole('button', { name: /^Download template$/ }).first(), {
+          settle: 800,
+          after: 2600,
+        });
+      },
+
+      async 'choose-file'({ page, stage }) {
+        const zone = page.locator('.sk-drop__zone');
+        await stage.point(zone, { settle: 900 });
+        // `stage.clickIt` CANNOT drive this one: the real <input type=file>
+        // is `opacity: 0; pointer-events: none` inside the zone, and a
+        // native picker cannot be opened from a script anyway. Setting the
+        // files on the input fires its own change event, which is the same
+        // path a person's picker takes.
+        await page.locator('input.sk-drop__input').setInputFiles(BULK_CSV);
+        await page.waitForTimeout(900);
+        // The zone's label becomes the file name once one is chosen.
+        await stage.dwellOn(zone, 2000);
+      },
+
+      async preview({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Upload and check$/ }), {
+          settle: 700,
+          after: 900,
+        });
+        await page.getByText('Check before importing').waitFor({ timeout: 45_000 });
+        await page.waitForTimeout(1400);
+        // "<file> · 6 rows · 4 orders" — the sentence the narration reads.
+        await stage.dwellOn(page.locator('.ord-mapping'), 7000);
+      },
+
+      async 'problem-row'({ page, stage }) {
+        // Held for most of the scene: this and the scene before it sit on
+        // the same unscrolled page, so the moving highlight is the only
+        // thing telling a viewer which half is being talked about.
+        await stage.dwellOn(page.locator('.ord-notice').first(), 9000);
+      },
+
+      async import({ page, stage }) {
+        const button = page.getByRole('button', { name: /^Import \d+ orders?$/ });
+        await stage.point(button, { settle: 1100 });
+        await stage.clickIt(button, { settle: 300, after: 1600 });
+      },
+
+      async processing({ page, stage }) {
+        // The table polls every 5s, so PROCESSING → terminal is not
+        // instant. Wait for the run to land rather than timing it: a
+        // scene that ends mid-poll shows a spinner over a line about
+        // four orders having been created.
+        const row = page.locator('table tbody tr').first();
+        await row.waitFor({ state: 'visible', timeout: 30_000 });
+        await page
+          .waitForFunction(
+            () => {
+              const cell = document.querySelector('table tbody tr');
+              return cell !== null && /done|failed|completed/i.test(cell.textContent ?? '');
+            },
+            undefined,
+            { timeout: 60_000 },
+          )
+          .catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.dwellOn(row, 2600);
+        // And press the errors file the narration is naming. A download
+        // shows nothing on camera, so what this actually films is the
+        // ABSENCE of a red notice — which is the whole of the second half
+        // of the 401 described on the `template` scene. It goes here
+        // rather than in a scene of its own because the link is already
+        // on screen and the line already names the file.
+        await stage.clickIt(page.getByRole('button', { name: /Errors CSV/i }).first(), {
+          settle: 500,
+          after: 1400,
+        });
+      },
+
+      async 'orders-list'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/orders(\?|$)/, { timeout: 30_000 });
+        const row = page.locator('table tbody tr').filter({ hasText: BULK_MULTI_LINE_REF }).first();
+        try {
+          await row.waitFor({ state: 'visible', timeout: 8_000 });
+        } catch {
+          // The list is a 30s-stale TanStack query and the import page
+          // does not invalidate it, so a fast take can arrive back here
+          // on the cached empty list. Every scene between is held open
+          // for its narration, so in practice the cache has long
+          // expired; this is the belt for the day it has not.
+          await page.reload({ waitUntil: 'domcontentloaded' });
+          await row.waitFor({ state: 'visible', timeout: 30_000 });
+        }
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(row, 2400);
+      },
+
+      async 'multi-line'({ page, stage }) {
+        await stage.clickIt(
+          page
+            .locator('table tbody tr')
+            .filter({ hasText: BULK_MULTI_LINE_REF })
+            .first()
+            .locator('a.ord-order-link')
+            .first(),
+          { settle: 500, after: 2000 },
+        );
+        await page.waitForURL(/\/orders\/[0-9a-f-]{20,}/, { timeout: 45_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The Items section is below the fold and says "2 lines" over a
+        // row per product — which is the whole claim of this video, on
+        // screen rather than only in the narration.
+        const items = page.getByRole('table', { name: 'Items on this order' });
+        await items.scrollIntoViewIfNeeded().catch(() => {});
+        await page.waitForTimeout(800);
+        await stage.dwellOn(items, 3000);
       },
     },
   },
