@@ -72,6 +72,50 @@ async function storeMockObject(rawUrl, base64) {
 }
 
 /**
+ * Media type for a stored object, from its key and then from its bytes.
+ *
+ * Nothing on disk records the type — `SpacesService` keeps the bytes and
+ * nothing else — so the key's extension is the first answer and the
+ * magic number is the fallback. It matters only for the `data:` URL the
+ * page is handed, and a wrong type there shows as a broken picture,
+ * which is exactly what this exists to prevent.
+ */
+function mockContentType(key, bytes) {
+  const ext = path.extname(key).toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.webp') return 'image/webp';
+  if (ext === '.gif') return 'image/gif';
+  if (ext === '.svg') return 'image/svg+xml';
+  if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50) return 'image/png';
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8) return 'image/jpeg';
+  if (bytes.length >= 12 && bytes.subarray(8, 12).toString('ascii') === 'WEBP') {
+    return 'image/webp';
+  }
+  return 'application/octet-stream';
+}
+
+/**
+ * Node side of the READ binding: hand the page back an object it cannot
+ * fetch for itself.
+ *
+ * Returns null rather than throwing for a missing object. An image the
+ * rig cannot find should stay as it was — a broken frame is honest, and
+ * an exception here would surface as a page error in the middle of a
+ * take.
+ */
+async function readMockObject(rawUrl) {
+  const target = mockObjectPath(rawUrl);
+  if (target === null) return null;
+  const bytes = await fs.readFile(target).catch(() => null);
+  if (bytes === null) return null;
+  return {
+    contentType: mockContentType(target, bytes),
+    base64: bytes.toString('base64'),
+  };
+}
+
+/**
  * The page-side wrapper, as a string because it is evaluated in the
  * browser and must close over nothing from Node.
  *
@@ -122,6 +166,68 @@ const PAGE_SHIM = `
     // answers a successful PUT with.
     return new Response(null, { status: 200, statusText: 'OK' });
   };
+
+  // ── mock:// IMAGES ────────────────────────────────────────────────
+  //
+  // A GET presign is a \`mock://\` string too, and the app puts it
+  // straight into an <img src>. That is NOT a fetch, so the wrapper
+  // above cannot help: the browser tries to load an unknown scheme and
+  // the frame renders broken. On camera that reads as a failed upload —
+  // the one thing a tutorial about uploading must not show.
+  //
+  // So each one is swapped for a \`data:\` URL of the bytes Node holds.
+  // \`img-src\` already admits \`data:\` in the real CSP, so nothing is
+  // widened for the rig. The original src is kept on the element, which
+  // makes this idempotent: an element already swapped is skipped, and
+  // React re-rendering the same src does not start a second read.
+  const swapping = new WeakSet();
+  async function swapImage(img) {
+    const src = img.getAttribute('src');
+    if (src === null || !src.startsWith('mock://')) return;
+    if (swapping.has(img)) return;
+    swapping.add(img);
+    try {
+      const got = await window.__tutReadMockObject(src);
+      if (got === null) return;
+      img.dataset.tutMockSrc = src;
+      img.src = 'data:' + got.contentType + ';base64,' + got.base64;
+    } finally {
+      swapping.delete(img);
+    }
+  }
+
+  function sweep(root) {
+    if (root.querySelectorAll === undefined) return;
+    for (const img of root.querySelectorAll('img[src^="mock://"]')) void swapImage(img);
+  }
+
+  function watch() {
+    sweep(document);
+    // The upload replaces the <img> rather than mutating it, so a
+    // one-shot sweep would catch the placeholder and miss the result.
+    new MutationObserver((records) => {
+      for (const r of records) {
+        if (r.type === 'attributes' && r.target instanceof HTMLImageElement) {
+          void swapImage(r.target);
+        }
+        for (const node of r.addedNodes) {
+          if (node instanceof HTMLImageElement) void swapImage(node);
+          else if (node instanceof Element) sweep(node);
+        }
+      }
+    }).observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['src'],
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', watch);
+  } else {
+    watch();
+  }
 })();
 `;
 
@@ -139,5 +245,6 @@ export async function armMockSpaces(context, { onStored } = {}) {
     if (typeof onStored === 'function') onStored(target);
     return target;
   });
+  await context.exposeFunction('__tutReadMockObject', (url) => readMockObject(url));
   await context.addInitScript(PAGE_SHIM);
 }

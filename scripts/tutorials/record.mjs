@@ -30,7 +30,22 @@ const SELLER = {
   password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
 };
 
-export async function record(slug) {
+/**
+ * Drive a flow and record it — or, with `{ check: true }`, drive it and
+ * record NOTHING.
+ *
+ * CHECK MODE exists because the expensive half of a re-take is not the
+ * recording, it is finding out that a selector moved. A flow is ordinary
+ * Playwright, so it can be run on its own: no narration is loaded, no
+ * video is written, and each scene is held for a fixed beat instead of
+ * for its clip. What it proves is exactly what goes stale — that every
+ * step still finds what it reaches for.
+ *
+ * It is also the only way to work on a flow whose narration does not
+ * exist yet, which is how it came to be written: the voice budget ran
+ * out mid-library and two finished flows had no way to be exercised.
+ */
+export async function record(slug, { check = false } = {}) {
   const video = videoBySlug(slug);
   const flow = FLOWS[slug];
   if (flow === undefined) throw new Error(`No flow for "${slug}" in flows.mjs`);
@@ -47,10 +62,21 @@ export async function record(slug) {
     throw new Error(`flows.mjs has actions with no narration: ${stray.join(', ')}`);
   }
 
-  const clips = await loadClips(slug);
+  // In check mode every scene gets the same short beat: the point is to
+  // reach each step, not to time it.
+  const CHECK_SECONDS = 0.4;
+  const clips = check
+    ? Object.fromEntries(video.steps.map((st) => [st.id, { seconds: CHECK_SECONDS }]))
+    : await loadClips(slug);
   const outDir = path.join(RAW_DIR, slug);
-  await fs.rm(outDir, { recursive: true, force: true });
-  await fs.mkdir(outDir, { recursive: true });
+  // Check mode must not TOUCH the raw directory. It writes no video, so
+  // wiping it would throw away a recording the composer still needs —
+  // running a check to see whether a flow still works would silently
+  // destroy the take it was checking on behalf of.
+  if (!check) {
+    await fs.rm(outDir, { recursive: true, force: true });
+    await fs.mkdir(outDir, { recursive: true });
+  }
   await fs.mkdir(VERIFY_DIR, { recursive: true });
 
   const browser = await chromium.launch({
@@ -66,7 +92,11 @@ export async function record(slug) {
   const context = await browser.newContext({
     viewport: { width: FRAME_WIDTH, height: CANVAS_HEIGHT },
     deviceScaleFactor: 1,
-    recordVideo: { dir: outDir, size: { width: FRAME_WIDTH, height: CANVAS_HEIGHT } },
+    // No video in check mode — writing and flushing a webm is most of
+    // the wall clock, and none of it is being looked at.
+    ...(check
+      ? {}
+      : { recordVideo: { dir: outDir, size: { width: FRAME_WIDTH, height: CANVAS_HEIGHT } } }),
     colorScheme: 'dark',
     reducedMotion: 'no-preference',
     locale: 'en-IN',
@@ -128,7 +158,7 @@ export async function record(slug) {
     // it, or the composer has nothing to measure its length against.
     await stage.marker(markerFor(video.steps.length));
     await stage.clearHalo();
-    await page.waitForTimeout(1800);
+    await page.waitForTimeout(check ? 200 : 1800);
   } catch (e) {
     failure = e;
     await page
@@ -139,6 +169,11 @@ export async function record(slug) {
 
   await context.close(); // flushes the video file
   await browser.close();
+
+  if (check) {
+    if (failure !== null) throw failure;
+    return { slug, checked: true, scenes: scenes.map((sc) => sc.id) };
+  }
 
   const files = (await fs.readdir(outDir)).filter((f) => f.endsWith('.webm'));
   const rawVideo = files[0] === undefined ? null : path.join(outDir, files[0]);
@@ -166,10 +201,20 @@ export async function record(slug) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const slug = process.argv[2];
-  if (slug === undefined) throw new Error('usage: node scripts/tutorials/record.mjs <slug>');
-  console.log(`Recording ${slug} against ${BASE_URL}`);
-  const manifest = await record(slug);
-  console.log(`\n  raw video ${manifest.rawVideo}`);
-  console.log(`  wall clock ${manifest.wallSeconds.toFixed(1)}s`);
+  const args = process.argv.slice(2);
+  const check = args.includes('--check');
+  const slug = args.find((a) => !a.startsWith('--'));
+  if (slug === undefined) {
+    throw new Error('usage: node scripts/tutorials/record.mjs [--check] <slug>');
+  }
+  if (check) {
+    console.log(`Checking the ${slug} flow against ${BASE_URL} (no audio, no video)`);
+    const result = await record(slug, { check: true });
+    console.log(`\n  every step reached: ${result.scenes.join(', ')}`);
+  } else {
+    console.log(`Recording ${slug} against ${BASE_URL}`);
+    const manifest = await record(slug);
+    console.log(`\n  raw video ${manifest.rawVideo}`);
+    console.log(`  wall clock ${manifest.wallSeconds.toFixed(1)}s`);
+  }
 }

@@ -68,7 +68,14 @@ export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
 
 SLUGS=("$@")
 if [ ${#SLUGS[@]} -eq 0 ]; then
-  SLUGS=(place-an-order add-a-product-with-variations upload-bulk-orders)
+  SLUGS=(
+    find-your-way-around
+    set-up-your-profile
+    place-an-order
+    add-a-product-with-variations
+    upload-bulk-orders
+    announce-a-consignment
+  )
 fi
 
 for slug in "${SLUGS[@]}"; do
@@ -76,7 +83,10 @@ for slug in "${SLUGS[@]}"; do
   echo "=============================================================="
   echo "  $slug"
   echo "=============================================================="
-  node scripts/tutorials/seed-demo-data.mjs
+  # The slug is passed so the seed can tailor the world per video — the
+  # orientation video wants a dashboard with orders on it, and every
+  # other video wants the order list cleared.
+  node scripts/tutorials/seed-demo-data.mjs "$slug"
   node scripts/tutorials/generate-voice.mjs "$slug"
   node scripts/tutorials/record.mjs "$slug"
   node scripts/tutorials/compose.mjs "$slug"

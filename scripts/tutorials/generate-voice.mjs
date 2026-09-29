@@ -83,7 +83,7 @@ async function synthesise(key, text, outFile) {
   await fs.writeFile(outFile, Buffer.from(await res.arrayBuffer()));
 }
 
-export async function voiceFor(video) {
+export async function voiceFor(video, { adopt = false } = {}) {
   const key = await apiKey();
   const dir = path.join(AUDIO_DIR, video.slug);
   await fs.mkdir(dir, { recursive: true });
@@ -110,12 +110,37 @@ export async function voiceFor(video) {
     if (hit !== undefined && hit.fingerprint === fp && exists) {
       clips[step.id] = { fingerprint: fp, seconds: hit.seconds, file };
       console.log(`  · ${step.id.padEnd(16)} ${hit.seconds.toFixed(2)}s (cached)`);
+      await writeManifest(manifestFile, video.slug, clips);
+      continue;
+    }
+
+    // ADOPTION. An mp3 with no manifest entry is audio that was paid for
+    // and then orphaned — which is exactly what a failed run used to
+    // leave behind, before the manifest was written per clip. Its
+    // duration is measurable; what CANNOT be checked is that the words
+    // in it are still the words above, so this is opt-in and says so
+    // every time. Without it the only way back is to buy the clip again.
+    if (hit === undefined && exists && adopt) {
+      const seconds = await probeDuration(file);
+      clips[step.id] = { fingerprint: fp, seconds, file };
+      console.log(
+        `  · ${step.id.padEnd(16)} ${seconds.toFixed(2)}s (ADOPTED — unverified against the text)`,
+      );
+      await writeManifest(manifestFile, video.slug, clips);
       continue;
     }
 
     await synthesise(key, step.say, file);
     const seconds = await probeDuration(file);
     clips[step.id] = { fingerprint: fp, seconds, file };
+
+    // WRITTEN PER CLIP, not once at the end. The manifest is what makes
+    // a clip re-usable — a clip whose duration and fingerprint were
+    // never recorded is regenerated on the next run, and regenerating
+    // costs credits. Writing it only after the whole loop meant a run
+    // that died on its last line threw away every clip it had just paid
+    // for, which is how ten of them were lost and this was found.
+    await writeManifest(manifestFile, video.slug, clips);
 
     const flag =
       seconds < MIN_CLIP_SECONDS
@@ -126,8 +151,13 @@ export async function voiceFor(video) {
     console.log(`  · ${step.id.padEnd(16)} ${seconds.toFixed(2)}s${flag}`);
   }
 
-  await fs.writeFile(manifestFile, `${JSON.stringify({ slug: video.slug, clips }, null, 2)}\n`);
+  await writeManifest(manifestFile, video.slug, clips);
   return clips;
+}
+
+/** The manifest, rewritten whole. Small enough that atomicity is not worth the temp file. */
+async function writeManifest(manifestFile, slug, clips) {
+  await fs.writeFile(manifestFile, `${JSON.stringify({ slug, clips }, null, 2)}\n`);
 }
 
 /** Read a previously generated manifest — the recorder and composer use this. */
@@ -138,10 +168,15 @@ export async function loadClips(slug) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const wanted = process.argv[2] === undefined ? VIDEOS : [videoBySlug(process.argv[2])];
+  const args = process.argv.slice(2);
+  // `--adopt` takes mp3s that are on disk with no manifest entry and
+  // records them rather than buying them again. See the adoption branch.
+  const adopt = args.includes('--adopt');
+  const named = args.find((a) => !a.startsWith('--'));
+  const wanted = named === undefined ? VIDEOS : [videoBySlug(named)];
   for (const video of wanted) {
     console.log(`\n${video.title} (${video.slug})`);
-    const clips = await voiceFor(video);
+    const clips = await voiceFor(video, { adopt });
     const total = Object.values(clips).reduce((a, c) => a + c.seconds, 0);
     console.log(`  total narration ${total.toFixed(1)}s across ${Object.keys(clips).length} clips`);
   }

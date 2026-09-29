@@ -50,6 +50,32 @@ const NEW_PRODUCT = {
   editedSku: 'RSH-KURTI-EMR-M',
 };
 
+/** The logo the profile video uploads. Committed, like the CSV fixture. */
+const LOGO_FILE = path.join(TUTORIALS_DIR, 'fixtures', 'rangpur-silk-logo.png');
+
+/** What the profile video types. Nothing here is a real bank. */
+const PROFILE = {
+  whatsapp: '+8801711223344',
+  bank: {
+    name: 'BRAC Bank',
+    branch: 'Rangpur Branch',
+    holder: 'Rangpur Silk House',
+    account: '1501204536789012',
+    routing: '060851726',
+    // Required, not optional — the form refuses a partial account.
+    swift: 'BRAKBDDH',
+  },
+};
+
+/** What the consignment video declares. Keep in step with seed-demo-data.mjs. */
+const CONSIGNMENT = {
+  lines: [
+    { search: 'Jamdani', qty: '40' },
+    { search: 'Nakshi', qty: '25', unitCost: '1150' },
+  ],
+  reference: 'RSH-CN-2026-07',
+};
+
 /**
  * Sign in off camera.
  *
@@ -110,6 +136,81 @@ function addSizeValue(page, colour) {
     .locator('.prd-parent')
     .filter({ has: sizeChip(page, colour, 1) })
     .getByRole('button', { name: 'Add value' });
+}
+
+/**
+ * One collapsible group of the nav rail, found through its own heading.
+ *
+ * The heading is a BUTTON (it folds the group), so haloing the button
+ * alone outlines a word and not the thing the viewer is being shown. The
+ * group's container is what carries the links, and the only stable way
+ * to it is "the group that contains this heading".
+ */
+function navGroup(page, heading) {
+  return page
+    .locator('.sk-nav__group')
+    .filter({ has: page.getByRole('button', { name: heading, exact: true }) })
+    .first();
+}
+
+/**
+ * One card of a `ChoiceCards` group, by the value its radio carries.
+ *
+ * The visible card is a <label> wrapping a visually-hidden radio, and
+ * clicking the label's TEXT is refused — the card's own decoration sits
+ * over it and Playwright waits for the interception to clear, which it
+ * never does. So the halo goes on the card, which is what a viewer is
+ * being shown, and the radio is checked directly.
+ */
+function choiceCard(page, value) {
+  return page.locator(`label.sk-choice:has(input[id$="-${value}"])`).first();
+}
+
+async function chooseCard({ page, stage }, value, { after = 900 } = {}) {
+  const card = choiceCard(page, value);
+  await stage.point(card, { settle: 600 });
+  const box = await card.boundingBox();
+  if (box !== null) {
+    await page.evaluate(
+      ([x, y]) => window.__tut.ripple(x, y),
+      [box.x + box.width / 2, box.y + box.height / 2],
+    );
+    await page.waitForTimeout(160);
+  }
+  await page.locator(`input[id$="-${value}"]`).first().check();
+  await page.waitForTimeout(after);
+  await stage.clearHalo();
+}
+
+/** Close a popover without clicking anything inside it. */
+async function dismiss(page) {
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Set a native `<input type="date">`.
+ *
+ * NOT `typeIn`: a date input is a row of SEGMENTS, so typing
+ * "2026-10-20" a character at a time feeds the digits into whichever
+ * segment has focus and produces a date like 02/02/61020 — which the
+ * server then refuses, several seconds after the mistake was made. The
+ * halo still goes on first, so the viewer sees which field is being
+ * filled; only the keystrokes are given up.
+ */
+async function setDate({ page, stage }, locator, iso) {
+  await stage.point(locator, { settle: 400 });
+  await locator.fill(iso);
+  await page.waitForTimeout(500);
+  await stage.clearHalo();
+}
+
+/** Pick a catalogue variant in the consignment form's combobox. */
+async function pickVariant({ page, stage }, query) {
+  await stage.typeIn(page.locator('#cn-variant'), query, { clear: true, after: 900 });
+  const option = page.getByRole('option').first();
+  await option.waitFor({ state: 'visible', timeout: 15_000 });
+  await stage.clickIt(option, { after: 700 });
 }
 
 export const FLOWS = {
@@ -503,6 +604,310 @@ export const FLOWS = {
         await items.scrollIntoViewIfNeeded().catch(() => {});
         await page.waitForTimeout(800);
         await stage.dwellOn(items, 3000);
+      },
+    },
+  },
+
+  'find-your-way-around': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1500);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async dashboard({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { name: /Treasury/i }).first(), 2400);
+        await stage.glide(260);
+        await page.waitForTimeout(900);
+        await stage.glide(-260);
+      },
+
+      async sidebar({ page, stage }) {
+        await stage.dwellOn(page.locator('[data-slot="nav-rail"]').first(), 3000);
+      },
+
+      async selling({ page, stage }) {
+        await stage.dwellOn(navGroup(page, 'Selling'), 3200);
+      },
+
+      async stock({ page, stage }) {
+        await stage.dwellOn(navGroup(page, 'Stock'), 3200);
+      },
+
+      async money({ page, stage }) {
+        await stage.dwellOn(navGroup(page, 'Money'), 1800);
+        await stage.dwellOn(navGroup(page, 'Reselling'), 2200);
+      },
+
+      async account({ page, stage }) {
+        await stage.dwellOn(navGroup(page, 'Account'), 3200);
+      },
+
+      async search({ page, stage }) {
+        // `type="search"`, so its implicit role is SEARCHBOX and not
+        // textbox — asking for a textbox waits thirty seconds and finds
+        // nothing.
+        const box = page.getByLabel('Find an order or ticket').first();
+        // A partial order number, so the suggestions the viewer is being
+        // told about are actually on screen. The A1 seed places orders
+        // for exactly this reason.
+        await stage.typeIn(box, 'SD-2026', { after: 1800 });
+        await page.waitForTimeout(1200);
+        await dismiss(page);
+        await box.fill('');
+      },
+
+      async 'quick-actions'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /Quick actions/i }).first(), {
+          after: 1600,
+        });
+        await page.waitForTimeout(1400);
+        await dismiss(page);
+      },
+
+      async bell({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Notifications/i }).first(), {
+          after: 1600,
+        });
+        await page.waitForTimeout(1600);
+        await dismiss(page);
+      },
+
+      async strip({ page, stage }) {
+        await stage.dwellOn(page.locator('[data-slot="status-strip"]').first(), 3000);
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-400);
+        await page.waitForTimeout(600);
+        await stage.dwellOn(navGroup(page, 'Account'), 1600);
+        await stage.dwellOn(navGroup(page, 'Stock'), 1600);
+      },
+    },
+  },
+
+  'set-up-your-profile': {
+    // The logo goes through presign → PUT, and local object storage is a
+    // stub. See lib/spaces-shim.mjs — it also serves the `mock://` GET
+    // back as a data URL, so the logo the viewer just uploaded actually
+    // APPEARS rather than rendering as a broken frame.
+    needsSpacesShim: true,
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-profile'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Profile', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/profile/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1600);
+      },
+
+      async 'edit-company'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Edit', exact: true }).first(), {
+          after: 1400,
+        });
+        await stage.typeIn(page.getByLabel('WhatsApp'), PROFILE.whatsapp, {
+          clear: true,
+          after: 600,
+        });
+      },
+
+      async fixed({ page, stage }) {
+        await stage.dwellOn(page.getByLabel('Company name'), 2000);
+        await stage.dwellOn(page.getByLabel(/^Phone/), 2000);
+      },
+
+      async 'save-company'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /Save changes/i }).first(), {
+          after: 2200,
+        });
+        await page.waitForTimeout(1200);
+      },
+
+      async 'logo-pick'({ page, stage }) {
+        const heading = page.getByRole('heading', { name: 'Company logo' }).first();
+        await heading.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(heading, 1600);
+        // The control is a styled <label> wrapping a hidden input, so the
+        // file goes to the INPUT while the halo sits on what a viewer can
+        // actually see.
+        await stage.point(page.locator('.set-file').first(), { settle: 700 });
+        await page.locator('.set-file input[type="file"]').first().setInputFiles(LOGO_FILE);
+        await page.waitForTimeout(1600);
+        await stage.clearHalo();
+      },
+
+      async 'logo-done'({ page, stage }) {
+        const frame = page.locator('.set-logo__frame').first();
+        await frame.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(frame, 2600);
+      },
+
+      async 'bank-open'({ page, stage }) {
+        const heading = page.getByRole('heading', { name: 'Bank details' }).first();
+        await heading.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.clickIt(page.getByRole('button', { name: 'Edit', exact: true }).last(), {
+          after: 1200,
+        });
+        // All six fields are filled inside THIS scene. There was a
+        // narrated scene of its own for them, and its line said "a SWIFT
+        // code if you have one" — which the form contradicts on screen,
+        // in the same shot: "All six fields are needed together". The
+        // line went rather than ship a tutorial the page argues with.
+        // The picture still shows every field being typed.
+        //
+        // Typed FASTER than the default 55 ms. Six fields at a careful
+        // human rate is about eighteen seconds, and the narration for
+        // this scene is eight — the rest would be silence over a form
+        // filling itself. The scene is still held for the whole clip;
+        // this only stops it running far past it.
+        const bank = { delay: 26, after: 200, clear: true };
+        await stage.typeIn(page.getByLabel('Bank name'), PROFILE.bank.name, bank);
+        await stage.typeIn(page.getByLabel('Branch name'), PROFILE.bank.branch, bank);
+        await stage.typeIn(page.getByLabel('Account holder name'), PROFILE.bank.holder, bank);
+        await stage.typeIn(page.getByLabel('Account number'), PROFILE.bank.account, bank);
+        await stage.typeIn(page.getByLabel('Routing number'), PROFILE.bank.routing, bank);
+        await stage.typeIn(page.getByLabel('SWIFT code'), PROFILE.bank.swift, bank);
+      },
+
+      async 'bank-approval'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /Save details/i }).first(), {
+          after: 1400,
+        });
+        // Saving asks first, and WHICH question it asks is the lesson:
+        // a first set of details is stored, a change to an account
+        // already on file goes to Skydrop for approval.
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(2000);
+        await stage.clickIt(
+          dialog.getByRole('button', { name: /Send for approval|Save details/i }).first(),
+          { after: 2000 },
+        );
+        // The closing shot. This is the last scene, so it runs on past
+        // its narration and ends on the whole page rather than on a
+        // dialog that has just closed.
+        await page.waitForTimeout(1200);
+        await stage.glide(-900);
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.getByRole('heading', { name: 'Company info' }).first(), 1800);
+      },
+    },
+  },
+
+  'announce-a-consignment': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-inbound'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Add stock', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/inbound/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1800);
+      },
+
+      async 'open-form'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Announce a consignment' }).first(), {
+          after: 1600,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(1200);
+      },
+
+      async route({ page, stage }) {
+        await stage.dwellOn(page.locator('#cn-route-h'), 2800);
+      },
+
+      async 'route-info'({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: /What do the routes mean/i }).first(),
+          { after: 1600 },
+        );
+        await page.waitForTimeout(2400);
+      },
+
+      async 'route-pick'(ctx) {
+        await chooseCard(ctx, 'VIA_BD', { after: 1800 });
+      },
+
+      async 'first-line'({ page, stage }) {
+        const line = CONSIGNMENT.lines[0];
+        await pickVariant({ page, stage }, line.search);
+        await stage.typeIn(page.locator('#cn-qty'), line.qty, { clear: true, after: 500 });
+        await stage.clickIt(
+          page.getByRole('button', { name: 'Add this product to the consignment' }),
+          { after: 1400 },
+        );
+      },
+
+      async 'unit-cost'({ page, stage }) {
+        const line = CONSIGNMENT.lines[1];
+        await pickVariant({ page, stage }, line.search);
+        await stage.typeIn(page.locator('#cn-qty'), line.qty, { clear: true, after: 400 });
+        await stage.typeIn(page.locator('#cn-cost'), line.unitCost, { clear: true, after: 1400 });
+      },
+
+      async 'second-line'({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: 'Add this product to the consignment' }),
+          { after: 1800 },
+        );
+      },
+
+      async details(ctx) {
+        const { page, stage } = ctx;
+        // Three weeks out: far enough to read as a real crossing rather
+        // than as whatever today happens to be.
+        const eta = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000);
+        await setDate(ctx, page.locator('#cn-eta'), eta.toISOString().slice(0, 10));
+        await stage.typeIn(page.locator('#cn-ref'), CONSIGNMENT.reference, {
+          clear: true,
+          after: 700,
+        });
+      },
+
+      async announce({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Announce \d+ product/ }).first(), {
+          after: 2400,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(
+          page.getByRole('heading', { name: 'Consignment register' }).first(),
+          1800,
+        );
+        await stage.glide(220);
+        await page.waitForTimeout(1600);
       },
     },
   },

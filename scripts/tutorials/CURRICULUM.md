@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 3 filmed. Of the 87 left, **31 are `ready` today**, 54 need
+**90 tutorials.** 5 filmed. Of the 85 left, **29 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -17,6 +17,16 @@ is the point of this document. Do not commit to the whole thing — see
 [the recommendation](#the-recommendation).
 
 Read ["What this costs"](#what-this-costs) before committing to the whole thing.
+
+**A third app is out of scope, and somebody should decide whether it stays
+that way.** `apps/reseller` — the portal a reseller store's own staff sign into
+at `reseller.skydrop.online` — has **23 gated pages** of its own (orders,
+catalogue, wallet, tickets, reports, expenses, team, terms, integrations). This
+curriculum covers the seller and admin apps, as asked. But section G teaches a
+seller how to set a store up, and the people who then have to USE it get
+nothing: the videos here are addressed to the seller who owns the stock, never
+to the shopkeeper selling it. If reseller stores become a real channel, that is
+a third section and roughly another fifteen tutorials.
 
 ---
 
@@ -29,8 +39,8 @@ Read ["What this costs"](#what-this-costs) before committing to the whole thing.
 - **Needs** — the world the camera has to find. This is the field that decides
   whether a tutorial gets made, so it names rows, not moods.
 - **Feasibility** — `ready` (today's seed, or no seed at all), `needs demo
-  data` (a seeding step that does not exist yet, described), `impractical
-  locally` (something outside this machine is required).
+data` (a seeding step that does not exist yet, described), `impractical
+locally` (something outside this machine is required).
 
 ### What "locally" can and cannot reach
 
@@ -64,38 +74,65 @@ A brand-new seller, signed in for the first time, with the dashboard's setup
 checklist still showing. Film these against a fresh account, in this order:
 the checklist is the tutorial index, and it disappears as they are completed.
 
-### A1. Finding your way around · `ready`
+### A1. Finding your way around · **FILMED** — `find-your-way-around.mp4`
+
 **Promise** — you can find any screen, and you know what the five sidebar
 sections are for.
-**Length** 3 min. **Prerequisites** none.
+**Length** 2 min 14 s. **Prerequisites** none.
 **Needs** a seller with a handful of orders so the dashboard is not all empty
-states. Today's seed gives this.
-**Covers** the grouped sidebar (01 Selling / 02 Stock / 03 Money / 04 Reselling
-/ 05 Account) and why the ordinals do not renumber per person, the header
-order search, the notification bell — the only control that survives on a
-phone — the quick-actions menu, and the bottom status strip (account status,
-FX rate, what is waiting on you). One pass, no clicks that change anything.
+states — `seed-demo-data.mjs find-your-way-around` places four.
+**Covers** the five collapsible sidebar groups (Selling, Stock, Money,
+Reselling, Account), the header order search, the quick-actions menu, the
+notification bell — the only control that survives on a phone — and the bottom
+status strip. One pass, no clicks that change anything.
+**Note:** an earlier draft of this entry said the groups carry ordinals
+(01–05). The seller shell still passes them and **the `Shell` component ignores
+them** ("Accepted and ignored: no index numbers"), so the narration describes
+what is on screen instead. Worth remembering as the shape of a curriculum
+mistake: a prop that is still being passed is not a thing a viewer can see.
 
-### A2. Your company profile · `ready`
+### A2. Your company profile · **FILMED** — `set-up-your-profile.mp4`
+
 **Promise** — Skydrop knows who you are, and your logo is on your customers'
 tracking page.
-**Length** 3 min. **Prerequisites** A1.
-**Needs** nothing. `/profile` is filmable on a blank account.
+**Length** 1 min 50 s. **Prerequisites** A1.
+**Needs** nothing beyond the standard seed, which also clears any pending bank
+change — with one open, the save dialog asks a different question and the take
+would not match its own narration.
+**Note:** filmed as **nine scenes, not eleven**, and both cuts are worth
+knowing about. The voice budget ran out on the closing summary, so the video
+ends on the bank-details save — which is the most important sentence in it
+anyway. The other cut was a correction: a scene narrated "and a SWIFT code if
+you have one" while the form on screen said "All six fields are needed
+together", so the line went rather than ship a tutorial the page argues with.
+The fields are still all typed on camera. Restoring either is one entry in
+`narration.mjs` and one re-run, and the SWIFT one must be re-written before it
+is re-recorded.
 **Covers** the three independently-editable sections, and why they are
 separate: company info, the logo (presign → register, removal asks first), and
 bank details — where the lesson is that **editing an account already on file
 goes to Skydrop for approval**, because that is where your money is sent.
 
 ### A3. Your first product · **FILMED** — `add-a-product-with-variations.mp4`
+
 Covers `/products/new`: the shared weight and declared value, options as axes
 rather than a tree, the four variants multiplied out, and the SKU being
 permanent once saved.
 
-### A4. Announcing your first consignment · `ready`
+### A4. Announcing your first consignment · `ready` — **written, proven, awaiting voice**
+
 **Promise** — you have told Skydrop stock is coming, and you chose the route
 that decides what you are billed.
-**Length** 4 min. **Prerequisites** A3.
-**Needs** products only. The declare form on `/inbound` is filmable cold.
+**Length** ~2 min 30 s (12 scenes). **Prerequisites** A3.
+**Needs** products, **and a Bangladesh intake warehouse**. That second one was
+not obvious and is the reason this entry said `ready` when it was not:
+`ops.bd_intake_warehouse_id` is seeded EMPTY on purpose (CNS-2) and a Via-Dhaka
+declaration is refused rather than quietly routed to India — so the more
+interesting half of the form could not be filmed at all. `seed-demo-data.mjs`
+now provisions one (`fulfilsOrders: false`, which the resolver re-checks).
+**Status:** narration and flow are written, and the flow has been driven end to
+end with `record.mjs --check`. The only thing missing is the audio — see
+[the voice budget](#the-voice-budget).
 **Covers** the question the whole page turns on — **Dhaka or India?** Send it
 to Dhaka and Skydrop moves it across the border and bills the freight; send it
 to India and you did that yourself and owe nothing. Then the contents, picked
@@ -104,6 +141,7 @@ what an absent unit cost costs you later on the inventory valuation). Ends on
 the register and on correcting a declaration while it is still PENDING.
 
 ### A5. The shopfronts you sell under · `ready`
+
 **Promise** — you can add a second brand without splitting your stock.
 **Length** 2 min. **Prerequisites** A1.
 **Needs** nothing.
@@ -114,6 +152,7 @@ stock, wallet and couriers are shared. "Store" is a word that invites the
 opposite assumption, which is exactly why this needs saying out loud.
 
 ### A6. The delivery fee your customer pays · `ready`
+
 **Promise** — new orders start with the right collectable amount.
 **Length** 2 min. **Prerequisites** A1.
 **Needs** nothing. `/settings/orders` is one field.
@@ -128,16 +167,19 @@ number you chose look identical in the box.
 ## B — The everyday job: orders
 
 ### B1. Placing an order by hand · **FILMED** — `place-an-order.mp4`
+
 Covers `/orders/new` end to end: recipient, the landmark on line two, the PIN
 doing the routing, your own reference, the call-centre note, products, quantity,
 cash on delivery, and submission into the call queue.
 
 ### B2. Uploading a day's orders from a spreadsheet · **FILMED** — `upload-bulk-orders.mp4`
+
 Covers `/orders/import`: the template, the check before importing, rows versus
 orders, the row that will not import, the job, and the two rows that became one
 order with two lines.
 
 ### B3. Fixing the rows that would not import · `needs demo data`
+
 **Promise** — every row of your spreadsheet becomes an order, including the
 ones the check refused.
 **Length** 3 min. **Prerequisites** B2 — this is its direct sequel.
@@ -151,6 +193,7 @@ address form (the band number is the spreadsheet's own row number), "Import
 this row", and discarding one you do not want.
 
 ### B4. Finding an order · `ready`
+
 **Promise** — you can find any order by any handle you have, and send someone
 a link to what you are looking at.
 **Length** 3 min. **Prerequisites** B1.
@@ -164,6 +207,7 @@ minutes: **the URL is the state**, so a filtered list is a link you can send
 and the back button works.
 
 ### B5. Reading an order · `needs demo data`
+
 **Promise** — you can tell where a parcel is and what it has cost you, from
 the order page alone.
 **Length** 4 min. **Prerequisites** B4.
@@ -174,6 +218,7 @@ charges breakdown, and the journey. Every action on this page gets its own
 tutorial below — this one is the map of it.
 
 ### B6. Changing an order before it is confirmed · `needs demo data`
+
 **Promise** — you can correct anything about an order until the call centre
 confirms it, and you know when that window shuts.
 **Length** 3 min. **Prerequisites** B5.
@@ -186,6 +231,7 @@ typed confirmation. The window is the lesson: after confirmation stock is held
 and a waybill is booked, and the contents stop being editable.
 
 ### B7. Cancelling an order · `needs demo data`
+
 **Promise** — you can call an order off, and you know what it costs at each
 stage.
 **Length** 3 min. **Prerequisites** B5.
@@ -202,6 +248,7 @@ the parcel is with the courier, and what to do instead (D4).
 ## C — Stock
 
 ### C1. Following a consignment from Dhaka to the shelf · `needs demo data`
+
 **Promise** — you can tell where your goods are and why two counts exist.
 **Length** 4 min. **Prerequisites** A4.
 **Needs** a consignment part-way along: declared, counted in Dhaka, dispatched,
@@ -214,6 +261,7 @@ freight section. The disagreement between the two counts is the whole reason
 there are two counts, and it is the thing to narrate.
 
 ### C2. Reading your stock · `needs demo data`
+
 **Promise** — you can tell what is sellable today from what is merely yours.
 **Length** 3 min. **Prerequisites** C1.
 **Needs** received stock (today's seed has it) plus one consignment in transit,
@@ -226,6 +274,7 @@ that have no unit cost recorded, which is the consequence of skipping that
 field back in A4.
 
 ### C3. Keeping a product up to date · `ready`
+
 **Promise** — you can change anything about a product except the things that
 must never change.
 **Length** 3 min. **Prerequisites** A3.
@@ -236,6 +285,7 @@ the variant's own fields — and the SKU sitting there read-only, with the reaso
 stated: every order, every pick and every stock count refers to it by that code.
 
 ### C4. Product photos · `ready`
+
 **Promise** — your products have pictures, in the app and on the picking sheet.
 **Length** 2 min. **Prerequisites** C3.
 **Needs** a variant and an image file. The recorder's mock-storage shim already
@@ -245,6 +295,7 @@ import video does.
 several at once, and removing one.
 
 ### C5. Being told before you run out · `ready`
+
 **Promise** — Skydrop warns you at the level you choose, per SKU where it
 matters.
 **Length** 2 min. **Prerequisites** C3.
@@ -255,6 +306,7 @@ the one the page makes explicitly: **blank and zero are different**. Zero warns
 you only at genuinely empty; blank never warns you at all.
 
 ### C6. Uploading a catalogue from a spreadsheet · `ready`
+
 **Promise** — you can load hundreds of products at once, and you never have to
 rename your own column headers again.
 **Length** 4 min. **Prerequisites** A3, and B2 for the shape.
@@ -273,21 +325,33 @@ This is the section the lifecycle seeding exists for. Film D0's seeding once
 and every tutorial here becomes `ready`.
 
 ### D0. (not a tutorial) The lifecycle seeding
+
 `scripts/tutorials/seed-demo-data.mjs` grows a `--lifecycle` pass that drives
 the demo seller's orders through the simulator to the states below, exactly as
 `scripts/sim-e2e.ts` does — call confirmation, pick, the pack bench, the
 handover scan, then simulator advances. One command, re-runnable, local-only.
 
-| State wanted | How | Used by |
-|---|---|---|
-| DELIVERED | advance IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED | B5, D1, E2, D6 |
-| DELIVERY_FAILED | … → NDR | D1, D2 |
-| RTO_IN_TRANSIT | NDR → RTO_INITIATED → RTO_IN_TRANSIT | D1, D3 |
-| RTO_RESTOCKED + a damage ticket | receive + inspect at the warehouse | D6, E2 |
-| AWAITING_SELLER_DECISION | record call attempts to the NDR cap | D5 |
-| CONFIRMED with a live waybill | stop after confirmation | B7, D4 |
+| State wanted                    | How                                               | Used by        |
+| ------------------------------- | ------------------------------------------------- | -------------- |
+| DELIVERED                       | advance IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED | B5, D1, E2, D6 |
+| DELIVERY_FAILED                 | … → NDR                                           | D1, D2         |
+| RTO_IN_TRANSIT                  | NDR → RTO_INITIATED → RTO_IN_TRANSIT              | D1, D3         |
+| RTO_RESTOCKED + a damage ticket | receive + inspect at the warehouse                | D6, E2         |
+| AWAITING_SELLER_DECISION        | record attempts to the cap (see note below)       | D5             |
+| CONFIRMED with a live waybill   | stop after confirmation                           | B7, D4         |
+
+**One state needs checking before its seeding is written.**
+`AWAITING_SELLER_DECISION` is the R5b pause at the call cap, and it happens only
+when `inventory.early_reservation_ndr_action` is `MANUAL_REVIEW` — which it
+already is by default. But `inventory.early_reservation_enabled` is seeded
+`false`, and whether `handleNdrCap` still raises a review with holds switched
+off is a question for the code rather than for this document. (CLAUDE.md says it
+raises one "even with ZERO holds", which suggests yes; that sentence is about
+holds, not about the switch.) Settle it before writing D0's last row, because
+D5 is unfilmable if the answer is no.
 
 ### D1. Where is my parcel · `needs demo data`
+
 **Promise** — you can answer a customer asking where their parcel is, without
 ringing anyone.
 **Length** 3 min. **Prerequisites** B5. **Needs** D0.
@@ -298,6 +362,7 @@ there is no button here because there is nothing the seller can make the
 courier do from this screen.
 
 ### D2. The customer was not there · `needs demo data`
+
 **Promise** — you know what happens after a failed delivery and what you can
 ask for.
 **Length** 3 min. **Prerequisites** D1. **Needs** D0's DELIVERY_FAILED order.
@@ -306,6 +371,7 @@ seller may ask for and what each costs. The honest framing matters: a
 re-attempt **sends a van**, which is why it is a request rather than a button.
 
 ### D3. What needs you today · `needs demo data`
+
 **Promise** — you can open one screen in the morning and know what is waiting
 on you.
 **Length** 3 min. **Prerequisites** D1. **Needs** D0.
@@ -316,6 +382,7 @@ page has no buttons at all and says why: the seller cannot make a courier
 deliver, and offering an action there would be theatre.
 
 ### D4. Asking for a parcel back · `needs demo data`
+
 **Promise** — you can turn a parcel round, and you know the fee before you do.
 **Length** 2 min. **Prerequisites** D1. **Needs** D0's CONFIRMED-with-waybill
 and DELIVERED orders.
@@ -325,6 +392,7 @@ loop** (CUR-10's seller amendment) — and, separately, "Request return" on a
 delivered one. Both charge a return fee; the tutorial says the figure.
 
 ### D5. The customer would not answer · `needs demo data`
+
 **Promise** — you can decide what happens to an order our agents could not
 confirm.
 **Length** 3 min. **Prerequisites** D3. **Needs** D0's
@@ -336,6 +404,7 @@ the call queue. Worth noting the held-units figure is zero unless the seller
 has opted into at-placement holds.
 
 ### D6. Something arrived damaged · `needs demo data`
+
 **Promise** — you can follow a damage claim from the warehouse finding it to
 the refund landing in your wallet.
 **Length** 4 min. **Prerequisites** B5. **Needs** D0's damage ticket, resolved
@@ -350,6 +419,7 @@ with the money and linking through to where it now sits in the wallet.
 ## E — Money
 
 ### E1. Paying money in · `ready`
+
 **Promise** — you can record a bank transfer so your wallet is credited.
 **Length** 3 min. **Prerequisites** A2.
 **Needs** nothing. The wizard is a claim form and works on a blank account.
@@ -360,6 +430,7 @@ Nothing is credited until somebody at Skydrop has seen it in the bank, which is
 why the Top-ups tab fills and the ledger does not.
 
 ### E2. Reading your wallet · `needs demo data`
+
 **Promise** — you can tell what you have from what you have merely asked for.
 **Length** 3 min. **Prerequisites** E1. **Needs** D0 (a delivered order and a
 resolved refund put real entries in the ledger) plus one pending top-up.
@@ -369,6 +440,7 @@ landed. Then the entries themselves — delivery charges, COD credit, a refund �
 and the balance shown in both rupees and taka.
 
 ### E3. Taking money out · `ready`
+
 **Promise** — you can request a payout, and set one to happen by itself.
 **Length** 3 min. **Prerequisites** E2.
 **Needs** a positive balance above the minimum. One seeded top-up acceptance.
@@ -378,6 +450,7 @@ balance to keep. Every schedule change is confirmed on a second screen that
 restates it, which is worth showing rather than clicking past.
 
 ### E4. What Skydrop charges · `ready`
+
 **Promise** — you can answer "why was I charged this?" from one page.
 **Length** 2 min. **Prerequisites** E2.
 **Needs** nothing — every figure on `/wallet/limits` is a platform term, not
@@ -387,6 +460,7 @@ withdrawal limits. Deliberately has no stat tiles because every number is a
 threshold, not a position — and that is the framing to narrate.
 
 ### E5. What the freight cost · `needs demo data`
+
 **Promise** — you understand why a freight bill is only partly owed.
 **Length** 3 min. **Prerequisites** C1, E2.
 **Needs** a consignment received **and billed**, with some of its units having
@@ -401,6 +475,7 @@ settled from the wallet.
 ## F — Your team, and your account
 
 ### F1. Inviting someone · `ready`
+
 **Promise** — a colleague can sign in, with only the access you meant to give.
 **Length** 3 min. **Prerequisites** A1.
 **Needs** nothing.
@@ -410,20 +485,27 @@ buttons and gets the server's refusal verbatim rather than a hidden control —
 the UI does not pretend to be the boundary.
 
 ### F2. Building a role · `ready`
+
 **Promise** — you can invent a role that fits how your business actually works.
 **Length** 4 min. **Prerequisites** F1.
 **Needs** nothing. One of the strongest candidates in the library: entirely
 self-contained, visually rich, consequential, and filmable on a blank account.
 **Covers** `/team/roles` — roles are **data**, so "Warehouse manager" is a
-thing you invent, not a thing we ship. The 68 permissions in ten groups each
-with its own sentence; the search that also matches the raw key, because
-somebody reading a refusal knows `warehouse.rto.finalize` and nothing else;
-sensitive permissions marked and counted; and saving a role that **loses**
-permissions asking first and naming exactly which ones go. Ends on the owner
-row being inert, and why: it is the way back in from any mistake made on this
-screen.
+thing you invent, not a thing we ship. The **41 permissions across seven
+groups** (Orders, Catalogue, Inventory, Money, Reseller stores, Support,
+Company), each with its own sentence; the search that also matches the raw key,
+because somebody reading a refusal knows `catalog.manage` and nothing else; and
+saving a role that **loses** permissions asking first and naming exactly which
+ones go. Ends on the owner row being inert, and why: it is the way back in from
+any mistake made on this screen.
+Sensitive permissions are marked and counted — **17 of the 41** — and the count
+is of what is SELECTED, so it moves as you tick. (The two apps name the flag
+differently: `sensitive` on the seller catalogue, `dangerous` on the staff one,
+where 32 of 84 carry it. Neither is enforced differently; both exist so a role
+that quietly acquired six says so before it is saved.)
 
 ### F3. Sign-in and sessions · `ready`
+
 **Promise** — you can end every session on the account at once.
 **Length** 2 min. **Prerequisites** A1.
 **Needs** nothing.
@@ -433,6 +515,7 @@ nothing about them. Says out loud that there is no session list, because the
 API exposes no such read and a table here would be invented.
 
 ### F4. What Skydrop tells you, and how to quieten it · `ready`
+
 **Promise** — you get the notifications you want and none of the ones you do
 not.
 **Length** 3 min. **Prerequisites** A1.
@@ -445,6 +528,7 @@ preferences. These were two screens and people changed the wrong one. Also:
 switches with no Save button, because each flip is a request.
 
 ### F5. Letting another system place your orders · `ready`
+
 **Promise** — your own software can create orders and be told when they move.
 **Length** 4 min. **Prerequisites** B1.
 **Needs** an endpoint to point a webhook at; any request bin works offline.
@@ -461,6 +545,7 @@ Seven tutorials, and the order matters more here than anywhere else: each one
 is the prerequisite for the next being non-empty.
 
 ### G1. What a reseller store is · `ready`
+
 **Promise** — you can open a store for someone who will sell your stock under
 their own name.
 **Length** 3 min. **Prerequisites** A1.
@@ -470,6 +555,7 @@ frame for everything after: their own login on `reseller.skydrop.online`, your
 stock, your warehouse, your courier, your money at risk.
 
 ### G2. The price they pay · `ready`
+
 **Promise** — every store has a default transfer price and a retail range.
 **Length** 3 min. **Prerequisites** A3 (products), G1.
 **Needs** products only — this page does **not** need a store to exist, which
@@ -478,6 +564,7 @@ makes it filmable earlier than its position suggests.
 unless it has one of its own, and the retail range it may sell inside.
 
 ### G3. What one store sells · `needs demo data`
+
 **Promise** — you can decide which products a store sees, at what price, and
 how much of your stock it may have.
 **Length** 4 min. **Prerequisites** G2.
@@ -489,6 +576,7 @@ quantity — with the hidden share. The moment worth filming is the real
 availability shown beside what the store will actually see.
 
 ### G4. The deal · `needs demo data`
+
 **Promise** — you can publish terms and see exactly who pays what.
 **Length** 4 min. **Prerequisites** G3.
 **Needs** a store with a catalogue.
@@ -499,6 +587,7 @@ versioned and an order snapshots the version it was placed under — which is wh
 a later change never re-prices a placed order.
 
 ### G5. What a store may do without asking · `needs demo data`
+
 **Promise** — you decide, per task, whether a store acts directly or needs your
 approval.
 **Length** 3 min. **Prerequisites** G4.
@@ -510,6 +599,7 @@ a direct **send-back calls the courier on their click**; a direct re-attempt
 opens a ticket for a person. This tutorial is also the setup for G6.
 
 ### G6. Answering what a store has asked · `needs demo data`
+
 **Promise** — you can clear the queue of decisions stores are waiting on.
 **Length** 3 min. **Prerequisites** G5.
 **Needs** at least one task set to "needs my approval" **and** a store that has
@@ -522,6 +612,7 @@ the store is told either way). The live badge count in the nav is the reason
 the queue does not sit unread.
 
 ### G7. How your stores are doing · `needs demo data`
+
 **Promise** — you can see which store makes you money and stop one that is
 losing it.
 **Length** 3 min. **Prerequisites** G6.
@@ -550,6 +641,7 @@ sign-in needs to exist beside the seller one. Half a day; see
 ## H — Your first day on the ops desk
 
 ### H1. The ops dashboard · `needs demo data`
+
 **Promise** — you can open one screen and know what needs a person today.
 **Length** 3 min. **Needs** D0, so the attention tiles are loud rather than
 all-clear.
@@ -557,6 +649,7 @@ all-clear.
 otherwise, over the work queues; then performance and money. Read-only.
 
 ### H2. Finding an order and reading its history · `needs demo data`
+
 **Promise** — you can answer any question about one order from its page.
 **Length** 4 min. **Prerequisites** H1. **Needs** D0.
 **Covers** `/orders` with its Indian-day date filters, then `/orders/[id]` as
@@ -565,6 +658,7 @@ admin timeline including internal-only events. Every button on this page is
 taught later, and separately, and this tutorial says so.
 
 ### H3. Things the system has raised · `needs demo data`
+
 **Promise** — you can work the system-issue queue and know which to act on
 first.
 **Length** 3 min. **Needs** seeded system issues at two severities; a failed
@@ -575,15 +669,18 @@ fixes the thing. "Notify unannounced" is shown and explained — it fans out rea
 notifications, which is why it asks first.
 
 ### H4. The permission model · `ready`
+
 **Promise** — you understand why someone cannot see a screen, and you can fix
 it safely.
 **Length** 4 min. **Needs** nothing.
 **Covers** `/roles` as the teaching hook for the whole model: permissions are
 data, each one is a line of code that checks it, they are grouped with a
 sentence each — because "Finalise a return" and "Hand parcels to the courier"
-both sound like routine warehouse work and both permanently remove stock.
-Dangerous permissions are marked and counted. Ends on the two things that keep
-this screen safe: the super-admin row is inert, and **the UI is never the
+both sound like routine warehouse work and both permanently remove stock. **84
+permissions across ten groups, 32 of them marked dangerous** — marked and
+counted, though the server treats all of them identically; the marking exists so
+that a role which quietly acquired six says so before it is saved. Ends on the
+two things that keep this screen safe: the super-admin row is inert, and **the UI is never the
 boundary** — hiding a button is courtesy, the server refuses regardless.
 
 ---
@@ -591,6 +688,7 @@ boundary** — hiding a button is courtesy, the server refuses regardless.
 ## I — The call centre
 
 ### I1. Taking calls · `needs demo data`
+
 **Promise** — you can work the call queue from your first shift.
 **Length** 4 min. **Needs** orders in PENDING_CONFIRMATION — today's seed has
 159 — and the agent marked available. **Note:** an agent who has not switched
@@ -603,12 +701,14 @@ recording it, and releasing a call. The consequence to state: recording
 cap.
 
 ### I2. Supervising the queue · `needs demo data`
+
 **Promise** — you can see what is waiting, who holds it, and move it.
 **Length** 3 min. **Prerequisites** I1. **Needs** an assigned entry.
 **Covers** `/call-center/queue`: reassign, reschedule, and `/call-center/agents`
 — who is on, how many calls each holds, and the capacity bump.
 
 ### I3. Forcing an outcome on a stuck call · `needs demo data` · **dangerous**
+
 **Promise** — you can close a call nobody can complete, and you know exactly
 what it writes.
 **Length** 3 min. **Prerequisites** I2.
@@ -621,6 +721,7 @@ reserves stock if the outcome is confirmed. It cannot be undone or edited.
 did not, and possibly stock held against an order nobody confirmed.
 
 ### I4. Sellers asking us to call again · `needs demo data`
+
 **Promise** — you can decide a re-attempt request.
 **Length** 2 min. **Needs** a rejected order with a seller request against it.
 **Covers** `/reattempt-requests`: approve or decline, and the fact that
@@ -636,6 +737,7 @@ own subtitle says so: consignment → receive → print → pick → pack → ha
 dispatch.
 
 ### J1. Where things live · `ready`
+
 **Promise** — you can build a warehouse's locations and know what the tracking
 switch does.
 **Length** 4 min. **Needs** nothing; creating a warehouse provisions its own
@@ -648,6 +750,7 @@ the bins you have built.** Collapse is a different, destructive act — named
 here, taught in P4.
 
 ### J2. Receiving a consignment · `needs demo data` · **dangerous**
+
 **Promise** — you can count goods in and write them to stock.
 **Length** 4 min. **Needs** a consignment with a pending goods receipt. C1's
 seeding provides it.
@@ -659,6 +762,7 @@ counted adjustment will fix. Also covers the rule that a variance no longer
 blocks — the count is recorded, the gap is noted, and the goods carry on.
 
 ### J3. Labels and the picking sheet · `needs demo data`
+
 **Promise** — you can get a day's parcels printed and picked.
 **Length** 4 min. **Prerequisites** J2. **Needs** confirmed orders with
 waybills. D0 provides them.
@@ -669,6 +773,7 @@ Confirming the print is what allocates the stock, so a shortfall surfaces at
 the desk before anyone walks — that is the reason for the order of the steps.
 
 ### J4. Packing a parcel · `needs demo data`
+
 **Promise** — you can pack a box so that what is inside it is what was ordered.
 **Length** 3 min. **Prerequisites** J3. **Needs** a picked parcel.
 **Covers** `/warehouse/pack`: scan the label to open the box, scan each product
@@ -678,6 +783,7 @@ Ends on cancelling a box — which returns nothing to stock, because the stock
 has not left yet.
 
 ### J5. Packing without a scan · `needs demo data` · **dangerous**
+
 **Promise** — you can get a parcel out when the label will not scan, and you
 know what you gave up.
 **Length** 2 min. **Prerequisites** J4.
@@ -689,6 +795,7 @@ question somebody can answer.
 customer's door with nothing in the record saying which step was skipped.
 
 ### J6. Handing parcels to the courier · `needs demo data` · **dangerous**
+
 **Promise** — you can dispatch a van-load and know every parcel is accounted
 for.
 **Length** 3 min. **Prerequisites** J4. **Needs** packed parcels.
@@ -702,6 +809,7 @@ either two boxes carry one waybill or the pile has already been done.
 the bench, or a duplicate label delivered to nobody.
 
 ### J7. Booking the van · `needs demo data` · **dangerous**
+
 **Promise** — you can raise a pickup, and you know when freeing a day is
 dangerous.
 **Length** 2 min. **Prerequisites** J6.
@@ -713,6 +821,7 @@ edge — only after confirming in the courier's own panel that no request exists
 because if one does, freeing the slot books a **second van** against a live one.
 
 ### J8. Manifests · `ready`
+
 **Promise** — you can answer "what went out on Tuesday's van".
 **Length** 2 min. **Prerequisites** J6.
 **Covers** `/warehouse/manifests` as what it now is: a **record, not a step**,
@@ -725,6 +834,7 @@ database edit. Short on purpose — the point is that nobody has to visit it.
 ## K — Returns
 
 ### K1. Taking a return in · `needs demo data`
+
 **Promise** — you can book a returned parcel in at the door.
 **Length** 3 min. **Needs** an RTO_IN_TRANSIT parcel. D0 provides one.
 **Covers** `/warehouse/rto`'s four tabs, then receiving by waybill — and the
@@ -734,6 +844,7 @@ units are booked into the returns hold at this moment, so a received-but-
 undecided return is on the ledger rather than nowhere.
 
 ### K2. Inspecting and finalising · `needs demo data` · **dangerous**
+
 **Promise** — you can decide what happens to each unit that came back.
 **Length** 4 min. **Prerequisites** K1.
 **Covers** inspection per line **and by quantity** — two units of one line can
@@ -748,6 +859,7 @@ and an apology; a damaged unit put back in stock is a second unhappy customer.
 ## L — Correcting stock
 
 ### L1. Adjusting stock · `needs demo data` · **dangerous**
+
 **Promise** — you can correct a count, and you know which corrections need a
 second person.
 **Length** 4 min. **Needs** stock in a bin.
@@ -761,6 +873,7 @@ a unit kept aside in the damaged bin goes back to the seller.
 is what somebody reads a year later trying to explain a variance.
 
 ### L2. Counting stock · `needs demo data` · **dangerous**
+
 **Promise** — you can run a cycle count and turn its differences into
 adjustments.
 **Length** 3 min. **Prerequisites** L1.
@@ -770,6 +883,7 @@ threshold rules. The discrepancy count is on screen before the button, and
 narrating that is the tutorial's job.
 
 ### L3. Reading the stock ledger · `ready`
+
 **Promise** — you can find out what happened to any SKU, or in any bin.
 **Length** 2 min. **Prerequisites** L1.
 **Covers** `/inventory/movements`: append-only, read-only **by construction** —
@@ -779,6 +893,7 @@ here". The natural end of every stock investigation, which is why it is taught
 after the two screens that write to it.
 
 ### L4. Moving stock between warehouses · `needs demo data` · **dangerous**
+
 **Promise** — you can transfer stock without losing what the batch knows.
 **Length** 2 min. **Prerequisites** L3.
 **Covers** `/inventory/transfers`, and the one field that makes it a tutorial:
@@ -793,6 +908,7 @@ today's, and a margin figure with nothing behind it.
 ## M — Couriers
 
 ### M1. Courier accounts and credentials · `ready`
+
 **Promise** — you can add a courier account and understand why you can never
 read its password back.
 **Length** 3 min. **Needs** nothing beyond the seeded couriers.
@@ -805,6 +921,7 @@ copy is the lesson: **off is not a kill switch** — parcels the courier already
 holds keep being tracked and cancellable.
 
 ### M2. Is the courier integration healthy · `ready`
+
 **Promise** — you can tell at a glance whether we can still book parcels.
 **Length** 3 min. **Needs** the simulator running, which makes the waybill pool
 and the connectivity probe real on camera.
@@ -814,6 +931,7 @@ expensive. The tracking **lookup** panel is the safe half and is shown here;
 the poller is M3.
 
 ### M3. Making parcels move · `needs demo data` · **dangerous**
+
 **Promise** — you can run the tracking poll and know what it sets in motion.
 **Length** 2 min. **Prerequisites** M2. **Needs** dispatched parcels.
 **Covers** "Run it now" on the tracking poll — and why it is not a refresh
@@ -822,9 +940,18 @@ orders through in-transit, out-for-delivery and delivered. It **acts**: it
 writes tracking events, moves orders and credits money downstream.
 
 ### M4. When nobody will carry it · `needs demo data` · **dangerous**
+
 **Promise** — you can get a parcel moving that every courier refused.
-**Length** 3 min. **Needs** a parcel in manual placement. Seeded by booking to
-a non-serviceable PIN, which the simulator supports by design (`000000`).
+**Length** 3 min. **Needs** a parcel in `PENDING_MANUAL_PLACEMENT`, and getting
+one is less obvious than it looks. The simulator refuses `000000` as
+non-serviceable by design — but **an order can never carry that PIN**, because
+`address-validation.service.ts` enforces `^[1-9][0-9]{5}$` at create and is
+right to. `999999` is refused too, but as a TRANSIENT failure, which by CUR-2b
+deliberately does NOT route to manual placement. So the two real routes are a
+**pick shortfall** (confirm an order, then take the stock away — WMS-4 routes it
+here with no side-effects), or **teaching the simulator to refuse a nominated
+valid pin permanently**, which is a few lines and makes the courier-refusal
+shape reachable as well. Take the pick shortfall first; it needs no new code.
 **Covers** `/manual-placement` as the worklist — showing **why** each parcel is
 there, in the courier's own words — and then placing the waybill on the order
 page. The consequence to state: recording a waybill dispatches the order and
@@ -832,6 +959,7 @@ tells a customer their parcel is on its way, so the number has to be one a real
 docket carries.
 
 ### M5. Choosing a carrier · `needs demo data` · **dangerous**
+
 **Promise** — you can pick the carrier for a parcel that is waiting on a
 person.
 **Length** 2 min. **Needs** a seller on the manual selection policy with a
@@ -843,6 +971,7 @@ books the cheapest itself **and says so loudly**, because auto-picking quietly
 would make the policy indistinguishable from "cheapest" to anyone not watching.
 
 ### M6. Acting on a failed delivery · `needs demo data` · **dangerous**
+
 **Promise** — you can decide what a seller has asked us to do about a parcel.
 **Length** 3 min. **Needs** D0's failed delivery plus a seller request.
 **Covers** `/delivery-actions`: approve or reject with a reason.
@@ -858,6 +987,7 @@ Ten tutorials, and the tone throughout is that none of these screens is a form.
 Each one moves money that exists.
 
 ### N1. How seller money works · `needs demo data`
+
 **Promise** — you can read a seller's wallet and explain any line in it.
 **Length** 4 min. **Needs** D0.
 **Covers** `/seller-wallets` and one seller's ledger: what a top-up, a COD
@@ -865,6 +995,7 @@ credit, a delivery charge, a return fee and a refund each are. Read-only, and
 deliberately first — every screen after this writes to what this one shows.
 
 ### N2. Accepting a top-up · `needs demo data` · **dangerous**
+
 **Promise** — you can credit a seller for money that has actually arrived.
 **Length** 3 min. **Prerequisites** N1. **Needs** a pending claim from E1.
 **Covers** `/topups`: the claim, its reference and proof, and matching it
@@ -874,6 +1005,7 @@ transfer is a claim, not a payment — accept one that never landed and you have
 given away money that can then be withdrawn.
 
 ### N3. Paying a seller out · `needs demo data` · **dangerous**
+
 **Promise** — you can take a withdrawal request through to money leaving the
 bank.
 **Length** 4 min. **Prerequisites** N2. **Needs** a request from E3.
@@ -884,6 +1016,7 @@ the wallet can no longer cover is rejected automatically.
 comes from the seller's bank details — which is why N4 exists.
 
 ### N4. Approving a change of bank account · `needs demo data` · **dangerous**
+
 **Promise** — you can approve a seller's new bank details safely.
 **Length** 2 min. **Prerequisites** N3. **Needs** a pending change from A2.
 **Covers** `/bank-changes`. Short, and the shortest tutorial with the highest
@@ -891,6 +1024,7 @@ stakes in the library: this screen decides **where a seller's money goes**, and
 approving a change somebody else requested is the whole attack.
 
 ### N5. Recording what the courier paid us · `needs demo data` · **dangerous**
+
 **Promise** — you can record a COD payout and match it to the orders it covers.
 **Length** 4 min. **Prerequisites** N1. **Needs** delivered COD orders.
 **Covers** `/settlements`: recording the payout against its own reference —
@@ -902,6 +1036,7 @@ paid.
 worth**, so a mis-recorded payout is money out of Skydrop's pocket, quietly.
 
 ### N6. Moving money in or out of a seller's wallet by hand · `needs demo data` · **dangerous**
+
 **Promise** — you can correct a wallet with a reason the seller will read.
 **Length** 3 min. **Prerequisites** N1.
 **Covers** `/wallet-transfers`: a staff debit or credit, the reason of at least
@@ -910,6 +1045,7 @@ internal note that only the audit keeps. The distinction to teach: this **moves
 cash**; an adjustment does not.
 
 ### N7. The bank book · `needs demo data` · **dangerous**
+
 **Promise** — you can keep the treasury agreeing with the statements.
 **Length** 4 min. **Prerequisites** N5.
 **Covers** `/treasury`: accounts, transfers between them, reconciling against a
@@ -919,6 +1055,7 @@ corrected by another entry and never by an edit — and an opening balance
 mistyped as a reconciliation reads as **profit**.
 
 ### N8. Freight bills · `needs demo data` · **dangerous**
+
 **Promise** — you can bill a consignment's freight and correct one you got
 wrong.
 **Length** 3 min. **Prerequisites** C1's consignment.
@@ -928,6 +1065,7 @@ because a wrong bill is withdrawn and re-raised, never edited. Editing in place
 would leave the wallet holding a figure the bill no longer claims.
 
 ### N9. Is the money picture true · `ready`
+
 **Promise** — you can tell how much of the P&L is measured and how much is
 missing.
 **Length** 3 min. **Needs** whatever data exists; the honesty of the page is
@@ -939,6 +1077,7 @@ nightly sync is even running, since a stopped one is invisible until a margin
 looks wrong weeks later.
 
 ### N10. Closing a month · `impractical locally` · **dangerous**
+
 **Promise** — you can close a month and understand why it never reopens.
 **Length** 4 min.
 **Why impractical:** the whole subject is months of accumulated activity and
@@ -952,12 +1091,14 @@ writing this one, not filming it**, until there are real closed months.
 ## O — Sellers, stores and the platform
 
 ### O1. Letting a seller in · `ready`
+
 **Promise** — you can take someone from asking to signed in.
 **Length** 3 min. **Needs** nothing.
 **Covers** `/leads` (the drawer, notes, status) and inviting them, then
 `/sellers` and the pending-invitations panel — invite, resend, delete.
 
 ### O2. Managing a seller · `needs demo data` · **dangerous**
+
 **Promise** — you can suspend, restrict or correct a seller's account.
 **Length** 4 min. **Prerequisites** O1.
 **Covers** `/sellers/[id]`: suspend and reapprove, the identity correction that
@@ -968,6 +1109,7 @@ and the restrictions — split into **the safe four**, which stop new work, and
 goods we are still paying to move.
 
 ### O3. Per-seller settings and courier routing · `needs demo data` · **dangerous**
+
 **Promise** — you can change one seller's behaviour without touching anybody
 else's.
 **Length** 3 min. **Prerequisites** O2.
@@ -977,6 +1119,7 @@ links and their weights — which accounts carry this seller's parcels. An empty
 list is normal and means the pair's default.
 
 ### O4. Changing how the platform behaves · `ready` · **dangerous**
+
 **Promise** — you can change a system setting and know what it will do.
 **Length** 4 min. **Needs** nothing.
 **Covers** `/settings`: grouped by what a setting decides rather than by its raw
@@ -988,6 +1131,7 @@ deploy between typing and effect — the reason that is the point is also the
 reason it is dangerous.
 
 ### O5. Staff, and telling everyone something · `ready` · **dangerous**
+
 **Promise** — you can add a colleague and send a message to an audience.
 **Length** 3 min. **Prerequisites** H4.
 **Covers** `/staff` (invite with its one-shot token reveal, change a role,
@@ -1005,6 +1149,7 @@ tone from everything above. Each one is something a person should have watched
 a tutorial about **before** the day they need it.
 
 ### P1. God mode · `needs demo data` · **dangerous**
+
 **Promise** — you can force an order into a state the rules forbid, and you
 know everything that follows.
 **Length** 4 min. **Needs** a stuck order.
@@ -1020,6 +1165,7 @@ that no longer exists. Use it when nothing else can work, and write the reason
 for the person reading it next year.
 
 ### P2. Live courier writes · `needs demo data` · **dangerous**
+
 **Promise** — you can cancel a waybill, re-attempt a delivery or record a scan
 by hand.
 **Length** 4 min. **Needs** D0's dispatched and failed parcels, against the
@@ -1032,6 +1178,7 @@ parcel into a return; an NDR re-attempt sends a van; a hand-recorded scan tells
 a customer something that may not be true.
 
 ### P3. Refunds and disputes · `needs demo data` · **dangerous**
+
 **Promise** — you can close a ticket with money attached.
 **Length** 3 min. **Needs** D0's damage ticket.
 **Covers** `/tickets/[id]`: replying to the seller, and the four outcomes at
@@ -1040,6 +1187,7 @@ transaction as the close**. Also settling a reseller-store dispute, which moves
 money between two wallets as one pair and refuses the ordinary refund path.
 
 ### P4. Collapsing a warehouse's bins · `impractical locally` · **dangerous**
+
 **Promise** — you can merge every bin into the floor, and recover if it was
 wrong.
 **Length** 3 min.
@@ -1051,6 +1199,7 @@ teaching a path production does not use. **Recommend writing this one**, and
 filming only the read-only "what a collapse would move" half.
 
 ### P5. What we cannot undo · `ready`
+
 **Promise** — you can name every irreversible act in the admin app and say what
 it costs.
 **Length** 4 min. **Needs** nothing — it is a tour, not a demonstration.
@@ -1068,23 +1217,23 @@ familiar.
 
 Every remaining page, with the reason.
 
-| Page | Why not |
-|---|---|
-| seller `/dashboard` | Covered inside A1. Read-only; no flow of its own. |
-| seller `/settings` | A tile hub. Filming navigation to navigation. |
-| seller `/settings/notifications` | A redirect kept for old bookmarks. Nothing happens on it. |
-| seller `/orders/import/[id]`, `/products/import/jobs/[id]` | One import's detail. A ten-second beat inside B2 and C6, not a tutorial. |
-| seller `/inventory/units` | Needs strict-mode serialised SKUs **and** a real discrepancy — a stuck unit or a count mismatch. Seedable, but it teaches a screen most sellers will never open. Revisit if strict mode is adopted. |
-| seller `/customers` | Genuinely thin: counts, a risk badge, correct-details, remove. Folded into B5 as a thirty-second aside. Promote it if the risk badge starts driving decisions. |
-| admin `/holds` | Read-only by design — there is deliberately no Release button, because the decision is the seller's. Named inside D5 and H1. |
-| admin `/nsa`, `/reports`, `/liabilities`, `/bank-accounts/history`, `/system/capacity`, `/margin`, `/inventory-units` | Read-only or single-button screens. Each gets a sentence in the neighbouring tutorial; none carries three minutes. `/system/capacity` in particular is prose already — reading it aloud adds nothing. |
-| admin `/warehouse/pick` | The retired per-parcel station, unlinked from the nav. It survives only for serialised stock, which nothing local uses. Film it the day strict mode ships. |
-| admin `/shiprocket` | Stubbed and inactive locally, so every panel would film as an empty state. `impractical locally` until Shiprocket is live in a dev environment. |
-| admin `/courier-escalation` and its three tabs | The whole subsystem is manual-by-design against a courier's own support desk. Filming it needs a real courier ticket to point at. Worth a tutorial once escalations are routine; not filmable now. |
-| admin `/cost-sync` portal runs | Browser-driven sign-ins to Delhivery's own portal. `impractical locally` and unwise to demonstrate anywhere else. The read-only half is inside N9. |
-| admin `/expenses`, `/expenses/categories`, `/courier-wallet`, `/bank-accounts`, `/reseller-store-wallets`, `/stores`, `/reseller-stores*` (admin side) | Real screens, genuinely deferred rather than dismissed — they are a second money wave once N1–N9 exist. Listing them here so the gap is visible rather than forgotten. |
-| both apps `/notifications`, `/notifications/settings` | Seller side is F4. Admin side is the same screens; one cross-reference is cheaper than a second video. |
-| admin `/account` | The staff equivalent of F3. One sentence in H1. |
+| Page                                                                                                                                                   | Why not                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| seller `/dashboard`                                                                                                                                    | Covered inside A1. Read-only; no flow of its own.                                                                                                                                                     |
+| seller `/settings`                                                                                                                                     | A tile hub. Filming navigation to navigation.                                                                                                                                                         |
+| seller `/settings/notifications`                                                                                                                       | A redirect kept for old bookmarks. Nothing happens on it.                                                                                                                                             |
+| seller `/orders/import/[id]`, `/products/import/jobs/[id]`                                                                                             | One import's detail. A ten-second beat inside B2 and C6, not a tutorial.                                                                                                                              |
+| seller `/inventory/units`                                                                                                                              | Needs strict-mode serialised SKUs **and** a real discrepancy — a stuck unit or a count mismatch. Seedable, but it teaches a screen most sellers will never open. Revisit if strict mode is adopted.   |
+| seller `/customers`                                                                                                                                    | Genuinely thin: counts, a risk badge, correct-details, remove. Folded into B5 as a thirty-second aside. Promote it if the risk badge starts driving decisions.                                        |
+| admin `/holds`                                                                                                                                         | Read-only by design — there is deliberately no Release button, because the decision is the seller's. Named inside D5 and H1.                                                                          |
+| admin `/nsa`, `/reports`, `/liabilities`, `/bank-accounts/history`, `/system/capacity`, `/margin`, `/inventory-units`                                  | Read-only or single-button screens. Each gets a sentence in the neighbouring tutorial; none carries three minutes. `/system/capacity` in particular is prose already — reading it aloud adds nothing. |
+| admin `/warehouse/pick`                                                                                                                                | The retired per-parcel station, unlinked from the nav. It survives only for serialised stock, which nothing local uses. Film it the day strict mode ships.                                            |
+| admin `/shiprocket`                                                                                                                                    | Stubbed and inactive locally, so every panel would film as an empty state. `impractical locally` until Shiprocket is live in a dev environment.                                                       |
+| admin `/courier-escalation` and its three tabs                                                                                                         | The whole subsystem is manual-by-design against a courier's own support desk. Filming it needs a real courier ticket to point at. Worth a tutorial once escalations are routine; not filmable now.    |
+| admin `/cost-sync` portal runs                                                                                                                         | Browser-driven sign-ins to Delhivery's own portal. `impractical locally` and unwise to demonstrate anywhere else. The read-only half is inside N9.                                                    |
+| admin `/expenses`, `/expenses/categories`, `/courier-wallet`, `/bank-accounts`, `/reseller-store-wallets`, `/stores`, `/reseller-stores*` (admin side) | Real screens, genuinely deferred rather than dismissed — they are a second money wave once N1–N9 exist. Listing them here so the gap is visible rather than forgotten.                                |
+| both apps `/notifications`, `/notifications/settings`                                                                                                  | Seller side is F4. Admin side is the same screens; one cross-reference is cheaper than a second video.                                                                                                |
+| admin `/account`                                                                                                                                       | The staff equivalent of F3. One sentence in H1.                                                                                                                                                       |
 
 ---
 
@@ -1095,12 +1244,12 @@ Every remaining page, with the reason.
 The three existing videos took roughly **a day each**, and that was with the
 pipeline being built at the same time. With it built, a tutorial is:
 
-| Step | Effort |
-|---|---|
-| Write 10–16 narration lines | 1–2 h, and it is the part that decides whether the video is any good |
-| Write the flow — the selectors and the gestures | 1–3 h, longer on a form-heavy screen |
-| Seed whatever state it needs | 0 for `ready`, 1–4 h for a new state |
-| Record, compose, verify, re-take | ~1 h of wall clock, mostly waiting |
+| Step                                            | Effort                                                               |
+| ----------------------------------------------- | -------------------------------------------------------------------- |
+| Write 10–16 narration lines                     | 1–2 h, and it is the part that decides whether the video is any good |
+| Write the flow — the selectors and the gestures | 1–3 h, longer on a form-heavy screen                                 |
+| Seed whatever state it needs                    | 0 for `ready`, 1–4 h for a new state                                 |
+| Record, compose, verify, re-take                | ~1 h of wall clock, mostly waiting                                   |
 
 Call it **half a day for a `ready` tutorial and a full day for one needing new
 demo data**, with the seeding amortised across everything that shares a state.
@@ -1117,6 +1266,27 @@ to four months for one person doing nothing else. Plus these one-offs first:
   staff sign-in needs to exist beside the seller one. **No admin tutorial can be
   made until this is done.**
 - **A products CSV fixture** for C6 — an hour.
+
+### The voice budget
+
+**This is a real constraint and it is the one that stopped this run.** Narration
+is ElevenLabs, billed per character, and the account's monthly quota is 10,000
+credits — roughly **eight tutorials' worth**. It ran out part-way through the
+third video of this batch.
+
+Two things follow, and both are worth deciding before committing to a section:
+
+- **A ninety-video library needs about eleven times the current monthly quota**,
+  or a year spread across monthly allowances. Re-takes cost again, though only
+  for the lines that changed — the per-clip cache is what makes that true.
+- **Budget the words, not the videos.** A tutorial is 10–16 lines of 120–180
+  characters, so roughly 2,000 credits. That is the unit to plan in.
+
+A partial failure used to be worse than it looked: the clip manifest was written
+only after the whole run, so a run that died on its last line **discarded every
+clip it had just paid for**. It is written per clip now, and
+`generate-voice.mjs --adopt` recovers mp3s orphaned by the old behaviour (opt-in,
+and it says on every line that it cannot verify the audio against the text).
 
 ### Keeping it
 
@@ -1153,10 +1323,16 @@ nobody re-runs is worse than no library: the videos keep playing, and they keep
 being wrong.
 Two things would cut it, and both are cheap next to the production cost:
 
-- **Run every flow in CI without the voice.** The flows are Playwright; a
-  headless nightly that only checks each flow completes would catch a moved
-  selector the day it moves, which is the whole problem. Roughly a day to wire
-  up, and it converts silent staleness into a red build.
+- **Run every flow in CI without the voice.** `record.mjs --check <slug>` now
+  exists and does exactly this: it drives the flow with no narration and no
+  video, holding each scene for a fixed beat, and fails on the first step that
+  cannot find what it reaches for. It was written because the voice budget ran
+  out with two finished flows and no way to exercise them — and it earned its
+  keep immediately, catching a click the dialog intercepted, a date field that
+  garbles when typed into character by character, and a missing Bangladesh
+  warehouse, all without spending a credit. **Wiring it into a nightly is now
+  an hour's work, not a day's**, and it converts silent staleness into a red
+  build.
 - **Film the stable things first.** The ordering in this document already does
   some of that — A, F, J1 and M1 are screens whose shape has not changed in
   months, while the reseller section (G) and the money section (N) are the
@@ -1166,8 +1342,8 @@ Two things would cut it, and both are cheap next to the production cost:
 ### The recommendation
 
 Do not commit to ninety. Commit to **A and B** — thirteen tutorials, of which
-three are already filmed and most of the rest are `ready` — ship them, and find
-out what people actually ask for. That is a fortnight, it covers everything a
+**five are already filmed** and most of the rest are `ready` — ship them, and
+find out what people actually ask for. That is a fortnight, it covers everything a
 new seller does in their first week, and it is the part of this document least
 likely to be wrong.
 
@@ -1212,3 +1388,27 @@ handover **scan**, which is what CUR-4 has said is the everyday path since
 
 It now runs green: one parcel to DELIVERED, one to RTO_RESTOCKED, stock
 conserved on each.
+
+**And three in the tutorial pipeline itself**, found while producing this
+batch rather than while planning it:
+
+- **The clip manifest was written once, after the whole run.** A run that died
+  on its last line therefore discarded every clip it had just paid for — which
+  is what happened, on a quota that then had nothing left to buy them again
+  with. Written per clip now, with `--adopt` to recover what the old behaviour
+  orphaned.
+- **Check mode wiped the raw recording directory.** Running a check to see
+  whether a flow still worked would have silently destroyed the take it was
+  checking on behalf of. Caught before it cost anything.
+- **A `mock://` image cannot be rendered by the browser**, so the logo the
+  profile video uploads would have appeared as a broken frame — in a tutorial
+  about uploading a logo, which is the worst possible place for it. The shim
+  now serves the bytes back as a `data:` URL.
+
+**Two curriculum errors, both from trusting a description over the code**: the
+seller roles editor has 41 permissions in seven groups and not 68 in ten (that
+is the staff catalogue), and the sidebar's section ordinals are passed by the
+seller shell and IGNORED by the component that renders it. Both were written
+into entries above and then corrected against the source. It is the argument
+for deriving a curriculum from code rather than from a tour of the UI — and for
+re-deriving anything in it that is a number.

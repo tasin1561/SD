@@ -174,6 +174,159 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'find-your-way-around',
+    title: 'Finding your way around',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Before anything else, a look at the place itself. This is the Skydrop seller dashboard, and everything you will ever do is reachable from this one screen.',
+      },
+      {
+        id: 'dashboard',
+        say: 'The dashboard answers one question: what needs you today. Money in your wallet, money still moving, and anything waiting on a decision from you.',
+      },
+      {
+        id: 'sidebar',
+        say: 'Everything else lives on the left, in five groups. They are ordered the way the work actually happens, and each one folds away if you never use it.',
+      },
+      {
+        id: 'selling',
+        say: 'Selling is where you spend most of your time. Orders you have placed, where the parcels are, and the customers you have shipped to. It is first because it is what you open every morning.',
+      },
+      {
+        id: 'stock',
+        say: 'Stock is the goods themselves. What you sell, how much of it is sitting in India right now, and how you tell us more is on the way.',
+      },
+      {
+        id: 'money',
+        say: 'Money is your wallet and what it cost to get your goods into the country. Reselling is for other businesses selling your stock under their own name.',
+      },
+      {
+        id: 'account',
+        say: 'And Account is the setup you do once: who is on your team, what each of them can reach, your company details, and your settings.',
+      },
+      {
+        id: 'search',
+        say: 'At the top there is a search box that follows you everywhere. Type an order number, a waybill or a customer, because the moment you need an order is rarely the moment you are on the orders page.',
+      },
+      {
+        id: 'quick-actions',
+        say: 'Quick actions is the shortcut to the two things you do most — placing an order and adding a product — from wherever you happen to be standing.',
+      },
+      {
+        id: 'bell',
+        say: 'The bell is how Skydrop tells you something. A parcel came back, stock ran low, a top-up was accepted. On a phone this is the only control that stays on screen.',
+      },
+      {
+        id: 'strip',
+        say: 'Along the bottom sit the standing facts: whether your account is active, which currency the figures are in, and the rate they were converted at.',
+      },
+      {
+        id: 'outro',
+        say: 'That is the whole console. If you are new, start with your company profile and your first product — everything after that is placing orders and watching them move.',
+      },
+    ],
+  },
+  {
+    slug: 'set-up-your-profile',
+    title: 'Setting up your company profile',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Your profile is three separate things: who you are, what your customers see, and where your money goes. They are edited separately, on purpose.',
+      },
+      {
+        id: 'open-profile',
+        say: 'Profile sits under Account in the sidebar. The top of the page is the account as we hold it — your status, the currency you read amounts in, and where payouts are sent.',
+      },
+      {
+        id: 'edit-company',
+        say: 'Company info is who we ring when something needs a person. Open Edit and you can change the contact name, a WhatsApp number, and how you would like figures shown to you.',
+      },
+      {
+        id: 'fixed',
+        say: 'Two things are shown but cannot be typed over: your company name and your phone. They are the identity your account was approved on, so changing them is a request rather than an edit.',
+      },
+      {
+        id: 'save-company',
+        say: 'Save, and that is done. Nothing here affects an order that has already been placed — an order keeps the details it was created with, whatever the profile says afterwards.',
+      },
+      {
+        id: 'logo-pick',
+        say: 'Next, your logo. This is the one thing on this page your customers actually see: it goes on the tracking page they open when they are waiting for a parcel.',
+      },
+      {
+        id: 'logo-done',
+        say: 'A square image, up to one megabyte. It is uploaded straight away — there is no separate save — and you can take it off again at any point.',
+      },
+      {
+        id: 'bank-open',
+        say: 'And then bank details. This is where Skydrop sends your money, so it is worth being slow and careful about exactly once.',
+      },
+      {
+        id: 'bank-approval',
+        say: 'Save, and read what the button says. The first time, these are simply stored. Changing an account already on file goes to Skydrop for approval — because this is the field that decides where your money lands.',
+      },
+    ],
+  },
+  {
+    slug: 'announce-a-consignment',
+    title: 'Telling us stock is coming',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Your goods are in Bangladesh and your customers are in India. A consignment is how you tell Skydrop a batch of stock is on its way, before it ships.',
+      },
+      {
+        id: 'open-inbound',
+        say: 'Add stock is under the Stock group. Everything you have ever sent us is listed here, with where each one is now and what we counted when it arrived.',
+      },
+      {
+        id: 'open-form',
+        say: 'Announce a consignment opens the form. Announce it before it ships, so our warehouse knows to expect it — and so you can follow it the whole way.',
+      },
+      {
+        id: 'route',
+        say: 'The first question is the one that matters most, because it decides what you are charged. Where are you sending it?',
+      },
+      {
+        id: 'route-info',
+        say: 'Straight to India means you have arranged the crossing yourself: one arrival, one count, no freight bill from us. Via Bangladesh means you ship to Dhaka and we move it on for you.',
+      },
+      {
+        id: 'route-pick',
+        say: 'Choose Bangladesh and we collect it in Dhaka, carry it across, and bill you the freight once the forwarder invoices us. That bill is spread across the units, not charged up front.',
+      },
+      {
+        id: 'first-line',
+        say: 'Then what is in it. Search your own catalogue by name or SKU, say how many you are sending, and add the line.',
+      },
+      {
+        id: 'unit-cost',
+        say: 'Unit cost is optional, and worth filling in. It is what makes landed cost and margin real later — leave it out and your stock valuation simply has a gap where that batch should be.',
+      },
+      {
+        id: 'second-line',
+        say: 'Add as many products as the shipment holds. This is a declaration of what you believe you are sending, not a promise — the count that counts is the one our warehouse makes.',
+      },
+      {
+        id: 'details',
+        say: 'Finally, when you expect it to land, and your own reference so this matches whatever you call it in your own records.',
+      },
+      {
+        id: 'announce',
+        say: 'Announce it, and it appears in the register as still travelling. From here you can open it and watch each leg — including what was counted at each stop.',
+      },
+      {
+        id: 'outro',
+        say: 'Nothing is sellable yet. Stock becomes yours to sell the moment our Indian warehouse counts it in, and until then it is shown separately so it can never be sold by mistake.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

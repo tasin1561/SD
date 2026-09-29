@@ -103,6 +103,27 @@ export const TUTORIAL_CSV_CUSTOMERS = [
   '+919845011068',
 ];
 
+/**
+ * The consignment the A4 video declares, and the profile fields the A2
+ * video types. Named here so a previous take's rows can be removed —
+ * a second consignment on the register makes the closing shot a
+ * different picture, and a pending bank change makes the save dialog
+ * ask a different question. Keep in step with `flows.mjs`.
+ */
+export const TUTORIAL_CONSIGNMENT_REF = 'RSH-CN-2026-07';
+
+/**
+ * Orders placed so the ORIENTATION video has a dashboard with something
+ * on it. Only that video wants them: every other seed run clears the
+ * seller's pre-dispatch orders, which is what makes each take identical.
+ */
+const TOUR_ORDERS = [
+  { name: 'Meera Krishnan', phone: '+919845030011', ref: 'RSH-TOUR-01', qty: 1 },
+  { name: 'Arjun Nair', phone: '+919845030012', ref: 'RSH-TOUR-02', qty: 2 },
+  { name: 'Divya Menon', phone: '+919845030013', ref: 'RSH-TOUR-03', qty: 1 },
+  { name: 'Rohit Sharma', phone: '+919845030014', ref: 'RSH-TOUR-04', qty: 3 },
+];
+
 async function call(path, init = {}) {
   const res = await fetch(`${API}${path}`, {
     method: init.method ?? 'GET',
@@ -424,6 +445,178 @@ async function clearPreviousImports(sellerId) {
   }
 }
 
+/**
+ * The Bangladesh intake warehouse, and the setting that points at it.
+ *
+ * CNS-2: `ops.bd_intake_warehouse_id` is seeded EMPTY on purpose, and a
+ * VIA_BD declaration is REFUSED rather than quietly routed to India —
+ * which is correct, and which makes the more interesting half of the
+ * consignment form unfilmable until somebody configures one. So the
+ * seed configures one.
+ *
+ * `fulfilsOrders: false` is not decoration: the resolver re-checks the
+ * flag on every read and refuses an intake warehouse that still fulfils
+ * orders (`BD_WAREHOUSE_FULFILS_ORDERS`), because nothing in Bangladesh
+ * is sellable from Bangladesh.
+ *
+ * Idempotent in both halves — the warehouse is found by its code, and
+ * the setting is only written when it does not already point somewhere.
+ */
+const BD_WAREHOUSE = { code: 'BD-DHK-1', name: 'Dhaka Intake' };
+
+async function ensureBdIntakeWarehouse(staffToken) {
+  const warehouses = await call('/admin/warehouses', { token: staffToken });
+  let bd = warehouses.find((w) => w.code === BD_WAREHOUSE.code);
+  if (bd === undefined) {
+    bd = await call('/admin/warehouses', {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        code: BD_WAREHOUSE.code,
+        name: BD_WAREHOUSE.name,
+        countryCode: 'BD',
+        timezone: 'Asia/Dhaka',
+        fulfilsOrders: false,
+      },
+    });
+    console.log(`  · created the Bangladesh intake warehouse (${BD_WAREHOUSE.code})`);
+  }
+
+  const current = await prisma.systemSetting.findUnique({
+    where: { key: 'ops.bd_intake_warehouse_id' },
+    select: { valueString: true },
+  });
+  if (current !== null && (current.valueString ?? '') !== bd.id) {
+    await call('/admin/system-settings/ops.bd_intake_warehouse_id', {
+      method: 'PATCH',
+      token: staffToken,
+      body: { valueType: 'STRING', value: bd.id },
+    });
+    console.log('  · pointed ops.bd_intake_warehouse_id at it');
+  }
+}
+
+/**
+ * Remove the consignment a previous take announced, and the bank change
+ * it left pending.
+ *
+ * A consignment is hard-deleted for the same reason the tutorial product
+ * is: it is minutes old, nothing was ever received against it, and what
+ * is wanted is a register identical to the one the first take filmed. A
+ * consignment that HAS been received is left alone and said out loud —
+ * on a dev box that means somebody was using this seller for something
+ * else, and deleting their work to tidy a video would be worse than a
+ * second row on screen.
+ *
+ * The pending bank change matters for a subtler reason: with one open,
+ * the profile video's save dialog asks a DIFFERENT question, so the take
+ * would not match its own narration.
+ */
+async function clearTutorialConsignments(sellerId) {
+  const rows = await prisma.consignment.findMany({
+    where: { sellerId, sellerReference: TUTORIAL_CONSIGNMENT_REF },
+    select: { id: true, consignmentNumber: true },
+  });
+  if (rows.length > 0) {
+    const ids = rows.map((r) => r.id);
+    // DECLARING a consignment already creates its legs as PENDING goods
+    // receipts, so "has a goods receipt" is not the test — every fresh
+    // one has two. What must never be deleted is a leg somebody has
+    // started counting, because a receipt past PENDING may have written
+    // stock and a batch points back at it.
+    const counted = await prisma.goodsReceipt.count({
+      where: { consignmentId: { in: ids }, status: { not: 'PENDING' } },
+    });
+    if (counted > 0) {
+      console.log(
+        `  · leaving ${rows.length} consignment(s) alone — ${counted} leg(s) have been counted`,
+      );
+    } else {
+      const receipts = await prisma.goodsReceipt.findMany({
+        where: { consignmentId: { in: ids } },
+        select: { id: true },
+      });
+      const receiptIds = receipts.map((r) => r.id);
+      await prisma.$transaction([
+        prisma.goodsReceiptLine.deleteMany({ where: { receiptId: { in: receiptIds } } }),
+        prisma.goodsReceipt.deleteMany({ where: { id: { in: receiptIds } } }),
+        prisma.consignmentEvent.deleteMany({ where: { consignmentId: { in: ids } } }),
+        prisma.consignment.deleteMany({ where: { id: { in: ids } } }),
+      ]);
+      console.log(
+        `  · removed a previous take's ${rows.length} consignment(s) and ${receiptIds.length} leg(s)`,
+      );
+    }
+  }
+
+  const changes = await prisma.sellerBankChangeRequest.deleteMany({
+    where: { sellerId, status: 'PENDING' },
+  });
+  if (changes.count > 0) {
+    console.log(`  · removed ${changes.count} pending bank change request(s)`);
+  }
+
+  // The logo the profile video uploads ON CAMERA. Left in place, the
+  // next take opens on a logo already there and a Remove button beside
+  // it — a different picture from the one the narration describes, and
+  // the frame the whole scene is about. The object under it goes too,
+  // or mock storage accumulates one per take.
+  const seller = await prisma.seller.findUnique({
+    where: { id: sellerId },
+    select: { logoUrl: true },
+  });
+  if ((seller?.logoUrl ?? null) !== null) {
+    await prisma.seller.update({ where: { id: sellerId }, data: { logoUrl: null } });
+    const bucket = process.env.SPACES_BUCKET ?? 'skydrop-storage';
+    const dir = path.join(MOCK_ROOT, bucket, 'sellers', sellerId, 'logo');
+    await fs.rm(dir, { recursive: true, force: true });
+    console.log("  · removed a previous take's company logo");
+  }
+}
+
+/**
+ * Give the ORIENTATION video a dashboard worth looking at.
+ *
+ * Runs only for that slug. The tour narrates a recent-orders list and a
+ * search box that returns something, and an empty dashboard would make
+ * both of those sentences false — while every other video wants the
+ * seller's order list cleared, which is what `clearPreviousOrders` above
+ * has just done. So this is the one place an order is created by the
+ * SEED rather than by the camera.
+ */
+async function placeTourOrders(sellerToken) {
+  const variants = await prisma.productVariant.findMany({
+    where: { skuCode: { in: CATALOGUE.map((c) => c.sku) }, deletedAt: null },
+    select: { id: true, skuCode: true },
+  });
+  if (variants.length === 0) throw new Error('No catalogue variants to place tour orders against');
+
+  for (const [i, o] of TOUR_ORDERS.entries()) {
+    const variant = variants[i % variants.length];
+    const order = await call('/seller/orders', {
+      method: 'POST',
+      token: await sellerToken(),
+      body: {
+        recipientName: o.name,
+        recipientPhoneE164: o.phone,
+        recipientAddressLine1: `${12 + i}, Residency Road`,
+        // ORD-5: line two is the LANDMARK and is required.
+        recipientAddressLine2: 'Near the Bangalore Club, opposite the petrol pump',
+        recipientPostalCode: '560025',
+        paymentMode: 'COD',
+        codAmountInr: String(1800 + i * 450),
+        sellerOrderRef: o.ref,
+        items: [{ variantId: variant.id, quantity: o.qty }],
+      },
+    });
+    await call(`/seller/orders/${order.id}/submit`, {
+      method: 'POST',
+      token: await sellerToken(),
+    });
+  }
+  console.log(`  · placed ${TOUR_ORDERS.length} order(s) so the dashboard is not empty`);
+}
+
 async function main() {
   assertLocal();
   console.log(`Seeding tutorial demo data against ${API}`);
@@ -446,9 +639,18 @@ async function main() {
     await ensureStockedVariant(sellerToken, staffToken, binId, item);
   }
 
+  await ensureBdIntakeWarehouse(staffToken);
+
   await clearTutorialProduct(sellerId);
   await clearPreviousOrders(sellerId);
   await clearPreviousImports(sellerId);
+  await clearTutorialConsignments(sellerId);
+
+  // Per-video tailoring, AFTER the clearing. The slug is optional: with
+  // none, this is the shared world every video that needs nothing extra
+  // records against.
+  const slug = process.argv[2];
+  if (slug === 'find-your-way-around') await placeTourOrders(sellerToken);
 
   console.log('\nReady.');
   console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);
