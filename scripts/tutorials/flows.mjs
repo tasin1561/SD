@@ -82,6 +82,16 @@ const NEW_STORE = {
   note: 'Instagram shop — same stock, different name',
 };
 
+/** The role the roles video builds. Keep in step with seed-demo-data.mjs. */
+const NEW_ROLE = {
+  name: 'Warehouse manager',
+  purpose: 'Runs the floor — stock, parcels and returns. No access to money.',
+  search: 'stock',
+  // Turned ON in this order. Named by their LABEL, because that is what
+  // the switch is addressable by and what a viewer reads.
+  grant: ['Orders', 'Inventory'],
+};
+
 /** What the top-up video records. A real bank account of ours, a reference that is not. */
 const TOPUP = {
   bank: 'BRAC Bank',
@@ -1400,6 +1410,164 @@ export const FLOWS = {
         await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
         await page.waitForTimeout(1200);
+        await stage.dwellOn(page.getByRole('table').first(), 2600);
+      },
+    },
+  },
+
+  'build-a-role': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-roles'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Roles', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/team\/roles/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 1600);
+      },
+
+      async 'the-list'({ page, stage }) {
+        await stage.dwellOn(page.getByRole('table').first(), 2200);
+        await stage.dwellOn(page.getByRole('row').filter({ hasText: 'Owner' }).first(), 2200);
+      },
+
+      async 'new-role'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'New role' }).first(), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.typeIn(dialog.getByLabel('Name'), NEW_ROLE.name, { after: 700 });
+      },
+
+      async purpose({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/What this role is for/i), NEW_ROLE.purpose, {
+          delay: 30,
+          after: 700,
+        });
+      },
+
+      async groups({ page, stage }) {
+        await stage.dwellOn(page.locator('.role-perms__list').first(), 3000);
+      },
+
+      async search({ page, stage }) {
+        // Typed into the search to show it matching the KEY, then
+        // cleared — the next scene needs the full list back.
+        await stage.typeIn(page.getByLabel('Search permissions'), NEW_ROLE.search, { after: 1800 });
+        await page.getByLabel('Search permissions').fill('');
+        await page.waitForTimeout(800);
+      },
+
+      async pick({ page, stage }) {
+        // Scoped to the GROUP's own accordion item, so a switch from
+        // another area can never be the one that gets ticked.
+        //
+        // And it THROWS when it ticks nothing. The first version skipped
+        // quietly on a selector miss, which passed `--check` twice while
+        // saving a role with zero permissions — a video whose whole
+        // middle is choosing permissions, filming a form where none were
+        // chosen. A step that cannot do its job must say so; that is the
+        // entire reason check mode exists.
+        let ticked = 0;
+        for (const group of NEW_ROLE.grant) {
+          const item = page
+            .locator('.sk-acc__item')
+            .filter({ has: page.locator('.sk-acc__title', { hasText: group }) })
+            .first();
+          await item.waitFor({ state: 'visible', timeout: 20_000 });
+          await stage.clickIt(item.locator('.sk-acc__trigger').first(), { after: 800 });
+
+          const switches = item.locator('[role="switch"]');
+          const n = Math.min(2, await switches.count());
+          if (n === 0) throw new Error(`No permission switches inside the "${group}" group`);
+          for (let i = 0; i < n; i += 1) {
+            await stage.clickIt(switches.nth(i), { settle: 300, after: 450 });
+            ticked += 1;
+          }
+        }
+        if (ticked === 0) throw new Error('The role would save with no permissions at all');
+      },
+
+      async sensitive({ page, stage }) {
+        await stage.dwellOn(page.locator('.role-perms__summary').first(), 3000);
+      },
+
+      async save({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Create role|^Save/ }).last(), {
+          after: 2200,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.getByRole('row').filter({ hasText: NEW_ROLE.name }).first(), 2000);
+      },
+
+      async remove({ page, stage }) {
+        await stage.clickIt(
+          page
+            .getByRole('row')
+            .filter({ hasText: NEW_ROLE.name })
+            .first()
+            .getByRole('button', { name: 'Edit' }),
+          { after: 1400 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // Turn OFF the first permission that is on, whichever it is.
+        // Re-opening the editor draws every group CLOSED, so the switch
+        // that is on sits inside a collapsed panel — Playwright found it,
+        // scrolled to it, and clicked the accordion header that was
+        // covering it, for thirty seconds. Open the group first.
+        const item = page
+          .locator('.sk-acc__item')
+          .filter({ has: page.locator('.sk-acc__title', { hasText: NEW_ROLE.grant[0] }) })
+          .first();
+        await item.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.clickIt(item.locator('.sk-acc__trigger').first(), { after: 800 });
+
+        // `aria-checked`, which is what the Switch actually sets — it
+        // carries no `data-state`, and asking for one waited 30 s and
+        // timed out.
+        const on = item.locator('[role="switch"][aria-checked="true"]').first();
+        await on.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.clickIt(on, { after: 900 });
+        await stage.clickIt(page.getByRole('button', { name: /^Save/ }).last(), { after: 1400 });
+        // The confirmation naming what goes — the scene's whole point.
+        await page
+          .getByRole('heading', { name: /Remove permissions from this role/i })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.sk-confirm__consequence').first(), 2600);
+
+        // Backed out HERE rather than at the top of the next scene.
+        // The lesson was the question, and going through with it would
+        // leave the role in a different shape than the one just built on
+        // camera — but the dismissal belongs to THIS scene's tail: a
+        // scene should open on the thing it is about, and the first take
+        // spent its first two seconds watching this editor close while
+        // the narration was already talking about the Owner row.
+        await stage.clickIt(page.getByRole('button', { name: 'Cancel' }).last(), { after: 800 });
+        await page.keyboard.press('Escape');
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 20_000 });
+        await page.waitForTimeout(600);
+      },
+
+      async owner({ page, stage }) {
+        await stage.dwellOn(page.getByRole('row').filter({ hasText: 'Owner' }).first(), 3200);
+      },
+
+      async outro({ page, stage }) {
         await stage.dwellOn(page.getByRole('table').first(), 2600);
       },
     },

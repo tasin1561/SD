@@ -546,6 +546,65 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'build-a-role',
+    title: 'Building a role that fits your team',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Most systems give you three fixed roles and leave you to fit your business around them. Skydrop lets you invent the ones you actually need.',
+      },
+      {
+        id: 'open-roles',
+        say: 'Roles is under Account, beside Team. A role is simply a set of permissions, and the permissions themselves are the part we fix.',
+      },
+      {
+        id: 'the-list',
+        say: 'These are the ones we ship, and you can change or delete any of them. Except the first: Owner is locked, and the padlock is the only one on this page.',
+      },
+      {
+        id: 'new-role',
+        say: 'So let us build one. Say you have taken on somebody to run the warehouse — they need stock and parcels, and nothing to do with money.',
+      },
+      {
+        id: 'purpose',
+        say: 'Describe what it is for while you remember. In six months this line is the difference between reading a role and re-deriving it from its ticks.',
+      },
+      {
+        id: 'groups',
+        say: 'Every permission the system has, grouped by area, and each one carries a sentence explaining what it actually lets somebody do rather than just its name.',
+      },
+      {
+        id: 'search',
+        say: 'The search matches those keys as well as the words — because the moment you need this, somebody has been refused, and a refusal names a key and nothing else.',
+      },
+      {
+        id: 'pick',
+        say: 'Turn on what the job needs. Each group keeps its own count, so you can see at a glance how much of an area you have handed over.',
+      },
+      {
+        id: 'sensitive',
+        say: 'And watch this line as you go. Some permissions can move money or stock, and Skydrop counts the ones you have selected — so a role that quietly grew teeth says so before you save it.',
+      },
+      {
+        id: 'save',
+        say: 'Save, and it joins the list as an ordinary role. Invite somebody into it, or move an existing person across, exactly as you would with one of ours.',
+      },
+      {
+        id: 'remove',
+        say: 'Now the part worth knowing. Open it again and take a permission away — and Skydrop stops you, naming what goes and how many people lose it the moment you save.',
+      },
+      {
+        id: 'owner',
+        say: 'One last thing. You cannot edit Owner, and that is deliberate: it is the way back in from any mistake made on this screen, so it is not yours to lock yourself out of.',
+      },
+      {
+        id: 'outro',
+        say: 'Build the roles your business actually has, name them after the jobs people do, and nobody has to hold access they never needed.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

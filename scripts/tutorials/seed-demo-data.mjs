@@ -115,6 +115,9 @@ export const TUTORIAL_CONSIGNMENT_REF = 'RSH-CN-2026-07';
 /** The shopfront the store video adds ON CAMERA. Keep in step with flows.mjs. */
 export const TUTORIAL_STORE_NAME = 'Dhaka Boutique';
 
+/** The role the roles video builds ON CAMERA. Keep in step with flows.mjs. */
+export const TUTORIAL_ROLE_NAME = 'Warehouse manager';
+
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
 
@@ -700,6 +703,29 @@ async function clearTutorialSettings(sellerId) {
   });
   if (topups.count > 0) {
     console.log(`  · removed ${topups.count} pending top-up claim(s) from a previous take`);
+  }
+
+  // The roles video BUILDS a role on camera, and a second take would
+  // fail on the duplicate name — and film a list that already has it
+  // while the narration says "let us build one".
+  //
+  // Only a role NOBODY HOLDS is removed. A role with members is somebody
+  // using this account for something else, and taking their access away
+  // to tidy a video is worse than a second row on screen.
+  const role = await prisma.sellerRoleDefinition.findFirst({
+    where: { sellerId, name: TUTORIAL_ROLE_NAME },
+    select: { id: true, _count: { select: { users: true } } },
+  });
+  if (role !== null) {
+    if (role._count.users > 0) {
+      console.log(
+        `  · leaving the "${TUTORIAL_ROLE_NAME}" role alone — ${role._count.users} member(s) hold it`,
+      );
+    } else {
+      await prisma.sellerRolePermission.deleteMany({ where: { roleId: role.id } });
+      await prisma.sellerRoleDefinition.delete({ where: { id: role.id } });
+      console.log(`  · removed a previous take's "${TUTORIAL_ROLE_NAME}" role`);
+    }
   }
 
   const account = await prisma.seller.updateMany({

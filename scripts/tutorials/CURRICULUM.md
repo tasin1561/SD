@@ -6,7 +6,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 11 filmed. Of the 79 left, **23 are `ready` today**, 54 need
+**90 tutorials.** 12 filmed. Of the 78 left, **22 are `ready` today**, 54 need
 demo data that does not exist yet, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -521,25 +521,42 @@ revoking, and changing somebody's role. Worth showing that a non-admin sees the
 buttons and gets the server's refusal verbatim rather than a hidden control —
 the UI does not pretend to be the boundary.
 
-### F2. Building a role · `ready`
+### F2. Building a role · **FILMED** — `build-a-role.mp4`
 
-**Promise** — you can invent a role that fits how your business actually works.
-**Length** 4 min. **Prerequisites** F1.
-**Needs** nothing. One of the strongest candidates in the library: entirely
-self-contained, visually rich, consequential, and filmable on a blank account.
-**Covers** `/team/roles` — roles are **data**, so "Warehouse manager" is a
-thing you invent, not a thing we ship. The **41 permissions across seven
-groups** (Orders, Catalogue, Inventory, Money, Reseller stores, Support,
-Company), each with its own sentence; the search that also matches the raw key,
-because somebody reading a refusal knows `catalog.manage` and nothing else; and
-saving a role that **loses** permissions asking first and naming exactly which
-ones go. Ends on the owner row being inert, and why: it is the way back in from
-any mistake made on this screen.
-Sensitive permissions are marked and counted — **17 of the 41** — and the count
-is of what is SELECTED, so it moves as you tick. (The two apps name the flag
-differently: `sensitive` on the seller catalogue, `dangerous` on the staff one,
-where 32 of 84 carry it. Neither is enforced differently; both exist so a role
-that quietly acquired six says so before it is saved.)
+Covers `/team/roles` — roles are **data**, so "Warehouse manager" is a thing you
+invent, not a thing we ship. The permissions across seven groups (Orders,
+Catalogue, Inventory, Money, Reseller stores, Support, Company), each with its
+own sentence; the search that also matches the raw key, because somebody reading
+a refusal knows `catalog.manage` and nothing else; and saving a role that
+**loses** permissions asking first and naming exactly which ones go. Ends on the
+owner row being inert, and why: it is the way back in from any mistake made on
+this screen.
+
+Sensitive permissions are marked and counted, and the count is of what is
+SELECTED, so it moves as you tick. (The two apps name the flag differently:
+`sensitive` on the seller catalogue, `dangerous` on the staff one. Neither is
+enforced differently; both exist so a role that quietly acquired six says so
+before it is saved.)
+
+**This entry said "41 permissions" and "17 of the 41". The live catalogue has
+35, of which 17 are sensitive** — the first number went stale and nothing
+noticed, which is exactly what the narration must not be allowed to do. So the
+narration names NO counts: it points at the figures the page prints, which are
+computed from the catalogue and cannot go stale. **Keep hard numbers out of
+narration wherever the screen already shows them** — a wrong number in a voice
+clip costs a re-take and is invisible until somebody listens.
+
+Two flow bugs worth recording, both found by `--check` before a credit was
+spent. The permission switches carry `aria-checked`, not `data-state`, so the
+first attempt waited thirty seconds for a selector that cannot exist; and
+re-opening the editor draws every group CLOSED, so the switch to untick sat
+behind a collapsed panel and Playwright kept clicking the accordion header
+covering it. **The third is the one worth generalising:** the first `pick` step
+skipped quietly when its selector missed, so it passed `--check` twice while
+saving a role with no permissions at all — a video whose whole middle is
+choosing permissions, filming a form where none were chosen. It now throws. A
+step that cannot do its job must say so, or check mode is only testing that the
+browser opened.
 
 ### F3. Sign-in and sessions · `ready`
 
