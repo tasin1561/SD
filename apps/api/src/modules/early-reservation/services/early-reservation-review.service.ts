@@ -14,6 +14,19 @@ import { StockReservationService } from '../../inventory-stock/services/stock-re
 export interface ReviewView {
   readonly id: string;
   readonly orderId: string;
+  /**
+   * The order's own number, for the seller to READ.
+   *
+   * The screens built on this view identified an order by the first
+   * eight characters of its uuid, which a person cannot read down a
+   * phone, match against their order list, or search for — the order
+   * search takes a number, a reference, an AWB, a name or a phone, and
+   * not a uuid prefix. `/needs-attention` lists the SAME orders by their
+   * number, so the two screens about one thing disagreed about how to
+   * name it. Nullable only because the order may have been soft-deleted
+   * out from under a historical review.
+   */
+  readonly orderNumber: string | null;
   readonly status: EarlyReservationReviewStatus;
   readonly attemptCount: number;
   readonly heldQty: number;
@@ -23,6 +36,9 @@ export interface ReviewView {
 }
 
 export type ReviewDecision = 'RELEASE' | 'REQUEST_MORE_ATTEMPTS';
+
+/** Declared once, so a new read cannot quietly answer without a number. */
+const ORDER_NUMBER = { order: { select: { orderNumber: true } } } as const;
 
 /**
  * R5 — the seller's side of the manual-review path: "call attempts are
@@ -75,6 +91,7 @@ export class EarlyReservationReviewService {
         order: { storeId, storeKind: SellerStoreKind.RESELLER, deletedAt: null },
       },
       orderBy: { createdAt: 'desc' },
+      include: ORDER_NUMBER,
     });
     return rows.map((r) => this.toView(r));
   }
@@ -97,6 +114,7 @@ export class EarlyReservationReviewService {
     const rows = await this.prisma.client.earlyReservationReview.findMany({
       where: { sellerId, ...(status === undefined ? {} : { status }) },
       orderBy: { createdAt: 'desc' },
+      include: ORDER_NUMBER,
     });
     return rows.map((r) => this.toView(r));
   }
@@ -130,6 +148,7 @@ export class EarlyReservationReviewService {
       // longest is the one costing the most.
       orderBy: { createdAt: 'asc' },
       take: Math.min(query.limit ?? 200, 500),
+      include: ORDER_NUMBER,
     });
     return rows.map((r) => ({ ...this.toView(r), sellerId: r.sellerId }));
   }
@@ -242,6 +261,7 @@ export class EarlyReservationReviewService {
         resolvedByUserId: actor.resolvedByUserId,
         note: note ?? existing.note,
       },
+      include: ORDER_NUMBER,
     });
 
     await this.audit.log({
@@ -261,6 +281,7 @@ export class EarlyReservationReviewService {
   private toView(row: {
     id: string;
     orderId: string;
+    order?: { orderNumber: string } | null;
     status: EarlyReservationReviewStatus;
     attemptCount: number;
     heldQty: number;
@@ -271,6 +292,7 @@ export class EarlyReservationReviewService {
     return {
       id: row.id,
       orderId: row.orderId,
+      orderNumber: row.order?.orderNumber ?? null,
       status: row.status,
       attemptCount: row.attemptCount,
       heldQty: row.heldQty,

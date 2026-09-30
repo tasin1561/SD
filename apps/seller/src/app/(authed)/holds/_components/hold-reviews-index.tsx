@@ -246,8 +246,17 @@ export function HoldReviewsIndex(): ReactElement {
                 {rows.map((r) => (
                   <Tr key={r.id} onActivate={() => router.push(`/orders/${r.orderId}`)}>
                     <Td>
+                      {/* The NUMBER, not eight characters of a uuid. A
+                          seller cannot read a uuid down a phone, match
+                          it against their order list, or search for it
+                          — the order search takes a number, a ref, an
+                          AWB, a name or a phone. `/needs-attention`
+                          lists these same orders by their number, so
+                          the two screens disagreed about how to name
+                          one thing. The id is still what the link
+                          uses. */}
                       <Link href={`/orders/${r.orderId}`} className="inv-link">
-                        <Ident value={`${r.orderId.slice(0, 8)}…`} />
+                        <Ident value={r.orderNumber ?? `${r.orderId.slice(0, 8)}…`} />
                       </Link>
                       <span className="inv-sub sk-figure">
                         {new Date(r.createdAt).toLocaleDateString()}
@@ -310,7 +319,11 @@ export function HoldReviewsIndex(): ReactElement {
         )}
       </AreaSection>
 
-      <HoldDecisionDialog review={selected} onClose={() => setSelected(null)} />
+      <HoldDecisionDialog
+        review={selected}
+        {...(selected?.orderNumber == null ? {} : { orderNumber: selected.orderNumber })}
+        onClose={() => setSelected(null)}
+      />
     </AreaPage>
   );
 }

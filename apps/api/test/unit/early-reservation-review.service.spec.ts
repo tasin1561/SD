@@ -21,6 +21,9 @@ function row(over: AnyArgs = {}): AnyArgs {
   return {
     id: REVIEW,
     orderId: ORDER,
+    // Included by every read, so the seller sees a number rather than
+    // eight characters of a uuid.
+    order: { orderNumber: 'SD-2026-26-000042' },
     sellerId: SELLER,
     status: EarlyReservationReviewStatus.OPEN,
     attemptCount: 3,
@@ -113,6 +116,7 @@ describe('EarlyReservationReviewService.listForSeller', () => {
     expect(view).toEqual({
       id: REVIEW,
       orderId: ORDER,
+      orderNumber: 'SD-2026-26-000042',
       status: EarlyReservationReviewStatus.OPEN,
       attemptCount: 3,
       heldQty: 5,
@@ -122,6 +126,8 @@ describe('EarlyReservationReviewService.listForSeller', () => {
     });
     // sellerId / resolvedByUserId / updatedAt are internal — never projected.
     expect(view).not.toHaveProperty('sellerId');
+    // …and the ORDER is projected as a number, never as the joined row.
+    expect(view).not.toHaveProperty('order');
   });
 });
 

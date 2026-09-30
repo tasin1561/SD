@@ -88,6 +88,10 @@ const CATALOGUE_MAPPING = {
  * `RSH-LIFE-FAILED` recipient — keep in step with `lib/lifecycle.mjs`.
  */
 const FAILED_CUSTOMER = 'Vikram Desai';
+/** What D6 types when it raises an issue on camera. */
+const RAISED_ISSUE =
+  'Customer says the box arrived open and one of the two sarees is missing. They sent photographs of the packaging, which I can forward.';
+
 /** What D5 types on the review before answering it. */
 const HOLD_NOTE =
   'They are travelling until Sunday — please try again early next week rather than this evening.';
@@ -3091,7 +3095,7 @@ export const FLOWS = {
       },
 
       async tiles({ page, stage }) {
-        const kpis = page.locator('.inv-kpis, [class*="kpi"]').first();
+        const kpis = page.locator('.inv-kpis').first();
         await kpis.waitFor({ state: 'visible', timeout: 20_000 });
         // The FIGURE, not the card: both tiles read a dash until the
         // list has answered, and a scene about "two figures" opening on
@@ -3107,7 +3111,7 @@ export const FLOWS = {
       async units({ page, stage }) {
         // There is no third tile — that is the scene. Dwelling on the
         // pair is what shows the gap where it would be.
-        await stage.dwellOn(page.locator('.inv-kpis, [class*="kpi"]').first(), 3400);
+        await stage.dwellOn(page.locator('.inv-kpis').first(), 3400);
       },
 
       async register({ page, stage }) {
@@ -3126,13 +3130,15 @@ export const FLOWS = {
         await stage.dwellOn(dialog, 3000);
       },
 
-      async 'let-it-go'({ page, stage }) {
-        const dialog = page.getByRole('dialog').first();
-        await stage.clickIt(dialog.getByText('Let it go', { exact: true }).first(), {
-          after: 1400,
-        });
-        await page.waitForTimeout(700);
-        await stage.dwellOn(dialog, 3000);
+      // `chooseCard`, not a click on the words: ChoiceCards wraps a
+      // visually-hidden real radio in a <label>, and clicking the card's
+      // TITLE is refused as "intercepts pointer events". The helper puts
+      // the halo on the card and checks the radio.
+      async 'let-it-go'(ctx) {
+        const { page, stage } = ctx;
+        await chooseCard(ctx, 'RELEASE', { after: 1200 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.getByRole('dialog').first(), 3000);
       },
 
       async confirm({ page, stage }) {
@@ -3161,13 +3167,11 @@ export const FLOWS = {
         await page.waitForTimeout(600);
       },
 
-      async 'keep-trying'({ page, stage }) {
-        const dialog = page.getByRole('dialog').first();
-        await stage.clickIt(dialog.getByText('Keep trying', { exact: true }).first(), {
-          after: 1400,
-        });
-        await page.waitForTimeout(700);
-        await stage.dwellOn(dialog, 3000);
+      async 'keep-trying'(ctx) {
+        const { page, stage } = ctx;
+        await chooseCard(ctx, 'REQUEST_MORE_ATTEMPTS', { after: 1200 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.getByRole('dialog').first(), 3000);
       },
 
       async note({ page, stage }) {
@@ -3189,7 +3193,7 @@ export const FLOWS = {
           .first()
           .waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(1000);
-        await stage.dwellOn(page.locator('.inv-panel, [class*="panel"]').first(), 3200);
+        await stage.dwellOn(page.locator('.inv-card').first(), 3200);
       },
 
       async decided({ page, stage }) {
@@ -3198,6 +3202,170 @@ export const FLOWS = {
         await table.waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(900);
         await stage.dwellOn(table, 3600);
+      },
+    },
+  },
+
+  /**
+   * D6 — a damage claim, from the bench to the wallet.
+   *
+   * D0's `RSH-LIFE-RESTOCKED`: two units came back, one good and one
+   * ruined (WMS-8d inspects BY QUANTITY, which is what lets one order be
+   * both restocked and carrying a scrap ticket). The lifecycle pass then
+   * replies on the ticket and settles it with a refund, so the video has
+   * the whole arc rather than an open claim.
+   *
+   * The second half is the seller's own: an issue raised on camera,
+   * which the seeding clears before the next take.
+   */
+  'something-arrived-damaged': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Tickets', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/tickets$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2800);
+      },
+
+      async tiles({ page, stage }) {
+        const kpis = page.locator('.tkt-kpis').first();
+        await kpis.waitFor({ state: 'visible', timeout: 20_000 });
+        // The REFUND figure, not the card: the tile reads a dash until
+        // the list has answered, and this scene is about the number.
+        await page
+          .getByText('already in your wallet', { exact: false })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(kpis, 3200);
+      },
+
+      async register({ page, stage }) {
+        const table = page.getByRole('table').first();
+        await table.waitFor({ state: 'visible', timeout: 20_000 });
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(table, 3400);
+      },
+
+      async 'our-ticket'({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: 'RTO DAMAGED' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+        await page.waitForURL(/\/tickets\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2400);
+      },
+
+      async 'refund-banner'({ page, stage }) {
+        // The banner renders only when a refund actually landed, so its
+        // absence means the seeding did not settle the claim — which a
+        // wait reports rather than filming the page without it.
+        const banner = page.locator('.tkt-refund').first();
+        await banner.waitFor({ state: 'visible', timeout: 25_000 });
+        await banner.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(banner, 3400);
+      },
+
+      async facts({ page, stage }) {
+        const facts = page.locator('.tkt-facts').first();
+        await facts.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(facts, 3400);
+      },
+
+      async conversation({ page, stage }) {
+        const thread = page.locator('.tkt-section').filter({ hasText: 'Conversation' }).first();
+        await thread.waitFor({ state: 'visible', timeout: 20_000 });
+        await thread.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(900);
+        await stage.dwellOn(thread, 3600);
+      },
+
+      async 'wallet-link'({ page, stage }) {
+        await stage.glide(-1200);
+        await page.waitForTimeout(600);
+        await stage.clickIt(page.locator('a.tkt-refund__link').first(), { after: 1800 });
+        await page.waitForURL(/\/wallet$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+        // The CREDIT, by its own label — proof the money is where the
+        // ticket said it went.
+        const entry = page.getByText('Damage settlement', { exact: false }).first();
+        await entry.waitFor({ state: 'visible', timeout: 25_000 });
+        await entry.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(entry, 3400);
+      },
+
+      async raise({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Tickets', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/tickets$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.clickIt(page.getByRole('button', { name: 'Raise an issue' }).first(), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // The categories come from the courier, over the network, so the
+        // select is empty for a beat after the dialog opens.
+        await dialog
+          .getByLabel('What is the problem')
+          .locator('option')
+          .nth(1)
+          .waitFor({ state: 'attached', timeout: 25_000 });
+        await stage.clickIt(dialog.getByLabel('What is the problem'), { after: 1200 });
+        await dialog.getByLabel('What is the problem').selectOption({ index: 1 });
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(dialog, 2600);
+      },
+
+      async describe({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        // Its subcategory step exists only for categories that HAVE any
+        // — several of Delhivery's go straight to the description.
+        const sub = dialog.getByLabel('Which one');
+        if ((await sub.count()) > 0) {
+          await sub.selectOption({ index: 1 });
+          await page.waitForTimeout(700);
+        }
+        await stage.typeIn(dialog.getByLabel('What happened'), RAISED_ISSUE, { after: 1600 });
+        await stage.dwellOn(dialog, 2600);
+      },
+
+      async raised({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Raise issue' }).first(), {
+          after: 1600,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
+        // The ROW, by its "Raised by = You" cell: the register is the
+        // proof, and a closed dialog says nothing about it.
+        const mine = page.getByRole('row').filter({ hasText: 'You' }).first();
+        await mine.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('table').first(), 3200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.tkt-kpis').first(), 3200);
       },
     },
   },

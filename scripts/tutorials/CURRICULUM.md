@@ -710,17 +710,45 @@ customer-facing action that calls the courier directly, with no operator in the
 loop** (CUR-10's seller amendment) — and, separately, "Request return" on a
 delivered one. Both charge a return fee; the tutorial says the figure.
 
-### D5. The customer would not answer · `needs demo data`
+### D5. The customer would not answer · **FILMED** — `the-customer-would-not-answer.mp4`
 
 **Promise** — you can decide what happens to an order our agents could not
 confirm.
-**Length** 3 min. **Prerequisites** D3. **Needs** D0's
-AWAITING_SELLER_DECISION order.
+**Length** 2 min 28 s. **Prerequisites** D3. **Needs** D0's
+AWAITING_SELLER_DECISION order, and it is in `LIFECYCLE_SLUGS`.
 **Covers** `/holds` ("Unreachable customers"): how many calls were made, the
 two choices — **let it go**, which rejects the order and returns any held units,
 behind its own second confirmation, and **keep trying**, which puts it back in
-the call queue. Worth noting the held-units figure is zero unless the seller
-has opted into at-placement holds.
+the call queue. One scene is about the tile that is NOT there: the held-units
+figure is absent rather than zero unless the seller has opted into
+at-placement holds, and the page says why.
+
+**It presses KEEP TRYING and cancels out of the confirm.** Letting the order go
+is a terminal reject and D0 cannot rebuild a rejected order; "keep trying" puts
+it back in the queue, which the seeding rings to the cap again.
+
+**THE REVIEW PARCEL IS THE ONE LIFECYCLE PARCEL THAT IS REBUILT RATHER THAN
+RESUMED.** `handleNdrCap` upserts with `update: {}`, so an ANSWERED review is
+never reopened — ring the order back to the cap and it parks at
+AWAITING_SELLER_DECISION with nothing open on `/holds`, and the video cannot be
+re-taken. (The order is not stranded; the product's own `sweepOrphans` expires
+it on the TTL. It is simply not filmable.) So `rebuildStaleReviewParcel` deletes
+and remakes it whenever it is not exactly right — which is safe for THIS parcel
+and no other, because it was never confirmed: no waybill, no picked stock, no
+wallet entry, no courier booking.
+
+**FILMING FOUND ONE, and the seeding three.** The register identified an order
+by the first eight characters of its uuid — which a seller cannot read down a
+phone, match against their order list, or search for, and which
+`/needs-attention` prints as a proper order number two clicks away. `ReviewView`
+carried no `orderNumber` at all. Now it does, on every read.
+
+The three in the seeding, each a predicate about the wrong thing: the stale-call
+reconciler closed the legitimate re-queue of every second ring (an order at
+CALL_NO_RESPONSE is still callable); the ring loop stopped after one attempt for
+the same reason; and putting our entry at the front of the queue computed
+"earliest minus a minute", which on a queue holding only a backed-off retry is
+still in the FUTURE, so `pullNext` correctly handed back nothing.
 
 ### D6. Something arrived damaged · `needs demo data`
 

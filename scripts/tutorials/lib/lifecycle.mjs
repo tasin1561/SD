@@ -162,7 +162,28 @@ export const LIFECYCLE_PARCELS = [
  * allocation or an open box behind it, and picking that up blind is how
  * a seed corrupts stock. Those are named and left.
  */
-const RESUMABLE_FROM = new Set(['PENDING_CONFIRMATION', 'CONFIRMED', 'DISPATCHED']);
+const RESUMABLE_FROM = new Set([
+  'PENDING_CONFIRMATION',
+  // Mid-calling. An agent recorded No answer and the order was
+  // re-queued (CC-2/CC-5); nothing is reserved, booked or picked, so
+  // carrying on ringing is exactly what the product would do next.
+  'CALL_NO_RESPONSE',
+  'CALL_RESCHEDULED',
+  'CONFIRMED',
+  'DISPATCHED',
+]);
+
+/**
+ * The statuses a confirmation call can still be made against.
+ *
+ * NOT just PENDING_CONFIRMATION: the moment an agent records No answer
+ * the order moves to CALL_NO_RESPONSE and is re-queued (CC-2/CC-5), so
+ * a loop that stopped at "no longer pending" stopped after ONE ring.
+ * AWAITING_SELLER_DECISION is deliberately absent — it is where this
+ * loop is trying to get to, and the product's own
+ * `CONFIRMATION_CALL_STATUSES` includes it for a different reason.
+ */
+const STILL_CALLABLE = new Set(['PENDING_CONFIRMATION', 'CALL_NO_RESPONSE', 'CALL_RESCHEDULED']);
 
 /** …and of those, the ones that have already been through the bench. */
 const ALREADY_DISPATCHED = new Set(['DISPATCHED']);
@@ -266,15 +287,21 @@ async function reconcileStaleCallQueue(log) {
       status: { in: ['PENDING', 'ASSIGNED'] },
       // ONLY a confirmation call. The other three reasons
       // (SELLER_ASKED, STORE_ASKED, DELIVERY_FAILED) exist precisely to
-      // ring a customer whose order is PAST confirmation, so the
-      // predicate above is false of a perfectly live entry — and this
-      // swept three of them away on the first D0 box, closing the
-      // post-NDR call the delivery-failed listener had just queued and
-      // leaving `closure_reason` null as the fingerprint. The rule is
-      // "a CONFIRMATION call for an order that no longer needs
-      // confirming", not "any call for an order that has moved on".
+      // ring a customer whose order is PAST confirmation, so a predicate
+      // about the order having moved on is false of a perfectly live
+      // entry — and this swept three of them away on the first D0 box,
+      // closing the post-NDR call the delivery-failed listener had just
+      // queued and leaving `closure_reason` null as the fingerprint.
       reason: 'ORDER_CONFIRMATION',
-      order: { status: { not: 'PENDING_CONFIRMATION' } },
+      // …and only for an order no confirmation call can be made against
+      // any more. NOT "not PENDING_CONFIRMATION": the moment an agent
+      // records No answer the order moves to CALL_NO_RESPONSE and the
+      // product RE-QUEUES it (CC-2/CC-5), so that predicate destroyed
+      // the second ring of every three-ring sequence and the next pass
+      // then waited thirty seconds for a queue entry it had deleted
+      // itself. The rule is "a confirmation call for an order that can
+      // no longer be confirmed".
+      order: { status: { notIn: [...STILL_CALLABLE] } },
     },
     data: { status: 'COMPLETED', assignedAgentId: null, assignedAt: null },
   });
@@ -296,7 +323,13 @@ async function callThisOneFirst(orderId) {
     where: { status: 'PENDING' },
     _min: { availableAt: true },
   });
-  const front = new Date((earliest._min.availableAt ?? new Date()).getTime() - 60_000);
+  // AHEAD OF THE QUEUE **AND IN THE PAST**. A no-answer re-queue is
+  // scheduled forward by the retry backoff (CC-2), so on a queue whose
+  // only entry is that one, "earliest minus a minute" is still in the
+  // future and `pullNext` correctly hands back nothing — which presents
+  // as "the order left the call queue" on the second ring.
+  const earliestAt = earliest._min.availableAt ?? new Date();
+  const front = new Date(Math.min(earliestAt.getTime(), Date.now()) - 60_000);
   await prisma.callQueueEntry.updateMany({
     where: { orderId, status: 'PENDING' },
     data: { availableAt: front },
@@ -582,6 +615,61 @@ async function receiveAndFinalize(awb, staffToken, disposition) {
 }
 
 /**
+ * Rebuild the call-cap parcel once its review has been ANSWERED.
+ *
+ * D5's video presses "Keep trying", which RESOLVES the review — and
+ * `handleNdrCap` upserts with `update: {}`, so a resolved review is
+ * never reopened. Ringing the order back to the cap therefore parks it
+ * at AWAITING_SELLER_DECISION again with NOTHING OPEN on `/holds`, and
+ * the video cannot be re-taken. (The order is not stranded: the
+ * product's own `sweepOrphans` expires a parked order with no open
+ * review on the TTL. It is simply not filmable.)
+ *
+ * So this one parcel is REBUILT rather than resumed — and it is the only
+ * one that can be, which is the whole argument for doing it here and
+ * nowhere else: it was never confirmed, so it carries no waybill, no
+ * picked stock, no wallet entry and no courier booking. Deleting it
+ * costs a phone call that never connected. Every other lifecycle parcel
+ * does carry those, which is why `ensureLifecycleParcels` refuses to
+ * rewind one.
+ *
+ * Nothing happens while the parcel is exactly right: paused, with a
+ * review still open to answer. Anything else — answered, or stopped
+ * part-way through its ring sequence — is rebuilt, so this parcel is
+ * deterministic rather than merely resumable.
+ */
+async function rebuildStaleReviewParcel(sellerId, ref, want, log) {
+  const order = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: ref },
+    select: {
+      id: true,
+      status: true,
+      orderNumber: true,
+      earlyReservationReview: { select: { status: true } },
+    },
+  });
+  if (order === null) return;
+  const review = order.earlyReservationReview ?? null;
+  // Exactly right: paused, with a review still open to answer.
+  if (order.status === want && review !== null && review.status === 'OPEN') return;
+  const why =
+    order.status !== want
+      ? `mid-calling at ${order.status}`
+      : `an answered review (${review?.status ?? 'none'})`;
+
+  await prisma.$transaction([
+    prisma.earlyReservationReview.deleteMany({ where: { orderId: order.id } }),
+    prisma.callAttempt.deleteMany({ where: { orderId: order.id } }),
+    prisma.callQueueEntry.deleteMany({ where: { orderId: order.id } }),
+    prisma.orderCharge.deleteMany({ where: { orderId: order.id } }),
+    prisma.orderItem.deleteMany({ where: { orderId: order.id } }),
+    prisma.orderEvent.deleteMany({ where: { orderId: order.id } }),
+    prisma.order.deleteMany({ where: { id: order.id } }),
+  ]);
+  log(`  · ${ref} had ${why} — rebuilt from scratch`);
+}
+
+/**
  * Build the six lifecycle parcels, or leave alone the ones that exist.
  *
  * `log` is passed in so the caller owns the seeding's voice.
@@ -599,6 +687,9 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
   }
 
   for (const parcel of LIFECYCLE_PARCELS) {
+    if (parcel.noAnswerToCap === true)
+      await rebuildStaleReviewParcel(sellerId, parcel.ref, parcel.want, log);
+
     const existing = await prisma.order.findFirst({
       where: { sellerId, sellerOrderRef: parcel.ref },
       select: { id: true, status: true, orderNumber: true },
@@ -674,15 +765,17 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
         that stops a loop running away.
       */
       for (let i = 0; i < attempts; i += 1) {
-        if ((await statusOf(order.id)) !== 'PENDING_CONFIRMATION') break;
+        if (!STILL_CALLABLE.has(await statusOf(order.id))) break;
         const assignmentId = await pullOwnCall(order.id, staffToken);
         if (assignmentId === null) {
           throw new Error(`${parcel.ref} left the call queue before attempt ${i + 1}`);
         }
         await recordAttempt(assignmentId, staffToken, 'NO_ANSWER', 'Rang out — nobody picked up');
       }
-      const reached = await statusOf(order.id);
-      log(`  · ${parcel.ref} rang ${attempts} times → ${reached}`);
+      const rang = await prisma.callAttempt.count({ where: { orderId: order.id } });
+      log(
+        `  · ${parcel.ref} rang ${rang} time${rang === 1 ? '' : 's'} → ${await statusOf(order.id)}`,
+      );
       continue;
     }
 

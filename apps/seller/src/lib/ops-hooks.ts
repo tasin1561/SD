@@ -143,6 +143,8 @@ export interface WithdrawalRequestView {
 export interface ReviewView {
   readonly id: string;
   readonly orderId: string;
+  /** The order's own number — what a person can read, quote and search. */
+  readonly orderNumber: string | null;
   readonly status: EarlyReservationReviewStatus;
   readonly attemptCount: number;
   readonly heldQty: number;
