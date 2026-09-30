@@ -33,8 +33,8 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (31):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
-F1, F2, F3, F5, G1–G5. Every one is listed in its own entry below with what it
+**Filmed so far (32):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
+F1, F2, F3, F5, G1–G6. Every one is listed in its own entry below with what it
 covers and what its seeding does.
 
 **SECTION D IS COMPLETE.** D4 landed 2026-09-30 and brought the lifecycle to
@@ -44,18 +44,22 @@ actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
 unwound. Read D4's entry before filming anything else that presses a courier
 button.
 
-**The next entry is G6, and it is the heaviest thing left in the seller app —
-cost it before starting.** After it: G7, then E5, then B3/B4/B5/B6/B7 and
-C1/C2/C7, then section H onward.
+**The next entry is G7.** After it: E5, then B3/B4/B5/B6/B7 and C1/C2/C7, then
+section H onward.
 
-**What G6 needs**, in the order a session would have to build it: a store USER
-who has actually signed in (`standingStoreFor` invites one and nobody accepts
-it), `reseller.orders_enabled` switched on for this seller — it is seeded FALSE
-and switching it on is a `PATCH /admin/sellers/:id/settings/…` — a store ORDER
-placed through `POST /store/orders`, and then a request raised against it from
-the store side. Only the last of those is short. G7 then needs those store
-orders driven through D0's lifecycle so the scorecards have outcomes to divide
-by.
+**G6 landed 2026-09-30 and built the whole store-order world**, which is most of
+what G7 needs: `storeRequestsWorldFor` in `seed-demo-data.mjs` opens a SECOND
+reseller store (`Pune Silk Studio`), signs its owner in, switches
+`reseller.orders_enabled` on for this seller, publishes and accepts terms,
+prices one product for it, and places three orders — one of them driven the
+whole way to OUT_FOR_DELIVERY through `driveOrderToOutForDelivery`, the new
+export on `lib/lifecycle.mjs`. **What G7 still needs is OUTCOMES**: its
+scorecards divide by orders whose fate is known, so at least one store order has
+to reach DELIVERED and one has to come back. Nothing in that world does yet —
+the delivery parcel is deliberately parked out for delivery for ever, because
+G6's take re-uses it. **Give G7 its OWN parcels rather than moving G6's**, for
+exactly the reason D4's entry gives: a video that spends another video's world
+is a video that breaks it.
 
 **E5 is the only entry in E with no seeding at all**: it needs a consignment
 RECEIVED and then BILLED with some of its units shipped, so `/freight` shows a
@@ -66,16 +70,23 @@ and is itself unwritten.
 or its take runs against a box that has never been driven. The seven D/E slugs
 already there are the worked examples.
 
-**And add it to `STORE_REQUIRED_SLUGS` when it needs a reseller store**, which
-is the same idea one section over: `standingStoreFor` opens the store, prices
-three products on the default list, and wipes the per-product terms, the
-published terms versions and the action policy — everything G3, G4 and G5 write
-on camera. G6 and G7 join that list; G1 and G2 must NOT, because they build a
-store and an unpriced row on camera and would collide with what it seeds.
+**And add it to `STORE_REQUIRED_SLUGS` when it needs the STANDING reseller
+store**, which is the same idea one section over: `standingStoreFor` opens the
+store, prices three products on the default list, and wipes the per-product
+terms, the published terms versions and the action policy — everything G3, G4
+and G5 write on camera. G1 and G2 must NOT be in it, because they build a store
+and an unpriced row on camera and would collide with what it seeds.
+
+**G6 and G7 use `STORE_ORDER_SLUGS` instead, and a DIFFERENT store.** A store
+with an order on it can never have its terms versions deleted again (RS-4's
+RESTRICT), which is exactly what `standingStoreFor` does on every run — so
+putting store orders on the standing store would break G4 permanently. `Pune
+Silk Studio` is the one that trades; `Kolkata Silk Room` is the one that gets
+configured on camera. Keep them apart.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
-**Filming these screens is finding real bugs at a steady rate — eighteen so
+**Filming these screens is finding real bugs at a steady rate — twenty so
 far, plus six in the seeding itself.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -90,6 +101,15 @@ as a literal in the copy over a setting that is per seller and per currency —
 beside a second return path that charged a DIFFERENT fee and named no figure at
 all — and a refund's ledger note naming its ticket by uuid, which is the SAME
 defect as the order one, in a second place, found by filming the wallet.
+**And, on 2026-09-30, the one that had never worked at all**: the seller's
+"Waiting on you" queue threw the moment any store asked for a change, and
+React's error boundary took the WHOLE page with it — so the two queues beside
+it became unreachable too, while the nav badge carried on counting rows nobody
+could open. Its list endpoint returned the raw database rows, typed
+`unknown[]`, where the screen and every other reader of that request expect the
+map the view builds. **A return type that promises nothing cannot disagree with
+a client that assumes something**, which is how it shipped and why nothing
+caught it.
 **Budget time for the fix as well as the film.**
 
 **The recurring shape is worth naming: a value that is CLOSE ENOUGH most of the
@@ -1411,18 +1431,73 @@ whole matrix, so "restates the whole matrix task by task" was false; it now says
 is both true and a better thing to teach. The take's only net change is
 `cancel` going to No, and the confirm shows exactly that one line.
 
-### G6. Answering what a store has asked · `needs demo data`
+### G6. Answering what a store has asked · **FILMED** — `answer-what-a-store-asked.mp4`
 
 **Promise** — you can clear the queue of decisions stores are waiting on.
-**Length** 3 min. **Prerequisites** G5.
-**Needs** at least one task set to "needs my approval" **and** a store that has
-raised something. The heaviest seeding in the section: a store user, a store
-order, and a request against it.
-**Covers** `/reseller-stores/requests` and its three families — cancels and
-call questions and issues, delivery asks, and order and address changes —
-approve (restating what approving will do) and reject (which requires a reason;
-the store is told either way). The live badge count in the nav is the reason
-the queue does not sit unread.
+**Length** 3 min 07 s (14 scenes). **Prerequisites** G5.
+**Covers** `/reseller-stores/requests` and its three families — cancels and call
+questions and issues, delivery asks, and order and address changes. It
+**approves** one (the confirmation restating the store, the order and what
+approving will DO), **turns one down** (which needs a reason, and the store
+reads it), and **reads** the third, because the third is a comparison rather
+than a decision. The nav badge is the bookend: it is on every screen, which is
+why this queue does not sit unread.
+
+**Which row is answered and which is only read is a SEEDING decision as much as
+a teaching one**, and it is what makes the take repeatable at all:
+
+- the **cancel** is APPROVED, which ends that order — so the seeding places a
+  new one, numbered, on the next run and leaves the spent one exactly as it is
+  (the D4 rule: forward motion, never a rewind). It is the cheapest order in
+  the library to remake, because nothing is reserved before confirmation
+  (ORD-10).
+- the **delivery ask** is TURNED DOWN, which changes NOTHING about the parcel —
+  so the expensive one (a real waybill against the simulator, a pick, the pack
+  bench, a handover scan and two scans on the road) is re-used for ever and
+  only the ask is raised again. Approving it would have asked the courier to
+  turn a parcel round, and the next take would have needed a whole new parcel.
+- the **issue** and the **order change** are read and not answered, so they
+  stand from one take to the next.
+
+**It films a SECOND reseller store, `Pune Silk Studio`, and that is not
+decoration.** G4's seeding DELETES every terms version of the store it
+configures, so its take can publish "version 1" — and an order snapshots the
+version it was placed under through a RESTRICT foreign key (RS-4). The moment a
+store has an order, that delete is refused BY THE DATABASE. Putting G6's orders
+on the standing store would therefore have made G4's own seed throw on its next
+run, and G4 could never be re-taken. G4's entry named this trap and ended
+"there are no store orders until G6"; the answer is to keep the two worlds
+apart rather than weaken a delete that is right. It also reads better — the
+queue's first column is the STORE, and a column with one value in it teaches
+nothing.
+
+**Its seeding is the heaviest in the library**, and every step is a refusal the
+product makes if it is skipped: a store USER who has actually signed in (a store
+whose invitation nobody accepted can do nothing), `reseller.orders_enabled`
+switched on for this seller (SET-1, seeded FALSE, fails closed — it guards
+money), terms PUBLISHED and ACCEPTED (`RESELLER_TERMS_NOT_READY` until both),
+one product enabled in the store's catalogue at a price of its own, and an
+action policy saying the seller wants to see these tasks first. Only then can
+the store place anything.
+
+**The invitation token is not recoverable, and the seeding says so out loud.**
+`store_user_invitations.token` holds a SHA-256; the plaintext exists only in the
+email, and there is no mail here. So the seed mints a plaintext of its own,
+writes its hash onto the invitation, and goes through the PRODUCT'S OWN
+acceptance endpoint with it — which creates the user, hashes the password,
+attaches the role and opens the session. Only the delivery of the token is
+faked.
+
+**`clearPreviousOrders` had to learn a second protected prefix.** `RSH-STORE-`
+joins `RSH-LIFE-`, and protecting it is not an economy — it is a REFUSAL: a
+reseller order carries held requests, a terms snapshot and its store's money
+rows, none of which that function's delete list knows about, so sweeping one
+would fail on a foreign key half way through some OTHER video's seed run.
+
+**Two bugs, both found by opening the screen** — see [Bugs found](#bugs-found-while-establishing-feasibility).
+The queue CRASHED outright as soon as any store asked for a change, taking the
+two working queues down with it; and one store appeared under two different
+names in one stack of tables.
 
 ### G7. How your stores are doing · `needs demo data`
 
@@ -2246,6 +2321,30 @@ batch rather than while planning it:
   profile video uploads would have appeared as a broken frame — in a tutorial
   about uploading a logo, which is the worst possible place for it. The shim
   now serves the bytes back as a `data:` URL.
+
+**And two from filming G6 (2026-09-30), both in the seller's "Waiting on you"
+queue — the screen that queue exists to be.**
+
+- **The page CRASHED the moment any store asked for an order or address
+  change**, and took the two queues beside it down with it: React's error
+  boundary replaced the whole page with "This page did not load", while the nav
+  badge went on counting rows nobody could reach. The cause is one line:
+  `SellerAddressChangeDecisionService.listPending` returned the RAW Prisma rows,
+  typed `Promise<readonly unknown[]>`, where every other reader of that request
+  — the store's own portal, the decision path, the notice — gets the `fields`
+  MAP that `toView` builds. The screen read `request.fields[k]` on an object
+  that was not there. **`unknown[]` is what let it ship**: a return type that
+  promises nothing cannot disagree with a client that assumes something, and the
+  client's own interface was a claim rather than a check. The queue is fixed and
+  typed, the payload now names the NON-address things a change moves
+  (`otherChanges`, from the server's own labels — a change that moved only the
+  quantities rendered an empty cell above an Approve button), and the page
+  defends itself against an absent `fields` as well. Pinned by
+  `store-address-change.spec.ts`, proved red on the old code.
+- **One store appeared under two names in one stack of tables.** The delivery-ask
+  column printed the store's plain `name` while the two tables either side of it
+  printed `displayName ?? name`, so `Kolkata Silk Room` and `Silk Room` read as
+  two different businesses on one screen. The payload already carried both.
 
 **Two curriculum errors, both from trusting a description over the code**: the
 seller roles editor has 41 permissions in seven groups and not 68 in ten (that

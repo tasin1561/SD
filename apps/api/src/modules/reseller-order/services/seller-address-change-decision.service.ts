@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { ActorType, StoreAddressChangeStatus } from '@skydrop/db';
+import type { OrderStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
@@ -40,6 +41,35 @@ import {
  * and the loser is told so rather than quietly editing the order twice.
  */
 
+/**
+ * One waiting correction as the seller's queue reads it: the view every
+ * other reader gets, plus the order it is ABOUT and the store that asked.
+ *
+ * The order's current recipient block is what the proposal is compared
+ * against, which is the whole job of that screen.
+ */
+export interface PendingAddressChange extends AddressChangeRequestView {
+  readonly order: {
+    readonly orderNumber: string;
+    readonly status: OrderStatus;
+    readonly recipientName: string;
+    readonly recipientPhoneE164: string;
+    readonly recipientAltPhoneE164: string | null;
+    readonly recipientEmail: string | null;
+    readonly recipientAddressLine1: string;
+    readonly recipientAddressLine2: string | null;
+    readonly recipientLandmark: string | null;
+    readonly recipientCity: string;
+    readonly recipientStateProvince: string;
+    readonly recipientPostalCode: string;
+  } | null;
+  readonly store: {
+    readonly id: string;
+    readonly name: string;
+    readonly displayName: string | null;
+  } | null;
+}
+
 /** The whole row — every column `toView` and the edit need. */
 type RequestRow = Awaited<
   ReturnType<PrismaService['client']['storeAddressChangeRequest']['findUniqueOrThrow']>
@@ -64,9 +94,23 @@ export class SellerAddressChangeDecisionService {
    * the question seller staff are actually answering is "is the new one
    * better than the one the parcel carries today" — and they cannot
    * answer it from the proposal alone.
+   *
+   * ── IT GOES THROUGH `toView`, AND THAT IS THE WHOLE FIX ──────────
+   * This returned the RAW Prisma rows, typed `unknown[]`, for as long as
+   * the queue has existed. A raw row carries the proposal as ten flat
+   * `recipient*` COLUMNS; every reader of this queue — the store's own
+   * portal, the decision path, the notice — reads it as the `fields` MAP
+   * that `toView` builds, and so does the seller's screen. So the screen
+   * did `request.fields[k]` on an object that was not there and threw
+   * "Cannot read properties of undefined", which React turns into the
+   * page's error boundary: the WHOLE queue went down, taking the two
+   * queues that were working with it, while the nav badge carried on
+   * counting rows nobody could reach. `unknown[]` is what let it ship —
+   * a return type that promises nothing cannot disagree with a client
+   * that assumes something. Found on 2026-09-30 by filming the screen.
    */
-  async listPending(sellerId: string): Promise<readonly unknown[]> {
-    return this.prisma.client.storeAddressChangeRequest.findMany({
+  async listPending(sellerId: string): Promise<readonly PendingAddressChange[]> {
+    const rows = await this.prisma.client.storeAddressChangeRequest.findMany({
       where: { sellerId, status: StoreAddressChangeStatus.PENDING },
       orderBy: { createdAt: 'asc' },
       take: 200,
@@ -90,6 +134,11 @@ export class SellerAddressChangeDecisionService {
         store: { select: { id: true, name: true, displayName: true } },
       },
     });
+    return rows.map((row) => ({
+      ...this.requests.toView(row),
+      order: row.order,
+      store: row.store,
+    }));
   }
 
   async approve(

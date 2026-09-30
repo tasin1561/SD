@@ -149,6 +149,32 @@ async function openStandingStore(page, stage) {
 }
 
 /**
+ * What G6's take reaches for, in the store's own words.
+ *
+ * Each is the text a ROW carries, because that is the only stable way to
+ * name one: the queue is oldest-first and the cancel order is REMADE on
+ * every take (its own take approves it and ends it), so "the first row"
+ * points at a different order every time. Keep in step with
+ * `STORE_REQUEST_ORDERS` in seed-demo-data.mjs.
+ */
+const STORE_REQUEST = {
+  cancelAskedTo: 'call the order off',
+  issueAskedTo: 'raise an issue with Skydrop',
+  deliveryAskedFor: 'Send the parcel back',
+  reason:
+    'The customer has not said no to us — our call centre is still trying her, and a return costs the fee both ways. Give it two more days.',
+};
+
+/** One waiting request, found by what it says rather than where it sits. */
+async function storeRequestRow(page, asked) {
+  const row = page.getByRole('row').filter({ hasText: asked }).first();
+  await row.waitFor({ state: 'visible', timeout: 25_000 });
+  await row.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(700);
+  return row;
+}
+
+/**
  * The deal G4 publishes.
  *
  * The shares are a real-looking arrangement rather than round numbers
@@ -4897,6 +4923,162 @@ export const FLOWS = {
 
       async outro({ page, stage }) {
         await stage.dwellOn(page.getByRole('link', { name: /^Waiting on you/ }).first(), 3200);
+      },
+    },
+  },
+
+  /**
+   * G6 — the queue of things reseller stores are waiting on.
+   *
+   * The take SPENDS one of its four rows: approving the cancel ends that
+   * order, so the seeding places a new one (numbered) on the next run.
+   * The delivery ask is TURNED DOWN rather than approved, and that is a
+   * seeding decision as much as a teaching one — rejecting changes
+   * nothing about the parcel, so the expensive one (a real waybill, a
+   * warehouse run and two scans on the road) is re-used for ever.
+   *
+   * Rows are found BY ORDER NUMBER, never by position: the queue is
+   * ordered oldest-first and a re-take's cancel order is a NEW order,
+   * so "the first row" is not a stable way to name anything here.
+   */
+  'answer-what-a-store-asked': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-queue'({ page, stage }) {
+        const link = page.getByRole('link', { name: /^Waiting on you/ }).first();
+        await stage.dwellOn(link, 1600);
+        await stage.clickIt(link, { after: 1800 });
+        await page.waitForURL(/\/reseller-stores\/requests$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The HEADER's own count, which only renders once all three
+        // queues have answered — so this is the gate that proves the
+        // page has its rows, not merely that the route resolved.
+        const waiting = page.getByText(/\d+ waiting/).first();
+        await waiting.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(waiting, 2400);
+      },
+
+      async 'three-queues'({ page, stage }) {
+        await stage.dwellOn(page.locator('.rs-kpis').first(), 3400);
+      },
+
+      async 'only-held'({ page, stage }) {
+        await stage.dwellOn(page.getByText(/What your Reseller stores have asked/).first(), 3400);
+      },
+
+      async 'cancel-row'({ page, stage }) {
+        const row = await storeRequestRow(page, STORE_REQUEST.cancelAskedTo);
+        await stage.dwellOn(row, 3600);
+      },
+
+      async 'approve-open'({ page, stage }) {
+        const row = await storeRequestRow(page, STORE_REQUEST.cancelAskedTo);
+        await stage.clickIt(row.getByRole('button', { name: 'Approve' }).first(), { after: 1400 });
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Approve' }).first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // The CONSEQUENCE sentence, which is what the narration is
+        // about — a dialog that is merely open says nothing about it.
+        await page
+          .getByText(/Approving runs it exactly as if the store had done it itself/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(dialog, 3400);
+      },
+
+      async approved({ page, stage }) {
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Approve' }).first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Approve', exact: true }).first(), {
+          after: 1600,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 30_000 });
+        // The toast first, while it is still up — it carries the
+        // sentence about the store having been told. It fades, so it
+        // cannot be what the scene RESTS on.
+        await stage
+          .dwellOn(page.getByText(/Approved and carried out/).first(), 2200)
+          .catch(() => {});
+        // The row LEAVING is the proof it was carried out. A toast fades
+        // and a closed dialog says nothing.
+        await page
+          .getByRole('row')
+          .filter({ hasText: STORE_REQUEST.cancelAskedTo })
+          .first()
+          .waitFor({ state: 'detached', timeout: 30_000 })
+          .catch(() => {});
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.rs-kpis').first(), 3000);
+      },
+
+      async 'issue-row'({ page, stage }) {
+        const row = await storeRequestRow(page, STORE_REQUEST.issueAskedTo);
+        await stage.dwellOn(row, 3400);
+      },
+
+      async 'delivery-row'({ page, stage }) {
+        const row = await storeRequestRow(page, STORE_REQUEST.deliveryAskedFor);
+        await stage.dwellOn(row, 3600);
+      },
+
+      async 'reject-open'({ page, stage }) {
+        const row = await storeRequestRow(page, STORE_REQUEST.deliveryAskedFor);
+        await stage.clickIt(row.getByRole('button', { name: 'Reject' }).first(), { after: 1400 });
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Turn down' }).first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(dialog, 3000);
+      },
+
+      async 'reject-type'({ page, stage }) {
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Turn down' }).first();
+        // BY ROLE AND NAME, not `getByLabel(..., { exact: true })`: the
+        // field carries a required mark, so its accessible name is not
+        // the label text and an exact match finds nothing at all.
+        await stage.typeIn(
+          dialog.getByRole('textbox', { name: /Your reason/ }).first(),
+          STORE_REQUEST.reason,
+          { after: 900 },
+        );
+        await stage.dwellOn(dialog, 2600);
+      },
+
+      async rejected({ page, stage }) {
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Turn down' }).first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Turn it down' }).first(), {
+          after: 1600,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // "Nothing to answer here" is what that queue says once its only
+        // ask has gone, and it is the sentence the narration claims.
+        const done = page.getByText('Nothing to answer here').first();
+        await done.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(done, 2800);
+      },
+
+      async 'change-row'({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: 'Landmark line' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row.locator('.rs-changes').first(), 4000);
+      },
+
+      async outro({ page, stage }) {
+        // The BADGE, which is the first thing the line is about and the
+        // one thing on this page that follows a person to every other.
+        await stage.dwellOn(page.getByRole('link', { name: /^Waiting on you/ }).first(), 3400);
       },
     },
   },

@@ -64,6 +64,20 @@ export interface AddressChangeRequestView {
   readonly patch: Record<string, unknown> | null;
   /** The keys it proposes, for a screen that lists them. */
   readonly changes: readonly string[];
+  /**
+   * The NON-recipient things it moves, in a person's words
+   * (2026-09-30) — "what is in the parcel", "the cash to collect".
+   *
+   * A change may move products, quantities and money as well as an
+   * address (ORD-6 as amended 2026-09-18), and the seller's queue lists
+   * the recipient fields with a before and an after. Everything else had
+   * nowhere to be shown at all, so a change that ONLY moved the
+   * quantities rendered an empty cell above an Approve button — a change
+   * somebody would be agreeing to without being able to see it. The
+   * labels are `OTHER_LABEL`'s, which is also what the notice to the
+   * seller is written from, so the two cannot disagree.
+   */
+  readonly otherChanges: readonly string[];
   readonly decisionNote: string | null;
   readonly sellerDecidedAt: string | null;
   readonly appliedAt: string | null;
@@ -276,6 +290,9 @@ export class StoreAddressChangeService {
       // A row held before `patch` existed proposed only recipient fields,
       // so its own columns ARE the whole change.
       changes: Object.keys(patch ?? fields),
+      otherChanges: Object.keys(patch ?? fields)
+        .filter((k) => !(RECIPIENT_KEYS as readonly string[]).includes(k))
+        .map((k) => OTHER_LABEL[k] ?? k),
       decisionNote: row.decisionNote,
       sellerDecidedAt: row.sellerDecidedAt?.toISOString() ?? null,
       appliedAt: row.appliedAt?.toISOString() ?? null,

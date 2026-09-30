@@ -125,7 +125,12 @@ export interface StoreActionRequestRow {
   readonly reason: string;
   readonly createdAt: string;
   readonly order: { readonly orderNumber: string; readonly recipientName: string } | null;
-  readonly resellerStore: { readonly id: string; readonly name: string } | null;
+  readonly resellerStore: {
+    readonly id: string;
+    readonly name: string;
+    /** What a customer reads on the parcel, when the store has one. */
+    readonly displayName: string | null;
+  } | null;
 }
 
 const KEY = ['seller-reseller-stores'] as const;
@@ -272,8 +277,19 @@ export type AddressField =
 export interface StoreAddressChangeRow {
   readonly id: string;
   readonly reason: string;
-  /** Only the fields this correction proposes. */
+  /** Only the RECIPIENT fields this correction proposes. */
   readonly fields: Partial<Record<AddressField, string>>;
+  /**
+   * The other things it moves, in the server's own words — "what is in
+   * the parcel", "the cash to collect".
+   *
+   * A store may change the order itself and not only where it is going
+   * (ORD-6 as amended 2026-09-18), and `fields` holds none of that. It
+   * is optional here because a row answered by an older API carries
+   * none; an absent list is drawn as no other changes rather than as a
+   * crash, which is the failure this whole payload has already had once.
+   */
+  readonly otherChanges?: readonly string[];
   readonly createdAt: string;
   /** The order as it reads NOW — what the proposal is compared against. */
   readonly order: {
@@ -282,7 +298,9 @@ export interface StoreAddressChangeRow {
     readonly recipientName: string;
     readonly recipientPhoneE164: string;
     readonly recipientAddressLine1: string;
-    readonly recipientAddressLine2: string;
+    /** Nullable in the database, so nullable here — it is drawn as "no
+     * current value" rather than as the word null. */
+    readonly recipientAddressLine2: string | null;
     readonly recipientCity: string;
     readonly recipientStateProvince: string;
     readonly recipientPostalCode: string;

@@ -598,7 +598,11 @@ function RequestRow({
     }
   }
 
-  const storeName = request.resellerStore?.name ?? '—';
+  // The SAME name the other two queues print (`displayName ?? name`).
+  // This column read the plain `name` while its neighbours read the
+  // display name, so one store appeared under two names in one stack of
+  // tables and read as two different businesses.
+  const storeName = request.resellerStore?.displayName ?? request.resellerStore?.name ?? '—';
   return (
     <Tr>
       <Td className="rs-strong">{storeName}</Td>
@@ -735,7 +739,7 @@ const CURRENT_VALUE: Partial<
   recipientName: (o) => o.recipientName,
   recipientPhoneE164: (o) => o.recipientPhoneE164,
   recipientAddressLine1: (o) => o.recipientAddressLine1,
-  recipientAddressLine2: (o) => o.recipientAddressLine2,
+  recipientAddressLine2: (o) => o.recipientAddressLine2 ?? '',
   recipientCity: (o) => o.recipientCity,
   recipientStateProvince: (o) => o.recipientStateProvince,
   recipientPostalCode: (o) => o.recipientPostalCode,
@@ -825,7 +829,17 @@ function AddressRow({
 
   const order = request.order;
   const storeName = request.store?.displayName ?? request.store?.name ?? '—';
-  const changes = ALL_FIELDS.filter((k) => request.fields[k] !== undefined);
+  // `fields` was ABSENT from this payload for as long as the queue
+  // existed (fixed 2026-09-30, API side) and reading it threw, which took
+  // the whole page down — all three queues, not only this one. Defended
+  // here as well as fixed there: a queue that cannot draw one row must
+  // still draw the other two.
+  const fields = request.fields ?? {};
+  const changes = ALL_FIELDS.filter((k) => fields[k] !== undefined);
+  // Everything that is NOT an address: products, quantities, the money
+  // the customer pays. Named by the server, so this and the notice the
+  // store gets cannot disagree about what moved.
+  const otherChanges = request.otherChanges ?? [];
 
   // The comparison IS the decision — nobody can approve a correction they
   // cannot check against what the parcel says now. The confirmation shows
@@ -834,17 +848,31 @@ function AddressRow({
   const changeList = (
     <ul className="rs-changes">
       {changes.map((k) => {
-        const now = order === null ? undefined : CURRENT_VALUE[k]?.(order);
+        const now = order === null || order === undefined ? undefined : CURRENT_VALUE[k]?.(order);
         return (
           <li key={k}>
             <span className="rs-changes__field">{FIELD_LABEL[k]}: </span>
-            {now === undefined || now === '' ? null : (
+            {now === undefined || now === null || now === '' ? null : (
               <span className="rs-changes__was">{now} → </span>
             )}
-            <span className="rs-changes__now">{request.fields[k] ?? ''}</span>
+            <span className="rs-changes__now">{fields[k] ?? ''}</span>
           </li>
         );
       })}
+      {/*
+        A change that moves only the contents or the money listed
+        NOTHING — an empty cell above an Approve button, which is a
+        change somebody would be agreeing to without being able to see
+        it. No before-and-after here on purpose: the proposal is a patch
+        over items and figures, and inventing a one-line "was" for it
+        would be a summary we made up.
+      */}
+      {otherChanges.map((label) => (
+        <li key={label}>
+          <span className="rs-changes__field">Also changing: </span>
+          <span className="rs-changes__now">{label}</span>
+        </li>
+      ))}
     </ul>
   );
 

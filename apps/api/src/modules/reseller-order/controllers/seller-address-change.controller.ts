@@ -21,7 +21,10 @@ import { SellerJwtGuard } from '../../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../../common/types/request';
 import { DecideAddressChangeDto } from '../dto/address-change.dto';
-import { SellerAddressChangeDecisionService } from '../services/seller-address-change-decision.service';
+import {
+  SellerAddressChangeDecisionService,
+  type PendingAddressChange,
+} from '../services/seller-address-change-decision.service';
 import type { AddressChangeRequestView } from '../services/store-address-change.service';
 
 /**
@@ -58,7 +61,7 @@ export class SellerAddressChangeController {
       'Address corrections your stores are waiting on, oldest first — with the order’s CURRENT ' +
       'details, so the change can be compared against what the parcel carries today',
   })
-  list(@CurrentSeller() seller: AuthenticatedSeller): Promise<readonly unknown[]> {
+  list(@CurrentSeller() seller: AuthenticatedSeller): Promise<readonly PendingAddressChange[]> {
     return this.svc.listPending(seller.id);
   }
 

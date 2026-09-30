@@ -295,6 +295,43 @@ describe('SellerAddressChangeDecisionService — the answer', () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
+  /**
+   * THE QUEUE'S OWN PAYLOAD (2026-09-30).
+   *
+   * `listPending` returned the RAW Prisma rows, typed `unknown[]`, so the
+   * proposal arrived as ten flat `recipient*` columns where every other
+   * reader of this request — and the screen — expects the `fields` map
+   * `toView` builds. The seller's page did `request.fields[k]`, threw,
+   * and React took the WHOLE page down: the two queues beside this one
+   * went with it, while the nav badge carried on counting rows nobody
+   * could reach. Found by filming the screen.
+   *
+   * Pinned as the SHAPE rather than as one key, because the shape is the
+   * contract three readers share.
+   */
+  it('the waiting list carries the proposal as a map, not as raw columns', async () => {
+    const row = {
+      ...pendingRow(),
+      patch: { recipientAddressLine1: '42 New Street', items: [{ quantity: 2 }] },
+      order: { orderNumber: ORDER.orderNumber, status: 'PENDING_CONFIRMATION' },
+      store: { id: 'store-1', name: 'Kolkata Silk Room', displayName: 'Silk Room' },
+    };
+    const prisma = makePrisma({ findMany: jest.fn().mockResolvedValue([row]) });
+    const { svc } = build(jest.fn(), prisma);
+    const [waiting] = await svc.listPending('seller-1');
+    expect(waiting?.fields).toEqual({
+      recipientAddressLine1: '42 New Street',
+      recipientPostalCode: '560001',
+    });
+    // And the things that are NOT an address, in words, or a change that
+    // moved only the contents would render an empty cell above Approve.
+    expect(waiting?.otherChanges).toEqual(['what is in the parcel']);
+    // The order it is about travels with it — the comparison IS the
+    // decision.
+    expect(waiting?.order?.orderNumber).toBe(ORDER.orderNumber);
+    expect(waiting?.store?.name).toBe('Kolkata Silk Room');
+  });
+
   it('rejecting tells the store and never edits the order', async () => {
     const apply = jest.fn();
     const { svc, decided } = build(apply);

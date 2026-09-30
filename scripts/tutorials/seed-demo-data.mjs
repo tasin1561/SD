@@ -22,10 +22,17 @@
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createHash, randomBytes } from 'node:crypto';
 import { prisma, argon2 } from './lib/deps.mjs';
 import { MOCK_ROOT } from './lib/spaces-shim.mjs';
 import { API, call } from './lib/api.mjs';
-import { ensureLifecycleParcels, lifecycleReport, LIFECYCLE_PARCELS } from './lib/lifecycle.mjs';
+import {
+  driveOrderToOutForDelivery,
+  ensureLifecycleParcels,
+  lifecycleReport,
+  LIFECYCLE_PARCELS,
+} from './lib/lifecycle.mjs';
+import { clearLoginThrottle } from './lib/clear-login-throttle.mjs';
 
 /** The staff account the seeding needs — goods receipts are received by ops, not by the seller. */
 const OPS = { email: 'tutorial-ops@skydrop.local', password: 'Tutorial-Ops-2026' };
@@ -223,6 +230,93 @@ export const RESELLING = {
 };
 
 /**
+ * The SECOND reseller store — the one whose requests G6 answers and
+ * whose figures G7 reads. Keep in step with `REQUEST_STORE` in flows.mjs.
+ *
+ * ── WHY A SECOND STORE AND NOT THE STANDING ONE ──────────────────────
+ * Because G4's seeding DELETES every terms version of the store it
+ * configures, and an order snapshots the version it was placed under
+ * through a RESTRICT foreign key (RS-4). The moment a store has an
+ * order, that delete is refused BY THE DATABASE — so putting G6's orders
+ * on the standing store would make G4's own seed throw on its next run,
+ * and G4 could never be re-taken. The CURRICULUM entry for G4 named this
+ * exact trap and ended "there are no store orders until G6"; this is
+ * G6, and the answer is to keep the two worlds apart rather than to
+ * weaken a delete that is right.
+ *
+ * It also reads better: the queue's first column is the STORE, and a
+ * column with one value in it teaches nothing about what it is for.
+ *
+ * G1's video opens a store on camera and its narration never names a
+ * figure, so a second store standing in the list costs it nothing; G3,
+ * G4 and G5 find their store BY NAME.
+ */
+export const REQUEST_STORE = {
+  storeName: 'Pune Silk Studio',
+  displayName: 'Silk Studio',
+  contactEmail: 'hello@punesilkstudio.test',
+  contactPhone: '+919833022155',
+  inviteEmail: 'anjali@punesilkstudio.test',
+  inviteName: 'Anjali Deshpande',
+  /** Forced on every run, exactly as the demo seller's is. */
+  password: 'Store-Demo-2026',
+  /** The one product this store sells. Stocked, and the lifecycle SKU. */
+  sku: 'RSH-JAMDANI-IVORY',
+  transferPriceInr: '1850',
+  minRetailInr: '2400',
+  maxRetailInr: '3200',
+  suggestedRetailInr: '2800',
+};
+
+/**
+ * The three store orders G6's queue is about, keyed by FAMILY.
+ *
+ * Each family is one row on the screen, and each is re-made only when
+ * the previous take spent it — see `storeRequestsWorldFor`. The refs
+ * carry a counter, because a spent order is RETIRED rather than
+ * rewound (the D4 rule): a cancelled order keeps its number, its events
+ * and its history and simply stops being the one this video films.
+ */
+export const STORE_REQUEST_ORDERS = {
+  cancel: {
+    family: 'RSH-STORE-CANCEL',
+    recipientName: 'Ritu Chatterjee',
+    phone: '+919845070011',
+    line1: '44, Ballygunge Place',
+    line2: 'Opposite the park gate, the green door',
+    postalCode: '560025',
+    note: 'The customer rang us to say she has already bought one locally.',
+  },
+  change: {
+    family: 'RSH-STORE-CHANGE',
+    recipientName: 'Sanjay Mehta',
+    phone: '+919845070022',
+    line1: '9, Church Street',
+    line2: 'Above the bakery, first floor',
+    postalCode: '560001',
+    /** What the store proposes instead — only fields that really differ. */
+    newLine2: 'Second floor, the door on the left past the bakery',
+    newPhone: '+919845070099',
+    reason: 'The customer rang: she has moved up a floor, and the old number is her husband’s.',
+    issueSubject: 'Parcel has not moved for four days',
+    issueBody:
+      'Tracking has said the same thing since Tuesday and the customer has rung us twice about it.',
+  },
+  delivery: {
+    family: 'RSH-STORE-DELIVERY',
+    recipientName: 'Deepa Ranganathan',
+    phone: '+919845070033',
+    line1: '12, Infantry Road',
+    line2: 'Next to the old post office, second gate',
+    postalCode: '560001',
+    reason: 'The customer has stopped answering and has told us she no longer wants it.',
+  },
+};
+
+/** The videos that need the second store, its orders and their held requests. */
+const STORE_ORDER_SLUGS = new Set(['answer-what-a-store-asked']);
+
+/**
  * What the CATALOGUE IMPORT video uploads. Keep in step with
  * `fixtures/rangpur-catalogue.csv` — the preview's figures are narrated
  * word for word, so the file and the words move together or not at all.
@@ -277,6 +371,18 @@ const LIFECYCLE_REF_PREFIX = 'RSH-LIFE-';
     );
   }
 }
+
+/**
+ * References this function must never sweep.
+ *
+ * `RSH-LIFE-` is D0's parcels, which cost a real courier booking and a
+ * warehouse run. `RSH-STORE-` is G6's store orders, and protecting those
+ * is not an economy — it is a REFUSAL: a reseller order carries held
+ * requests, a terms snapshot and its store's money rows, none of which
+ * this function's delete list knows about, so sweeping one would fail on
+ * a foreign key half way through somebody else's seed run.
+ */
+const PROTECTED_REF_PREFIXES = [LIFECYCLE_REF_PREFIX, 'RSH-STORE-'];
 
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
@@ -1347,6 +1453,487 @@ async function standingStoreFor(sellerId, sellerToken) {
   }
 }
 
+/** The master switch RS-5 guards store orders with (SET-1, seeded FALSE). */
+const RESELLER_ORDERS_KEY = 'reseller.orders_enabled';
+
+/**
+ * G6's world: a second reseller store with three orders on it, each
+ * carrying something its seller has to answer.
+ *
+ * WHAT IT HAS TO BUILD, in the order it has to be built: a store user
+ * who has actually SIGNED IN (a store whose invitation nobody accepted
+ * can do nothing at all), the master switch `reseller.orders_enabled` —
+ * seeded FALSE and fail-closed, because it guards money — terms
+ * PUBLISHED and ACCEPTED (an order is refused until both,
+ * `RESELLER_TERMS_NOT_READY`), one product enabled in the store's
+ * catalogue at a price of its own, and a policy saying the seller wants
+ * to see these tasks first. Only then can the store place anything.
+ *
+ * ── HOW IT STAYS RE-TAKEABLE ─────────────────────────────────────────
+ * The video answers exactly two of the four rows, and WHICH two is a
+ * seeding decision as much as a teaching one:
+ *
+ *   · it APPROVES the cancel, which ends that order — so that family
+ *     gets a NEW order on the next run, numbered, and the spent one is
+ *     left exactly as it is. Forward motion, never a rewind (the D4
+ *     rule). It is also the cheapest order in the library to remake:
+ *     nothing is reserved before confirmation (ORD-10).
+ *   · it REJECTS the delivery ask, which changes NOTHING about the
+ *     parcel — so the expensive one (a real courier booking, a warehouse
+ *     run and two simulator scans) is re-used for ever and only the ask
+ *     is raised again.
+ *   · the issue and the order change are READ and not answered, so they
+ *     stand from one take to the next.
+ */
+async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
+  if (!STORE_ORDER_SLUGS.has(slug ?? '')) return;
+  const log = (m) => console.log(m);
+  const token = await sellerToken();
+  const storeId = await ensureRequestStore(sellerId, token, log);
+  const storeToken = await ensureStoreSession(storeId, log);
+
+  await call(`/admin/sellers/${sellerId}/settings/${RESELLER_ORDERS_KEY}`, {
+    method: 'PATCH',
+    token: staffToken,
+    body: {
+      valueType: 'BOOLEAN',
+      value: true,
+      note: 'Tutorial demo world — the reseller-store videos place store orders.',
+    },
+  });
+
+  await ensureStoreTerms(storeId, token, storeToken, log);
+  const variantId = await ensureStoreCatalogue(sellerId, storeId, token, log);
+
+  // What the seller wants to see first — the G5 lesson applied. Only a
+  // task set to "ask me first" ever reaches this queue, so every row the
+  // video films is a row this policy put there.
+  await call(`/seller/reseller-stores/${storeId}/action-policy`, {
+    method: 'PUT',
+    token,
+    body: {
+      recall: 'DIRECT',
+      orderChange: 'ASK_SELLER',
+      cancel: 'ASK_SELLER',
+      callCapDecision: 'ASK_SELLER',
+      chaseSkydrop: 'ASK_SELLER',
+      reattempt: 'ASK_SELLER',
+      sendBack: 'ASK_SELLER',
+    },
+  });
+
+  await ensureHeldCancel(sellerId, storeToken, variantId, log);
+  await ensureHeldChangeAndIssue(sellerId, storeToken, variantId, log);
+  await ensureHeldDeliveryAsk(sellerId, storeToken, staffToken, variantId, log);
+}
+
+/** The store itself, opened through the real endpoint (`initialStatusFor`). */
+async function ensureRequestStore(sellerId, sellerTok, log) {
+  const existing = await prisma.sellerStore.findFirst({
+    where: {
+      sellerId,
+      name: REQUEST_STORE.storeName,
+      kind: 'RESELLER',
+      deletedAt: null,
+    },
+    select: { id: true, status: true },
+  });
+  if (existing !== null) {
+    // PAUSED refuses new orders (RS-1), and G6 places them.
+    if (existing.status !== 'ACTIVE') {
+      await call(`/seller/reseller-stores/${existing.id}/resume`, {
+        method: 'POST',
+        token: sellerTok,
+      });
+      log(`  · resumed "${REQUEST_STORE.storeName}" (it was ${existing.status})`);
+    }
+    return existing.id;
+  }
+  const created = await call('/seller/reseller-stores', {
+    method: 'POST',
+    token: sellerTok,
+    body: {
+      name: REQUEST_STORE.storeName,
+      displayName: REQUEST_STORE.displayName,
+      contactEmail: REQUEST_STORE.contactEmail,
+      contactPhone: REQUEST_STORE.contactPhone,
+      invite: {
+        email: REQUEST_STORE.inviteEmail,
+        fullName: REQUEST_STORE.inviteName,
+        roleKey: 'owner',
+      },
+    },
+  });
+  log(`  · opened the "${REQUEST_STORE.storeName}" store`);
+  return created.store?.id ?? created.id;
+}
+
+/**
+ * A signed-in store user, and a token to act as them.
+ *
+ * THE INVITATION TOKEN IS NOT RECOVERABLE, and that is the interesting
+ * part. `store_user_invitations.token` holds a SHA-256 of it; the
+ * plaintext exists only in the email, and there is no mail here. So the
+ * seeding mints a plaintext of its own, writes its hash onto the
+ * invitation, and then goes through the PRODUCT'S OWN acceptance
+ * endpoint with it — which is what creates the user, hashes the
+ * password, attaches the role and opens the session. Only the delivery
+ * of the token is faked; everything the endpoint does is real.
+ *
+ * On later runs the user exists, so the password is force-set (exactly
+ * as `ensureSeller` does for the seller) and this signs in normally.
+ */
+async function ensureStoreSession(storeId, log) {
+  const user = await prisma.storeUser.findFirst({
+    where: { storeId, email: REQUEST_STORE.inviteEmail, deletedAt: null },
+    select: { id: true },
+  });
+  if (user === null) {
+    const invitation = await prisma.storeUserInvitation.findFirst({
+      where: { storeId, email: REQUEST_STORE.inviteEmail, usedAt: null, deletedAt: null },
+      select: { id: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (invitation === null) {
+      throw new Error(
+        `No open invitation for ${REQUEST_STORE.inviteEmail} — the store was opened without one, ` +
+          'which the create DTO is supposed to refuse.',
+      );
+    }
+    const plaintext = randomBytes(32).toString('base64url');
+    await prisma.storeUserInvitation.update({
+      where: { id: invitation.id },
+      data: {
+        token: createHash('sha256').update(plaintext, 'utf8').digest('hex'),
+        expiresAt: new Date(Date.now() + 7 * 86_400_000),
+      },
+    });
+    const session = await call('/auth/store/invitations/accept', {
+      method: 'POST',
+      body: {
+        token: plaintext,
+        password: REQUEST_STORE.password,
+        fullName: REQUEST_STORE.inviteName,
+      },
+    });
+    log(`  · ${REQUEST_STORE.inviteName} accepted her invitation to "${REQUEST_STORE.storeName}"`);
+    return session.accessToken;
+  }
+
+  await prisma.storeUser.update({
+    where: { id: user.id },
+    data: { passwordHash: await hash(REQUEST_STORE.password), emailVerifiedAt: new Date() },
+  });
+  return storeLogin(log);
+}
+
+/**
+ * Sign the store user in, clearing the local rate-limit counter if it
+ * is what refused.
+ *
+ * Store login is throttled like every other (5 per 15 minutes per
+ * email + IP), and a seed run costs one of those — so the third seed of
+ * a quarter of an hour, which is exactly what "check, seed, check, seed,
+ * take" produces, would otherwise be refused. The counter is the local
+ * Redis one the recording pipeline already clears before every video.
+ */
+async function storeLogin(log) {
+  const body = { email: REQUEST_STORE.inviteEmail, password: REQUEST_STORE.password };
+  try {
+    return (await call('/auth/store/login', { method: 'POST', body })).accessToken;
+  } catch (e) {
+    if (!/429|too many|ThrottlerException/i.test(String(e))) throw e;
+    log('  · store sign-in was rate-limited; clearing the local counter and trying once more');
+    await clearLoginThrottle({ log: () => {} });
+    return (await call('/auth/store/login', { method: 'POST', body })).accessToken;
+  }
+}
+
+/**
+ * Terms published by the seller and accepted by the store.
+ *
+ * Both halves are required before a single order can be placed
+ * (`orderReadiness`), and neither is something this can write by hand:
+ * versions are numbered and append-only (RS-4), and the acceptance
+ * records who accepted and from where. So it publishes only when there
+ * is none, and accepts only when the version in force is unaccepted.
+ */
+async function ensureStoreTerms(storeId, sellerTok, storeTok, log) {
+  const view = await call(`/seller/reseller-stores/${storeId}/terms`, { token: sellerTok });
+  if (view.current === null || view.current === undefined) {
+    await call(`/seller/reseller-stores/${storeId}/terms`, {
+      method: 'POST',
+      token: sellerTok,
+      body: {
+        deliveryFeeStorePercent: '50',
+        returnFeeStorePercent: '40',
+        customerReturnFeeStorePercent: '100',
+        codFeeStorePercent: '50',
+        codTaxStorePercent: '100',
+        instantPayFeeStorePercent: '100',
+        storeCreditTrigger: 'AFTER_DELIVERY',
+        storeCreditDays: 3,
+        sellerCreditTrigger: 'AFTER_DELIVERY',
+        sellerCreditDays: 3,
+        note: 'Opening terms.',
+        basedOnVersion: 0,
+      },
+    });
+    log(`  · published version 1 of "${REQUEST_STORE.storeName}"’s terms`);
+  }
+  const mine = await call('/store/terms', { token: storeTok });
+  const current = mine.current;
+  // `acceptance`, not `acceptedAt` — the version view carries WHO
+  // accepted and when as an object, and reading a key that is not there
+  // made this re-accept on every run and say so in the log.
+  if (current != null && current.acceptance == null) {
+    await call(`/store/terms/${current.id}/accept`, { method: 'POST', token: storeTok });
+    log(`  · the store accepted version ${current.version}`);
+  }
+}
+
+/** One product, enabled for this store at a price of its own. */
+async function ensureStoreCatalogue(sellerId, storeId, sellerTok, log) {
+  const variant = await prisma.productVariant.findFirst({
+    where: { skuCode: REQUEST_STORE.sku, product: { sellerId } },
+    select: { id: true },
+  });
+  if (variant === null) {
+    throw new Error(`No ${REQUEST_STORE.sku} for this seller — the catalogue seeding runs first.`);
+  }
+  // A price OF ITS OWN rather than the seller's default list, so this
+  // store's catalogue does not depend on what G2's take last did to that
+  // list — G2 clears a default price on every run.
+  await call(`/seller/reseller-stores/${storeId}/catalogue/${variant.id}`, {
+    method: 'PUT',
+    token: sellerTok,
+    body: {
+      enabled: true,
+      priceOverride: {
+        transferPriceInr: REQUEST_STORE.transferPriceInr,
+        minRetailInr: REQUEST_STORE.minRetailInr,
+        maxRetailInr: REQUEST_STORE.maxRetailInr,
+        suggestedRetailInr: REQUEST_STORE.suggestedRetailInr,
+      },
+      stockMode: 'SHARED',
+      hiddenPercent: 0,
+    },
+  });
+  log(`  · ${REQUEST_STORE.sku} is on "${REQUEST_STORE.storeName}"’s shelf`);
+  return variant.id;
+}
+
+/** The newest order of one family, whatever became of it. */
+async function newestStoreOrder(sellerId, family) {
+  return prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: { startsWith: `${family}-` } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, orderNumber: true, status: true, sellerOrderRef: true },
+  });
+}
+
+/** Place one, numbered after whatever is already parked under that family. */
+async function placeStoreOrder(sellerId, storeTok, variantId, spec, log) {
+  const placed = await prisma.order.count({
+    where: { sellerId, sellerOrderRef: { startsWith: `${spec.family}-` } },
+  });
+  const order = await call('/store/orders', {
+    method: 'POST',
+    token: storeTok,
+    body: {
+      recipientName: spec.recipientName,
+      recipientPhoneE164: spec.phone,
+      recipientAddressLine1: spec.line1,
+      // ORD-5: line two is the LANDMARK and is required.
+      recipientAddressLine2: spec.line2,
+      recipientPostalCode: spec.postalCode,
+      paymentMode: 'COD',
+      codAmountInr: REQUEST_STORE.suggestedRetailInr,
+      sellerOrderRef: `${spec.family}-${placed + 1}`,
+      items: [
+        {
+          variantId,
+          quantity: 1,
+          retailUnitPriceInr: Number(REQUEST_STORE.suggestedRetailInr),
+        },
+      ],
+    },
+  });
+  log(
+    `  · ${REQUEST_STORE.displayName} placed ${order.orderNumber} (${spec.family}-${placed + 1})`,
+  );
+  return { id: order.id, orderNumber: order.orderNumber, status: order.status };
+}
+
+/** Is one of this store's held requests still waiting for an answer? */
+async function hasPendingRequest(orderId, kind) {
+  const row = await prisma.storeOrderRequest.findFirst({
+    where: { orderId, kind, status: 'PENDING' },
+    select: { id: true },
+  });
+  return row !== null;
+}
+
+/**
+ * The held CANCEL — the row the video APPROVES.
+ *
+ * Approving ends the order, so this family is remade whenever the one
+ * it finds is no longer callable off. The spent one keeps its number and
+ * its history and is simply not this video's order any more.
+ */
+async function ensureHeldCancel(sellerId, storeTok, variantId, log) {
+  const spec = STORE_REQUEST_ORDERS.cancel;
+  let order = await newestStoreOrder(sellerId, spec.family);
+  if (order !== null && order.status !== 'PENDING_CONFIRMATION') {
+    log(
+      `  · ${order.sellerOrderRef} is ${order.status} — a previous take answered it; a fresh one follows`,
+    );
+    order = null;
+  }
+  if (order === null) order = await placeStoreOrder(sellerId, storeTok, variantId, spec, log);
+  if (await hasPendingRequest(order.id, 'CANCEL')) {
+    log(`  · ${order.orderNumber} already has a cancel waiting`);
+    return;
+  }
+  await call(`/store/orders/${order.id}/cancel`, {
+    method: 'POST',
+    token: storeTok,
+    body: { reason: 'CUSTOMER_REQUESTED', note: spec.note },
+  });
+  log(`  · the store has asked to call ${order.orderNumber} off`);
+}
+
+/**
+ * The held ORDER CHANGE and the held ISSUE, both on one order.
+ *
+ * Neither is answered on camera, so this order is stable across takes
+ * and only tops up whichever request is missing. They can share an order
+ * because they are different things in different tables — the one-open
+ * rule is per KIND for a request and per ORDER for a correction.
+ */
+async function ensureHeldChangeAndIssue(sellerId, storeTok, variantId, log) {
+  const spec = STORE_REQUEST_ORDERS.change;
+  let order = await newestStoreOrder(sellerId, spec.family);
+  if (order !== null && order.status !== 'PENDING_CONFIRMATION') {
+    log(`  · ${order.sellerOrderRef} is ${order.status} — a fresh one follows`);
+    order = null;
+  }
+  if (order === null) order = await placeStoreOrder(sellerId, storeTok, variantId, spec, log);
+
+  const openChange = await prisma.storeAddressChangeRequest.findFirst({
+    where: { orderId: order.id, status: { in: ['PENDING', 'APPROVED'] } },
+    select: { id: true },
+  });
+  if (openChange === null) {
+    // Only the fields that really DIFFER. A patch carrying a value the
+    // order already holds renders "9, Church Street → 9, Church Street"
+    // on the queue, which is a before-and-after that teaches the
+    // opposite of what it is there for.
+    await call(`/store/orders/${order.id}/recipient`, {
+      method: 'PATCH',
+      token: storeTok,
+      body: {
+        recipientAddressLine2: spec.newLine2,
+        recipientPhoneE164: spec.newPhone,
+        reason: spec.reason,
+      },
+    });
+    log(`  · the store has asked to correct ${order.orderNumber}`);
+  }
+
+  if (!(await hasPendingRequest(order.id, 'RAISE_ISSUE'))) {
+    await call('/store/issues', {
+      method: 'POST',
+      token: storeTok,
+      body: { orderId: order.id, subject: spec.issueSubject, description: spec.issueBody },
+    });
+    log(`  · the store has asked to raise an issue on ${order.orderNumber}`);
+  }
+}
+
+/**
+ * The held DELIVERY ASK — the row the video TURNS DOWN.
+ *
+ * Its parcel is the expensive one: a real waybill against the local
+ * simulator, a pick, the pack bench, a handover scan and two scans on
+ * the road, because `DeliveryActionService.request` refuses anything
+ * that is not out for delivery or freshly failed. Turning the ask down
+ * leaves all of that untouched, so the parcel is re-used and only the
+ * ask is raised again — which is why the video rejects this one and
+ * approves the cheap one.
+ */
+async function ensureHeldDeliveryAsk(sellerId, storeTok, staffToken, variantId, log) {
+  const spec = STORE_REQUEST_ORDERS.delivery;
+  const usable = new Set(['OUT_FOR_DELIVERY', 'DELIVERY_FAILED']);
+  let order = await newestStoreOrder(sellerId, spec.family);
+
+  // A parcel the courier has already been told to return is spent: its
+  // status does not move when that happens (CUR-11), so the status alone
+  // cannot tell. `courierCancelledAt` is stamped only on a real reply.
+  const turnedRound =
+    order === null
+      ? false
+      : (await prisma.shipment.findFirst({
+          where: {
+            orderShipments: { some: { orderId: order.id } },
+            supersededAt: null,
+            courierCancelledAt: { not: null },
+          },
+          select: { id: true },
+        })) !== null;
+
+  if (order !== null && (turnedRound || !RESUMABLE_TO_DELIVERY.has(order.status))) {
+    log(
+      `  · ${order.sellerOrderRef} is ${order.status}${turnedRound ? ' and already turned round' : ''}` +
+        ' — a fresh parcel follows',
+    );
+    order = null;
+  }
+  if (order === null) order = await placeStoreOrder(sellerId, storeTok, variantId, spec, log);
+
+  if (!usable.has(order.status)) {
+    console.log('\nDriving the store’s parcel out for delivery (this takes a minute)…');
+    const out = await driveOrderToOutForDelivery({ orderId: order.id, staffToken, log });
+    if (!usable.has(out.status ?? '')) {
+      throw new Error(
+        `The store's parcel is ${out.status}, not out for delivery — a delivery ask cannot be raised on it.`,
+      );
+    }
+  }
+
+  const pending = await prisma.orderDeliveryActionRequest.findFirst({
+    where: { orderId: order.id, status: 'PENDING', needsSellerApproval: true },
+    select: { id: true },
+  });
+  if (pending !== null) {
+    log(`  · ${order.orderNumber} already has a delivery ask waiting`);
+    return;
+  }
+  await call(`/store/orders/${order.id}/actions`, {
+    method: 'POST',
+    token: storeTok,
+    body: { action: 'RTO', reason: spec.reason },
+  });
+  log(`  · the store has asked for ${order.orderNumber} to be sent back`);
+}
+
+/**
+ * States the delivery parcel can be carried forward from.
+ *
+ * Deliberately narrower than the lifecycle's own list: a parcel already
+ * delivered, returned or cancelled cannot be asked about, and picking up
+ * one abandoned mid-warehouse is how a seed corrupts stock.
+ */
+const RESUMABLE_TO_DELIVERY = new Set([
+  'PENDING_CONFIRMATION',
+  'CALL_NO_RESPONSE',
+  'CALL_RESCHEDULED',
+  'CONFIRMED',
+  'DISPATCHED',
+  'OUT_FOR_DELIVERY',
+  'DELIVERY_FAILED',
+]);
+
 /**
  * Undo the CATALOGUE IMPORT video, which leaves more behind than any
  * other: products, variants, an import job, a saved column mapping and
@@ -1479,7 +2066,10 @@ async function clearPreviousOrders(sellerId) {
     // take. Every one is past dispatch and would be "left alone" by the
     // status filter below anyway — but named, one line per take, in a
     // log whose job is to say what a take left behind.
-    where: { sellerId, NOT: { sellerOrderRef: { startsWith: LIFECYCLE_REF_PREFIX } } },
+    where: {
+      sellerId,
+      NOT: { OR: PROTECTED_REF_PREFIXES.map((p) => ({ sellerOrderRef: { startsWith: p } })) },
+    },
     select: { id: true, orderNumber: true, status: true },
   });
   if (orders.length === 0) return;
@@ -1564,7 +2154,11 @@ async function clearDeliveryTakeArtefacts(sellerId) {
   const ids = orders.map((o) => o.id);
   if (ids.length > 0) {
     const asks = await prisma.orderDeliveryActionRequest.deleteMany({
-      where: { orderId: { in: ids } },
+      // The SELLER's own asks only. A reseller store's held ask is not
+      // a take's leftover — it is G6's seeded world, and sweeping it
+      // here would half-dismantle that world on every OTHER video's seed
+      // run, leaving a queue the G6 seeding then has to rebuild.
+      where: { orderId: { in: ids }, resellerStoreId: null },
     });
     if (asks.count > 0) {
       console.log(`  · removed a previous take's ${asks.count} delivery-action request(s)`);
@@ -2016,6 +2610,10 @@ async function main() {
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
   await integrationsWorldFor(slug, sellerId);
   await resellingWorldFor(slug, sellerId, sellerToken);
+  // G6's world — a SECOND reseller store with orders on it. Expensive
+  // (one of its three parcels goes the whole way to out-for-delivery) and
+  // so, like D0, only for the videos that need it.
+  await storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken);
 
   // D0 — the parcels sections D, E and K are about. EXPENSIVE (a real
   // courier booking and a warehouse run per parcel) and IDEMPOTENT, so

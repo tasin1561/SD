@@ -1231,6 +1231,75 @@ async function raiseOverdueFlags(sellerId, staffToken, log) {
   }
 }
 
+/**
+ * Drive ONE already-placed order all the way to OUT_FOR_DELIVERY.
+ *
+ * G6's queue has a DELIVERY ASK in it — call the customer again, try
+ * again, send it back — and `DeliveryActionService.request` refuses
+ * anything that is not out for delivery or freshly failed. So the
+ * reseller store's third order has to go the whole way: confirmed on a
+ * call, a waybill booked, picked, packed at the bench, scanned at
+ * handover, and then moved by the simulator.
+ *
+ * It is the SAME path `ensureLifecycleParcels` walks — the same call, the
+ * same box ritual, the same signed webhooks — reached through the same
+ * private helpers rather than a second copy of them. What it does NOT
+ * share is `LIFECYCLE_PARCELS`: this order is placed by a STORE, through
+ * `/store/orders`, and belongs to whoever placed it rather than to that
+ * table.
+ *
+ * IDEMPOTENT AND FORWARD-ONLY, exactly as the rest of this file: an
+ * order already out for delivery is left alone, and one in a state this
+ * cannot carry forward from is NAMED and left rather than unwound.
+ */
+export async function driveOrderToOutForDelivery({ orderId, staffToken, log }) {
+  const sim = await assertSimulator();
+  await reconcileStaleCallQueue(log);
+
+  const before = await statusOf(orderId);
+  if (before === 'OUT_FOR_DELIVERY') return { moved: false, status: before };
+  if (before !== null && !RESUMABLE_FROM.has(before)) {
+    log(`  · order is ${before}, which this cannot carry forward from — left alone`);
+    return { moved: false, status: before };
+  }
+
+  if (STILL_CALLABLE.has(before ?? '')) {
+    const assignmentId = await pullOwnCall(orderId, staffToken);
+    if (assignmentId === null) {
+      throw new Error('The order never appeared on the call queue (CC-6 enqueues on submit)');
+    }
+    await recordAttempt(assignmentId, staffToken, 'CONFIRMED', 'Customer confirmed on the phone');
+  }
+
+  // Confirming books the waybill (CUR-2b), off a queue worker.
+  await waitFor('a waybill on the store order', async () => {
+    const shipments = await call(`/admin/orders/${orderId}/shipments`, { token: staffToken });
+    return (Array.isArray(shipments) ? shipments : []).find((sh) => sh.awbNumber)?.awbNumber;
+  });
+
+  const now = await statusOf(orderId);
+  const dispatched = ALREADY_DISPATCHED.has(now ?? '')
+    ? {
+        awb: (
+          await prisma.shipment.findFirstOrThrow({
+            where: {
+              orderShipments: { some: { orderId } },
+              deletedAt: null,
+              supersededAt: null,
+              awbNumber: { not: null },
+            },
+            select: { awbNumber: true },
+          })
+        ).awbNumber,
+      }
+    : await driveToDispatched(orderId, staffToken, log);
+
+  for (const stage of ['IN_TRANSIT', 'OUT_FOR_DELIVERY']) {
+    await advance(sim, dispatched.awb, stage);
+  }
+  return { moved: true, status: await statusOf(orderId), awb: dispatched.awb };
+}
+
 /** What the pass is supposed to have produced, for a caller to check. */
 export async function lifecycleReport(sellerId) {
   const rows = await prisma.order.findMany({

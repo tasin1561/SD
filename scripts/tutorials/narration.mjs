@@ -1702,6 +1702,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'answer-what-a-store-asked',
+    title: 'Answering what a store has asked',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Once a store is running, some of what it wants to do stops with you. Everything you put on your approval arrives in one place, and until you answer it, nothing happens.',
+      },
+      {
+        id: 'open-queue',
+        say: 'It is Waiting on you, under Reselling, and it carries a count. That number is why this queue does not sit unread — it is on the sidebar of every screen you open.',
+      },
+      {
+        id: 'three-queues',
+        say: 'Three kinds of thing arrive here, and they are three different jobs. A decision to make, one that spends real money, and a comparison to check.',
+      },
+      {
+        id: 'only-held',
+        say: 'Read the line under the title. Nothing at all happens until you answer — and only the tasks you marked ask me first arrive here. Anything you let a store do itself has already been done.',
+      },
+      {
+        id: 'cancel-row',
+        say: 'The first table is the store making a decision about an order. Who asked, which order and what state it is in, what they want, and the reason in their own words.',
+      },
+      {
+        id: 'approve-open',
+        say: 'Approving asks first, and read what it says before you agree. It runs the request exactly as if the store had been allowed to do it themselves.',
+      },
+      {
+        id: 'approved',
+        say: 'Agreed, and carried out. The order is called off, the row has gone from the queue, and the store has been told — which matters, because they have a customer to ring back.',
+      },
+      {
+        id: 'issue-row',
+        say: 'The same table carries a different kind of ask entirely. The store wants something raised with Skydrop about a parcel, and approving is what actually opens it with us.',
+      },
+      {
+        id: 'delivery-row',
+        say: 'The second table is the expensive one. A parcel already out for delivery, and the store asking for it to be turned round and sent back to your warehouse.',
+      },
+      {
+        id: 'reject-open',
+        say: 'You do not have to agree. Turning it down asks for a reason, and the box will not let you send one without it.',
+      },
+      {
+        id: 'reject-type',
+        say: 'Write it for the store, not for yourself. Somebody there has to go back to a customer with your answer, and a refusal with nothing in it is a dead end for them.',
+      },
+      {
+        id: 'rejected',
+        say: 'Turned down, and sent. Nothing was done to the parcel, the courier was never asked, and the store has your reason. Either way, they find out what happened.',
+      },
+      {
+        id: 'change-row',
+        say: 'And the last table is the comparison. The store says a detail is wrong; the queue shows what the order carries today beside what they would put in its place.',
+      },
+      {
+        id: 'outro',
+        say: 'Answer them and that count clears. Leave one and it closes itself after a few days, and the store is told nobody answered — which is worse for them than a straight no.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
