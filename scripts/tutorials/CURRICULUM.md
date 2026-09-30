@@ -33,10 +33,8 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (30):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
-F1, F2, F3, F5, G1–G4. **G5 is BUILT and not yet filmed** — its seeding,
-narration and flow are committed and all it needs is `--check` twice and a
-render. Every one is listed in its own entry below with what it
+**Filmed so far (31):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
+F1, F2, F3, F5, G1–G5. Every one is listed in its own entry below with what it
 covers and what its seeding does.
 
 **SECTION D IS COMPLETE.** D4 landed 2026-09-30 and brought the lifecycle to
@@ -46,12 +44,11 @@ actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
 unwound. Read D4's entry before filming anything else that presses a courier
 button.
 
-**The next entry is G5 — and it is already written.** Seed it
-(`node scripts/tutorials/seed-demo-data.mjs what-a-store-may-do`), `--check`
-twice with a seed between, look at the frames, and render. After it: G6, G7,
-then E5, then B3/B4/B5/B6/B7 and C1/C2/C7, then section H onward.
+**The next entry is G6, and it is the heaviest thing left in the seller app —
+cost it before starting.** After it: G7, then E5, then B3/B4/B5/B6/B7 and
+C1/C2/C7, then section H onward.
 
-**G6 is the heaviest thing left in the seller app** and should be costed before
+**G6** and should be costed before
 it is started: it needs a store USER who has actually signed in, a store ORDER
 placed by them, and a request raised against it — and `reseller.orders_enabled`
 is seeded FALSE and must be switched on per seller first. G7 needs store orders
@@ -1356,14 +1353,11 @@ not on the element: its placeholder while the request is in flight is "Working
 out an example…", so waiting for the real text is what stops the scene filming
 the placeholder and calling it a worked example.
 
-### G5. What a store may do without asking · **BUILT, NOT YET FILMED**
+### G5. What a store may do without asking · **FILMED** — `what-a-store-may-do.mp4`
 
 **Promise** — you decide, per task, whether a store acts directly or needs your
 approval.
-**Length** ~2 min 45 s (14 scenes). **Prerequisites** G4.
-**Status:** the seeding, the narration and the flow are all written and
-committed; `'what-a-store-may-do'` is in `STORE_REQUIRED_SLUGS`. **What is left
-is `--check` twice and one render.**
+**Length** 2 min 43 s (14 scenes). **Prerequisites** G4.
 **Covers** the "What they can do" matrix, THREE of its seven rows rather than
 all of them: the gentlest task set to direct, the send-back set to
 needs-my-approval, and one turned off entirely. Seven rows narrated one at a
@@ -1379,6 +1373,17 @@ permissions — it is putting them back to what a store nobody has configured ha
 It also makes the page open on "Running on the defaults — you have not set this
 store yet", which is the sentence the second scene argues from and which never
 appears again once a take has saved.
+
+**READING `DEFAULT_POLICY` BEFORE WRITING THE SCRIPT CAUGHT TWO LINES THAT WOULD
+HAVE BEEN WRONG ON CAMERA**, and the lesson generalises: when a video is about a
+form's settings, read what the form OPENS ON before writing what the video does
+to it. (a) `recall` already defaults to DIRECT, so a scene claiming to choose it
+would have been a click that changes nothing under narration saying otherwise —
+it reads the row instead. (b) The save confirm lists only what CHANGED, not the
+whole matrix, so "restates the whole matrix task by task" was false; it now says
+"lists exactly what you are changing… nothing you left alone is listed", which
+is both true and a better thing to teach. The take's only net change is
+`cancel` going to No, and the confirm shows exactly that one line.
 
 ### G6. Answering what a store has asked · `needs demo data`
 
