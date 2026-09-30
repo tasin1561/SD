@@ -33,9 +33,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (35):** A1–A6, B1, B2, B4, B5, C3, C4, C5, C6, D1–D6, E1, E2,
-E3, E4, F1, F2, F3, F5, G1–G7. Every one is listed in its own entry below with
-what it covers and what its seeding does.
+**Filmed so far (36):** A1–A6, B1, B2, B4, B5, B6, C3, C4, C5, C6, D1–D6, E1,
+E2, E3, E4, F1, F2, F3, F5, G1–G7. Every one is listed in its own entry below
+with what it covers and what its seeding does.
 
 **SECTION G IS COMPLETE**, and with it the whole of the reselling side of the
 seller app.
@@ -47,11 +47,20 @@ actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
 unwound. Read D4's entry before filming anything else that presses a courier
 button.
 
-**The next entries are B6 and B7**, which are the two cheapest things left: both
-read D0's world and each writes one thing that a pre-confirmation order can be
-rebuilt from. Then B3 (run B2's import and stop), then C7, then the CONSIGNMENT
-block — C1, C2 and E5 — which is one seeding job wearing three hats and is the
-last big piece of the seller app.
+**The next entry is B7**, which DOES spend a confirmed parcel and so needs the
+`retireSpentParcel` treatment D4 established — read D4's entry before starting
+it. After it: **B3** (run B2's import and stop — the cheapest new demo data in
+the library), then **C7**, then the CONSIGNMENT block — **C1, C2 and E5** —
+which is one seeding job wearing three hats and is the last big piece of the
+seller app.
+
+**What B7 needs, having just built B6's world:** one PENDING_CONFIRMATION order
+(cancelling it releases nothing, because nothing was held — ORD-10) and one
+CONFIRMED order carrying a waybill (cancelling it returns the stock and leaves a
+live waybill for Skydrop to close with the courier — CUR-10 amendment #4).
+`RSH-LIFE-CONFIRMED` is the second one and is EXPENSIVE: its rebuild is a real
+courier booking. `editDraftWorldFor` is the pattern for the first — one order,
+created after the shared clearing, free to spend.
 
 **B4 and B5 landed 2026-09-30 and needed NO new seeding at all**, which is worth
 knowing before costing anything else in section B: D0's nine parcels already
@@ -102,7 +111,7 @@ configured on camera. Keep them apart.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
-**Filming these screens is finding real bugs at a steady rate — twenty-one so
+**Filming these screens is finding real bugs at a steady rate — twenty-two so
 far, plus six in the seeding itself.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -424,18 +433,46 @@ fourth time.**
 **One bug, found by opening the page** — see [Bugs found](#bugs-found-while-establishing-feasibility):
 a DELIVERED order carried a section heading reading "Out for delivery".
 
-### B6. Changing an order before it is confirmed · `needs demo data`
+### B6. Changing an order before it is confirmed · **FILMED** — `changing-an-order.mp4`
 
 **Promise** — you can correct anything about an order until the call centre
 confirms it, and you know when that window shuts.
-**Length** 3 min. **Prerequisites** B5.
-**Needs** an order in DRAFT or PENDING_CONFIRMATION. Today's seed produces
-these; the Edit button does not render on anything further along, so this
-tutorial is unfilmable against a confirmed order.
-**Covers** `/orders/[id]/edit` — lines, quantities, prices, customer — then
-"Save changes" versus "Save and submit", and discarding a draft behind its
-typed confirmation. The window is the lesson: after confirmation stock is held
-and a waybill is booked, and the contents stop being editable.
+**Length** 3 min 03 s (14 scenes). **Prerequisites** B5.
+**Covers** `/orders/[id]/edit` on a DRAFT: the four-step rail, the lines with the
+catalogue and its live stock underneath, changing a quantity, the payment section
+noticing that the parcel is now worth more than the amount being collected and
+offering the figure, the two lines of address help that matter most, notes, the
+action bar, and Save + submit with its confirmation. It ends on the order sitting
+in the call queue with its contents settled.
+
+**IT NEEDS A DRAFT, NOT A PENDING ORDER, and that is a real constraint rather
+than a preference.** `EditOrderForm` computes `canEdit = isDraft || isPending`
+and then renders **"Save + submit" and "Discard draft" only for a draft**; on a
+PENDING_CONFIRMATION order its own notice says the server allows the recipient
+and the notes alone. The video is about the window while everything is still
+changeable, so it needs the state where everything still is.
+
+**Its seeding is three lines and no cleanup**, which is the nicest shape in this
+file: `clearPreviousOrders` already removes every pre-dispatch order not under a
+protected prefix, and DRAFT is the first entry in `REMOVABLE_STATUSES` — so a
+take that saved it, submitted it or discarded it leaves nothing to collide with,
+and `editDraftWorldFor` simply creates a fresh one afterwards. Cheap for the same
+reason the call-cap parcel is cheap to rebuild: nothing is reserved before
+confirmation (ORD-10). The draft is seeded WITH a unit price, so the payment
+section opens agreeing with itself and the video is what makes it disagree.
+
+**One bug, and it is the largest this library has found** — see
+[Bugs found](#bugs-found-while-establishing-feasibility). **No order edit could
+be saved at all.** The check run's very first Save returned
+`[BAD_REQUEST] packageType must be one of the following values: BOX, POLYBAG,
+ENVELOPE, TUBE, CUSTOM`, and the whole screen had been unusable for as long as
+that select has existed.
+
+**`getByLabel` is SUBSTRING by default and it cost a run here too** — "Quantity
+of RSH-KANTHA-BLUE" also matches the Increase and Decrease buttons either side of
+it, so Playwright refused all three under strict mode. The quantity box is
+addressed by its ROLE (`spinbutton`). That is the third video in this library to
+be bitten by the same default.
 
 ### B7. Cancelling an order · `needs demo data`
 
@@ -2455,6 +2492,26 @@ that is correct most of the time it was written for and wrong everywhere else �
 and a render test asserting "a heading is shown" passes either way, which is why
 `deliveryPanelTitle` is now pure, exported and pinned by its WORDS
 (`delivery-panel-title.test.ts`, proved red both ways).
+
+**And the largest one yet, from filming B6 (2026-09-30): NO ORDER EDIT COULD BE
+SAVED AT ALL.** The check run's very first Save came back
+
+>   `[BAD_REQUEST] packageType must be one of the following values: BOX,
+>   POLYBAG, ENVELOPE, TUBE, CUSTOM`
+
+The seller app had invented three package types of its own — STANDARD, FRAGILE
+and DOCUMENT — over an enum that has only ever held those five, and a comment
+beside the display mapping said "the enum names the same three things", which was
+simply false. `buildPatch` sends `packageType` on EVERY save, so every save of
+every order — draft or pending, whatever had been changed — was refused, and had
+been for as long as that select existed. The order-CREATE form escaped only
+because it sends no package type at all, which is why B1 has always worked.
+
+The list now lives once in `apps/seller/src/lib/package-type.ts`, the form offers
+"Not stated" and omits the field when there is none rather than inventing one,
+and `package-type-vocabulary.test.ts` pins it **against `schema.prisma` itself**
+rather than against a copy — a second hand-written list is exactly what went
+wrong, and a test holding one would drift the same way. Proved red.
 
 **Two curriculum errors, both from trusting a description over the code**: the
 seller roles editor has 41 permissions in seven groups and not 68 in ten (that

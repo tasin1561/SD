@@ -1553,8 +1553,86 @@ async function standingStoreFor(sellerId, sellerToken) {
   }
 }
 
+/**
+ * The DRAFT order the B6 video edits on camera.
+ *
+ * A draft, not a submitted one, and that is the whole reason this exists:
+ * `EditOrderForm` computes `canEdit = isDraft || isPending` and then
+ * renders "Save + submit" and "Discard draft" ONLY for a draft; on a
+ * PENDING_CONFIRMATION order its own notice says the server allows
+ * "recipient + notes" alone. The video is about the window while
+ * everything is still changeable, so it needs the state where everything
+ * still is.
+ *
+ * NOTHING CLEARS IT SPECIALLY. `clearPreviousOrders` already removes
+ * every pre-dispatch order that is not under a protected prefix, and
+ * DRAFT is the first entry in `REMOVABLE_STATUSES` — so a take that
+ * saved it, submitted it, or discarded it leaves nothing for the next
+ * run to collide with, and this simply creates a fresh one afterwards.
+ * Cheap for the same reason the call-cap parcel is cheap to rebuild:
+ * nothing is reserved before confirmation (ORD-10).
+ */
+export const EDIT_DRAFT = {
+  ref: 'RSH-EDIT-DRAFT',
+  sku: 'RSH-KANTHA-BLUE',
+  recipientName: 'Aparna Balakrishnan',
+  phone: '+919845080011',
+  line1: '31, Dickenson Road',
+  // Deliberately VAGUE — the video corrects it on camera, and ORD-5's
+  // 2026-08-07 amendment is why: line two is the landmark, and the
+  // landmark is what decides whether a driver finds the place.
+  line2: 'Near the main road',
+  betterLine2: 'The lane beside Holy Ghost church, third gate on the left',
+  postalCode: '560042',
+  /**
+   * ONE unit at the catalogue's own price, so the draft opens looking
+   * like an ordinary order rather than a half-filled one: the seller's
+   * form pre-fills a line's unit price and the API leaves it blank, and
+   * a blank price makes the payment section open already disagreeing
+   * with itself. The video changes the QUANTITY and lets it disagree
+   * then, which is the moment worth filming.
+   */
+  unitPriceInr: '1850',
+  codAmountInr: '1850',
+};
+
 /** The master switch RS-5 guards store orders with (SET-1, seeded FALSE). */
 const RESELLER_ORDERS_KEY = 'reseller.orders_enabled';
+
+/**
+ * The draft B6 edits. Created AFTER the clearing, so it is always fresh.
+ *
+ * Through the real endpoint, which is what makes it a DRAFT at all:
+ * `OrderService.create` defaults `initialStatus` to DRAFT and the
+ * seller's own submit is a separate call the lifecycle makes and this
+ * deliberately does not.
+ */
+async function editDraftWorldFor(slug, sellerId, sellerToken) {
+  if (slug !== 'changing-an-order') return;
+  const variant = await prisma.productVariant.findFirst({
+    where: { skuCode: EDIT_DRAFT.sku, product: { sellerId } },
+    select: { id: true },
+  });
+  if (variant === null) {
+    throw new Error(`No ${EDIT_DRAFT.sku} for this seller — the catalogue seeding runs first.`);
+  }
+  const order = await call('/seller/orders', {
+    method: 'POST',
+    token: await sellerToken(),
+    body: {
+      recipientName: EDIT_DRAFT.recipientName,
+      recipientPhoneE164: EDIT_DRAFT.phone,
+      recipientAddressLine1: EDIT_DRAFT.line1,
+      recipientAddressLine2: EDIT_DRAFT.line2,
+      recipientPostalCode: EDIT_DRAFT.postalCode,
+      paymentMode: 'COD',
+      codAmountInr: EDIT_DRAFT.codAmountInr,
+      sellerOrderRef: EDIT_DRAFT.ref,
+      items: [{ variantId: variant.id, quantity: 1, unitPriceInr: EDIT_DRAFT.unitPriceInr }],
+    },
+  });
+  console.log(`  · drafted ${order.orderNumber} (${EDIT_DRAFT.ref}) for the edit video`);
+}
 
 /**
  * G6's world: a second reseller store with three orders on it, each
@@ -2867,6 +2945,7 @@ async function main() {
   const slug = process.argv[2];
   if (slug === 'find-your-way-around') await placeTourOrders(sellerToken);
   if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
+  await editDraftWorldFor(slug, sellerId, sellerToken);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
   await integrationsWorldFor(slug, sellerId);
   await resellingWorldFor(slug, sellerId, sellerToken);

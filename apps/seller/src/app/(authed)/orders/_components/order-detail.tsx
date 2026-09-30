@@ -47,6 +47,7 @@ import { OrderChargesSection } from './order-charges';
 import { OrderJourney } from './order-journey-parts';
 import { BackLink, Facts, LinkButton, MetaFact, Notice, OrdSection } from './orders-parts';
 import { serverVerdict } from '@/lib/server-verdict';
+import { packageWords } from '@/lib/package-type';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
@@ -794,20 +795,6 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
       )}
     </div>
   );
-}
-
-/** The package type in words — the enum names the same three things. */
-function packageWords(t: string): string {
-  switch (t) {
-    case 'STANDARD':
-      return 'Standard';
-    case 'FRAGILE':
-      return 'Fragile';
-    case 'DOCUMENT':
-      return 'Document';
-    default:
-      return t;
-  }
 }
 
 /**

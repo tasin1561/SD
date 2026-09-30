@@ -1954,6 +1954,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'changing-an-order',
+    title: 'Changing an order before it is confirmed',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'An order you have not sent to the call centre yet is still entirely yours. Everything on it can be corrected — and there is a moment when that stops being true.',
+      },
+      {
+        id: 'open-draft',
+        say: 'A draft is an order you have started and not submitted. It sits in your list like any other, with nothing held for it and nothing booked against it.',
+      },
+      {
+        id: 'edit',
+        say: 'Edit, and read the line under the title. A draft can be changed in full; once it is waiting on the call centre, the recipient and the notes are still yours to correct.',
+      },
+      {
+        id: 'rail',
+        say: 'Four parts to an order, and the rail says so before you scroll: what is in it, where it is going, what the customer pays, and what you want us to know.',
+      },
+      {
+        id: 'items',
+        say: 'The lines first, with the catalogue underneath it. Each product carries what you have in stock right now, because the commonest correction is one you can only make if you know that.',
+      },
+      {
+        id: 'quantity',
+        say: 'Change a quantity here rather than cancelling and starting again. A wrong product on an order nobody has confirmed is a correction, not a reason to begin twice.',
+      },
+      {
+        id: 'cod-warning',
+        say: 'And the payment section notices. The parcel is now worth more than the amount you are asking the customer for, so the page says so — and offers you the figure it worked out.',
+      },
+      {
+        id: 'use-figure',
+        say: 'Taking it makes the two agree. That sum is what the courier will ask for at the door, and nothing else on this page will remind you if it is wrong.',
+      },
+      {
+        id: 'recipient',
+        say: 'The recipient, and the two lines of help worth reading. The first line takes the address and nothing else — the PIN code decides the rest of it.',
+      },
+      {
+        id: 'landmark',
+        say: 'The second line is the landmark on its own, and it is the field that decides whether a rural address gets found at all. It is what we print for the driver.',
+      },
+      {
+        id: 'notes',
+        say: 'Notes are for the agent who rings your customer and the person who packs the box. Your customer never reads them.',
+      },
+      {
+        id: 'bar',
+        say: 'Then the bar that stays with you. Discard throws the draft away, Save keeps it a draft, and Save and submit is the one that closes the window.',
+      },
+      {
+        id: 'submit',
+        say: 'It asks first, and it asks with the two things worth checking: which order, and what the customer will be handing over.',
+      },
+      {
+        id: 'outro',
+        say: 'Submitted, and in the call queue. From here the contents are settled — stock is about to be held and a waybill booked — and Edit reaches only the customer’s own details.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

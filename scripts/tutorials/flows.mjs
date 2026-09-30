@@ -175,6 +175,16 @@ async function storeRequestRow(page, asked) {
 }
 
 /**
+ * The DRAFT order B6 edits on camera, and the landmark it rewrites.
+ * Keep in step with `EDIT_DRAFT` in seed-demo-data.mjs.
+ */
+const EDIT_DRAFT = {
+  ref: 'RSH-EDIT-DRAFT',
+  sku: 'RSH-KANTHA-BLUE',
+  betterLine2: 'The lane beside Holy Ghost church, third gate on the left',
+};
+
+/**
  * The order B5 reads, and how it is reached.
  *
  * BY ITS OWN REFERENCE, through the list's search: `RSH-LIFE-DELIVERED`
@@ -5553,6 +5563,174 @@ export const FLOWS = {
         await actions.scrollIntoViewIfNeeded();
         await page.waitForTimeout(700);
         await stage.dwellOn(actions, 3200);
+      },
+    },
+  },
+
+  /**
+   * B6 — changing an order before it is confirmed.
+   *
+   * It SPENDS its order: the take submits the draft, which is the point
+   * of the video and cannot be undone from the seller's side. That costs
+   * nothing to remake, because nothing is reserved before confirmation
+   * (ORD-10) and the shared clearing removes every pre-dispatch order
+   * that is not under a protected prefix — so `editDraftWorldFor` simply
+   * creates a fresh draft after it, every run.
+   *
+   * IT NEEDS A DRAFT AND NOT A PENDING ORDER. `EditOrderForm` computes
+   * `canEdit = isDraft || isPending` and then renders "Save + submit" and
+   * "Discard draft" only for a draft; on a pending order its own notice
+   * says the server allows the recipient and the notes alone. The video
+   * is about the window while everything is still changeable.
+   */
+  'changing-an-order': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-draft'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/orders$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.typeIn(page.getByLabel('Search orders'), EDIT_DRAFT.ref, { after: 500 });
+        await page.keyboard.press('Enter');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = page.getByRole('row').filter({ hasText: EDIT_DRAFT.ref }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(row, 3000);
+      },
+
+      async edit({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: EDIT_DRAFT.ref }).first();
+        await stage.clickIt(row.getByRole('link').first(), { after: 1600 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(page.getByRole('link', { name: 'Edit', exact: true }).first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/orders\/[0-9a-f-]+\/edit$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The page's OWN sentence about what may be changed when — which
+        // is the line the narration reads, and which renders only once the
+        // order has loaded and been found editable.
+        const rule = page.getByText(/A draft can be changed in full/).first();
+        await rule.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(rule, 3200);
+      },
+
+      async rail({ page, stage }) {
+        await stage.dwellOn(page.getByRole('navigation').last(), 3200);
+      },
+
+      async items({ page, stage }) {
+        await stage.dwellOn(page.locator('#eo-items'), 3600);
+      },
+
+      async quantity({ page, stage }) {
+        const plus = page.getByRole('button', {
+          name: `Increase Quantity of ${EDIT_DRAFT.sku}`,
+        });
+        await stage.clickIt(plus, { after: 900 });
+        await stage.clickIt(plus, { after: 1200 });
+        // The line's own quantity box, which now reads what was clicked.
+        // BY ROLE: `getByLabel` is substring by default, so "Quantity of
+        // X" also matches the Increase and Decrease buttons either side
+        // of it and Playwright refuses all three under strict mode.
+        await stage.dwellOn(
+          page.getByRole('spinbutton', { name: `Quantity of ${EDIT_DRAFT.sku}` }),
+          2800,
+        );
+      },
+
+      async 'cod-warning'({ page, stage }) {
+        // The arithmetic line, which appears ONLY while the components
+        // and the COD amount disagree — so waiting for it is what proves
+        // the quantity change actually landed.
+        const notice = page.getByText(/Items \+ delivery − advance − discount =/).first();
+        await notice.scrollIntoViewIfNeeded();
+        await notice.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(notice, 3400);
+      },
+
+      async 'use-figure'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Use ₹/ }).first(), { after: 1400 });
+        // Gone, because the two now agree. A button that is still there
+        // is a click that did nothing.
+        await page
+          .getByText(/Items \+ delivery − advance − discount =/)
+          .first()
+          .waitFor({ state: 'hidden', timeout: 20_000 })
+          .catch(() => {});
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.getByLabel('COD amount (INR)'), 3000);
+      },
+
+      async recipient({ page, stage }) {
+        const help = page.getByText(/The address only, in this order/).first();
+        await help.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(help, 3400);
+      },
+
+      async landmark({ page, stage }) {
+        await stage.typeIn(page.getByLabel('Address line 2'), EDIT_DRAFT.betterLine2, {
+          clear: true,
+          after: 900,
+        });
+        await stage.dwellOn(page.getByText(/The landmark only/).first(), 3200);
+      },
+
+      async notes({ page, stage }) {
+        const notes = page.locator('#eo-notes');
+        await notes.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(notes, 3000);
+      },
+
+      async bar({ page, stage }) {
+        await stage.dwellOn(page.locator('.ord-bar').first(), 3600);
+      },
+
+      async submit({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Save + submit' }).first(), {
+          after: 1400,
+        });
+        const dialog = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Save and submit for confirmation?' })
+          .first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(dialog, 3200);
+      },
+
+      async outro({ page, stage }) {
+        const dialog = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Save and submit for confirmation?' })
+          .first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Save + submit' }).first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The STATUS is the proof the window shut: a closed dialog says
+        // nothing about whether the order was submitted.
+        const chip = page.getByText('Pending confirmation').first();
+        await chip.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(chip, 3200);
       },
     },
   },

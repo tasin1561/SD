@@ -37,6 +37,12 @@ import {
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { serverVerdict } from '@/lib/server-verdict';
+import {
+  PACKAGE_TYPES,
+  isPackageType,
+  packageWords,
+  type PackageTypeValue,
+} from '@/lib/package-type';
 import { useStores } from '@/lib/store-hooks';
 import {
   ADDRESS_LINE_1_HINT,
@@ -117,7 +123,8 @@ interface FormState {
   discountInr: string;
   declaredValueInr: string;
   totalWeightGrams: string;
-  packageType: 'STANDARD' | 'FRAGILE' | 'DOCUMENT';
+  /** '' means the order states none, which is a legitimate answer. */
+  packageType: PackageTypeValue | '';
   isUrgent: boolean;
   sellerOrderRef: string;
   storeId: string;
@@ -164,7 +171,10 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       discountInr: d.discountInr?.toString() ?? '',
       declaredValueInr: d.declaredValueInr?.toString() ?? '',
       totalWeightGrams: d.totalWeightGrams?.toString() ?? '',
-      packageType: (d.packageType ?? 'STANDARD') as 'STANDARD' | 'FRAGILE' | 'DOCUMENT',
+      // NOT defaulted to a value: an order with no package type stated
+      // keeps none, and inventing one here would write a fact nobody
+      // gave us onto every order anybody edits.
+      packageType: isPackageType(d.packageType) ? d.packageType : '',
       isUrgent: d.isUrgent,
       sellerOrderRef: d.sellerOrderRef ?? '',
       storeId: d.storeId ?? '',
@@ -323,7 +333,10 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     body.advanceAmountInr = Number(form.advanceAmountInr) || 0;
     body.deliveryFeeInr = Number(form.deliveryFeeInr) || 0;
     body.discountInr = Number(form.discountInr) || 0;
-    body.packageType = form.packageType;
+    // Only when there IS one. Sending '' would be a 400, and sending an
+    // invented default would silently state a package type the seller
+    // never chose.
+    if (form.packageType !== '') body.packageType = form.packageType;
     body.isUrgent = form.isUrgent;
     if (form.recipientAltPhoneE164.trim())
       body.recipientAltPhoneE164 = form.recipientAltPhoneE164.trim();
@@ -737,13 +750,14 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             <Select
               label="Package type"
               value={form.packageType}
-              onChange={(e) =>
-                set('packageType', e.target.value as 'STANDARD' | 'FRAGILE' | 'DOCUMENT')
-              }
+              onChange={(e) => set('packageType', e.target.value as PackageTypeValue | '')}
             >
-              <option value="STANDARD">Standard</option>
-              <option value="FRAGILE">Fragile</option>
-              <option value="DOCUMENT">Document</option>
+              <option value="">Not stated</option>
+              {PACKAGE_TYPES.map((t) => (
+                <option key={t} value={t}>
+                  {packageWords(t)}
+                </option>
+              ))}
             </Select>
             <TextField
               label="Your reference"

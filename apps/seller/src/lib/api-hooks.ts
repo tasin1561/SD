@@ -5,6 +5,7 @@ import type {
   JourneyMilestoneView,
   JourneyParcelView,
 } from '@skydrop/ui/components';
+import type { PackageTypeValue } from './package-type';
 import {
   useInfiniteQuery,
   useMutation,
@@ -433,7 +434,7 @@ export function useSubmitOrder(): UseMutationResult<OrderView, Error, { id: stri
  */
 export type UpdateOrderInput = Partial<CreateOrderInput> & {
   readonly internalNotes?: string;
-  readonly packageType?: 'STANDARD' | 'FRAGILE' | 'DOCUMENT';
+  readonly packageType?: PackageTypeValue;
   readonly isUrgent?: boolean;
 };
 
