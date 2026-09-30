@@ -54,10 +54,19 @@ two entries marked `impractical locally` (P4's emailed six-digit code, N10's
 month close) are perfectly filmable INSIDE it — P5 can show the screens it
 cannot demonstrate.
 
-**The admin app is not running.** Bring it up on its own port (it is
-`apps/admin`, and `next start -p 3002` is the port its CP1 doc uses) and write
-down how in `README.md` — there is no staff `signIn` in `flows.mjs` yet, and no
-staff equivalent of `peek.mjs`.
+**THE ADMIN RIG IS BUILT — that half is done.** `record.mjs` takes `app:
+'admin'` on a flow and drives apps/admin on :3002 as
+`tutorial-ops@skydrop.local` (the SUPER_ADMIN the seed already makes);
+`peek.mjs --admin` photographs one admin screen and `--routes` walks several on
+ONE sign-in; `make-tutorials.sh` health-checks only the consoles a run needs.
+See [Re-running](README.md#re-running) for the two commands that start the app.
+
+**And P5's ten screens are SURVEYED.** Seven of them show the irreversible act
+today and three show an empty state, which is why P5 is now `needs demo data`
+rather than `ready` — the three rows it wants are small and listed in
+**P5's own entry at the end of section P**.
+**Read that table before writing a line of narration**; it is the whole of what
+a following agent would otherwise pay a sign-in at a time to find out.
 
 **C1 was re-taken the same evening and nothing is outstanding.** E5 bills the
 very consignment C1 films, so C1's `freight` line — which said "nothing has been
@@ -2498,18 +2507,52 @@ Feasible if the seed reads the code from the notification row, but that is
 teaching a path production does not use. **Recommend writing this one**, and
 filming only the read-only "what a collapse would move" half.
 
-### P5. What we cannot undo · `ready`
+### P5. What we cannot undo · `needs demo data` (was `ready`) · **NEXT**
 
 **Promise** — you can name every irreversible act in the admin app and say what
 it costs.
-**Length** 4 min. **Needs** nothing — it is a tour, not a demonstration.
+**Length** 4 min. **Needs** three rows that do not exist; see the survey below.
 **Covers** no clicks at all. It walks the list: god mode, finalising a return,
 completing a receipt, forcing a call outcome, packing without a scan, freeing a
 pickup day, closing a month, collapsing bins, accepting a top-up, approving a
 bank change. For each: what it writes, what it cannot take back, and what asks
-first. **This should arguably be the first admin tutorial anybody watches**,
-and it is placed last only because it makes more sense once the screens are
-familiar.
+first. **This should arguably be the first admin tutorial anybody watches**, and
+[the pick-up section](#where-to-pick-up) argues it should be the first one MADE.
+
+**THE RIG IS BUILT AND THE TEN SCREENS ARE SURVEYED (2026-09-30).** apps/admin
+is driven by `record.mjs` now — a flow says `app: 'admin'` and gets :3002 and
+`tutorial-ops@skydrop.local` — and `peek.mjs --admin --routes /a /b /c` walks
+several screens on ONE sign-in, which is what this survey used. What it found,
+route by route, is the entry's real `Needs`:
+
+| Act | Route | What is on it today |
+| --- | --- | --- |
+| God mode | `/orders/<a D0 order>` | ✅ the panel, with its own copy: "Audited CRITICAL… `hasAdminOverride` permanently — a flag that is set once and never cleared" |
+| Completing a receipt | `/warehouse/receive` | ✅ one PENDING receipt (`GR-2026-09-0001`, Test Brand) |
+| Forcing a call outcome | `/call-center/queue` | ✅ two open entries and a **Force outcome** control |
+| Packing without a scan | `/warehouse/pack` | ✅ one parcel waiting, and the station's own "a box is opened by scanning one" |
+| Freeing a pickup day | `/warehouse/pickups` | ✅ six days with **Call off**, under a paragraph that is already P5's script: "A failed attempt keeps the day claimed on purpose — when a call fails we cannot tell whether they registered it, and assuming they did not is how two vans arrive" |
+| Collapsing bins | `/warehouse/bins` | ✅ both warehouses; the collapse control is below the fold |
+| Accepting a top-up | `/topups` | ✅ one claim Waiting for review, with **Accept** |
+| **Finalising a return** | `/warehouse/rto` | ⚠️ **"Nothing waiting to be received"** — D0's returns are all past the bench |
+| **Closing a month** | `/pnl/carry-forward` | ⚠️ September is open and no month has ever been closed, so there is no close to point at |
+| **Approving a bank change** | `/bank-changes` | ⚠️ **"Nothing waiting"** — the seed clears the pending change A2 makes |
+
+So seven of the ten show the act; three show an empty state. **That is why the
+`ready` on this entry is now `needs demo data`** — a video whose whole subject is
+"what this costs to get wrong" reading "Nothing waiting" three times is the
+weakest version of it, and the frame check would say so. The three are small:
+drive one D0 parcel only as far as RTO_IN_TRANSIT and leave it AT THE DOOR
+rather than finalising it; leave A2's pending bank change in place for this slug
+instead of clearing it; and close one ended month through
+`POST /admin/treasury/pnl-periods/:month/close` (`money.pnl.close`, reason ≥ 10
+— and read PNL-CF-1 first, because a close is itself irreversible and a month
+earlier than a closed one can never be closed afterwards).
+
+**Film it with NO clicks even so.** Every one of these screens carries its own
+warning copy, written by whoever built it, and the video's job is to read that
+copy out beside what the act writes — not to press it. The pickups paragraph
+above is the model.
 
 ---
 

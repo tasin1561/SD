@@ -17,6 +17,13 @@
  *   node scripts/tutorials/peek.mjs /orders
  *   node scripts/tutorials/peek.mjs '/orders?search=RSH-LIFE-DELIVERED' out.png
  *   node scripts/tutorials/peek.mjs --admin /system-issues
+ *   node scripts/tutorials/peek.mjs --admin --routes /topups /withdrawals /pnl
+ *
+ * `--routes` takes SEVERAL and visits them on ONE sign-in, writing each
+ * to `out/verify/peek/<slug>.png` and printing each page's text under a
+ * banner. It exists for the survey a tour video needs: P5 walks ten
+ * screens, and ten separate peeks would be ten sign-ins against a login
+ * throttled at five per fifteen minutes.
  *
  * `--admin` drives apps/admin on :3002 as the tutorial OPS staff user
  * instead (`tutorial-ops@skydrop.local`, which `seed-demo-data.mjs`
@@ -54,9 +61,23 @@ const APP = admin
       password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
     };
 
-const route = args[0] ?? '/dashboard';
+const tour = args[0] === '--routes';
+if (tour) args.shift();
+const routes = tour ? args : [args[0] ?? '/dashboard'];
+if (routes.length === 0) throw new Error('--routes needs at least one route');
 await fs.mkdir(VERIFY_DIR, { recursive: true });
-const out = args[1] ?? path.join(VERIFY_DIR, admin ? 'peek-admin.png' : 'peek.png');
+const tourDir = path.join(VERIFY_DIR, 'peek');
+if (tour) await fs.mkdir(tourDir, { recursive: true });
+
+/** A route as a filename: `/warehouse/bins?x=1` → `warehouse-bins`. */
+function shotPath(route) {
+  const slug =
+    route
+      .split('?')[0]
+      .replace(/^\/|\/$/g, '')
+      .replace(/\//g, '-') || 'root';
+  return path.join(tourDir, `${slug}.png`);
+}
 
 const browser = await chromium.launch();
 // The same context the recorder uses, so what this shows is what a take
@@ -84,13 +105,19 @@ await page
   .click();
 await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
 
-await page.goto(`${APP.base}${route}`, { waitUntil: 'domcontentloaded' });
-await page.waitForLoadState('networkidle').catch(() => {});
-await page.waitForTimeout(2500);
-await page.screenshot({ path: out, fullPage: true });
+for (const route of routes) {
+  const out = tour
+    ? shotPath(route)
+    : (args[1] ?? path.join(VERIFY_DIR, admin ? 'peek-admin.png' : 'peek.png'));
+  await page.goto(`${APP.base}${route}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(2500);
+  await page.screenshot({ path: out, fullPage: true });
 
-console.log(await page.locator('body').innerText());
-console.log(`\n  shot → ${out}`);
+  if (tour) console.log(`\n${'='.repeat(70)}\n  ${route}\n${'='.repeat(70)}`);
+  console.log(await page.locator('body').innerText());
+  console.log(`\n  shot → ${out}`);
+}
 
 await context.close();
 await browser.close();
