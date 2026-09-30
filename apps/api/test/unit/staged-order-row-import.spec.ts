@@ -21,7 +21,12 @@ const GOOD_ROW = {
 };
 
 function makeService(over: AnyArgs = {}) {
-  const create = jest.fn(async () => ({ id: 'order-1' }));
+  // Declared with rest ARGS, not `()`. `jest.fn(async () => …)` infers
+  // its call tuple as `[]`, so reading `mock.calls[0]![4]` below — the
+  // options argument, which is the whole point of these two tests — is
+  // `TS2493: tuple of length 0 has no element at index 4`. Typecheck-only;
+  // the assertions themselves were always right.
+  const create = jest.fn(async (..._args: AnyArgs[]) => ({ id: 'order-1' }));
   const prisma = {
     client: {
       stagedOrderRow: {
