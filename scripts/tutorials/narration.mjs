@@ -2143,6 +2143,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'quieten-your-notifications',
+    title: 'What Skydrop tells you, and how to quieten it',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Skydrop tells you a great deal — every call, every scan, every rupee. This is where all of it lands, and where you decide how much of it you want.',
+      },
+      {
+        id: 'inbox',
+        say: 'The bell opens your inbox. Everything sent to you: what a courier did, what the warehouse checked in, and what moved in your wallet.',
+      },
+      {
+        id: 'counts',
+        say: 'How many you have not read, how many are on the page, and a button for the ones further back. It loads a screenful at a time rather than everything you have ever been sent.',
+      },
+      {
+        id: 'filters',
+        say: 'Two rows of filters. The first is simply read or unread; the second is the kinds that happen to be on this page, so it changes with what you have been sent lately.',
+      },
+      {
+        id: 'message',
+        say: 'A message is a paragraph, not a document. What kind it is, when it arrived, a link to the order it is about, and its own name at the end — that last one matters in a moment.',
+      },
+      {
+        id: 'open',
+        say: 'Click it and it opens in place, and it stops being new — because opening something is what reading it means. There is no page to go to and come back from.',
+      },
+      {
+        id: 'unread',
+        say: 'Which is what makes the unread filter useful. The one just read has gone from this list, so what is left is what you have not seen.',
+      },
+      {
+        id: 'dismiss',
+        say: 'Dismiss asks first, and it names the message. It clears it from your feed and nobody else’s — a colleague who was sent the same thing still has their copy.',
+      },
+      {
+        id: 'settings',
+        say: 'Now the other half. Settings, and read the sentence at the top, because the whole page turns on it.',
+      },
+      {
+        id: 'tiles',
+        say: 'Two separate choices. What reaches you, and what this company is emailed about. Both of them only ever take a message away — neither can turn one on that the other switched off.',
+      },
+      {
+        id: 'yours',
+        say: 'Yours first, grouped the way the messages are. Every one carries the same name you saw at the bottom of the message, so you can find the switch for the thing that is bothering you.',
+      },
+      {
+        id: 'off',
+        say: 'Switch one off and it is off. There is no save button on this page, because every flip is its own request — the page would have nothing left to do when you pressed it.',
+      },
+      {
+        id: 'company',
+        say: 'Below it, the company’s email, by category rather than by message. Flipping one of these changes what everybody here is sent, not only you — which is why it is a separate list on the same page.',
+      },
+      {
+        id: 'outro',
+        say: 'And some things cannot be switched off at all. Anything about your account, your password or the bank account we pay you into always reaches your email, and neither list contains them.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

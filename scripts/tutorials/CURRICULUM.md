@@ -33,8 +33,8 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (38):** A1–A6, B1–B7, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
-F1, F2, F3, F5, G1–G7. **SECTIONS A, B, D, F (bar F4) and G are complete.**
+**Filmed so far (39):** A1–A6, B1–B7, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
+F1–F5, G1–G7. **SECTIONS A, B, D, F and G are complete.**
 Every one is listed in its own entry below with what it covers and what its
 seeding does.
 
@@ -59,12 +59,23 @@ process → poll and stops, which is the pattern to copy whenever a video needs
 the OUTPUT of a flow another video films: drive the endpoints, never insert the
 row the worker would have written.
 
-**The next entry is C7**, then the CONSIGNMENT block — **C1, C2 and E5** —
-which is one seeding job wearing three hats and is the last big piece of the
-seller app.
+**THERE IS NO C7.** Two earlier passes over this file listed one as the next
+entry and put it in the ready list; section C runs C1 to C6 and always has. It
+is the same class of mistake the document warns about at the end — a number
+written down and then trusted — and it cost a few minutes rather than a video,
+because there was nothing to film and no page to look at. Both references are
+corrected; **when an entry is named in the pick-up order, check it has a heading
+of its own.**
 
-**What C7 needs** is written in its own entry below. It is the last small one
-in C; everything after it in the seller app is the consignment world.
+**F4 LANDED 2026-09-30 and SECTION F IS COMPLETE.** The whole of the seller app
+is now filmed except the CONSIGNMENT block — **C1, C2 and E5** — which is one
+seeding job wearing three hats and is the next thing anybody should take. C1 is
+the prerequisite for both of the others: a consignment declared, counted in
+Dhaka, dispatched and arrived in India, with the two counts deliberately
+disagreeing by one unit, and then BILLED with some of its units already shipped
+so `/freight` shows a bill that is genuinely part-owed (FRT-3's amortisation is
+what makes it part-owed). `docs/consignment-two-leg.md` and the CNS rules in
+CLAUDE.md are what it has to be built against.
 
 **B4 and B5 landed 2026-09-30 and needed NO new seeding at all**, which is worth
 knowing before costing anything else in section B: D0's nine parcels already
@@ -113,7 +124,8 @@ putting store orders on the standing store would break G4 permanently. `Pune
 Silk Studio` is the one that trades; `Kolkata Silk Room` is the one that gets
 configured on camera. Keep them apart.
 
-Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
+Still `ready` without D0: C1, C2, E5. (B3, B4 and F4 are filmed; there is no
+C7 — see above.)
 
 **Filming these screens is finding real bugs at a steady rate — twenty-eight so
 far, plus seven in the seeding itself.** Every one is on a path nothing else
@@ -1353,18 +1365,40 @@ recording is running in, so anything after it is filmed signed out. The click
 sits in the PREVIOUS scene's tail, so the final scene opens on the result rather
 than on a dialog dismissing.
 
-### F4. What Skydrop tells you, and how to quieten it · `ready`
+### F4. What Skydrop tells you, and how to quieten it · **FILMED** — `quieten-your-notifications.mp4`
 
 **Promise** — you get the notifications you want and none of the ones you do
 not.
-**Length** 3 min. **Prerequisites** A1.
-**Needs** notification rows for the inbox half; D0 supplies them. The settings
-half is filmable cold — the topic catalogue is static.
-**Covers** `/notifications` (read, unread, dismiss, the category tabs) and then
-the two grains on `/notifications/settings`, which is the whole point of the
-page: **your own** per-topic silences, and **your company's** per-category email
-preferences. These were two screens and people changed the wrong one. Also:
-switches with no Save button, because each flip is a request.
+**Length** 2 min 40 s (14 scenes). **Prerequisites** A1.
+**Needs** nothing built: D0's parcels and the nightly sweeps have filled that
+inbox many times over. What it needs is a RESET, because everything it presses
+is durable — a message read, a message dismissed, a topic silenced.
+`notificationWorldFor` puts all three back.
+**Covers** the bell, `/notifications` (the counts, the two rows of filters, a
+message opened in place, the unread filter proving it was read, and Dismiss)
+and then the two grains on `/notifications/settings`: **your own** per-topic
+silences and **your company's** per-category email. These were two screens and
+people changed the wrong one. Ends on what cannot be switched off at all.
+
+**Its seeding is the shape to copy for any video that changes a PREFERENCE.**
+The messages are UN-MARKED, never deleted: `notification_logs` is the ledger the
+NOTIF-2 dedup gate reads, and NOTIF-21 is explicit that a "delete" in this inbox
+is a dismiss for exactly that reason. The per-topic silences ARE deleted,
+because an absent `notification_subscriptions` row means the topic reaches you.
+The company's categories are **upserted back to their defaults rather than
+deleted** — and that distinction was found in a frame: deleting them looked
+right (the resolver fails open, NOTIF-15), and left the company half of the
+settings page reading "Company categories — 0" under a line describing a table,
+because nothing recreates those rows on a read.
+
+**Two flow lessons, both cheap and both general.** A `<li>` whose `id` is a
+uuidv7 cannot be addressed as `#id` — it starts with a digit, which is not a
+valid CSS identifier, and Chromium throws rather than matching nothing; use
+`[id="…"]`. And **a page-header action can share its name with a nav item**:
+`getByRole('link', { name: 'Settings' }).first()` took the sidebar's Account →
+Settings, which navigates perfectly to the wrong page, so the failure arrived as
+a URL wait timing out thirty seconds later rather than as a selector miss. The
+href is the unambiguous handle.
 
 ### F5. Letting another system place your orders · **FILMED** — `keys-and-webhooks.mp4`
 

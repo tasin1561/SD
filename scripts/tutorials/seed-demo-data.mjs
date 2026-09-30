@@ -1641,6 +1641,94 @@ async function editDraftWorldFor(slug, sellerId, sellerToken) {
 }
 
 /**
+ * F4's world — an inbox that has not been read, and no silences set.
+ *
+ * The video PRESSES: it marks a message read, dismisses one, and
+ * switches a topic and a category off. Every one of those is a durable
+ * per-person or per-company choice, so without this the second take
+ * opens on a half-read inbox with a category already silenced, under
+ * narration about turning one off.
+ *
+ * THE MESSAGES ARE NOT DELETED. `notification_logs` is the ledger the
+ * NOTIF-2 dedup gate reads, and NOTIF-21 is explicit that a "delete" in
+ * this inbox is a DISMISS for exactly that reason — removing a row would
+ * quietly let a re-emit of the same event send again. The two columns
+ * that make a row read or hidden are cleared instead, which is the same
+ * shape the product's own un-read does.
+ *
+ * The other two are row-absence defaults, so deleting really is the
+ * reset: a topic with no `notification_subscriptions` row reaches the
+ * inbox, and a category with no `seller_notification_preferences` row is
+ * emailed (`SellerNotificationPreferenceResolver` fails open — NOTIF-15,
+ * "a missing row means send").
+ *
+ * The inbox itself needs no seeding at all: D0's parcels and the nightly
+ * sweeps have filled it many times over, and this video reads whatever
+ * is there rather than naming any of it.
+ */
+/** `SellerNotificationCategory`, which the settings page lists one row per. */
+const SELLER_NOTIFICATION_CATEGORIES = [
+  'ORDER_UPDATES',
+  'SHIPMENT_UPDATES',
+  'STOCK_ALERTS',
+  'CALL_CENTER_OUTCOMES',
+  'BILLING',
+  'SYSTEM_ANNOUNCEMENTS',
+  'MARKETING',
+];
+
+async function notificationWorldFor(slug, sellerId) {
+  if (slug !== 'quieten-your-notifications') return;
+
+  const users = await prisma.sellerUser.findMany({ where: { sellerId }, select: { id: true } });
+  const userIds = users.map((u) => u.id);
+
+  const silences = await prisma.notificationSubscription.deleteMany({
+    where: { subjectType: 'SELLER_USER', subjectId: { in: userIds } },
+  });
+  /*
+    The company's categories are UPSERT-TO-DEFAULT, not deleted.
+
+    Deleting looked right — `SellerNotificationPreferenceResolver` fails
+    open, so an absent row means send (NOTIF-15) — and it left the
+    company half of the settings page EMPTY, because nothing recreates
+    those rows on a read. The video's scene about it would have been an
+    empty state under a line describing a table. Seen in a check-run
+    frame: "Company categories — 0".
+  */
+  const categories = [];
+  for (const category of SELLER_NOTIFICATION_CATEGORIES) {
+    categories.push(
+      prisma.sellerNotificationPreference.upsert({
+        where: { sellerId_category: { sellerId, category } },
+        update: {
+          emailEnabled: true,
+          inAppEnabled: true,
+          quietHoursStart: null,
+          quietHoursEnd: null,
+        },
+        create: { sellerId, category },
+      }),
+    );
+  }
+  await prisma.$transaction(categories);
+  const unread = await prisma.notificationLog.updateMany({
+    where: {
+      toInAppUserId: { in: userIds },
+      channel: 'IN_APP',
+      OR: [{ readAt: { not: null } }, { dismissedAt: { not: null } }],
+    },
+    data: { readAt: null, dismissedAt: null },
+  });
+
+  console.log(
+    `  · notifications reset: ${silences.count} topic silence(s) removed, ${categories.length} ` +
+      `category preference(s) put back to their defaults, ` +
+      `${unread.count} message(s) put back in the inbox`,
+  );
+}
+
+/**
  * B3's world — B2's import, RUN AND STOPPED.
  *
  * The bulk video uploads `fixtures/rangpur-bulk-orders.csv` on camera
@@ -3138,6 +3226,7 @@ async function main() {
   await editDraftWorldFor(slug, sellerId, sellerToken);
   await cancelWorldFor(slug, sellerId, sellerToken);
   await pendingRowsWorldFor(slug, sellerId, sellerToken);
+  await notificationWorldFor(slug, sellerId);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
   await integrationsWorldFor(slug, sellerId);
   await resellingWorldFor(slug, sellerId, sellerToken);

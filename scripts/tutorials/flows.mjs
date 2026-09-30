@@ -267,6 +267,26 @@ async function openOrderByRef(page, stage, ref) {
 }
 
 /**
+ * The topic F4 silences on camera, and the message id it carries
+ * between two scenes.
+ *
+ * `order.confirmed.seller` is the noisiest thing in a busy seller's
+ * inbox and the easiest to defend switching off — they placed the
+ * order, so they know. The LABEL is what the switch is named by
+ * (`Notify me about: …`); the KEY is what the message itself prints at
+ * its foot, which is the whole reason the scene before it points at
+ * that line. Keep in step with `NotificationTopicCatalogService`.
+ */
+const QUIET_TOPIC = { label: 'Order confirmed', key: 'order.confirmed.seller' };
+
+/**
+ * The message F4 opens, remembered so a later scene can prove it left
+ * the unread list. Module-scoped because two scenes share it and a
+ * flow's steps are given no state of their own.
+ */
+let openedNotificationId = null;
+
+/**
  * The staged row B3 fixes, and how it is found.
  *
  * BY ITS OWN REFERENCE. It is the only row waiting today, and a
@@ -6146,6 +6166,178 @@ export const FLOWS = {
         await row.waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(1000);
         await stage.dwellOn(row, 3400);
+      },
+    },
+  },
+  /**
+   * F4 — the inbox, and the two grains of quieting it.
+   *
+   * IT PRESSES, and everything it presses is durable: a message read, a
+   * message dismissed, a topic silenced. `notificationWorldFor` puts all
+   * three back — the messages are UN-marked rather than deleted
+   * (NOTIF-21: a dismiss is not a delete, because the row is the NOTIF-2
+   * dedup ledger), and the two preference tables are row-absence
+   * defaults so removing a row IS the reset.
+   *
+   * IT NAMES NO COUNT. The inbox is filled by D0's parcels and by the
+   * nightly sweeps, so how many are in it changes between takes and even
+   * between the check and the take. Every scene acts on "the first
+   * message" and the narration describes what a message carries.
+   */
+  'quieten-your-notifications': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async inbox({ page, stage }) {
+        // Through the BELL, which is how a person gets here — and the
+        // only notification control that survives on a phone (FE-7).
+        await stage.clickIt(page.getByRole('button', { name: /^Notifications/ }).first(), {
+          after: 1400,
+        });
+        await stage.clickIt(page.getByRole('link', { name: /See everything/ }).first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/notifications$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const intro = page.getByText(/what a courier did, what the warehouse checked in/).first();
+        await intro.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(intro, 3200);
+      },
+
+      async counts({ page, stage }) {
+        await stage.dwellOn(page.locator('.set-meta, .ord-meta').first(), 3400);
+      },
+
+      async filters({ page, stage }) {
+        await stage.dwellOn(page.locator('.ntf-filters').first(), 3600);
+      },
+
+      async message({ page, stage }) {
+        const first = page.locator('li.ntf-item').first();
+        await first.waitFor({ state: 'visible', timeout: 25_000 });
+        await first.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(first, 3600);
+      },
+
+      async open({ page, stage }) {
+        const first = page.locator('li.ntf-item').first();
+        // Remembered so the UNREAD scene can prove this one left that
+        // list — the feed reorders nothing, but "the first item changed"
+        // is a weaker claim than "this exact message is not here".
+        openedNotificationId = await first.getAttribute('id');
+        if (openedNotificationId === null) {
+          throw new Error('The first notification has no id — the unread scene needs one.');
+        }
+        await stage.clickIt(first.locator('.ntf-item__open'), { after: 1400 });
+        // Read is the claim: the button flips to "Mark unread" only once
+        // the server has said so.
+        await first
+          .getByRole('button', { name: /Mark unread|^Unread$/ })
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(first, 3200);
+      },
+
+      async unread({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: /^Unread/ }).first(), { after: 1600 });
+        await page.waitForTimeout(900);
+        // THE MESSAGE JUST READ IS GONE. A tab that merely highlighted
+        // would pass a gate on the tab itself.
+        // ATTRIBUTE SELECTOR, not `#id`: these ids are uuidv7 and start
+        // with a digit, which is not a valid CSS identifier — Chromium
+        // throws rather than matching nothing.
+        const still = await page.locator(`li.ntf-item[id="${openedNotificationId}"]`).count();
+        if (still !== 0) {
+          throw new Error('The message just read is still on the unread list.');
+        }
+        await stage.dwellOn(page.locator('.ntf-list').first(), 3400);
+      },
+
+      async dismiss({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: /^All$/ }).first(), { after: 1200 });
+        const first = page.locator('li.ntf-item').first();
+        await first.waitFor({ state: 'visible', timeout: 25_000 });
+        const id = await first.getAttribute('id');
+        await stage.clickIt(first.getByRole('button', { name: 'Dismiss' }), { after: 1200 });
+        const d = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Dismiss this notification?' })
+          .first();
+        await d.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(d, 2600);
+        await stage.clickIt(d.getByRole('button', { name: 'Dismiss', exact: true }).last(), {
+          after: 1600,
+        });
+        await page
+          .locator(`li.ntf-item[id="${id}"]`)
+          .waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForTimeout(700);
+      },
+
+      async settings({ page, stage }) {
+        // BY ITS HREF, not by its name. The page header's action and the
+        // sidebar's Account → Settings are both a link called "Settings",
+        // and `.first()` took the nav one — which navigates perfectly, to
+        // the wrong page, so the failure was a URL wait timing out thirty
+        // seconds later rather than a selector miss.
+        await stage.clickIt(page.locator('a[href="/notifications/settings"]').first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/notifications\/settings$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const rule = page.getByText(/Both only ever remove a message/).first();
+        await rule.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(rule, 3200);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(page.locator('.set-kpis').first(), 3800);
+      },
+
+      async yours({ page, stage }) {
+        const heading = page.getByText('What reaches you', { exact: true }).first();
+        await heading.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.getByText(QUIET_TOPIC.key, { exact: true }).first(), 3600);
+      },
+
+      async off({ page, stage }) {
+        const sw = page.getByRole('switch', { name: `Notify me about: ${QUIET_TOPIC.label}` });
+        await stage.clickIt(sw, { after: 1400 });
+        // OFF is the claim, and it is the SERVER's answer: the switch
+        // re-renders from the subscription list once the write lands.
+        await page
+          .locator(`[role="switch"][aria-label="Notify me about: ${QUIET_TOPIC.label}"]`)
+          .and(page.locator('[aria-checked="false"]'))
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(sw, 3000);
+      },
+
+      async company({ page, stage }) {
+        const heading = page.getByText("The company's email", { exact: true }).first();
+        await heading.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(heading, 3600);
+      },
+
+      async outro({ page, stage }) {
+        const never = page.getByText('Cannot be switched off', { exact: true }).first();
+        await never.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(never, 3600);
       },
     },
   },

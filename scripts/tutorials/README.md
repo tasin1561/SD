@@ -28,6 +28,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `changing-an-order.mp4` | Correcting a draft before it goes to the call centre — the quantity, the payment section noticing that the collectable no longer adds up, the landmark line that decides whether a driver finds the place, and Save + submit, which is what shuts the window. |
 | `cancelling-an-order.mp4` | Calling an order off at two points in its life, because the dialog says something different at each: waiting on the call centre it names the queue and releases nothing, confirmed it gives the held stock back. Ends on a parcel already with a driver, which has no Cancel button at all. |
 | `fix-the-rows-that-failed.mp4` | The rows a spreadsheet upload could not turn into orders — the page nothing in the nav links to, the field the import marked and why, the fix typed in, and Import, which saves the correction before it imports. Ends with the row on the orders list beside the rest of its file. |
+| `quieten-your-notifications.mp4` | The inbox everything lands in — the filters, a message opened in place (which is what reading it means), and Dismiss — and then the two separate decisions on the settings page: what reaches YOU, and what this COMPANY is emailed about. Ends on what cannot be switched off at all. |
 | `the-deal.mp4`                      | The arrangement with a reseller store — the share of each Skydrop fee they pay, worked through in rupees as you type it, when each of you is credited, and publishing a version they then have to accept. Versions are kept for ever, because placed orders are priced under the one they were placed under. |
 | `what-one-store-sells.mp4`          | Deciding what one reseller store may sell — turning a product on, giving that store a price of its own, and the two stock modes: shared with everyone, or a set-aside nobody else can touch, with a share held back from what they are shown. |
 | `read-your-wallet.mp4`              | The three tabs and why they are three — the Ledger is what happened, the other two are what has merely been asked for. Then a row at a time: a delivery charge, the COD credit and when it is actually written, the tax taken out of it, and a damage settlement. |
@@ -339,6 +340,14 @@ the file are still the words in `narration.mjs`.
   cost a full check run here (2026-09-30): the frames still showed a bug that
   had been fixed and rebuilt twenty minutes earlier.
   `ss -ltnpH 'sport = :4000'` is the honest question.
+- **An id that starts with a digit is not a CSS id selector.** These rows carry
+  uuidv7 ids, so `page.locator('li.x#01a0f2…')` makes Chromium THROW rather than
+  match nothing — `[id="…"]` is the handle.
+- **A page-header action can share its name with a nav item.**
+  `getByRole('link', { name: 'Settings' }).first()` took the sidebar's
+  Account → Settings, which navigates perfectly to the wrong page — so the
+  failure arrived as a URL wait timing out thirty seconds later rather than as a
+  selector miss. Reach for the `href` when a name is a common word.
 - **Do not `source apps/api/.env` in the shell you run `record.mjs` from.** It
   exports `SELLER_APP_URL`, which points at a dead local port, and the recorder
   then drives a browser at nothing while the seller app sits perfectly healthy
