@@ -43,6 +43,32 @@ export interface DeliveryActionRequestView {
 /** Where a delivery action applies — the shared list (see its file). */
 const REQUESTABLE_FROM = DELIVERY_ACTION_STATUSES;
 
+/**
+ * What we tell the seller we did, and WHY, when their own request needs
+ * no decision from us.
+ *
+ * One hard-coded sentence used to answer all three: "Auto-approved —
+ * returning their own parcel is the seller to decide". True of a
+ * send-back and false of the other two, which do not return anything —
+ * so a seller who asked us to ring their customer read back a note about
+ * returning a parcel, on their own order, as OUR reply to them. The note
+ * is stored and shown verbatim, so it is not a label: it is the only
+ * explanation they get.
+ *
+ * F2-exhaustive, so a fourth action has to be given its own words rather
+ * than silently inheriting somebody else's.
+ */
+function autoApprovalNote(action: DeliveryActionKind): string {
+  switch (action) {
+    case DeliveryActionKind.RTO:
+      return 'Auto-approved — returning their own parcel is the seller to decide';
+    case DeliveryActionKind.REATTEMPT:
+      return 'Auto-approved — we have opened a ticket and will take the re-attempt up with the courier';
+    case DeliveryActionKind.RECALL:
+      return 'Auto-approved — your customer is on our call list and we will report back on the ticket';
+  }
+}
+
 @Injectable()
 export class DeliveryActionService {
   constructor(
@@ -197,7 +223,7 @@ export class DeliveryActionService {
                 decidedAt: new Date(),
                 decisionNote:
                   input.store === undefined
-                    ? 'Auto-approved — returning their own parcel is the seller to decide'
+                    ? autoApprovalNote(input.action)
                     : 'The seller lets this store act on its own orders without asking',
               }
             : {}),

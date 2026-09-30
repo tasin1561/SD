@@ -968,6 +968,108 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'the-customer-was-not-there',
+    title: 'The customer was not there',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A courier went to your customer’s door and came away still holding the parcel. Nothing is lost, and nothing has been decided — but somebody has to decide, and that somebody is you.',
+      },
+      {
+        id: 'open-order',
+        say: 'A failed delivery is an ordinary order in your list, with its own tab. Open it, and the first thing to read is the tracker.',
+      },
+      {
+        id: 'tracker',
+        say: 'This is the whole journey in one column. Picked, packed, handed to the courier, carried, taken out for delivery — and then it stopped, which is where you come in.',
+      },
+      {
+        id: 'panel',
+        say: 'Further down, we say what happened and what we are already doing about it: a call to your customer is queued, so somebody finds out why before you spend anything.',
+      },
+      {
+        id: 'history',
+        say: 'Beside it is every call we have made to them and what the agent was told. Read this first — nobody answered and they have moved house lead to opposite decisions.',
+      },
+      {
+        id: 'ask-open',
+        say: 'Then tell us what you want. Ask admin to act sits at the top of the order, and it offers three things. They are not the same size, so it is worth knowing what each one costs you.',
+      },
+      {
+        id: 'reattempt',
+        say: 'Try delivering again asks the courier to go back. That sends a van, which is why it is worth asking for only when you know the customer will actually be in.',
+      },
+      {
+        id: 'sendback',
+        say: 'Send it back is the only one that does not wait for us. It is your parcel, so it reaches the courier the moment you press it, it cannot be undone, and a return fee applies.',
+      },
+      {
+        id: 'recall',
+        say: 'And in the middle, the cheapest of the three: have one of our agents ring them. Nothing moves and nothing is charged — you are buying an answer before you spend anything.',
+      },
+      {
+        id: 'reason',
+        say: 'The box underneath is required, and it is not a formality. A person reads it before they act, so write what you actually know rather than what you would like to happen.',
+      },
+      {
+        id: 'sent',
+        say: 'Send it, and it lands on the order itself: what you asked for, what we said back, and a ticket you can follow the answer on.',
+      },
+      {
+        id: 'outro',
+        say: 'That is the shape of it. You say what you know, we weigh what it costs, and the answer comes back on the order rather than in somebody’s inbox.',
+      },
+    ],
+  },
+  {
+    slug: 'what-needs-you-today',
+    title: 'What needs you today',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Most mornings there is one question worth asking: is anything of mine stuck. There is a screen that answers exactly that, and on a good day it is empty.',
+      },
+      {
+        id: 'open',
+        say: 'Needs attention, under Selling. Its subtitle gives you the two halves before you read a single row — orders we could not confirm, and parcels that went out and never arrived.',
+      },
+      {
+        id: 'tiles',
+        say: 'Two figures, and they are two completely different jobs. The first is waiting on you. The second is waiting on a courier, and nothing you do will make it move faster.',
+      },
+      {
+        id: 'could-not-reach',
+        say: 'Could not reach comes first, because it is the half only you can settle. Our agents rang, nobody answered, and now somebody has to say what happens to the order.',
+      },
+      {
+        id: 'waiting-row',
+        say: 'The row carries the order, the customer, when it was placed and what is riding on it — and then tells you what the order page will actually offer when you open it.',
+      },
+      {
+        id: 'overdue',
+        say: 'Underneath, the parcels. Out for delivery and still not arrived, counted in nights rather than hours, because a courier’s day ends in the evening.',
+      },
+      {
+        id: 'chasing',
+        say: 'And under each one, where we have got to with it. Flagged, and nobody here has picked it up yet. When one of us does, that shows here too, with the time.',
+      },
+      {
+        id: 'no-buttons',
+        say: 'Now notice something: there is no button anywhere on this page. You cannot make a courier deliver, and a button pretending otherwise would just be theatre.',
+      },
+      {
+        id: 'through-to-order',
+        say: 'What every row does instead is take you to the order, which is where the things you can actually do have always lived.',
+      },
+      {
+        id: 'outro',
+        say: 'So open it in the morning, clear the top half yourself, and leave the bottom half with us. On a quiet day it says nothing needs you, and it means it.',
+      },
+    ],
+  },
+  {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
     subtitle: 'Skydrop for sellers',

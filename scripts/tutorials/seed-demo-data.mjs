@@ -1107,11 +1107,28 @@ async function clearDeliveryTakeArtefacts(sellerId) {
     }
   }
 
+  // A seller's own SELLER_ASKED call, queued by the recall D2 sends.
+  // Legitimate product state, and one more of it per take.
+  if (ids.length > 0) {
+    const calls = await prisma.callQueueEntry.deleteMany({
+      where: { orderId: { in: ids }, reason: { in: ['SELLER_ASKED', 'STORE_ASKED'] } },
+    });
+    if (calls.count > 0) {
+      console.log(`  · removed a previous take's ${calls.count} requested call(s)`);
+    }
+  }
+
   // `ticket_events` is append-only by construction, so there is no
   // service path that removes a ticket — a take's own row goes by hand,
   // children first.
+  //
+  // BOTH kinds a take can raise: "Raise an issue" opens a
+  // SELLER_RAISED_ISSUE, and so does a RECALL; a REATTEMPT opens a
+  // COURIER_NDR_ESCALATION with a courier thread hanging off it (which
+  // cascades from the ticket). SCRAP_DAMAGE and RECEIPT_SHORTFALL are
+  // OURS and are the seeded world, so they stay.
   const raised = await prisma.ticket.findMany({
-    where: { sellerId, ticketType: 'SELLER_RAISED_ISSUE' },
+    where: { sellerId, ticketType: { in: ['SELLER_RAISED_ISSUE', 'COURIER_NDR_ESCALATION'] } },
     select: { id: true, ticketNumber: true },
   });
   if (raised.length > 0) {

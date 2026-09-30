@@ -305,6 +305,30 @@ describe('DeliveryActionService.request — the manual ticket system', () => {
     );
   });
 
+  it('tells the seller what we actually did, not what a send-back would have done', async () => {
+    // One hard-coded sentence answered all three — "returning their own
+    // parcel is the seller to decide" — which is true of a send-back and
+    // false of the other two. A seller who asked us to RING their
+    // customer read back a note about returning a parcel, as our reply
+    // to them, stored on their own order.
+    const notes: Record<string, string | null> = {};
+    for (const action of [
+      DeliveryActionKind.RTO,
+      DeliveryActionKind.REATTEMPT,
+      DeliveryActionKind.RECALL,
+    ]) {
+      const sut = makeSut();
+      await sut.svc.request({ ...BASE, action });
+      notes[action] = (sut.created[0]?.['decisionNote'] as string | undefined) ?? null;
+    }
+
+    expect(notes[DeliveryActionKind.RTO]).toContain('returning their own parcel');
+    expect(notes[DeliveryActionKind.REATTEMPT]).toContain('courier');
+    expect(notes[DeliveryActionKind.REATTEMPT]).not.toContain('returning their own parcel');
+    expect(notes[DeliveryActionKind.RECALL]).toContain('call list');
+    expect(notes[DeliveryActionKind.RECALL]).not.toContain('returning their own parcel');
+  });
+
   it('nothing waits for an approval any more', async () => {
     const sut = makeSut();
     for (const action of [

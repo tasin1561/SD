@@ -656,14 +656,38 @@ inside one minute all matched the single attempt, so "In Transit — Attempt 1 �
 Failed" appeared against a parcel that was simply moving. An attempt now
 attaches only to a `DELIVERY_ATTEMPTED` scan, which is the scan that caused it.
 
-### D2. The customer was not there · `needs demo data`
+### D2. The customer was not there · **FILMED** — `the-customer-was-not-there.mp4`
 
 **Promise** — you know what happens after a failed delivery and what you can
 ask for.
-**Length** 3 min. **Prerequisites** D1. **Needs** D0's DELIVERY_FAILED order.
-**Covers** the order page's "Ask admin to act" dialog — the three things a
-seller may ask for and what each costs. The honest framing matters: a
-re-attempt **sends a van**, which is why it is a request rather than a button.
+**Length** 2 min 16 s. **Prerequisites** D1. **Needs** D0's DELIVERY_FAILED
+order, and it is in `LIFECYCLE_SLUGS`.
+**Covers** the failed order end to end: the tracker, the "Delivery did not
+succeed" panel, every call we have made to that customer, and then the "Ask
+admin to act" dialog — all three choices, each SELECTED so its own hint is on
+screen while it is described. It SENDS a recall, and closes on the card that
+appears on the order carrying what was asked, our reply and the ticket it
+opened.
+
+**It sends the RECALL, not the re-attempt, and that is deliberate.** A
+send-back reaches the courier on the click (CUR-10's seller amendment) and
+would turn D0's failed parcel into a returning one — D4 owns that. A
+re-attempt opens a COURIER escalation with a thread hanging off it; a recall
+opens a plain seller issue and queues a call, both of which the seeding clears.
+
+**FILMING FOUND THREE.** (a) A delivery attempt was drawn against EVERY scan
+in the order's Full history — the identical defect D1 fixed on the tracking
+page, in a second place (`OrderJourneyService`), and equally invisible until a
+parcel moves fast enough to put several scans in one minute. The simulator does
+exactly that, so "In transit — Delivery attempt 1 — could not reach the
+customer" appeared three times on a parcel that was plainly still moving. (b)
+Every auto-approved request replied with ONE hard-coded sentence — "returning
+their own parcel is the seller to decide" — which is true of a send-back and
+false of the other two, so a seller who asked us to RING their customer read
+back a note about returning a parcel as our reply to them. (c) Asking opens a
+ticket, and the mutation invalidated only the actions list — so "Issues raised
+on this order", a few centimetres below the reply, went on saying "Nothing
+raised yet" about the ticket just created, on the same page, until a reload.
 
 ### D3. What needs you today · `needs demo data`
 

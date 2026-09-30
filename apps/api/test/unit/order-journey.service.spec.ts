@@ -236,6 +236,54 @@ describe('OrderJourneyService — the ladder', () => {
     expect(a?.nsl?.reAttemptable).toBe(true);
   });
 
+  it('draws the attempt on the DELIVERY_ATTEMPTED scan alone, however fast the parcel moved', async () => {
+    // A simulator run — and a real courier catching up after a webhook
+    // backlog — puts several scans inside one minute. Keyed on the
+    // minute alone, EVERY one of them claimed the single attempt, so
+    // "In transit — Delivery attempt 1 — could not reach the customer"
+    // was drawn against a parcel that was plainly still moving.
+    const minute = '2026-08-28T09:00';
+    const { svc } = makeService({
+      orderShipments: [
+        shipment({
+          trackingEvents: [
+            scan(ShipmentStatus.IN_TRANSIT, `${minute}:05Z`, { description: 'In transit' }),
+            scan(ShipmentStatus.OUT_FOR_DELIVERY, `${minute}:22Z`, {
+              description: 'Out for delivery',
+            }),
+            scan(ShipmentStatus.DELIVERY_ATTEMPTED, `${minute}:41Z`, {
+              description: 'Delivery attempted',
+            }),
+          ],
+          deliveryAttempts: [
+            {
+              attemptNumber: 1,
+              attemptedAt: new Date(`${minute}:41Z`),
+              failureReason: 'CUSTOMER_UNAVAILABLE',
+              failureNotes: 'Nobody at the address',
+              nextAttemptScheduledAt: null,
+              agentName: null,
+              agentPhone: null,
+              contactedCustomer: null,
+              customerResponse: null,
+              courierNslCode: 'EOD-74',
+            },
+          ],
+        }),
+      ],
+    });
+
+    const j = await svc.forOrder('order-1', 'seller-1');
+
+    // Three scans, one attempt, and nothing invented: the attempt is on
+    // the scan that caused it and on neither of the other two.
+    expect(j.timeline).toHaveLength(3);
+    const withAttempt = j.timeline.filter((e) => e.attempt !== null);
+    expect(withAttempt).toHaveLength(1);
+    expect(withAttempt[0]?.title).toBe('Delivery attempted');
+    expect(withAttempt[0]?.attempt?.number).toBe(1);
+  });
+
   it('still shows an attempt that has no scan to attach to', async () => {
     const { svc } = makeService({
       orderShipments: [

@@ -83,6 +83,17 @@ const CATALOGUE_MAPPING = {
   checkProduct: 'Katan Silk Panjabi',
 };
 
+/**
+ * D2's parcel and what the seller types on it. `FAILED_CUSTOMER` is D0's
+ * `RSH-LIFE-FAILED` recipient — keep in step with `lib/lifecycle.mjs`.
+ */
+const FAILED_CUSTOMER = 'Vikram Desai';
+/** D0's back-dated parcel, on `/needs-attention`'s overdue list. */
+const OVERDUE_CUSTOMER = 'Priyanka Joshi';
+
+const ASK_REASON =
+  'Customer rang me after the failed attempt — they were at work when the courier came, and they still want the parcel. Please find out when they are actually in.';
+
 /** The logo the profile video uploads. Committed, like the CSV fixture. */
 const LOGO_FILE = path.join(TUTORIALS_DIR, 'fixtures', 'rangpur-silk-logo.png');
 
@@ -2742,6 +2753,291 @@ export const FLOWS = {
         await row.scrollIntoViewIfNeeded();
         await page.waitForTimeout(500);
         await stage.dwellOn(row.locator('a.ord-link').first(), 3000);
+      },
+    },
+  },
+
+  /**
+   * D2 — what a seller does after a failed delivery.
+   *
+   * The parcel is D0's `RSH-LIFE-FAILED` (Vikram Desai), driven to
+   * DELIVERY_FAILED by a real NDR scan from the simulator. The dialog is
+   * OPENED on all three choices and SENT on one — a re-attempt, which is
+   * a request an operator reads. The send-back is deliberately only
+   * described: it reaches the courier on the click (CUR-10's seller
+   * amendment), and performing it here would turn D0's failed parcel
+   * into a returning one and take the world with it. D4 owns that.
+   */
+  'the-customer-was-not-there': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-order'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/orders$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        // The status TAB, not a search box: it is how a seller finds this
+        // in real life, and it proves the order is where the video says.
+        await stage.clickIt(page.getByRole('tab', { name: /^Delivery failed/ }).first(), {
+          after: 1600,
+        });
+        const row = page.getByRole('row').filter({ hasText: FAILED_CUSTOMER }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 1800);
+      },
+
+      async tracker({ page, stage }) {
+        const tracker = page.locator('.ord-section').filter({ hasText: 'Order tracker' }).first();
+        await tracker.waitFor({ state: 'visible', timeout: 25_000 });
+        await tracker.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(900);
+        await stage.dwellOn(tracker, 3600);
+      },
+
+      async panel({ page, stage }) {
+        const panel = page
+          .locator('.ord-section')
+          .filter({ hasText: 'Delivery did not succeed' })
+          .first();
+        // The panel renders only while the parcel is in trouble, so its
+        // absence means the seeding did not leave this order failed —
+        // which a dwell on a missing element reports as a timeout rather
+        // than filming a page that quietly does not say this.
+        await panel.waitFor({ state: 'visible', timeout: 25_000 });
+        await panel.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(900);
+        await stage.dwellOn(panel.locator('.ord-notice, [class*="notice"]').first(), 3000);
+      },
+
+      async history({ page, stage }) {
+        const panel = page
+          .locator('.ord-section')
+          .filter({ hasText: 'Delivery did not succeed' })
+          .first();
+        const calls = panel.locator('.ord-callcard').first();
+        await calls.waitFor({ state: 'visible', timeout: 25_000 });
+        await calls.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(calls, 3400);
+      },
+
+      async 'ask-open'({ page, stage }) {
+        await stage.glide(-2400);
+        await page.waitForTimeout(700);
+        await stage.clickIt(page.getByRole('button', { name: 'Ask admin to act' }).first(), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(dialog, 2600);
+      },
+
+      // Each choice is SELECTED so its own hint is on screen while the
+      // narration describes it — the hint is the component's own words,
+      // and reading them out over a different option's text would be a
+      // video of the wrong sentence.
+      async reattempt({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await dialog.getByLabel('What would you like').selectOption('REATTEMPT');
+        await page.waitForTimeout(900);
+        await stage.dwellOn(dialog.getByLabel('What would you like'), 3000);
+      },
+
+      async sendback({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await dialog.getByLabel('What would you like').selectOption('RTO');
+        await page.waitForTimeout(900);
+        // The dialog's DESCRIPTION changes on this choice — "returning
+        // your own parcel is your decision, so this reaches the courier
+        // immediately" — and the button goes destructive. That change is
+        // the scene. It is NOT pressed: it would reach the simulator on
+        // the click and turn D0's failed parcel into a returning one.
+        await stage.dwellOn(dialog, 3400);
+      },
+
+      // A RECALL is what the video actually sends — the cheapest of the
+      // three and the honest first move, and the one that leaves least
+      // behind: a seller issue and a queued call, both cleared by the
+      // seeding. A re-attempt would open a COURIER thread instead.
+      async recall({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await dialog.getByLabel('What would you like').selectOption('RECALL');
+        await page.waitForTimeout(900);
+        await stage.dwellOn(dialog, 3000);
+      },
+
+      async reason({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.typeIn(dialog.getByLabel('What do you know'), ASK_REASON, { after: 1600 });
+        await stage.dwellOn(dialog.getByLabel('What do you know'), 2200);
+      },
+
+      async sent({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Send request' }).first(), {
+          after: 1400,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
+        const panel = page
+          .locator('.ord-section')
+          .filter({ hasText: 'Delivery did not succeed' })
+          .first();
+        // The CARD, not the dialog closing: the request is only real once
+        // it is on the order, and a closed dialog says nothing about that.
+        await panel
+          .getByRole('heading', { name: 'What you asked for' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        const asked = panel.locator('.ord-callcard').last();
+        await asked.waitFor({ state: 'visible', timeout: 25_000 });
+        await asked.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(asked, 3400);
+      },
+
+      async outro({ page, stage }) {
+        const panel = page
+          .locator('.ord-section')
+          .filter({ hasText: 'Delivery did not succeed' })
+          .first();
+        await panel.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(panel, 3200);
+      },
+    },
+  },
+
+  /**
+   * D3 — the morning screen.
+   *
+   * Both lists come from D0: `RSH-LIFE-REVIEW` is the order the call
+   * centre could not confirm (AWAITING_SELLER_DECISION), and
+   * `RSH-LIFE-OVERDUE` is the seventh parcel, out for delivery on a
+   * back-dated scan and flagged by the real NSA sweep. Nothing is
+   * pressed — the page has no buttons, which is the eighth scene.
+   */
+  'what-needs-you-today': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Needs attention', exact: true }).first(),
+          {
+            after: 1600,
+          },
+        );
+        await page.waitForURL(/\/needs-attention$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async tiles({ page, stage }) {
+        // The tiles read "—" until BOTH order queries and the NSA list
+        // have answered (the page says so itself), so waiting on the
+        // figure rather than the element is what stops this filming a
+        // dash where the narration says "two figures".
+        const kpis = page.locator('.nat-kpis').first();
+        await kpis.waitFor({ state: 'visible', timeout: 20_000 });
+        await kpis
+          .getByText('Out three nights or more')
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(kpis, 3400);
+      },
+
+      async 'could-not-reach'({ page, stage }) {
+        const section = page.locator('.nat-section').filter({ hasText: 'Could not reach' }).first();
+        await section.waitFor({ state: 'visible', timeout: 25_000 });
+        await section.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(900);
+        await stage.dwellOn(section.locator('.sk-sh, h2, h3').first(), 3000);
+      },
+
+      async 'waiting-row'({ page, stage }) {
+        const row = page.getByText('Waiting on your decision').first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        const card = page.locator('a').filter({ has: row }).first();
+        await card.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(card, 3600);
+      },
+
+      async overdue({ page, stage }) {
+        const section = page.locator('.nat-section').filter({ hasText: 'Overdue parcels' }).first();
+        await section.waitFor({ state: 'visible', timeout: 25_000 });
+        await section.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(900);
+        // The parcel D0 back-dated. Waiting on the ROW rather than the
+        // heading is what proves the sweep flagged it — an unflagged one
+        // simply is not here, and the section would still render.
+        await page
+          .getByText(OVERDUE_CUSTOMER, { exact: false })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(section, 3400);
+      },
+
+      async chasing({ page, stage }) {
+        const note = page.locator('.nat-next').last();
+        await note.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(note, 3200);
+      },
+
+      async 'no-buttons'({ page, stage }) {
+        await stage.glide(-500);
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.locator('.nat-page').first(), 3400);
+      },
+
+      async 'through-to-order'({ page, stage }) {
+        const row = page.getByText(OVERDUE_CUSTOMER, { exact: false }).first();
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.clickIt(page.locator('a').filter({ has: row }).first(), { after: 1800 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Needs attention', exact: true }).first(),
+          {
+            after: 1600,
+          },
+        );
+        await page.waitForURL(/\/needs-attention$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.locator('.nat-kpis').first(), 3200);
       },
     },
   },

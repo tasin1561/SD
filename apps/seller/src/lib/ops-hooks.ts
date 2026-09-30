@@ -667,8 +667,18 @@ export function useRequestDeliveryAction(): UseMutationResult<
         method: 'POST',
         body,
       }),
-    onSuccess: (_d, v) =>
-      void qc.invalidateQueries({ queryKey: ['seller-delivery-actions', v.orderId] }),
+    onSuccess: (_d, v) => {
+      void qc.invalidateQueries({ queryKey: ['seller-delivery-actions', v.orderId] });
+      // AND the tickets, because the request OPENS one: a recall raises
+      // a seller issue, a re-attempt raises a courier escalation. Only
+      // the actions list was invalidated, so the panel a few
+      // centimetres below the reply went on saying "Nothing raised yet"
+      // about the ticket that had just been created — on the same page,
+      // until a reload. The prefix, not the exact key, because the list
+      // is keyed on its whole query object and the order page, the
+      // register and the header count are three different ones.
+      void qc.invalidateQueries({ queryKey: ['seller-tickets'] });
+    },
   });
 }
 

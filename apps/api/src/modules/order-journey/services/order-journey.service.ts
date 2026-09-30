@@ -497,10 +497,31 @@ export class OrderJourneyService {
     // page already uses: the two rows are written in one saga but not
     // in one statement, so their timestamps agree to the minute rather
     // than to the millisecond.
+    //
+    // ── AND ONLY ON THE SCAN THAT CAUSED IT ──────────────────────────
+    // The minute ALONE is right while scans are hours apart and wrong
+    // the moment a parcel moves quickly: every scan in that minute
+    // matched the one attempt, so "In transit — Delivery attempt 1 —
+    // could not reach the customer" was drawn against a parcel that was
+    // simply moving, three times over. Seen on the order page's own Full
+    // history while filming D2; the same defect was fixed on the
+    // tracking page's timeline (D1) and this is the second copy of it.
+    //
+    // A delivery attempt is written by the DELIVERY_ATTEMPTED branch of
+    // the webhook processor and by nothing else, so that is the only
+    // scan status entitled to one. The minute stays as the tie-break
+    // between SEVERAL attempts.
     const minute = (d: Date): string => d.toISOString().slice(0, 16);
     const byMinute = new Map<string, (typeof attempts)[number]>();
     for (const a of attempts) byMinute.set(minute(a.attemptedAt), a);
     const claimed = new Set<string>();
+    const attemptFor = (s: {
+      eventAt: Date;
+      status: ShipmentStatus;
+    }): (typeof attempts)[number] | null =>
+      s.status === ShipmentStatus.DELIVERY_ATTEMPTED
+        ? (byMinute.get(minute(s.eventAt)) ?? null)
+        : null;
 
     const asAttempt = (a: (typeof attempts)[number]): JourneyEntry['attempt'] => ({
       number: a.attemptNumber,
@@ -529,7 +550,7 @@ export class OrderJourneyService {
       // processor; they are for us, not for a seller reading a story.
       .filter((s) => s.isVisibleToCustomer)
       .map((s) => {
-        const hit = byMinute.get(minute(s.eventAt)) ?? null;
+        const hit = attemptFor(s);
         if (hit !== null) claimed.add(minute(s.eventAt));
         return {
           at: s.eventAt,
