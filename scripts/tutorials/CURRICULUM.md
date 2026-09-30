@@ -622,6 +622,21 @@ second two exist because the first is not enough:
    failed take once; it is checked now (`/_sim/parcels`, failing safe towards
    "the sim still knows it").
 
+**The retired parcels ACCUMULATE, about two per take, and that is the price of
+never rewinding.** After D4 was built there were eight
+(`RSH-LIFE-SENDBACK-SPENT-1…4`, `RSH-LIFE-RETURNREQ-SPENT-1…4`). Each is a real
+parcel with stock decremented, money charged and a waybill, which is exactly why
+none of them is deleted. Two consequences to know before they surprise somebody:
+the seller's order list and its status tabs grow by two per take (every D-section
+video finds its parcel BY CUSTOMER NAME, so no scene is aimed at a row that
+moves), and **a retired SENDBACK sits at OUT_FOR_DELIVERY for ever** — so three
+nights later the NSA sweep will start flagging it onto `/needs-attention`'s
+overdue list, which is D3's second list. D3 finds its own parcel by name too, so
+its scenes hold; what changes is how many rows are beside it. If that list ever
+needs to be exactly one row again, the honest fix is to cancel the retired ones
+through the product (which gives their stock back through `UNPACK_STOCK`), not
+to delete them.
+
 **Wiring:** `LIFECYCLE_SLUGS` in `seed-demo-data.mjs` holds the five D-section
 slugs filmed so far. A new video that needs a moved parcel adds its slug there,
 and the pass then runs before that video's take — it is expensive (a courier
