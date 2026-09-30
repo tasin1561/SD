@@ -23,7 +23,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
-import { prisma, argon2 } from './lib/deps.mjs';
+import { prisma, argon2, pdfLib } from './lib/deps.mjs';
 import { MOCK_ROOT, mockObjectPath } from './lib/spaces-shim.mjs';
 import { TUTORIALS_DIR } from './lib/paths.mjs';
 import { API, call, waitFor } from './lib/api.mjs';
@@ -541,7 +541,22 @@ const LIFECYCLE_REF_PREFIX = 'RSH-LIFE-';
 // `REMOVABLE_STATUSES` — so without this the next seed run would try to
 // delete an order holding a live stock reservation and a booked waybill.
 // It is retired forward by `callWorldFor` instead, the D4 / B7 rule.
-const PROTECTED_REF_PREFIXES = [LIFECYCLE_REF_PREFIX, 'RSH-STORE-', 'RSH-FRT-', 'RSH-CALL-'];
+/*
+  `RSH-PICK-` joins them for exactly the reason `RSH-CALL-` did: J3's
+  parcels end the take CONFIRMED-or-later holding a LIVE RESERVATION, and
+  CONFIRMED is in `REMOVABLE_STATUSES` — so the shared clearing would try
+  to delete an order whose `order_items` are referenced by
+  `stock_reservations` under a RESTRICT foreign key, and die there rather
+  than in the video's own seeding. `pickWorldFor` retires them forward
+  itself.
+*/
+const PROTECTED_REF_PREFIXES = [
+  LIFECYCLE_REF_PREFIX,
+  'RSH-STORE-',
+  'RSH-FRT-',
+  'RSH-CALL-',
+  'RSH-PICK-',
+];
 
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
@@ -3813,7 +3828,10 @@ async function clearPreviousOrders(sellerId) {
       prisma.order.deleteMany({ where: { id: { in: ids } } }),
     ]);
   } catch (e) {
-    const blocked = /foreign key constraint "([a-z_]+)_[a-z_]*order_id_fkey"/.exec(String(e));
+    // Both shapes: a row pointing at the ORDER, and one pointing at an
+    // order ITEM (`stock_reservations`, which is what a confirmation
+    // leaves behind).
+    const blocked = /foreign key constraint "([a-z_]+)_order_(?:item_)?id_fkey"/.exec(String(e));
     if (blocked !== null) {
       throw new Error(
         `Cannot clear a previous take's orders: rows in "${blocked[1]}" reference them and that ` +
@@ -4162,6 +4180,318 @@ async function receiveWorldFor(slug, sellerId, sellerToken, staffToken) {
     `  · ${RECEIVE_CONSIGNMENT.ref} declared as ${declared.consignmentNumber}, ` +
       `waiting to be counted on ${pending[0].receiptNumber} — the only receipt waiting`,
   );
+}
+
+/**
+ * J3's world: three confirmed parcels waiting on a label, and nothing
+ * else of ours in the queue that the video must not touch.
+ *
+ * ── WHY IT PLACES ITS OWN RATHER THAN USING WHAT IS THERE ────────────
+ * The label queue is genuinely busy on this box — two dozen parcels,
+ * because every confirmed order carries a waybill from the moment it is
+ * confirmed (CUR-2b). That is the right picture for a video about a
+ * delivery morning, and it is exactly why the video must not simply
+ * select the top rows: among them are `RSH-LIFE-CONFIRMED`, which is D0's
+ * parcel for B7 and whose whole value is sitting at CONFIRMED, and
+ * `RSH-CALL-1`, which is I1's. Printing and picking either would move it
+ * and `lifecycleReport` would fail the next seed run naming it.
+ *
+ * ── SO THEY ARE NAMED BY THE ONE THING THE ROW SHOWS ─────────────────
+ * The label queue's columns are the order number, the seller, the
+ * courier, the waybill, the DESTINATION, the COD and the item count.
+ * Order and waybill numbers are minted per run and the seller is shared
+ * with five other parcels, so the only stable handle is the destination:
+ * all three are addressed to `560103`, a pin nothing else on the box
+ * uses, and the seeding ASSERTS exactly three waiting parcels carry it.
+ * The flow selects those rows by that pin.
+ *
+ * ── WHAT CONFIRMING COSTS, AND WHY IT IS DONE THROUGH FORCE-OUTCOME ──
+ * A confirmation reserves stock (ORD-10) and books a waybill (CUR-2b),
+ * so these are real parcels. Driving them through the AGENT station
+ * would need a login each; `POST /admin/call-queue/:entryId/force-outcome`
+ * is the same `CallAttemptService` by another door (I3 films it), so the
+ * attempt is a real appended fact under the ops account and the order
+ * moves by the ordinary mapping. Three different SKUs, so the picking
+ * sheet has more than one line to walk.
+ *
+ * ── AND IT IS FORWARD-ONLY ───────────────────────────────────────────
+ * The take prints, confirms, allocates phase-2 and marks picked, so the
+ * orders end at PICKED — outside `REMOVABLE_STATUSES`, holding live
+ * reservations, and not rewindable. Each is retired forward by name and
+ * three fresh ones are placed (the D4 / B7 rule, fifth instance).
+ * **This accumulates**: three units stay reserved per take and never
+ * come back, because nothing packs them. At a few dozen takes that is
+ * still small against the catalogue's stock, but it is a cost, and the
+ * honest fix when it matters is a J4 that PACKS them rather than a seed
+ * that unwinds them.
+ */
+const PICK_PIN = '560103';
+const PICK_ORDERS = [
+  {
+    ref: 'RSH-PICK-1',
+    sku: 'RSH-JAMDANI-IVORY',
+    recipientName: 'Ananya Iyer',
+    phone: '+919845090301',
+    line1: '4, Neeladri Road',
+    line2: 'Behind the Electronic City bus depot',
+    codAmountInr: '2400',
+    unitPriceInr: '2400',
+  },
+  {
+    ref: 'RSH-PICK-2',
+    sku: 'RSH-KANTHA-BLUE',
+    recipientName: 'Vikram Choudhury',
+    phone: '+919845090302',
+    line1: '21, Hosa Road',
+    line2: 'Opposite the Infosys gate three',
+    codAmountInr: '1850',
+    unitPriceInr: '1850',
+  },
+  {
+    ref: 'RSH-PICK-3',
+    sku: 'RSH-SCARF-EMERALD',
+    recipientName: 'Nandini Rao',
+    phone: '+919845090303',
+    line1: '7, Doddathoguru Main Road',
+    line2: 'Next to the Konappana Agrahara temple',
+    codAmountInr: '990',
+    unitPriceInr: '990',
+  },
+];
+
+/**
+ * Write the label the courier leg would have written.
+ *
+ * ── WHY THIS EXISTS AT ALL ───────────────────────────────────────────
+ * The label leg CANNOT succeed against the local Delhivery simulator,
+ * and that is correct product behaviour rather than a bug.
+ * `DelhiveryLabelService` puts the courier's `pdf_download_link` through
+ * `assertPublicHttpsUrl` — the same SSRF guard a seller-supplied webhook
+ * URL goes through, because the bytes are stored in our bucket and later
+ * presigned for a seller to open — and the simulator's link is
+ * `http://127.0.0.1`, refused on the scheme. So every confirmation on
+ * this box logs "AWB persisted but label upload pending", the waybill is
+ * durable and the label never arrives: 64 shipments carrying a waybill
+ * and 10 carrying a label, at the time this was written.
+ *
+ * Without a stored label `/warehouse/printing` builds a sheet of ZERO
+ * pages and names every parcel `NO_STORED_LABEL` — which is the screen
+ * behaving perfectly and J3 being unfilmable. The picking tab is gated
+ * on labels having been CONFIRMED, so the whole of J3 to J6 is behind
+ * this one file.
+ *
+ * ── AND WHY IT IS A REAL PDF ─────────────────────────────────────────
+ * `LabelSheetService` loads every label with pdf-lib and merges them,
+ * reporting anything it cannot parse as `UNREADABLE_PDF`. A hand-rolled
+ * `%PDF-1.4 … %%EOF` — which is what STUB MODE returns — would fail one
+ * layer further along and present as a different problem, so this
+ * builds a genuine one-page document with the parcel named on it.
+ *
+ * The bytes go where `SpacesService`'s mock mode looks for them
+ * (`/tmp/skydrop-spaces-mock/<bucket>/<key>`, `DEV_MOCK_SPACES=true` on
+ * this box) and the `awb_labels` row is the ordinary CUR-6 shape:
+ * version 1, current, generated INITIAL. Idempotent — a shipment that
+ * already has a current label is left alone.
+ */
+const LABEL_BUCKET = process.env.SPACES_BUCKET ?? 'skydrop-storage';
+
+async function storeStubLabel(shipmentId, shipmentNumber, awbNumber) {
+  const already = await prisma.awbLabel.findFirst({
+    where: { shipmentId, isCurrent: true },
+    select: { id: true },
+  });
+  if (already !== null) return;
+
+  const doc = await pdfLib.PDFDocument.create();
+  // 4R, which is the size the real fetch asks Delhivery for.
+  const page = doc.addPage([288, 432]);
+  page.drawText('SKYDROP', { x: 24, y: 380, size: 22 });
+  page.drawText(shipmentNumber, { x: 24, y: 344, size: 14 });
+  page.drawText(`AWB ${awbNumber}`, { x: 24, y: 320, size: 12 });
+  page.drawText('Demo label — local recording box', { x: 24, y: 32, size: 8 });
+  const bytes = Buffer.from(await doc.save());
+
+  const key = `labels/${shipmentId}/v1.pdf`;
+  const target = path.join('/tmp/skydrop-spaces-mock', LABEL_BUCKET, key);
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, bytes);
+
+  await prisma.awbLabel.create({
+    data: {
+      shipmentId,
+      version: 1,
+      isCurrent: true,
+      spacesKey: key,
+      spacesBucket: LABEL_BUCKET,
+      fileSizeBytes: bytes.byteLength,
+      mimeType: 'application/pdf',
+    },
+  });
+}
+
+async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
+  if (slug !== 'print-and-pick') return;
+
+  for (const o of PICK_ORDERS) {
+    /*
+      REUSED WHERE IT CAN BE, RETIRED AND CANCELLED WHERE IT CANNOT.
+
+      This world is spent progressively rather than all at once: the take
+      confirms labels, then confirms a picking sheet, then marks the
+      batch picked, and a check can stop between any two. A parcel still
+      CONFIRMED with NO label printed is exactly where the video expects
+      to find it, so it is REUSED and a failed check costs nothing.
+
+      Anything else is retired forward — and then CANCELLED, which the
+      other retire-forwards do not do and which this one has to. The pin
+      is the only handle the label queue's columns offer (see
+      `ourParcels` in `flows.mjs`), and a retired parcel carries the same
+      pin for ever: leave three of them CONFIRMED and the next take opens
+      on six rows where the narration says three. The admin cancel is the
+      product's own path out — it releases the reservation (ORD-3) and
+      voids the shipment — so it also gives back the unit the spent take
+      was holding, which is what stops three units a take accumulating.
+
+      Past PENDING_PICK it is left alone and said out loud: a picked or
+      packed parcel has been through stock in ways a cancel here should
+      not guess at, and it is out of both queues anyway.
+    */
+    const spent = await prisma.order.findFirst({
+      where: { sellerId, sellerOrderRef: o.ref },
+      select: { id: true, orderNumber: true, status: true },
+    });
+    if (spent !== null) {
+      const stillWaiting =
+        spent.status === 'CONFIRMED' &&
+        (await prisma.orderShipment.count({
+          where: {
+            orderId: spent.id,
+            shipment: { deletedAt: null, labelPrintedAt: null, awbNumber: { not: null } },
+          },
+        })) > 0;
+      if (stillWaiting) {
+        console.log(
+          `  · ${o.ref} (${spent.orderNumber}) is still waiting on a label — reused as it is`,
+        );
+        continue;
+      }
+      const parked = await prisma.order.count({
+        where: { sellerId, sellerOrderRef: { startsWith: `${o.ref}-SPENT-` } },
+      });
+      const retiredRef = `${o.ref}-SPENT-${parked + 1}`;
+      await prisma.order.update({ where: { id: spent.id }, data: { sellerOrderRef: retiredRef } });
+      console.log(
+        `  · ${o.ref} is spent — ${spent.orderNumber} is ${spent.status}. ` +
+          `Renamed ${retiredRef}; a fresh one follows`,
+      );
+      if (spent.status === 'CONFIRMED' || spent.status === 'PENDING_PICK') {
+        await call(`/admin/orders/${spent.id}/cancel`, {
+          method: 'POST',
+          token: staffToken,
+          body: {
+            cancellationReason: 'OTHER',
+            note: 'Spent by a tutorial take; cancelled so it leaves the printing queues.',
+          },
+        }).catch((e) => {
+          console.log(`  · could not cancel ${spent.orderNumber}, leaving it: ${String(e)}`);
+        });
+      } else {
+        console.log(
+          `  · ${spent.orderNumber} is ${spent.status} — past cancelling here, and out of both queues`,
+        );
+      }
+    }
+
+    const variant = await prisma.productVariant.findFirst({
+      where: { skuCode: o.sku, product: { sellerId } },
+      select: { id: true },
+    });
+    if (variant === null) {
+      throw new Error(`No ${o.sku} for this seller — the catalogue seeding runs first.`);
+    }
+    const token = await sellerToken();
+    const order = await call('/seller/orders', {
+      method: 'POST',
+      token,
+      body: {
+        recipientName: o.recipientName,
+        recipientPhoneE164: o.phone,
+        recipientAddressLine1: o.line1,
+        recipientAddressLine2: o.line2,
+        recipientPostalCode: PICK_PIN,
+        paymentMode: 'COD',
+        codAmountInr: o.codAmountInr,
+        sellerOrderRef: o.ref,
+        items: [{ variantId: variant.id, quantity: 1, unitPriceInr: o.unitPriceInr }],
+        // The PREVIOUS take's parcel for this customer is retired but
+        // still unpacked — it is confirmed or picked, which is exactly
+        // what `create` refuses a second order against
+        // (`DUPLICATE_ORDER_SUSPECTED`: a repeat for a customer whose
+        // last parcel has not left is usually somebody submitting
+        // twice). Here it is deliberate, and acknowledging is what the
+        // real form makes a person do too. Same trap as I1's seeding.
+        acknowledgeDuplicate: true,
+      },
+    });
+    await call(`/seller/orders/${order.id}/submit`, { method: 'POST', token });
+
+    const entry = await waitFor(`${o.ref} to reach the call queue`, () =>
+      prisma.callQueueEntry.findFirst({
+        where: { orderId: order.id, status: 'PENDING' },
+        select: { id: true },
+      }),
+    );
+    await call(`/admin/call-queue/${entry.id}/force-outcome`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        outcome: 'CONFIRMED',
+        startedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+        endedAt: new Date(Date.now() - 19 * 60_000).toISOString(),
+        outcomeNotes: 'Confirmed on the phone; happy to pay cash at the door.',
+      },
+    });
+
+    /*
+      AND WAIT FOR THE WAYBILL. The AWB is booked by a bus listener
+      POST-COMMIT of the confirmation (CUR-2b), so it lands a heartbeat
+      later — and the label queue selects on a shipment that HAS one. A
+      seed that returned before it arrived would leave the video opening
+      on a queue its parcels had not joined yet.
+    */
+    const booked = await waitFor(
+      `${o.ref} to be given a waybill`,
+      async () => {
+        const link = await prisma.orderShipment.findFirst({
+          where: { orderId: order.id, shipment: { deletedAt: null, awbNumber: { not: null } } },
+          select: { shipment: { select: { id: true, shipmentNumber: true, awbNumber: true } } },
+        });
+        return link?.shipment ?? null;
+      },
+      { tries: 45 },
+    );
+    await storeStubLabel(booked.id, booked.shipmentNumber, booked.awbNumber);
+    console.log(
+      `  · ${order.orderNumber} (${o.ref}) confirmed, labelled and waiting to be printed — ` +
+        `${booked.shipmentNumber} / ${booked.awbNumber}`,
+    );
+  }
+
+  const waiting = await prisma.order.count({
+    where: {
+      sellerId,
+      recipientPostalCode: PICK_PIN,
+      status: { in: ['CONFIRMED', 'PENDING_PICK'] },
+      deletedAt: null,
+    },
+  });
+  if (waiting !== PICK_ORDERS.length) {
+    throw new Error(
+      `${waiting} parcel(s) are addressed to ${PICK_PIN} and waiting to be printed, expected ` +
+        `${PICK_ORDERS.length} — the flow selects the label queue's rows by that pin, so any ` +
+        'other parcel carrying it would be printed and picked without being narrated.',
+    );
+  }
 }
 
 /**
@@ -4587,6 +4917,7 @@ async function main() {
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
   await binsWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
+  await pickWorldFor(slug, sellerId, sellerToken, staffToken);
   await pendingRowsWorldFor(slug, sellerId, sellerToken);
   await notificationWorldFor(slug, sellerId);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);

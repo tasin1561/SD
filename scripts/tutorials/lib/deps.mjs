@@ -40,3 +40,24 @@ export const Redis = requireFromApi('ioredis').default ?? requireFromApi('ioredi
  * the work and its gates are unchanged.
  */
 export const BullMQ = requireFromApi('bullmq');
+
+/**
+ * The SAME PDF library the label sheet merges with.
+ *
+ * Borrowed for one purpose, in J3's seeding: the LABEL LEG CANNOT
+ * SUCCEED against the local Delhivery simulator. `DelhiveryLabelService`
+ * puts the courier's `pdf_download_link` through `assertPublicHttpsUrl`
+ * — the same SSRF guard a seller-supplied webhook URL goes through,
+ * because the bytes end up in our bucket and are later presigned for a
+ * seller to open — and the simulator's link is `http://127.0.0.1`, which
+ * that guard refuses on the scheme before it even looks at the address.
+ * Correct product behaviour and a permanent local gap: 64 shipments on
+ * this box carry a waybill and 10 carry a label.
+ *
+ * So the seeding writes the label the real path would have written, and
+ * it has to be a PDF something can actually MERGE — `LabelSheetService`
+ * loads each one with pdf-lib and reports an unreadable file as
+ * UNREADABLE_PDF, so a hand-rolled `%PDF` header would fail one layer
+ * further along and look like a different problem.
+ */
+export const pdfLib = requireFromApi('pdf-lib');

@@ -3118,6 +3118,65 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'print-and-pick',
+    title: 'Labels and the picking sheet',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'This is the morning. Every confirmed order is already carrying a waybill, and this screen turns a list of them into paper somebody can walk the building with.',
+      },
+      {
+        id: 'order',
+        say: 'Labels first, then the picking sheet, and the subtitle says the rule the whole page turns on: nothing moves until somebody confirms the paper actually came out.',
+      },
+      {
+        id: 'queue',
+        say: 'So here is what is waiting on a label. Order, seller, courier, waybill, where it is going, what the customer owes at the door, and how many things are in it.',
+      },
+      {
+        id: 'select',
+        say: 'You do not print the whole queue. Pick the parcels you are going to walk in one go — these three are all going to the same part of the city.',
+      },
+      {
+        id: 'printed',
+        say: 'Print, and the file goes to the printer. Then it asks whether the paper came out, and names anything it could not print rather than quietly leaving it out of the stack.',
+      },
+      {
+        id: 'confirm',
+        say: 'Confirm only what is really in your hand. Saying yes marks those parcels labelled and moves them along; saying it for paper that jammed puts a parcel on a walk with nothing on it.',
+      },
+      {
+        id: 'picking',
+        say: 'They have moved to the picking tab. Same parcels, second sheet — and this is the one that tells a person which shelves to visit and in what order.',
+      },
+      {
+        id: 'list',
+        say: 'Print the picking list, and it tells you how many lines there are to walk. If something could not be allocated it says so and marks it on the sheet rather than hiding it.',
+      },
+      {
+        id: 'allocates',
+        say: 'And confirming this one does the real work. It claims the exact units on the exact shelves, and sends every order on it to be picked. That is why a shortfall surfaces here and not in an aisle.',
+      },
+      {
+        id: 'batches',
+        say: 'Every sheet is a batch, and past batches is where they live — when it was made, who made it, when it printed, and whether more than one copy is loose in the building.',
+      },
+      {
+        id: 'walk',
+        say: 'Now somebody actually walks it. When they come back with the trolley, the batch is marked picked and those parcels arrive at the packing bench.',
+      },
+      {
+        id: 'strict',
+        say: 'And it names the one exception before you press. Anything tracked unit by unit stays behind for the pick station, because a serial has to be scanned rather than counted off a sheet.',
+      },
+      {
+        id: 'outro',
+        say: 'So: select a walk, print it, confirm only what printed, and mark it picked when the trolley comes back. The paper is the plan; confirming it is what makes the plan true.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

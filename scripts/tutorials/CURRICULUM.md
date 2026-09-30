@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 53 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, the whole of I, J1–J2 and P5.** The 37 left are all in the admin app: 2 are
+**90 tutorials. 54 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, the whole of I, J1–J3 and P5.** The 36 left are all in the admin app: 2 are
 `impractical locally` and 29 touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,41 +32,45 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (53):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J2**.
+**Filmed so far (54):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J3**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
-**THE NEXT ENTRY IS J3 — "Labels and the picking sheet"**, which is where the
-warehouse pipeline's REAL seeding problem starts, and it is worth reading this
-before starting rather than discovering it half way.
+**THE NEXT ENTRY IS J4 — "Packing a parcel"**, and J3 has left it most of what
+it needs. `pickWorldFor` (`seed-demo-data.mjs`) places three confirmed, labelled
+parcels addressed to one pin and J3's take walks them all the way to PICKED —
+which is exactly the state the pack bench selects on (`o.status = 'picked'`,
+WMS-2). **So J4's seeding is probably `pickWorldFor` plus one step**: drive the
+three through the printing station with the API rather than the camera, and stop
+at PICKED. It is the same shape as I2 and I3 sharing `SUPERVISE_SLUGS`.
 
-**J3 onwards needs parcels PARKED at a station, and nothing builds those.** D0
-(`lib/lifecycle.mjs`) is the only machinery that drives a parcel and it drives
-them ALL THE WAY — `ensureLifecycleParcels` resumes a half-built parcel and
-NEVER rewinds one. A parcel standing at CONFIRMED waiting to be printed, or at
-PENDING_PICK waiting to be walked, or at PICKED waiting to be packed, is a
-"stop early" shape rather than a "wind back" one, and D0 has no notion of
-stopping early. **The cheapest honest answer is probably a `parkAt` option on a
-lifecycle parcel** — drive it to a named status and no further — rather than a
-second driver, because the steps are all in that file already and a copy would
-drift from it. Read D0's entry first; it is the longest one in this document
-for a reason.
+**Read PACK-1 and LBL-4 before writing a line of it**, because the pack bench is
+the most rule-dense screen in the app and every rule is a scene: the BOX is the
+claim and it is taken up front (two partial unique indexes — one open box per
+shipment, one per packer); contents are verified as a SET, per SKU and per unit,
+because a count alone passes a box with two of one thing and none of another;
+over-scanning is refused AT THE SCAN; cancelling a box returns NOTHING to
+inventory (PACK-2, and `pack-box-flow.e2e-spec.ts` asserts on-hand is
+byte-identical across a cancel, so a "fix" fails); and `PackService.complete`
+REFUSES without a closed box (LBL-4) with a supervisor-only `force-complete`
+carrying its own audit action as the escape hatch. **Do not route the flow
+through `force-complete`** — the README says so and the reason is that it would
+make the only exercised path the one production should not use.
 
-**And J3's own subject is LBL-1 and WMS-1**, which are worth reading together:
-picking is PRINT-FIRST and batched (`/warehouse/printing` — select parcels,
-print labels, confirm, print ONE consolidated picking sheet, confirm, walk, mark
-picked), **confirming the print is what ALLOCATES phase-2**, and the picking
-list decides the barcode PER LINE (a STRICT product prints "STRICT — scan each
-unit" instead of a SKU barcode). The per-parcel pick station is RETIRED from the
-nav and must not be filmed as the everyday path.
+**And the scan needs a barcode to scan.** LBL-2: the code is
+`variant.barcode ?? skuCode`, nothing is minted, and `PackBoxService.scan`
+accepts BOTH scoped to the order's seller. The demo catalogue's variants have
+no `barcode`, so the SKU code is what a scan resolves — which means the flow can
+type the SKU into the scan field and it is the real path, not a workaround.
+`packAtBench()` in the API e2e harness is the worked example of the ritual.
 
 P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
 [the recommendation](#the-recommendation) goes further: if the ops team never
 grows, P5 is worth making on its own and the rest are not); H1, H2, H4 and then
-H3, then all of I, then J1 and J2 followed. From here, work sections J–P as written, and read
-[the recommendation](#the-recommendation) first — they are 33 entries and this
+H3, then all of I, then J1, J2 and J3 followed. From here, work sections J–P as written, and read
+[the recommendation](#the-recommendation) first — they are 32 entries and this
 document is explicit that they are a BET.
 
 **WHAT I2 ACTUALLY NEEDED, and the two things the note that stood here got
@@ -172,13 +176,13 @@ on the one configured key) for 13 scenes and 156 s, H1 **946** for 13 and 143 s,
 H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, H3 **1,068** for
 14 and 180 s, I1 **1,067** for 14 and 172 s, and I2 **1,185** for 16 and 197 s, I3
 **1,049** for 14 and 169 s, I4 **920** for 13 and 151 s, J1 **1,024** for 14
-and 171 s, and J2 **994** for 14 and 163 s — **11,301 for the eleven, or roughly
-a third each of the 1,200 the seller videos were costing**, because a tour
-writes shorter lines than a demonstration. Every pre-flight estimate was about
-2× the real spend (I2's said 2,695, I3's 2,386, I4's 2,087, J1's 2,329, J2's
-2,262). The `--check` runs and the seed runs cost nothing, and there have been
-fifty.
-**Balance after this batch: 77,699 of 121,027** on the one configured key, which
+and 171 s, J2 **994** for 14 and 163 s, and J3 **937** for 13 and 152 s —
+**12,238 for the twelve, or roughly a third each of the 1,200 the seller videos
+were costing**, because a tour writes shorter lines than a demonstration. Every
+pre-flight estimate was about 2× the real spend (I2's said 2,695, I3's 2,386,
+I4's 2,087, J1's 2,329, J2's 2,262, J3's 2,129). The `--check` runs and the seed
+runs cost nothing, and there have been fifty-five.
+**Balance after this batch: 76,762 of 121,027** on the one configured key, which
 is seventy-odd more admin videos.
 
 **Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
@@ -2656,16 +2660,77 @@ bin is honoured either way and is "pure upside"), so the video does what an
 operator must do and puts both lines into FLOOR. **If anybody does relax it,
 relax the COPY instead — "can still note one" is the sentence that is wrong.**
 
-### J3. Labels and the picking sheet · `needs demo data`
+### J3. Labels and the picking sheet · **FILMED** — `print-and-pick.mp4`
 
 **Promise** — you can get a day's parcels printed and picked.
-**Length** 4 min. **Prerequisites** J2. **Needs** confirmed orders with
-waybills. D0 provides them.
-**Covers** `/warehouse/printing`, which owns picking now: shipping labels
-(build → print → **confirm printed**, its own step because a PDF existing is
-not paper existing), then the picking sheet, then marking the batch picked.
-Confirming the print is what allocates the stock, so a shortfall surfaces at
-the desk before anyone walks — that is the reason for the order of the steps.
+**Length** 13 scenes, 2 min 32 s. **Needs**
+`seed-demo-data.mjs print-and-pick`.
+**Covers** `/warehouse/printing` as WMS-1 describes it: labels first, then the
+picking sheet, and nothing moves until somebody confirms the paper came out.
+Selecting a walk rather than the whole queue, the sheet naming anything it could
+not print rather than dropping it, confirming labels (which moves those parcels
+to the picking tab), printing the picking list, **confirming THAT — which is
+what allocates phase-2** — then past batches and marking the batch picked.
+
+**THE ONE THAT BLOCKED IT, AND IT IS NOT A BUG: no parcel on this box can have
+a stored label.** `DelhiveryLabelService` puts the courier's
+`pdf_download_link` through `assertPublicHttpsUrl` — the same SSRF guard a
+seller-supplied webhook URL goes through, because the bytes end up in our bucket
+and are later presigned for a seller to open — and `apps/delhivery-sim`'s link
+is `http://127.0.0.1`, refused on the scheme before the address is even looked
+at. So every confirmation logs "AWB persisted but label upload pending", the
+waybill is durable and the label never arrives: **64 shipments carrying a
+waybill and 10 carrying a label** when this was measured. Without one the
+printing station builds a sheet of ZERO pages and names every parcel
+`NO_STORED_LABEL` — the screen behaving perfectly — and the picking tab is
+gated on labels having been confirmed, so **the whole of J3 to J6 sits behind
+that one file**.
+
+`storeStubLabel` in the seeding writes what the real leg would have written: a
+genuine one-page PDF (built with the SAME pdf-lib the sheet merges with —
+`LabelSheetService` reports anything it cannot parse as `UNREADABLE_PDF`, so the
+`%PDF … %%EOF` string stub mode returns would fail one layer further along and
+look like a different problem), into the mock Spaces path, with an ordinary
+CUR-6 `awb_labels` row beside it. `lib/deps.mjs` borrows `pdf-lib` from
+`apps/api` exactly as it already borrows Prisma, argon2, ioredis and BullMQ.
+
+**Its three parcels are its own, and they are named by the DESTINATION PIN.**
+The label queue is genuinely busy — two dozen parcels, because every confirmed
+order carries a waybill from the moment it is confirmed (CUR-2b) — and that is
+the right picture, but it is also why the video must not select the top rows:
+among them sit `RSH-LIFE-CONFIRMED`, D0's parcel for B7 whose whole value is
+being at CONFIRMED, and `RSH-CALL-1`, which is I1's. Printing and picking either
+moves it and `lifecycleReport` fails the next seed run naming it. The queue's
+columns are the order number, the seller, the courier, the waybill, the
+destination, the COD and the item count — both numbers are minted per run and
+the seller is shared with five other parcels — so the pin is the only stable
+handle, and the seeding asserts exactly three live parcels carry it.
+
+**The seeding is REUSE-OR-RETIRE, and the retire CANCELS**, which none of the
+earlier ones do. This world is spent progressively — labels confirmed, then the
+picking sheet, then the batch marked picked — and a check can stop between any
+two. A parcel still CONFIRMED with no label printed is where the video expects
+it, so it is reused and a failed check costs nothing; anything else is retired
+forward AND cancelled through the ordinary admin cancel, because a retired
+parcel carries the same pin for ever and three of them left CONFIRMED means the
+next take opens on six rows where the narration says three. The cancel also
+releases the reservation, which is what stops three units a take accumulating.
+Past PENDING_PICK it is left alone and said out loud.
+
+**`RSH-PICK-` had to join `PROTECTED_REF_PREFIXES`**, for exactly the reason
+`RSH-CALL-` did and which I1's entry already states: these end the take
+CONFIRMED-or-later holding a LIVE RESERVATION, and CONFIRMED is in
+`REMOVABLE_STATUSES` — so the shared clearing tried to delete an order whose
+`order_items` are referenced by `stock_reservations` under RESTRICT, and died
+there rather than in the video's own seeding. (The catch added for I4 now names
+that shape too.)
+
+**One narration correction the frames forced.** A line about serialised units
+being left behind for the pick station was written as though it happened; the
+catalogue is all NORMAL-mode, so all three parcels went through and the frame
+showed nothing of the sort. It now quotes what the confirm dialog says BEFORE
+the press — "any with serialised units stay behind for the pick station" — which
+is on screen and is the rule stated as a rule.
 
 ### J4. Packing a parcel · `needs demo data`
 

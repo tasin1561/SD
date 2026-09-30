@@ -50,6 +50,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `sellers-asking-to-call-again.mp4`  | Deciding a seller's request to ring a customer who already said no — why a card is mostly its reason, approving one and declining the other, the extra calls an approval has to grant or the order comes back already out of chances, and a history where nothing is deleted.                                    |
 | `where-things-live.mp4`             | A warehouse's shelving — what is standing in every bin across the business, why in-transit stock is counted somewhere it cannot be sold, building a shelf from coordinates rather than typing its name, and the switch that changes what you are ASKED without moving anything.                                  |
 | `receive-a-consignment.mp4`         | Counting goods in at the door — claiming the receipt so two people cannot count the same pallet, recording what was really found rather than what was promised, and completing, which writes real stock and cannot be cancelled afterwards.                                                                   |
+| `print-and-pick.mp4`                | A morning's parcels turned into paper — selecting a walk rather than the whole queue, a sheet that names what it could not print, confirming labels, and confirming the picking list, which is what actually claims the units on the shelves.                                                              |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -455,6 +456,17 @@ the file are still the words in `narration.mjs`.
   that said so — and in that case it was a product bug rather than a flow one
   (see the curriculum's Bugs found). **When a form field misbehaves under
   `clear: true`, check whether a HUMAN can clear it before working around it.**
+- **No parcel on this box can have a STORED LABEL, and that is correct
+  behaviour.** `DelhiveryLabelService` puts the courier's `pdf_download_link`
+  through the SSRF guard (`assertPublicHttpsUrl`), and `apps/delhivery-sim`'s
+  link is `http://127.0.0.1` — refused on the scheme. Every confirmation logs
+  "AWB persisted but label upload pending"; the waybill is durable and the
+  label never comes. `/warehouse/printing` then builds a ZERO-page sheet and
+  names every parcel `NO_STORED_LABEL`. `storeStubLabel` in `seed-demo-data.mjs`
+  writes what the real leg would have written — a genuine PDF built with the
+  same pdf-lib the sheet merges with, because a hand-rolled `%PDF` header fails
+  one layer further along as `UNREADABLE_PDF` and looks like a different
+  problem.
 - **A `--check` run SPENDS a world just as a take does.** J2's very first press
   moves its goods receipt out of PENDING, so the second check opens on an empty
   list and fails at scene one. That is the seed doing its job, not a flaw —

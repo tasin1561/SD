@@ -8742,6 +8742,172 @@ export const FLOWS = {
       },
     },
   },
+
+  'print-and-pick': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/printing`, { waitUntil: 'domcontentloaded' });
+        // Gated on OUR three rows, by the destination pin nothing else on
+        // the box uses — the queue is two dozen parcels deep and the
+        // video must touch only the three the seeding placed.
+        await ourParcels(page).first().waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async order({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph').first(), 3200);
+      },
+
+      async queue({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-thead').first(), 3400);
+      },
+
+      async select({ page, stage }) {
+        /*
+          THREE ROWS, EACH BY ITS OWN CHECKBOX. The header checkbox would
+          select all two dozen — including `RSH-LIFE-CONFIRMED`, which is
+          D0's parcel for B7 and whose whole value is sitting at
+          CONFIRMED, and `RSH-CALL-1`, which is I1's. Printing and
+          picking either moves it and the next seed run fails naming it.
+        */
+        const rows = ourParcels(page);
+        const n = await rows.count();
+        if (n !== 3) {
+          throw new Error(`${n} parcels are addressed to the seeded pin, expected 3.`);
+        }
+        for (let i = 0; i < n; i += 1) {
+          await stage.clickIt(rows.nth(i).locator('input.wh-check'), { settle: 220, after: 260 });
+        }
+        await page.getByText('3 selected').waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.getByText('3 selected'), 2600);
+      },
+
+      async printed({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Print labels' }), { after: 1600 });
+        /*
+          THE SHEET DIALOG, by its own count line. `printPdf` prints from
+          a HIDDEN IFRAME rather than a new window — headless Chromium
+          treats `window.print()` as a no-op — so nothing blocks here,
+          but the dialog is the thing the narration is about either way.
+        */
+        const dialog = page.getByRole('dialog');
+        await dialog.getByText(/3 labels across/).waitFor({ state: 'visible', timeout: 30_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__body').first(), 3200);
+      },
+
+      async confirm({ page, stage }) {
+        await stage.dwellOn(
+          page.getByRole('dialog').getByText(/Only confirm what is actually on paper/),
+          3600,
+        );
+      },
+
+      async picking({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Yes, they printed' }),
+          { after: 1600 },
+        );
+        await page
+          .getByText(/labels? confirmed/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(page.getByRole('button', { name: 'Picking list' }), { after: 1400 });
+        // The same three parcels, now on the SECOND tab — which is what
+        // the narration claims and what confirming the labels caused.
+        await ourParcels(page).first().waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3000);
+      },
+
+      async list({ page, stage }) {
+        const rows = ourParcels(page);
+        const n = await rows.count();
+        if (n !== 3) {
+          throw new Error(`${n} labelled parcels are ready to pick, expected 3.`);
+        }
+        for (let i = 0; i < n; i += 1) {
+          await rows.nth(i).locator('input.wh-check').click();
+        }
+        await stage.clickIt(page.getByRole('button', { name: 'Print picking list' }), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.getByText(/lines? to walk/).waitFor({ state: 'visible', timeout: 30_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__body').first(), 3200);
+      },
+
+      async allocates({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Yes, it printed' }),
+          { after: 1800 },
+        );
+        /*
+          THE SERVICE'S OWN REPORT — "<batch> is on the floor — N orders
+          sent to be picked". Confirming the PICKING sheet is what
+          allocates phase-2 (WMS-1), so this toast is the only place the
+          write announces itself.
+        */
+        await page
+          .getByText(/is on the floor/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.getByText(/is on the floor/).first(), 3200);
+      },
+
+      async batches({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Past batches' }), { after: 1400 });
+        await page
+          .locator('.sk-tbody .sk-tr')
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3400);
+      },
+
+      async walk({ page, stage }) {
+        /*
+          THE FIRST PRINTED BATCH, which is ours: the list is newest
+          first and only a PRINTED batch offers "Picked" at all (a DRAFT
+          offers "It printed" and "Abandon"). Reaching for the BUTTON
+          rather than the row is therefore already specific.
+        */
+        await stage.clickIt(page.getByRole('button', { name: /^Mark .* picked$/ }).first(), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.getByRole('button').first().waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__body').first(), 3000);
+      },
+
+      async strict({ page, stage }) {
+        await stage.clickIt(
+          page
+            .getByRole('dialog')
+            .getByRole('button', { name: /picked|confirm/i })
+            .last(),
+          { after: 1800 },
+        );
+        await page
+          .getByText(/at the packing bench|still need scanning/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph').first(), 3400);
+      },
+    },
+  },
 };
 
 /**
@@ -8825,4 +8991,18 @@ async function putIntoFloor(page, line) {
     );
   }
   await line.getByLabel(/^Putaway bin$/).selectOption(binId);
+}
+
+/**
+ * J3's three parcels, by the destination pin the seeding gives them.
+ *
+ * The label queue's columns are the order number, the seller, the
+ * courier, the waybill, the destination, the COD and the item count.
+ * Both numbers are minted per run and the seller is shared with five
+ * other parcels in the same queue — two of which belong to other videos
+ * and must not be printed — so the pin is the only stable handle, and
+ * the seeding asserts exactly three waiting parcels carry it.
+ */
+function ourParcels(page) {
+  return page.locator('.sk-tbody .sk-tr', { hasText: '560103' });
 }
