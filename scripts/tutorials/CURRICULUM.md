@@ -32,17 +32,26 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (43):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — and **P5, the first admin video.** Every one has its
-own entry below saying what it covers and what its seeding does.
+**Filmed so far (44):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5** and **H1** on the admin side. Every one
+has its own entry below saying what it covers and what its seeding does.
 
-**THE NEXT ENTRY IS H1 — "The ops dashboard".** P5 was taken out of order on
-purpose (this document argues it should be the first admin tutorial anybody
-watches, and [the recommendation](#the-recommendation) goes further: if the ops
-team never grows, P5 is worth making on its own and the rest are not). That is
-done. From here, work sections H–P in their written order, and read
-[the recommendation](#the-recommendation) first — they are 43 entries and this
-document is explicit that they are a BET.
+**THE NEXT ENTRY IS H2 — "Finding an order and reading its history".** P5 was
+taken out of order on purpose (this document argues it should be the first admin
+tutorial anybody watches, and [the recommendation](#the-recommendation) goes
+further: if the ops team never grows, P5 is worth making on its own and the rest
+are not); H1 followed it as the pair. From here, work sections H–P in their
+written order, and read [the recommendation](#the-recommendation) first — they
+are 42 entries and this document is explicit that they are a BET.
+
+**H2 is `needs demo data` and D0 covers it** — `RSH-LIFE-RESTOCKED` is the
+richest order on the box (a full journey, a damage ticket, a refund) and
+`RSH-LIFE-REVIEW` is the one that is genuinely stuck. Add
+`'find-an-order'` (or whatever it is slugged) to `LIFECYCLE_SLUGS` in the same
+change, as H1 and P5 both did. **Admin order detail is already surveyed** — P5
+films the bottom of that page, and its check shots under
+`out/verify/what-we-cannot-undo-check/02-god-mode.png` show the tracker, the
+Full history and the Actions panel in one frame.
 
 **THE ADMIN RIG IS BUILT AND PROVEN.** `record.mjs` takes `app: 'admin'` on a
 flow and drives apps/admin on :3002 as `tutorial-ops@skydrop.local` (the
@@ -52,11 +61,12 @@ health-checks only the consoles a run needs. See
 [Re-running](README.md#re-running) for the two commands that start the app.
 P5 drove ten admin screens through it with no changes to the rig at all.
 
-**WHAT P5 COST, MEASURED: 1,032 credits** (89,000 → 87,968 on the one
-configured key) for 13 scenes and 156 s of narration — **about a third of the
-1,200 the seller videos were costing**, because a tour writes shorter lines than
-a demonstration. The pre-flight estimate said 2,344, which is the usual ~2×
-over. Four `--check` runs and five seed runs went into it and cost nothing.
+**WHAT THE ADMIN VIDEOS COST, MEASURED:** P5 **1,032 credits** (89,000 → 87,968 on the one
+configured key) for 13 scenes and 156 s of narration, and H1 **about the same**
+for 13 scenes and 143 s — **roughly a third of the 1,200 the seller videos were
+costing**, because a tour writes shorter lines than a demonstration. Both
+pre-flight estimates were about 2× the real spend (2,344 and 2,152). The
+`--check` runs and the seed runs cost nothing, and there were nine of them.
 
 **Its subtitle is `Skydrop for ops`**, not `Skydrop for sellers`. That is the
 convention for H–P; the title card is the only place it shows.
@@ -123,7 +133,7 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — THIRTY-ONE so
+**Filming these screens is finding real bugs at a steady rate — THIRTY-TWO so
 far, plus seven in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -1953,13 +1963,43 @@ sign-in needs to exist beside the seller one. Half a day; see
 
 ## H — Your first day on the ops desk
 
-### H1. The ops dashboard · `needs demo data`
+### H1. The ops dashboard · **FILMED** — `the-ops-dashboard.mp4`
 
 **Promise** — you can open one screen and know what needs a person today.
-**Length** 3 min. **Needs** D0, so the attention tiles are loud rather than
-all-clear.
-**Covers** `/dashboard`: the seven attention tiles, quiet at zero and loud
-otherwise, over the work queues; then performance and money. Read-only.
+**Length** 13 scenes. **Prerequisites** none — with P5 it is the pair to watch
+first. **Needs** `seed-demo-data.mjs the-ops-dashboard`, which is D0: the
+attention tiles have to be loud rather than all-clear, and D0's parcels are what
+lights them.
+**Covers** `/dashboard` and nothing else, read-only. Three bands and the lesson
+that they answer three different questions: what is waiting on a person RIGHT
+NOW (seven tiles, lit when they have work and quiet at zero), how the last
+thirty days have gone (rates, each with its denominator printed under it), and
+whose money is where (ending on the one tile that is a debt rather than income).
+
+**NO FIGURE IS SPOKEN, and here that is not only the standing rule.** The
+call-centre tile counts ORDERS in `PENDING_CONFIRMATION` and links to
+`/call-center/queue`, which counts live queue ENTRIES. On a healthy database
+those agree (CC-6 enqueues on entry to that status); on this box they read 157
+and 3, because 153 Test Brand orders were bulk-loaded on 23 Sept with no entry
+ever created. **I1 films that queue**, so a spoken figure here would put the two
+videos in contradiction. Describing the shape is true either way.
+
+**`networkidle` never arrives on this page** — it polls — so the opening scene's
+wait burned its whole 30-second timeout and the first `--check` showed
+`intro … scene 34.58s`. It failed nothing; it would simply have filmed
+thirty-four seconds of picture under an eleven-second line. Gate on the
+subtitle instead. **A slow scene is not a failed step, and only the timing
+column says so.**
+
+**Tiles are picked by their AREA word inside `.db-attn`, never by position.**
+The grid is permission-filtered (a role without money sees five tiles, not
+seven), so an index films whichever tile happened to be fourth for whoever last
+edited the guards. The same words are in the sidebar, which is why the filter is
+scoped to the card class — `attnCard()` in `flows.mjs`.
+
+**One bug, found by counting the tiles in a frame:** the note under the band
+read "4 queues need staff attention" over FIVE lit tiles. See
+[Bugs found](#bugs-found-while-establishing-feasibility).
 
 ### H2. Finding an order and reading its history · `needs demo data`
 
@@ -2996,6 +3036,23 @@ so a receive landing first cannot be overwritten. The spec's Prisma fake now
 APPLIES the where clause on a shipment write — the `pnl-fake-db.ts` lesson, a
 second time: a fake that answers every write alike cannot tell a guarded write
 from an unguarded one, and the guards ARE the behaviour under test. Proved red.
+
+**One from filming H1 (2026-09-30), found by COUNTING THE TILES IN A FRAME.**
+The admin dashboard's attention band said **"4 queues need staff attention"**
+over FIVE lit tiles. `needingAttention` was a bare array of six counts in the
+same order the seven tiles render, with `toPick` simply absent — a skipped line,
+not a decision, since the array otherwise followed the render order exactly. So
+a warehouse holding twenty parcels ready for a picking sheet, and nothing else
+wrong anywhere, read **"Nothing is waiting on a person"** directly above a lit
+tile saying twenty. It undercounted by one on every morning picking was
+outstanding, which is most of them, and was only VISIBLE on the morning picking
+was the ONLY thing outstanding — the morning the note exists for. The recurring
+shape again. It is now `countNeedingAttention`, taking a NAMED FIELD PER TILE
+rather than an array: a missing key is a hole with a name where a missing array
+element is nothing at all. `dashboard-attention-count.test.ts` asserts the
+arithmetic AND compares the counted set against the `<AttentionCard>`s the view
+actually renders, because proving the arithmetic was never the problem — the old
+code counted its six perfectly. Proved red.
 
 **And one capability with no screen, found by the same video: THE BIN COLLAPSE.**
 BIN-4 is a designed, guarded, destructive operation — SUPER_ADMIN, the warehouse

@@ -845,6 +845,18 @@ async function dwellOnTerms(page, stage, labels, ms = 1800) {
  * hour of looking in the wrong place. The page's own verdict is on
  * screen; this puts it in the error.
  */
+/**
+ * One attention tile on the admin dashboard, by its AREA word.
+ *
+ * Scoped to `.db-attn` because every one of those words is also a
+ * sidebar link — "Call centre", "Warehouse", "Tickets" — and a bare
+ * text match takes the nav item, which is on screen the whole time and
+ * would film the left-hand rail for thirteen seconds.
+ */
+function attnCard(page, area) {
+  return page.locator('.db-attn').filter({ hasText: area }).first();
+}
+
 async function signIn({ page, stage, baseUrl, seller }) {
   await page.goto(`${baseUrl}/login`, { waitUntil: 'domcontentloaded' });
   await page.getByLabel(/email/i).first().fill(seller.email);
@@ -7008,6 +7020,126 @@ export const FLOWS = {
         const close = page.getByRole('button', { name: /^Close August 2026$/ }).first();
         await close.waitFor({ state: 'visible', timeout: 20_000 });
         await stage.dwellOn(close, 3600);
+      },
+    },
+  },
+  /*
+    H1 — the admin dashboard. ONE screen, read-only, and every scene is
+    a different part of it.
+
+    Each attention tile is picked by its AREA word inside `.db-attn`,
+    never by position: the grid is permission-filtered (a role without
+    money sees five tiles, not seven), so an index would film whichever
+    tile happened to be fourth for whoever last edited the guards. The
+    area words are also in the sidebar, which is why the filter is
+    scoped to the card class rather than to the page.
+  */
+  'the-ops-dashboard': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        // NOT `networkidle`. This page polls, so that state never
+        // arrives and the wait burns its whole 30s timeout — which does
+        // not fail anything, it just makes the opening scene thirty
+        // seconds of picture against an eleven-second line. Gate on the
+        // thing that says the page has drawn instead.
+        await page
+          .getByText('What is waiting on someone right now', { exact: false })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async attention({ page, stage }) {
+        const head = page.getByText('Operations attention queue', { exact: true }).first();
+        await head.waitFor({ state: 'visible', timeout: 25_000 });
+        // The note under the heading counts the LIT ones, and it only
+        // appears once every tile's query has answered — so waiting for
+        // it is what stops this filming a row of skeletons.
+        await page
+          .getByText(/queues? needs? staff attention|Nothing is waiting on a person/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.db-attn-grid').first(), 3400);
+      },
+
+      async 'call-centre'({ page, stage }) {
+        await stage.dwellOn(attnCard(page, 'Call centre'), 3600);
+      },
+
+      async merchant({ page, stage }) {
+        await stage.dwellOn(attnCard(page, 'Merchant'), 3600);
+      },
+
+      async warehouse({ page, stage }) {
+        await stage.dwellOn(attnCard(page, 'Warehouse'), 3400);
+      },
+
+      async quiet({ page, stage }) {
+        // BOTH of the quiet ones, so the scene shows the contrast the
+        // narration describes rather than one dark card.
+        await stage.dwellOn(attnCard(page, 'Dispatch'), 1700);
+        await stage.dwellOn(attnCard(page, 'Stock'), 2600);
+      },
+
+      async support({ page, stage }) {
+        await stage.dwellOn(attnCard(page, 'Support'), 3400);
+      },
+
+      async settlements({ page, stage }) {
+        await stage.dwellOn(attnCard(page, 'Settlements'), 3400);
+      },
+
+      async performance({ page, stage }) {
+        const head = page.getByText(/^Performance & fulfilment/).first();
+        await head.waitFor({ state: 'visible', timeout: 25_000 });
+        await head.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(head, 3400);
+      },
+
+      async rates({ page, stage }) {
+        // Gate on a FIGURE rather than on the card: these read "—" until
+        // the summary answers, and a dash under a line about rates and
+        // denominators is exactly the frame this check exists to catch.
+        const confirmed = page.getByText('Confirmed on call', { exact: true }).first();
+        await confirmed.waitFor({ state: 'visible', timeout: 25_000 });
+        await page
+          .locator('.db-chip')
+          .filter({ hasText: /^\d+\/\d+$/ })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(confirmed, 1700);
+        await stage.dwellOn(page.getByText('Returned (RTO)', { exact: true }).first(), 2400);
+      },
+
+      async money({ page, stage }) {
+        const head = page.getByText('Financial treasury & settlements', { exact: true }).first();
+        await head.waitFor({ state: 'visible', timeout: 25_000 });
+        await head.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.getByText('COD collected', { exact: true }).first(), 3400);
+      },
+
+      async outstanding({ page, stage }) {
+        const owed = page.getByText('Outstanding owed', { exact: true }).first();
+        await owed.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(owed, 2200);
+        await stage.dwellOn(page.getByRole('link', { name: 'View ledger' }).first(), 2600);
+      },
+
+      async outro({ page, stage }) {
+        await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.db-attn-grid').first(), 3400);
       },
     },
   },

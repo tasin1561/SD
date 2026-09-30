@@ -487,6 +487,9 @@ const LIFECYCLE_SLUGS = new Set([
   // it is there. Cheap in practice: the pass is idempotent and only
   // rebuilds it after a B7 take has spent it.
   'read-your-stock',
+  // H1 reads the admin dashboard's attention band, and a band of
+  // zeroes teaches nothing — D0's parcels are what light it.
+  'the-ops-dashboard',
   // P5 walks the RTO station and reads its "At our door" worklist out
   // loud. `RSH-LIFE-ATDOOR` is the only parcel that ever puts a row in
   // it — a return the courier has handed back that nobody has received.

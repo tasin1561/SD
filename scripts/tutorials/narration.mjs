@@ -2460,6 +2460,76 @@ export const VIDEOS = [
       },
     ],
   },
+  /*
+    H1 — the admin dashboard, read-only. One screen, three bands, and
+    the lesson is that they answer three different questions.
+
+    NO FIGURE IS SPOKEN. The tiles print every one of them, and on this
+    box the call-centre tile counts 157 ORDERS awaiting confirmation
+    while the queue it links to holds three live entries — 153 of the
+    difference is a bulk load somebody left behind. Describing the
+    SHAPE is right anyway (the standing rule) and here it is also what
+    keeps this video and I1's from contradicting each other.
+  */
+  {
+    slug: 'the-ops-dashboard',
+    title: 'What needs a person today',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'This is the staff console’s front page, and it answers one question before any other: what is waiting on somebody right now. Everything below that is history.',
+      },
+      {
+        id: 'attention',
+        say: 'The top band is the work queue. Seven areas, each with a count, and the ones with something in them are lit — so the screen reads as a shape before you read a single number.',
+      },
+      {
+        id: 'call-centre',
+        say: 'The call centre is first because nothing moves until a customer says yes. These are orders nobody has reached yet, and the P zero badge is the console telling you where to start.',
+      },
+      {
+        id: 'merchant',
+        say: 'The next is not yours to clear. These rang out until the cap, and the seller has been asked whether to keep trying or let them go — so it waits on them, not on us.',
+      },
+      {
+        id: 'warehouse',
+        say: 'Then the floor. Confirmed orders with stock behind them, waiting for somebody to print a picking sheet. That number is a morning’s work, not a problem.',
+      },
+      {
+        id: 'quiet',
+        say: 'Two of them are quiet, and that is the point of the band. Nothing a courier refused to carry, nothing confirmed against an empty shelf. A zero here is genuinely good news.',
+      },
+      {
+        id: 'support',
+        say: 'Support is damage claims and seller issues, and it carries an Action badge because every one of them has somebody at the other end waiting to hear back from us.',
+      },
+      {
+        id: 'settlements',
+        say: 'And the last is money. Sellers who have asked to be paid out and have not been yet — marked Escrow, because we are holding cash that belongs to somebody else.',
+      },
+      {
+        id: 'performance',
+        say: 'The second band is a different question. Not what is waiting, but how the last thirty days have gone — and every figure in it is a rate with its own denominator underneath.',
+      },
+      {
+        id: 'rates',
+        say: 'Confirmed on call, out of the orders placed. Delivered, out of everything dispatched. Returned, the same. Read together they say where parcels are being lost, which is the useful reading.',
+      },
+      {
+        id: 'money',
+        say: 'The third band is the money the last thirty days moved. What the couriers collected, what we charged for carrying it, and what we have actually paid out to sellers.',
+      },
+      {
+        id: 'outstanding',
+        say: 'The last tile is the one to read carefully. It is not revenue — it is seller balances we hold and have not paid out. That is a debt, and the link goes to the ledger behind it.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the top band is today, the middle is the month, and the bottom is whose money is where. Every tile is a link to the screen that clears it.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

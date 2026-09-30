@@ -300,6 +300,46 @@ function MoneyCard({
   );
 }
 
+/**
+ * How many of the attention tiles have work on them.
+ *
+ * ── WHY THIS IS A NAMED SHAPE AND NOT AN ARRAY LITERAL ───────────────
+ * It was six entries in a bare array, in the same order the tiles
+ * render — except that `toPick` was not among them. So a warehouse with
+ * twenty parcels waiting for a picking sheet and nothing else wrong read
+ * "Nothing is waiting on a person", under a lit tile saying twenty.
+ * It undercounted by one on every other morning too, which is why it
+ * survived: the note is only WRONG when picking is the thing that needs
+ * doing, and only OBVIOUSLY wrong when it is the only thing.
+ *
+ * A named field per tile is what makes the omission visible — a missing
+ * key is a hole with a name, where a missing array element is nothing at
+ * all — and `dashboard-attention-count.test.ts` asserts the set, so a
+ * tile added to the grid without a count here fails rather than quietly
+ * not counting.
+ */
+export const ATTENTION_QUEUES = [
+  'awaitingCall',
+  'awaitingSeller',
+  'toPick',
+  'manualPlacement',
+  'outOfStock',
+  'openTickets',
+  'pendingWithdrawals',
+] as const;
+
+/**
+ * `number | undefined` rather than an optional key: under
+ * `exactOptionalPropertyTypes` those are different types, and every
+ * caller here passes `query.data?.total`, which is one or the other.
+ * A tile whose query has not answered is not a tile with no work.
+ */
+export type AttentionCounts = Record<(typeof ATTENTION_QUEUES)[number], number | undefined>;
+
+export function countNeedingAttention(counts: AttentionCounts): number {
+  return ATTENTION_QUEUES.reduce<number>((n, key) => n + ((counts[key] ?? 0) > 0 ? 1 : 0), 0);
+}
+
 function pct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
 }
@@ -331,14 +371,15 @@ export function DashboardView(): ReactElement {
   const summary = useReportSummary(undefined, { enabled: canReports });
   const nothingToShow = !canOrders && !canTickets && !canMoney && !canReports;
 
-  const needingAttention = [
-    awaitingCall.data?.total,
-    awaitingSeller.data?.total,
-    manualPlacement.data?.total,
-    outOfStock.data?.total,
-    openTickets.data?.total,
-    pendingWithdrawals.data?.total,
-  ].reduce<number>((n, c) => n + ((c ?? 0) > 0 ? 1 : 0), 0);
+  const needingAttention = countNeedingAttention({
+    awaitingCall: awaitingCall.data?.total,
+    awaitingSeller: awaitingSeller.data?.total,
+    toPick: toPick.data?.total,
+    manualPlacement: manualPlacement.data?.total,
+    outOfStock: outOfStock.data?.total,
+    openTickets: openTickets.data?.total,
+    pendingWithdrawals: pendingWithdrawals.data?.total,
+  });
 
   return (
     <div className="af-page">
