@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { ActorType, BinType, RtoDisposition, StockMovementType } from '@skydrop/db';
+import { parcelLabel } from '../../../common/text/parcel-label';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockTransferService } from '../../inventory-transfer/services/stock-transfer.service';
@@ -228,6 +229,15 @@ export class RtoPutawayService {
     const pending = await this.listPending(shipmentId);
     const byItem = new Map(pending.map((p) => [p.shipmentItemId, p]));
 
+    // The movement's reason is read on the stock ledger by a person, so
+    // it names the parcel by its number and not its uuid — the same
+    // rule the order's own history follows.
+    const parcelRow = await this.prisma.client.shipment.findUnique({
+      where: { id: shipmentId },
+      select: { id: true, shipmentNumber: true },
+    });
+    const parcel = parcelLabel(parcelRow ?? { id: shipmentId });
+
     const results: Array<{
       shipmentItemId: string;
       destBinId: string;
@@ -293,7 +303,7 @@ export class RtoPutawayService {
           // they are. Re-batching would break FEFO and the freight
           // lineage the batch carries.
           destBatchId: p.batchId,
-          reason: `RTO putaway — shipment ${shipmentId}`,
+          reason: `Return putaway — parcel ${parcel}`,
         },
         staffId,
       );

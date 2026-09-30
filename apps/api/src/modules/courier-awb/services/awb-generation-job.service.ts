@@ -6,6 +6,7 @@ import {
   ShipmentStatus,
   SupersedeReason,
 } from '@skydrop/db';
+import { parcelLabel } from '../../../common/text/parcel-label';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderWriteService } from '../../order/services/order-write.service';
@@ -139,6 +140,10 @@ export class AwbGenerationJobService {
           where: { status: ShipmentStatus.CREATED },
           select: {
             id: true,
+            // The order's history names a parcel by its number, never
+            // its uuid — selected here so the routing helper needs no
+            // second read on a path that is already a recovery.
+            shipmentNumber: true,
             orderShipments: {
               select: { orderId: true },
               orderBy: { shipmentSequence: 'asc' },
@@ -247,7 +252,11 @@ export class AwbGenerationJobService {
         failedCount += 1;
         const reason = AwbGenerationJobService.supersedeReasonFor(gen);
         if (orderId !== null) {
-          await this.routeOrderToManual(orderId, shipment.id, OrderStatus.PENDING_DISPATCH);
+          await this.routeOrderToManual(
+            orderId,
+            parcelLabel(shipment),
+            OrderStatus.PENDING_DISPATCH,
+          );
         }
         const sup = await this.supersede.supersede(shipment.id, reason, {
           type: ActorType.SYSTEM,
@@ -412,7 +421,7 @@ export class AwbGenerationJobService {
         shipment: { status: ShipmentStatus.CREATED, supersededAt: null, deletedAt: null },
       },
       orderBy: { shipmentSequence: 'desc' },
-      select: { shipmentId: true },
+      select: { shipmentId: true, shipment: { select: { shipmentNumber: true } } },
     });
 
     if (link === null) {
@@ -423,6 +432,7 @@ export class AwbGenerationJobService {
     }
 
     const shipmentId = link.shipmentId;
+    const parcel = parcelLabel({ id: shipmentId, shipmentNumber: link.shipment?.shipmentNumber });
     try {
       const gen = await this.generation.generateForShipment(shipmentId, { type: ActorType.SYSTEM });
 
@@ -460,7 +470,7 @@ export class AwbGenerationJobService {
       // on. Nothing is superseded and no issue is raised: waiting for a
       // decision is the system working.
       if (gen.status === 'AWAITING_COURIER_CHOICE') {
-        await this.pauseForCourierChoice(orderId, shipmentId);
+        await this.pauseForCourierChoice(orderId, parcel);
         return {
           orderId,
           shipmentId,
@@ -520,7 +530,7 @@ export class AwbGenerationJobService {
       // PICKED → PACKED under Model C (CUR-3). That is what makes
       // routing a confirmation-time refusal here correct rather than a
       // dead end.
-      await this.routeOrderToManual(orderId, shipmentId, OrderStatus.CONFIRMED);
+      await this.routeOrderToManual(orderId, parcel, OrderStatus.CONFIRMED);
       const sup = await this.supersede.supersede(
         shipmentId,
         AwbGenerationJobService.supersedeReasonFor(gen),
@@ -557,14 +567,14 @@ export class AwbGenerationJobService {
    * is a parcel that will be booked by the next run with the carrier's
    * own choice, which is a decision nobody made.
    */
-  private async pauseForCourierChoice(orderId: string, shipmentId: string): Promise<void> {
+  private async pauseForCourierChoice(orderId: string, parcel: string): Promise<void> {
     try {
       await this.orderWrite.transitionStatus({
         orderId,
         to: OrderStatus.AWAITING_COURIER,
         actor: { type: ActorType.SYSTEM, id: null },
         expectedFrom: OrderStatus.CONFIRMED,
-        reason: `Waiting for a courier to be chosen for shipment ${shipmentId}`,
+        reason: `Waiting for a courier to be chosen for parcel ${parcel}`,
       });
     } catch (err) {
       const code =
@@ -588,7 +598,7 @@ export class AwbGenerationJobService {
    *  Both edges exist on the matrix with no side-effects. */
   private async routeOrderToManual(
     orderId: string,
-    shipmentId: string,
+    parcel: string,
     expectedFrom: OrderStatus,
   ): Promise<void> {
     try {
@@ -597,7 +607,7 @@ export class AwbGenerationJobService {
         to: OrderStatus.PENDING_MANUAL_PLACEMENT,
         actor: { type: ActorType.SYSTEM, id: null },
         expectedFrom,
-        reason: `AWB generation failed for shipment ${shipmentId}`,
+        reason: `Waybill booking failed for parcel ${parcel}`,
       });
     } catch (err) {
       const code =

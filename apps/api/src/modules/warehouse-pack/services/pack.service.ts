@@ -6,6 +6,7 @@ import {
   ShipmentStatus,
   StockUnitStatus,
 } from '@skydrop/db';
+import { parcelLabel } from '../../../common/text/parcel-label';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -90,6 +91,7 @@ export class PackService {
       where: { id: shipmentId, deletedAt: null },
       select: {
         id: true,
+        shipmentNumber: true,
         status: true,
         packCompletedAt: true,
         manifestId: true,
@@ -250,7 +252,7 @@ export class PackService {
       to: OrderStatus.PACKED,
       actor: { type: ActorType.STAFF, id: staffId },
       expectedFrom: OrderStatus.PICKED,
-      reason: `Pack completed on shipment ${shipmentId}`,
+      reason: `Pack completed on parcel ${parcelLabel(shipment)}`,
       ...(ctx !== undefined ? { ctx } : {}),
     });
 

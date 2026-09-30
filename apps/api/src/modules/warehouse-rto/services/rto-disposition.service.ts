@@ -9,6 +9,7 @@ import {
   StockMovementType,
   StockUnitStatus,
 } from '@skydrop/db';
+import { parcelLabel } from '../../../common/text/parcel-label';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -196,6 +197,7 @@ export class RtoDispositionService {
       where: { id: shipmentId, deletedAt: null },
       select: {
         id: true,
+        shipmentNumber: true,
         originWarehouseId: true,
         rtoReceivedWarehouseId: true,
         orderShipments: {
@@ -483,7 +485,7 @@ export class RtoDispositionService {
       to: finalStatus,
       actor: { type: ActorType.STAFF, id: staffId },
       expectedFrom: OrderStatus.RTO_RECEIVED,
-      reason: `RTO finalize on shipment ${shipmentId}`,
+      reason: `Return finalised on parcel ${parcelLabel(shipment)}`,
       ...(ctx !== undefined ? { ctx } : {}),
     });
 

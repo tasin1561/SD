@@ -12,6 +12,7 @@ import {
   ShipmentStatus,
   StockUnitStatus,
 } from '@skydrop/db';
+import { parcelLabel } from '../../../common/text/parcel-label';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -123,7 +124,7 @@ export class PickExecutionService {
    * (WMS-4) — not an error.
    */
   async start(shipmentId: string, staffId: string, ctx?: ClientContext): Promise<StartPickResult> {
-    const { orderId } = await this.loadClaimedShipment(shipmentId, staffId);
+    const { orderId, parcel } = await this.loadClaimedShipment(shipmentId, staffId);
     const actor = { type: ActorType.STAFF, id: staffId };
 
     const order = await this.orders.getById(orderId);
@@ -142,7 +143,7 @@ export class PickExecutionService {
         to: OrderStatus.PENDING_PICK,
         actor,
         expectedFrom: OrderStatus.CONFIRMED,
-        reason: `Pick started on shipment ${shipmentId}`,
+        reason: `Pick started on parcel ${parcel}`,
         ...(ctx !== undefined ? { ctx } : {}),
       });
     } else if (order.status !== OrderStatus.PENDING_PICK) {
@@ -383,13 +384,13 @@ export class PickExecutionService {
     staffId: string,
     ctx?: ClientContext,
   ): Promise<CompletePickResult> {
-    const { orderId, pickCompletedAt: existing } = await this.loadClaimedShipment(
-      shipmentId,
-      staffId,
-      {
-        allowCompleted: true,
-      },
-    );
+    const {
+      orderId,
+      pickCompletedAt: existing,
+      parcel,
+    } = await this.loadClaimedShipment(shipmentId, staffId, {
+      allowCompleted: true,
+    });
     const actor = { type: ActorType.STAFF, id: staffId };
 
     const order = await this.orders.getById(orderId);
@@ -451,7 +452,7 @@ export class PickExecutionService {
       to: OrderStatus.PICKED,
       actor,
       expectedFrom: OrderStatus.PENDING_PICK,
-      reason: `Pick completed on shipment ${shipmentId}`,
+      reason: `Pick completed on parcel ${parcel}`,
       ...(ctx !== undefined ? { ctx } : {}),
     });
 
@@ -494,11 +495,14 @@ export class PickExecutionService {
     orderId: string;
     pickCompletedAt: Date | null;
     originWarehouseId: string;
+    /** `SH-2026-000123` — what the order's history calls this parcel. */
+    parcel: string;
   }> {
     const shipment = await this.prisma.client.shipment.findFirst({
       where: { id: shipmentId, deletedAt: null },
       select: {
         id: true,
+        shipmentNumber: true,
         status: true,
         pickStartedAt: true,
         pickStartedByStaffId: true,
@@ -552,6 +556,7 @@ export class PickExecutionService {
       orderId,
       pickCompletedAt: shipment.pickCompletedAt,
       originWarehouseId: shipment.originWarehouseId,
+      parcel: parcelLabel(shipment),
     };
   }
 

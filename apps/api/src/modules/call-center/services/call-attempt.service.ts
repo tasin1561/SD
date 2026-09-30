@@ -274,13 +274,24 @@ export class CallAttemptService {
     //    audit. (Count BEFORE the insert so it is exactly the resolver's
     //    `priorAttemptCount`; the resolver adds +1 itself for a counting
     //    outcome — CC-5.)
-    const { attemptId, resolved, priorAttemptCount } = await this.prisma.client.$transaction(
-      async (tx) => {
+    const { attemptId, resolved, priorAttemptCount, callNumber } =
+      await this.prisma.client.$transaction(async (tx) => {
         const priorAttemptCount = await tx.callAttempt.count({
           where: {
             orderId: entry.orderId,
             outcome: { in: this.countingOutcomes },
           },
+        });
+
+        // EVERY call on this order, not just the ones that count toward
+        // the NDR cap. The two are different numbers and only one of
+        // them belongs in a sentence a seller reads: `priorAttemptCount`
+        // deliberately ignores CALLBACK_REQUESTED / TECHNICAL_FAILURE /
+        // LANGUAGE_BARRIER (CC-5), so using it to say "call 3" would
+        // print the same ordinal twice the moment an agent logged one of
+        // those. This is only ever read for the description.
+        const priorCallCount = await tx.callAttempt.count({
+          where: { orderId: entry.orderId },
         });
 
         const r = this.mapping.resolve(input.outcome, {
@@ -366,9 +377,13 @@ export class CallAttemptService {
           tx,
         );
 
-        return { attemptId: attempt.id, resolved: r, priorAttemptCount };
-      },
-    );
+        return {
+          attemptId: attempt.id,
+          resolved: r,
+          priorAttemptCount,
+          callNumber: priorCallCount + 1,
+        };
+      });
 
     // 3b. R5 — at-placement stock hold, BEFORE the NDR transition.
     //     Ordering matters: the durable side-effect (either the release,
@@ -435,7 +450,7 @@ export class CallAttemptService {
           orderId: entry.orderId,
           to: resolved.targetStatus,
           actor: { type: ActorType.STAFF, id: input.agentId },
-          reason: `Call outcome ${input.outcome} (attempt ${attemptId})`,
+          reason: `Call ${callNumber} — ${input.outcome}`,
           ...(input.ctx ? { ctx: input.ctx } : {}),
         });
         finalOrderStatus = res.status;
