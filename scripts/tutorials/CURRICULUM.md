@@ -202,6 +202,15 @@ is down or gated wrong fails the check instead of filming prose.
   lint` does. A spec constructing a service with the wrong number of arguments
   passed the whole unit suite here and turned CI red on the commit after it
   (82fb69f4) — the same shape as the "gate a subset" trap, one directory over.
+  **IT HAPPENED AGAIN ON 2026-09-30 (`ba413eb5`), to somebody who had read this
+  line**, which is why it is worth restating rather than merely leaving here:
+  the spec ran green under jest and turned main red on `tsc`, because
+  `jest.fn(async () => …)` infers its call tuple as `[]` and reading
+  `mock.calls[0]![4]` is then TS2493. The tell is that **jest does not
+  typecheck what it runs** — `ts-jest`'s isolated transpile does not, so a spec
+  can pass and not compile. Typecheck AFTER the spec is written, not before.
+  And a red main blocks DEPLOY, so it holds up whatever else is waiting on the
+  branch — which on that day was somebody else's security work.
 - **`TUT_CHECK_SHOTS=1 node scripts/tutorials/record.mjs --check <slug>` writes
   the end of every scene to `out/verify/<slug>-check/`.** Check mode proves a
   step was REACHED, never that the frame showed what the narration says about
