@@ -19,6 +19,7 @@ import {
   Prisma,
   WalletEntryDirection,
 } from '@skydrop/db';
+import { money } from '../../../common/money/format-money';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { SettingsResolverService } from '../../settings/services/settings-resolver.service';
@@ -76,11 +77,14 @@ export function freightRecordedDescription(input: {
   readonly lineCount: number;
   readonly units: number;
 }): string {
-  const inr = `₹${input.totalInr.toFixed(2)}`;
+  // Grouped and symbolled through the ONE formatter (FE-6's rule, on
+  // the server side of it): this sentence is stored, so it cannot use
+  // `Money`, and it was the only ungrouped rupee figure a seller saw.
+  const inr = money(input.totalInr, Currency.INR);
   const agreed =
     input.agreedCurrency === Currency.INR
       ? ''
-      : ` (${input.agreedAmount.toFixed(2)} ${input.agreedCurrency} as agreed)`;
+      : ` (${money(input.agreedAmount, input.agreedCurrency)} as agreed)`;
   const when =
     input.mode === InboundFreightMode.PAY_ADVANCE
       ? 'billed before it leaves Bangladesh'
@@ -1482,8 +1486,8 @@ export class InboundFreightService {
           consignmentId: charge.consignmentId,
           type: ConsignmentEventType.FREIGHT_RECORDED,
           description:
-            `Freight bill withdrawn — ₹${charge.totalInr.toFixed(2)}` +
-            (refund.gt(0) ? `, ₹${refund.toFixed(2)} returned to your wallet` : '') +
+            `Freight bill withdrawn — ${money(charge.totalInr, Currency.INR)}` +
+            (refund.gt(0) ? `, ${money(refund, Currency.INR)} returned to your wallet` : '') +
             `. ${reason.trim()}`,
           data: {
             freightChargeId,

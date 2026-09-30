@@ -17,6 +17,7 @@ import {
   lockAccountsForPosting,
   takeAdvisoryLock,
 } from '../../../common/db/advisory-lock';
+import { rupees } from '../../../common/money/format-money';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
@@ -496,16 +497,17 @@ export class StaffWalletTransferService {
   }
 }
 
-const INR_FORMAT = new Intl.NumberFormat('en-IN', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-/** `₹1,234.50`, or `−₹388.60` for a negative figure. */
-export function rupees(v: Prisma.Decimal): string {
-  const s = `₹${INR_FORMAT.format(Number(v.abs().toFixed(2)))}`;
-  return v.lessThan(0) ? `−${s}` : s;
-}
+/**
+ * `₹1,234.50`, or `−₹388.60` for a negative figure.
+ *
+ * The implementation moved to `common/money/format-money.ts` when the
+ * freight timeline needed the same thing and nearly got a second copy
+ * of it. Re-exported here so this module's callers and its spec are
+ * untouched, and so the two sentences a seller reads — their wallet's
+ * and their consignment's — cannot come to disagree about a minus sign
+ * or a grouping separator.
+ */
+export { rupees };
 
 /** "Menev Store's", but "QA Test Traders'" — the seller reads this sentence's twin in the audit. */
 export function possessive(name: string): string {
