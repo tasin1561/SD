@@ -47,6 +47,9 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   // the list, stated rather than inherited so a later change to the
   // prefix above does not silently move it.
   ['/warehouse/bins', 'warehouse.view'],
+  // Merging every bin into FLOOR is destructive and only partly
+  // reversible, so it does not inherit the warehouse read gate.
+  ['/warehouse/collapse', 'warehouse.bins.collapse'],
   // The whole page is pickups, so it needs the pickup permission — not
   // the warehouse one it inherited from the prefix above.
   ['/warehouse/pickups', 'courier.pickups.manage'],

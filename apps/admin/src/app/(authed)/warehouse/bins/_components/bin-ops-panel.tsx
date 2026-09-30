@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
+import Link from 'next/link';
 import { useToast } from '@skydrop/ui/components';
 import { ArrowRightLeft, Plus } from 'lucide-react';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
@@ -61,6 +62,14 @@ import {
  * snapshot to restore from. It destroys the record of where everything
  * was and is meant to be hard to reach; putting it beside a routine
  * re-shelving button is exactly how it gets clicked by accident.
+ *
+ * It has its own screen at `/warehouse/collapse` since 2026-10-01, and
+ * this panel LINKS to it — a link, not a button, and only for somebody
+ * who already holds the permission. Before that it had no caller at all
+ * outside the e2e suite, which meant the operation needed API access and
+ * the backup it takes could be listed by nobody. Unreachable is not the
+ * same as hard to reach, and the difference showed up as a restore path
+ * that existed and could not be used.
  */
 
 interface DraftLine {
@@ -93,6 +102,10 @@ export function BinOpsPanel({
   // demand warehouse.manage. Without this, anyone who can read the floor
   // plan is offered two buttons the server will refuse.
   const mayManage = usePermission('warehouse.manage');
+  // Cosmetic (FE-2): the collapse endpoints carry this key and refuse
+  // regardless. It gates the LINK so somebody who can never use it is
+  // not pointed at a screen that would bounce them.
+  const mayCollapse = usePermission('warehouse.bins.collapse');
 
   const toast = useToast();
   const warehouses = useWarehouses();
@@ -448,6 +461,20 @@ export function BinOpsPanel({
           and a picker sent to the new bin needs to find them there.
         </Note>
       </ConfirmDialog>
+
+      {/* The way in to the destructive one. A LINK and not a button, at
+          the very bottom, and only for somebody who already holds the
+          permission — reachable on the day it is needed without ever
+          being a thing a hand lands on while re-shelving. */}
+      {mayCollapse && (
+        <Note>
+          Abandoning this warehouse&rsquo;s shelving altogether?{' '}
+          <Link href="/warehouse/collapse" className="stk-link">
+            Collapse its bins into FLOOR
+          </Link>{' '}
+          — destructive, two-step, and backed up first.
+        </Note>
+      )}
     </AreaSection>
   );
 }
