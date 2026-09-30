@@ -48,11 +48,14 @@ button.
 cost it before starting.** After it: G7, then E5, then B3/B4/B5/B6/B7 and
 C1/C2/C7, then section H onward.
 
-**G6** and should be costed before
-it is started: it needs a store USER who has actually signed in, a store ORDER
-placed by them, and a request raised against it — and `reseller.orders_enabled`
-is seeded FALSE and must be switched on per seller first. G7 needs store orders
-that have been through D0's lifecycle.
+**What G6 needs**, in the order a session would have to build it: a store USER
+who has actually signed in (`standingStoreFor` invites one and nobody accepts
+it), `reseller.orders_enabled` switched on for this seller — it is seeded FALSE
+and switching it on is a `PATCH /admin/sellers/:id/settings/…` — a store ORDER
+placed through `POST /store/orders`, and then a request raised against it from
+the store side. Only the last of those is short. G7 then needs those store
+orders driven through D0's lifecycle so the scorecards have outcomes to divide
+by.
 
 **E5 is the only entry in E with no seeding at all**: it needs a consignment
 RECEIVED and then BILLED with some of its units shipped, so `/freight` shows a
@@ -60,8 +63,15 @@ bill that is genuinely part-owed. C1's consignment seeding is its prerequisite
 and is itself unwritten.
 
 **Add the slug to `LIFECYCLE_SLUGS` in `seed-demo-data.mjs`** when you film one,
-or its take runs against a box that has never been driven. The five D/E slugs
+or its take runs against a box that has never been driven. The seven D/E slugs
 already there are the worked examples.
+
+**And add it to `STORE_REQUIRED_SLUGS` when it needs a reseller store**, which
+is the same idea one section over: `standingStoreFor` opens the store, prices
+three products on the default list, and wipes the per-product terms, the
+published terms versions and the action policy — everything G3, G4 and G5 write
+on camera. G6 and G7 join that list; G1 and G2 must NOT, because they build a
+store and an unpriced row on camera and would collide with what it seeds.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
@@ -75,10 +85,11 @@ when the courier made it, a delivery attempt drawn against every scan in the
 order history, an auto-approval note describing a send-back on a request that
 was not one, a ticket that existed but a panel saying "nothing raised yet" a
 few centimetres below it, an order named by eight characters of a uuid on
-the one screen whose job is to say which order needs you, and a return fee
-printed as a literal in the copy over a setting that is per seller and per
-currency — beside a second return path that charged a DIFFERENT fee and named
-no figure at all.
+the one screen whose job is to say which order needs you, a return fee printed
+as a literal in the copy over a setting that is per seller and per currency —
+beside a second return path that charged a DIFFERENT fee and named no figure at
+all — and a refund's ledger note naming its ticket by uuid, which is the SAME
+defect as the order one, in a second place, found by filming the wallet.
 **Budget time for the fix as well as the film.**
 
 **The recurring shape is worth naming: a value that is CLOSE ENOUGH most of the
