@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent, type ReactElement } from 'react';
-import { CircleAlert, Link2, ListChecks, Tag, Webhook } from 'lucide-react';
+import { CircleAlert, Link2, Tag, Webhook } from 'lucide-react';
 import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
@@ -15,12 +15,37 @@ import type {
 import { useCreateWebhookEndpoint, useUpdateWebhookEndpoint } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { SetCallout, phaseOf } from '../../_components/settings-parts';
+import { DEFAULT_EVENTS, EventPicker } from './event-picker';
 
 /**
- * Create / edit form. Events entered as comma-separated; the server
- * accepts any string codes so a future M11 NOTIF-4 docs page lists
- * the canonical event codes for sellers to subscribe to (the schema
- * is intentionally `string[]`).
+ * Create / edit form.
+ *
+ * ── EVENTS ARE PICKED, NOT TYPED (2026-10-01) ────────────────────────
+ * This was a comma-separated text box over a `string[]` column with no
+ * vocabulary check anywhere. A seller typing `shipment.delivery` or
+ * `order.confirm` — close, and wrong — saved cleanly, showed on screen
+ * as configured, and matched nothing we ever send. Silently, for ever:
+ * an endpoint subscribed to nothing looks exactly like one whose events
+ * have not happened yet. The reseller STORE's version of this screen
+ * has picked from the catalogue since RS-5, so one concept had two
+ * behaviours.
+ *
+ * ── WHY NOT JUST VALIDATE ON WRITE ───────────────────────────────────
+ * The owner's call, and the reason constrains the shape: a row already
+ * holding a value outside the catalogue would then fail its NEXT save,
+ * INCLUDING a save that does not touch the events at all — somebody
+ * renaming an endpoint would be blocked by a typo made months ago.
+ * That punishes a seller for our omission.
+ *
+ * So the picker makes a typo UNREPRESENTABLE rather than detected, and
+ * a stored value the catalogue does not know is kept, shown as a
+ * warning chip in the seller's own words, and removable in one click.
+ * Nobody's save breaks; no new bad value can be made; a bad one is
+ * visible the next time somebody opens the page.
+ *
+ * The API is deliberately UNCHANGED — `subscribedEvents` is still
+ * `string[]` with no write check, which is what lets a live row stay
+ * saveable.
  *
  * FE-2 (pinned by `webhook-create-fe2.test.tsx`): a refusal is shown as
  * the server's `[code] message`, verbatim, and the submit is usable again
@@ -53,9 +78,7 @@ export function WebhookFormModal(
   const [url, setUrl] = useState(seed?.url ?? 'https://');
   const [name, setName] = useState(seed?.name ?? '');
   const [description, setDescription] = useState(seed?.description ?? '');
-  const [events, setEvents] = useState(
-    seed?.subscribedEvents.join(', ') ?? 'order.confirmed, shipment.dispatched, shipment.delivered',
-  );
+  const [events, setEvents] = useState<readonly string[]>(seed?.subscribedEvents ?? DEFAULT_EVENTS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,10 +91,9 @@ export function WebhookFormModal(
     setError(null);
     setBusy(true);
     try {
-      const parsedEvents = events
-        .split(',')
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
+      // Sent EXACTLY as held, unrecognised values included: a save that
+      // did not touch the events must not quietly drop one.
+      const parsedEvents = [...events];
       if (props.mode === 'create') {
         const body: CreateWebhookEndpointRequest = {
           url: url.trim(),
@@ -142,15 +164,7 @@ export function WebhookFormModal(
           showCount
           placeholder="What this endpoint is for, who owns it, etc."
         />
-        <TextArea
-          label="Subscribed events (comma-separated)"
-          icon={<ListChecks size={15} />}
-          rows={3}
-          value={events}
-          onChange={(e) => setEvents(e.target.value)}
-          placeholder="order.confirmed, shipment.dispatched, shipment.delivered"
-          required
-        />
+        <EventPicker value={events} onChange={setEvents} />
 
         {error && (
           <SetCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">

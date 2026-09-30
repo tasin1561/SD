@@ -1,0 +1,74 @@
+.whk-events {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.whk-events > legend {
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-sm);
+  color: var(--fg-muted);
+}
+
+.whk-events__grid {
+  display: grid;
+  gap: var(--sp-2);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .whk-events__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* A value we do not recognise: stated, not refused. */
+.whk-events__warn {
+  display: flex;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+
+.whk-events__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+  list-style: none;
+  padding: 0;
+}
+
+.whk-events__chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0 var(--sp-1) 0 var(--sp-2);
+  border: 1px solid var(--saffron-line);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
+
+.whk-events__chips button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap);
+  min-height: var(--tap);
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--r-pill);
+}
+
+.whk-events__chips button:hover {
+  background: var(--surface-3);
+}

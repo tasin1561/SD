@@ -24,6 +24,7 @@ import {
   type WebhookEndpointWithSecret,
 } from './services/seller-webhook.service';
 import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
+import { WEBHOOK_EVENT_CATALOGUE } from '../seller-webhook-delivery/webhook-event-catalogue';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 
@@ -43,6 +44,27 @@ const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
 @Controller('seller/webhook-endpoints')
 export class SellerWebhookController {
   constructor(private readonly svc: SellerWebhookService) {}
+
+  /**
+   * The events a seller may subscribe to, with the words they pick them
+   * by.
+   *
+   * The same `WEBHOOK_EVENT_CATALOGUE` the STORE's `/store/webhook-endpoints/events`
+   * serves — imported, never restated. A second list is how the two
+   * screens come to offer different things while both look correct,
+   * and this one is already derived from an F2 switch and pinned
+   * against it in both directions by `webhook-event-catalogue.spec.ts`.
+   *
+   * It is a fixed list with nothing seller-specific in it, so it needs
+   * no scoping; `webhooks.manage` from the class is what makes it a
+   * seller's to read at all.
+   */
+  @Get('events')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'The event codes a webhook can subscribe to' })
+  events(): ReadonlyArray<{ readonly code: string; readonly description: string }> {
+    return WEBHOOK_EVENT_CATALOGUE;
+  }
 
   @Get()
   @HttpCode(HttpStatus.OK)

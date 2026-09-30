@@ -1037,6 +1037,28 @@ import type {
   UpdateWebhookEndpointRequest,
 } from '@skydrop/api-client';
 
+export interface WebhookEventOption {
+  readonly code: string;
+  readonly description: string;
+}
+
+/**
+ * The events a webhook can subscribe to.
+ *
+ * Served from the SAME `WEBHOOK_EVENT_CATALOGUE` the store's screen
+ * reads, so the two cannot come to offer different things. Long-lived:
+ * it is a fixed list that changes only with a release.
+ */
+export function useWebhookEvents(): UseQueryResult<ReadonlyArray<WebhookEventOption>> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-webhooks', 'events'],
+    staleTime: 60 * 60_000,
+    queryFn: () =>
+      client.request<ReadonlyArray<WebhookEventOption>>('/api/seller/webhook-endpoints/events'),
+  });
+}
+
 export function useWebhookEndpointsList(): UseQueryResult<ReadonlyArray<WebhookEndpointView>> {
   const client = useApiClient();
   return useQuery({
