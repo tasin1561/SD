@@ -24,10 +24,36 @@ import { serverVerdict } from '@/lib/server-verdict';
  * What happened to a parcel that could not be delivered, and what the
  * seller can do about it.
  *
- * Rendered only while the parcel is actually in trouble. A panel about
+ * Rendered while the parcel is actually in trouble, AND afterwards on an
+ * order where something happened worth reading back. A panel about
  * failed deliveries on an order that arrived fine is noise, and noise on
  * every order is how people stop reading the one that matters.
  */
+
+/**
+ * What to call this panel, which is not always "the parcel is in
+ * trouble".
+ *
+ * It was a two-branch ternary on the CURRENT order status —
+ * DELIVERY_FAILED or, for everything else, "Out for delivery". That is
+ * right for the two statuses the panel is rendered for while a parcel is
+ * still moving, and wrong for every order it is rendered for AFTERWARDS,
+ * which is most of them: the panel stays on any order with a call or a
+ * delivery request against it, so a DELIVERED order carried a heading
+ * saying "Out for delivery" two inches under a chip saying Delivered.
+ *
+ * Found by filming the order page (2026-09-30). Pure, and exported so it
+ * can be pinned: the failure is a FALLBACK reappearing as the primary,
+ * which a render test asserting "a heading is shown" passes either way.
+ */
+export function deliveryPanelTitle(orderStatus: string): string {
+  if (orderStatus === 'DELIVERY_FAILED') return 'Delivery did not succeed';
+  if (orderStatus === 'OUT_FOR_DELIVERY') return 'Out for delivery';
+  // Past it, one way or the other. The panel is then a RECORD — what was
+  // said to the customer and what was asked for — so it is named for
+  // that rather than for a state the order has left.
+  return 'What happened with this delivery';
+}
 function statusKind(s: DeliveryActionStatus): 'pending' | 'confirmed' | 'failed' | 'cancelled' {
   switch (s) {
     case 'PENDING':
@@ -165,9 +191,7 @@ export function DeliveryTroublePanel({
   }
 
   return (
-    <OrdSection
-      title={orderStatus === 'DELIVERY_FAILED' ? 'Delivery did not succeed' : 'Out for delivery'}
-    >
+    <OrdSection title={deliveryPanelTitle(orderStatus)}>
       <div className="ord-stack">
         {orderStatus === 'DELIVERY_FAILED' && (
           <Notice tone="warn" icon={<AlertTriangle size={16} />}>

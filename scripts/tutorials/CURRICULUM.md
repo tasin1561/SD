@@ -33,9 +33,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (33):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
-F1, F2, F3, F5, G1–G7. Every one is listed in its own entry below with what it
-covers and what its seeding does.
+**Filmed so far (35):** A1–A6, B1, B2, B4, B5, C3, C4, C5, C6, D1–D6, E1, E2,
+E3, E4, F1, F2, F3, F5, G1–G7. Every one is listed in its own entry below with
+what it covers and what its seeding does.
 
 **SECTION G IS COMPLETE**, and with it the whole of the reselling side of the
 seller app.
@@ -47,8 +47,17 @@ actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
 unwound. Read D4's entry before filming anything else that presses a courier
 button.
 
-**The next entry is E5.** After it: B3/B4/B5/B6/B7 and C1/C2/C7, then section H
-onward.
+**The next entries are B6 and B7**, which are the two cheapest things left: both
+read D0's world and each writes one thing that a pre-confirmation order can be
+rebuilt from. Then B3 (run B2's import and stop), then C7, then the CONSIGNMENT
+block — C1, C2 and E5 — which is one seeding job wearing three hats and is the
+last big piece of the seller app.
+
+**B4 and B5 landed 2026-09-30 and needed NO new seeding at all**, which is worth
+knowing before costing anything else in section B: D0's nine parcels already
+spread orders across every status the list filters on, and its delivered one
+already carries charges, an invoice, a tracker and a full history. Anything in B
+that only READS is now a narration-and-flow job.
 
 **E5 is the only entry in E with no seeding at all** and it is the one thing
 left in the seller app that needs a world nobody has built: a consignment
@@ -93,7 +102,7 @@ configured on camera. Keep them apart.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
-**Filming these screens is finding real bugs at a steady rate — twenty so
+**Filming these screens is finding real bugs at a steady rate — twenty-one so
 far, plus six in the seeding itself.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -356,30 +365,64 @@ non-zero, and that is worth showing rather than explaining. Then the per-row
 address form (the band number is the spreadsheet's own row number), "Import
 this row", and discarding one you do not want.
 
-### B4. Finding an order · `ready`
+### B4. Finding an order · **FILMED** — `finding-an-order.mp4`
 
-**Promise** — you can find any order by any handle you have, and send someone
-a link to what you are looking at.
-**Length** 3 min. **Prerequisites** B1.
-**Needs** orders spread across several statuses, so the chips and tiles have
-something in them. Today's seed leaves them all PENDING_CONFIRMATION; the
-lifecycle seeding described in D0 fixes that and this tutorial should be filmed
-after it.
-**Covers** the search box, the "Placed when" presets, the status chips with
-their counts, the four tiles — and the thing that makes the page worth three
-minutes: **the URL is the state**, so a filtered list is a link you can send
-and the back button works.
+**Promise** — you can find any order by any handle you have, and send someone a
+link to what you are looking at.
+**Length** 2 min 37 s (14 scenes). **Prerequisites** B1.
+**Covers** `/orders`: the four tiles and the second line on each, the search box
+and every handle it takes, the Reset marker, the status chips with their counts,
+the "Placed when" presets, the store filter, the columns, and the page size.
 
-### B5. Reading an order · `needs demo data`
+**The page's best idea cannot be filmed directly, and the way round it is worth
+knowing.** Its filters live in the URL — which is what makes a filtered list a
+link somebody can be sent — and **Playwright records the PAGE, never the
+browser's own chrome**, so there is no address bar to point at. The scene
+RELOADS instead: the search survives, the row is still the only one, and that is
+the same fact seen from the only side the camera has. Reach for this shape
+whenever a claim is about something outside the viewport.
 
-**Promise** — you can tell where a parcel is and what it has cost you, from
-the order page alone.
-**Length** 4 min. **Prerequisites** B4.
-**Needs** one DELIVERED order with charges. Seeded by D0.
-**Covers** `/orders/[id]` as a **reading** exercise before any of the buttons:
-the recipient block and why it never changes once placed, the items, the
-charges breakdown, and the journey. Every action on this page gets its own
-tutorial below — this one is the map of it.
+**It writes nothing at all** — types into a filter, reloads, resets — so it needs
+no seeding beyond D0 and its own take leaves the world byte-identical.
+
+**The search is filmed on a PARTIAL PHONE**, because that is the handle a
+customer actually has in front of them, and because showing that a fragment is
+enough is worth more than showing that an exact order number works. All four
+handles were checked against the API first; all four match on a fragment.
+
+### B5. Reading an order · **FILMED** — `reading-an-order.mp4`
+
+**Promise** — you can tell where a parcel is and what it has cost you, from the
+order page alone.
+**Length** 3 min 04 s (14 scenes). **Prerequisites** B4.
+**Covers** `/orders/[id]` as a READING exercise and nothing else: the header's
+four facts, the tracker and who recorded each step, the recipient snapshot, what
+it is worth and what it weighs, the lines by SKU, the charges with tax on its own
+row and what "estimated" means, the invoice, the parcel's own figures, and the
+full history. **It presses nothing** — every button on the page has a tutorial of
+its own, and this is the map.
+
+**It reaches the order through the UI rather than by URL**, which is not fussiness:
+the camera records the page and never the address bar, so a `goto` reads as the
+screen changing for no reason. Clicking Orders and searching the seller's own
+reference is also the path B4 has just taught.
+
+**`ordSection` scrolls a section to the CENTRE, not merely into view.**
+`scrollIntoViewIfNeeded` stops the moment the top edge is on screen, which on a
+tall section — Charges, the tracker — leaves most of what the narration is about
+below the fold. Worth copying for any future read-heavy flow.
+
+**The scene about the parcel's own figures was REWRITTEN after looking at the
+frame.** It first said the courier's weight and the money collected "fill in as
+the journey happens"; on the delivered order it films, the simulator reports
+neither, so the page reads "Not yet weighed" and "Not yet". The line now says
+that the courier has told us neither and that the page says so rather than
+guessing — which is true, is the better lesson, and is the thing the frame
+actually shows. **This is the `TUT_CHECK_SHOTS` rule earning its keep for the
+fourth time.**
+
+**One bug, found by opening the page** — see [Bugs found](#bugs-found-while-establishing-feasibility):
+a DELIVERED order carried a section heading reading "Out for delivery".
 
 ### B6. Changing an order before it is confirmed · `needs demo data`
 
@@ -2398,6 +2441,20 @@ queue — the screen that queue exists to be.**
   column printed the store's plain `name` while the two tables either side of it
   printed `displayName ?? name`, so `Kolkata Silk Room` and `Silk Room` read as
   two different businesses on one screen. The payload already carried both.
+
+**And one from filming B5 (2026-09-30), on the most-read screen in the seller
+app.** A DELIVERED order carried a section heading reading **"Out for
+delivery"**, two inches under a chip saying Delivered. The heading was a
+two-branch ternary on the current order status — DELIVERY_FAILED, or, for
+everything else, "Out for delivery" — which is right for the two statuses the
+panel is rendered for WHILE a parcel is moving, and wrong for every order it is
+rendered for afterwards. And it is rendered for most of them: the panel
+deliberately stays on any order carrying a call or a delivery request, so the
+seller can read back what was said. It is the recurring shape again — a FALLBACK
+that is correct most of the time it was written for and wrong everywhere else —
+and a render test asserting "a heading is shown" passes either way, which is why
+`deliveryPanelTitle` is now pure, exported and pinned by its WORDS
+(`delivery-panel-title.test.ts`, proved red both ways).
 
 **Two curriculum errors, both from trusting a description over the code**: the
 seller roles editor has 41 permissions in seven groups and not 68 in ten (that

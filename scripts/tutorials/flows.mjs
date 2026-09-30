@@ -175,6 +175,45 @@ async function storeRequestRow(page, asked) {
 }
 
 /**
+ * The order B5 reads, and how it is reached.
+ *
+ * BY ITS OWN REFERENCE, through the list's search: `RSH-LIFE-DELIVERED`
+ * is stable across every rebuild of the demo box and an order id is not.
+ * Keep in step with `LIFECYCLE_PARCELS` in lib/lifecycle.mjs.
+ */
+const ORDER_READ = { ref: 'RSH-LIFE-DELIVERED' };
+
+/**
+ * One titled section of the order page, by the words above it.
+ *
+ * `OrdSection` renders its title as a heading, so the section is the
+ * heading's own section ancestor — which is how a scene points at a
+ * block rather than at a line of it.
+ */
+async function ordSection(page, title) {
+  const section = page.locator('section').filter({ has: page.getByText(title, { exact: true }) });
+  const target = section.last();
+  await target.waitFor({ state: 'visible', timeout: 25_000 });
+  // CENTRED, not merely "in view". `scrollIntoViewIfNeeded` stops the
+  // moment the top edge is on screen, which on a tall section leaves
+  // most of what the narration is about below the fold.
+  await target.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.waitForTimeout(700);
+  return target;
+}
+
+/**
+ * What B4 searches for, and the row it must find.
+ *
+ * A PHONE, because that is the handle a customer actually has in front
+ * of them; PART of one, because the search matches on a fragment and
+ * showing that is the point. The recipient is how the found row is
+ * recognised — the order number changes with every rebuilt box, the name
+ * does not.
+ */
+const ORDER_SEARCH = { phone: '9845060077', recipient: 'Priyanka Joshi' };
+
+/**
  * The TRADING store, as its rows print it — the display name, because
  * that is what every table on the reports page shows. Keep in step with
  * `REQUEST_STORE` in seed-demo-data.mjs.
@@ -5262,6 +5301,258 @@ export const FLOWS = {
 
       async outro({ page, stage }) {
         await stage.dwellOn(page.locator('.rs-kpis').first(), 3400);
+      },
+    },
+  },
+
+  /**
+   * B4 — finding an order.
+   *
+   * Entirely READ-ONLY: it types into a filter and clears it again, and
+   * writes nothing at all. So there is no seeding beyond D0, and its own
+   * take leaves the world exactly as it found it.
+   *
+   * THE PAGE'S BEST IDEA CANNOT BE FILMED DIRECTLY. Its filters live in
+   * the URL, which is what makes a filtered list a link somebody can be
+   * sent — and Playwright records the PAGE, never the browser's own
+   * chrome, so there is no address bar to point at. The scene reloads
+   * instead: the filter survives, which is the same fact seen from the
+   * only side the camera has.
+   */
+  'finding-an-order': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-orders'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/orders$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The header's own facts render only once the status summary has
+        // answered, so this proves the page has its numbers.
+        const meta = page.locator('.ord-meta').first();
+        await meta.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(meta, 2600);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(page.locator('.ord-kpis').first(), 3600);
+      },
+
+      async 'search-what'({ page, stage }) {
+        const box = page.getByLabel('Search orders');
+        await box.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(box, 3400);
+      },
+
+      async 'search-do'({ page, stage }) {
+        await stage.typeIn(page.getByLabel('Search orders'), ORDER_SEARCH.phone, { after: 700 });
+        await page.keyboard.press('Enter');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The RESULT, not the box: one row, and it is the order that
+        // number belongs to. A search that found nothing would still
+        // leave a filled box.
+        const row = page.getByRole('row').filter({ hasText: ORDER_SEARCH.recipient }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(row, 3000);
+      },
+
+      async reload({ page, stage }) {
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The same single row after a reload IS the claim: the filter was
+        // in the address, not in the browser's memory of the page.
+        const row = page.getByRole('row').filter({ hasText: ORDER_SEARCH.recipient }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(row, 3200);
+      },
+
+      async reset({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Reset' }).first(), { after: 1600 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // "None active" comes back only when every filter is off.
+        const none = page.getByText('None active').first();
+        await none.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(none, 2800);
+      },
+
+      async chips({ page, stage }) {
+        const tabs = page.getByRole('tablist', { name: 'Filter by status' }).first();
+        await tabs.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(tabs, 3400);
+      },
+
+      async 'chip-click'({ page, stage }) {
+        const tabs = page.getByRole('tablist', { name: 'Filter by status' }).first();
+        await stage.clickIt(tabs.getByRole('tab', { name: /^Out for delivery/ }).first(), {
+          after: 1600,
+        });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.ord-card').first(), 3200);
+      },
+
+      async 'placed-when'({ page, stage }) {
+        const field = page.getByLabel('Placed when');
+        await field.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(field, 3200);
+      },
+
+      async store({ page, stage }) {
+        // Back to every status first, or the store filter would be shown
+        // over a list already narrowed to one — two filters at once, and
+        // the narration is about this one.
+        const tabs = page.getByRole('tablist', { name: 'Filter by status' }).first();
+        await tabs.getByRole('tab', { name: /^All/ }).first().click();
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        const field = page.getByLabel('Filter by store');
+        await field.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(field, 3200);
+      },
+
+      async columns({ page, stage }) {
+        const head = page.locator('table thead').first();
+        await head.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(head, 3400);
+      },
+
+      async paging({ page, stage }) {
+        const showing = page.getByText(/Showing/).first();
+        await showing.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(showing, 3000);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.getByLabel('Find an order or ticket').first(), 3200);
+      },
+    },
+  },
+
+  /**
+   * B5 — reading an order.
+   *
+   * PRESSES NOTHING. It opens one delivered order and reads it top to
+   * bottom, which is the point: every button on this page has a tutorial
+   * of its own, and a seller needs the map before any of them. So the
+   * take leaves the world byte-identical and needs no seeding beyond D0's
+   * delivered parcel.
+   *
+   * The order is found BY ITS OWN REFERENCE through the list's search,
+   * never by a stored id: `RSH-LIFE-DELIVERED` is stable across every
+   * rebuild of the demo box and an order id is not.
+   */
+  'reading-an-order': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-order'({ page, stage }) {
+        // Through the UI, not a `goto`: the camera records the PAGE and
+        // never the address bar, so a URL jump reads as the screen
+        // changing for no reason. This is also the path B4 just taught.
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/orders$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.typeIn(page.getByLabel('Search orders'), ORDER_READ.ref, { after: 500 });
+        await page.keyboard.press('Enter');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = page.getByRole('row').filter({ hasText: ORDER_READ.ref }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // Its OWN reference under the number is what proves the right
+        // order opened — the number itself changes with every rebuild.
+        const ref = page.getByText(`Your ref: ${ORDER_READ.ref}`).first();
+        await ref.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(ref, 2800);
+      },
+
+      async 'four-facts'({ page, stage }) {
+        await stage.dwellOn(page.locator('.ord-kpis').first(), 3600);
+      },
+
+      async tracker({ page, stage }) {
+        await stage.dwellOn(await ordSection(page, 'Order tracker'), 3600);
+      },
+
+      async 'tracker-detail'({ page, stage }) {
+        // The HANDOVER step, which is the line the sentence turns on:
+        // everything above it is ours, everything below is the courier's.
+        const step = page.getByText('Handed to courier').first();
+        await step.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(step, 3400);
+      },
+
+      async recipient({ page, stage }) {
+        await stage.dwellOn(await ordSection(page, 'Recipient'), 3600);
+      },
+
+      async payment({ page, stage }) {
+        await stage.dwellOn(await ordSection(page, 'Payment & parcel'), 3600);
+      },
+
+      async items({ page, stage }) {
+        await stage.dwellOn(await ordSection(page, 'Items'), 3400);
+      },
+
+      async charges({ page, stage }) {
+        await stage.dwellOn(await ordSection(page, 'Charges'), 3600);
+      },
+
+      async invoice({ page, stage }) {
+        await stage.dwellOn(await ordSection(page, 'Invoice'), 3200);
+      },
+
+      async parcel({ page, stage }) {
+        await stage.dwellOn(await ordSection(page, 'Parcel'), 3400);
+      },
+
+      async 'parcel-figures'({ page, stage }) {
+        const line = page.getByText('Chargeable weight').first();
+        await line.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(line, 3400);
+      },
+
+      async history({ page, stage }) {
+        await stage.dwellOn(await ordSection(page, 'Full history'), 3800);
+      },
+
+      async outro({ page, stage }) {
+        const actions = page.getByRole('button', { name: 'Raise an issue' }).first();
+        await actions.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(actions, 3200);
       },
     },
   },

@@ -1828,6 +1828,132 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'finding-an-order',
+    title: 'Finding an order',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A customer rings. They have a phone number, a name, maybe an order number — and you have one screen. This one, and it takes all of them.',
+      },
+      {
+        id: 'open-orders',
+        say: 'Orders is everything you have ever sent us. Two facts before the list: how many you have placed altogether, and how many are on the road right now.',
+      },
+      {
+        id: 'tiles',
+        say: 'Four figures, and each carries a second line that is the useful half — the cash placed, how many are waiting on the call, what is still to collect, and how many are coming back.',
+      },
+      {
+        id: 'search-what',
+        say: 'Then the search, and read what it says it takes. The order number, your own reference, a waybill, a name, or a phone. Whatever the person in front of you actually has.',
+      },
+      {
+        id: 'search-do',
+        say: 'A phone number is usually what they have, and part of one is enough. One order, found from the thing a customer can read off their own handset.',
+      },
+      {
+        id: 'reload',
+        say: 'And what you filtered to is written into the page’s own address. Reload it and the filter is still there — which is what makes a list like this something you can send somebody.',
+      },
+      {
+        id: 'reset',
+        say: 'Reset clears everything at once, and the marker beside the word Filters tells you whether anything is narrowing the list before you wonder why an order is missing.',
+      },
+      {
+        id: 'chips',
+        say: 'Under the filters, every status you actually have, with a count on it. This is the row people open this page for: how many are stuck at the call, how many are out today.',
+      },
+      {
+        id: 'chip-click',
+        say: 'Clicking one narrows the list to it. The counts come from all your orders, not from the page in front of you, so they do not change as you page through.',
+      },
+      {
+        id: 'placed-when',
+        say: 'Placed when takes the ordinary questions as presets, and a custom range underneath for the awkward one. Days are counted in Indian time, like everything else.',
+      },
+      {
+        id: 'store',
+        say: 'And if you have reseller stores, you can look at one shop at a time. An order a store took says so under its number — the goods are yours, the sale was theirs.',
+      },
+      {
+        id: 'columns',
+        say: 'Every row carries what you would ask for: the order number, your own reference under it, who it is going to, their phone, where it has got to, the cash, and when it was placed.',
+      },
+      {
+        id: 'paging',
+        say: 'Then the page size and the count, so you know how much of your own list you are looking at. Twenty at a time by default.',
+      },
+      {
+        id: 'outro',
+        say: 'The order number is a link into everything else about it. And the search along the top of every screen does the same job from wherever you happen to be.',
+      },
+    ],
+  },
+  {
+    slug: 'reading-an-order',
+    title: 'Reading an order',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'One order, one page, and every question anybody will ask you about it. This tutorial presses nothing — it is the map, and each button on it has a tutorial of its own.',
+      },
+      {
+        id: 'open-order',
+        say: 'The order number, its status, how it is paid for, and your own reference underneath — the one from your spreadsheet, so you know you are looking at the right thing.',
+      },
+      {
+        id: 'four-facts',
+        say: 'Four facts you would otherwise scroll for. Where it has got to, what is being collected at the door, how many lines and how heavy, and when it was placed.',
+      },
+      {
+        id: 'tracker',
+        say: 'Then the tracker, which is the whole journey stage by stage. Each step says who recorded it — us, in our warehouse, or the courier, out on the road.',
+      },
+      {
+        id: 'tracker-detail',
+        say: 'That distinction is worth having. Everything up to the handover is ours and we can answer for it; everything after is the courier telling us where they have been.',
+      },
+      {
+        id: 'recipient',
+        say: 'On the right, the recipient exactly as it was when the order was placed. It is a snapshot, not a link — changing a customer’s details later never rewrites a parcel that has already gone.',
+      },
+      {
+        id: 'payment',
+        say: 'What it is worth and what it weighs. The amount to collect is what the courier asks for at the door; the declared value is what it is worth if it goes missing.',
+      },
+      {
+        id: 'items',
+        say: 'The lines, by your own SKU. This is the snapshot too — the product can be renamed or archived afterwards and this order still says what was sold.',
+      },
+      {
+        id: 'charges',
+        say: 'Charges is what the parcel costs you, line by line, with tax on its own row. Estimated means the figure is worked out and not yet taken from your wallet.',
+      },
+      {
+        id: 'invoice',
+        say: 'And the tax document for the sale, with its own number, downloadable as a PDF. Skydrop issues it when the parcel is delivered.',
+      },
+      {
+        id: 'parcel',
+        say: 'Back on the left: the parcel itself. The waybill, which courier is carrying it, and a tracking link written for your customer rather than for you.',
+      },
+      {
+        id: 'parcel-figures',
+        say: 'Under it, what the COURIER says rather than what you declared — the weight they charged on, and whether they have handed the money over. Here they have told us neither, and the page says so rather than guessing.',
+      },
+      {
+        id: 'history',
+        say: 'Full history is the same journey without the shaping: our handling and every courier scan, newest first, and it is never edited. This is what an argument gets settled from.',
+      },
+      {
+        id: 'outro',
+        say: 'And the two buttons at the top are the actions — raise an issue, or ask for it back. Each has its own tutorial; from here you can read any order without pressing a thing.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
