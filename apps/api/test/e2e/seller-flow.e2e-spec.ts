@@ -198,14 +198,32 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
       })
       .expect(201);
 
+    // A key names what it may reach, and at least one thing: the guard
+    // derives its permissions from these and nothing else, so a key with
+    // none grants nothing and is refused rather than minted.
+    await request(h.baseUrl)
+      .post('/seller/api-keys')
+      .set('Authorization', `Bearer ${reg.body.accessToken}`)
+      .send({ name: 'No scopes' })
+      .expect(400);
+
+    // And only scopes we know. A typo is fixable at CREATE time; a key
+    // already issued is not.
+    await request(h.baseUrl)
+      .post('/seller/api-keys')
+      .set('Authorization', `Bearer ${reg.body.accessToken}`)
+      .send({ name: 'Bad scope', scopes: ['orders:everything'] })
+      .expect(400);
+
     const create = await request(h.baseUrl)
       .post('/seller/api-keys')
       .set('Authorization', `Bearer ${reg.body.accessToken}`)
-      .send({ name: 'Production' })
+      .send({ name: 'Production', scopes: ['orders:read', 'orders:write'] })
       .expect(201);
 
     expect(create.body.plaintext).toMatch(/^skd_[A-Za-z0-9_-]+$/);
     expect(create.body.keyPrefix).toHaveLength(12);
+    expect(create.body.scopes).toEqual(['orders:read', 'orders:write']);
 
     const list = await request(h.baseUrl)
       .get('/seller/api-keys')
@@ -215,6 +233,7 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
     expect(list.body[0].keyPrefix).toBe(create.body.keyPrefix);
     expect(list.body[0].keyHash).toBeUndefined();
     expect(list.body[0].plaintext).toBeUndefined();
+    expect(list.body[0].scopes).toEqual(['orders:read', 'orders:write']);
 
     await request(h.baseUrl)
       .post(`/seller/api-keys/${create.body.id}/revoke`)
