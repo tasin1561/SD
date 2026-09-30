@@ -33,7 +33,7 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (27):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E3, E4,
+**Filmed so far (28):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
 F1, F2, F3, F5, G1, G2. Every one is listed in its own entry below with what it
 covers and what its seeding does.
 
@@ -44,11 +44,13 @@ actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
 unwound. Read D4's entry before filming anything else that presses a courier
 button.
 
-**The next entry is E2 (reading your wallet), then E5 (what the freight cost),
-then G3–G7, then B3/B4/B5/B6/B7 and C1/C2/C7, then section H onward.** E2 needs
-D0 (which now leaves a fuller ledger than ever — D4's takes add return fees to
-it) plus one pending top-up; E5 needs a consignment received AND billed, which
-nothing seeds yet.
+**The next entry is E5 (what the freight cost), then G3–G7, then
+B3/B4/B5/B6/B7 and C1/C2/C7, then section H onward.** E5 is the last one in E
+and it is the only one in the section with NO seeding at all: it needs a
+consignment RECEIVED and then BILLED, with some of its units shipped, so the
+`/freight` page has a bill that is genuinely part-owed. Nothing builds that
+today — C1's consignment seeding is the prerequisite and is itself unwritten.
+G3–G7 need reseller stores, which `resellingWorldFor` already seeds for G1/G2.
 
 **Add the slug to `LIFECYCLE_SLUGS` in `seed-demo-data.mjs`** when you film one,
 or its take runs against a box that has never been driven. The five D/E slugs
@@ -56,7 +58,7 @@ already there are the worked examples.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
-**Filming these screens is finding real bugs at a steady rate — seventeen so
+**Filming these screens is finding real bugs at a steady rate — eighteen so
 far, plus six in the seeding itself.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -946,15 +948,54 @@ The seed removes PENDING claims before each take — ACCEPTED ones are left, sin
 a wallet entry sits behind them and the ledger is append-only, so deleting the
 claim would leave a credit with nothing explaining it.
 
-### E2. Reading your wallet · `needs demo data`
+### E2. Reading your wallet · **FILMED** — `read-your-wallet.mp4`
 
 **Promise** — you can tell what you have from what you have merely asked for.
-**Length** 3 min. **Prerequisites** E1. **Needs** D0 (a delivered order and a
-resolved refund put real entries in the ledger) plus one pending top-up.
+**Length** 3 min 03 s (16 scenes). **Prerequisites** E1. **Needs** D0, and it is
+in `LIFECYCLE_SLUGS`.
 **Covers** the three tabs and why they are three: **Ledger** is what happened;
 **Top-ups** and **Withdrawal requests** are what was asked for and has not
-landed. Then the entries themselves — delivery charges, COD credit, a refund —
-and the balance shown in both rupees and taka.
+landed. Then the entries themselves, one scene each — a delivery charge, the COD
+credit, the tax deduction directly beneath it, a damage settlement — and the
+balance shown in both rupees and taka with the rate it used. It presses nothing
+that moves anything.
+
+**Its seeding had to produce a COD credit, which is the one ledger entry a
+parcel cannot write on its own.** On the default `wallet.cod_credit_mode` of
+SETTLEMENT a COD is credited when the COURIER PAYS US (WAL-5) — an operator
+recording a payout, not a consequence of delivery. So
+`settleOneCodForLedger` records a real one through
+`POST /admin/courier-settlements`, which writes the credit AND the tax
+withholding beside it; that pair is the middle third of the video. Two things it
+learned: a settlement must name **the account that CARRIED the parcel** (CACC-1
+— this box has two Delhivery accounts whose labels differ by one word, and
+`SETTLEMENT_ORDER_OTHER_COURIER` refuses the wrong one), and the courier account
+needs a rupee bank account linked or TRE-3 refuses it outright. It settles
+`RSH-LIFE-DELIVERED` only: D4's parcels are retired and remade, and money
+against an order about to be renamed would be money nobody can find.
+
+**Scenes point at rows BY LABEL (`ledgerRow`), never by position** — the ledger
+is newest-first and any seed run can add an entry. The matcher looks for a CELL
+STARTING WITH the label rather than an exact match: `LedgerEntryLabel` renders
+the direction's words as a bare text node with the entry's note in a `<div>`
+right after, so nothing in the row is exactly the label and an exact match finds
+nothing at all.
+
+**FILMING FOUND THE REFUND'S LEDGER NOTE NAMED ITS TICKET BY UUID.**
+`TicketService.transition` wrote "Ticket &lt;uuid&gt; settled" on the
+`SCRAP_REFUND` — the line a seller reads under "Damage settlement", and the only
+pointer from the money back to the claim it settled. A uuid cannot be read down
+a phone, matched against the ticket list or typed into its search box, which is
+precisely why TKT-1 gave tickets a number. **The same defect D5 found on
+`/holds`, in a second place.** It names `TK-YYYY-NNNNNN` now; the seeded row is
+brought into line by `renameRefundNoteToTicketNumber` (the note only — no
+amount, no direction, no running balance). D6 films that row too.
+
+**Two seeding tells were on camera and are gone**: the accepted top-up's
+operator note read "Seeded for the withdrawal tutorial." and its reference
+"TXN-SEED-1790717138318". Both are printed in full on the Top-ups tab, which
+this video dwells on for eight seconds. **A note or a reference a seed writes is
+published material if any video shows the screen that prints it.**
 
 ### E3. Taking money out · **FILMED** — `take-money-out.mp4`
 

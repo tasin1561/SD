@@ -1111,13 +1111,14 @@ async function settleScrapTicket(sellerId, staffToken, log) {
   const ticket = await prisma.ticket.findFirst({
     where: { sellerId, ticketType: 'SCRAP_DAMAGE' },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, ticketNumber: true, status: true },
+    select: { id: true, ticketNumber: true, status: true, resolutionWalletEntryId: true },
   });
   if (ticket === null) {
     log('  · no damage ticket to settle (nothing was written off)');
     return;
   }
   if (ticket.status === 'RESOLVED_REFUND') {
+    await renameRefundNoteToTicketNumber(ticket, log);
     log(`  · ${ticket.ticketNumber} already refunded`);
     return;
   }
@@ -1149,6 +1150,41 @@ async function settleScrapTicket(sellerId, staffToken, log) {
     },
   });
   log(`  · ${ticket.ticketNumber} refunded ₹${SCRAP_REFUND_INR}`);
+}
+
+/**
+ * Bring a PRE-FIX refund note up to what the product now writes.
+ *
+ * `TicketService.transition` used to note a `SCRAP_REFUND` as
+ * "Ticket <uuid> settled". That line is what the seller reads in their
+ * wallet ledger beside "Damage settlement", and a uuid is not something
+ * anybody can read down a phone or type into the ticket search — the
+ * same defect D5 found on `/holds`. It names the ticket NUMBER now, and
+ * D6 and E2 both film that exact row.
+ *
+ * A wallet entry is append-only and this file is careful about that, so
+ * the scope is deliberately tight: the seeded scrap ticket's OWN entry,
+ * only when its note still carries the uuid, and only the NOTE — the
+ * direction, the amount and the running balance are untouched, so no
+ * money and no chain is rewritten. It is bringing a demo row into line
+ * with the code, not correcting a ledger.
+ *
+ * Nothing happens once it has run, and nothing happens on a box where
+ * the refund was written after the fix.
+ */
+async function renameRefundNoteToTicketNumber(ticket, log) {
+  if (ticket.resolutionWalletEntryId == null || ticket.ticketNumber == null) return;
+  const fixed = await prisma.sellerWalletEntry.updateMany({
+    where: {
+      id: ticket.resolutionWalletEntryId,
+      direction: 'SCRAP_REFUND',
+      note: `Ticket ${ticket.id} settled`,
+    },
+    data: { note: `Ticket ${ticket.ticketNumber} settled` },
+  });
+  if (fixed.count > 0) {
+    log(`  · ledger note for ${ticket.ticketNumber} now names the ticket rather than its uuid`);
+  }
 }
 
 /**

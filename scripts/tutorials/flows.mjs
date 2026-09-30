@@ -105,6 +105,42 @@ const ISSUE = {
 };
 
 /**
+ * One ledger row, found by the ENTRY KIND it is about.
+ *
+ * Never by position. The ledger is newest-first and every seed run can
+ * add an entry (a return fee, a charge, the COD credit itself), so a
+ * scene aimed at "the third row" would quietly start describing its
+ * neighbour — the same class of mistake `dwellOnTerms` avoids on the
+ * fees page, and the quietest way a tutorial goes wrong.
+ *
+ * It THROWS rather than returning nothing when the entry is absent: a
+ * missing row means the seeding did not write it, and a scene that
+ * dwells on an empty locator passes a `--check` exactly as loudly as one
+ * that works.
+ */
+async function ledgerRow(page, label) {
+  // Matched on the CELL STARTING with the label, not on an exact text
+  // match: `LedgerEntryLabel` renders the direction's words as a bare
+  // text node with the entry's own note in a `<div>` directly after, so
+  // the cell's text is "Order chargesOrder charges — base shipping…"
+  // and nothing in the row is exactly the label. An exact match finds
+  // nothing at all, which is how this first failed.
+  //
+  // `.first()` is the NEWEST of its kind (the ledger is newest-first),
+  // which is deterministic — two delivery charges are two identical
+  // rows and either tells the same story.
+  const startsWithLabel = new RegExp(`^${label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
+  const row = page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell').filter({ hasText: startsWithLabel }) })
+    .first();
+  await row.waitFor({ state: 'visible', timeout: 25_000 });
+  await row.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(700);
+  return row;
+}
+
+/**
  * D4's two parcels and what the seller types on each.
  *
  * Their recipients are `RSH-LIFE-SENDBACK` and `RSH-LIFE-RETURNREQ` in
@@ -4046,6 +4082,149 @@ export const FLOWS = {
         await page.waitForLoadState('networkidle').catch(() => {});
         await page.waitForTimeout(1000);
         await stage.dwellOn(page.locator('.ord-kpis').first(), 3400);
+      },
+    },
+  },
+
+  /**
+   * E2 — reading the wallet.
+   *
+   * The only money video whose subject is the LEDGER rather than an
+   * action, so it presses nothing that moves anything: three tabs, an
+   * export, and a row-by-row read of what each kind of entry means. The
+   * scenes point at rows BY THEIR LABEL (`ledgerRow`), never by
+   * position — the ledger is newest-first and a seed run that adds one
+   * entry would otherwise re-aim every scene at its neighbour.
+   *
+   * Its world comes from D0 plus `ledgerWorldForReading`: the COD credit
+   * is the one entry a parcel cannot produce on its own (WAL-5 — on the
+   * default SETTLEMENT mode it is written when the COURIER PAYS US), so
+   * the seeding records a real courier payout for it, which also writes
+   * the tax deduction beside it. That pair is what the video's middle
+   * third is about.
+   */
+  'read-your-wallet': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Wallet', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/wallet$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3000);
+      },
+
+      async balance({ page, stage }) {
+        const tiles = page.locator('.wal-kpis, [class*="kpi"]').first();
+        await tiles.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(tiles, 3600);
+      },
+
+      async rate({ page, stage }) {
+        // The CONVERTED tile's own hint, which carries the rate. Anchored
+        // on the text rather than "the second tile": an account with no
+        // FX rate on file renders one tile, and the narration would then
+        // be pointing at the rupee balance while saying "the rate".
+        const hint = page.getByText(/₹1 = ৳/).first();
+        await hint.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(hint, 3000);
+      },
+
+      async 'three-tabs'({ page, stage }) {
+        const tabs = page.getByRole('tablist', { name: 'Wallet views' }).first();
+        await tabs.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(tabs, 2600);
+      },
+
+      async 'ledger-is-truth'({ page, stage }) {
+        const heading = page.locator('.wal-section').first();
+        await heading.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        // The section's NOTE — "Every movement, oldest last" — which is
+        // the page saying in its own words what this scene claims.
+        await stage.dwellOn(page.getByText('Every movement, oldest last.').first(), 2800);
+      },
+
+      async columns({ page, stage }) {
+        const head = page.locator('thead').first();
+        await head.waitFor({ state: 'visible', timeout: 20_000 });
+        await head.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(head, 3000);
+      },
+
+      async charges({ page, stage }) {
+        await stage.dwellOn(await ledgerRow(page, 'Order charges'), 3400);
+      },
+
+      async cod({ page, stage }) {
+        await stage.dwellOn(await ledgerRow(page, 'COD collected'), 3000);
+      },
+
+      async 'cod-timing'({ page, stage }) {
+        // Held on the same row: the claim is about WHEN that row was
+        // written, so moving the eye somewhere else would drop the
+        // subject half way through the sentence.
+        await stage.dwellOn(await ledgerRow(page, 'COD collected'), 3600);
+      },
+
+      async gst({ page, stage }) {
+        await stage.dwellOn(await ledgerRow(page, 'COD tax deduction'), 3200);
+      },
+
+      async refund({ page, stage }) {
+        await stage.dwellOn(await ledgerRow(page, 'Damage settlement'), 3200);
+      },
+
+      async topups({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: 'Top-ups' }).first(), { after: 1600 });
+        await page
+          .getByText('Money you have told us you sent.')
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.wal-panel').first(), 3800);
+      },
+
+      async withdrawals({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: 'Withdrawal requests' }).first(), {
+          after: 1600,
+        });
+        await page
+          .getByText('Money you have asked us to pay out.')
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.wal-panel').first(), 3800);
+      },
+
+      async export({ page, stage }) {
+        // Back to the Ledger first: the Export button is rendered only
+        // on that tab, so pointing at it from the withdrawals view would
+        // be pointing at nothing.
+        await stage.clickIt(page.getByRole('tab', { name: 'Ledger' }).first(), { after: 1400 });
+        const button = page.getByRole('button', { name: /Export CSV/ }).first();
+        await button.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(button, 3200);
+      },
+
+      async outro({ page, stage }) {
+        const tabs = page.getByRole('tablist', { name: 'Wallet views' }).first();
+        await tabs.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(tabs, 3400);
       },
     },
   },

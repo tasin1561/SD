@@ -243,6 +243,10 @@ const LIFECYCLE_SLUGS = new Set([
   // run (`retireSpentParcel`). That is why it must be in this list even
   // though it films no state the other videos do not already reach.
   'ask-for-a-parcel-back',
+  // E2's subject IS the ledger, and every interesting line in it —
+  // charges, return fees, a damage refund — is written by a parcel
+  // having moved.
+  'read-your-wallet',
 ]);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
@@ -664,6 +668,151 @@ async function ensureTeamColleague(sellerId, sellerToken) {
  * seller for something, and quietly rewriting a money ledger to tidy a
  * video would be the worst thing in this file.
  */
+/**
+ * E2's wallet — the one video whose subject is the LEDGER itself.
+ *
+ * The other money videos are about an ACTION (declaring a transfer,
+ * asking for a payout) and their worlds are built around what that
+ * action needs. This one is about reading what has already happened, so
+ * what it needs is history: money in, money out, and money back.
+ *
+ * D0 supplies four of the five kinds — a top-up, two delivery charges,
+ * two return fees and a damage refund. The fifth is the one a seller
+ * actually cares about and the hardest to arrange, because it is
+ * deliberately NOT a consequence of delivery: on the default
+ * `wallet.cod_credit_mode` of SETTLEMENT a COD is credited when the
+ * COURIER PAYS US (WAL-5), which is a thing an operator records, not a
+ * thing a parcel does. So the seeding records one — through
+ * `POST /admin/courier-settlements`, the real path, which writes the
+ * credit, the GST we withhold and the COD fee as three separate ledger
+ * lines. That trio IS the scene: "what comes off a COD before it
+ * reaches you" is unanswerable from a screen that has never shown one.
+ *
+ * TWO PREREQUISITES, both real product state rather than fixtures:
+ *
+ *   - the courier account must have a rupee bank account to be paid
+ *     into (TRE-3: a settlement whose cash was never recorded reads on
+ *     the coverage page as money we hold and do not);
+ *   - the payout's reference is UNIQUE per account (SETL-1), which is
+ *     what makes recording the same bank credit twice a 409 rather than
+ *     a double count — so this is idempotent by construction and simply
+ *     skips when its own reference is already on file.
+ *
+ * It settles `RSH-LIFE-DELIVERED` and nothing else: the canonical
+ * delivered parcel, which no video moves. D4's `RSH-LIFE-RETURNREQ` is
+ * deliberately left out — it is remade whenever a take spends it, and a
+ * settlement against an order that is about to be retired would leave
+ * money against a parcel nobody can find.
+ */
+const COD_SETTLEMENT = {
+  /** The courier's own payout reference. Unique per account — SETL-1. */
+  reference: 'RSH-TUTORIAL-PAYOUT-01',
+  /** The ref of the parcel it pays for. */
+  orderRef: 'RSH-LIFE-DELIVERED',
+};
+
+async function settleOneCodForLedger(sellerId, staffToken) {
+  const order = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: COD_SETTLEMENT.orderRef, status: 'DELIVERED' },
+    select: { id: true, orderNumber: true, codAmountInr: true },
+  });
+  if (order === null || order.codAmountInr === null) {
+    console.log(
+      `  \u00b7 no delivered ${COD_SETTLEMENT.orderRef} to settle — skipping the COD credit`,
+    );
+    return;
+  }
+
+  // Already credited? Ask the LEDGER, not the settlement table: WAL-6's
+  // rule is that an order is credited iff it has more COD_COLLECTION
+  // entries than COD_REVERSAL ones, and that is the fact this video
+  // films.
+  const credited = await prisma.sellerWalletEntry.findFirst({
+    where: { sellerId, linkedOrderId: order.id, direction: 'COD_COLLECTION' },
+    select: { id: true },
+  });
+  if (credited !== null) {
+    console.log(`  \u00b7 ${order.orderNumber}'s COD is already credited`);
+    return;
+  }
+
+  // THE ACCOUNT THAT CARRIED IT (CACC-1), read off the parcel — never
+  // the default or the first one on file. A settlement is refused
+  // outright against an account that did not carry the order
+  // (`SETTLEMENT_ORDER_OTHER_COURIER`), and this box has two Delhivery
+  // accounts whose labels differ by one word: the lifecycle parcels go
+  // out on the SANDBOX one and picking the production one by name is
+  // exactly the mistake that guard exists to catch.
+  const shipment = await prisma.shipment.findFirst({
+    where: { orderShipments: { some: { orderId: order.id } }, supersededAt: null },
+    select: { courierAccountId: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const account =
+    shipment?.courierAccountId == null
+      ? null
+      : await prisma.courierAccount.findUnique({
+          where: { id: shipment.courierAccountId },
+          select: { id: true, label: true, payoutBankAccountId: true, deletedAt: true },
+        });
+  if (account === null || account.deletedAt !== null) {
+    console.log(
+      `  \u00b7 ${order.orderNumber} names no live courier account — skipping the COD credit`,
+    );
+    return;
+  }
+
+  // TRE-3. Through the admin endpoint rather than a Prisma update: it is
+  // the path that checks the account exists and is a rupee one, and a
+  // settlement recorded against a bank account nobody validated is the
+  // thing that guard is for.
+  if (account.payoutBankAccountId === null) {
+    const bank = await prisma.platformBankAccount.findFirst({
+      where: { currency: 'INR', deletedAt: null, isActive: true },
+      select: { id: true, label: true },
+    });
+    if (bank === null) {
+      console.log('  \u00b7 no rupee bank account — skipping the COD credit');
+      return;
+    }
+    await call(`/admin/courier-accounts/${account.id}`, {
+      method: 'PATCH',
+      token: staffToken,
+      body: { payoutBankAccountId: bank.id },
+    });
+    console.log(`  \u00b7 paid-into account for ${account.label}: ${bank.label}`);
+  }
+
+  // The courier pays the whole COD here. A short payment is a real and
+  // interesting case (WAL-6 absorbs it against capital), but it is not
+  // this video's subject and a seller reading their first ledger should
+  // not meet it in a tutorial.
+  const cod = String(order.codAmountInr);
+  await call('/admin/courier-settlements', {
+    method: 'POST',
+    token: staffToken,
+    body: {
+      courierAccountId: account.id,
+      reference: COD_SETTLEMENT.reference,
+      amountInr: cod,
+      receivedAt: new Date().toISOString(),
+      lines: [{ orderId: order.id, settledInr: cod }],
+      note: 'Tutorial demo payout',
+    },
+  }).catch((err) => {
+    // SETL-1's unique is the idempotency gate, and it answers 409. The
+    // check above should have caught it; this is the backstop for a
+    // payout recorded with no credit behind it (which would be a bug
+    // worth seeing rather than a seed worth failing).
+    if (String(err).includes('SETTLEMENT_ALREADY_RECORDED')) {
+      console.log(`  \u00b7 payout ${COD_SETTLEMENT.reference} is already on file`);
+      return;
+    }
+    throw err;
+  });
+  console.log(`  \u00b7 credited ${order.orderNumber}'s COD through a recorded courier payout`);
+}
+
 async function walletWorldFor(slug, sellerId, sellerToken, staffToken) {
   // A request moves no money (WAL-3: the balance changes when the
   // remittance is recorded), so these are free to remove — and the
@@ -763,15 +912,141 @@ async function walletWorldFor(slug, sellerId, sellerToken, staffToken) {
     body: {
       bankAccountId: account.id,
       amount: WALLET_FLOOR_INR - balance,
-      transactionRef: `TXN-SEED-${Date.now()}`,
+      // ON CAMERA in E2's Top-ups tab, and it is what a seller would
+      // copy off their own banking app — so it is shaped like one rather
+      // than announcing itself as a fixture. Still unique per run.
+      transactionRef: `NEFT${Date.now().toString().slice(-10)}`,
     },
   });
   await call(`/admin/wallet/topups/${claim.id}/accept`, {
     method: 'POST',
     token: staffToken,
-    body: { note: 'Seeded for the withdrawal tutorial.' },
+    // A note an OPERATOR would write, because it is on camera: the
+    // Top-ups tab shows an accepted claim's note in full, and "seeded
+    // for the tutorial" in the middle of a published video is the kind
+    // of tell that makes a viewer stop believing the rest of it.
+    body: { note: TOPUP_ACCEPT_NOTE },
   });
   console.log(`  · wallet topped up to ₹${WALLET_FLOOR_INR.toLocaleString('en-IN')}`);
+}
+
+/**
+ * E2's world: a ledger worth reading, and one row on each of the other
+ * two tabs.
+ *
+ * The video's whole argument is that the three tabs answer DIFFERENT
+ * questions — Ledger is what happened, Top-ups and Withdrawal requests
+ * are what has merely been ASKED FOR — and that argument cannot be made
+ * on a screen where two of the three say "nothing here". So each gets
+ * exactly one pending row, made through the real endpoints, and the
+ * scene that compares them has something to compare.
+ *
+ * NEITHER MOVES MONEY, which is the point being taught and also what
+ * makes them safe to seed on every take: a top-up claim writes nothing
+ * until somebody accepts it (WAL-2) and a withdrawal request writes
+ * nothing until a remittance is recorded (WAL-3). `walletWorldFor` has
+ * already removed the previous take's, so the tables hold one row each
+ * however many times this runs.
+ */
+/**
+ * What an operator writes when they accept a claim.
+ *
+ * ON CAMERA: the Top-ups tab prints an accepted claim's note in full,
+ * beneath its Credited chip. E2 dwells on that table for eight seconds.
+ */
+const TOPUP_ACCEPT_NOTE = 'Matched against the HDFC statement.';
+
+const READING_TOPUP_INR = 15000;
+const READING_WITHDRAWAL_INR = 5000;
+
+async function ledgerWorldForReading(sellerId, sellerToken, staffToken) {
+  await settleOneCodForLedger(sellerId, staffToken);
+
+  // A claim ACCEPTED by an earlier run of a different video still
+  // carries that run's wording, and all of it is on screen here: the
+  // operator's note under the Credited chip, the bank reference beside
+  // it, and the same reference again inside the ledger row's own note.
+  // "Seeded for the withdrawal tutorial" and "TXN-SEED-…" in the middle
+  // of a published video are the kind of tell that makes a viewer stop
+  // believing the rest of it.
+  //
+  // COSMETIC ONLY, and deliberately narrow: notes and a reference, on
+  // this demo seller, never an amount, a direction or a running
+  // balance. No money is rewritten and no chain is touched — the
+  // ledger's append-only rule is about the numbers, and these rows are
+  // being brought into line with what the seeding writes today rather
+  // than corrected.
+  const stale = await prisma.walletTopupRequest.updateMany({
+    where: { sellerId, status: 'ACCEPTED', reviewNote: { contains: 'tutorial' } },
+    data: { reviewNote: TOPUP_ACCEPT_NOTE },
+  });
+  if (stale.count > 0) console.log(`  \u00b7 tidied ${stale.count} accepted top-up note(s)`);
+
+  // The ledger row quotes the reference that was on the claim when it
+  // was accepted, so correcting one without the other leaves the two
+  // disagreeing on the same screen.
+  const staleRefs = await prisma.sellerWalletEntry.findMany({
+    where: { sellerId, direction: 'TOPUP', note: { contains: 'TXN-SEED-' } },
+    select: { id: true, note: true, topupRequest: { select: { transactionRef: true } } },
+  });
+  for (const entry of staleRefs) {
+    const ref = entry.topupRequest?.transactionRef;
+    if (ref == null || entry.note == null) continue;
+    await prisma.sellerWalletEntry.update({
+      where: { id: entry.id },
+      data: { note: entry.note.replace(/TXN-SEED-\d+/, ref) },
+    });
+  }
+  if (staleRefs.length > 0) {
+    console.log(`  \u00b7 ${staleRefs.length} ledger note(s) now quote the claim's own reference`);
+  }
+
+  const { accounts } = await call('/seller/wallet/topups/bank-accounts', {
+    token: await sellerToken(),
+  });
+  // The TAKA one, deliberately. E1 films why a Bangladeshi seller pays
+  // into it, and a claim whose amount is in the account's own currency
+  // is the thing the Top-ups tab then has to show two figures for.
+  const account = (accounts ?? []).find((a) => a.currency === 'BDT') ?? (accounts ?? [])[0];
+  if (account === undefined) {
+    throw new Error('No active platform bank account — run the db seed first.');
+  }
+  await call('/seller/wallet/topups', {
+    method: 'POST',
+    token: await sellerToken(),
+    body: {
+      bankAccountId: account.id,
+      amount: READING_TOPUP_INR,
+      transactionRef: `TXN-RSH-${Date.now()}`,
+    },
+  });
+  console.log(`  \u00b7 one pending top-up claim against ${account.bankName ?? account.label}`);
+
+  // A withdrawal is refused without somewhere to send it, and the
+  // profile video's clearing takes the bank details off — so they go
+  // back on here for the same reason `take-money-out` puts them back.
+  await prisma.seller.update({
+    where: { id: sellerId },
+    data: {
+      bankName: WALLET_PAYOUT_BANK.name,
+      bankBranchName: WALLET_PAYOUT_BANK.branch,
+      bankAccountName: WALLET_PAYOUT_BANK.holder,
+      bankAccountNumber: WALLET_PAYOUT_BANK.account,
+      bankAccountNumberMasked: `\u2022\u2022\u2022\u2022${WALLET_PAYOUT_BANK.account.slice(-4)}`,
+      bankRoutingNumber: WALLET_PAYOUT_BANK.routing,
+      bankSwiftCode: WALLET_PAYOUT_BANK.swift,
+    },
+  });
+  await call('/seller/wallet/withdrawal-requests', {
+    method: 'POST',
+    token: await sellerToken(),
+    body: {
+      currency: 'INR',
+      amount: `${READING_WITHDRAWAL_INR}.00`,
+      note: 'Monthly payout to our BRAC account.',
+    },
+  });
+  console.log(`  \u00b7 one pending withdrawal request`);
 }
 
 /**
@@ -1599,6 +1874,11 @@ async function main() {
       throw new Error(`${bad.length} lifecycle parcel(s) are not in the state they should be.`);
     }
   }
+
+  // E2's ledger, AFTER the parcels have moved — the COD credit needs a
+  // delivered order to settle, and the pending rows need a wallet that
+  // already has a balance to ask against.
+  if (slug === 'read-your-wallet') await ledgerWorldForReading(sellerId, sellerToken, staffToken);
 
   console.log('\nReady.');
   console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);

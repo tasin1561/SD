@@ -944,7 +944,17 @@ export class TicketService {
             direction: WalletEntryDirection.SCRAP_REFUND,
             amount: refundAmount,
             linkedOrderId: existing.orderId,
-            note: `Ticket ${ticketId} settled`,
+            // BY ITS NUMBER, never its uuid. This note is what the
+            // seller reads in their wallet ledger beside "Damage
+            // settlement", and it is the only pointer from the money
+            // back to the claim it settled — a uuid cannot be read down
+            // a phone, matched against the ticket list, or typed into
+            // its search box. TKT-1 gave tickets a number for exactly
+            // this, and the same mistake was found on `/holds` naming an
+            // order by eight characters of one. `ticketNumber` is NOT
+            // NULL, so the fallback is unreachable and only keeps a
+            // pre-numbering row from printing "Ticket null".
+            note: `Ticket ${existing.ticketNumber ?? ticketId} settled`,
             actorType: actor.type,
             actorId: actor.staffId ?? null,
           });

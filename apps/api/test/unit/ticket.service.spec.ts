@@ -354,6 +354,17 @@ describe('TicketService.transition', () => {
       linkedOrderId: 'order-1',
     });
     expect((entry.amount as Prisma.Decimal).toString()).toBe('250.5');
+    // THE NOTE NAMES THE TICKET BY ITS NUMBER, not by its uuid.
+    //
+    // It is the line the seller reads in their wallet ledger under
+    // "Damage settlement", and it is the only pointer from the money
+    // back to the claim it settled. A uuid cannot be read down a phone,
+    // matched against the ticket list, or typed into its search box —
+    // which is exactly why TKT-1 gave tickets a number in the first
+    // place, and the same defect D5 found on `/holds` naming an order by
+    // eight characters of one.
+    expect(entry.note).toBe('Ticket TK-2026-000001 settled');
+    expect(entry.note).not.toContain(TICKET);
     const data = update.mock.calls[0]![0]!.data as AnyArgs;
     expect(data.resolutionWalletEntryId).toBe('wallet-entry-1');
     expect((claim.mock.calls[0]![0]!.data as AnyArgs).resolvedAt).toBeInstanceOf(Date);

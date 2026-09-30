@@ -1430,6 +1430,77 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'read-your-wallet',
+    title: 'Reading your wallet',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Your wallet is the account between you and Skydrop. Everything that has actually happened to your money is on one screen, and so is everything that merely has been asked for.',
+      },
+      {
+        id: 'open',
+        say: 'Wallet, under Money. Read the line under the title: what is owed to you, cash on delivery net of charges, and payouts going the other way.',
+      },
+      {
+        id: 'balance',
+        say: 'Two tiles, but one balance. Everything Skydrop stores is in rupees; the second is that same money read in taka, which is why it says so rather than calling itself a second balance.',
+      },
+      {
+        id: 'rate',
+        say: 'And it tells you the rate it used, underneath. A figure you cannot check is a figure you have to take on trust, and this is money.',
+      },
+      {
+        id: 'three-tabs',
+        say: 'Now the part worth slowing down for. Three tabs, and they are not three filters — they answer different questions.',
+      },
+      {
+        id: 'ledger-is-truth',
+        say: 'Ledger is the only one of the three that is about things that happened. Every movement, oldest last, each one leaving a new balance behind it.',
+      },
+      {
+        id: 'columns',
+        say: 'When, what it was, what it was about, how much, and where that left you. The linked column is a click through to the order, when there is one.',
+      },
+      {
+        id: 'charges',
+        say: 'Here is a delivery charge. One per parcel, taken when the parcel is delivered or when its label is made — which of those is your account setting, over on limits.',
+      },
+      {
+        id: 'cod',
+        say: 'And here is the one you are waiting for: cash on delivery, collected from your customer and credited to you in full. What matters about this row is when it gets written.',
+      },
+      {
+        id: 'cod-timing',
+        say: 'On the default setting, it is written when the courier pays us — not when your customer paid them. Those are different days, and that gap is the thing to plan your cash around.',
+      },
+      {
+        id: 'gst',
+        say: 'Directly underneath it, the tax deduction. It is taken out of what was collected rather than added on top, so the amount you see is the collection minus this.',
+      },
+      {
+        id: 'refund',
+        say: 'A credit going the other way: a damage settlement. Something came back broken, we agreed it, and the money is here rather than in an email promising it.',
+      },
+      {
+        id: 'topups',
+        say: 'Second tab: money you have told us you sent. The top one is a claim and nothing more — in no ledger and no balance until somebody has seen it arrive. The one below it has been seen.',
+      },
+      {
+        id: 'withdrawals',
+        say: 'Third tab, the mirror image: money you have asked us to send you. Also not a movement, and awaiting review. Both of these tables are about the future, which is why neither is on the first one.',
+      },
+      {
+        id: 'export',
+        say: 'And if you keep your own books, export the whole ledger. It fetches every page first, not just the rows on screen, so what you download is all of it.',
+      },
+      {
+        id: 'outro',
+        say: 'One rule carries the whole screen. If it is on the Ledger it has happened; if it is on either of the others it has not. Nothing here needs interpreting beyond that.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
