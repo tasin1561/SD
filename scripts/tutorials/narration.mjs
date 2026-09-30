@@ -1363,6 +1363,73 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'ask-for-a-parcel-back',
+    title: 'Asking for a parcel back',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Sometimes you want a parcel back. There are two ways to ask, they cost different amounts, and one of them reaches the courier the instant you press it.',
+      },
+      {
+        id: 'open-live',
+        say: 'Start with a parcel still on the road — out for delivery, nobody has signed for it yet. Orders, then the tab for parcels in transit.',
+      },
+      {
+        id: 'on-order',
+        say: 'This is the panel for a parcel in trouble, and it renders while one is. The button that matters sits at the top, next to the order number, where you look for something to do.',
+      },
+      {
+        id: 'ask-open',
+        say: 'It opens on the gentlest of the three choices. Read the line under the heading: an operator reads this and acts on it, and nothing reaches the courier by itself.',
+      },
+      {
+        id: 'pick-sendback',
+        say: 'Now choose Send it back, and watch three things change at once. That sentence, the hint underneath, and the colour of the button.',
+      },
+      {
+        id: 'the-fee',
+        say: 'The hint is the whole lesson. This one is your decision about your own goods, so it goes straight to the courier, it cannot be undone, and it names the return fee right there.',
+      },
+      {
+        id: 'reason',
+        say: 'Tell us why anyway. Nobody has to approve this, but the warehouse reads it when the carton lands and it decides whether the stock goes back on your shelf.',
+      },
+      {
+        id: 'confirm',
+        say: 'Pressing it asks once more, names the order, and repeats the fee and the fact that it is final. This is the last moment you can change your mind.',
+      },
+      {
+        id: 'sent',
+        say: 'Done, and the card underneath is the proof: asked for, and carried out. The order still reads out for delivery, because its status follows the courier\u2019s own scans and changes when they make the next one.',
+      },
+      {
+        id: 'open-delivered',
+        say: 'The other way starts later. This parcel arrived, the customer has it, and now they want to send it back.',
+      },
+      {
+        id: 'request-return',
+        say: 'Request return only appears on a delivered order, and that is deliberate. Before delivery a parcel that cannot be handed over comes home on its own, so offering a button would suggest a choice you do not have.',
+      },
+      {
+        id: 'return-dialog',
+        say: 'This one costs more, and the dialog says why in its own words: the parcel travels the same distance a second time, so it is charged as a second delivery. The figure is in the sentence.',
+      },
+      {
+        id: 'return-reason',
+        say: 'The same reason field, doing more work. Damaged, or simply not what they expected, decides whether we can sell the unit again — so this is the line the returns bench acts on.',
+      },
+      {
+        id: 'booked',
+        say: 'And this one does something the first did not. It books the collection, and the message names the waybill the return travels home under. Then the order itself moves.',
+      },
+      {
+        id: 'outro',
+        say: 'Two asks, two fees, and one thing in common. Neither is charged until the goods are actually back with us, and both appear on the order and in your wallet when they are.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

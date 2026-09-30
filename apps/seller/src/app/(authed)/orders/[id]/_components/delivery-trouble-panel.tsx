@@ -16,6 +16,8 @@ import {
   type DeliveryActionKind,
   type DeliveryActionStatus,
 } from '@/lib/ops-hooks';
+import { useSellerFees } from '@/lib/api-hooks';
+import { feeOfKind, type FeeFigure } from '@/lib/fee-figure';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -49,25 +51,57 @@ function humanOutcome(outcome: string): string {
     .replace(/^./, (c) => c.toUpperCase());
 }
 
-const ACTIONS: ReadonlyArray<{ value: DeliveryActionKind; label: string; hint: string }> = [
-  {
-    value: 'REATTEMPT',
-    label: 'Try delivering again',
-    hint: 'We ask the courier for another attempt. Best when you know the customer will be there.',
-  },
-  {
-    value: 'RECALL',
-    label: 'Call the customer for me',
-    hint: 'One of our agents phones them and reports back. Nothing moves until you know more.',
-  },
-  {
-    value: 'RTO',
-    label: 'Send it back',
-    hint:
-      'Your call, so this goes to the courier straight away — there is no operator step and it ' +
-      'cannot be undone. The parcel returns to our warehouse, the sale ends, and a return fee applies.',
-  },
-];
+const ACTION_LABEL: Readonly<Record<DeliveryActionKind, string>> = {
+  REATTEMPT: 'Try delivering again',
+  RECALL: 'Call the customer for me',
+  RTO: 'Send it back',
+};
+
+/**
+ * The three choices, and what each one actually does.
+ *
+ * A FUNCTION of the fee rather than a constant, because the send-back's
+ * hint used to end "and a return fee applies" — naming no figure at all,
+ * on the one choice that spends money the instant it is pressed. The fee
+ * is `pricing.flat_rto_fee`, which is per seller and carries its own
+ * currency (PRC-8), so it cannot be written into the sentence; and it is
+ * a DIFFERENT fee from the one the delivered-order return dialog
+ * charges, so a seller who read that dialog's figure and pressed this
+ * button paid something else.
+ *
+ * With no figure available the old prose stands. Saying "a return fee
+ * applies" is true; printing a dash or a zero is not.
+ */
+function actionsWith(
+  returnFee: FeeFigure | null,
+): ReadonlyArray<{ value: DeliveryActionKind; label: string; hint: string }> {
+  const cost =
+    returnFee === null
+      ? 'a return fee applies'
+      : returnFee.priced
+        ? `the return fee is ${returnFee.primary}` +
+          (returnFee.agreed === null ? '' : ` (agreed as ${returnFee.agreed})`)
+        : `the return fee is ${returnFee.primary}, charged in rupees at the rate on the day`;
+  return [
+    {
+      value: 'REATTEMPT',
+      label: ACTION_LABEL.REATTEMPT,
+      hint: 'We ask the courier for another attempt. Best when you know the customer will be there.',
+    },
+    {
+      value: 'RECALL',
+      label: ACTION_LABEL.RECALL,
+      hint: 'One of our agents phones them and reports back. Nothing moves until you know more.',
+    },
+    {
+      value: 'RTO',
+      label: ACTION_LABEL.RTO,
+      hint:
+        'Your call, so this goes to the courier straight away — there is no operator step and it ' +
+        `cannot be undone. The parcel returns to our warehouse, the sale ends, and ${cost}.`,
+    },
+  ];
+}
 
 export function DeliveryTroublePanel({
   orderId,
@@ -96,6 +130,11 @@ export function DeliveryTroublePanel({
   const actions = useDeliveryActions(orderId);
   const calls = useCallHistory(orderId);
   const request = useRequestDeliveryAction();
+  // Only while the ask dialog is up: a fee nobody is about to spend is
+  // not worth a request on every order page.
+  const fees = useSellerFees(open);
+  const returnFee = feeOfKind(fees.data?.items, 'return');
+  const ACTIONS = actionsWith(returnFee);
 
   const setOpen = onOpenChange;
   const [action, setAction] = useState<DeliveryActionKind>('REATTEMPT');
@@ -187,7 +226,7 @@ export function DeliveryTroublePanel({
                 <li key={a.id} className="ord-callcard">
                   <div className="ord-callcard__head">
                     <span className="ord-callcard__title">
-                      {ACTIONS.find((x) => x.value === a.action)?.label ?? a.action}
+                      {ACTION_LABEL[a.action] ?? a.action}
                     </span>
                     <span className="ord-callcard__time">
                       <StatusChip
@@ -286,7 +325,15 @@ export function DeliveryTroublePanel({
         title="Send this parcel back now?"
         entity={orderNumber ?? 'This order'}
         entityIsIdentifier={orderNumber !== undefined}
-        consequence="The courier is told straight away and it cannot be undone. The parcel returns to our warehouse, the sale ends, and a return fee applies."
+        consequence={
+          'The courier is told straight away and it cannot be undone. The parcel returns to our ' +
+          'warehouse, the sale ends, and ' +
+          (returnFee === null
+            ? 'a return fee applies.'
+            : returnFee.priced
+              ? `you are charged a return fee of ${returnFee.primary}.`
+              : `you are charged a return fee of ${returnFee.primary}, in rupees at the rate on the day.`)
+        }
         confirmLabel="Send it back now"
         destructive
         onConfirm={() => submit()}

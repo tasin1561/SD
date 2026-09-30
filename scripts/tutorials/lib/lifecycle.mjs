@@ -25,6 +25,14 @@
  * parcel to re-film a video would be the most dangerous thing in this
  * directory.
  *
+ * There are exactly TWO departures and both keep that rule. The
+ * call-cap parcel is DELETED and remade (`rebuildStaleReviewParcel`) —
+ * safe only because it was never confirmed, so there is nothing behind
+ * it to lose. D4's two parcels are RETIRED and remade
+ * (`retireSpentParcel`): the spent one keeps every row, every movement
+ * and its waybill and simply stops answering to the canonical
+ * reference. Neither unwinds anything.
+ *
  * IT REFUSES ANY COURIER THAT IS NOT THE SIMULATOR. `assertSimulator`
  * reads the live `courier.delhivery_api_base_url` and demands a loopback
  * host that answers on the simulator's own route. This is the one script
@@ -151,6 +159,78 @@ export const LIFECYCLE_PARCELS = [
       { status: 'IN_TRANSIT', daysAgo: 5, description: 'Shipment picked up' },
       { status: 'OUT_FOR_DELIVERY', daysAgo: 4, description: 'Out for delivery' },
     ],
+  },
+  /**
+   * ── THE TWO D4 PARCELS ARE SPENT BY THEIR OWN VIDEO ──────────────
+   *
+   * D4 is the one tutorial whose take CONSUMES what it films. Both of
+   * its actions move the parcel irreversibly, one of them by calling
+   * the courier on the click (CUR-10's seller amendment), and neither
+   * can be undone by anything in this file — a returning parcel is not
+   * rewound to out-for-delivery, ever.
+   *
+   * They exist rather than the video borrowing D2's failed parcel or D0's
+   * delivered one for exactly that reason. A send-back on
+   * `RSH-LIFE-FAILED` would take D2's world with it; a return request on
+   * `RSH-LIFE-DELIVERED` would take B5's, D1's, E2's and D6's. Each of
+   * those is the sort of loss that shows up as a DIFFERENT video failing
+   * its check a fortnight later.
+   *
+   * `spendable: true` is what makes D4 re-takeable: a parcel found past
+   * its state is RETIRED — its `sellerOrderRef` is moved aside and a
+   * fresh one is built under the canonical ref. That is forward motion,
+   * not a rewind: the spent parcel keeps every row it has, its stock,
+   * its money and its waybill, and carries on being a parcel that is
+   * coming back. It just stops answering to this name. Costs one courier
+   * booking and one warehouse run per take, which on the simulator is
+   * about twenty seconds.
+   *
+   * Note that a `--check` pass spends one too — check mode drives the
+   * real app, so it really does press the button. Seed, check, seed,
+   * check, seed, take is therefore three parcels, and the procedure in
+   * CURRICULUM.md ("`--check` twice with a seed in between") is exactly
+   * what makes that work.
+   */
+  {
+    ref: 'RSH-LIFE-SENDBACK',
+    want: 'OUT_FOR_DELIVERY',
+    customer: { name: 'Meenakshi Sundaram', phone: '+919845060088' },
+    /**
+     * OUT_FOR_DELIVERY, not CONFIRMED. CURRICULUM.md's D4 entry asked
+     * for "D0's CONFIRMED-with-waybill" order and that is wrong: the
+     * seller's send-back lives on `DeliveryTroublePanel`, which renders
+     * only while `orderStatus` is DELIVERY_FAILED or OUT_FOR_DELIVERY.
+     * On a CONFIRMED order there is no panel and no button at all.
+     *
+     * Out for delivery rather than failed, so the two halves of the
+     * video are about two different moments: a parcel still moving that
+     * the seller has changed their mind about, and one already delivered
+     * that the customer wants to send back.
+     */
+    stages: ['IN_TRANSIT', 'OUT_FOR_DELIVERY'],
+    spendable: true,
+    /**
+     * ITS STATUS DOES NOT MOVE WHEN IT IS SPENT, which is the whole
+     * reason this flag exists. A send-back reaches the courier and they
+     * accept it, but the ORDER stays OUT_FOR_DELIVERY — CUR-11: their
+     * scans are the only authority on our status, and accepting a
+     * cancellation is not a scan. So the ordinary "is it still at its
+     * want" test answers yes on a parcel already turned round, and the
+     * next take would film a second send-back on a waybill the courier
+     * has already cancelled.
+     *
+     * `shipments.courierCancelledAt` is the honest signal: it is stamped
+     * only when the courier actually accepted, and nothing else writes
+     * it.
+     */
+    spentWhenCourierCancelled: true,
+  },
+  {
+    ref: 'RSH-LIFE-RETURNREQ',
+    want: 'DELIVERED',
+    customer: { name: 'Kaushik Iyer', phone: '+919845060099' },
+    stages: ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED'],
+    spendable: true,
   },
 ];
 
@@ -615,6 +695,149 @@ async function receiveAndFinalize(awb, staffToken, disposition) {
 }
 
 /**
+ * Retire a SPENT D4 parcel so a fresh one can take its name.
+ *
+ * D4 presses two buttons that cannot be un-pressed: a send-back reaches
+ * the courier on the click, and a return request books a collection and
+ * moves the order onto the RTO path. Both leave the parcel somewhere
+ * `ensureLifecycleParcels` will not carry it forward from, which without
+ * this would print "left alone" for ever and the video could never be
+ * re-taken.
+ *
+ * IT DOES NOT REWIND, AND THAT IS THE WHOLE POINT. Nothing is deleted
+ * and nothing is unwound — the spent parcel keeps its stock movements,
+ * its wallet entries, its waybill and its reverse booking, and carries
+ * on being a parcel that is coming back, which is a true record of what
+ * the take did. All that changes is the NAME: `sellerOrderRef` moves to
+ * `<ref>-SPENT-<n>`, which is free (it is a seller-supplied external
+ * reference, unique per seller and store, read by nothing that decides
+ * anything) and leaves the canonical ref available for a new one.
+ *
+ * Contrast `rebuildStaleReviewParcel`, which really does delete: that
+ * parcel was never confirmed, so there was nothing behind it to lose.
+ * These two have been picked, packed, dispatched and scanned.
+ *
+ * Nothing happens while the parcel is still at its state and unspent —
+ * a seed run between two takes must not churn a parcel that is ready.
+ */
+async function retireSpentParcel(sellerId, ref, want, log, spentWhenCourierCancelled = false) {
+  const order = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: ref },
+    select: { id: true, status: true, orderNumber: true, customerReturnRequestedAt: true },
+  });
+  if (order === null) return;
+
+  // Spent means "no longer the parcel the video needs". Three ways.
+  //
+  // The status moved (a send-back or a return request both do that), or
+  // it is still DELIVERED but a return has already been asked for —
+  // which the request endpoint treats as idempotent, so a second take
+  // would film "was already coming back" instead of a collection being
+  // booked.
+  const movedOn = order.status !== want;
+  const alreadyAsked = !movedOn && order.customerReturnRequestedAt !== null;
+  // …and for the send-back parcel, whose status does NOT move when it is
+  // spent (CUR-11 — see its entry in `LIFECYCLE_PARCELS`).
+  const courierTold =
+    !movedOn && !alreadyAsked && spentWhenCourierCancelled
+      ? await courierWasToldToReturn(order.id)
+      : false;
+
+  // …AND THE THIRD: THE SIMULATOR HAS FORGOTTEN IT.
+  //
+  // The simulator keeps its parcels in memory and says so in its own
+  // words ("Restarting is the reset"). Our database keeps the waybill
+  // either way, so after a sim restart an order sits perfectly at
+  // OUT_FOR_DELIVERY carrying a waybill the courier has never heard of —
+  // and the ONE thing D4 does with it, the send-back, is a live call
+  // against that waybill. It comes back "waybill not found", which the
+  // product correctly records as a courier refusal, and the take fails
+  // eight scenes in.
+  //
+  // It cost exactly that once, so the check is here rather than in a
+  // note: a parcel the simulator cannot answer for is spent, whatever
+  // our own status column says.
+  const unknownToSim =
+    movedOn || alreadyAsked || courierTold ? false : !(await simKnowsParcelFor(order.id));
+  if (!movedOn && !alreadyAsked && !courierTold && !unknownToSim) return;
+
+  // A suffix that cannot collide, whatever is already parked.
+  const parked = await prisma.order.count({
+    where: { sellerId, sellerOrderRef: { startsWith: `${ref}-SPENT-` } },
+  });
+  const retiredRef = `${ref}-SPENT-${parked + 1}`;
+  await prisma.order.update({
+    where: { id: order.id },
+    data: { sellerOrderRef: retiredRef },
+  });
+  const why = unknownToSim
+    ? 'the simulator has forgotten its waybill (it was restarted)'
+    : courierTold
+      ? `the courier has already been told to return ${order.orderNumber}`
+      : `${order.orderNumber} is ${order.status}${alreadyAsked ? ', return already asked' : ''}`;
+  log(
+    `  · ${ref} is spent — ${why}. ` + `Renamed ${retiredRef} and left intact; a fresh one follows`,
+  );
+}
+
+/**
+ * Has the courier already accepted a cancellation on this order's parcel?
+ *
+ * `courierCancelledAt` is stamped by `cancelWithCourier` and by nothing
+ * else, only on a successful reply — so it is the one column that says
+ * "they really were told", which the order's own status cannot (CUR-11).
+ */
+async function courierWasToldToReturn(orderId) {
+  const cancelled = await prisma.shipment.findFirst({
+    where: {
+      orderShipments: { some: { orderId } },
+      supersededAt: null,
+      courierCancelledAt: { not: null },
+    },
+    select: { id: true },
+  });
+  return cancelled !== null;
+}
+
+/**
+ * Does the simulator still hold the live waybill of this order's parcel?
+ *
+ * Asked through `/_sim/parcels`, which is the simulator's own
+ * introspection route rather than Delhivery's wire API — this is a
+ * question about the FIXTURE, not about a courier.
+ *
+ * FAILS SAFE TOWARDS "YES": a sim we cannot reach, or an order with no
+ * waybill at all, answers true, so a network wobble never retires a good
+ * parcel and costs a fresh courier booking. Being wrong that way shows
+ * up as the take failing, which is loud; being wrong the other way
+ * churns parcels quietly on every seed run.
+ */
+async function simKnowsParcelFor(orderId) {
+  const awb = await prisma.shipment
+    .findFirst({
+      where: {
+        orderShipments: { some: { orderId } },
+        deletedAt: null,
+        supersededAt: null,
+        awbNumber: { not: null },
+      },
+      select: { awbNumber: true },
+      orderBy: { createdAt: 'desc' },
+    })
+    .catch(() => null);
+  if (awb?.awbNumber == null) return true;
+  try {
+    const res = await fetch(`${SIM}/_sim/parcels`);
+    if (!res.ok) return true;
+    const parcels = await res.json();
+    if (!Array.isArray(parcels)) return true;
+    return parcels.some((p) => p?.awb === awb.awbNumber);
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Rebuild the call-cap parcel once its review has been ANSWERED.
  *
  * D5's video presses "Keep trying", which RESOLVES the review — and
@@ -670,9 +893,11 @@ async function rebuildStaleReviewParcel(sellerId, ref, want, log) {
 }
 
 /**
- * Build the six lifecycle parcels, or leave alone the ones that exist.
+ * Build the lifecycle parcels, or leave alone the ones that exist.
  *
- * `log` is passed in so the caller owns the seeding's voice.
+ * Deliberately not "the N parcels": the count is `LIFECYCLE_PARCELS`,
+ * and this sentence said six through two additions of a seventh and an
+ * eighth. `log` is passed in so the caller owns the seeding's voice.
  */
 export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken, log }) {
   const sim = await assertSimulator();
@@ -689,6 +914,14 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
   for (const parcel of LIFECYCLE_PARCELS) {
     if (parcel.noAnswerToCap === true)
       await rebuildStaleReviewParcel(sellerId, parcel.ref, parcel.want, log);
+    if (parcel.spendable === true)
+      await retireSpentParcel(
+        sellerId,
+        parcel.ref,
+        parcel.want,
+        log,
+        parcel.spentWhenCourierCancelled === true,
+      );
 
     const existing = await prisma.order.findFirst({
       where: { sellerId, sellerOrderRef: parcel.ref },

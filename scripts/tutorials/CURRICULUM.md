@@ -33,16 +33,22 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (26):** A1–A6, B1, B2, C3, C4, C5, C6, D1, D2, D3, D5, D6, E1,
-E3, E4, F1, F2, F3, F5, G1, G2. Every one is listed in its own entry below with
-what it covers and what its seeding does.
+**Filmed so far (27):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E3, E4,
+F1, F2, F3, F5, G1, G2. Every one is listed in its own entry below with what it
+covers and what its seeding does.
 
-**SECTION D IS DONE except D4** (asking for a parcel back). D4 is the one that
-presses the send-back, which reaches the courier on the click — so it needs the
-`RSH-LIFE-CONFIRMED` parcel and a decision about whether the take may consume
-it. **The next entry is D4, then E2 (reading your wallet) and E5 (what the
-freight cost), then G3–G7, then B3/B4/B5/B6/B7 and C1/C2/C7, then section H
-onward.**
+**SECTION D IS COMPLETE.** D4 landed 2026-09-30 and brought the lifecycle to
+NINE parcels: it is the one video that SPENDS what it films — both of its
+actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
+`RSH-LIFE-RETURNREQ`, retired and remade on every seed run rather than
+unwound. Read D4's entry before filming anything else that presses a courier
+button.
+
+**The next entry is E2 (reading your wallet), then E5 (what the freight cost),
+then G3–G7, then B3/B4/B5/B6/B7 and C1/C2/C7, then section H onward.** E2 needs
+D0 (which now leaves a fuller ledger than ever — D4's takes add return fees to
+it) plus one pending top-up; E5 needs a consignment received AND billed, which
+nothing seeds yet.
 
 **Add the slug to `LIFECYCLE_SLUGS` in `seed-demo-data.mjs`** when you film one,
 or its take runs against a box that has never been driven. The five D/E slugs
@@ -50,8 +56,8 @@ already there are the worked examples.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
-**Filming these screens is finding real bugs at a steady rate — twelve so far,
-plus five in the seeding itself.** Every one is on a path nothing else
+**Filming these screens is finding real bugs at a steady rate — seventeen so
+far, plus six in the seeding itself.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
 column mappings that drove nothing, a tracking filter that 500'd, a stuck
@@ -59,15 +65,30 @@ parcel's clock that started when we WROTE DOWN the courier's scan rather than
 when the courier made it, a delivery attempt drawn against every scan in the
 order history, an auto-approval note describing a send-back on a request that
 was not one, a ticket that existed but a panel saying "nothing raised yet" a
-few centimetres below it, and an order named by eight characters of a uuid on
-the one screen whose job is to say which order needs you.
+few centimetres below it, an order named by eight characters of a uuid on
+the one screen whose job is to say which order needs you, and a return fee
+printed as a literal in the copy over a setting that is per seller and per
+currency — beside a second return path that charged a DIFFERENT fee and named
+no figure at all.
 **Budget time for the fix as well as the film.**
 
 **The recurring shape is worth naming: a value that is CLOSE ENOUGH most of the
 time.** `order_events.created_at` really is the scan time on a healthy evening;
 a delivery attempt really is in the same minute as its scan; a uuid really does
-identify an order. Each is wrong exactly where it matters, and none of them
-fails loudly.
+identify an order; `₹200` really is the return fee — on the seeded default, for
+a seller who never negotiated one, until the day somebody changes it. Each is
+wrong exactly where it matters, and none of them fails loudly.
+
+**A second shape has now appeared twice, and it is about the TESTS rather than
+the code: a gate that passes on the wrong thing.** D4's send-back scene waited
+for the order's status to read "Rto initiated" and passed while the order
+plainly still said "Out for delivery" — the regex matched elsewhere on a long
+page. The status was never going to move (CUR-11: the courier accepting a
+cancellation is not a scan), so the narration was wrong too. **Only the frame
+caught it**, which is the whole argument for `TUT_CHECK_SHOTS=1`. Anchor a
+gate on the thing the narration CLAIMS, as specifically as you can: D4's fee
+scene waits for the hint text to contain "return fee is", so an endpoint that
+is down or gated wrong fails the check instead of filming prose.
 
 ### What a following agent needs to know that is not obvious
 
@@ -522,12 +543,14 @@ and every tutorial here becomes `ready`.
 node scripts/tutorials/seed-demo-data.mjs --lifecycle
 ```
 
-SEVEN parcels, driven the whole way by the real path: an order placed by the
+NINE parcels, driven the whole way by the real path: an order placed by the
 seller, confirmed on a CALL, a waybill booked against the local Delhivery
 simulator, picked, packed at the bench with the box ritual, scanned at handover,
 then advanced by the simulator — which fires the same signed webhooks the real
-courier does. Takes about two minutes from cold. **Verified 2026-09-30, all
-seven green, and idempotent: a second run says "already" and changes nothing.**
+courier does. Takes about two and a half minutes from cold. **Verified 2026-09-30, all nine
+green, and idempotent: a second run says "already" and changes nothing — except
+for the two D4 parcels, which are retired and remade whenever a take has spent
+them (`retireSpentParcel`, and see D4).**
 
 | Ref                  | State                             | Used by        |
 | -------------------- | --------------------------------- | -------------- |
@@ -538,6 +561,8 @@ seven green, and idempotent: a second run says "already" and changes nothing.**
 | `RSH-LIFE-REVIEW`    | AWAITING_SELLER_DECISION          | D5             |
 | `RSH-LIFE-CONFIRMED` | CONFIRMED, live waybill           | B7, D4         |
 | `RSH-LIFE-OVERDUE`   | OUT_FOR_DELIVERY, flagged day 3   | D3             |
+| `RSH-LIFE-SENDBACK`  | OUT_FOR_DELIVERY — **spent by D4**| D4             |
+| `RSH-LIFE-RETURNREQ` | DELIVERED — **spent by D4**       | D4             |
 
 It also leaves behind what those states imply and the videos will want: the
 `SCRAP_DAMAGE` ticket **with our reply on it and a `SCRAP_REFUND` credit in the
@@ -553,7 +578,29 @@ it, for exactly this), and the flag is raised by running the real NSA sweep
 (`POST /admin/nsa/sweep`) rather than by stamping `nsa_*`.
 
 **`RSH-LIFE-REVIEW` is REBUILT rather than resumed** — see D5 for why, and why
-it is the only parcel that may be.
+it is the only parcel that may be DELETED.
+
+**D4's two are RETIRED and remade, which is a third thing and not a rewind.**
+`RSH-LIFE-SENDBACK` and `RSH-LIFE-RETURNREQ` are spent by their own take, so a
+parcel found past its state has its `sellerOrderRef` moved to `<ref>-SPENT-<n>`
+and a fresh one is built under the canonical name. Nothing is deleted and
+nothing is unwound: the spent parcel keeps every movement, every wallet entry,
+its waybill and its reverse booking. Three tests make a parcel spent, and the
+second two exist because the first is not enough:
+
+1. **its status moved** — a return request takes it to RTO_INITIATED;
+2. **the courier has already been told** (`shipments.courierCancelledAt`) — a
+   SEND-BACK leaves the order at OUT_FOR_DELIVERY, because CUR-11 says the
+   courier's scans are the only authority on our status and accepting a
+   cancellation is not a scan. Without this, the next take would film a second
+   send-back on a waybill the courier had already cancelled;
+3. **the simulator has forgotten its waybill.** The sim keeps parcels in
+   memory and says so ("Restarting is the reset"), our database keeps the
+   waybill either way — so after a sim restart the order sits perfectly at
+   OUT_FOR_DELIVERY carrying a waybill the courier has never heard of, and the
+   one thing D4 does with it is a live call against that waybill. It cost a
+   failed take once; it is checked now (`/_sim/parcels`, failing safe towards
+   "the sim still knows it").
 
 **Wiring:** `LIFECYCLE_SLUGS` in `seed-demo-data.mjs` holds the five D-section
 slugs filmed so far. A new video that needs a moved parcel adds its slug there,
@@ -744,15 +791,67 @@ out for delivery three nights or more (**you are waiting on a courier**). The
 page has no buttons at all and says why: the seller cannot make a courier
 deliver, and offering an action there would be theatre.
 
-### D4. Asking for a parcel back · `needs demo data`
+### D4. Asking for a parcel back · **FILMED** — `ask-for-a-parcel-back.mp4`
 
 **Promise** — you can turn a parcel round, and you know the fee before you do.
-**Length** 2 min. **Prerequisites** D1. **Needs** D0's CONFIRMED-with-waybill
-and DELIVERED orders.
+**Length** 2 min 52 s (15 scenes). **Prerequisites** D1. **Needs** D0, and it is
+in `LIFECYCLE_SLUGS`.
 **Covers** the seller's own "send it back" on an in-flight parcel — **the one
 customer-facing action that calls the courier directly, with no operator in the
-loop** (CUR-10's seller amendment) — and, separately, "Request return" on a
-delivered one. Both charge a return fee; the tutorial says the figure.
+loop** (CUR-10's seller amendment) — and then "Request return" on a delivered
+one. **Both are PRESSED.** The send-back goes through the ask dialog (the choice
+changes the dialog's own description and the button's colour), a reason nobody
+approves but the returns bench reads, and the second confirmation that names the
+order and repeats the fee. The return request closes on the toast carrying the
+**reverse waybill** — the collection really is booked.
+
+**This entry named the wrong parcel, and the code says why.** It asked for "D0's
+CONFIRMED-with-waybill" order. `DeliveryTroublePanel` renders only while the
+order is `DELIVERY_FAILED` or `OUT_FOR_DELIVERY`, so on a CONFIRMED order there
+is no panel and no button at all. The send-back needs a parcel that is MOVING.
+
+**IT IS THE ONE VIDEO THAT SPENDS WHAT IT FILMS**, so it has its own two parcels
+— `RSH-LIFE-SENDBACK` (out for delivery) and `RSH-LIFE-RETURNREQ` (delivered) —
+rather than borrowing D2's failed one or D0's delivered one, which four other
+videos read between them. `retireSpentParcel` is what makes it re-takeable: a
+parcel found past its state has its `sellerOrderRef` moved to
+`<ref>-SPENT-<n>` and a fresh one is built under the canonical name. **Nothing
+is unwound** — the spent parcel keeps every movement, every wallet entry, its
+waybill and its reverse booking, and carries on being a parcel that is coming
+back. That is the only shape that respects D0's never-rewind rule for a parcel
+this far down the line; the only other departure, `rebuildStaleReviewParcel`,
+really does delete, and is safe only because its parcel was never confirmed.
+**A `--check` pass spends one too** — check mode drives the real app and really
+presses the button — so "check twice with a seed in between" is three parcels,
+about twenty seconds each on the simulator.
+
+**FILMING FOUND THE FEE ON SCREEN WAS A LITERAL.** `RequestReturnDialog`'s copy
+carried `₹200`, and `pricing.customer_return_fee` is per seller with its own
+currency key beside it (PRC-8) — so the sentence was right for the seeded
+default and wrong for anybody who negotiated one, and wrong for everybody the
+day the default moves. Which has happened: the DELIVERY fee's default became
+৳200 on 2026-09-20 and no screen changed. The send-back half was worse — it said
+"a return fee applies" and named no figure at all, while charging a **different**
+fee (`pricing.flat_rto_fee`, ৳30 ≈ ₹22), so a seller who read the ₹200 in one
+dialog and pressed the other paid something else.
+
+And **not one of the three flat fees was readable anywhere in the seller app**:
+`/wallet/limits` (E4) lists the wallet's terms and deliberately names only the
+TIMING of the delivery fee, never the amount. E4's narration is honest about
+that and needs no re-take.
+
+`GET /seller/pricing/fees` is the fix — the three fees priced in rupees at the
+moment they are read, from the engine that takes the money, with the agreed
+amount and currency beside each so "৳30" and "₹22.22" are both on screen. Gated
+on `orders.view`, **not** `wallet.view`: the callers are return dialogs on an
+order and the Operations role cancels orders without ever seeing the wallet.
+An unpriceable fee answers `amountInr: null`, never a zero — PRC-8 already
+refuses to CHARGE a zero, and showing one would promise a free return and then
+take money for it. `feeFigure` in `apps/seller/src/lib/fee-figure.ts` is the one
+formatter both dialogs read.
+
+**The narration names neither figure**, now that both are on screen — which also
+means a price change does not silently make this video wrong.
 
 ### D5. The customer would not answer · **FILMED** — `the-customer-would-not-answer.mp4`
 

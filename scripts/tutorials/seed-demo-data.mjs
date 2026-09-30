@@ -238,10 +238,33 @@ const LIFECYCLE_SLUGS = new Set([
   'what-needs-you-today',
   'the-customer-would-not-answer',
   'something-arrived-damaged',
+  // D4 is the one video that SPENDS its parcels — both of its actions
+  // are irreversible — so its two are retired and remade on every seed
+  // run (`retireSpentParcel`). That is why it must be in this list even
+  // though it films no state the other videos do not already reach.
+  'ask-for-a-parcel-back',
 ]);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
 const LIFECYCLE_REFS = LIFECYCLE_PARCELS.map((p) => p.ref);
+
+/**
+ * What every lifecycle reference starts with, retired ones included.
+ *
+ * Asserted rather than assumed: the prefix is what `clearPreviousOrders`
+ * protects, so a parcel added with a ref that does not carry it would be
+ * swept by the next seed run of any other video.
+ */
+const LIFECYCLE_REF_PREFIX = 'RSH-LIFE-';
+{
+  const stray = LIFECYCLE_REFS.filter((r) => !r.startsWith(LIFECYCLE_REF_PREFIX));
+  if (stray.length > 0) {
+    throw new Error(
+      `Lifecycle refs must start with ${LIFECYCLE_REF_PREFIX} so clearPreviousOrders leaves ` +
+        `them alone: ${stray.join(', ')}`,
+    );
+  }
+}
 
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
@@ -1015,7 +1038,14 @@ async function clearPreviousOrders(sellerId) {
     // them costs a real courier booking and a warehouse run; leaving them
     // costs nothing, because each is keyed on its own reference and the
     // lifecycle pass skips one it finds already in the right state.
-    where: { sellerId, NOT: { sellerOrderRef: { in: LIFECYCLE_REFS } } },
+    //
+    // The PREFIX, not only the exact refs. D4's two parcels are spent by
+    // their own take and retired to `<ref>-SPENT-<n>` rather than
+    // unwound (see `retireSpentParcel`), so the family grows by one per
+    // take. Every one is past dispatch and would be "left alone" by the
+    // status filter below anyway — but named, one line per take, in a
+    // log whose job is to say what a take left behind.
+    where: { sellerId, NOT: { sellerOrderRef: { startsWith: LIFECYCLE_REF_PREFIX } } },
     select: { id: true, orderNumber: true, status: true },
   });
   if (orders.length === 0) return;

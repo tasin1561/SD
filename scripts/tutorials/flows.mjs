@@ -104,6 +104,34 @@ const ISSUE = {
     'Customer says the box arrived open and one of the two sarees is missing. They have sent photographs of the packaging, which I can forward.',
 };
 
+/**
+ * D4's two parcels and what the seller types on each.
+ *
+ * Their recipients are `RSH-LIFE-SENDBACK` and `RSH-LIFE-RETURNREQ` in
+ * `lib/lifecycle.mjs` — keep in step. They are D4's OWN parcels rather
+ * than D2's or D0's because this video SPENDS them: both actions are
+ * irreversible, and borrowing a parcel four other videos read would take
+ * their worlds with it.
+ */
+const SENDBACK_CUSTOMER = 'Meenakshi Sundaram';
+const RETURNREQ_CUSTOMER = 'Kaushik Iyer';
+
+/**
+ * Nobody approves a send-back, so this reason is not a request — it is
+ * what the returns bench reads when the carton lands. Written to sound
+ * like the real thing rather than a form being filled in.
+ */
+const SENDBACK_REASON =
+  'Customer rang me directly and cancelled — they have already bought the same saree locally, so there is no point delivering it.';
+
+/**
+ * The delivered half. Names a CONDITION rather than a mood, because the
+ * dialog's own hint says this line decides whether the unit can be sold
+ * again.
+ */
+const RETURN_REASON =
+  'Customer says the blouse piece is a different shade from the saree. Fabric is unworn and still folded, so it should be resellable.';
+
 /** What D5 types on the review before answering it. */
 const HOLD_NOTE =
   'They are travelling until Sunday — please try again early next week rather than this evening.';
@@ -3772,6 +3800,252 @@ export const FLOWS = {
         // ended the session this recording is running in. Anything after
         // it would be filmed signed out.
         await stage.dwellOn(page.locator('.set-card[aria-live="polite"]').first(), 3400);
+      },
+    },
+  },
+
+  /**
+   * D4 — asking for a parcel back.
+   *
+   * THE ONE VIDEO THAT SPENDS WHAT IT FILMS. Both halves press a button
+   * that cannot be un-pressed: the send-back reaches the courier on the
+   * click (CUR-10's seller amendment, with no operator anywhere in the
+   * loop), and the return request books a real collection and moves the
+   * order onto the RTO path.
+   *
+   * So it has its OWN two parcels — `RSH-LIFE-SENDBACK` and
+   * `RSH-LIFE-RETURNREQ` — rather than borrowing D2's failed one or
+   * D0's delivered one, both of which four other videos read. The
+   * seeding retires a spent parcel and builds a fresh one under the same
+   * reference (`retireSpentParcel`), which is what makes this
+   * re-takeable; a `--check` pass spends one too, because check mode
+   * drives the real app.
+   *
+   * CURRICULUM.md's D4 entry asked for "D0's CONFIRMED-with-waybill"
+   * order and that was wrong: `DeliveryTroublePanel` renders only while
+   * the order is DELIVERY_FAILED or OUT_FOR_DELIVERY, so on a CONFIRMED
+   * order there is no panel and no button at all.
+   *
+   * THE FIGURES ARE NOT NARRATED. Both fees are now read from the server
+   * and printed on screen (the hard-coded `₹200` in the return dialog's
+   * copy was this video's first finding), and they are per seller and
+   * per currency — so the narration points at where the number is rather
+   * than saying it, which also survives a price change.
+   */
+  'ask-for-a-parcel-back': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-live'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/orders$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        // The status tab, as D2 does: it is how a seller finds this in
+        // real life, and it proves the seeding left the parcel moving.
+        await stage.clickIt(page.getByRole('tab', { name: /^Out for delivery/ }).first(), {
+          after: 1600,
+        });
+        const row = page.getByRole('row').filter({ hasText: SENDBACK_CUSTOMER }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row, 2400);
+      },
+
+      async 'on-order'({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: SENDBACK_CUSTOMER }).first();
+        await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        // THE BUTTON IS THE GATE, not a section title. The panel renders
+        // only while the parcel is in trouble, so no button means the
+        // seeding did not leave this one out for delivery — and a
+        // `.ord-section` filtered on "Out for delivery" would ALSO match
+        // the order tracker, which carries the same words as a rung on
+        // its own timeline. A gate that passes on the wrong element is a
+        // gate that films a page which does not say this.
+        const ask = page.getByRole('button', { name: 'Ask admin to act' }).first();
+        await ask.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(ask, 2800);
+      },
+
+      async 'ask-open'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Ask admin to act' }).first(), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(dialog, 2800);
+      },
+
+      async 'pick-sendback'({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        // BY VALUE on a labelled select, never by index: the three
+        // choices are ordered by us today and a fourth would land this
+        // scene on whatever happened to be third.
+        await dialog.getByLabel('What would you like').selectOption('RTO');
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(dialog, 3000);
+      },
+
+      async 'the-fee'({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        // ANCHORED ON THE FEE ITSELF, not on the hint's class. This
+        // scene's whole claim is that the figure is printed here, and
+        // that figure is read from `GET /seller/pricing/fees` — so if
+        // the endpoint is down, unresolvable or gated wrong, the hint
+        // falls back to "a return fee applies" and the check FAILS here
+        // rather than filming a sentence the narration contradicts.
+        //
+        // `sk-field__msg[data-kind="hint"]` is the element (FieldShell's
+        // own markup); the text is the assertion.
+        const hint = dialog.locator('p[data-kind="hint"]').filter({ hasText: /return fee is/ });
+        await hint.first().waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(hint.first(), 3600);
+      },
+
+      async reason({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.typeIn(dialog.getByLabel('What do you know'), SENDBACK_REASON, { after: 1600 });
+        await stage.dwellOn(dialog.getByLabel('What do you know'), 2200);
+      },
+
+      async confirm({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Send it back now' }).first(), {
+          after: 1400,
+        });
+        // BY ITS OWN TITLE, never `.last()`. Both dialogs are mounted at
+        // once and both carry a button reading "Send it back now", so DOM
+        // order is the only thing separating them — and which of two
+        // portals renders last is not a promise any component makes.
+        const confirm = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Send this parcel back now?' })
+          .first();
+        await confirm.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(confirm, 3400);
+      },
+
+      async sent({ page, stage }) {
+        const confirm = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Send this parcel back now?' })
+          .first();
+        await stage.clickIt(confirm.getByRole('button', { name: 'Send it back now' }).first(), {
+          after: 1600,
+        });
+        // THE REQUEST CARD, carrying "Executed" — not the order's status.
+        //
+        // A first cut waited for the status chip to read Rto initiated,
+        // and it PASSED while the order plainly still said Out for
+        // delivery: the regex matched somewhere else on a long page, and
+        // check mode only proves a step was reached. The frame is what
+        // caught it.
+        //
+        // The status was never going to move, and that is CUR-11 rather
+        // than a bug: the courier accepting a cancellation is not a
+        // scan, and our order status follows their scans and nothing
+        // else. What IS true the moment this returns is that the request
+        // was carried out — so that is what the scene shows and what the
+        // narration says.
+        const panel = page
+          .locator('.ord-section')
+          .filter({ hasText: 'What you asked for' })
+          .first();
+        await panel.waitFor({ state: 'visible', timeout: 40_000 });
+        const asked = panel.locator('.ord-callcard').last();
+        await asked
+          .getByText(/Executed/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 40_000 });
+        await asked.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(asked, 3400);
+      },
+
+      async 'open-delivered'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/orders$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.clickIt(page.getByRole('tab', { name: /^Delivered/ }).first(), { after: 1600 });
+        const row = page.getByRole('row').filter({ hasText: RETURNREQ_CUSTOMER }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.locator('.ord-kpis').first(), 2600);
+      },
+
+      async 'request-return'({ page, stage }) {
+        const button = page.getByRole('button', { name: 'Request return' }).first();
+        await button.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(button, 3200);
+      },
+
+      async 'return-dialog'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Request return' }).first(), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // The paragraph carrying the fee, which is read from the server
+        // rather than typed into the copy — the whole point of the
+        // change this video's filming produced.
+        const said = dialog.locator('.ord-p').first();
+        await said.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(said, 3600);
+      },
+
+      async 'return-reason'({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.typeIn(dialog.getByLabel('Why is it coming back?'), RETURN_REASON, {
+          after: 1600,
+        });
+        await stage.dwellOn(dialog.getByLabel('Why is it coming back?'), 2400);
+      },
+
+      async booked({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Request return' }).first(), {
+          after: 1600,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 40_000 });
+        // TWO dwells, because the first subject does not survive the
+        // scene. The toast is the only place the reverse waybill appears
+        // and a success toast lives 4500 ms; this scene's line runs about
+        // ten seconds, so a single dwell on it would spend most of the
+        // scene haloing an element that had gone. It is emphasised while
+        // it is there, and the order's own tiles carry the rest.
+        const toast = page.getByText(/Collection booked/i).first();
+        await toast.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(toast, 2400);
+        await stage.dwellOn(page.locator('.ord-kpis').first(), 2600);
+      },
+
+      async outro({ page, stage }) {
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.ord-kpis').first(), 3400);
       },
     },
   },

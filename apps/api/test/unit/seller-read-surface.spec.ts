@@ -146,6 +146,16 @@ const ORDERS_VIEW_GETS: Readonly<Record<string, Readonly<Record<string, string>>
   // The fee this company would be charged — its own number, which the
   // order form shows before anything is placed.
   'seller-order-defaults.controller.ts': { 'customer-delivery-fee': 'orders.view' },
+  // What OUR three flat fees cost this company: the delivery fee and the
+  // two return fees, priced in rupees now. Their own numbers, resolved
+  // through SET-1, and they disclose nothing about another tenant.
+  //
+  // Deliberately NOT `wallet.view`, which is where a money figure would
+  // otherwise sit: the callers are the two return dialogs on an ORDER,
+  // and the Operations role holds `orders.cancel` without ever holding
+  // `wallet.view` — so gating it on the wallet would have shown the role
+  // that actually returns parcels a dialog whose fee was a dash.
+  'seller-pricing.controller.ts': { fees: 'orders.view' },
   // Whether a pincode is serviceable. Courier data rather than any
   // seller's, so it discloses nothing about another tenant — but note it
   // spends a live courier lookup, which is the reason to look here again

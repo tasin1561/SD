@@ -1915,3 +1915,40 @@ export function useRequestReturn(
     },
   });
 }
+
+/** One of the three flat fees, as agreed and as it will be charged. */
+export interface SellerFeeView {
+  readonly kind: 'delivery' | 'return' | 'customerReturn';
+  /** Rupees. NULL means we could not price it — never show a zero. */
+  readonly amountInr: string | null;
+  readonly agreedAmount: string;
+  readonly agreedCurrency: 'INR' | 'BDT' | null;
+  /** The FX row as stored, for checking — e.g. "1.35" / "INR/BDT". */
+  readonly fxRate: string | null;
+  readonly fxRatePair: string | null;
+}
+
+/**
+ * What a delivery and each kind of return cost THIS seller.
+ *
+ * Every figure is a per-seller setting with its own currency (PRC-8), so
+ * a number typed into copy is right for the default and wrong for
+ * everybody who negotiated one — which is what the return dialog's
+ * `₹200` was. Read at the moment the dialog opens, from the engine that
+ * takes the money.
+ *
+ * NOT gated on `wallet.view`: the callers are return dialogs on an
+ * order, and the Operations role cancels orders without ever seeing the
+ * wallet.
+ */
+export function useSellerFees(enabled = true): UseQueryResult<{ items: SellerFeeView[] }> {
+  const client = useApiClient();
+  return useQuery({
+    queryKey: ['seller-pricing', 'fees'],
+    queryFn: () => client.request<{ items: SellerFeeView[] }>('/api/seller/pricing/fees'),
+    enabled,
+    // Settings, not activity: re-reading on every focus would spend a
+    // request to learn the same number.
+    staleTime: 5 * 60 * 1000,
+  });
+}

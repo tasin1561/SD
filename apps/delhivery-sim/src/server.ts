@@ -82,6 +82,17 @@ async function readBody(req: IncomingMessage): Promise<string> {
  * adapter's `form-data-key` encoding actually produces what a server
  * expects.
  */
+/** A raw JSON body, or null if it is not one. */
+function parseJsonBody(raw: string): unknown {
+  if (raw.trim() === '') return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseFormDataKey(raw: string): unknown {
   const params = new URLSearchParams(raw);
   const data = params.get('data');
@@ -349,7 +360,28 @@ const server = createServer((req, res) => {
     if (path === '/api/p/edit' && method === 'POST') {
       // Cancel and edit share this endpoint; `cancellation: "true"` is
       // the cancel.
-      const parsed = parseFormDataKey(body) as { waybill?: string; cancellation?: string } | null;
+      //
+      // A RAW JSON BODY, not `data=<json>`. Only `/api/cmu/create.json`
+      // uses that form encoding — `docs/delhivery-integration.md`'s
+      // verified table gives this one as `{"waybill":"…",
+      // "cancellation":"true"}`, and `DelhiveryShipmentEditService`
+      // sends exactly that with `encoding: 'json'`.
+      //
+      // It was parsed with `parseFormDataKey` here, which looks for a
+      // `data` key, found none, and answered "waybill not found" to
+      // EVERY cancel. So the seller's own send-back — the single most
+      // consequential customer-facing courier call in the product, the
+      // one that reaches Delhivery with no operator in the loop — had
+      // never once been exercised end to end on this box: anything
+      // testing it was silently testing the refusal path. Found by
+      // filming it (D4).
+      //
+      // The form shape is still accepted, because a fixture written
+      // against the old behaviour is not worth breaking to make a point.
+      const parsed = (parseJsonBody(body) ?? parseFormDataKey(body)) as {
+        waybill?: string;
+        cancellation?: string;
+      } | null;
       const awb = String(parsed?.waybill ?? '');
       const parcel = getParcel(awb);
       if (!parcel) return json(res, 200, { status: false, error: ['waybill not found'] });

@@ -8,7 +8,8 @@ import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
 import { Notice } from './orders-parts';
-import { useRequestReturn } from '@/lib/api-hooks';
+import { useRequestReturn, useSellerFees } from '@/lib/api-hooks';
+import { feeOfKind } from '@/lib/fee-figure';
 import { serverVerdict } from '@/lib/server-verdict';
 
 /**
@@ -24,6 +25,15 @@ import { serverVerdict } from '@/lib/server-verdict';
  * The reason is required and is not a formality: the warehouse reads it
  * when the parcel lands, and "damaged" versus "changed their mind"
  * decides whether the stock goes back on the shelf.
+ *
+ * THE FIGURE IS READ, NOT TYPED. It used to be the literal `₹200` in
+ * this paragraph — right for the seeded default of
+ * `pricing.customer_return_fee`, wrong for any seller who negotiated one
+ * and wrong for everybody the day the default moves (which is exactly
+ * what happened to the delivery fee on 2026-09-20: ₹200 became ৳200 and
+ * nothing on any screen changed). It now comes from the engine that will
+ * take the money, priced at the moment this opens. When it cannot be
+ * priced the sentence falls back to prose rather than printing a zero.
  */
 export function RequestReturnDialog({
   orderId,
@@ -37,6 +47,10 @@ export function RequestReturnDialog({
   readonly onClose: () => void;
 }): ReactElement {
   const request = useRequestReturn(orderId);
+  // Only while the dialog is up: a fee nobody is about to spend is not
+  // worth a request on every order page.
+  const fees = useSellerFees(open);
+  const fee = feeOfKind(fees.data?.items, 'customerReturn');
   const toast = useToast();
   const [reason, setReason] = useState('');
 
@@ -98,10 +112,25 @@ export function RequestReturnDialog({
         </div>
         <p className="ord-p">
           The courier collects it from your customer and brings it to our warehouse. It travels the
-          same distance again, so it is charged as a second delivery —{' '}
-          <span className="ord-strong">₹200</span> on top of the delivery you already paid. Nothing
-          is charged until the parcel actually arrives.
+          same distance again, so it is charged as a second delivery
+          {fee === null ? (
+            <> on top of the delivery you already paid</>
+          ) : (
+            <>
+              {' — '}
+              <span className="ord-strong">{fee.primary}</span>
+              {fee.agreed === null ? null : <> (agreed as {fee.agreed})</>} on top of the delivery
+              you already paid
+            </>
+          )}
+          . Nothing is charged until the parcel actually arrives.
         </p>
+        {fee !== null && !fee.priced && (
+          <p className="ord-faint">
+            That is the figure we agreed with you. What leaves your wallet is its value in rupees on
+            the day the parcel arrives.
+          </p>
+        )}
         <p className="ord-faint">
           Stock goes back on the shelf once the warehouse has checked it. If it comes back damaged
           it is written off instead, and you will see that on the order.
