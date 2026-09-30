@@ -232,7 +232,13 @@ export const CATALOGUE_IMPORT = {
  * Passing `--lifecycle` runs it whatever the slug, which is how it is
  * built the first time.
  */
-const LIFECYCLE_SLUGS = new Set(['where-is-my-parcel']);
+const LIFECYCLE_SLUGS = new Set([
+  'where-is-my-parcel',
+  'the-customer-was-not-there',
+  'what-needs-you-today',
+  'the-customer-would-not-answer',
+  'something-arrived-damaged',
+]);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
 const LIFECYCLE_REFS = LIFECYCLE_PARCELS.map((p) => p.ref);
@@ -1070,6 +1076,54 @@ async function clearPreviousOrders(sellerId) {
  * references in the fixture are re-used by every take and an orphaned
  * object is the one piece of a previous run nothing else would clear.
  */
+/**
+ * Remove what a SECTION D take leaves on the lifecycle parcels.
+ *
+ * The D parcels themselves are never rebuilt (they cost a real courier
+ * booking and a warehouse run, and `clearPreviousOrders` excludes them),
+ * so anything a take WRITES ON one of them survives into the next take
+ * unless it is cleared here — which is exactly the trap the bulk-import
+ * video's "Recent imports" table was:
+ *
+ *   · the "Ask admin to act" request D2 sends. Leave it and the second
+ *     take opens on "What you asked for" already holding the first
+ *     take's card, so the scene that says "and there it is" shows two.
+ *   · the issue D6 raises on camera. Leave it and the register opens on
+ *     four tickets where the narration says what the two kinds are.
+ *
+ * The SCRAP_DAMAGE ticket is deliberately kept: it is the seeded world
+ * (opened by the RTO inspection, settled with a refund by the lifecycle
+ * pass), and re-raising it would mean re-running the warehouse leg.
+ */
+async function clearDeliveryTakeArtefacts(sellerId) {
+  const orders = await prisma.order.findMany({ where: { sellerId }, select: { id: true } });
+  const ids = orders.map((o) => o.id);
+  if (ids.length > 0) {
+    const asks = await prisma.orderDeliveryActionRequest.deleteMany({
+      where: { orderId: { in: ids } },
+    });
+    if (asks.count > 0) {
+      console.log(`  · removed a previous take's ${asks.count} delivery-action request(s)`);
+    }
+  }
+
+  // `ticket_events` is append-only by construction, so there is no
+  // service path that removes a ticket — a take's own row goes by hand,
+  // children first.
+  const raised = await prisma.ticket.findMany({
+    where: { sellerId, ticketType: 'SELLER_RAISED_ISSUE' },
+    select: { id: true, ticketNumber: true },
+  });
+  if (raised.length > 0) {
+    const ticketIds = raised.map((t) => t.id);
+    await prisma.$transaction([
+      prisma.ticketEvent.deleteMany({ where: { ticketId: { in: ticketIds } } }),
+      prisma.ticket.deleteMany({ where: { id: { in: ticketIds } } }),
+    ]);
+    console.log(`  · removed a previous take's ${raised.length} seller-raised ticket(s)`);
+  }
+}
+
 async function clearPreviousImports(sellerId) {
   const uploads = await prisma.bulkOrderUpload.findMany({
     where: { sellerId },
@@ -1466,6 +1520,7 @@ async function main() {
   await clearVariantPhotos(sellerId);
   await clearTutorialProduct(sellerId);
   await clearPreviousOrders(sellerId);
+  await clearDeliveryTakeArtefacts(sellerId);
   await clearPreviousImports(sellerId);
   await clearCatalogueImport(sellerId);
   await clearTutorialConsignments(sellerId);

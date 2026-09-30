@@ -859,3 +859,171 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------
+// WHEN a parcel went out for delivery.
+//
+// The sweep asked `order_events.created_at`, which is when WE RECORDED
+// the courier's scan rather than when the courier made it. On a healthy
+// evening the two agree and the bug is invisible. They part company in
+// exactly the cases this sweep exists for: a webhook queue stuck for a
+// day and then drained writes today's order event for yesterday's scan,
+// and a scan recorded by hand (TRK-9, which REQUIRES `eventAtIso` for
+// precisely this reason) writes one dated now for a scan a week old.
+// Either way the clock restarts at zero — so the parcels whose scans
+// were themselves late are the ones never flagged.
+//
+// Same shape as the returns worklist's `shipments.updatedAt` defect
+// (rule 4b): a long wait read as no wait, precisely, and silently.
+// ---------------------------------------------------------------------
+describe('OrderAttentionService — when a parcel went out for delivery', () => {
+  /** 12:30 IST on 12 September. Past no cutoff; four days is four days. */
+  const NOW = new Date('2026-09-12T07:00:00Z');
+  const ORDER = 'ord-ofd';
+  const SHIP = 'ship-ofd';
+
+  function makeSweep(opts: {
+    /** The courier's own scan time, as `tracking_events.event_at`. */
+    scanAt?: Date;
+    /** When the order event recording it was written. */
+    eventAt?: Date;
+  }) {
+    const claims: Array<Record<string, unknown>> = [];
+    const client = {
+      systemSetting: {
+        findUnique: jest.fn(async ({ where }: { where: { key: string } }) =>
+          where.key === 'ops.nsa_enabled'
+            ? { valueBoolean: true }
+            : where.key === 'ops.nsa_cutoff_hour'
+              ? { valueInt: 18 }
+              : where.key === 'ops.nsa_max_days'
+                ? { valueInt: 3 }
+                : null,
+        ),
+        findMany: jest.fn(async () => []),
+      },
+      fxRate: { findFirst: jest.fn(async () => null) },
+      orderShipment: {
+        // The NSA lookup asks by orderId; every other consumer in this
+        // sweep is fed an empty estate below.
+        findMany: jest.fn(async (args: { where?: Record<string, unknown> }) => {
+          const where = (args?.where ?? {}) as { orderId?: { in?: readonly string[] } };
+          if (where.orderId?.in !== undefined) return [{ orderId: ORDER, shipmentId: SHIP }];
+          return [];
+        }),
+        count: jest.fn(async () => 0),
+        findFirst: jest.fn(async () => null),
+      },
+      orderEvent: {
+        count: jest.fn(async () => 0),
+        groupBy: jest.fn(async () =>
+          opts.eventAt === undefined ? [] : [{ orderId: ORDER, _max: { createdAt: opts.eventAt } }],
+        ),
+      },
+      order: {
+        // Scalar status = the NSA candidates; `status: { in: … }` is the
+        // shipmentless check, which wants nothing here.
+        findMany: jest.fn(async (args: { where?: Record<string, unknown> }) => {
+          const where = (args?.where ?? {}) as { status?: unknown };
+          if (where.status === 'OUT_FOR_DELIVERY') {
+            return [{ id: ORDER, sellerId: 'sel-1', orderNumber: 'SD-OFD', nsaDayCount: 0 }];
+          }
+          return [];
+        }),
+        findUnique: jest.fn(async () => ({
+          id: ORDER,
+          orderNumber: 'SD-OFD',
+          status: 'OUT_FOR_DELIVERY',
+          recipientName: 'Anita Rao',
+          recipientCity: 'Bengaluru',
+          seller: { id: 'sel-1', companyName: 'Rangpur Silk House', contactEmail: null },
+          orderShipments: [],
+        })),
+        updateMany: jest.fn(async (args: { where?: Record<string, unknown> }) => {
+          const where = (args?.where ?? {}) as { id?: string };
+          if (where.id !== undefined) {
+            claims.push(args as Record<string, unknown>);
+            return { count: 1 };
+          }
+          return { count: 0 };
+        }),
+      },
+      shipment: { findUnique: jest.fn(async () => null), findMany: jest.fn(async () => []) },
+      orderDeliveryActionRequest: { findMany: jest.fn(async () => []) },
+      courierWebhook: { findMany: jest.fn(async () => []) },
+    };
+
+    const svc = new OrderAttentionService(
+      { client } as never,
+      { log: jest.fn() } as never,
+      { enqueue: jest.fn(async () => undefined) } as never,
+      { sellerAppUrl: 'http://localhost:3003' } as never,
+      {
+        raise: jest.fn(async () => undefined),
+        resolveByKey: jest.fn(async () => undefined),
+        openDedupeKeys: jest.fn(async () => []),
+      } as never,
+      { processOrder: jest.fn(async () => ({ result: 'ERROR' })) } as never,
+      new TrackingStatusMappingService(),
+      { isTerminalStatus: (st: never) => new OrderStateMachineService().isTerminal(st) } as never,
+      {
+        reachedStatusAt: jest.fn(async () =>
+          opts.scanAt === undefined ? new Map() : new Map([[SHIP, opts.scanAt]]),
+        ),
+      } as never,
+      { retryMissing: jest.fn(async () => ({ results: [], sawEverything: true })) } as never,
+      {
+        reprovisionShipment: jest.fn(),
+        retryResellerMoneyRecalculation: jest.fn(),
+      } as never,
+      { dispatch: jest.fn(async () => undefined) } as never,
+    );
+    return { svc, claims };
+  }
+
+  it('counts from the COURIER’S SCAN, not from when we recorded it', async () => {
+    // Scanned out for delivery on the 8th; the order event was written a
+    // minute ago, because the webhook that carried it had been stuck.
+    const { svc, claims } = makeSweep({
+      scanAt: new Date('2026-09-08T05:00:00Z'), // 10:30 IST, 8 Sep
+      eventAt: new Date('2026-09-12T06:59:00Z'), // a minute ago
+    });
+
+    const summary = await svc.sweep(NOW);
+
+    expect(summary.raised).toBe(1);
+    // Four evenings have passed, capped at the configured three.
+    expect(claims[0]?.['data']).toMatchObject({ nsaDayCount: 3 });
+  });
+
+  it('falls back to the order event when there is NO scan — a status set by hand', async () => {
+    const { svc, claims } = makeSweep({ eventAt: new Date('2026-09-09T05:00:00Z') });
+
+    const summary = await svc.sweep(NOW);
+
+    expect(summary.raised).toBe(1);
+    expect(claims[0]?.['data']).toMatchObject({ nsaDayCount: 3 });
+  });
+
+  it('raises nothing for a parcel with neither a scan nor an event', async () => {
+    const { svc, claims } = makeSweep({});
+
+    const summary = await svc.sweep(NOW);
+
+    expect(summary.raised).toBe(0);
+    expect(claims).toHaveLength(0);
+  });
+
+  it('does not flag a parcel scanned out this morning', async () => {
+    const { svc, claims } = makeSweep({
+      scanAt: new Date('2026-09-12T04:30:00Z'), // 10:00 IST today
+      // …even though a STALE order event says it went out days ago.
+      eventAt: new Date('2026-09-05T05:00:00Z'),
+    });
+
+    const summary = await svc.sweep(NOW);
+
+    expect(summary.raised).toBe(0);
+    expect(claims).toHaveLength(0);
+  });
+});

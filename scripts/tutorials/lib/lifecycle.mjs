@@ -124,6 +124,34 @@ export const LIFECYCLE_PARCELS = [
      */
     noAnswerToCap: true,
   },
+  {
+    ref: 'RSH-LIFE-OVERDUE',
+    want: 'OUT_FOR_DELIVERY',
+    customer: { name: 'Priyanka Joshi', phone: '+919845060077' },
+    /**
+     * THE ONE PARCEL THE SIMULATOR CANNOT PRODUCE.
+     *
+     * `/needs-attention`'s second list is parcels that went out for
+     * delivery three nights or more ago and never arrived — and the
+     * simulator moves a parcel through every scan in seconds, so
+     * nothing on this box is ever three days old. D3's video would be
+     * half a screen without it.
+     *
+     * So its scans are RECORDED BY HAND, back-dated, through the
+     * product's own `ManualTrackingService` (TRK-9) — which REQUIRES
+     * the operator to supply `eventAtIso` for exactly this reason:
+     * TRK-3 says `event_at` is the SCAN time, never `now()`, and a
+     * backfill is meant to land in its true place on the timeline. No
+     * column is written that the product does not write itself, and the
+     * scan goes through the same mapping and the same monotonic-forward
+     * guard a webhook does.
+     */
+    stages: [],
+    backdatedScans: [
+      { status: 'IN_TRANSIT', daysAgo: 5, description: 'Shipment picked up' },
+      { status: 'OUT_FOR_DELIVERY', daysAgo: 4, description: 'Out for delivery' },
+    ],
+  },
 ];
 
 /**
@@ -236,6 +264,16 @@ async function reconcileStaleCallQueue(log) {
   const { count } = await prisma.callQueueEntry.updateMany({
     where: {
       status: { in: ['PENDING', 'ASSIGNED'] },
+      // ONLY a confirmation call. The other three reasons
+      // (SELLER_ASKED, STORE_ASKED, DELIVERY_FAILED) exist precisely to
+      // ring a customer whose order is PAST confirmation, so the
+      // predicate above is false of a perfectly live entry — and this
+      // swept three of them away on the first D0 box, closing the
+      // post-NDR call the delivery-failed listener had just queued and
+      // leaving `closure_reason` null as the fingerprint. The rule is
+      // "a CONFIRMATION call for an order that no longer needs
+      // confirming", not "any call for an order that has moved on".
+      reason: 'ORDER_CONFIRMATION',
       order: { status: { not: 'PENDING_CONFIRMATION' } },
     },
     data: { status: 'COMPLETED', assignedAgentId: null, assignedAt: null },
@@ -482,6 +520,43 @@ async function driveToDispatched(orderId, staffToken, log) {
   return { shipmentId, awb };
 }
 
+/**
+ * Record a parcel's scans by hand, back-dated.
+ *
+ * TRK-9's own path: the same mapping, the same monotonic-forward guard
+ * and the same `tracking_events` writer a webhook uses, with the
+ * operator supplying the scan time — which TRK-3 requires precisely so
+ * a backfill lands where it belongs rather than at `now()`.
+ *
+ * `eventAt` is what decides how many nights a parcel has been out (the
+ * NSA sweep asks the courier's scan, not when we recorded it), so the
+ * days are counted from the seeding's own clock and a rebuild weeks
+ * later produces the same picture.
+ */
+async function recordBackdatedScans(shipmentId, staffToken, scans, log) {
+  for (const scan of scans) {
+    const eventAtIso = new Date(Date.now() - scan.daysAgo * 86_400_000).toISOString();
+    const res = await call(`/admin/tracking/shipments/${shipmentId}/manual-scan`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        status: scan.status,
+        eventAtIso,
+        description: scan.description,
+        locationName: 'Bengaluru Hub',
+        locationCity: 'Bengaluru',
+      },
+    });
+    // A skipped transition is NORMAL for a repeat (TRK-4), but on a
+    // FIRST build it means the order never got where the video needs
+    // it — so say which, rather than reporting success either way.
+    log(
+      `    scan ${scan.status} at ${eventAtIso.slice(0, 10)} → ${res.kind}` +
+        (res.toStatus === undefined ? '' : ` (${res.toStatus})`),
+    );
+  }
+}
+
 /** Receive the carton, inspect every line, and finalize (WMS-8). */
 async function receiveAndFinalize(awb, staffToken, disposition) {
   await call('/warehouse/rto/receive', {
@@ -586,7 +661,20 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
         select: { valueInt: true },
       });
       const attempts = cap?.valueInt ?? 3;
+      /*
+        Ring until the order stops being callable, bounded by the cap.
+
+        Not "ring exactly `cap` times": the D5 video ANSWERS this review
+        with "keep trying", which puts the order back to
+        PENDING_CONFIRMATION with its attempts already counted — so the
+        next seeding's very FIRST ring is at the cap and re-pauses it,
+        and two more rings would then be asking for a call the order is
+        no longer in the queue for. Reading the order's own status after
+        each attempt is the honest condition; the cap is only the bound
+        that stops a loop running away.
+      */
       for (let i = 0; i < attempts; i += 1) {
+        if ((await statusOf(order.id)) !== 'PENDING_CONFIRMATION') break;
         const assignmentId = await pullOwnCall(order.id, staffToken);
         if (assignmentId === null) {
           throw new Error(`${parcel.ref} left the call queue before attempt ${i + 1}`);
@@ -616,7 +704,7 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
       return (Array.isArray(shipments) ? shipments : []).find((sh) => sh.awbNumber)?.awbNumber;
     });
 
-    if (parcel.stages.length === 0) {
+    if (parcel.stages.length === 0 && parcel.backdatedScans === undefined) {
       log(`  · ${parcel.ref} confirmed, waybill ${awb}, nothing picked`);
       continue;
     }
@@ -625,12 +713,25 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
     // one on the road, and the scans are all that is left. Replaying the
     // whole stage list is safe either way: TRK-4 skips a scan whose
     // target the order is already at, silently and by design.
-    const dispatchedAwb = ALREADY_DISPATCHED.has(from)
-      ? awb
-      : (await driveToDispatched(order.id, staffToken, log)).awb;
+    const dispatched = ALREADY_DISPATCHED.has(from)
+      ? { awb, shipmentId: null }
+      : await driveToDispatched(order.id, staffToken, log);
+    const dispatchedAwb = dispatched.awb;
     for (const stage of parcel.stages) {
       const [name, note] = Array.isArray(stage) ? stage : [stage, undefined];
       await advance(sim, dispatchedAwb, name, note);
+    }
+
+    if (parcel.backdatedScans !== undefined) {
+      const shipmentId =
+        dispatched.shipmentId ??
+        (
+          await prisma.shipment.findFirstOrThrow({
+            where: { awbNumber: dispatchedAwb },
+            select: { id: true },
+          })
+        ).id;
+      await recordBackdatedScans(shipmentId, staffToken, parcel.backdatedScans, log);
     }
 
     if (parcel.receiveAndFinalize === true) {
@@ -657,6 +758,114 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
     }
 
     log(`  · ${parcel.ref} → ${await statusOf(order.id)} (${dispatchedAwb})`);
+  }
+
+  await raiseOverdueFlags(sellerId, staffToken, log);
+  await settleScrapTicket(sellerId, staffToken, log);
+}
+
+/**
+ * The damage claim, seen through: our reply, then a refund.
+ *
+ * The RTO inspection opens the ticket (TKT-1) and leaves it OPEN, which
+ * is the right place for a claim nobody has looked at. D6's video is
+ * about the whole arc — the warehouse finding damage, the conversation,
+ * and the money landing in the wallet — so the claim is settled here.
+ *
+ * NEVER RE-SETTLED: `RESOLVED_REFUND` is terminal and it writes a real
+ * `SCRAP_REFUND` credit, so a second pass on a settled ticket would pay
+ * the seller twice. The matrix refuses it (no outbound edges from a
+ * resolution) and this returns before asking.
+ *
+ * The figure is the SKU's declared value, for the one unit written off.
+ */
+const SCRAP_REFUND_INR = '2400.00';
+
+async function settleScrapTicket(sellerId, staffToken, log) {
+  const ticket = await prisma.ticket.findFirst({
+    where: { sellerId, ticketType: 'SCRAP_DAMAGE' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, ticketNumber: true, status: true },
+  });
+  if (ticket === null) {
+    log('  · no damage ticket to settle (nothing was written off)');
+    return;
+  }
+  if (ticket.status === 'RESOLVED_REFUND') {
+    log(`  · ${ticket.ticketNumber} already refunded`);
+    return;
+  }
+  if (ticket.status !== 'OPEN' && ticket.status !== 'NEGOTIATING') {
+    log(`  · ${ticket.ticketNumber} is ${ticket.status} — left alone`);
+    return;
+  }
+
+  if (ticket.status === 'OPEN') {
+    await call(`/admin/tickets/${ticket.id}/notes`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        note:
+          'We have checked the photographs from the returns bench and we agree with the ' +
+          'inspector — the water damage happened in transit, not in your packing. We are ' +
+          'settling this at the declared value of the unit.',
+      },
+    });
+  }
+
+  await call(`/admin/tickets/${ticket.id}`, {
+    method: 'PATCH',
+    token: staffToken,
+    body: {
+      to: 'RESOLVED_REFUND',
+      refundAmountInr: SCRAP_REFUND_INR,
+      notes: 'Refunded at the declared value of the damaged unit.',
+    },
+  });
+  log(`  · ${ticket.ticketNumber} refunded ₹${SCRAP_REFUND_INR}`);
+}
+
+/**
+ * Put the back-dated parcel on `/needs-attention`'s overdue list.
+ *
+ * The flag is `orders.nsa_*`, and the ONLY thing that writes it is the
+ * nightly sweep — so the seeding runs the sweep rather than stamping the
+ * columns, through the product's own `POST /admin/nsa/sweep`, which
+ * exists for precisely this ("run it now rather than waiting for the
+ * hourly tick") and is idempotent per evening.
+ *
+ * Run every time, because the short-circuit above skips a parcel already
+ * in its target state — so on a second seeding nothing else would ask.
+ * Guarded on one of OUR parcels actually being out for delivery: the
+ * sweep is estate-wide, and running it for nothing would flag whatever
+ * else happens to be sitting on the box.
+ */
+async function raiseOverdueFlags(sellerId, staffToken, log) {
+  const overdue = LIFECYCLE_PARCELS.filter((p) => p.want === 'OUT_FOR_DELIVERY').map((p) => p.ref);
+  if (overdue.length === 0) return;
+  const waiting = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: { in: overdue }, status: 'OUT_FOR_DELIVERY' },
+    select: { id: true, nsaDayCount: true },
+  });
+  if (waiting === null) {
+    log('  · no parcel is out for delivery — the overdue sweep has nothing to flag');
+    return;
+  }
+  const summary = await call('/admin/nsa/sweep', { method: 'POST', token: staffToken });
+  const after = await prisma.order.findUniqueOrThrow({
+    where: { id: waiting.id },
+    select: { nsaDayCount: true, nsaRaisedAt: true },
+  });
+  log(
+    `  · overdue sweep: raised ${summary.raised}, escalated ${summary.escalated} — ` +
+      `our parcel is day ${after.nsaDayCount}` +
+      (after.nsaRaisedAt === null ? ' (NOT FLAGGED)' : ''),
+  );
+  if (after.nsaRaisedAt === null) {
+    throw new Error(
+      'The back-dated parcel is out for delivery but the sweep did not flag it. ' +
+        'Check `ops.nsa_enabled`, and that the OUT_FOR_DELIVERY scan really carries a past date.',
+    );
   }
 }
 

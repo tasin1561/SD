@@ -1614,14 +1614,76 @@ export class OrderAttentionService {
     return row?.valueBoolean ?? fallback;
   }
 
+  /**
+   * When each order's parcel most recently went OUT FOR DELIVERY.
+   *
+   * ── WHY NOT `order_events.created_at` ────────────────────────────
+   * That is when WE RECORDED the scan, which is not when the courier
+   * made it. The two agree on a healthy evening and part company in
+   * exactly the cases this sweep exists for: a webhook queue stuck for
+   * a day and then drained writes today's order event for a scan from
+   * yesterday, and a scan backfilled by hand
+   * (`ManualTrackingService.recordScan`, TRK-9) writes one dated now
+   * for a scan that may be a week old. Either way the clock restarts
+   * from zero, so the parcels whose scans were themselves late — the
+   * ones most likely to be genuinely stuck — are the ones never
+   * flagged. Silent, and the same shape as the returns worklist's
+   * `shipments.updatedAt` bug (rule 4b).
+   *
+   * `tracking_events.eventAt` is the courier's own scan time and is the
+   * authority TRK-3 names, read through `reachedStatusAt` for the whole
+   * set at once rather than per row — `list()` did one query per order
+   * against the tracking HYPERTABLE, which is how a worklist that opens
+   * instantly with three parcels times out with three hundred.
+   *
+   * The order event SURVIVES as the fallback for a parcel with no such
+   * scan at all — a status somebody set by hand — because then nothing
+   * better exists and the recording time is honest about itself. An
+   * order with neither is ABSENT from the map rather than dated now.
+   *
+   * The LATEST is taken, across every one of the order's shipments: a
+   * parcel that failed and went out again has been out since the last
+   * time it went out, which is what the existing `createdAt desc` read
+   * said too.
+   */
+  private async outForDeliveryAtMany(
+    orderIds: readonly string[],
+  ): Promise<ReadonlyMap<string, Date>> {
+    const out = new Map<string, Date>();
+    if (orderIds.length === 0) return out;
+
+    const links = await this.prisma.client.orderShipment.findMany({
+      where: { orderId: { in: [...orderIds] } },
+      select: { orderId: true, shipmentId: true },
+    });
+    const scanAt = await this.trackingEvents.reachedStatusAt(
+      links.map((l) => l.shipmentId),
+      [ShipmentStatus.OUT_FOR_DELIVERY],
+    );
+    for (const link of links) {
+      const at = scanAt.get(link.shipmentId);
+      if (at === undefined) continue;
+      const seen = out.get(link.orderId);
+      if (seen === undefined || at.getTime() > seen.getTime()) out.set(link.orderId, at);
+    }
+
+    const unscanned = orderIds.filter((id) => !out.has(id));
+    if (unscanned.length > 0) {
+      const events = await this.prisma.client.orderEvent.groupBy({
+        by: ['orderId'],
+        where: { orderId: { in: unscanned }, toStatus: OrderStatus.OUT_FOR_DELIVERY },
+        _max: { createdAt: true },
+      });
+      for (const ev of events) {
+        if (ev._max.createdAt !== null) out.set(ev.orderId, ev._max.createdAt);
+      }
+    }
+    return out;
+  }
+
   /** When this order most recently went out for delivery. */
   private async outForDeliveryAt(orderId: string): Promise<Date | null> {
-    const ev = await this.prisma.client.orderEvent.findFirst({
-      where: { orderId, toStatus: OrderStatus.OUT_FOR_DELIVERY },
-      orderBy: { createdAt: 'desc' },
-      select: { createdAt: true },
-    });
-    return ev?.createdAt ?? null;
+    return (await this.outForDeliveryAtMany([orderId])).get(orderId) ?? null;
   }
 
   /** The open worklist. `sellerId` scopes it to one seller's own. */
@@ -1658,6 +1720,9 @@ export class OrderAttentionService {
       },
     });
 
+    // ONE lookup for the whole page (see outForDeliveryAtMany): this
+    // loop used to ask per row, against the tracking hypertable.
+    const outAt = await this.outForDeliveryAtMany(rows.map((r) => r.id));
     const out: NsaOrderView[] = [];
     for (const r of rows) {
       const ship = r.orderShipments[0]?.shipment ?? null;
@@ -1676,7 +1741,7 @@ export class OrderAttentionService {
         dayCount: r.nsaDayCount,
         // Non-null by the query's own filter.
         raisedAt: r.nsaRaisedAt ?? new Date(0),
-        outForDeliveryAt: await this.outForDeliveryAt(r.id),
+        outForDeliveryAt: outAt.get(r.id) ?? null,
         acknowledgedAt: r.nsaAcknowledgedAt,
         note: r.nsaNote,
       });
