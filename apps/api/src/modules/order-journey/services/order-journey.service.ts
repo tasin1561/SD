@@ -1,12 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { OrderEventType, OrderStatus, ShipmentStatus } from '@skydrop/db';
+import {
+  ActorType,
+  OrderEventType,
+  OrderStatus,
+  ShipmentStatus,
+  SellerStoreKind,
+} from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { ownerForActor, type MilestoneOwner } from './journey-owner';
+
+export type { MilestoneOwner };
 import {
   NslInterpretationService,
   type NslMeaning,
 } from '../../tracking-events/services/nsl-interpretation.service';
 
-export type MilestoneOwner = 'SKYDROP' | 'COURIER';
 export type MilestoneState = 'DONE' | 'CURRENT' | 'PENDING' | 'SKIPPED';
 
 export interface JourneyMilestone {
@@ -156,6 +164,10 @@ export class OrderJourneyService {
         codAmountInr: true,
         placedAt: true,
         createdAt: true,
+        // Settles the one ambiguous actor: `ActorType.API` means the
+        // STORE on a reseller order and the seller's own integration on
+        // anything else (`ownerForActor`).
+        storeKind: true,
         events: {
           // ── THE SELLER SEES ONLY WHAT WAS MARKED FOR THEM ──────────
           // `isVisibleToSeller` DEFAULTS TO FALSE (see
@@ -170,6 +182,10 @@ export class OrderJourneyService {
             toStatus: true,
             description: true,
             createdAt: true,
+            // WHOSE act this was. Every line used to be labelled
+            // SKYDROP, so a seller read their own cancellation note
+            // attributed to us.
+            actorType: true,
           },
           orderBy: { createdAt: 'asc' },
         },
@@ -299,7 +315,12 @@ export class OrderJourneyService {
         courierStatusLine: s.courierStatusLine,
         courierStatusLocation: s.courierStatusLocation,
       })),
-      timeline: this.buildTimeline(order.events, scans, live?.deliveryAttempts ?? []),
+      timeline: this.buildTimeline(
+        order.events,
+        order.storeKind,
+        scans,
+        live?.deliveryAttempts ?? [],
+      ),
     };
   }
 
@@ -577,7 +598,9 @@ export class OrderJourneyService {
       toStatus: OrderStatus | null;
       description: string | null;
       createdAt: Date;
+      actorType: ActorType | null;
     }>,
+    storeKind: SellerStoreKind | null,
     scans: ReadonlyArray<{
       eventAt: Date;
       status: ShipmentStatus;
@@ -650,7 +673,10 @@ export class OrderJourneyService {
     });
     const ours: JourneyEntry[] = events.map((e) => ({
       at: e.createdAt,
-      owner: 'SKYDROP',
+      // WHOSE act this was — not "our side of it", which is what the
+      // two-valued field meant and why a seller's own cancellation note
+      // was attributed to us.
+      owner: ownerForActor(e.actorType, storeKind),
       title: e.toStatus === null ? humanizeEventType(e.type) : humanizeStatus(e.toStatus),
       detail: e.description,
       location: null,

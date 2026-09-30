@@ -3,8 +3,9 @@
 import { useState, type ReactElement } from 'react';
 import { Check, Copy } from 'lucide-react';
 import { Card, CardBody, CardHeader } from './card';
+import { isCourierOwned, journeyOwnerLabel, type MilestoneOwner } from '../status';
 
-export type MilestoneOwner = 'SKYDROP' | 'COURIER';
+export type { MilestoneOwner };
 export type MilestoneState = 'DONE' | 'CURRENT' | 'PENDING' | 'SKIPPED';
 
 export interface JourneyMilestoneView {
@@ -182,7 +183,7 @@ export function JourneyLadder({
                   {m.label}
                 </span>
                 <span className="text-text-faint text-[11px] tracking-wide uppercase">
-                  {m.owner === 'SKYDROP' ? 'Skydrop' : 'Courier'}
+                  {journeyOwnerLabel(m.owner)}
                 </span>
                 {m.state === 'SKIPPED' && (
                   <span className="text-text-faint text-[11px]">not needed</span>
@@ -446,7 +447,7 @@ export function JourneyTimeline({
               // find — colour here is the meaning, not decoration.
               e.attempt !== null
                 ? 'bg-warning'
-                : e.owner === 'COURIER'
+                : isCourierOwned(e.owner)
                   ? 'bg-accent-fill'
                   : 'bg-text-faint',
             ].join(' ')}
@@ -461,7 +462,7 @@ export function JourneyTimeline({
                 {e.title}
               </span>
               <span className="text-text-faint text-[11px] tracking-wide uppercase">
-                {e.owner === 'SKYDROP' ? 'Skydrop' : 'Courier'}
+                {journeyOwnerLabel(e.owner)}
               </span>
               <span className="text-text-faint ml-auto text-xs whitespace-nowrap">{fmt(e.at)}</span>
             </div>

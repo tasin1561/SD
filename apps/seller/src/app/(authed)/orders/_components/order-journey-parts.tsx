@@ -10,6 +10,7 @@ import {
   type JourneyParcelView,
 } from '@skydrop/ui/components';
 import { Timeline, type TimelineStep, type TimelineStepState } from '@skydrop/ui/app/timeline';
+import { journeyOwnerLabel } from '@skydrop/ui/status';
 import { OrdSection } from './orders-parts';
 
 /**
@@ -55,7 +56,7 @@ const STATE: Record<JourneyMilestoneView['state'], TimelineStepState> = {
 /** Milestones → timeline steps. Same labels, same owner word, same times. */
 export function milestoneSteps(milestones: readonly JourneyMilestoneView[]): TimelineStep[] {
   return milestones.map((m) => {
-    const owner = m.owner === 'SKYDROP' ? 'Skydrop' : 'Courier';
+    const owner = journeyOwnerLabel(m.owner);
     const description: ReactNode = (
       <>
         <span>{owner}</span>

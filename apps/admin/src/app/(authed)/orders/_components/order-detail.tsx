@@ -13,7 +13,7 @@ import {
   type JourneyParcelView,
   type JourneyEntryView,
 } from '@skydrop/ui/components';
-import { orderStatusKind, statusLabel } from '@skydrop/ui/status';
+import { journeyOwnerLabel, orderStatusKind, statusLabel } from '@skydrop/ui/status';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
@@ -350,7 +350,7 @@ const STEP_STATE: Record<JourneyMilestoneView['state'], TimelineStepState> = {
 /** Milestones → u17 timeline steps. Same labels, same owner word, same times. */
 function milestoneSteps(milestones: readonly JourneyMilestoneView[]): TimelineStep[] {
   return milestones.map((m) => {
-    const owner = m.owner === 'SKYDROP' ? 'Skydrop' : 'Courier';
+    const owner = journeyOwnerLabel(m.owner);
     const description: ReactNode = (
       <>
         <span>{owner}</span>

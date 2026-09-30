@@ -1208,3 +1208,81 @@ export const FREIGHT_MODES: readonly InboundFreightMode[] = [
   InboundFreightMode.PAY_NOW,
   InboundFreightMode.PAY_LATER,
 ];
+
+/**
+ * WHOSE act a line on an order's journey was.
+ *
+ * ── THE PROBLEM ──────────────────────────────────────────────────────
+ * The field was `'SKYDROP' | 'COURIER'` and every `order_events` row
+ * got `SKYDROP`, so a seller who cancelled their own order read
+ *
+ *     Cancelled · SKYDROP · <their own note>
+ *
+ * — us, apparently, giving their reason. Two values meant "our side,
+ * not the courier's", which is true and useless: the question that
+ * column answers for a reader is WHO DID THIS.
+ *
+ * ── WHY IT LIVES HERE ────────────────────────────────────────────────
+ * FE-6: a status vocabulary gets ONE exhaustive mapper in
+ * `@skydrop/ui/status`, never a per-component map. There were FOUR
+ * copies of `owner === 'SKYDROP' ? 'Skydrop' : 'Courier'` — two in the
+ * shared journey component, one in apps/admin, one in apps/seller — and
+ * each of them silently turned a new value into "Courier", which is the
+ * one thing it is never allowed to say about our own act or the
+ * seller's. The `never` below makes a fifth value fail to COMPILE in
+ * all four places at once.
+ *
+ * ── ONE WORD SET, NOT A PER-APP ONE ──────────────────────────────────
+ * SELLER deliberately reads "Seller" and not "You" on the seller's own
+ * app. Their order page is read by several people at one company, and
+ * on a reseller order it is read by the seller ABOUT a store's act — so
+ * "You" would be wrong for a colleague's line and confusing beside
+ * "Store". One word set is also one thing to keep true, which is the
+ * whole reason these four copies were collapsed.
+ */
+export type MilestoneOwner = 'SKYDROP' | 'SELLER' | 'STORE' | 'COURIER';
+
+export function journeyOwnerLabel(owner: MilestoneOwner): string {
+  switch (owner) {
+    case 'SKYDROP':
+      return 'Skydrop';
+    case 'SELLER':
+      return 'Seller';
+    case 'STORE':
+      return 'Store';
+    case 'COURIER':
+      return 'Courier';
+    default: {
+      const never: never = owner;
+      return never;
+    }
+  }
+}
+
+/**
+ * Is this line the COURIER's? The journey timeline's dot asks, because
+ * a courier scan and one of our own read differently at a glance.
+ *
+ * Deliberately a BINARY question and not a colour per owner: the dot is
+ * already carrying "a delivery failed" in amber, and giving a seller's
+ * line and a store's line each their own colour would add a distinction
+ * nobody is scanning that column for while diluting the one they are.
+ * But it is asked HERE, exhaustively, rather than as
+ * `owner === 'COURIER'` at the call site — that ternary is how the two
+ * new values would have silently landed on whichever side the author of
+ * the colour never considered.
+ */
+export function isCourierOwned(owner: MilestoneOwner): boolean {
+  switch (owner) {
+    case 'COURIER':
+      return true;
+    case 'SKYDROP':
+    case 'SELLER':
+    case 'STORE':
+      return false;
+    default: {
+      const never: never = owner;
+      return never;
+    }
+  }
+}
