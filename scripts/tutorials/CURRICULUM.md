@@ -403,7 +403,7 @@ handles were checked against the API first; all four match on a fragment.
 
 **Promise** — you can tell where a parcel is and what it has cost you, from the
 order page alone.
-**Length** 3 min 04 s (14 scenes). **Prerequisites** B4.
+**Length** 2 min 47 s (14 scenes). **Prerequisites** B4.
 **Covers** `/orders/[id]` as a READING exercise and nothing else: the header's
 four facts, the tracker and who recorded each step, the recipient snapshot, what
 it is worth and what it weighs, the lines by SKU, the charges with tax on its own
@@ -437,7 +437,7 @@ a DELIVERED order carried a section heading reading "Out for delivery".
 
 **Promise** — you can correct anything about an order until the call centre
 confirms it, and you know when that window shuts.
-**Length** 3 min 03 s (14 scenes). **Prerequisites** B5.
+**Length** 2 min 32 s (14 scenes). **Prerequisites** B5.
 **Covers** `/orders/[id]/edit` on a DRAFT: the four-step rail, the lines with the
 catalogue and its live stock underneath, changing a quantity, the payment section
 noticing that the parcel is now worth more than the amount being collected and
@@ -1521,7 +1521,7 @@ is both true and a better thing to teach. The take's only net change is
 ### G6. Answering what a store has asked · **FILMED** — `answer-what-a-store-asked.mp4`
 
 **Promise** — you can clear the queue of decisions stores are waiting on.
-**Length** 3 min 07 s (14 scenes). **Prerequisites** G5.
+**Length** 2 min 36 s (14 scenes). **Prerequisites** G5.
 **Covers** `/reseller-stores/requests` and its three families — cancels and call
 questions and issues, delivery asks, and order and address changes. It
 **approves** one (the confirmation restating the store, the order and what
@@ -1590,7 +1590,7 @@ names in one stack of tables.
 
 **Promise** — you can see what each reseller store is doing to your goods and
 your money, and stop one that keeps sending them back.
-**Length** 3 min 04 s (14 scenes). **Prerequisites** G6.
+**Length** 2 min 48 s (14 scenes). **Prerequisites** G6.
 **Covers** `/reseller-stores/reports` — the four figures across every store, the
 per-store scorecards, the ranking, and the transfer revenue each store put on
 your wallet — then the one WRITE hiding on a reports page, the auto-pause rule,
