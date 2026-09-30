@@ -42,6 +42,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `what-we-cannot-undo.mp4`           | **The first ADMIN video.** Every irreversible act in the staff console, in one pass and with no clicks that change anything — god mode and the stock claim beside it, completing a receipt, overruling a call, the pack bench's scan, freeing a pickup day, a return standing at our door, bins, a top-up, a bank change, and closing a month. Each scene reads that screen's own warning copy. |
 | `the-ops-dashboard.mp4`             | The staff console's front page, read-only — the attention band (seven areas, lit when they have work and quiet at zero), the last thirty days as rates with their denominators, and whose money is where. No figure is spoken: the call-centre tile counts ORDERS and the queue it links to counts ENTRIES, and on a dev box those differ. |
 | `find-an-order.mp4`                 | Reading ONE order end to end on the staff console — the filters and the search that finds it, then the immutable recipient snapshot, the customer's reputation, the item and charge lines, the parcel, the tracker that ends where the parcel actually got to, and our events and the courier's scans in one column. Nothing is pressed. |
+| `the-permission-model.mp4`          | Why somebody cannot see a screen, and how to fix it safely — a role is yours to shape and the permissions are not, every one carries a sentence saying what its holder can actually do, and the marked ones move money or stock. The editor is opened on a real role and closed with Cancel; nothing is saved. |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -386,6 +387,10 @@ the file are still the words in `narration.mjs`.
   on 3003. The seed DOES need that env (it talks to Prisma); run the two in
   separate shells, or in a subshell — `( set -a; . apps/api/.env; set +a; node
   …seed… )` — which is what `make-tutorials.sh` effectively does.
+- **`getByText` does not see a PLACEHOLDER.** H4's first check spent thirty
+  seconds waiting for "Search permissions", which is on screen and in no text
+  node at all. A field's handle is its label or its `aria-label`; a panel's is
+  its class.
 - **Three selector traps that all PASS while filming the wrong thing** (H2,
   2026-09-30). A search box that is a FORM needs Enter, and a gate on "a row"
   is satisfied by the unfiltered list — gate on the filtered COUNT.

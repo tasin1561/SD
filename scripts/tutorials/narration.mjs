@@ -2604,6 +2604,75 @@ export const VIDEOS = [
       },
     ],
   },
+  /*
+    H4 — the permission model, taught through the screen that edits it.
+    `ready`: it needs no seeding at all, which makes it the cheapest
+    admin entry in the library.
+
+    IT SAVES NOTHING. The editor is opened on a real role and closed
+    again with Cancel, because the thing being taught is how to READ the
+    catalogue — and a role saved on camera would be a role somebody has
+    to unpick afterwards.
+  */
+  {
+    slug: 'the-permission-model',
+    title: 'Who can see what',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Somebody cannot see a screen, and you have been asked to fix it. This is where that is decided — and the page says the important half in its own first line.',
+      },
+      {
+        id: 'roles',
+        say: 'A role is a set of permissions, and you make as many as the work needs. The permissions themselves are fixed by the system: you choose which ones a role has, never what one means.',
+      },
+      {
+        id: 'list',
+        say: 'Each role says what it covers and how many people hold it. Look at that last column first — a role nobody holds is safe to change, and one held by thirty is not.',
+      },
+      {
+        id: 'superadmin',
+        say: 'One row has a padlock and no Delete. Super admin holds everything, including permissions that do not exist yet, which is what stops a new feature being invisible to everybody on the day it ships.',
+      },
+      {
+        id: 'open',
+        say: 'Open a real role to see the catalogue. This is the whole model on one screen — every permission the system has, grouped, with the ones this role holds already ticked.',
+      },
+      {
+        id: 'counts',
+        say: 'The line above the list is worth reading before anything else. How many of the total this role holds, and separately, how many of those can move money or stock.',
+      },
+      {
+        id: 'groups',
+        say: 'They are grouped by the part of the business they belong to. And every single one carries a sentence: not what it is called, but what somebody holding it can actually do.',
+      },
+      {
+        id: 'dangerous',
+        say: 'A triangle means it can move money or stock. Not a different check — the server treats them all alike — but a mark, so a role that quietly collects six says so before it is saved.',
+      },
+      {
+        id: 'search',
+        say: 'The search covers the name, the explanation and the key, which is how you answer the question you were actually asked. Somebody cannot finish a return, so search for return.',
+      },
+      {
+        id: 'lookalike',
+        say: 'And this is why the sentences matter. Finalise a return sounds like paperwork, and it permanently removes stock. Act on a parcel at the courier sounds like admin, and it sends a van.',
+      },
+      {
+        id: 'cancel',
+        say: 'Close it without saving. Nothing here was going to be lost, but a role is held by real people and changing one is not something to do while looking around.',
+      },
+      {
+        id: 'boundary',
+        say: 'Last, the thing that keeps all of this honest. Hiding a button is a courtesy. The server checks the permission on every request, so a hidden control is refused anyway if somebody finds it.',
+      },
+      {
+        id: 'outro',
+        say: 'So: roles are yours to shape, permissions are not, every one explains itself, and the marked ones move money or stock. That is the whole model.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

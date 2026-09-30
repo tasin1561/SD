@@ -32,26 +32,33 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (45):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1** and **H2** on the admin side.
-Every one has its own entry below saying what it covers and what its seeding
-does.
+**Filmed so far (46):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1**, **H2** and **H4** on the admin
+side. Every one has its own entry below saying what it covers and what its
+seeding does.
 
-**THE NEXT ENTRY IS H3 — "Things the system has raised".** P5 was taken out of
-order on purpose (this document argues it should be the first admin tutorial
-anybody watches, and [the recommendation](#the-recommendation) goes further: if
-the ops team never grows, P5 is worth making on its own and the rest are not);
-H1 and H2 followed it in order. From here, work sections H–P as written, and
-read [the recommendation](#the-recommendation) first — they are 41 entries and
-this document is explicit that they are a BET.
+**THE NEXT ENTRY IS H3 — "Things the system has raised", the one gap left in
+section H.** P5 was taken out of order on purpose (this document argues it
+should be the first admin tutorial anybody watches, and
+[the recommendation](#the-recommendation) goes further: if the ops team never
+grows, P5 is worth making on its own and the rest are not); H1, H2 and H4
+followed. H4 was taken before H3 because it is `ready` and H3 is not. From here,
+work sections I–P as written, and read
+[the recommendation](#the-recommendation) first — they are 40 entries and this
+document is explicit that they are a BET.
 
-**H3 needs system issues at two severities, and it is the first admin entry
-whose world does NOT already exist.** Nothing on this box raises one on its own
-schedule, so its seeding has to make them — `SystemIssueService.raise` is the
-only writer, the sweeps that call it are hourly, and a row written by hand would
-skip the notification NOTIF-16 sends on a NEW issue. Read H3's own entry and
-NOTIF-16 before deciding which way. H4 (`/roles`) is `ready` and needs nothing,
-so it is the cheaper of the two if H3's world proves awkward.
+**H3 is the first admin entry whose world does NOT already exist.** Nothing on
+this box raises a system issue on its own schedule, so its seeding has to make
+them — `SystemIssueService.raise` is the only writer, the sweeps that call it
+are hourly, and a row written by hand would skip the notification NOTIF-16 sends
+on a NEW issue (and skipping it is arguably right for a seed: the alternative is
+a tutorial run that mails somebody). Read H3's entry and NOTIF-16 before
+choosing. **An easier route exists and is worth trying first**: several sweeps
+raise real issues against state that IS seedable —
+`OrderAttentionService.checkStalledReturns` wants an EXECUTED RTO request with no
+return scan, and `checkLiveWaybills` wants a voided shipment still holding a
+waybill, which a cancel after confirmation produces. Driving the sweep is more
+honest than writing the row.
 
 **Every admin flow so far has `app: 'admin'` and nothing else special.** The
 three selector traps H2 hit are in its entry and are worth reading before
@@ -67,13 +74,15 @@ health-checks only the consoles a run needs. See
 [Re-running](README.md#re-running) for the two commands that start the app.
 P5 drove ten admin screens through it with no changes to the rig at all.
 
-**WHAT THE ADMIN VIDEOS COST, MEASURED:** P5 **1,032 credits** (89,000 → 87,968 on the one
-configured key) for 13 scenes and 156 s, H1 **946** for 13 scenes and 143 s, and
-H2 **1,044** for 14 scenes and 159 s — **roughly a third of the 1,200 the
-seller videos were costing**, because a tour writes shorter lines than a
-demonstration. Every pre-flight estimate was about 2× the real spend (2,344,
-2,152 and 2,370). The `--check` runs and the seed runs cost nothing, and there
-were fourteen of them.
+**WHAT THE ADMIN VIDEOS COST, MEASURED:** P5 **1,032 credits** (89,000 → 87,968
+on the one configured key) for 13 scenes and 156 s, H1 **946** for 13 and 143 s,
+H2 **1,044** for 14 and 159 s, and H4 **972** for 13 and 148 s — **3,994 for the
+four, or roughly a third each of the 1,200 the seller videos were costing**,
+because a tour writes shorter lines than a demonstration. Every pre-flight
+estimate was about 2× the real spend (2,344, 2,152, 2,370 and 2,207). The
+`--check` runs and the seed runs cost nothing, and there were twenty of them.
+**Balance after this batch: 85,006 of 121,027** on the one configured key,
+which is eighty-odd more admin videos.
 
 **Its subtitle is `Skydrop for ops`**, not `Skydrop for sellers`. That is the
 convention for H–P; the title card is the only place it shows.
@@ -2075,20 +2084,50 @@ acknowledge versus resolve, and the deep links that take you to the screen that
 fixes the thing. "Notify unannounced" is shown and explained — it fans out real
 notifications, which is why it asks first.
 
-### H4. The permission model · `ready`
+### H4. The permission model · **FILMED** — `the-permission-model.mp4`
 
 **Promise** — you understand why someone cannot see a screen, and you can fix
 it safely.
-**Length** 4 min. **Needs** nothing.
-**Covers** `/roles` as the teaching hook for the whole model: permissions are
-data, each one is a line of code that checks it, they are grouped with a
-sentence each — because "Finalise a return" and "Hand parcels to the courier"
-both sound like routine warehouse work and both permanently remove stock. **84
-permissions across ten groups, 32 of them marked dangerous** — marked and
-counted, though the server treats all of them identically; the marking exists so
-that a role which quietly acquired six says so before it is saved. Ends on the
-two things that keep this screen safe: the super-admin row is inert, and **the UI is never the
-boundary** — hiding a button is courtesy, the server refuses regardless.
+**Length** 13 scenes. **Prerequisites** H1. **Needs** NOTHING — the only `ready`
+admin entry filmed so far, and the cheapest in the library to make.
+**Covers** `/roles` as the teaching hook for the whole model: a role is yours to
+shape and the permissions are not; what each role covers and how many people
+hold it; the locked Super admin row, which holds permissions that do not exist
+yet so a new feature is not invisible on the day it ships; then the editor —
+the count of what this role holds beside the count of what can move money or
+stock, the groups, the SENTENCE every permission carries, the danger triangle,
+and the search that covers the name, the explanation AND the key. Ends on the
+two things that keep the screen safe: the super-admin row is inert, and the UI
+is never the boundary.
+
+**IT SAVES NOTHING.** The editor is opened on a real role and closed with
+Cancel. What is being taught is how to READ the catalogue, and a role saved on
+camera is a role somebody has to unpick afterwards. `roleRow()` in `flows.mjs`
+picks a row by the role's NAME, because every row carries an Edit and a Delete —
+a bare `getByRole('button', { name: 'Edit' })` opens whichever is first, which on
+this box is Super admin, the one row that cannot be edited at all.
+
+**The curriculum's own illustration did not survive contact with the search.**
+This entry used to name "Finalise a return" and "Hand parcels to the courier" as
+the pair that both sound like routine warehouse work and both remove stock. The
+second does not contain the word "return" and never appears in that search. What
+DOES come back is better and is what the video says: **Finalise a return**
+("Write-off permanently removes stock and cannot be undone") beside **Act on a
+parcel at the courier** ("a cancel turns a moving parcel into a return, and an
+NDR action sends a van") — two permissions that differ in what they REACH rather
+than in where they sit. Re-derived from `common/auth/permissions.ts`, which also
+confirms the figures this entry has always carried: **84 permissions, ten
+groups, 32 marked dangerous.** None of them is spoken.
+
+**`getByText` does not see a PLACEHOLDER.** The first check spent thirty seconds
+waiting for "Search permissions", which is on screen and in no text node. The
+input's handle is its `aria-label`; the catalogue's is `.ac-perms`.
+
+**Two `(test)` roles are on this box** — "No money access (test)" and "Treasury
+viewer (test)", left by somebody's treasury work, each held by one staff user.
+They are on camera and nothing names them. Deleting a role somebody holds is not
+a tidy-up to do inside a filming session; if they are ever cleared, do it with
+the people moved off first.
 
 ---
 

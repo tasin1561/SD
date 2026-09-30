@@ -861,6 +861,18 @@ async function dwellOnTerms(page, stage, labels, ms = 1800) {
  * whichever card mentions the word first — which is a card the narration
  * is not talking about, and a check that passes.
  */
+/**
+ * One row of the roles table, by the role's name.
+ *
+ * Every row carries an "Edit" and a "Delete", so a bare
+ * `getByRole('button', { name: 'Edit' })` opens whichever role happens
+ * to be first — which on this box is Super admin, the one row that
+ * cannot be edited at all.
+ */
+function roleRow(page, name) {
+  return page.locator('tr').filter({ hasText: name }).first();
+}
+
 function ooSection(page, title) {
   return page
     .locator('section.oo-section')
@@ -7330,6 +7342,145 @@ export const FLOWS = {
         await actions.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(800);
         await stage.dwellOn(actions, 3400);
+      },
+    },
+  },
+  /*
+    H4 — the permission model. `ready`: no seeding at all.
+
+    IT SAVES NOTHING. The editor is opened on a REAL role and closed with
+    Cancel, because what is being taught is how to read the catalogue —
+    and a role saved on camera is a role somebody has to unpick.
+  */
+  'the-permission-model': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/roles`, { waitUntil: 'domcontentloaded' });
+        await page
+          .getByText(/^\d+ roles?$/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async roles({ page, stage }) {
+        // The page's own sentence about what is yours to change and what
+        // is not — which is the line the narration is quoting.
+        const note = page.getByText(/permissions themselves are fixed by the system/).first();
+        await note.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(note, 3400);
+      },
+
+      async list({ page, stage }) {
+        await stage.dwellOn(roleRow(page, 'Warehouse supervisor'), 3400);
+      },
+
+      async superadmin({ page, stage }) {
+        await stage.dwellOn(roleRow(page, 'Super admin'), 3600);
+      },
+
+      async open({ page, stage }) {
+        // Edit on a REAL role, by its row — every row has an "Edit", so
+        // a bare name match opens whichever is first.
+        await stage.clickIt(
+          roleRow(page, 'Warehouse supervisor').getByRole('button', { name: 'Edit' }).first(),
+          { after: 1400 },
+        );
+        await page
+          .getByRole('heading', { name: /^Edit Warehouse supervisor$/ })
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        // The catalogue itself, not the search box — "Search permissions"
+        // is a PLACEHOLDER, and `getByText` does not see one. (It waited
+        // thirty seconds for words that are on screen and in no text
+        // node.)
+        await stage.dwellOn(page.locator('.ac-perms').first(), 2400);
+      },
+
+      async counts({ page, stage }) {
+        // Gate on the DANGER count, which only renders when the role
+        // holds at least one — an empty role would show the left half of
+        // this line and none of what the narration is about.
+        const danger = page.getByText(/can move money or stock$/).first();
+        await danger.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.ac-counts').first(), 3400);
+      },
+
+      async groups({ page, stage }) {
+        const group = page.locator('fieldset.ac-fieldset').first();
+        await group.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(group, 3400);
+      },
+
+      async dangerous({ page, stage }) {
+        const marked = page.locator('.ac-perm-danger').first();
+        await marked.waitFor({ state: 'visible', timeout: 20_000 });
+        await marked.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(marked, 3400);
+      },
+
+      async search({ page, stage }) {
+        await stage.typeIn(
+          page.getByLabel('Search permissions', { exact: true }).first(),
+          'return',
+        );
+        // The count line names the matches, and it is the thing that
+        // cannot be true until the filter has run.
+        await page
+          .getByText(/\d+ match(es)?/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.ac-perms').first(), 2800);
+      },
+
+      async lookalike({ page, stage }) {
+        // The PAIR the narration names. Gated on the words, because the
+        // point of the scene is what their descriptions say and an
+        // empty result renders the same panel.
+        const finalise = page.getByText('Finalise a return').first();
+        await finalise.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(finalise, 1800);
+        /*
+          THE PAIR THE SEARCH ACTUALLY RETURNS, which is not the pair
+          the curriculum illustrated with. "Hand parcels to the courier"
+          does not contain the word "return" and never appears here;
+          "Act on a parcel at the courier" does, because its own
+          description says a cancel turns a moving parcel into one — and
+          it makes the point better, since the two differ in what they
+          reach rather than in where they sit.
+        */
+        const hand = page.getByText('Act on a parcel at the courier').first();
+        await hand.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(hand, 2600);
+      },
+
+      async cancel({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Cancel', exact: true }).first(), {
+          after: 1400,
+        });
+        await page
+          .getByRole('heading', { name: /^Edit Warehouse supervisor$/ })
+          .waitFor({ state: 'detached', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async boundary({ page, stage }) {
+        await stage.dwellOn(roleRow(page, 'Call agent'), 3400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('table').first(), 3400);
       },
     },
   },
