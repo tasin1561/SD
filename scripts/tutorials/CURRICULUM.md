@@ -46,6 +46,35 @@ H3 and then I1 followed. From here, work sections I–P as written, and read
 [the recommendation](#the-recommendation) first — they are 38 entries and this
 document is explicit that they are a BET.
 
+**What I2 will need, measured on this box on 2026-10-01 rather than guessed.**
+I1's work left most of it in place, and two things about it are NOT obvious:
+
+- **There is already an ASSIGNED entry, and it is the one I1 left behind.**
+  `SD-2026-26-000326` (`RSH-STORE-RETURNED-1`, a `DELIVERY_FAILED` follow-up on
+  an order that has since been restocked) came out of I1's take holding
+  `pulls=2` — the release scene handed it back and the auto-advance took it
+  again before "Stop taking calls". So "an assigned entry" is free, but it is
+  the WRONG SHAPE for a video about a confirmation queue and it belongs to G6's
+  world; seed a deliberate one instead, by pulling a seeded confirmation call as
+  `tutorial-ops` and leaving it held.
+- **The agent roster is five rows and four are debris.**
+  `sim-staff-1790671328532@skydrop.local` and three like it, left by
+  `scripts/sim-e2e.ts`, sit beside `tutorial-ops` on `/call-center/agents` — and
+  that page's whole subject is "who is on, what they are holding". Reassign also
+  needs somewhere to reassign TO. **Seed one well-named second agent** (a
+  `staff_users` row with the call-agent role plus an `agent_call_settings` row —
+  `ensureOps` is the pattern) rather than reassigning to a timestamp. Deleting
+  the sim accounts is NOT a filming task: they hold call attempts.
+- **Both writes are seedable-back.** Reassign moves `assigned_agent_id` and
+  Reschedule moves `available_at` behind a reason of at least five characters
+  (`MIN_RESCHEDULE_REASON`), and neither touches the attempt count on purpose —
+  the panel's own comment says reaching for force-outcome to move a call records
+  a conversation nobody had, which is I3's subject and is worth quoting.
+- **The queue list opens on `OPEN`, not on everything** — a `COMPLETED` row is
+  the record of a finished attempt, and an order retried has one row per attempt
+  cycle, so the default keeps the history out of the live view. Read what the
+  LIST opens on before writing what the video does to it.
+
 **What I1 needed, read from the code rather than guessed (2026-10-01) — kept
 here because I2 and I3 are about the same queue and inherit every one of them:**
 
@@ -171,7 +200,7 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — THIRTY-FOUR so
+**Filming these screens is finding real bugs at a steady rate — THIRTY-FIVE so
 far, plus seven in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -3382,3 +3411,22 @@ way until a seller's send-back is refused again.
 also carries a shipment uuid, but that string is `err.message` from the worker's
 own throw rather than prose written for a reader, and it is one of the few
 places on the board that is genuinely addressed to an engineer.
+
+**THE SEVENTH PLACE, one day later, found by filming the call station
+(2026-10-01).** The card an agent reads with the phone already ringing opened
+
+    Assignment 01a0ef64 · Order 01a0f2a6-4f66-7bb0-9657-872a6237734b · pull #1
+
+while the recipient panel a few centimetres below it said SD-2026-26-000365 —
+two identifiers for one order on one card, and the unreadable one on top, where
+the number is what the agent would say to the seller, type into a search box or
+write on a pad. `assignment.order.orderNumber` was already on the payload and
+already rendered lower down; the head simply read `assignment.orderId` because
+that is what the queue entry carries. It falls back to the id only for the case
+the type documents — the order vanished under the entry. Structural spec, like
+the rest of `call-station-recovers-held-call.test.ts`: what is wrong is WHICH
+field the head reads, and a rendered assertion passes on either.
+
+**apps/admin had to be REBUILT AND RESTARTED before the take**, or the video
+would have filmed the defect that had just been fixed — the README's rule about
+restarting by the LISTENING pid, applied to a frontend rather than to the API.
