@@ -44,6 +44,8 @@ interface FakeShipment {
   awbNumber: string;
   status: ShipmentStatus;
   orderId: string;
+  /** Set by the bench when somebody receives the return (WMS-8). */
+  rtoReceivedAt: Date | null;
 }
 
 interface FakeOrder {
@@ -128,6 +130,7 @@ function defaultShipment(over: Partial<FakeShipment> = {}): FakeShipment {
     awbNumber: AWB,
     status: ShipmentStatus.IN_TRANSIT,
     orderId: ORDER_ID,
+    rtoReceivedAt: null,
     ...over,
   };
 }
@@ -184,6 +187,43 @@ function makeProcessor(setup: Setup = {}) {
           orderShipments: [{ order: orderState }],
         }
       : null,
+  );
+
+  /**
+   * The two shipment writers, and they APPLY THE WHERE CLAUSE.
+   *
+   * A fake that answered every write alike could not tell a guarded
+   * write from an unguarded one — which is exactly the lesson
+   * `pnl-fake-db.ts` was rebuilt for. The guards here are the whole
+   * behaviour under test: `syncHandedBackReturn` puts them in the
+   * WHERE so a receive landing between the read and the write cannot
+   * be overwritten, and a fake ignoring them would pass on the
+   * unguarded implementation too.
+   */
+  const shipmentUpdate = jest.fn(
+    async (args: { where: { id: string }; data: Partial<FakeShipment> }): Promise<FakeShipment> => {
+      if (args.where.id !== ship.id) throw new Error('shipment not found');
+      Object.assign(ship, args.data);
+      return ship;
+    },
+  );
+  const shipmentUpdateMany = jest.fn(
+    async (args: {
+      where: {
+        id: string;
+        rtoReceivedAt?: Date | null;
+        status?: { in: ShipmentStatus[] };
+      };
+      data: Partial<FakeShipment>;
+    }): Promise<{ count: number }> => {
+      if (args.where.id !== ship.id) return { count: 0 };
+      if (args.where.rtoReceivedAt === null && ship.rtoReceivedAt !== null) return { count: 0 };
+      if (args.where.status !== undefined && !args.where.status.in.includes(ship.status)) {
+        return { count: 0 };
+      }
+      Object.assign(ship, args.data);
+      return { count: 1 };
+    },
   );
 
   const trackingEventFindFirst = jest.fn(
@@ -262,7 +302,11 @@ function makeProcessor(setup: Setup = {}) {
       update: courierWebhookUpdate,
       updateMany: courierWebhookUpdateMany,
     },
-    shipment: { findUnique: shipmentFindUnique },
+    shipment: {
+      findUnique: shipmentFindUnique,
+      update: shipmentUpdate,
+      updateMany: shipmentUpdateMany,
+    },
     trackingEvent: { findFirst: trackingEventFindFirst },
     $transaction,
   };
@@ -716,6 +760,75 @@ describe('WebhookProcessorService.process — informational (RTO_DELIVERED, DAMA
     expect(state.trackingEvents[0]?.eventType).toBe(TrackingEventType.RTO_DELIVERED);
     expect(state.transitionCalls).toHaveLength(0);
     expect(state.webhooks[0]?.status).toBe(WebhookStatus.PROCESSED);
+  });
+
+  /**
+   * The SHIPMENT follows the parcel even when the ORDER may not.
+   *
+   * TRK-6 stops the order moving, and that is right. It was implemented
+   * as "write nothing", which left `shipments.status` frozen on the
+   * return leg — and `RtoReceiptService.listAwaitingReceipt` classifies
+   * a row AT OUR DOOR on exactly that column. So the worklist built
+   * because a handed-back parcel appeared on no screen could never see
+   * a real one: no writer in the product had ever set that status from
+   * a scan.
+   */
+  it('RTO_DELIVERED scan: the SHIPMENT moves to RTO_DELIVERED so the bench can see it', async () => {
+    const { svc, state } = makeProcessor({
+      normalized: { kind: 'NORMALIZED', shipmentStatus: ShipmentStatus.RTO_DELIVERED },
+      shipment: defaultShipment({ status: ShipmentStatus.RTO_IN_TRANSIT }),
+      order: defaultOrder({ status: OrderStatus.RTO_IN_TRANSIT }),
+    });
+    const out = await svc.process(WH_ID);
+    expect(out.kind).toBe('INFORMATIONAL');
+    expect(state.shipment.status).toBe(ShipmentStatus.RTO_DELIVERED);
+    // TRK-6 is unchanged: the ORDER is still where it was.
+    expect(state.order.status).toBe(OrderStatus.RTO_IN_TRANSIT);
+    expect(state.transitionCalls).toHaveLength(0);
+  });
+
+  it('RTO_DELIVERED scan after the bench received it: the row is NOT rewritten', async () => {
+    const { svc, state } = makeProcessor({
+      normalized: { kind: 'NORMALIZED', shipmentStatus: ShipmentStatus.RTO_DELIVERED },
+      shipment: defaultShipment({
+        status: ShipmentStatus.RTO_IN_TRANSIT,
+        rtoReceivedAt: new Date('2026-05-21T09:00:00.000Z'),
+      }),
+      order: defaultOrder({ status: OrderStatus.RTO_RECEIVED }),
+    });
+    const out = await svc.process(WH_ID);
+    expect(out.kind).toBe('INFORMATIONAL');
+    expect(state.shipment.status).toBe(ShipmentStatus.RTO_IN_TRANSIT);
+  });
+
+  it('RTO_DELIVERED arriving before the return leg: forward-only, so nothing moves', async () => {
+    const { svc, state } = makeProcessor({
+      normalized: { kind: 'NORMALIZED', shipmentStatus: ShipmentStatus.RTO_DELIVERED },
+      shipment: defaultShipment({ status: ShipmentStatus.OUT_FOR_DELIVERY }),
+      order: defaultOrder({ status: OrderStatus.OUT_FOR_DELIVERY }),
+    });
+    const out = await svc.process(WH_ID);
+    expect(out.kind).toBe('INFORMATIONAL');
+    expect(state.shipment.status).toBe(ShipmentStatus.OUT_FOR_DELIVERY);
+  });
+
+  /**
+   * DAMAGED is the other INFORMATIONAL scan and stays telemetry. It
+   * describes a parcel's CONDITION, not where it is, and the public
+   * tracking page projects from this column — so a damage scan landing
+   * after a delivery must not tell a customer their parcel was damaged
+   * in transit.
+   */
+  it('DAMAGED scan: telemetry only — the shipment row does not move', async () => {
+    const { svc, state } = makeProcessor({
+      normalized: { kind: 'NORMALIZED', shipmentStatus: ShipmentStatus.DAMAGED },
+      shipment: defaultShipment({ status: ShipmentStatus.IN_TRANSIT }),
+      order: defaultOrder({ status: OrderStatus.IN_TRANSIT }),
+    });
+    const out = await svc.process(WH_ID);
+    expect(out.kind).toBe('INFORMATIONAL');
+    expect(state.shipment.status).toBe(ShipmentStatus.IN_TRANSIT);
+    expect(state.transitionCalls).toHaveLength(0);
   });
 });
 

@@ -375,6 +375,7 @@ export class WebhookProcessorService {
           reason: decision.reason,
         },
       });
+      await this.syncHandedBackReturn(ship.id, normalized.shipmentStatus);
       await this.markProcessed(webhookId, te.id);
       return {
         kind: 'INFORMATIONAL',
@@ -649,6 +650,61 @@ export class WebhookProcessorService {
         },
       });
     });
+  }
+
+  /**
+   * The courier says the return is back with us — move the SHIPMENT
+   * there, and nothing else.
+   *
+   * ── WHY THIS HAD TO EXIST ────────────────────────────────────────
+   * TRK-6 is right and unchanged: an `RTO_DELIVERED` scan must not move
+   * the ORDER, because a webhook driving `RTO_RECEIVED` would start the
+   * conservation-critical restock / write-off chain with nobody having
+   * seen the goods. But "do not move the order" was implemented as "do
+   * not write anything", and the shipment row is not the order — it is
+   * where the parcel physically IS (CUR-2b), and the two branches that
+   * DO transition both say so in as many words while syncing it.
+   *
+   * The cost of the omission was a worklist that could never fill.
+   * `RtoReceiptService.listAwaitingReceipt` classifies a row AT OUR DOOR
+   * on exactly one test — `shipments.status === RTO_DELIVERED` — and
+   * that list exists because a handed-back parcel nobody had received
+   * appeared on no screen at all and one sat that way for five days. No
+   * writer in the product ever set that status from a scan, so the only
+   * rows that ever reached it were written by a seeding script: the list
+   * built to catch the gap was structurally unable to see a real one.
+   *
+   * ── WHY IT IS THIS NARROW ────────────────────────────────────────
+   * `DAMAGED` is the other INFORMATIONAL scan and is deliberately NOT
+   * synced: it is telemetry about a parcel's condition rather than a
+   * statement about where it is, and the public tracking page projects
+   * from this column — a damage scan arriving after a delivery would
+   * tell a customer their delivered parcel was damaged in transit.
+   *
+   * Forward-only and guarded IN THE WHERE, not read-then-written: only
+   * from the return leg (a stale `RTO_DELIVERED` on a parcel still out
+   * for delivery means scans arrived out of order, and the return-leg
+   * ones will follow), and only while nobody has received it — once the
+   * bench owns the row a late scan must not rewrite it. Best-effort:
+   * the scan and its tracking event are the durable record.
+   */
+  private async syncHandedBackReturn(shipmentId: string, status: ShipmentStatus): Promise<void> {
+    if (status !== ShipmentStatus.RTO_DELIVERED) return;
+    try {
+      await this.prisma.client.shipment.updateMany({
+        where: {
+          id: shipmentId,
+          rtoReceivedAt: null,
+          status: { in: [ShipmentStatus.RTO_INITIATED, ShipmentStatus.RTO_IN_TRANSIT] },
+        },
+        data: { status: ShipmentStatus.RTO_DELIVERED },
+      });
+    } catch (e) {
+      this.logger.warn(
+        { shipmentId, err: String(e) },
+        'Could not mark the return as handed back; the scan is recorded',
+      );
+    }
   }
 
   private async markProcessed(webhookId: string, trackingEventId: string | null): Promise<void> {
