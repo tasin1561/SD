@@ -11,6 +11,7 @@ import type {
   ConsignmentRoute,
   ConsignmentStatus,
   InboundFreightMode,
+  InboundFreightStatus,
   LabelReprintRequestStatus,
   GoodsReceiptStatus,
   LabellingSite,
@@ -102,7 +103,15 @@ export interface ConsignmentView {
    */
   readonly freightCharges: readonly {
     readonly id: string;
-    readonly status: string;
+    /**
+     * The enum, not `string`. It was `string`, so every reader had to
+     * word it for itself and nothing could tell them they had got it
+     * wrong — apps/seller lower-cased it into a tile and printed
+     * "partially_settled" on a seller's own screen for as long as the
+     * tile has existed. A type that promises nothing cannot disagree
+     * with a client that assumes something.
+     */
+    readonly status: InboundFreightStatus;
     readonly totalInr: string;
     readonly goodsReceiptId: string;
   }[];

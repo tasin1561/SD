@@ -18,7 +18,7 @@ import type {
   ConsignmentLegView,
   ConsignmentView,
 } from '@skydrop/api-client';
-import { ConsignmentStatus } from '@skydrop/db';
+import { ConsignmentStatus, InboundFreightStatus } from '@skydrop/db';
 import { Money, Num } from '@skydrop/ui/components';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Button } from '@skydrop/ui/app/button';
@@ -263,11 +263,22 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
           // Billed per ARRIVAL: a consignment that lands in two shipments
           // carries two forwarder invoices, so the seller sees the sum
           // rather than one of them.
+          //
+          // The status goes through `statusLabel`, like every other
+          // status on this page. Lower-casing the enum instead read fine
+          // for four of the five values and was wrong for the two that
+          // matter: `PARTIALLY_SETTLED` printed as "partially_settled",
+          // an underscore out of the database on a seller's own screen,
+          // and `VOIDED` printed as "voided" where every sentence beside
+          // it — and `statusLabel` itself — says WITHDRAWN. It went
+          // unnoticed because a bill has to REACH one of those two for
+          // it to show, and until the freight tutorial was filmed
+          // (2026-09-30) no bill on any box ever had.
           hint={
             consignment.freightCharges.length === 0
               ? 'Nothing has been billed against this yet.'
               : consignment.freightCharges.length === 1
-                ? `One bill · ${consignment.freightCharges[0]?.status.toLowerCase()}`
+                ? `One bill · ${statusLabel(consignment.freightCharges[0]?.status ?? InboundFreightStatus.PENDING)}`
                 : `${consignment.freightCharges.length} bills, one per arrival`
           }
         />
