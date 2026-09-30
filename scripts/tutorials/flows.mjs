@@ -853,6 +853,21 @@ async function dwellOnTerms(page, stage, labels, ms = 1800) {
  * text match takes the nav item, which is on screen the whole time and
  * would film the left-hand rail for thirteen seconds.
  */
+/**
+ * One card on the admin order page, by the title of its own heading.
+ *
+ * NOT `filter({ hasText })`: "Payment", "Charges" and "Shipments" all
+ * appear inside OTHER cards' bodies on this page, so a text filter picks
+ * whichever card mentions the word first — which is a card the narration
+ * is not talking about, and a check that passes.
+ */
+function ooSection(page, title) {
+  return page
+    .locator('section.oo-section')
+    .filter({ has: page.getByRole('heading', { level: 2, name: title }) })
+    .first();
+}
+
 function attnCard(page, area) {
   return page.locator('.db-attn').filter({ hasText: area }).first();
 }
@@ -7140,6 +7155,181 @@ export const FLOWS = {
         await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
         await page.waitForTimeout(900);
         await stage.dwellOn(page.locator('.db-attn-grid').first(), 3400);
+      },
+    },
+  },
+  /*
+    H2 — reading ONE order. Read-only: the only gestures are a search, a
+    click through to the detail, and scrolling.
+
+    Every band is reached through `ooSection`, which matches the card by
+    its own `<h2>` rather than by any text inside it — "Payment",
+    "Charges" and "Shipments" all appear in other cards' bodies on this
+    page, so a `hasText` filter would pick whichever card happened to
+    mention the word first.
+  */
+  'find-an-order': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/orders`, { waitUntil: 'domcontentloaded' });
+        // The row count in the subtitle only lands once the list has
+        // answered; waiting for it is what stops this filming a page of
+        // skeletons under a line about every order on the platform.
+        await page
+          .getByText(/^\d+ orders?$/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async filters({ page, stage }) {
+        const status = page.getByLabel('Status', { exact: true }).first();
+        await status.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(status, 1500);
+        await stage.dwellOn(page.getByLabel('Seller', { exact: true }).first(), 1300);
+        await stage.dwellOn(page.getByLabel('Placed from', { exact: true }).first(), 2200);
+      },
+
+      async search({ page, stage }) {
+        // Typed, not navigated: the point of the scene is that one box
+        // takes whichever handle the person on the phone happens to
+        // have, and a URL would show none of that.
+        /*
+          "Search orders", not "Search".
+
+          The field carries `aria-label="Search orders"`, which OVERRIDES
+          its visible label — and the submit magnifier sitting inside it
+          is labelled "Search". So `getByLabel('Search')` resolves to the
+          BUTTON, the click focused it, and `pressSequentially` typed
+          eighteen characters into a `<button>`: nothing appeared, the
+          list stayed unfiltered, and the step passed. Playwright only
+          said so when something asked the node for its value.
+        */
+        await stage.typeIn(
+          page.getByLabel('Search orders', { exact: true }).first(),
+          'RSH-LIFE-RESTOCKED',
+        );
+        // The box is a FORM, not a debounce — nothing happens until it
+        // is submitted, which is what a person does with the keyboard.
+        await page.keyboard.press('Enter');
+        /*
+          WAIT FOR THE COUNT, NOT FOR "A ROW".
+
+          The box is debounced, so for a beat after the last keystroke
+          the UNFILTERED list is still on screen — and it is full of
+          rows matching `SD-…`, sorted newest first. The first check
+          waited for one of those, found the NEWEST order on the box,
+          clicked it, and filmed nine scenes about somebody else's
+          parcel while passing every single step. The subtitle's count
+          is the one thing that cannot be true until the filter has
+          applied.
+        */
+        await page
+          .getByText(/^1 orders?$/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+      },
+
+      async open({ page, stage }) {
+        // …and the link INSIDE that row, so a second match cannot be
+        // the one that opens.
+        const row = page.locator('tr').filter({ hasText: 'RSH-LIFE-RESTOCKED' }).first();
+        await row.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.clickIt(row.getByRole('link', { name: /^SD-\d{4}-\d{2}-\d{6}$/ }).first(), {
+          after: 1500,
+        });
+        await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2400);
+      },
+
+      async snapshot({ page, stage }) {
+        await stage.dwellOn(ooSection(page, 'Recipient'), 3400);
+      },
+
+      async reputation({ page, stage }) {
+        // The reputation line lives in the Recipient card's NOTE, and it
+        // is the one thing on this page that is not a snapshot — it is
+        // counted live. Gate on the words so an endpoint that is down
+        // fails the check rather than filming a blank.
+        const note = page.getByText(/previous order/).first();
+        await note.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(note, 3400);
+      },
+
+      async payment({ page, stage }) {
+        await stage.dwellOn(ooSection(page, 'Payment'), 3400);
+      },
+
+      async items({ page, stage }) {
+        await stage.dwellOn(ooSection(page, /^Items \(\d+\)$/), 3400);
+      },
+
+      async charges({ page, stage }) {
+        const section = ooSection(page, 'Charges');
+        // A charge LINE, not the card: an order with none renders the
+        // same heading over an empty state.
+        await section
+          .getByText(/Base shipping/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(section, 3400);
+      },
+
+      async parcel({ page, stage }) {
+        const section = ooSection(page, 'Shipments');
+        await section.getByText(/^AWB /).first().waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(section, 3400);
+      },
+
+      async tracker({ page, stage }) {
+        const section = ooSection(page, 'Order tracker');
+        // The rung this order ends on, which is the whole point of the
+        // line — and which did not exist until the ladder learned that
+        // a parcel can come back (2026-09-30).
+        // NOT `{ exact: true }`. On `getByText` that means the element's
+        // WHOLE text, and a timeline rung's label is a text node inside
+        // a node that also carries the state word, the owner and the
+        // time — so the exact form matched ZERO elements while the words
+        // were plainly on the page. (`getByLabel` is the other way
+        // round, which is the trap: there, substring is the default.)
+        await section
+          .getByText('Back in your stock')
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(section, 3600);
+      },
+
+      async history({ page, stage }) {
+        const section = ooSection(page, 'Full history');
+        await section.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(section.locator('h2').first(), 3400);
+      },
+
+      async attempt({ page, stage }) {
+        const line = page.getByText(/Delivery attempt \d/).first();
+        await line.waitFor({ state: 'visible', timeout: 20_000 });
+        await line.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(line, 3600);
+      },
+
+      async outro({ page, stage }) {
+        const actions = page.getByRole('heading', { name: 'Actions', exact: true }).first();
+        await actions.waitFor({ state: 'visible', timeout: 20_000 });
+        await actions.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(actions, 3400);
       },
     },
   },

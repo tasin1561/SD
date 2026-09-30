@@ -32,26 +32,32 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (44):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5** and **H1** on the admin side. Every one
-has its own entry below saying what it covers and what its seeding does.
+**Filmed so far (45):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1** and **H2** on the admin side.
+Every one has its own entry below saying what it covers and what its seeding
+does.
 
-**THE NEXT ENTRY IS H2 — "Finding an order and reading its history".** P5 was
-taken out of order on purpose (this document argues it should be the first admin
-tutorial anybody watches, and [the recommendation](#the-recommendation) goes
-further: if the ops team never grows, P5 is worth making on its own and the rest
-are not); H1 followed it as the pair. From here, work sections H–P in their
-written order, and read [the recommendation](#the-recommendation) first — they
-are 42 entries and this document is explicit that they are a BET.
+**THE NEXT ENTRY IS H3 — "Things the system has raised".** P5 was taken out of
+order on purpose (this document argues it should be the first admin tutorial
+anybody watches, and [the recommendation](#the-recommendation) goes further: if
+the ops team never grows, P5 is worth making on its own and the rest are not);
+H1 and H2 followed it in order. From here, work sections H–P as written, and
+read [the recommendation](#the-recommendation) first — they are 41 entries and
+this document is explicit that they are a BET.
 
-**H2 is `needs demo data` and D0 covers it** — `RSH-LIFE-RESTOCKED` is the
-richest order on the box (a full journey, a damage ticket, a refund) and
-`RSH-LIFE-REVIEW` is the one that is genuinely stuck. Add
-`'find-an-order'` (or whatever it is slugged) to `LIFECYCLE_SLUGS` in the same
-change, as H1 and P5 both did. **Admin order detail is already surveyed** — P5
-films the bottom of that page, and its check shots under
-`out/verify/what-we-cannot-undo-check/02-god-mode.png` show the tracker, the
-Full history and the Actions panel in one frame.
+**H3 needs system issues at two severities, and it is the first admin entry
+whose world does NOT already exist.** Nothing on this box raises one on its own
+schedule, so its seeding has to make them — `SystemIssueService.raise` is the
+only writer, the sweeps that call it are hourly, and a row written by hand would
+skip the notification NOTIF-16 sends on a NEW issue. Read H3's own entry and
+NOTIF-16 before deciding which way. H4 (`/roles`) is `ready` and needs nothing,
+so it is the cheaper of the two if H3's world proves awkward.
+
+**Every admin flow so far has `app: 'admin'` and nothing else special.** The
+three selector traps H2 hit are in its entry and are worth reading before
+writing any flow against a form: a form that needs Enter, a field whose label
+belongs to the button inside it, and `exact: true` meaning opposite things on
+`getByText` and `getByLabel`.
 
 **THE ADMIN RIG IS BUILT AND PROVEN.** `record.mjs` takes `app: 'admin'` on a
 flow and drives apps/admin on :3002 as `tutorial-ops@skydrop.local` (the
@@ -62,11 +68,12 @@ health-checks only the consoles a run needs. See
 P5 drove ten admin screens through it with no changes to the rig at all.
 
 **WHAT THE ADMIN VIDEOS COST, MEASURED:** P5 **1,032 credits** (89,000 → 87,968 on the one
-configured key) for 13 scenes and 156 s of narration, and H1 **about the same**
-for 13 scenes and 143 s — **roughly a third of the 1,200 the seller videos were
-costing**, because a tour writes shorter lines than a demonstration. Both
-pre-flight estimates were about 2× the real spend (2,344 and 2,152). The
-`--check` runs and the seed runs cost nothing, and there were nine of them.
+configured key) for 13 scenes and 156 s, H1 **946** for 13 scenes and 143 s, and
+H2 **1,044** for 14 scenes and 159 s — **roughly a third of the 1,200 the
+seller videos were costing**, because a tour writes shorter lines than a
+demonstration. Every pre-flight estimate was about 2× the real spend (2,344,
+2,152 and 2,370). The `--check` runs and the seed runs cost nothing, and there
+were fourteen of them.
 
 **Its subtitle is `Skydrop for ops`**, not `Skydrop for sellers`. That is the
 convention for H–P; the title card is the only place it shows.
@@ -133,7 +140,7 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — THIRTY-TWO so
+**Filming these screens is finding real bugs at a steady rate — THIRTY-THREE so
 far, plus seven in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -2001,14 +2008,61 @@ scoped to the card class — `attnCard()` in `flows.mjs`.
 read "4 queues need staff attention" over FIVE lit tiles. See
 [Bugs found](#bugs-found-while-establishing-feasibility).
 
-### H2. Finding an order and reading its history · `needs demo data`
+### H2. Finding an order and reading its history · **FILMED** — `find-an-order.mp4`
 
 **Promise** — you can answer any question about one order from its page.
-**Length** 4 min. **Prerequisites** H1. **Needs** D0.
-**Covers** `/orders` with its Indian-day date filters, then `/orders/[id]` as
-a **reading** exercise: the immutable recipient snapshot, the items, the full
-admin timeline including internal-only events. Every button on this page is
-taught later, and separately, and this tutorial says so.
+**Length** 14 scenes. **Prerequisites** H1. **Needs**
+`seed-demo-data.mjs find-an-order`, which is D0.
+**Covers** `/orders` — four filters and one search box — and then
+`/orders/[id]` as a READING exercise: the immutable recipient snapshot and the
+customer's reputation line beside it, COD against declared value, the item
+snapshot and what "reserved" means on a parcel that has already gone, charges
+with their visibility column, the parcel and what the courier will no longer
+accept, the tracker, the full history with our events and the courier's scans in
+ONE column, and the failed delivery drawn on the scan it belongs to. Every
+button on the page is taught later and separately, and the closing line says so.
+
+**Filmed against `RSH-LIFE-RESTOCKED`**, the richest order D0 leaves: a whole
+forward journey, a failed delivery carrying the courier's own reason code, a
+return, a receipt at the bench and a disposition. So every band has something in
+it, and the tracker ends on "Back in your stock" — which did not exist until the
+ladder learned a parcel can come back (see Bugs found).
+
+**THREE SELECTOR TRAPS, all found in frames rather than by a failing step.**
+Each one is a scene that PASSED while filming the wrong thing:
+
+1. **The search box is a FORM, not a debounce.** Typing filters nothing until
+   Enter. The first check typed, waited for "a row matching `SD-…`" — which the
+   UNFILTERED list is full of, newest first — clicked it, and filmed nine scenes
+   about somebody else's parcel. The gate is now the subtitle's count (`1 order`),
+   which cannot be true until the filter has applied, and the click is on the
+   link INSIDE the row carrying the ref.
+2. **`getByLabel('Search')` is the submit MAGNIFIER, not the field.** The input
+   carries `aria-label="Search orders"`, which overrides its visible label, and
+   the button inside it is labelled "Search". So the click focused a `<button>`
+   and `pressSequentially` typed eighteen characters into it — no error, no
+   text, and a passing step. Playwright only said so when something asked that
+   node for its value. **When a field has a button inside it, check which of the
+   two owns the visible word.**
+3. **`getByText(…, { exact: true })` means the element's WHOLE text.** A timeline
+   rung's label is a text node beside the state word, the owner and the time, so
+   the exact form matched ZERO elements while the words were plainly on screen.
+   `getByLabel` is the other way round — substring by default — which is what
+   makes this pair worth remembering together.
+
+**`ooSection(page, title)` matches an order-page card by its own `<h2>`**, never
+by `hasText`: "Payment", "Charges" and "Shipments" all appear inside OTHER
+cards' bodies on this page, so a text filter picks whichever card mentions the
+word first — a card the narration is not talking about, and a check that passes.
+
+**Observed and deliberately NOT fixed: five event notes on this page name a row
+by its uuid.** "RTO finalize on shipment 01a0ef6c-…", and the same shape on pick
+start, pick complete, pack complete and the call attempt. It is the third and
+fourth place this defect has been found (the seller's order list, then a refund's
+ledger note), and it is worse here only in quantity. These are
+`order_events.description` strings and the table is append-only, so a fix reaches
+future events alone — it wants doing deliberately, at the five write sites, with
+the shipment NUMBER that already exists, not inside a filming session.
 
 ### H3. Things the system has raised · `needs demo data`
 
@@ -3036,6 +3090,29 @@ so a receive landing first cannot be overwritten. The spec's Prisma fake now
 APPLIES the where clause on a shipment write — the `pnl-fake-db.ts` lesson, a
 second time: a fake that answers every write alike cannot tell a guarded write
 from an unguarded one, and the guards ARE the behaviour under test. Proved red.
+
+**One from filming H2 (2026-09-30): A PARCEL THAT CAME BACK WAS STILL OUT FOR
+DELIVERY.** The order tracker had nine forward rungs and no idea a return leg
+exists. So an order whose goods were back on our shelf and whose seller had
+already been refunded read, on the SELLER's own order page, two inches under a
+chip saying "RTO restocked",
+
+>     Current step:  Out for delivery   Courier
+>     Still to come: Delivered          Courier
+
+and the Delivered rung fell back to the courier's ETA, so it printed a delivery
+DATE for a delivery that was never going to happen. **It is the third time this
+one ladder has said something confident that was not so** — after the AWB-time
+fallback that told every confirmed seller picking was "not needed", and the
+DELIVERED order carrying an "Out for delivery" heading. A parcel that never
+reached the customer now gets no Delivered rung at all; the return rungs say what
+happened and "Back in your stock" becomes the current step. One DELIVERED and
+then sent back keeps its delivery, because that delivery happened. A LOST parcel
+says so. "Back in our warehouse" is deliberately allowed to sit PENDING while the
+courier's own handed-back scan is already on the timeline below it — only a
+person at the bench writes RTO_RECEIVED (TRK-6), and the gap between those two is
+a real one somebody has to close. Five cases pinned, including the two that must
+NOT change. Proved red.
 
 **One from filming H1 (2026-09-30), found by COUNTING THE TILES IN A FRAME.**
 The admin dashboard's attention band said **"4 queues need staff attention"**

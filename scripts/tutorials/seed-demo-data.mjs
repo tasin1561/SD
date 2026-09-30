@@ -487,6 +487,10 @@ const LIFECYCLE_SLUGS = new Set([
   // it is there. Cheap in practice: the pass is idempotent and only
   // rebuilds it after a B7 take has spent it.
   'read-your-stock',
+  // H2 reads ONE order end to end, and `RSH-LIFE-RESTOCKED` is the
+  // richest D0 leaves: a whole journey, a failed delivery with the
+  // courier's own reason code, a return and a disposition.
+  'find-an-order',
   // H1 reads the admin dashboard's attention band, and a band of
   // zeroes teaches nothing — D0's parcels are what light it.
   'the-ops-dashboard',

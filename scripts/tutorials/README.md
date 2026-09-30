@@ -41,6 +41,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `upload-bulk-orders.mp4`            | A day's orders from a spreadsheet — the template, the check before importing (what we matched, rows versus orders, and the row that will not import because it has no landmark), the import running, and the four orders it placed, one of them assembled from two rows that shared a reference. |
 | `what-we-cannot-undo.mp4`           | **The first ADMIN video.** Every irreversible act in the staff console, in one pass and with no clicks that change anything — god mode and the stock claim beside it, completing a receipt, overruling a call, the pack bench's scan, freeing a pickup day, a return standing at our door, bins, a top-up, a bank change, and closing a month. Each scene reads that screen's own warning copy. |
 | `the-ops-dashboard.mp4`             | The staff console's front page, read-only — the attention band (seven areas, lit when they have work and quiet at zero), the last thirty days as rates with their denominators, and whose money is where. No figure is spoken: the call-centre tile counts ORDERS and the queue it links to counts ENTRIES, and on a dev box those differ. |
+| `find-an-order.mp4`                 | Reading ONE order end to end on the staff console — the filters and the search that finds it, then the immutable recipient snapshot, the customer's reputation, the item and charge lines, the parcel, the tracker that ends where the parcel actually got to, and our events and the courier's scans in one column. Nothing is pressed. |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -385,6 +386,17 @@ the file are still the words in `narration.mjs`.
   on 3003. The seed DOES need that env (it talks to Prisma); run the two in
   separate shells, or in a subshell — `( set -a; . apps/api/.env; set +a; node
   …seed… )` — which is what `make-tutorials.sh` effectively does.
+- **Three selector traps that all PASS while filming the wrong thing** (H2,
+  2026-09-30). A search box that is a FORM needs Enter, and a gate on "a row"
+  is satisfied by the unfiltered list — gate on the filtered COUNT.
+  `getByLabel('Search')` can be the submit MAGNIFIER rather than the field,
+  because an `aria-label` on the input overrides its visible label and the
+  button inside it owns the word; the typing then goes into a `<button>` with
+  no error at all. And `getByText(…, { exact: true })` means the element's
+  WHOLE text, so a timeline rung's label — a text node beside the state word,
+  the owner and the time — matches ZERO elements; `getByLabel` is the other way
+  round, substring by default, which is what makes the pair worth remembering
+  together.
 - **A LIST OPENS ON A FILTER, and the filter decides which controls exist.**
   `/warehouse/receive` opens on PENDING, and a PENDING goods receipt offers
   "Start receiving" and "Cancel receipt" — the **Complete** button the video is

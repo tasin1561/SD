@@ -2530,6 +2530,80 @@ export const VIDEOS = [
       },
     ],
   },
+  /*
+    H2 — reading ONE order, and nothing else. Every control on this page
+    is taught somewhere later and separately, and the closing line says
+    so; the promise here is that you can answer any question about an
+    order without asking anybody.
+
+    Filmed against `RSH-LIFE-RESTOCKED`, the richest order D0 leaves: a
+    whole forward journey, a failed delivery with the courier's own
+    reason code, a return, a receipt at the bench and a disposition —
+    so every band on the page has something in it.
+  */
+  {
+    slug: 'find-an-order',
+    title: 'Reading an order',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Every order on the platform is on this one list, whoever sold it. The job of this video is reading one — not changing it. Nothing here gets pressed.',
+      },
+      {
+        id: 'filters',
+        say: 'Four filters over the top. Status is the whole lifecycle, thirty of them; then how the order arrived, which seller it belongs to, and the day it was placed — read in India time, not yours.',
+      },
+      {
+        id: 'search',
+        say: 'And one search box that takes several things: our order number, the seller’s own reference, the recipient’s name or their phone. Whichever the person on the phone happens to have.',
+      },
+      {
+        id: 'open',
+        say: 'Rows link straight through. This one came back — delivery failed, the parcel returned, and the goods are on our shelf again, which makes it the fullest page to read.',
+      },
+      {
+        id: 'snapshot',
+        say: 'The recipient block is a SNAPSHOT, frozen when the order was placed. Editing the customer record later never rewrites it, because this is where the parcel was actually sent.',
+      },
+      {
+        id: 'reputation',
+        say: 'Above it, what we know about this customer: how many orders they have had, how many arrived, and how many came back. That last number is the one a call agent wants before ringing.',
+      },
+      {
+        id: 'payment',
+        say: 'Then the money the customer is in. What they hand over at the door, and separately what the goods were declared to be worth — the courier needs both, and they are not the same figure.',
+      },
+      {
+        id: 'items',
+        say: 'The items are a snapshot too, down to the SKU and the weight. Reserved is stock actually held for this order — on one that has already shipped, it is back to nothing.',
+      },
+      {
+        id: 'charges',
+        say: 'Charges are what the seller was billed, line by line, with a visibility column: this is the page that tells you whether the seller can see the same line you are looking at.',
+      },
+      {
+        id: 'parcel',
+        say: 'The parcel carries its waybill and which of our courier accounts booked it. Underneath, the panel says plainly what the courier will no longer accept, and why.',
+      },
+      {
+        id: 'tracker',
+        say: 'The tracker is the journey as rungs. It ends where the parcel actually got to — this one has no delivery step at all, because it never had one, and it finishes back in stock.',
+      },
+      {
+        id: 'history',
+        say: 'Under that is everything, newest first: our own events and the courier’s scans in one column, so you never have to hold two timelines in your head at once.',
+      },
+      {
+        id: 'attempt',
+        say: 'And the failed delivery is drawn on the scan it belongs to, not as a second line — with the courier’s own reason code, and whether that code even allows another attempt.',
+      },
+      {
+        id: 'outro',
+        say: 'Everything below is an action, and each one has a tutorial of its own. If you only ever read this page, you can still answer almost any question about an order.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
