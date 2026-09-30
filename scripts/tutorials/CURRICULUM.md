@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 49 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I1, I2 and P5.** The 41 left are all in the admin app: 2 are
+**90 tutorials. 50 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I1–I3 and P5.** The 40 left are all in the admin app: 2 are
 `impractical locally` and 29 touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,32 +32,34 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (49):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (50):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4** (the whole of section H) and
-**I1–I2**. Every one has its own entry below saying what it covers and what its
+**I1–I3**. Every one has its own entry below saying what it covers and what its
 seeding does.
 
-**THE NEXT ENTRY IS I3 — "Forcing an outcome on a stuck call".** It is the
-first DANGEROUS one in section I, and I2's world is most of what it needs: the
-force-outcome panel is the third button on every row of `/call-center/queue`,
-it is gated on `callcenter.queue.manage` (SUPER_ADMIN in the seeded roles, which
-`tutorial-ops` holds), and `seed-demo-data.mjs supervising-the-queue` already
-leaves five open entries to press it on. **What I3 must decide before a frame is
-shot is WHICH outcome it forces**, because every one of them is real: the panel
-routes through the same `CallAttemptService` an agent does, so the attempt is
-appended under the supervisor's id, the order moves by the ordinary mapping, and
-a forced CONFIRMED reserves stock and books a waybill (CUR-2b). A forced
-`WRONG_NUMBER` or `CUSTOMER_DECLINED` on one of the three `RSH-QUEUE-` orders is
-the cheap version and is the one to use — it is spent-and-remade in exactly the
-`RSH-CALL-` shape I1 uses, because the seed rebuilds those three on every run.
-Read I1's entry on what a spent order costs before writing it.
+**THE NEXT ENTRY IS I4 — "Sellers asking us to call again".** It is the natural
+close of section I and **I3's take sets its world up for it**: I3 forces
+`CUSTOMER_DECLINED`, so the box now carries a `RSH-QUEUE-1-SPENT-<n>` order
+sitting in `REJECTED_BY_CUSTOMER`, which is exactly the order a seller would
+raise a re-attempt request against. What I4 still needs is the REQUEST itself —
+a `call_reattempt_requests` row placed by the SELLER (there is a seller-side
+endpoint; find it rather than writing the row by hand, so the video films
+something a seller could really have done) — and it should read
+`apps/admin/src/app/(authed)/reattempt-requests/` first: this curriculum has
+twice now been wrong about a screen because it was written from the database
+rather than from the page. Its promise is the load-bearing sentence, so check
+it against the code before narrating it: **approving is the only way out of a
+customer-rejected order**, because it puts the order back in the call queue.
+The grant of EXTRA attempts (`extraAttempts` on the approve body, which
+`CallCapService.grantedExtraByOrder` then adds to the cap) is the half nobody
+would guess and is worth a scene of its own.
 
 P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
 [the recommendation](#the-recommendation) goes further: if the ops team never
 grows, P5 is worth making on its own and the rest are not); H1, H2, H4 and then
-H3, I1 and I2 followed. From here, work sections I–P as written, and read
-[the recommendation](#the-recommendation) first — they are 37 entries and this
+H3, I1, I2 and I3 followed. From here, work sections I–P as written, and read
+[the recommendation](#the-recommendation) first — they are 36 entries and this
 document is explicit that they are a BET.
 
 **WHAT I2 ACTUALLY NEEDED, and the two things the note that stood here got
@@ -161,12 +163,13 @@ P5 drove ten admin screens through it with no changes to the rig at all.
 **WHAT THE ADMIN VIDEOS COST, MEASURED:** P5 **1,032 credits** (89,000 → 87,968
 on the one configured key) for 13 scenes and 156 s, H1 **946** for 13 and 143 s,
 H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, H3 **1,068** for
-14 and 180 s, I1 **1,067** for 14 and 172 s, and I2 **1,185** for 16 and 197 s —
-**7,314 for the seven, or roughly a third each of the 1,200 the seller videos
-were costing**, because a tour writes shorter lines than a demonstration. Every
-pre-flight estimate was about 2× the real spend (I2's said 2,695). The `--check`
-runs and the seed runs cost nothing, and there have been thirty-four.
-**Balance after this batch: 81,686 of 121,027** on the one configured key, which
+14 and 180 s, I1 **1,067** for 14 and 172 s, and I2 **1,185** for 16 and 197 s, and I3
+**1,049** for 14 and 169 s — **8,363 for the eight, or roughly a third each of
+the 1,200 the seller videos were costing**, because a tour writes shorter lines
+than a demonstration. Every pre-flight estimate was about 2× the real spend
+(I2's said 2,695, I3's 2,386). The `--check` runs and the seed runs cost
+nothing, and there have been thirty-six.
+**Balance after this batch: 80,637 of 121,027** on the one configured key, which
 is seventy-odd more admin videos.
 
 **Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
@@ -2428,11 +2431,15 @@ the frame rather than by the check — see
 and restarted by its LISTENING pid before the take, or the video would have
 filmed the defect that had just been fixed.
 
-### I3. Forcing an outcome on a stuck call · `needs demo data` · **dangerous**
+### I3. Forcing an outcome on a stuck call · **FILMED** — `forcing-an-outcome.mp4` · **dangerous**
 
 **Promise** — you can close a call nobody can complete, and you know exactly
 what it writes.
-**Length** 3 min. **Prerequisites** I2.
+**Length** 14 scenes, 2 min 49 s. **Prerequisites** I2. **Needs**
+`seed-demo-data.mjs forcing-an-outcome` — **the SAME world I2 films**
+(`SUPERVISE_SLUGS`), because both want a queue with a real roster behind it and
+exactly one call assigned to somebody who is not going to make it. I2 moves it;
+I3 records what the call would have come to.
 **Covers** the force-outcome panel — and what makes it dangerous is precisely
 that it is **not** a special case: it runs through the same service an agent
 does, so the attempt lands in the append-only ledger **under the supervisor's
@@ -2440,6 +2447,32 @@ id**, moves the order by the ordinary mapping, counts toward the NDR cap, and
 reserves stock if the outcome is confirmed. It cannot be undone or edited.
 **Cost of getting it wrong:** a permanent record that a call happened when it
 did not, and possibly stock held against an order nobody confirmed.
+
+**IT FORCES `CUSTOMER_DECLINED`, AND THAT CHOICE IS THE VIDEO.** Terminal by the
+mapping (`REJECTED_BY_CUSTOMER`), so one press permanently rejects a real order —
+which is the cost stated as an act rather than as a warning. It also reads the
+`Confirmed` helper FIRST and then changes the answer, because nothing is written
+until the button at the bottom and the most expensive option is the one worth
+reading aloud. And it leaves exactly the world **I4** needs: a
+customer-rejected order for a seller to ask us to ring again.
+
+**Its seeding is I2's plus one thing: the retire-forward.** A forced
+`CUSTOMER_DECLINED` lands the order in `REJECTED_BY_CUSTOMER`, which is NOT in
+`REMOVABLE_STATUSES` — so the shared clearing correctly leaves it alone and the
+next run's create would collide on `sellerOrderRef`, which is unique per seller.
+`RSH-QUEUE-1` is renamed `RSH-QUEUE-1-SPENT-<n>` and left exactly as the take
+left it, and a fresh one follows (the D4 / B7 rule, third instance). The
+retire runs for all three seeded orders, not only the one this video spends, so
+a later video in the same world can spend any of them.
+
+**The toast is READ in the next scene, and that only works because the pointer
+is still on it.** A success toast lives 4.5 s of UNPAUSED time and
+`usePausableTimer` stops the clock while it is hovered — a designed behaviour,
+so that somebody reading a message is not cut off mid-sentence — and
+`stage.point` moves the pointer onto whatever it outlines. So the press scene
+and the reading scene both outline the toast itself, and the first scene to
+point anywhere else lets it fade. **If a flow needs a toast to survive more than
+one scene, keep the halo on it**; there is no other lever.
 
 ### I4. Sellers asking us to call again · `needs demo data`
 

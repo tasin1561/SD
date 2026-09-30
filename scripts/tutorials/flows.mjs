@@ -8124,4 +8124,158 @@ export const FLOWS = {
       },
     },
   },
+
+  'forcing-an-outcome': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/call-center/queue`, { waitUntil: 'domcontentloaded' });
+        // The ASSIGNED row, which the seeding guarantees is exactly one
+        // and holds it in the name of an agent who is marked off.
+        const row = page.locator('.sk-tr', { hasText: 'asha.pillai' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row, 3400);
+      },
+
+      async why({ page, stage }) {
+        await stage.dwellOn(
+          page.locator('.sk-tr', { hasText: 'asha.pillai' }).first().locator('.cc-row-actions'),
+          3600,
+        );
+      },
+
+      async open({ page, stage }) {
+        /*
+          SCOPED TO THE ROW. "Force outcome" renders on every open entry
+          — five of them here — so the unscoped reach is a strict-mode
+          failure, and `.first()` would be the top of the list rather
+          than the parcel this video is about.
+        */
+        await stage.clickIt(
+          page
+            .locator('.sk-tr', { hasText: 'asha.pillai' })
+            .first()
+            .getByRole('button', { name: 'Force outcome' }),
+          { after: 1400 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('heading', { name: /Overrule this call/ })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__head').first(), 3000);
+      },
+
+      async same({ page, stage }) {
+        await stage.dwellOn(page.getByRole('dialog').locator('.sk-dialog__desc').first(), 3400);
+      },
+
+      async permanent({ page, stage }) {
+        // The paragraph inside the body, which is the one that names all
+        // three consequences. The description above it names only one.
+        const para = page.getByRole('dialog').locator('.oo-p').first();
+        await para.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(para, 3600);
+      },
+
+      async outcomes({ page, stage }) {
+        await stage.dwellOn(page.locator('#fo-outcome'), 3400);
+      },
+
+      async confirmed({ page, stage }) {
+        /*
+          CHOSEN AND THEN CHANGED, on purpose: the helper line only
+          exists once an outcome is picked, and the most expensive one
+          is worth reading BEFORE the one we actually mean. Nothing is
+          written until the button at the bottom.
+        */
+        await page.selectOption('#fo-outcome', 'CONFIRMED');
+        await page
+          .getByText(/reserves stock and advances the order/)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.getByText(/reserves stock and advances the order/), 3200);
+      },
+
+      async declined({ page, stage }) {
+        await page.selectOption('#fo-outcome', 'CUSTOMER_DECLINED');
+        // GATED ON THE WORD THE NARRATION QUOTES. The select itself
+        // changes just as happily on a value that means something else.
+        await page
+          .getByText(/the order is rejected\. Terminal\./)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.getByText(/the order is rejected\. Terminal\./), 3200);
+      },
+
+      async when({ page, stage }) {
+        await stage.dwellOn(page.getByRole('dialog').locator('#fo-started'), 3600);
+      },
+
+      async notes({ page, stage }) {
+        await stage.typeIn(
+          page.locator('#fo-notes'),
+          'Seller emailed: their customer cancelled before we could ring.',
+        );
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.locator('#fo-notes'), 2600);
+      },
+
+      async record({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Record this outcome' }),
+          { after: 1400 },
+        );
+        /*
+          THE TOAST, which is the service's own report and the thing the
+          next scene reads out. Gating on the dialog closing would pass
+          on a cancel just as well.
+        */
+        await page
+          .getByText(/Forced CUSTOMER_DECLINED/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        /*
+          AND THE MOUSE STAYS ON THE TOAST, which is what lets the NEXT
+          scene read it. A success toast lives 4.5 s of UNPAUSED time and
+          `point` moves the pointer onto whatever it outlines, so hovering
+          it stops the clock (`usePausableTimer` — a designed behaviour,
+          so that somebody reading a message is not cut off mid-sentence).
+          Both scenes therefore outline the toast itself; the first thing
+          to point somewhere else lets it fade, which is why `gone` comes
+          after rather than between.
+        */
+        await stage.dwellOn(page.getByText(/Forced CUSTOMER_DECLINED/i).first(), 2400);
+      },
+
+      async landed({ page, stage }) {
+        await stage.dwellOn(page.getByText(/Forced CUSTOMER_DECLINED/i).first(), 3600);
+      },
+
+      async gone({ page, stage }) {
+        /*
+          THE ROW IS GONE, which is what the narration claims — the entry
+          is COMPLETED and the list opens on OPEN. Waiting for it to
+          DETACH rather than reading a count, because the list refetches
+          and a count taken mid-flight is whichever render won.
+        */
+        await page
+          .locator('.sk-tr', { hasText: 'asha.pillai' })
+          .first()
+          .waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.oo-kpis').first(), 3600);
+      },
+    },
+  },
 };

@@ -2604,8 +2604,17 @@ const SUPERVISE_ORDERS = [
   },
 ];
 
+/**
+ * BOTH I2 AND I3 record against this world, and they want the same
+ * thing: a queue with a real roster behind it and exactly one call
+ * assigned to somebody who is not going to make it. I2 moves it; I3
+ * records what the call would have come to. One world, two videos,
+ * rather than a second copy that drifts.
+ */
+const SUPERVISE_SLUGS = new Set(['supervising-the-queue', 'forcing-an-outcome']);
+
 async function superviseWorldFor(slug, sellerId, sellerToken) {
-  if (slug !== 'supervising-the-queue') return;
+  if (!SUPERVISE_SLUGS.has(slug)) return;
 
   const callAgentRole = await prisma.staffRoleDefinition.findFirstOrThrow({
     where: { key: 'call_agent' },
@@ -2668,6 +2677,35 @@ async function superviseWorldFor(slug, sellerId, sellerToken) {
   if (holder === undefined) throw new Error('No seeded agent is marked as holding the call.');
 
   for (const o of SUPERVISE_ORDERS) {
+    /*
+      RETIRE A SPENT ONE FORWARD rather than rewinding it (the D4 / B7
+      rule). I3 forces CUSTOMER_DECLINED on the assigned entry, which is
+      TERMINAL and append-only — the order lands REJECTED_BY_CUSTOMER,
+      which is not in `REMOVABLE_STATUSES`, so the shared clearing
+      correctly leaves it alone and the next run's create would collide
+      on `sellerOrderRef`, which is unique per seller. Only its NAME
+      moves; everything it carries stays exactly as the take left it.
+
+      A take that did not reach the press leaves it PENDING_CONFIRMATION,
+      which the clearing has already removed by the time this runs — so
+      either way this ends with exactly one, freshly placed.
+    */
+    const spent = await prisma.order.findFirst({
+      where: { sellerId, sellerOrderRef: o.ref },
+      select: { id: true, orderNumber: true, status: true },
+    });
+    if (spent !== null) {
+      const parked = await prisma.order.count({
+        where: { sellerId, sellerOrderRef: { startsWith: `${o.ref}-SPENT-` } },
+      });
+      const retiredRef = `${o.ref}-SPENT-${parked + 1}`;
+      await prisma.order.update({ where: { id: spent.id }, data: { sellerOrderRef: retiredRef } });
+      console.log(
+        `  · ${o.ref} is spent — ${spent.orderNumber} is ${spent.status}. ` +
+          `Renamed ${retiredRef} and left intact; a fresh one follows`,
+      );
+    }
+
     const variant = await prisma.productVariant.findFirst({
       where: { skuCode: o.sku, product: { sellerId } },
       select: { id: true },

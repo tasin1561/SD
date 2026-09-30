@@ -46,6 +46,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `things-the-system-has-raised.mp4`  | The system-issue board — everything that could not be fixed automatically, worst first, with the severity as a word and not only a colour. What to read on a card, the link to the order it is about, claiming one so two people do not chase it, and why closing is a different act. The Close and Notify dialogs are opened and cancelled. |
 | `taking-calls.mp4`                  | A whole call-centre shift — why the station opens saying you are not taking calls, one switch that puts you on the roster, a customer handed to you without asking, why this call is happening, what their history says, choosing an outcome and reading what it does before pressing, and releasing one you cannot take. |
 | `supervising-the-queue.mp4`         | The call queue from a supervisor's side — the picked-up column against the called column, which is how a call somebody claimed and never rang becomes visible; moving it off an agent who has gone home; changing when a customer gets rung without pretending a call was made; and the agent roster, what each is holding against their cap, and raising one.                        |
+| `forcing-an-outcome.mp4`            | Closing a call nobody can complete — why reassigning and closing the entry both leave the order stuck, what the panel says before you have chosen anything, reading what each outcome DOES rather than what it is called, recording the time the conversation really happened, and a press that cannot be undone.                          |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -451,6 +452,12 @@ the file are still the words in `narration.mjs`.
   that said so — and in that case it was a product bug rather than a flow one
   (see the curriculum's Bugs found). **When a form field misbehaves under
   `clear: true`, check whether a HUMAN can clear it before working around it.**
+- **A toast lives 4.5 seconds of UNPAUSED time, and hovering it stops the
+  clock.** `usePausableTimer` is deliberate — somebody reading a message should
+  not be cut off — and `stage.point` moves the pointer onto whatever it
+  outlines. So a toast CAN be read across two scenes, provided both of them
+  halo the toast itself; the first scene that points anywhere else lets it fade.
+  There is no other lever on it from a flow.
 - **The call-centre presence sweep runs EVERY MINUTE**, and it stands down any
   agent marked available whose `lastSeenAt` is older than ten minutes — handing
   back whatever they were holding. A seeded available agent with a null

@@ -2870,6 +2870,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'forcing-an-outcome',
+    title: 'Forcing an outcome on a stuck call',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Here is a call nobody is going to make. Somebody picked it up and then went off shift, and we already know how it ends — the seller emailed to say their customer has cancelled.',
+      },
+      {
+        id: 'why',
+        say: 'Neither of the other two levers helps. Reassigning hands the same dead call to another person, and closing the queue entry leaves the order sitting where it is for ever, waiting on a call that will never come.',
+      },
+      {
+        id: 'open',
+        say: 'So there is a third button. Notice what it does before you have typed anything — it goes red and it puts a gavel on the panel. That is the screen telling you which kind of act this is.',
+      },
+      {
+        id: 'same',
+        say: 'Read the line under the title, because it is the whole warning. This is recorded as a real attempt, against your name, with exactly the effect it would have had if an agent had made the call.',
+      },
+      {
+        id: 'permanent',
+        say: 'Three consequences, stated before you choose anything. The attempt is permanent. It counts toward the number of times we may ring this customer. And confirming here holds stock.',
+      },
+      {
+        id: 'outcomes',
+        say: 'Nine outcomes, the same nine an agent sees. Read the line underneath rather than the label — the words are ordinary and what each one does to the order is not.',
+      },
+      {
+        id: 'confirmed',
+        say: 'Confirmed is the expensive one. It reserves stock and sends the order to the warehouse, which is a van and a parcel set moving on a conversation you are asserting happened.',
+      },
+      {
+        id: 'declined',
+        say: 'Ours is declined, and the line says the word that matters: terminal. The order is rejected and this screen has no way back from that.',
+      },
+      {
+        id: 'when',
+        say: 'Then when the call happened — not when you are typing. The ledger is a record of real conversations, so putting the real time in is telling the truth rather than bending it.',
+      },
+      {
+        id: 'notes',
+        say: 'And say why. The attempt log is append-only, nothing here can be edited afterwards, and this box is the only place your reason will ever live.',
+      },
+      {
+        id: 'record',
+        say: 'One press, and it is done. No second confirmation, which is exactly why everything worth reading is above the button rather than after it.',
+      },
+      {
+        id: 'landed',
+        say: 'And it reports rather than predicts. The outcome it recorded, and where the order actually landed \u2014 and it would say so here too if the attempt limit had been reached.',
+      },
+      {
+        id: 'gone',
+        say: 'The call has left the queue and the order is rejected. Nothing on this page will put either of those back, and the attempt now sits in the ledger under your name for good.',
+      },
+      {
+        id: 'outro',
+        say: 'So: only when you already know, record what actually happened rather than what is convenient, and write down why. There is one way back out of a rejected order, and the seller has to ask for it.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
