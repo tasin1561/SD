@@ -44,15 +44,12 @@ grows past the people who built the screens, **P5 is worth making on its own and
 the rest are not.** So it is the entry with the highest value per
 credit in sections H–P, and it is the one to make before betting on the rest.
 
-Three practical reasons to take it first as well as the argument above. It is
-`ready` and needs **no seeding at all** — it is a tour, not a demonstration, and
-clicks nothing. It therefore doubles as the shake-down of the admin recording
-rig: apps/admin has never been driven by this pipeline, and finding out what
-`signIn` needs for a STAFF identity is cheaper on a video that presses nothing
-than on one that forces an order's status. And because it clicks nothing, the
-two entries marked `impractical locally` (P4's emailed six-digit code, N10's
-month close) are perfectly filmable INSIDE it — P5 can show the screens it
-cannot demonstrate.
+Two practical reasons on top of that argument. **It presses NOTHING** — it is a
+tour, not a demonstration — so it is the cheapest admin video to get wrong and
+the safest one to learn the admin rig on. And because it clicks nothing, the two
+entries marked `impractical locally` (P4's emailed six-digit code, N10's month
+close) are perfectly filmable INSIDE it: P5 can show the screens it cannot
+demonstrate.
 
 **THE ADMIN RIG IS BUILT — that half is done.** `record.mjs` takes `app:
 'admin'` on a flow and drives apps/admin on :3002 as
