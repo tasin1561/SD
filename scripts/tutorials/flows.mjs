@@ -6818,4 +6818,197 @@ export const FLOWS = {
       },
     },
   },
+  /*
+    P5 — THE FIRST ADMIN FLOW, and a TOUR: it presses nothing that
+    changes anything. Ten screens, each one visited so the narration can
+    read that screen's own warning copy out loud beside it.
+
+    Every scene GATES ON THE THING THE NARRATION CLAIMS rather than on
+    the container that would hold it — three of these screens render an
+    identical page when their world is missing, so waiting for the panel
+    would film an empty state under a line about a waiting parcel.
+  */
+  'what-we-cannot-undo': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2400);
+      },
+
+      /*
+        The stuck order D0 leaves behind. Reached through the list's own
+        search on the SELLER's reference rather than by a hard-coded id:
+        these rows carry uuidv7 ids, which differ on every database.
+      */
+      async 'god-mode'({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/orders?search=RSH-LIFE-REVIEW`, {
+          waitUntil: 'domcontentloaded',
+        });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = page.getByRole('link', { name: /^SD-\d{4}-\d{2}-\d{6}$/ }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(row, { after: 1400 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The sentence the narration quotes, not the card that holds it.
+        const warning = page.getByText(/set once and never cleared/i).first();
+        await warning.waitFor({ state: 'visible', timeout: 25_000 });
+        await warning.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(warning, 3400);
+      },
+
+      async 'god-mode-stock'({ page, stage }) {
+        const release = page.getByRole('button', { name: /^Release reservations/ }).first();
+        await release.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(release, 1800);
+        const restore = page.getByRole('button', { name: /^Restore stock claim/ }).first();
+        await restore.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(restore, 2600);
+      },
+
+      /*
+        The one PENDING goods receipt. Its detail page carries the
+        Complete button; the consequence sentence lives inside the
+        confirm dialog, which this video does not open.
+      */
+      async receive({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/receive`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The list OPENS on PENDING, and a receipt somebody has started
+        // counting is ARRIVING — which is the only state where the
+        // Complete button exists at all. Selected by its label; the
+        // option order is not a promise.
+        await page.getByLabel('Status', { exact: true }).first().selectOption('ARRIVING');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(600);
+        const receipt = page.getByRole('link', { name: /^GR-\d{4}-\d{2}-\d{4}$/ }).first();
+        await receipt.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(receipt, { after: 1400 });
+        await page.waitForURL(/\/warehouse\/receive\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const complete = page.getByRole('button', { name: /^Complete$/ }).first();
+        await complete.waitFor({ state: 'visible', timeout: 25_000 });
+        await complete.evaluate((el) =>
+          el.scrollIntoView({ block: 'center', behavior: 'instant' }),
+        );
+        await page.waitForTimeout(800);
+        await stage.dwellOn(complete, 3400);
+      },
+
+      async 'force-outcome'({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/call-center/queue`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const force = page.getByRole('button', { name: 'Force outcome' }).first();
+        await force.waitFor({ state: 'visible', timeout: 25_000 });
+        await force.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(force, 3600);
+      },
+
+      async pack({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/pack`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The bench's own sentence about the box being opened by a scan.
+        const scan = page.getByText(/a box is opened by scanning one/i).first();
+        await scan.waitFor({ state: 'visible', timeout: 25_000 });
+        await scan.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(scan, 3600);
+      },
+
+      async pickups({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/pickups`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const note = page.getByText(/is how two vans arrive/i).first();
+        await note.waitFor({ state: 'visible', timeout: 25_000 });
+        await note.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(note, 3800);
+      },
+
+      /*
+        `RSH-LIFE-ATDOOR` is the only parcel that ever puts a row in this
+        list — a return the courier has handed back that nobody has
+        received. Gate on the SENTENCE, because the empty state renders
+        the same page just as happily.
+      */
+      async rto({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/rto`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const line = page.getByText(/nothing does it automatically, on purpose/i).first();
+        await line.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.getByText('handed back', { exact: false }).first().waitFor({
+          state: 'visible',
+          timeout: 25_000,
+        });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(line, 3800);
+      },
+
+      async bins({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/bins`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const heading = page.getByText('Location tracking', { exact: true }).first();
+        await heading.waitFor({ state: 'visible', timeout: 25_000 });
+        await heading.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(900);
+        await stage.dwellOn(heading, 3600);
+      },
+
+      async topups({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/topups`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const accept = page.getByRole('button', { name: /^Accept$/ }).first();
+        await accept.waitFor({ state: 'visible', timeout: 25_000 });
+        await accept.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(accept, 3400);
+      },
+
+      async 'bank-change'({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/bank-changes`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The guard the narration names, not the Approve button — with
+        // nothing waiting this sentence is still on the page, so the row
+        // itself is what proves the world was seeded.
+        const row = page.getByText(/fields changed/i).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row, 3800);
+      },
+
+      /*
+        The page opens on the OPEN month. August is the one that has
+        ended and is not closed, which is where the amber warning and the
+        Close button live; July, already frozen, is the row above it in
+        the same dropdown.
+      */
+      async month({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/pnl/carry-forward`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const picker = page.getByLabel('Month', { exact: true }).first();
+        await picker.waitFor({ state: 'visible', timeout: 25_000 });
+        await picker.selectOption({ label: 'August 2026 — not closed yet' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const notice = page.getByText(/has ended and is not closed yet/i).first();
+        await notice.waitFor({ state: 'visible', timeout: 25_000 });
+        await notice.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(notice, 3800);
+      },
+
+      async outro({ page, stage }) {
+        const close = page.getByRole('button', { name: /^Close August 2026$/ }).first();
+        await close.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(close, 3600);
+      },
+    },
+  },
 };

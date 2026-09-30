@@ -252,6 +252,40 @@ export const LIFECYCLE_PARCELS = [
     /** The return request books a REVERSE collection — a live call. */
     needsLiveCourier: true,
   },
+  {
+    ref: 'RSH-LIFE-ATDOOR',
+    /*
+      THE ONE PARCEL WHOSE ORDER AND SHIPMENT DELIBERATELY PART COMPANY.
+
+      The courier has handed this return back to us and nobody has
+      received it. That is a state the RTO station has a whole worklist
+      for — "At our door", somebody must scan each of these — and it is
+      the ONLY state in this file that lives on the SHIPMENT rather than
+      on the order: TRK-6 forbids a scan moving the order to
+      RTO_RECEIVED, because only a person with the carton in front of
+      them may start the restock or write-off chain. So the order stays
+      at RTO_IN_TRANSIT and the shipment goes on to RTO_DELIVERED, and
+      `want` alone cannot tell this parcel from `RSH-LIFE-RETURNING`.
+
+      Hence `wantShipment`: the skip test and the report both read it,
+      so a run that died between the last two scans is resumed rather
+      than reported green. It exists for P5, which reads that worklist
+      out loud and would otherwise film "Nothing waiting to be
+      received" under a line about the one act at this bench that
+      cannot be taken back.
+    */
+    want: 'RTO_IN_TRANSIT',
+    wantShipment: 'RTO_DELIVERED',
+    customer: { name: 'Deepa Ramanathan', phone: '+919845060110' },
+    stages: [
+      'IN_TRANSIT',
+      'OUT_FOR_DELIVERY',
+      ['NDR', 'Customer asked us not to deliver — sending it back'],
+      'RTO_INITIATED',
+      'RTO_IN_TRANSIT',
+      'RTO_DELIVERED',
+    ],
+  },
 ];
 
 /**
@@ -352,6 +386,24 @@ async function assertSimulator() {
 
 async function statusOf(orderId) {
   const row = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
+  return row?.status ?? null;
+}
+
+/**
+ * Where the LIVE parcel is, which is not always where the order is.
+ *
+ * A shipment carries no `orderId` — the link is the `order_shipments`
+ * join — and a supersede retires the old row while leaving it in place
+ * (CUR-7), so "the parcel" means the newest live one. Returns null when
+ * there is none, which is the honest answer for an order that never got
+ * as far as a booking.
+ */
+async function shipmentStateOf(orderId) {
+  const row = await prisma.shipment.findFirst({
+    where: { deletedAt: null, supersededAt: null, orderShipments: { some: { orderId } } },
+    orderBy: { createdAt: 'desc' },
+    select: { status: true },
+  });
   return row?.status ?? null;
 }
 
@@ -983,7 +1035,15 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
     // parcel found short of its state is carried FORWARD from where it
     // actually is; only one in a state this pass cannot continue from is
     // left alone and named.
-    if (existing !== null && existing.status === parcel.want) {
+    if (
+      existing !== null &&
+      existing.status === parcel.want &&
+      // Only the parcel that names a shipment state is asked about one.
+      // `?? null` here would have compared every OTHER parcel's live
+      // shipment against null and re-driven all nine on every run.
+      (parcel.wantShipment === undefined ||
+        (await shipmentStateOf(existing.id)) === parcel.wantShipment)
+    ) {
       log(`  · ${parcel.ref} already ${parcel.want}`);
       continue;
     }
@@ -1400,16 +1460,27 @@ export async function driveOrderThrough({
 export async function lifecycleReport(sellerId) {
   const rows = await prisma.order.findMany({
     where: { sellerId, sellerOrderRef: { in: LIFECYCLE_PARCELS.map((p) => p.ref) } },
-    select: { sellerOrderRef: true, status: true, orderNumber: true },
+    select: { id: true, sellerOrderRef: true, status: true, orderNumber: true },
   });
-  return LIFECYCLE_PARCELS.map((p) => {
-    const row = rows.find((r) => r.sellerOrderRef === p.ref);
-    return {
-      ref: p.ref,
-      want: p.want,
-      got: row?.status ?? null,
-      orderNumber: row?.orderNumber ?? null,
-      ok: row?.status === p.want,
-    };
-  });
+  return Promise.all(
+    LIFECYCLE_PARCELS.map(async (p) => {
+      const row = rows.find((r) => r.sellerOrderRef === p.ref);
+      // Only the parcel that asks for one pays for the lookup, and only
+      // that one can fail on it.
+      const ship =
+        row === undefined || p.wantShipment === undefined ? null : await shipmentStateOf(row.id);
+      return {
+        ref: p.ref,
+        want: p.wantShipment === undefined ? p.want : `${p.want} + parcel ${p.wantShipment}`,
+        got:
+          row === undefined
+            ? null
+            : p.wantShipment === undefined
+              ? row.status
+              : `${row.status} + parcel ${ship ?? '—'}`,
+        orderNumber: row?.orderNumber ?? null,
+        ok: row?.status === p.want && (p.wantShipment === undefined || ship === p.wantShipment),
+      };
+    }),
+  );
 }

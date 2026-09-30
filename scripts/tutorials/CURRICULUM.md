@@ -32,38 +32,34 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (42):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7.
-**THE WHOLE SELLER APP IS FILMED.** Every one has its own entry below saying
-what it covers and what its seeding does.
+**Filmed so far (43):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — and **P5, the first admin video.** Every one has its
+own entry below saying what it covers and what its seeding does.
 
-**THE NEXT ENTRY IS P5 — "What we cannot undo".** Not H1, and the reordering is
-deliberate (decided 2026-09-30, after E5): this document already argues that P5
-"should arguably be the first admin tutorial anybody watches", and
-[the recommendation](#the-recommendation) goes further — if the ops team never
-grows past the people who built the screens, **P5 is worth making on its own and
-the rest are not.** So it is the entry with the highest value per
-credit in sections H–P, and it is the one to make before betting on the rest.
+**THE NEXT ENTRY IS H1 — "The ops dashboard".** P5 was taken out of order on
+purpose (this document argues it should be the first admin tutorial anybody
+watches, and [the recommendation](#the-recommendation) goes further: if the ops
+team never grows, P5 is worth making on its own and the rest are not). That is
+done. From here, work sections H–P in their written order, and read
+[the recommendation](#the-recommendation) first — they are 43 entries and this
+document is explicit that they are a BET.
 
-Two practical reasons on top of that argument. **It presses NOTHING** — it is a
-tour, not a demonstration — so it is the cheapest admin video to get wrong and
-the safest one to learn the admin rig on. And because it clicks nothing, the two
-entries marked `impractical locally` (P4's emailed six-digit code, N10's month
-close) are perfectly filmable INSIDE it: P5 can show the screens it cannot
-demonstrate.
+**THE ADMIN RIG IS BUILT AND PROVEN.** `record.mjs` takes `app: 'admin'` on a
+flow and drives apps/admin on :3002 as `tutorial-ops@skydrop.local` (the
+SUPER_ADMIN the seed already makes); `peek.mjs --admin` photographs one admin
+screen and `--routes` walks several on ONE sign-in; `make-tutorials.sh`
+health-checks only the consoles a run needs. See
+[Re-running](README.md#re-running) for the two commands that start the app.
+P5 drove ten admin screens through it with no changes to the rig at all.
 
-**THE ADMIN RIG IS BUILT — that half is done.** `record.mjs` takes `app:
-'admin'` on a flow and drives apps/admin on :3002 as
-`tutorial-ops@skydrop.local` (the SUPER_ADMIN the seed already makes);
-`peek.mjs --admin` photographs one admin screen and `--routes` walks several on
-ONE sign-in; `make-tutorials.sh` health-checks only the consoles a run needs.
-See [Re-running](README.md#re-running) for the two commands that start the app.
+**WHAT P5 COST, MEASURED: 1,032 credits** (89,000 → 87,968 on the one
+configured key) for 13 scenes and 156 s of narration — **about a third of the
+1,200 the seller videos were costing**, because a tour writes shorter lines than
+a demonstration. The pre-flight estimate said 2,344, which is the usual ~2×
+over. Four `--check` runs and five seed runs went into it and cost nothing.
 
-**And P5's ten screens are SURVEYED.** Seven of them show the irreversible act
-today and three show an empty state, which is why P5 is now `needs demo data`
-rather than `ready` — the three rows it wants are small and listed in
-**P5's own entry at the end of section P**.
-**Read that table before writing a line of narration**; it is the whole of what
-a following agent would otherwise pay a sign-in at a time to find out.
+**Its subtitle is `Skydrop for ops`**, not `Skydrop for sellers`. That is the
+convention for H–P; the title card is the only place it shows.
 
 **C1 was re-taken the same evening and nothing is outstanding.** E5 bills the
 very consignment C1 films, so C1's `freight` line — which said "nothing has been
@@ -73,10 +69,6 @@ its world is built before its take, and its `freight` scene is gated on the word
 "Charged so far" rather than on the section, which renders an empty panel just as
 happily. **The whole re-take cost 86 credits**, because clips are cached on their
 words and only the one that changed was bought again.
-
-**After that, sections H–P are 48 entries** and this document is explicit that
-they are a BET — read [the recommendation](#the-recommendation) first, and
-consider taking support questions rather than this file's order.
 
 ### The four seeded worlds, and which list puts a video in one
 
@@ -89,7 +81,9 @@ that has never been driven.
   Three of them are SPENT by their own take and retired-and-remade rather than
   rewound (`retireSpentParcel`): D4's `RSH-LIFE-SENDBACK` and
   `RSH-LIFE-RETURNREQ`, and B7's `RSH-LIFE-CONFIRMED`. **Read D4's and B7's
-  entries before writing any seeding that has to survive its own take.**
+  entries before writing any seeding that has to survive its own take.** The
+  tenth, `RSH-LIFE-ATDOOR`, is P5's and is the only one whose ORDER and SHIPMENT
+  deliberately disagree — see D0.
 - **`CONSIGNMENT_SLUGS` → C0 (`lib/consignments.mjs`)** — two consignments, one
   landed with its two counts deliberately disagreeing and one still in the air.
   Build-once and idempotent; C1 and C2 only read it.
@@ -129,8 +123,8 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — THIRTY so far,
-plus seven in the seeding itself.** Every one is on a path nothing else
+**Filming these screens is finding real bugs at a steady rate — THIRTY-ONE so
+far, plus seven in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
 column mappings that drove nothing, a tracking filter that 500'd, a stuck
@@ -879,14 +873,26 @@ and every tutorial here becomes `ready`.
 node scripts/tutorials/seed-demo-data.mjs --lifecycle
 ```
 
-NINE parcels, driven the whole way by the real path: an order placed by the
+TEN parcels, driven the whole way by the real path: an order placed by the
 seller, confirmed on a CALL, a waybill booked against the local Delhivery
 simulator, picked, packed at the bench with the box ritual, scanned at handover,
 then advanced by the simulator — which fires the same signed webhooks the real
-courier does. Takes about two and a half minutes from cold. **Verified 2026-09-30, all nine
+courier does. Takes about two and a half minutes from cold. **Verified 2026-09-30, all ten
 green, and idempotent: a second run says "already" and changes nothing — except
 for the two D4 parcels, which are retired and remade whenever a take has spent
 them (`retireSpentParcel`, and see D4).**
+
+**`RSH-LIFE-ATDOOR` is the tenth, and it is the only parcel whose ORDER and
+SHIPMENT deliberately disagree.** It is `RSH-LIFE-RETURNING` plus one scan: the
+courier says it has handed the return back. TRK-6 forbids that scan moving the
+ORDER (only a person at the bench may start the restock chain), so the order
+stays at RTO_IN_TRANSIT while the shipment reaches RTO_DELIVERED — which is the
+one thing that puts a row in the RTO station's "At our door" worklist. `want`
+alone therefore cannot tell it from `RSH-LIFE-RETURNING`, so it carries
+**`wantShipment`**, which the skip test AND `lifecycleReport` both read; a run
+that died between the last two scans is resumed rather than reported green.
+Only a parcel that names one pays for the extra lookup. **It needed a product
+fix to exist at all** — see [Bugs found](#bugs-found-while-establishing-feasibility).
 
 | Ref                  | State                             | Used by        |
 | -------------------- | --------------------------------- | -------------- |
@@ -899,6 +905,7 @@ them (`retireSpentParcel`, and see D4).**
 | `RSH-LIFE-OVERDUE`   | OUT_FOR_DELIVERY, flagged day 3   | D3             |
 | `RSH-LIFE-SENDBACK`  | OUT_FOR_DELIVERY — **spent by D4**| D4             |
 | `RSH-LIFE-RETURNREQ` | DELIVERED — **spent by D4**       | D4             |
+| `RSH-LIFE-ATDOOR`    | RTO_IN_TRANSIT, **parcel RTO_DELIVERED** | P5      |
 
 It also leaves behind what those states imply and the videos will want: the
 `SCRAP_DAMAGE` ticket **with our reply on it and a `SCRAP_REFUND` credit in the
@@ -2504,52 +2511,74 @@ Feasible if the seed reads the code from the notification row, but that is
 teaching a path production does not use. **Recommend writing this one**, and
 filming only the read-only "what a collapse would move" half.
 
-### P5. What we cannot undo · `needs demo data` (was `ready`) · **NEXT**
+### P5. What we cannot undo · **FILMED** — `what-we-cannot-undo.mp4`
 
 **Promise** — you can name every irreversible act in the admin app and say what
 it costs.
-**Length** 4 min. **Needs** three rows that do not exist; see the survey below.
-**Covers** no clicks at all. It walks the list: god mode, finalising a return,
-completing a receipt, forcing a call outcome, packing without a scan, freeing a
-pickup day, closing a month, collapsing bins, accepting a top-up, approving a
-bank change. For each: what it writes, what it cannot take back, and what asks
-first. **This should arguably be the first admin tutorial anybody watches**, and
-[the pick-up section](#where-to-pick-up) argues it should be the first one MADE.
+**Length** 2 min 36 s of narration over 13 scenes. **Prerequisites** none — it
+is deliberately the first admin tutorial anybody watches.
+**Needs** `seed-demo-data.mjs what-we-cannot-undo`, which is D0 plus three rows
+of its own (below).
+**Covers** ten screens and NOT ONE CLICK that changes anything: god mode and the
+stock claim beside it, completing a goods receipt, overruling a call, the pack
+bench's scan, freeing a pickup day, a return standing at our door, bins,
+accepting a top-up, approving a bank change, and closing a month. Each scene
+reads that screen's OWN warning copy — written by whoever built it — beside what
+the act actually writes.
 
-**THE RIG IS BUILT AND THE TEN SCREENS ARE SURVEYED (2026-09-30).** apps/admin
-is driven by `record.mjs` now — a flow says `app: 'admin'` and gets :3002 and
-`tutorial-ops@skydrop.local` — and `peek.mjs --admin --routes /a /b /c` walks
-several screens on ONE sign-in, which is what this survey used. What it found,
-route by route, is the entry's real `Needs`:
+**Its seeding is `dangerousActsWorldFor` plus one D0 parcel.** Three of the ten
+screens read as empty states, and a video whose whole subject is what an act
+costs cannot say "Nothing waiting" three times:
 
-| Act | Route | What is on it today |
-| --- | --- | --- |
-| God mode | `/orders/<a D0 order>` | ✅ the panel, with its own copy: "Audited CRITICAL… `hasAdminOverride` permanently — a flag that is set once and never cleared" |
-| Completing a receipt | `/warehouse/receive` | ✅ one PENDING receipt (`GR-2026-09-0001`, Test Brand) |
-| Forcing a call outcome | `/call-center/queue` | ✅ two open entries and a **Force outcome** control |
-| Packing without a scan | `/warehouse/pack` | ✅ one parcel waiting, and the station's own "a box is opened by scanning one" |
-| Freeing a pickup day | `/warehouse/pickups` | ✅ six days with **Call off**, under a paragraph that is already P5's script: "A failed attempt keeps the day claimed on purpose — when a call fails we cannot tell whether they registered it, and assuming they did not is how two vans arrive" |
-| Collapsing bins | `/warehouse/bins` | ✅ both warehouses; the collapse control is below the fold |
-| Accepting a top-up | `/topups` | ✅ one claim Waiting for review, with **Accept** |
-| **Finalising a return** | `/warehouse/rto` | ⚠️ **"Nothing waiting to be received"** — D0's returns are all past the bench |
-| **Closing a month** | `/pnl/carry-forward` | ⚠️ September is open and no month has ever been closed, so there is no close to point at |
-| **Approving a bank change** | `/bank-changes` | ⚠️ **"Nothing waiting"** — the seed clears the pending change A2 makes |
+- **A return AT OUR DOOR** — `RSH-LIFE-ATDOOR`, the tenth D0 parcel, driven one
+  scan past `RSH-LIFE-RETURNING` to `RTO_DELIVERED`. **It is the only parcel in
+  the file whose ORDER and SHIPMENT deliberately part company** (TRK-6 keeps the
+  order at RTO_IN_TRANSIT), so it carries `wantShipment` and both the skip test
+  and the report read it — otherwise a run that died between the last two scans
+  would report green on a parcel that never reached the bench.
+- **A bank change waiting** — `pendingBankChange` puts an account on file and
+  then changes it, through `PATCH /seller/profile/bank-details` twice, because
+  the FIRST set writes straight through and only a change raises a request. Not
+  through Prisma: the account number is encrypted and carries its own mask and
+  key version.
+- **A month closed** — `closeAnEndedMonth` closes **July**, not August. The
+  month list runs from the earliest CLOSED period to today, so with nothing ever
+  closed the dropdown holds only the open month and there is no close to point
+  at. July closed puts three on one page: July frozen, August "has ended and is
+  not closed yet" with its amber warning and the Close button, and September
+  live. **Closing is itself irreversible and PNL-CF-1 refuses any month earlier
+  than a closed one for ever**, so on this box June and before can never be
+  closed now; the function runs only when nothing is closed already.
 
-So seven of the ten show the act; three show an empty state. **That is why the
-`ready` on this entry is now `needs demo data`** — a video whose whole subject is
-"what this costs to get wrong" reading "Nothing waiting" three times is the
-weakest version of it, and the frame check would say so. The three are small:
-drive one D0 parcel only as far as RTO_IN_TRANSIT and leave it AT THE DOOR
-rather than finalising it; leave A2's pending bank change in place for this slug
-instead of clearing it; and close one ended month through
-`POST /admin/treasury/pnl-periods/:month/close` (`money.pnl.close`, reason ≥ 10
-— and read PNL-CF-1 first, because a close is itself irreversible and a month
-earlier than a closed one can never be closed afterwards).
+**Two things the survey got wrong, both found by the frames:**
 
-**Film it with NO clicks even so.** Every one of these screens carries its own
-warning copy, written by whoever built it, and the video's job is to read that
-copy out beside what the act writes — not to press it. The pickups paragraph
-above is the model.
+- **`/warehouse/receive` opens on PENDING, and a PENDING receipt has no
+  Complete button** — it offers "Start receiving" and "Cancel receipt". The
+  Complete button exists only at ARRIVING. So the seeding takes every ARRIVING
+  receipt as far as it can WITHOUT writing stock (started, every line counted at
+  what was declared) and the flow switches the list's Status filter. The first
+  attempt staged one receipt and the list handed the flow a DIFFERENT one that
+  an earlier run had left half-started, which filmed "recorded: 0" under a line
+  about stock being written for what was counted.
+- **THE BIN COLLAPSE HAS NO SCREEN AT ALL.** The survey said "the collapse
+  control is below the fold"; it is not. `/warehouse/bins` ends at "Move stock
+  between bins", and `BinCollapseService`'s four endpoints
+  (`collapse/request`, `collapse/confirm`, `snapshots`, `snapshots/:id/restore`)
+  have no caller outside the e2e suite. The narration says so — it is the one
+  act on the list you cannot do from the console — which is more useful than
+  pretending otherwise, and it also makes **P4 more impractical than its entry
+  records**: there is no read-only "what a collapse would move" half to film.
+
+**And one product bug, which is why this entry could not simply be filmed.**
+The "At our door" worklist could never fill from a real courier scan: the
+webhook processor's INFORMATIONAL branch never synced `shipments.status`, and
+`RTO_DELIVERED` is the only thing that puts a row in that list. See
+[Bugs found](#bugs-found-while-establishing-feasibility).
+
+**Film it with NO clicks.** The only gestures are navigation, one list filter
+and one month picker. Every scene gates on the SENTENCE the narration quotes
+rather than on the panel that would hold it, because three of these screens
+render an identical page when their world is missing.
 
 ---
 
@@ -2943,6 +2972,45 @@ below") rather than leaving a zero with no explanation for why the arithmetic
 does not reach what Dhaka counted. Both halves pinned — the counted leg AND the
 open one, because the fix must not take away the case the tile exists for.
 Proved red.
+
+**One from filming P5 (2026-09-30), and it is the reason P5 could not simply be
+filmed: A WORKLIST THAT COULD NEVER FILL.** The RTO station's "At our door" tab
+exists because a return the courier had handed back and nobody had received
+appeared on NO screen at all, and one sat that way for five days —
+`listAwaitingReceipt`'s own docblock says so. It classifies a row AT OUR DOOR on
+exactly one test: `shipments.status === RTO_DELIVERED`. **Nothing in the product
+ever wrote that status.** TRK-6 is right and unchanged — an `RTO_DELIVERED` scan
+must not move the ORDER — but it was implemented as "write nothing", and the
+shipment row is not the order: it is where the parcel physically IS, and the two
+branches of the webhook processor that DO transition both sync it, one of them
+saying so at length ("the shipment row follows the parcel, not just the order").
+The INFORMATIONAL branch returned without touching it. So the only rows that had
+ever reached RTO_DELIVERED were written by a seeding script, and the production
+row the docblock cites (SD-TEST-524086) is one of those: **the list built to
+catch the gap was structurally unable to see a real one.** The fix is narrow —
+`RTO_DELIVERED` only (`DAMAGED` is the other INFORMATIONAL scan and describes a
+parcel's condition rather than where it is; the public tracking page projects
+from this column, so a damage scan after a delivery would tell a customer their
+delivered parcel was damaged in transit), forward-only, and guarded IN THE WHERE
+so a receive landing first cannot be overwritten. The spec's Prisma fake now
+APPLIES the where clause on a shipment write — the `pnl-fake-db.ts` lesson, a
+second time: a fake that answers every write alike cannot tell a guarded write
+from an unguarded one, and the guards ARE the behaviour under test. Proved red.
+
+**And one capability with no screen, found by the same video: THE BIN COLLAPSE.**
+BIN-4 is a designed, guarded, destructive operation — SUPER_ADMIN, the warehouse
+code typed exactly, a thirty-character reason, a six-digit code emailed to the
+actor, a snapshot taken before the merge and a restore path after it — and
+`BinCollapseService`'s four endpoints (`collapse/request`, `collapse/confirm`,
+`snapshots`, `snapshots/:id/restore`) have **no caller anywhere outside the e2e
+suite.** `/warehouse/bins` ends at "Move stock between bins". This entry's own
+survey said "the collapse control is below the fold", which is the shape the
+curriculum has already named: *a capability with an endpoint and no screen is
+invisible to every roadmap doc.* Not fixed — a request/confirm/snapshot/restore
+UI is a feature, not a filming task — and P5's narration says the honest thing
+instead: it is the one act on the list you cannot do from the console.
+**It also makes P4 more impractical than its entry records**: there is no
+read-only "what a collapse would move" half to film either.
 
 **Observed and deliberately NOT fixed:** the order's Full history labels every
 one of OUR events `SKYDROP`, the seller's own cancellation included — so a seller

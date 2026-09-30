@@ -39,6 +39,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `the-customer-would-not-answer.mp4` | Deciding what happens to an order nobody answered — the calls already made, the tile that is deliberately absent, and the two choices: let it go, behind its own confirmation, or keep trying, which is the one you can undo tomorrow. |
 | `what-needs-you-today.mp4`          | The morning screen — orders the call centre could not confirm, which only the seller can settle, and parcels out for delivery three nights or more, which only we can chase. There is no button anywhere on it, and the page says why.                                       |
 | `upload-bulk-orders.mp4`            | A day's orders from a spreadsheet — the template, the check before importing (what we matched, rows versus orders, and the row that will not import because it has no landmark), the import running, and the four orders it placed, one of them assembled from two rows that shared a reference. |
+| `what-we-cannot-undo.mp4`           | **The first ADMIN video.** Every irreversible act in the staff console, in one pass and with no clicks that change anything — god mode and the stock claim beside it, completing a receipt, overruling a call, the pack bench's scan, freeing a pickup day, a return standing at our door, bins, a top-up, a bank change, and closing a month. Each scene reads that screen's own warning copy. |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -383,6 +384,18 @@ the file are still the words in `narration.mjs`.
   on 3003. The seed DOES need that env (it talks to Prisma); run the two in
   separate shells, or in a subshell — `( set -a; . apps/api/.env; set +a; node
   …seed… )` — which is what `make-tutorials.sh` effectively does.
+- **A LIST OPENS ON A FILTER, and the filter decides which controls exist.**
+  `/warehouse/receive` opens on PENDING, and a PENDING goods receipt offers
+  "Start receiving" and "Cancel receipt" — the **Complete** button the video is
+  about only exists once counting has started. The flow has to change the Status
+  select before the row it wants is even in the table. Same shape as "read what
+  a form opens on", one level up: read what the LIST opens on too.
+- **When a seed stages one row and the flow takes `.first()`, they can be
+  different rows.** P5's receive scene filmed a box an earlier run had left
+  half-started, reading "recorded: 0" under a line about stock being written for
+  what was counted — while the row the seed had carefully staged sat two places
+  down. Either stage EVERY row the flow could land on (which is what that seed
+  does now) or reach for the one by name.
 - The recorder writes `out/verify/<slug>-failure.png` when a flow breaks. It is
   usually enough on its own — the failures during this build were all visible
   in it.

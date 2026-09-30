@@ -2395,6 +2395,71 @@ export const VIDEOS = [
       },
     ],
   },
+  /*
+    THE FIRST ADMIN VIDEO, and deliberately a tour rather than a
+    demonstration: it presses nothing anywhere. Every screen it visits
+    carries warning copy written by whoever built it, and the job here
+    is to read that copy out beside what the act actually writes.
+  */
+  {
+    slug: 'what-we-cannot-undo',
+    title: 'What we cannot undo',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Almost everything in this console can be put right afterwards. A handful of things cannot. This is that list — what each one writes, and what it costs to get wrong.',
+      },
+      {
+        id: 'god-mode',
+        say: 'God mode forces an order into a state the rules forbid. The panel says the price out loud: audited as critical, and the order carries an override flag that is set once and never cleared.',
+      },
+      {
+        id: 'god-mode-stock',
+        say: 'And the half people miss. A forced status does everything a real one does — notifications, webhooks, money — except stock. So the claim on the shelf is released, or restored, on its own.',
+      },
+      {
+        id: 'receive',
+        say: 'Completing a goods receipt writes stock for what was counted. There is no cancel afterwards: a miscount is corrected with a stock adjustment, which is a second entry rather than an erasure.',
+      },
+      {
+        id: 'force-outcome',
+        say: 'On the call queue you can overrule a stuck call. It is recorded as a real attempt against your own name, and attempts are append-only — nobody can take it back out of the history.',
+      },
+      {
+        id: 'pack',
+        say: 'At the pack bench a box is opened by scanning its label, and the scan is what proves the right things went into it. You can pack without one — recorded under your name, with a reason.',
+      },
+      {
+        id: 'pickups',
+        say: 'A pickup is one request per warehouse per day. Freeing a day is the dangerous one, and the page says why: when a call fails we cannot tell whether the courier registered it.',
+      },
+      {
+        id: 'rto',
+        say: 'A return the courier has handed back waits here until a person receives it. Nothing does that automatically, on purpose — receiving is what starts the inspection that puts stock back or writes it off.',
+      },
+      {
+        id: 'bins',
+        say: 'The switch here moves no stock either way. The one act that would — collapsing every bin into the floor — has no button at all. It takes a super admin, and a code sent to them.',
+      },
+      {
+        id: 'topups',
+        say: 'Accepting a top-up credits a seller’s wallet, and the screen asks you to check it against the statement first. That credit is money they can ask us to send them.',
+      },
+      {
+        id: 'bank-change',
+        say: 'Approving a bank change moves where a seller’s money is sent. Until somebody approves it, their withdrawals keep going to the account already on file — which is the whole reason this screen exists.',
+      },
+      {
+        id: 'month',
+        say: 'And closing a month freezes its figures for good. A closed month is never reopened; anything that changes it afterwards is carried into whichever month is open when we find it.',
+      },
+      {
+        id: 'outro',
+        say: 'None of these is forbidden. Each one asks you for a reason and records who you are. If you cannot write the reason down, that is the sign to ask somebody before you press it.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

@@ -487,6 +487,10 @@ const LIFECYCLE_SLUGS = new Set([
   // it is there. Cheap in practice: the pass is idempotent and only
   // rebuilds it after a B7 take has spent it.
   'read-your-stock',
+  // P5 walks the RTO station and reads its "At our door" worklist out
+  // loud. `RSH-LIFE-ATDOOR` is the only parcel that ever puts a row in
+  // it — a return the courier has handed back that nobody has received.
+  'what-we-cannot-undo',
   // B7 cancels `RSH-LIFE-CONFIRMED` on camera — the second of its two
   // orders, and the one that has stock held and a waybill booked. It is
   // `spendable` for that reason, so this pass retires the spent one and
@@ -1073,6 +1077,187 @@ async function settleOneCodForLedger(sellerId, staffToken) {
     throw err;
   });
   console.log(`  \u00b7 credited ${order.orderNumber}'s COD through a recorded courier payout`);
+}
+
+/**
+ * P5's world — the three irreversible acts whose screens would otherwise
+ * read as empty states.
+ *
+ * P5 is a TOUR: it presses nothing, and its whole method is to read each
+ * screen's own warning copy out beside what the act writes. Seven of its
+ * ten screens already carry the act. Three did not, and a video about
+ * what cannot be undone reading "Nothing waiting" three times is the
+ * weakest version of the one tutorial this document argues is worth
+ * making on its own.
+ *
+ * The return AT OUR DOOR is not here — it is `RSH-LIFE-ATDOOR` in D0,
+ * because it is a parcel and parcels are built there.
+ */
+async function dangerousActsWorldFor(slug, sellerId, sellerToken, staffToken) {
+  if (slug !== 'what-we-cannot-undo') return;
+
+  await pendingBankChange(sellerId, sellerToken);
+  await closeAnEndedMonth(staffToken);
+  await aReceiptReadyToComplete(staffToken);
+}
+
+/**
+ * A goods receipt standing at the moment BEFORE the irreversible one.
+ *
+ * The receive station's detail page only offers "Complete" once counting
+ * has STARTED — a PENDING receipt shows "Start receiving" and "Cancel
+ * receipt" instead, which is the right page and the wrong sentence for a
+ * video about completing one. (It cost a check run to find, which is
+ * what the rule about reading what a form opens on is for.)
+ *
+ * So this takes the one PENDING receipt as far as it can WITHOUT writing
+ * any stock: receiving started, every line counted at what was declared.
+ * Completing is still the act nobody has performed, which is what P5
+ * points at. Idempotent, and it never completes anything — a receipt
+ * already past PENDING is left exactly as it is.
+ */
+async function aReceiptReadyToComplete(staffToken) {
+  // EVERY receipt already being counted, not just one. The station's
+  // list opens on PENDING and the video switches it to ARRIVING, so
+  // whichever row sorts first is the one it films — and a box left
+  // half-started by an earlier run reads "recorded: 0" under a line
+  // about stock being written for what was counted. (It did: the first
+  // check run filmed exactly that.)
+  const arriving = await call('/admin/goods-receipts?status=ARRIVING&pageSize=25', {
+    token: staffToken,
+  });
+  let receipts = Array.isArray(arriving.items) ? arriving.items : [];
+
+  if (receipts.length === 0) {
+    const pending = await call('/admin/goods-receipts?status=PENDING&pageSize=5', {
+      token: staffToken,
+    });
+    const first = (Array.isArray(pending.items) ? pending.items : [])[0];
+    if (first === undefined) {
+      throw new Error('No PENDING or ARRIVING goods receipt for P5 to point at');
+    }
+    await call(`/admin/goods-receipts/${first.id}/start-receiving`, {
+      method: 'POST',
+      token: staffToken,
+    });
+    receipts = [first];
+  }
+
+  for (const r of receipts) {
+    const detail = await call(`/admin/goods-receipts/${r.id}`, { token: staffToken });
+    const lines = (detail.lines ?? []).map((l) => ({
+      lineId: l.id,
+      receivedQty: l.expectedQty ?? 0,
+      damagedQty: 0,
+    }));
+    if (lines.length === 0) continue;
+    await call(`/admin/goods-receipts/${r.id}/lines`, {
+      method: 'POST',
+      token: staffToken,
+      body: { lines },
+    });
+    console.log(`  · ${r.receiptNumber} counted and waiting to be completed`);
+  }
+}
+
+/**
+ * A bank change waiting for an admin to approve it.
+ *
+ * `clearTutorialConsignments` deletes any pending change and then wipes
+ * the seller's account entirely, because A2 films the FIRST-TIME path
+ * and a seller with an account on file gets a different form. So this
+ * runs after it and puts both halves back: an account on file, then a
+ * change to it — which is what raises the request (SellerProfileService:
+ * "A seller with no account on file has nothing to redirect").
+ *
+ * Through the product's own endpoint rather than Prisma, and not only
+ * for honesty: the account number is ENCRYPTED and carries its own mask
+ * and key version, so a row written by hand would be one nothing can
+ * read.
+ */
+async function pendingBankChange(sellerId, sellerToken) {
+  const open = await prisma.sellerBankChangeRequest.count({
+    where: { sellerId, status: 'PENDING' },
+  });
+  if (open > 0) {
+    console.log('  · a bank change is already waiting for review');
+    return;
+  }
+  // `sellerToken` is the LAZY LOGIN this file passes everywhere, not a
+  // string — it signs in on first use and caches.
+  const token = await sellerToken();
+  // First add — writes straight through, no request.
+  await call('/seller/profile/bank-details', {
+    method: 'PATCH',
+    token,
+    body: {
+      bankName: WALLET_PAYOUT_BANK.name,
+      bankBranchName: WALLET_PAYOUT_BANK.branch,
+      bankAccountName: WALLET_PAYOUT_BANK.holder,
+      bankAccountNumber: WALLET_PAYOUT_BANK.account,
+      bankRoutingNumber: WALLET_PAYOUT_BANK.routing,
+      bankSwiftCode: WALLET_PAYOUT_BANK.swift,
+    },
+  });
+  // …and now a CHANGE to it, which is the act an admin has to approve.
+  await call('/seller/profile/bank-details', {
+    method: 'PATCH',
+    token,
+    body: {
+      bankName: 'Dutch-Bangla Bank',
+      bankBranchName: 'Rangpur Branch',
+      bankAccountName: WALLET_PAYOUT_BANK.holder,
+      bankAccountNumber: '1471100098765432',
+      bankRoutingNumber: '090851733',
+      bankSwiftCode: 'DBBLBDDH',
+    },
+  });
+  const now = await prisma.sellerBankChangeRequest.count({
+    where: { sellerId, status: 'PENDING' },
+  });
+  if (now !== 1) {
+    throw new Error(`Expected one pending bank change for P5, found ${now}`);
+  }
+  console.log('  · a bank change is waiting for review');
+}
+
+/**
+ * One month closed, so the carry-forward page has a frozen month AND a
+ * month still to close.
+ *
+ * WHY JULY AND NOT AUGUST. The month list is built from the months
+ * BETWEEN the earliest closed period and today, so with nothing ever
+ * closed it holds only the open month and there is no close to point at.
+ * Closing July puts three on the page at once: July frozen, August
+ * "has ended and is not closed yet" with its own amber warning and the
+ * Close button beside it, and September live. Closing August would give
+ * the first and the third and lose the middle one — which is the only
+ * one carrying the product's own sentence about what closing costs.
+ *
+ * THIS IS ITSELF IRREVERSIBLE, and that is the point of the video. A
+ * closed month is never reopened, and PNL-CF-1 refuses any month EARLIER
+ * than a closed one for ever after — so on this box June and before can
+ * never be closed once this has run. It is guarded accordingly: it runs
+ * only when nothing is closed already, and it refuses rather than
+ * guesses if the world is not what it expects.
+ */
+async function closeAnEndedMonth(staffToken) {
+  const MONTH = '2026-07';
+  const closed = await prisma.pnlPeriod.count();
+  if (closed > 0) {
+    const first = await prisma.pnlPeriod.findFirst({
+      orderBy: { month: 'asc' },
+      select: { month: true },
+    });
+    console.log(`  · ${first?.month ?? 'a month'} is already closed — leaving the P&L alone`);
+    return;
+  }
+  await call(`/admin/treasury/pnl-periods/${MONTH}/close`, {
+    method: 'POST',
+    token: staffToken,
+    body: { reason: 'Closed for the tutorial library so the page has a frozen month to show.' },
+  });
+  console.log(`  · closed ${MONTH} — frozen for good, as the video says`);
 }
 
 async function walletWorldFor(slug, sellerId, sellerToken, staffToken) {
@@ -3276,6 +3461,9 @@ async function main() {
   // (one of its three parcels goes the whole way to out-for-delivery) and
   // so, like D0, only for the videos that need it.
   await storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken);
+  // P5's three — a bank change waiting, a month frozen, and (through D0
+  // below) a return standing at the door.
+  await dangerousActsWorldFor(slug, sellerId, sellerToken, staffToken);
 
   // D0 — the parcels sections D, E and K are about. EXPENSIVE (a real
   // courier booking and a warehouse run per parcel) and IDEMPOTENT, so
