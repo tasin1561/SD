@@ -5,11 +5,14 @@ import { LifeBuoy } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
-import { TextArea, TextField } from '@skydrop/ui/app/text-field';
+import { TextArea } from '@skydrop/ui/app/text-field';
 import { Select } from '@skydrop/ui/app/select';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useCreateTicket, useIssueCategories } from '@/lib/ops-hooks';
+import { OrderPicker } from '@/components/order-picker';
+import { can } from '@/lib/page-access';
+import { useSellerIdentity } from '@skydrop/auth/client';
 import { serverVerdict } from '@/lib/server-verdict';
 import './tickets.css';
 
@@ -48,6 +51,9 @@ export function RaiseTicketModal({
   const toast = useToast();
   const create = useCreateTicket();
   const categories = useIssueCategories();
+  // Cosmetic (FE-2): the orders list carries `orders.view` and refuses
+  // regardless. It decides whether the picker is worth showing at all.
+  const canSeeOrders = can(useSellerIdentity(), 'orders.view');
 
   const [categoryId, setCategoryId] = useState('');
   const [subcategoryId, setSubcategoryId] = useState('');
@@ -168,15 +174,25 @@ export function RaiseTicketModal({
           </Select>
         ) : null}
 
-        {fixedOrderId === undefined ? (
-          <TextField
-            id="ticket-order"
-            label="Order"
-            hint="Optional, but including it gets you an answer far faster. Copy the ID from the order page."
-            value={orderId}
-            onChange={(e) => setOrderId(e.target.value)}
-            placeholder="0198f3c2-…"
-            autoComplete="off"
+        {/*
+          Asked for by SEARCH, never typed.
+
+          This was a text box wanting an order's UUID, hinting "copy the
+          ID from the order page" — a page that shows a NUMBER. So the
+          hint described something a seller could not do, and the field
+          was fillable only by somebody who knew to read a URL.
+
+          Hidden entirely for a team member without `orders.view`: the
+          order is optional on a ticket, and offering somebody a search
+          over records they cannot see would 403 or come back empty,
+          both of which read as a broken form. They can still raise the
+          issue and describe the order in words.
+        */}
+        {fixedOrderId === undefined && canSeeOrders ? (
+          <OrderPicker
+            value={orderId === '' ? null : orderId}
+            onChange={(next) => setOrderId(next ?? '')}
+            hint="Optional, but including it gets you an answer far faster."
           />
         ) : null}
 

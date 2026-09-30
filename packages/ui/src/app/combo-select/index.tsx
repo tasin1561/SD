@@ -34,6 +34,22 @@ export { filterOptions, type ComboOption } from './listbox';
  *
  * Controlled (`value` + `onChange`) or uncontrolled (`defaultValue`). With
  * `name`, a hidden input submits the chosen value with a form.
+ *
+ * ── REMOTE SEARCH (`remote` + `onQueryChange`) ───────────────────────
+ * By default the options are the whole set and the typed text filters
+ * them here. When the set is too large to hand over — a seller's
+ * orders, a catalogue — the caller fetches instead: `onQueryChange`
+ * reports what was typed (debounce it there, not here: how long to wait
+ * is a property of the endpoint, not of the control) and `remote` turns
+ * the local filter OFF.
+ *
+ * That second flag is load-bearing rather than a convenience. The
+ * server decides what "matches" means, and for an order that is its
+ * number, the seller's own reference, the recipient's name, their
+ * phone AND the waybill — none of which need appear in the option's
+ * LABEL. Left filtering locally, typing a phone number fetches the
+ * right order and then hides it, because the label says
+ * "SD-2026-26-000365 · Asha Verma".
  */
 export type ComboSelectProps = Omit<
   InputHTMLAttributes<HTMLInputElement>,
@@ -46,6 +62,17 @@ export type ComboSelectProps = Omit<
     readonly onChange?: ((value: string | null, option: ComboOption | null) => void) | undefined;
     /** Shown when nothing matches the typed text. */
     readonly emptyText?: ReactNode;
+    /**
+     * What was typed, on every keystroke. Debounce in the CALLER — the
+     * right interval belongs to whatever it is asking.
+     */
+    readonly onQueryChange?: ((query: string) => void) | undefined;
+    /**
+     * The options are already the answer: do not filter them again
+     * here. See the note above — local filtering over a remote result
+     * hides rows the server matched on something the label never shows.
+     */
+    readonly remote?: boolean | undefined;
   };
 
 export const ComboSelect = forwardRef<HTMLInputElement, ComboSelectProps>(function ComboSelect(
@@ -62,6 +89,8 @@ export const ComboSelect = forwardRef<HTMLInputElement, ComboSelectProps>(functi
     defaultValue,
     onChange,
     emptyText = 'No matches',
+    onQueryChange,
+    remote = false,
     name,
     required,
     disabled,
@@ -85,7 +114,13 @@ export const ComboSelect = forwardRef<HTMLInputElement, ComboSelectProps>(functi
   const [query, setQuery] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
-  const list = useMemo(() => filterOptions(options, query ?? ''), [options, query]);
+  const list = useMemo(
+    () =>
+      remote
+        ? options.map((option, index) => ({ option, index }))
+        : filterOptions(options, query ?? ''),
+    [options, query, remote],
+  );
   const guidance = hint ?? help;
   const text = query ?? chosenOption?.label ?? '';
 
@@ -107,7 +142,17 @@ export const ComboSelect = forwardRef<HTMLInputElement, ComboSelectProps>(functi
     const q = e.target.value;
     setQuery(q);
     setOpen(true);
-    setActive(nextEnabled(filterOptions(options, q), -1, 1));
+    onQueryChange?.(q);
+    // Remote: the rows on screen are the PREVIOUS answer until the
+    // caller's fetch lands, so the highlight is computed over what is
+    // actually rendered rather than over a re-filter of it.
+    setActive(
+      nextEnabled(
+        remote ? options.map((option, index) => ({ option, index })) : filterOptions(options, q),
+        -1,
+        1,
+      ),
+    );
   }
 
   function key(e: KeyboardEvent<HTMLInputElement>): void {
