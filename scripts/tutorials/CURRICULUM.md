@@ -33,8 +33,8 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (39):** A1–A6, B1–B7, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
-F1–F5, G1–G7. **SECTIONS A, B, D, F and G are complete.**
+**Filmed so far (40):** A1–A6, B1–B7, C1, C3, C4, C5, C6, D1–D6, E1, E2, E3,
+E4, F1–F5, G1–G7. **SECTIONS A, B, D, F and G are complete.**
 Every one is listed in its own entry below with what it covers and what its
 seeding does.
 
@@ -70,12 +70,15 @@ of its own.**
 **F4 LANDED 2026-09-30 and SECTION F IS COMPLETE.** The whole of the seller app
 is now filmed except the CONSIGNMENT block — **C1, C2 and E5**.
 
-**AND THEIR SEEDING IS NOW BUILT: see [C0](#c0-not-a-tutorial-the-consignment-seeding--built--libconsignmentsmjs).**
-`node scripts/tutorials/seed-demo-data.mjs --consignments` leaves two
-consignments on the box — one landed with its counts deliberately disagreeing
-twice, one still in the air so `/inventory`'s in-transit column is not zero. C1
-and C2 are therefore narration-and-flow jobs now; add their slugs to
-`CONSIGNMENT_SLUGS` as they are filmed. **E5 still needs one more thing** — a
+**THEIR SEEDING IS BUILT: see [C0](#c0-not-a-tutorial-the-consignment-seeding--built--libconsignmentsmjs),
+and C1 IS FILMED.** `node scripts/tutorials/seed-demo-data.mjs --consignments`
+leaves two consignments on the box — one landed with its counts deliberately
+disagreeing twice, one still in the air so `/inventory`'s in-transit column is
+not zero.
+
+**The next entry is C2**, which is now a narration-and-flow job: the world it
+needs is `RSH-CN-FLYING`, already there, and the page only reads. Add its slug
+to `CONSIGNMENT_SLUGS`. **Then E5, which still needs one more thing** — a
 freight bill that is genuinely part-owed — and C0's entry says exactly what that
 costs and why it is harder than recording a bill.
 
@@ -619,18 +622,42 @@ rather than against an assumption about it.
 landed and been counted short told its seller the missing unit was "still to
 come — in Dhaka or in the air".
 
-### C1. Following a consignment from Dhaka to the shelf · `needs demo data`
+### C1. Following a consignment from Dhaka to the shelf · **FILMED** — `follow-a-consignment.mp4`
 
 **Promise** — you can tell where your goods are and why two counts exist.
-**Length** 4 min. **Prerequisites** A4.
-**Needs** C0 above, which is BUILT: `RSH-CN-LANDED` is declared, counted in
-Dhaka, dispatched and counted in India, with its two counts deliberately
-disagreeing twice and for two different reasons. Add `follow-a-consignment` (or
-whatever the slug ends up being) to `CONSIGNMENT_SLUGS` when filming it.
-**Covers** `/inbound/[id]`: the timeline labelled by what each step **means**
-rather than by status, the declared-versus-counted table at each stop, and the
-freight section. The disagreement between the two counts is the whole reason
-there are two counts, and it is the thing to narrate.
+**Length** 2 min 35 s (14 scenes). **Prerequisites** A4.
+**Needs** C0, which is BUILT: `RSH-CN-LANDED` is declared, counted in Dhaka,
+dispatched and counted in India, with its two counts deliberately disagreeing
+twice and for two different reasons. It is in `CONSIGNMENT_SLUGS`.
+**Covers** `/inbound` (the register and its three tiles) and then `/inbound/[id]`
+— the route sentence that decides the bill, the four tiles, the timeline
+labelled by what each step **means** rather than by a status word, both count
+cards with their per-product differences, and the freight section.
+
+**The two differences are the video, and they are different KINDS of thing.**
+The Dhaka count is short against what the SELLER declared — a conversation
+between them and whoever packed it. The India count is short against what
+BANGLADESH dispatched — ours to take up with the forwarder. Narrating them as
+one thing ("a count went wrong") would lose the only distinction the page
+exists to draw, which is also why C0 seeds both on the SAME line rather than
+one each.
+
+**It presses nothing**, so its take leaves the world byte-identical and C0's
+consignments never need rebuilding.
+
+**Its narration names no quantity.** The counts are the subject, and repeating
+them would make the video wrong the day somebody edits
+`TUTORIAL_CONSIGNMENTS` — so every line describes the SHAPE ("one line came up
+short of the declaration") and lets the table carry the figures. Worth copying
+for any video whose subject is a number.
+
+**The section helper is `ordSection` one domain over, with one difference worth
+knowing**: a leg's heading renders its title and its receipt number inside one
+span, so its text is "Counted at our Bangladesh warehouseGR-2026-09-0027" and an
+exact `getByText` finds nothing. `hasText` plus `.last()` is the handle —
+sections nest here (the two legs live inside "Each stop") and a parent opens
+before its child, so the last in document order is the innermost one carrying
+the words.
 
 ### C2. Reading your stock · `needs demo data`
 

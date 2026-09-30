@@ -267,6 +267,47 @@ async function openOrderByRef(page, stage, ref) {
 }
 
 /**
+ * C0's two consignments, by the seller's own reference.
+ *
+ * Keep in step with `TUTORIAL_CONSIGNMENTS` in lib/consignments.mjs.
+ */
+const CONSIGNMENTS = { landed: 'RSH-CN-LANDED', flying: 'RSH-CN-FLYING' };
+
+/** A consignment's row in the register, by its reference. */
+function consignmentRow(page, ref) {
+  return page
+    .getByRole('row')
+    .filter({ has: page.getByText(ref, { exact: true }) })
+    .first();
+}
+
+/**
+ * One titled area of the consignment page, by the words above it.
+ *
+ * `AreaSection` renders its title as a heading inside its own section,
+ * exactly as the order page's does — so this is `ordSection` one domain
+ * over, and centred for the same reason.
+ */
+async function invSection(page, title) {
+  /*
+    hasText, NOT an exact `getByText`. A leg's heading renders its title
+    and its receipt number inside one span, so the element's whole text
+    is "Counted at our Bangladesh warehouseGR-2026-09-0027" and an exact
+    match finds nothing at all.
+
+    `.last()` is what picks the leg's own section rather than the "Each
+    stop" section that CONTAINS it: sections nest here, and a parent
+    opens before its child, so the last in document order is the
+    innermost one carrying the words.
+  */
+  const target = page.locator('section').filter({ hasText: title }).last();
+  await target.waitFor({ state: 'visible', timeout: 25_000 });
+  await target.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.waitForTimeout(700);
+  return target;
+}
+
+/**
  * The topic F4 silences on camera, and the message id it carries
  * between two scenes.
  *
@@ -6338,6 +6379,126 @@ export const FLOWS = {
         await never.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(700);
         await stage.dwellOn(never, 3600);
+      },
+    },
+  },
+  /**
+   * C1 — following a consignment from Dhaka to the shelf.
+   *
+   * It READS and presses nothing, so its take leaves the world
+   * byte-identical and C0's consignments never need rebuilding. Both
+   * counts on `RSH-CN-LANDED` disagree, and for two different reasons —
+   * which is the whole video, and why the seeding puts them there.
+   */
+  'follow-a-consignment': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async register({ page, stage }) {
+        // "Add stock" is what the sidebar calls `/inbound`, and it is
+        // the only way in that a seller has.
+        await stage.clickIt(page.getByRole('link', { name: 'Add stock', exact: true }).first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/inbound$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = consignmentRow(page, CONSIGNMENTS.landed);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.locator('table').first(), 3400);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(page.locator('.inv-kpis, .set-kpis, .ord-kpis').first(), 3600);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(consignmentRow(page, CONSIGNMENTS.landed).getByRole('link').first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/inbound\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // Its own reference is what proves the RIGHT one opened; the
+        // consignment number changes with every rebuild.
+        const ref = page.getByText(CONSIGNMENTS.landed, { exact: true }).first();
+        await ref.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(ref, 2800);
+      },
+
+      async route({ page, stage }) {
+        await stage.dwellOn(page.getByText(/we move it to India for you/).first(), 3400);
+      },
+
+      async 'detail-tiles'({ page, stage }) {
+        await stage.dwellOn(page.locator('.inv-kpis, .set-kpis, .ord-kpis').first(), 3800);
+      },
+
+      async timeline({ page, stage }) {
+        await stage.dwellOn(await invSection(page, 'What has happened'), 3800);
+      },
+
+      async dhaka({ page, stage }) {
+        await stage.dwellOn(await invSection(page, 'Counted at our Bangladesh warehouse'), 3400);
+      },
+
+      async 'dhaka-lines'({ page, stage }) {
+        // THE DIFFERENCE, on the Bangladesh table. The whole scene is
+        // about a line being short, so a gate on the section would pass
+        // on a consignment that matched all the way through.
+        const bd = await invSection(page, 'Counted at our Bangladesh warehouse');
+        const short = bd.locator('[data-tone="bad"]').first();
+        await short.waitFor({ state: 'visible', timeout: 20_000 });
+        await short.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(bd.locator('table').first(), 3600);
+      },
+
+      async india({ page, stage }) {
+        await stage.dwellOn(await invSection(page, 'Arrival in India'), 3400);
+      },
+
+      async 'india-lines'({ page, stage }) {
+        const arrival = await invSection(page, 'Arrival in India');
+        const short = arrival.locator('[data-tone="bad"]').first();
+        await short.waitFor({ state: 'visible', timeout: 20_000 });
+        await short.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(arrival.locator('table').first(), 3600);
+      },
+
+      async 'why-two'({ page, stage }) {
+        // Back up to the two headline figures, which is where the
+        // comparison the narration is making actually lives.
+        const arrival = await invSection(page, 'Arrival in India');
+        await stage.dwellOn(arrival.locator('.inv-stack').first(), 3800);
+      },
+
+      async freight({ page, stage }) {
+        await stage.dwellOn(await invSection(page, 'Inbound freight'), 3600);
+      },
+
+      async outro({ page, stage }) {
+        /*
+          THE LOST UNIT, NAMED. Until 2026-09-30 this tile read
+          "Still to come: 1 — in Dhaka or in the air", on a consignment
+          whose every leg had been counted and whose transit bin held
+          nothing. Gating on the sentence rather than on the tile means
+          a regression fails this check instead of filming the promise
+          again under a line about saying it out loud.
+        */
+        const named = page.getByText(/left Bangladesh and did not arrive/).first();
+        await named.waitFor({ state: 'visible', timeout: 20_000 });
+        await named.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(named, 3800);
       },
     },
   },

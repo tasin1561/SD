@@ -406,7 +406,7 @@ export const STORE_REQUEST_ORDERS = {
  * through the real endpoints — and BUILD-ONCE, so it runs only for the
  * videos that read it or when asked by name with `--consignments`.
  */
-const CONSIGNMENT_SLUGS = new Set([]);
+const CONSIGNMENT_SLUGS = new Set(['follow-a-consignment']);
 
 /** The videos that need the second store, its orders and their held requests. */
 const STORE_ORDER_SLUGS = new Set(['answer-what-a-store-asked']);

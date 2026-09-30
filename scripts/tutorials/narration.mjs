@@ -2206,6 +2206,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'follow-a-consignment',
+    title: 'Following a consignment from Dhaka to the shelf',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Stock you send us through Dhaka is counted twice — once when it reaches Bangladesh and again when it lands in India. This page is where you see both.',
+      },
+      {
+        id: 'register',
+        say: 'Everything you have announced, and where each one has got to. One is still travelling, one has landed, and one of them was counted differently from what was declared.',
+      },
+      {
+        id: 'tiles',
+        say: 'The three tiles are the whole register in one line. Nothing is blocked by a difference in a count — your stock is simply what was counted.',
+      },
+      {
+        id: 'open',
+        say: 'Open the one that has landed, because it has the full story on it: announced, counted, flown, and counted again.',
+      },
+      {
+        id: 'route',
+        say: 'The route is the first thing, and it is the sentence that decides your bill. You ship to Dhaka, we move it to India for you, and the inbound freight for that move is ours to charge.',
+      },
+      {
+        id: 'detail-tiles',
+        say: 'How many products, how many units are on the shelf in India, how many are not yet, and whether freight has been billed for it.',
+      },
+      {
+        id: 'timeline',
+        say: 'Then what has actually happened to it, oldest first, and labelled by what each step means rather than by a status word. Nobody has to ask us for this.',
+      },
+      {
+        id: 'dhaka',
+        say: 'The first stop. This is what our Bangladesh warehouse found when it opened the cartons, against what you told us was coming.',
+      },
+      {
+        id: 'dhaka-lines',
+        say: 'And the difference, per product. One line came up short of the declaration, which is a conversation between you and whoever packed it — we simply record what we found.',
+      },
+      {
+        id: 'india',
+        say: 'The second stop, and the second count. Here the comparison is not against your declaration — it is against what Bangladesh actually dispatched.',
+      },
+      {
+        id: 'india-lines',
+        say: 'Short again, on the same product, and this difference is a different problem. It left Dhaka and it did not land, which is ours to take up with the forwarder.',
+      },
+      {
+        id: 'why-two',
+        say: 'That is the whole reason there are two counts. One tells you what left; the other tells you what arrived. With a single number at the end you could not tell those two apart.',
+      },
+      {
+        id: 'freight',
+        say: 'Below it, the freight. Nothing has been billed against this one yet — a bill appears here once the forwarder has invoiced us, and when that is depends on the terms you are on.',
+      },
+      {
+        id: 'outro',
+        say: 'And back at the top, the unit that did not arrive is named. What landed is sellable from the moment it was counted; what did not is said out loud rather than quietly missing from a total.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
