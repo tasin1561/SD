@@ -1129,6 +1129,7 @@ export class OrderAttentionService {
         shipmentNumber: true,
         awbNumber: true,
         rtoReceivedAt: true,
+        awbGeneratedAt: true,
         updatedAt: true,
         orderShipments: {
           orderBy: { shipmentSequence: 'asc' },
@@ -1153,6 +1154,41 @@ export class OrderAttentionService {
 
       if (ship.rtoReceivedAt !== null) {
         await this.issues.resolveByKey(key, 'The return was received at the warehouse.');
+        continue;
+      }
+
+      // A parcel we never sent cannot come back to us.
+      //
+      // `awbGeneratedAt` is stamped by the two places that BOOK a
+      // waybill — the AWB saga (CUR-2b) and manual placement (CUR-8,
+      // which stamps it too, so this does not quietly exclude a manual
+      // courier's parcel). A shipment sitting at RTO_DELIVERED without
+      // it never had a waybill of ours: nothing was picked, packed or
+      // handed over against it, so there is no stock of ours in it and
+      // nothing for the RTO bench to receive. The same discriminator
+      // that CLAUDE.md already draws for counting real bookings and
+      // missing labels — saga-booked waybills, never every row with an
+      // AWB.
+      //
+      // On production this is the tracking-seed fixtures
+      // (`scripts/seed-tracking-test-orders.mjs` and the Shiprocket
+      // import), which carry real waybills off the business's own
+      // pre-Skydrop parcels and were written straight to their courier
+      // status. Every one of the eight shipments that has ever reached
+      // RTO_DELIVERED is one of them — no real parcel has yet come back
+      // — and five were raising HIGH every hour, 924 occurrences
+      // between them by 30 September 2026. Resolving one by hand does
+      // not help: `raise` only bumps an OPEN row, so the next sweep an
+      // hour later opens a fresh issue under the same key. The question
+      // has to stop being asked AND the issue it already asked has to
+      // be closed, which is why this resolves rather than only
+      // skipping.
+      if (ship.awbGeneratedAt === null) {
+        await this.issues.resolveByKey(
+          key,
+          'This waybill was never booked through Skydrop, so no parcel of ours went out in it ' +
+            'and there is nothing for the warehouse to receive back.',
+        );
         continue;
       }
 

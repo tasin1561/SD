@@ -369,6 +369,64 @@ describe('OrderAttentionService — a confirmed order with no waybill', () => {
     expect(resolveByKey).not.toHaveBeenCalledWith('awb-label-missing:still', expect.any(String));
   });
 
+  // ── The unreceived-returns sweep ───────────────────────────────────
+  // The guard here is not "skip the test fixtures". It is that the
+  // question this watchdog asks — the courier brought a parcel of ours
+  // back and nobody received it — is meaningless about a waybill we
+  // never booked. On production five such rows had raised HIGH every
+  // hour for a fortnight, 924 occurrences between them, and every
+  // shipment that has ever reached RTO_DELIVERED there is one of them.
+  // Resolving one by hand cannot help: `raise` only bumps an OPEN row,
+  // so the next sweep opens a fresh one under the same key.
+  function unreceivedRow(id: string, awbGeneratedAt: Date | null): unknown {
+    return {
+      id,
+      shipmentNumber: `SH-${id}`,
+      awbNumber: `AWB-${id}`,
+      rtoReceivedAt: null,
+      awbGeneratedAt,
+      updatedAt: new Date('2026-09-01T12:00:00Z'),
+      orderShipments: [
+        {
+          order: {
+            id: `ord-${id}`,
+            orderNumber: `SD-${id}`,
+            status: 'RTO_IN_TRANSIT',
+            sellerId: 'sel-1',
+          },
+        },
+      ],
+    };
+  }
+
+  it('a return we DID send and nobody received is raised, HIGH', async () => {
+    const { svc, raise } = makeService({
+      unreceived: [unreceivedRow('ours', new Date('2026-08-30T12:00:00Z'))],
+    });
+    const summary = await svc.sweep(NOW);
+    expect(raise).toHaveBeenCalledWith(
+      expect.objectContaining({ severity: 'HIGH', dedupeKey: 'rto-unreceived:ours' }),
+    );
+    expect(summary.unreceivedReturns).toBe(1);
+  });
+
+  it('a waybill we never booked is not asked about, and its open issue is CLOSED', async () => {
+    const { svc, raise, resolveByKey } = makeService({
+      unreceived: [unreceivedRow('never-ours', null)],
+    });
+    const summary = await svc.sweep(NOW);
+    expect(raise).not.toHaveBeenCalledWith(
+      expect.objectContaining({ dedupeKey: 'rto-unreceived:never-ours' }),
+    );
+    // Skipping alone would leave the five production issues open for
+    // ever, since nothing else would ever reach their key again.
+    expect(resolveByKey).toHaveBeenCalledWith(
+      'rto-unreceived:never-ours',
+      expect.stringContaining('never booked through Skydrop'),
+    );
+    expect(summary.unreceivedReturns).toBe(0);
+  });
+
   it('a confirmed order with NO shipment is re-provisioned, booked, and its issue cleared', async () => {
     const { svc, reprovisionShipment, processOrder, resolveByKey, raise } = makeService({
       shipmentless: [{ id: 'ord-bare', orderNumber: 'SD-BARE', status: 'CONFIRMED' }],
