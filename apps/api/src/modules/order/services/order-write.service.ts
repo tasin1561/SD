@@ -62,6 +62,25 @@ export const SELLER_CANCELLABLE_STATES: ReadonlySet<OrderStatus> = new Set([
   OrderStatus.CALL_NO_RESPONSE,
   OrderStatus.CALL_RESCHEDULED,
   OrderStatus.AWAITING_SELLER_DECISION,
+  /*
+    CUR-17 — paused while somebody decides WHICH carrier should take it.
+    Nothing has been booked and nothing has been picked, so this is one
+    of the cheapest points in the whole lifecycle to change your mind,
+    and the matrix has carried `AWAITING_COURIER -> CANCELLED` with
+    RELEASE_STOCK since the state was added.
+
+    IT WAS MISSING HERE UNTIL 2026-09-30, and the gap was invisible from
+    either side on its own: the matrix allowed the edge, the seller's
+    order page offered the button (its own `CANCELLABLE` set cites
+    CUR-17 for it), and CLAUDE.md says in as many words that the state
+    "is in SELLER_CANCELLABLE_STATES". Only this set disagreed — so a
+    seller whose parcel was held for a carrier decision pressed Cancel
+    and read `[NOT_CANCELLABLE] An order in AWAITING_COURIER cannot be
+    cancelled`, on the one state where cancelling costs least. The same
+    set answers `capabilities.cancel` for a reseller store's order list
+    (`StoreOrdersService`), so their screens were wrong in step with it.
+  */
+  OrderStatus.AWAITING_COURIER,
   OrderStatus.CONFIRMED,
   OrderStatus.OUT_OF_STOCK,
   OrderStatus.PENDING_PICK,

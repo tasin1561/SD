@@ -33,9 +33,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (36):** A1–A6, B1, B2, B4, B5, B6, C3, C4, C5, C6, D1–D6, E1,
-E2, E3, E4, F1, F2, F3, F5, G1–G7. Every one is listed in its own entry below
-with what it covers and what its seeding does.
+**Filmed so far (37):** A1–A6, B1, B2, B4, B5, B6, B7, C3, C4, C5, C6, D1–D6,
+E1, E2, E3, E4, F1, F2, F3, F5, G1–G7. Every one is listed in its own entry
+below with what it covers and what its seeding does.
 
 **SECTION G IS COMPLETE**, and with it the whole of the reselling side of the
 seller app.
@@ -47,20 +47,22 @@ actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
 unwound. Read D4's entry before filming anything else that presses a courier
 button.
 
-**The next entry is B7**, which DOES spend a confirmed parcel and so needs the
-`retireSpentParcel` treatment D4 established — read D4's entry before starting
-it. After it: **B3** (run B2's import and stop — the cheapest new demo data in
-the library), then **C7**, then the CONSIGNMENT block — **C1, C2 and E5** —
-which is one seeding job wearing three hats and is the last big piece of the
-seller app.
+**B7 LANDED 2026-09-30**, and with it SECTION B is complete except B3. It is the
+THIRD video to spend what it films: `RSH-LIFE-CONFIRMED` is now `spendable` and
+`RSH-CANCEL-PENDING` is placed fresh by `cancelWorldFor` on every run. Read B7's
+entry before writing another seeding that has to survive its own take.
 
-**What B7 needs, having just built B6's world:** one PENDING_CONFIRMATION order
-(cancelling it releases nothing, because nothing was held — ORD-10) and one
-CONFIRMED order carrying a waybill (cancelling it returns the stock and leaves a
-live waybill for Skydrop to close with the courier — CUR-10 amendment #4).
-`RSH-LIFE-CONFIRMED` is the second one and is EXPENSIVE: its rebuild is a real
-courier booking. `editDraftWorldFor` is the pattern for the first — one order,
-created after the shared clearing, free to spend.
+**The next entry is B3** — run B2's import and stop, which is the cheapest new
+demo data left in the library. After it: **C7**, then the CONSIGNMENT block —
+**C1, C2 and E5** — which is one seeding job wearing three hats and is the last
+big piece of the seller app.
+
+**What B3 needs:** an order CSV import that produced a failed row.
+`fixtures/rangpur-bulk-orders.csv` — the file B2 already uploads — produces
+exactly one, so the seeding is "run the B2 import and stop". The staged rows and
+the import record are already cleared between takes (see the bulk-import gotcha
+in README.md), so the only new work is running the import from the seed rather
+than from the camera.
 
 **B4 and B5 landed 2026-09-30 and needed NO new seeding at all**, which is worth
 knowing before costing anything else in section B: D0's nine parcels already
@@ -111,8 +113,8 @@ configured on camera. Keep them apart.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
-**Filming these screens is finding real bugs at a steady rate — twenty-two so
-far, plus six in the seeding itself.** Every one is on a path nothing else
+**Filming these screens is finding real bugs at a steady rate — twenty-five so
+far, plus seven in the seeding itself.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
 column mappings that drove nothing, a tracking filter that 500'd, a stuck
@@ -126,7 +128,11 @@ as a literal in the copy over a setting that is per seller and per currency —
 beside a second return path that charged a DIFFERENT fee and named no figure at
 all — and a refund's ledger note naming its ticket by uuid, which is the SAME
 defect as the order one, in a second place, found by filming the wallet.
-**And, on 2026-09-30, the one that had never worked at all**: the seller's
+**And, on 2026-09-30, TWO that had never worked at all.** The order tracker told
+every confirmed seller that picking and packing were "not needed" — a fallback
+onto the waybill's own timestamp, correct until CUR-2b moved the booking to
+order confirmation two months ago and silently wrong on every confirmed order
+since. And the seller's
 "Waiting on you" queue threw the moment any store asked for a change, and
 React's error boundary took the WHOLE page with it — so the two queues beside
 it became unreachable too, while the nav badge carried on counting rows nobody
@@ -474,18 +480,44 @@ it, so Playwright refused all three under strict mode. The quantity box is
 addressed by its ROLE (`spinbutton`). That is the third video in this library to
 be bitten by the same default.
 
-### B7. Cancelling an order · `needs demo data`
+### B7. Cancelling an order · **FILMED** — `cancelling-an-order.mp4`
 
 **Promise** — you can call an order off, and you know what it costs at each
 stage.
-**Length** 3 min. **Prerequisites** B5.
-**Needs** two orders: one PENDING_CONFIRMATION and one CONFIRMED with a
-waybill. Seeded by D0.
-**Covers** the Cancel action, its reason, and the sentence the seller actually
-needs: cancelling before confirmation releases nothing because nothing was
-held; cancelling after it returns the stock and leaves a live waybill for
-Skydrop to close with the courier. Worth saying that the button disappears once
-the parcel is with the courier, and what to do instead (D4).
+**Length** 2 min 44 s (15 scenes). **Prerequisites** B5.
+**Needs** TWO orders, and it SPENDS BOTH. `RSH-CANCEL-PENDING` is placed fresh
+by `cancelWorldFor` on every seed run and sits in the call queue;
+`RSH-LIFE-CONFIRMED` is D0's, now marked `spendable` so the lifecycle pass
+retires the cancelled one and builds another. A `--check` pass spends them too,
+so seed-check-seed-check-seed-take is three of each; the confirmed one costs a
+real courier booking each time (about twenty seconds on the simulator).
+**Covers** the Cancel action on both, its reason, and the sentence the seller
+actually needs: **the dialog says something different at each stage, and that is
+the video.** Before confirmation it names the call queue and nothing is released,
+because nothing was ever held (ORD-10). After it, "the stock held for this order
+goes back to available straight away". It ends on a parcel already out with a
+driver, which has no Cancel button at all, and on the button it has instead.
+
+**Its seeding retires rather than deletes, and that is forced rather than
+chosen.** `clearPreviousOrders` sweeps PENDING_CONFIRMATION but not CANCELLED,
+and a cancelled order cannot simply be deleted either — the cancel emails the
+seller, and `notification_logs.order_id` refuses the row. So the spent one keeps
+everything and only its NAME moves aside (D4's `retireSpentParcel` rule), which
+it must: `sellerOrderRef` is unique per seller and store.
+
+**`needsLiveCourier` is new on `LIFECYCLE_PARCELS` and exists because of this
+one.** D4's two parcels are retired when the SIMULATOR has forgotten their
+waybill, since D4 calls the courier on it. A seller cancel calls the courier
+NOTHING (CUR-10 amendment #4 — it voids our shipment and a person closes the
+waybill on Delhivery's desk afterwards), so that test would have bought a
+courier booking after every sim restart for nothing. Only the two parcels whose
+video makes a live call carry the flag.
+
+**Three bugs, and one of them had been on screen for two months** — see
+[Bugs found](#bugs-found-while-establishing-feasibility): the tracker told every
+confirmed seller that picking and packing were "not needed"; the cancel dialog's
+money line had nothing supplying it; and `AWAITING_COURIER` was missing from the
+server's own cancellable set while the button was offered on it.
 
 ---
 
@@ -686,7 +718,7 @@ them (`retireSpentParcel`, and see D4).**
 | `RSH-LIFE-RETURNING` | RTO_IN_TRANSIT                    | D1, D3         |
 | `RSH-LIFE-RESTOCKED` | RTO_RESTOCKED + a REFUNDED ticket | D6, E2         |
 | `RSH-LIFE-REVIEW`    | AWAITING_SELLER_DECISION          | D5             |
-| `RSH-LIFE-CONFIRMED` | CONFIRMED, live waybill           | B7, D4         |
+| `RSH-LIFE-CONFIRMED` | CONFIRMED — **spent by B7**       | B7             |
 | `RSH-LIFE-OVERDUE`   | OUT_FOR_DELIVERY, flagged day 3   | D3             |
 | `RSH-LIFE-SENDBACK`  | OUT_FOR_DELIVERY — **spent by D4**| D4             |
 | `RSH-LIFE-RETURNREQ` | DELIVERED — **spent by D4**       | D4             |
@@ -2512,6 +2544,69 @@ The list now lives once in `apps/seller/src/lib/package-type.ts`, the form offer
 and `package-type-vocabulary.test.ts` pins it **against `schema.prisma` itself**
 rather than against a copy — a second hand-written list is exactly what went
 wrong, and a test holding one would drift the same way. Proved red.
+
+**Three from filming B7 (2026-09-30), and the first of them had been on screen
+for two months.**
+
+1. **The order tracker told every confirmed seller that picking and packing were
+   "not needed".** The `Ready to dispatch` rung fell back to
+   `shipments.awbGeneratedAt`, which was right under the model the ladder was
+   written against — a waybill was booked when a supervisor closed the manifest,
+   by which point the parcel really was packed and waiting for a van. **CUR-2b
+   moved the booking to order CONFIRMATION on 2026-08-01 and nothing here
+   noticed.** So the rung carried a time days before anything was picked, which
+   made it CURRENT — and the two rungs above it, with no times of their own and
+   a later rung passed, rendered as `Picked from shelf — Skipped · not needed`
+   and `Packed — Skipped · not needed`, on the one screen whose job is to say
+   where the parcel has got to. The recurring shape once more: a fallback that
+   was correct for the world it was written in. The rung reads its own event
+   only now, and stays SKIPPED on a parcel the handover scan dispatched with no
+   manifest at all — which is the ordinary path (CUR-4) and is exactly what "not
+   needed" is for. Pinned both ways, proved red.
+2. **The cancel dialog's money line had nothing supplying it.**
+   `CancelOrderDialog` takes an optional `chargedInr` and renders "The delivery
+   fee of ₹X already charged for this order goes back to your wallet" — the
+   paragraph its own docblock calls "the reason this is not a plain confirm: the
+   seller is owed something back and should see the number before agreeing, not
+   discover it in the ledger afterwards." Its ONLY caller never passed it, so it
+   was always `undefined` and the paragraph had never rendered for anybody. **An
+   optional prop nobody supplies is indistinguishable from one legitimately
+   absent**, which is why nothing failed and why a render test cannot see it —
+   hand the dialog a figure and it works perfectly. The missing thing was the
+   WIRE, so the guard reads the source of both files. The figure itself is the
+   server's: `unrefundedCharge` is now the ONE pairing, shared with
+   `OrderChargesRefundService`, which reads the original entry rather than
+   re-summing the charge rows and says why — "the seller would be refunded a
+   different number from the one they were charged". A screen deriving it
+   independently would be that drift with the worse symptom.
+3. **`AWAITING_COURIER` was missing from `SELLER_CANCELLABLE_STATES`.** The
+   matrix has carried `AWAITING_COURIER → CANCELLED` with RELEASE_STOCK since
+   the state existed, the seller's order page offers the button there citing
+   CUR-17, and CLAUDE.md says in as many words that the state "is in
+   `SELLER_CANCELLABLE_STATES`". Only the set itself disagreed, so a seller
+   whose parcel was paused for a carrier decision pressed Cancel and read
+   `[NOT_CANCELLABLE] An order in AWAITING_COURIER cannot be cancelled` — on the
+   one state where cancelling costs least. The same set answers
+   `capabilities.cancel` for a reseller store's order list, so their screens were
+   wrong in step. Found by reading, not by filming; proved red.
+
+**And a seventh in the seeding**: `raiseOverdueFlags` asked for "our parcel out
+for delivery" as `want === 'OUT_FOR_DELIVERY'`, which has been TWO parcels since
+D4 — the back-dated one, and `RSH-LIFE-SENDBACK`, which is rebuilt fresh on every
+take and is therefore always day 0. `findFirst` promises no ordering, so which
+one answered was a coin toss on the heap; it came up SENDBACK in the middle of a
+take and threw "the sweep did not flag it" about a parcel that could not possibly
+have been flagged. It selects on `backdatedScans` now, which is the only thing
+that can make a parcel old enough.
+
+**Observed and deliberately NOT fixed:** the order's Full history labels every
+one of OUR events `SKYDROP`, the seller's own cancellation included — so a seller
+reads "Cancelled · SKYDROP · <their own words>". The field is the two-valued
+`MilestoneOwner` and means "our side, not the courier's", which is true and is
+what the section's note says ("Our handling and the courier's scans, together").
+Telling the seller apart from Skydrop staff would be a third value flowing
+through both apps and the ui package, and a decision about what SYSTEM reads as.
+Worth doing; not worth doing inside a filming session.
 
 **Two curriculum errors, both from trusting a description over the code**: the
 seller roles editor has 41 permissions in seven groups and not 68 in ten (that

@@ -16,6 +16,7 @@ import {
   VariantStatus,
   SellerCapability,
   ShipmentStatus,
+  WalletEntryDirection,
 } from '@skydrop/db';
 import {
   resellerOrderColumns,
@@ -38,6 +39,7 @@ import { CallQueueService } from '../../call-queue/services/call-queue.service';
 import { OrderChargesService } from '../../order-charges/services/order-charges.service';
 import { EarlyReservationService } from '../../early-reservation/services/early-reservation.service';
 import { composeSellerPrefixedName, stripSellerPrefix } from '../../../common/text/recipient-name';
+import { unrefundedCharge } from '../../../common/money/order-charge-pairing';
 import type { CreateOrderDto } from '../dto/create-order.dto';
 import type { UpdateOrderDto } from '../dto/update-order.dto';
 import { SellerCreditService } from '../../seller-credit/services/seller-credit.service';
@@ -157,6 +159,23 @@ const ORDER_VIEW_INCLUDE = {
 } as const;
 
 export type OrderView = Prisma.OrderGetPayload<{ include: typeof ORDER_VIEW_INCLUDE }>;
+
+/**
+ * The seller's own read of an order, as the order PAGE needs it.
+ *
+ * `chargedInr` is what the seller has actually been DEBITED for this
+ * order and not yet had back — the figure a cancel would return
+ * (`OrderChargesRefundService`), never a re-sum of `order_charges`.
+ * Null on the ordinary AT_DELIVERY seller, whose order is billed when
+ * it arrives and so has taken nothing yet.
+ *
+ * It is a DISPLAY field and lives only here: the mutators read
+ * `loadOwned`, and a query nobody looks at on a write path is work for
+ * nothing (the same reason the item thumbnails are resolved here).
+ */
+export type OrderDisplayView = OrderView & {
+  readonly chargedInr: string | null;
+};
 
 /** The staff read of an order: the reseller terms version by NUMBER too. */
 export type AdminOrderView = OrderView & { readonly resellerTermsVersionNumber: number | null };
@@ -1571,13 +1590,42 @@ export class OrderService {
    * have no use for a picture, and presigning on a write path would be
    * work nobody reads.
    */
-  async loadOwnedForDisplay(sellerId: string, id: string): Promise<OrderView> {
+  async loadOwnedForDisplay(sellerId: string, id: string): Promise<OrderDisplayView> {
     const order = await this.loadOwnedForSeller(sellerId, id);
     const thumbs = await this.catalog.thumbnailUrlsByVariant(order.items.map((i) => i.variantId));
     return {
       ...order,
+      chargedInr: await this.unrefundedChargeInr(id),
       items: order.items.map((i) => ({ ...i, imageUrl: thumbs.get(i.variantId) ?? null })),
     };
+  }
+
+  /**
+   * What this order has taken from the wallet and not given back.
+   *
+   * The cancel dialog is the only reader, and it exists so a seller sees
+   * the money before they agree rather than finding it in the ledger
+   * afterwards — which is why it must be the SAME number the refund
+   * will credit. `unrefundedCharge` is the shared pairing; re-summing
+   * `order_charges` here would be the drift the refund service
+   * deliberately avoids, with the worse symptom of the two.
+   *
+   * Reads the ledger and writes nothing (WAL-7 governs writes), the
+   * same shape treasury, reports and inbound-freight already use.
+   */
+  private async unrefundedChargeInr(orderId: string): Promise<string | null> {
+    const [charges, refunds] = await Promise.all([
+      this.prisma.client.sellerWalletEntry.findMany({
+        where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES },
+        select: { id: true, amount: true },
+        orderBy: { id: 'desc' },
+      }),
+      this.prisma.client.sellerWalletEntry.findMany({
+        where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES_REFUND },
+        select: { linkedEntryId: true },
+      }),
+    ]);
+    return unrefundedCharge(charges, refunds)?.amount.toString() ?? null;
   }
 
   /**

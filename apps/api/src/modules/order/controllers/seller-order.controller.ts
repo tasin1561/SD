@@ -39,6 +39,7 @@ import {
   type OrderEventView,
   type OrderListItem,
   type OrderView,
+  type OrderDisplayView,
 } from '../services/order.service';
 import { OrderReadService } from '../services/order-read.service';
 import { OrderWriteService } from '../services/order-write.service';
@@ -176,7 +177,7 @@ export class SellerOrderController {
   get(
     @CurrentSeller() seller: AuthenticatedSeller,
     @Param('id', uuid()) id: string,
-  ): Promise<OrderView> {
+  ): Promise<OrderDisplayView> {
     return this.svc.loadOwnedForDisplay(seller.id, id);
   }
 

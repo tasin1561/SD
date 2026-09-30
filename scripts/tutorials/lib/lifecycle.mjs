@@ -111,6 +111,22 @@ export const LIFECYCLE_PARCELS = [
     customer: { name: 'Gayatri Menon', phone: '+919845060055' },
     /** Stops after the call. The waybill exists; nothing has been picked. */
     stages: [],
+    /*
+      B7 CANCELS IT ON CAMERA, so it is spent by its own take — the
+      third parcel in this file to be, after D4's two.
+
+      It is the cheap kind of spending, though, and worth telling apart
+      from D4's: nothing is un-pressed at the courier, because a seller
+      cancel tells the courier NOTHING (CUR-10 amendment #4 — it voids
+      our shipment and a person closes the waybill on Delhivery's own
+      desk afterwards). So the retire/remake is a call, a booking and
+      nothing else, and it does NOT need the simulator to still hold the
+      waybill — see `needsLiveCourier`.
+
+      Its status MOVES when it is spent (CONFIRMED → CANCELLED), so the
+      ordinary test catches it and no `spentWhen…` flag is needed.
+    */
+    spendable: true,
   },
   {
     ref: 'RSH-LIFE-REVIEW',
@@ -209,6 +225,8 @@ export const LIFECYCLE_PARCELS = [
      */
     stages: ['IN_TRANSIT', 'OUT_FOR_DELIVERY'],
     spendable: true,
+    /** D4 calls the courier on this parcel's own waybill — see below. */
+    needsLiveCourier: true,
     /**
      * ITS STATUS DOES NOT MOVE WHEN IT IS SPENT, which is the whole
      * reason this flag exists. A send-back reaches the courier and they
@@ -231,6 +249,8 @@ export const LIFECYCLE_PARCELS = [
     customer: { name: 'Kaushik Iyer', phone: '+919845060099' },
     stages: ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED'],
     spendable: true,
+    /** The return request books a REVERSE collection — a live call. */
+    needsLiveCourier: true,
   },
 ];
 
@@ -741,7 +761,8 @@ async function receiveAndFinalize(awb, staffToken, disposition) {
  * Nothing happens while the parcel is still at its state and unspent —
  * a seed run between two takes must not churn a parcel that is ready.
  */
-async function retireSpentParcel(sellerId, ref, want, log, spentWhenCourierCancelled = false) {
+async function retireSpentParcel(sellerId, ref, want, log, opts = {}) {
+  const { spentWhenCourierCancelled = false, needsLiveCourier = false } = opts;
   const order = await prisma.order.findFirst({
     where: { sellerId, sellerOrderRef: ref },
     select: { id: true, status: true, orderNumber: true, customerReturnRequestedAt: true },
@@ -778,8 +799,16 @@ async function retireSpentParcel(sellerId, ref, want, log, spentWhenCourierCance
   // It cost exactly that once, so the check is here rather than in a
   // note: a parcel the simulator cannot answer for is spent, whatever
   // our own status column says.
+  //
+  // ONLY FOR A PARCEL WHOSE VIDEO CALLS THE COURIER. B7's cancel tells
+  // the courier nothing (CUR-10 amendment #4), so a sim that has
+  // forgotten its waybill costs that take nothing — and retiring a
+  // perfectly good CONFIRMED parcel on every seed run after a sim
+  // restart would buy a courier booking for no reason.
   const unknownToSim =
-    movedOn || alreadyAsked || courierTold ? false : !(await simKnowsParcelFor(order.id));
+    !needsLiveCourier || movedOn || alreadyAsked || courierTold
+      ? false
+      : !(await simKnowsParcelFor(order.id));
   if (!movedOn && !alreadyAsked && !courierTold && !unknownToSim) return;
 
   // A suffix that cannot collide, whatever is already parked.
@@ -936,13 +965,10 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
     if (parcel.noAnswerToCap === true)
       await rebuildStaleReviewParcel(sellerId, parcel.ref, parcel.want, log);
     if (parcel.spendable === true)
-      await retireSpentParcel(
-        sellerId,
-        parcel.ref,
-        parcel.want,
-        log,
-        parcel.spentWhenCourierCancelled === true,
-      );
+      await retireSpentParcel(sellerId, parcel.ref, parcel.want, log, {
+        spentWhenCourierCancelled: parcel.spentWhenCourierCancelled === true,
+        needsLiveCourier: parcel.needsLiveCourier === true,
+      });
 
     const existing = await prisma.order.findFirst({
       where: { sellerId, sellerOrderRef: parcel.ref },
@@ -1224,7 +1250,21 @@ async function renameRefundNoteToTicketNumber(ticket, log) {
  * else happens to be sitting on the box.
  */
 async function raiseOverdueFlags(sellerId, staffToken, log) {
-  const overdue = LIFECYCLE_PARCELS.filter((p) => p.want === 'OUT_FOR_DELIVERY').map((p) => p.ref);
+  /*
+    THE BACK-DATED ONES, not every parcel out for delivery.
+
+    It used to take `want === 'OUT_FOR_DELIVERY'`, which is TWO parcels
+    since D4: the one whose scans are deliberately days old, and
+    `RSH-LIFE-SENDBACK`, which is rebuilt fresh on every take and is
+    therefore always day 0. `findFirst` has no ordering to promise, so
+    which of them answered "our parcel" was a coin toss on the heap —
+    and it came up SENDBACK during a take, which threw
+    "the sweep did not flag it" about a parcel that could not possibly
+    have been flagged. Only a back-dated parcel can be old enough.
+  */
+  const overdue = LIFECYCLE_PARCELS.filter(
+    (p) => Array.isArray(p.backdatedScans) && p.backdatedScans.length > 0,
+  ).map((p) => p.ref);
   if (overdue.length === 0) return;
   const waiting = await prisma.order.findFirst({
     where: { sellerId, sellerOrderRef: { in: overdue }, status: 'OUT_FOR_DELIVERY' },

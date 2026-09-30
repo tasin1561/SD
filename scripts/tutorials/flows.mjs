@@ -194,6 +194,105 @@ const EDIT_DRAFT = {
 const ORDER_READ = { ref: 'RSH-LIFE-DELIVERED' };
 
 /**
+ * B7's three orders, each teaching a different point in the window.
+ *
+ * `pending` is placed fresh by `cancelWorldFor` on every seed run and
+ * is spent by the take; `confirmed` is D0's `RSH-LIFE-CONFIRMED`,
+ * which is `spendable` for the same reason; `past` is only LOOKED at,
+ * so nothing on it is written and no artefact needs clearing.
+ *
+ * Keep in step with `CANCEL_PENDING` in seed-demo-data.mjs and
+ * `LIFECYCLE_PARCELS` in lib/lifecycle.mjs.
+ */
+const CANCEL_ORDERS = {
+  pending: { ref: 'RSH-CANCEL-PENDING', reason: 'She found the same throw in a shop near her.' },
+  confirmed: { ref: 'RSH-LIFE-CONFIRMED' },
+  past: { ref: 'RSH-LIFE-OVERDUE' },
+};
+
+/**
+ * Open one of this seller's orders by ITS OWN reference, through the
+ * list — never by `goto`.
+ *
+ * The camera records the page and never the browser's address bar, so a
+ * URL jump reads as the screen changing for no reason; searching is
+ * also the path B4 teaches.
+ *
+ * THE ROW IS MATCHED ON AN EXACT REF, which is not fussiness. The list
+ * searches `contains`, and this library retires a spent order by moving
+ * its reference to `<ref>-SPENT-<n>` rather than deleting it — so
+ * "RSH-LIFE-CONFIRMED" matches every take's leavings as well as the one
+ * that is ready. The reference has its own element in the row
+ * (`span.sk-ident`), so an exact text match picks the canonical one and
+ * nothing else.
+ */
+async function openOrderByRef(page, stage, ref) {
+  await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+    after: 1600,
+  });
+  await page.waitForURL(/\/orders$/, { timeout: 30_000 });
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await stage.typeIn(page.getByLabel('Search orders'), ref, { clear: true, after: 500 });
+  await page.keyboard.press('Enter');
+  await page.waitForLoadState('networkidle').catch(() => {});
+  const row = page
+    .getByRole('row')
+    .filter({ has: page.getByText(ref, { exact: true }) })
+    .first();
+  await row.waitFor({ state: 'visible', timeout: 25_000 });
+  /*
+    SETTLE BEFORE CLICKING. Typing into the search box pushes the filter
+    into the URL, and the list re-renders when the query behind it comes
+    back — which happens AFTER `networkidle` has already fired once. The
+    first run of this flow found the row, began scrolling to its link,
+    and the row was replaced underneath it ("Element is not attached to
+    the DOM"). The retry is the belt to that brace: a detached element
+    is the one failure here that a second attempt genuinely fixes.
+  */
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(1200);
+  try {
+    await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+  } catch (err) {
+    if (!String(err).includes('not attached')) throw err;
+    await page.waitForTimeout(1200);
+    await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+  }
+  await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
+  await page.waitForLoadState('networkidle').catch(() => {});
+  // Its own reference under the number is what proves the RIGHT order
+  // opened — the order number changes with every rebuild.
+  await page.getByText(`Your ref: ${ref}`).first().waitFor({ state: 'visible', timeout: 25_000 });
+  await page.waitForTimeout(900);
+}
+
+/** The header's Cancel — exact, so "Cancel this order" is not it. */
+function cancelButton(page) {
+  return page.getByRole('button', { name: 'Cancel', exact: true });
+}
+
+/**
+ * The cancel dialog, by the one sentence it always carries.
+ *
+ * Not `.first()` on every dialog: the order page mounts several at once
+ * and which portal renders first is not a promise any component makes.
+ */
+function cancelDialog(page) {
+  return page.getByRole('dialog').filter({ hasText: 'This cannot be undone' }).first();
+}
+
+/** Press it, and wait for the dialog to actually go. */
+async function pressCancel(page, stage) {
+  const d = cancelDialog(page);
+  await stage.clickIt(d.getByRole('button', { name: 'Cancel this order' }).first(), {
+    after: 1600,
+  });
+  await d.waitFor({ state: 'hidden', timeout: 30_000 });
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(900);
+}
+
+/**
  * One titled section of the order page, by the words above it.
  *
  * `OrdSection` renders its title as a heading, so the section is the
@@ -5731,6 +5830,147 @@ export const FLOWS = {
         await chip.waitFor({ state: 'visible', timeout: 30_000 });
         await page.waitForTimeout(900);
         await stage.dwellOn(chip, 3200);
+      },
+    },
+  },
+  /**
+   * B7 — cancelling an order, at two different points in its life.
+   *
+   * IT SPENDS BOTH OF ITS ORDERS, which is why each has its own: the
+   * pending one is placed fresh by `cancelWorldFor` on every seed run,
+   * and the confirmed one is D0's `RSH-LIFE-CONFIRMED`, marked
+   * `spendable` so the lifecycle pass retires the cancelled one and
+   * builds another. A `--check` pass spends them too — check mode
+   * drives the real app and really presses the button — so seed, check,
+   * seed, check, seed, take is three of each.
+   *
+   * The third order is only READ. Its whole job is to show the absence
+   * of a button, so the scene ASSERTS the absence rather than trusting
+   * the frame: a locator that finds nothing is indistinguishable from a
+   * page that failed to load.
+   */
+  'cancelling-an-order': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-pending'({ page, stage }) {
+        await openOrderByRef(page, stage, CANCEL_ORDERS.pending.ref);
+        await stage.dwellOn(page.getByText('Pending confirmation').first(), 2800);
+      },
+
+      async buttons({ page, stage }) {
+        await stage.dwellOn(cancelButton(page), 2800);
+      },
+
+      async dialog({ page, stage }) {
+        await stage.clickIt(cancelButton(page), { after: 1400 });
+        const d = cancelDialog(page);
+        await d.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(d, 3000);
+      },
+
+      async 'consequence-pending'({ page, stage }) {
+        // THE SENTENCE THE NARRATION READS, not the dialog. The dialog
+        // says something different at every stage of an order's life and
+        // that is the whole point of the video — so a gate on the dialog
+        // would pass on the wrong one of them.
+        const notice = cancelDialog(page).getByText(/It leaves the call queue/);
+        await notice.first().waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(notice.first(), 3600);
+      },
+
+      async reason({ page, stage }) {
+        const field = cancelDialog(page).getByLabel('Reason (optional)');
+        await stage.typeIn(field, CANCEL_ORDERS.pending.reason, { after: 1200 });
+        await stage.dwellOn(field, 2400);
+      },
+
+      async confirm({ page, stage }) {
+        await pressCancel(page, stage);
+        await stage.dwellOn(page.getByText('Cancelled', { exact: true }).first(), 3000);
+      },
+
+      async history({ page, stage }) {
+        await stage.dwellOn(await ordSection(page, 'Full history'), 3600);
+      },
+
+      async 'open-confirmed'({ page, stage }) {
+        await openOrderByRef(page, stage, CANCEL_ORDERS.confirmed.ref);
+        await stage.dwellOn(page.getByText('Confirmed', { exact: true }).first(), 2800);
+      },
+
+      async tracker({ page, stage }) {
+        const tracker = await ordSection(page, 'Order tracker');
+        // The claim is "the warehouse steps are still to come". Before
+        // 2026-09-30 they were not: the rung below them fell back to
+        // `shipments.awbGeneratedAt`, which CUR-2b sets at CONFIRMATION,
+        // so this tracker said "Picked from shelf — Skipped · not
+        // needed" on a parcel nobody had been near. Gate on the words
+        // the narration is about.
+        const notNeeded = await tracker.getByText('not needed').count();
+        if (notNeeded !== 0) {
+          throw new Error(
+            'The tracker calls a warehouse step "not needed" on a confirmed order — ' +
+              'this scene says they are still to come. Has the ready-to-dispatch rung ' +
+              'regained a fallback onto the waybill?',
+          );
+        }
+        await stage.dwellOn(tracker, 3800);
+      },
+
+      async 'cancel-confirmed'({ page, stage }) {
+        await stage.clickIt(cancelButton(page), { after: 1400 });
+        const d = cancelDialog(page);
+        await d.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(d, 2800);
+      },
+
+      async 'consequence-confirmed'({ page, stage }) {
+        const notice = cancelDialog(page).getByText(/stock held for this order goes back/);
+        await notice.first().waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(notice.first(), 3800);
+      },
+
+      async 'confirm-confirmed'({ page, stage }) {
+        await pressCancel(page, stage);
+        await stage.dwellOn(page.getByText('Cancelled', { exact: true }).first(), 3200);
+      },
+
+      async window({ page, stage }) {
+        await openOrderByRef(page, stage, CANCEL_ORDERS.past.ref);
+        // THE ABSENCE IS THE CLAIM, so it is asserted rather than left
+        // to the frame — and asserted against a page that has plainly
+        // loaded, which is what the `Raise an issue` wait is for. A
+        // selector that matches nothing on a blank page would otherwise
+        // "prove" this scene.
+        const raise = page.getByRole('button', { name: 'Raise an issue' }).first();
+        await raise.waitFor({ state: 'visible', timeout: 25_000 });
+        const offered = await cancelButton(page).count();
+        if (offered !== 0) {
+          throw new Error(
+            `${CANCEL_ORDERS.past.ref} still offers Cancel — this scene says it does not. ` +
+              'Is the parcel still out for delivery?',
+          );
+        }
+        // The whole action row, which is where Cancel would have been.
+        await stage.dwellOn(raise.locator('..'), 3200);
+      },
+
+      async outro({ page, stage }) {
+        // The one button the seller DOES get here. It sits in the same
+        // header row the last scene pointed at, so the only thing that
+        // changes is which of them is outlined — which is the point:
+        // Cancel has gone and this has taken its place.
+        await stage.dwellOn(page.getByRole('button', { name: 'Ask admin to act' }).first(), 4000);
       },
     },
   },

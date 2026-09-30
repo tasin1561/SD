@@ -784,11 +784,21 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             onClose={() => setReturnOpen(false)}
           />
 
+          {/* `chargedInr` is what the wallet has actually taken for
+              this order and not given back — the figure the refund will
+              credit, from the server. It went unpassed from the day the
+              dialog was written (found 2026-09-30), so the paragraph
+              that names the money had never rendered for anybody, on
+              the one screen whose whole argument is that a seller
+              should see it before agreeing. Null for an AT_DELIVERY
+              seller, whose order is billed on arrival and has taken
+              nothing yet. */}
           <CancelOrderDialog
             open={cancelOpen}
             orderId={orderId}
             orderNumber={detail.data.orderNumber}
             status={detail.data.status}
+            chargedInr={detail.data.chargedInr ?? null}
             onOpenChange={setCancelOpen}
           />
         </>

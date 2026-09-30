@@ -26,6 +26,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `finding-an-order.mp4` | Finding any order from whatever handle the person in front of you has — a partial phone number is enough — plus the status chips and their counts, the presets, the store filter, and the fact that a filter survives a reload because it lives in the page's own address. |
 | `reading-an-order.mp4` | One order, read top to bottom and pressing nothing: the tracker and who recorded each step, the recipient snapshot, the charges with what "estimated" means, the invoice, what the courier says as against what you declared, and the full history. |
 | `changing-an-order.mp4` | Correcting a draft before it goes to the call centre — the quantity, the payment section noticing that the collectable no longer adds up, the landmark line that decides whether a driver finds the place, and Save + submit, which is what shuts the window. |
+| `cancelling-an-order.mp4` | Calling an order off at two points in its life, because the dialog says something different at each: waiting on the call centre it names the queue and releases nothing, confirmed it gives the held stock back. Ends on a parcel already with a driver, which has no Cancel button at all. |
 | `the-deal.mp4`                      | The arrangement with a reseller store — the share of each Skydrop fee they pay, worked through in rupees as you type it, when each of you is credited, and publishing a version they then have to accept. Versions are kept for ever, because placed orders are priced under the one they were placed under. |
 | `what-one-store-sells.mp4`          | Deciding what one reseller store may sell — turning a product on, giving that store a price of its own, and the two stock modes: shared with everyone, or a set-aside nobody else can touch, with a share held back from what they are shown. |
 | `read-your-wallet.mp4`              | The three tabs and why they are three — the Ledger is what happened, the other two are what has merely been asked for. Then a row at a time: a delivery charge, the COD credit and when it is actually written, the tax taken out of it, and a damage settlement. |
@@ -329,6 +330,20 @@ the file are still the words in `narration.mjs`.
   matches the calling shell), delete `out/raw/<slug>/`, and run it again — the
   narration clips are cached on their words, so a re-run buys nothing and the
   second attempt has so far always worked.
+- **Restart the API by the pid that is LISTENING, never by the `$!` of the
+  `nohup … &` that started it.** A backgrounded compound command hands back the
+  SUBSHELL's pid, so `kill $!` leaves node running — and the next `node
+  dist/main.js` either loses the port or, worse, the health check passes against
+  the OLD process and every later check films code that was never deployed. It
+  cost a full check run here (2026-09-30): the frames still showed a bug that
+  had been fixed and rebuilt twenty minutes earlier.
+  `ss -ltnpH 'sport = :4000'` is the honest question.
+- **Do not `source apps/api/.env` in the shell you run `record.mjs` from.** It
+  exports `SELLER_APP_URL`, which points at a dead local port, and the recorder
+  then drives a browser at nothing while the seller app sits perfectly healthy
+  on 3003. The seed DOES need that env (it talks to Prisma); run the two in
+  separate shells, or in a subshell — `( set -a; . apps/api/.env; set +a; node
+  …seed… )` — which is what `make-tutorials.sh` effectively does.
 - The recorder writes `out/verify/<slug>-failure.png` when a flow breaks. It is
   usually enough on its own — the failures during this build were all visible
   in it.

@@ -198,7 +198,6 @@ export class OrderJourneyService {
                 courierStatusLocation: true,
                 pickCompletedAt: true,
                 packCompletedAt: true,
-                awbGeneratedAt: true,
                 deliveryAttempts: {
                   select: {
                     attemptNumber: true,
@@ -262,7 +261,6 @@ export class OrderJourneyService {
       firstScan,
       pickCompletedAt: live?.pickCompletedAt ?? null,
       packCompletedAt: live?.packCompletedAt ?? null,
-      awbGeneratedAt: live?.awbGeneratedAt ?? null,
       expectedDeliveryAt: live?.expectedDeliveryAt ?? null,
       // The agent's own words from the most recent call. This is the
       // step no courier panel has, so the detail is worth carrying.
@@ -323,7 +321,6 @@ export class OrderJourneyService {
     ) => { eventAt: Date; description: string | null; locationName: string | null } | null;
     pickCompletedAt: Date | null;
     packCompletedAt: Date | null;
-    awbGeneratedAt: Date | null;
     expectedDeliveryAt: Date | null;
     lastCallEvent: string | null;
   }): JourneyMilestone[] {
@@ -370,7 +367,31 @@ export class OrderJourneyService {
         key: 'ready_to_dispatch',
         label: 'Ready to dispatch',
         owner: 'SKYDROP',
-        at: input.firstEventTo(OrderStatus.PENDING_DISPATCH) ?? input.awbGeneratedAt,
+        /*
+          THE EVENT ONLY. It used to fall back to the shipment's
+          `awbGeneratedAt`, which was right under the model this ladder
+          was written against — a waybill was booked when a supervisor
+          closed the manifest, by which point the parcel really was
+          packed and waiting for a van.
+
+          CUR-2b moved the booking to order CONFIRMATION (2026-08-01),
+          and nothing here noticed. So every confirmed order carried a
+          time on this rung days before anything was picked — which
+          made it CURRENT, and made the two rungs above it, with no
+          times of their own and a later rung passed, read
+          "Picked from shelf — Skipped · not needed" and
+          "Packed — Skipped · not needed". The seller was told the
+          warehouse work was not needed and the parcel was ready to go,
+          while it sat unpicked on a shelf. Found by filming the cancel
+          video against a CONFIRMED order (2026-09-30).
+
+          With no fallback the rung is PENDING until a manifest is
+          closed, and SKIPPED on a parcel the handover scan dispatched
+          without one — which is now the ordinary path (CUR-4: "the
+          manifest is a RECORD, not a step"), and is exactly what
+          "not needed" is for.
+        */
+        at: input.firstEventTo(OrderStatus.PENDING_DISPATCH),
         detail: null,
         estimated: false,
       },

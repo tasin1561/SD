@@ -444,6 +444,11 @@ const LIFECYCLE_SLUGS = new Set([
   // charges, return fees, a damage refund — is written by a parcel
   // having moved.
   'read-your-wallet',
+  // B7 cancels `RSH-LIFE-CONFIRMED` on camera — the second of its two
+  // orders, and the one that has stock held and a waybill booked. It is
+  // `spendable` for that reason, so this pass retires the spent one and
+  // builds a fresh one each run.
+  'cancelling-an-order',
 ]);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
@@ -1632,6 +1637,97 @@ async function editDraftWorldFor(slug, sellerId, sellerToken) {
     },
   });
   console.log(`  · drafted ${order.orderNumber} (${EDIT_DRAFT.ref}) for the edit video`);
+}
+
+/**
+ * B7's cheap half — an order WAITING ON THE CALL CENTRE, to be called
+ * off on camera.
+ *
+ * The video needs two orders and they teach opposite halves of the same
+ * sentence. This one is the "nothing was held" case: ORD-10 says
+ * reservation is LATE, so an order nobody has confirmed has claimed no
+ * stock at all and cancelling it releases nothing. The other is D0's
+ * `RSH-LIFE-CONFIRMED`, which has been confirmed on a call and carries
+ * a waybill — that one gives its stock back and leaves a live waybill
+ * for us to close with the courier.
+ *
+ * PENDING_CONFIRMATION, not DRAFT: a draft is not in anybody's queue,
+ * so the dialog's "it leaves the call queue — nobody will phone this
+ * customer about it" would be a sentence about nothing.
+ *
+ * ── HOW IT STAYS RE-TAKEABLE ─────────────────────────────────────────
+ * It is RETIRED, not deleted, and that is forced rather than chosen:
+ * `clearPreviousOrders` sweeps PENDING_CONFIRMATION but not CANCELLED,
+ * and a cancelled order cannot simply be deleted here either — the
+ * cancel sends the seller an email, and `notification_logs.order_id`
+ * would refuse the row. So the spent one keeps everything it has and
+ * only its NAME moves aside (the D4 rule, `retireSpentParcel`), which
+ * it must, because `sellerOrderRef` is unique per seller and store.
+ *
+ * A take that did NOT reach the cancel leaves it PENDING_CONFIRMATION,
+ * which the shared clearing has already removed by the time this runs —
+ * so either way this ends with exactly one, freshly placed.
+ */
+const CANCEL_PENDING = {
+  ref: 'RSH-CANCEL-PENDING',
+  sku: 'RSH-KANTHA-BLUE',
+  recipientName: 'Shalini Prabhu',
+  phone: '+919845090011',
+  line1: '9, Wood Street',
+  line2: 'Opposite the Bishop Cotton school gate',
+  postalCode: '560025',
+  codAmountInr: '1850',
+  unitPriceInr: '1850',
+};
+
+async function cancelWorldFor(slug, sellerId, sellerToken) {
+  if (slug !== 'cancelling-an-order') return;
+
+  const spent = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: CANCEL_PENDING.ref },
+    select: { id: true, orderNumber: true, status: true },
+  });
+  if (spent !== null) {
+    const parked = await prisma.order.count({
+      where: { sellerId, sellerOrderRef: { startsWith: `${CANCEL_PENDING.ref}-SPENT-` } },
+    });
+    const retiredRef = `${CANCEL_PENDING.ref}-SPENT-${parked + 1}`;
+    await prisma.order.update({ where: { id: spent.id }, data: { sellerOrderRef: retiredRef } });
+    console.log(
+      `  · ${CANCEL_PENDING.ref} is spent — ${spent.orderNumber} is ${spent.status}. ` +
+        `Renamed ${retiredRef} and left intact; a fresh one follows`,
+    );
+  }
+
+  const variant = await prisma.productVariant.findFirst({
+    where: { skuCode: CANCEL_PENDING.sku, product: { sellerId } },
+    select: { id: true },
+  });
+  if (variant === null) {
+    throw new Error(`No ${CANCEL_PENDING.sku} for this seller — the catalogue seeding runs first.`);
+  }
+  const token = await sellerToken();
+  const order = await call('/seller/orders', {
+    method: 'POST',
+    token,
+    body: {
+      recipientName: CANCEL_PENDING.recipientName,
+      recipientPhoneE164: CANCEL_PENDING.phone,
+      recipientAddressLine1: CANCEL_PENDING.line1,
+      recipientAddressLine2: CANCEL_PENDING.line2,
+      recipientPostalCode: CANCEL_PENDING.postalCode,
+      paymentMode: 'COD',
+      codAmountInr: CANCEL_PENDING.codAmountInr,
+      sellerOrderRef: CANCEL_PENDING.ref,
+      items: [{ variantId: variant.id, quantity: 1, unitPriceInr: CANCEL_PENDING.unitPriceInr }],
+    },
+  });
+  // Submitting is what puts it in the call queue (CC-6), which is the
+  // fact the dialog's own consequence line is about.
+  await call(`/seller/orders/${order.id}/submit`, { method: 'POST', token });
+  console.log(
+    `  · placed ${order.orderNumber} (${CANCEL_PENDING.ref}) waiting on the call centre, for the cancel video`,
+  );
 }
 
 /**
@@ -2946,6 +3042,7 @@ async function main() {
   if (slug === 'find-your-way-around') await placeTourOrders(sellerToken);
   if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
   await editDraftWorldFor(slug, sellerId, sellerToken);
+  await cancelWorldFor(slug, sellerId, sellerToken);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
   await integrationsWorldFor(slug, sellerId);
   await resellingWorldFor(slug, sellerId, sellerToken);

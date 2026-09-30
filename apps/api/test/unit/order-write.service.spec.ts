@@ -845,6 +845,34 @@ describe('OrderWriteService.cancelBySeller — the window closes at PACKED', () 
     expect(data.cancelledAt).toBeInstanceOf(Date);
   });
 
+  it('cancels an AWAITING_COURIER order — paused for a carrier decision, nothing booked', async () => {
+    /*
+      CUR-17's pause. The matrix has carried `AWAITING_COURIER ->
+      CANCELLED` with RELEASE_STOCK since the state existed and the
+      seller's order page has always offered the button there, but
+      `SELLER_CANCELLABLE_STATES` did not list it — so the one state
+      where changing your mind costs least was the one that answered
+      `[NOT_CANCELLABLE] An order in AWAITING_COURIER cannot be
+      cancelled`. Red before the fix, on exactly that message.
+    */
+    const { svc, release } = makeService({
+      order: {
+        id: 'o1',
+        sellerId: 's1',
+        orderNumber: 'SD-2026-26-000001',
+        status: OrderStatus.AWAITING_COURIER,
+        items: [{ id: 'oi1', variantId: 'v1', quantity: 2 }],
+      },
+      active: [{ id: 'res-1', orderItemId: 'oi1', qtyReserved: 2 }],
+    });
+
+    const res = await svc.cancelBySeller({ sellerId: 's1', orderId: 'o1', actor: SELLER });
+    expect(res.status).toBe(OrderStatus.CANCELLED);
+    // The reservation taken on the first entry to CONFIRMED (ORD-10) is
+    // given back — the parcel never moved.
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
   it('cancels a PICKED order — the goods are in a tote, not on a van', async () => {
     const { svc, release } = makeService({
       order: {

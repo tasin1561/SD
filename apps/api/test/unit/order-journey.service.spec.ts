@@ -127,6 +127,78 @@ describe('OrderJourneyService — the ladder', () => {
     expect(by['dispatched']?.state).toBe('CURRENT');
   });
 
+  it('does not call a merely CONFIRMED order ready to dispatch (CUR-2b)', async () => {
+    /*
+      The waybill is booked at order CONFIRMATION now, not at manifest
+      close — so `shipments.awbGeneratedAt` is set days before anything
+      is picked. This rung used to fall back to it, which made it
+      CURRENT on every confirmed order and, because the two rungs above
+      it had no times and a later rung had passed, printed
+      "Picked from shelf — Skipped · not needed" and
+      "Packed — Skipped · not needed" to the seller while the goods sat
+      on a shelf.
+    */
+    const { svc } = makeService({
+      status: OrderStatus.CONFIRMED,
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.CONFIRMED,
+          description: null,
+          createdAt: new Date('2026-08-27T11:00:00Z'),
+        },
+      ],
+      orderShipments: [
+        shipment({
+          status: ShipmentStatus.CREATED,
+          awbGeneratedAt: new Date('2026-08-27T11:00:05Z'),
+          expectedDeliveryAt: null,
+        }),
+      ],
+    });
+
+    const j = await svc.forOrder('order-1', 'seller-1');
+    const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
+
+    expect(by['call_confirmed']?.state).toBe('CURRENT');
+    // Still to come, all three of them — and none of them "not needed".
+    expect(by['picked']?.state).toBe('PENDING');
+    expect(by['packed']?.state).toBe('PENDING');
+    expect(by['ready_to_dispatch']?.state).toBe('PENDING');
+    expect(by['ready_to_dispatch']?.at).toBeNull();
+  });
+
+  it('still calls the manifest rung "not needed" when a handover scan carried the dispatch', async () => {
+    // CUR-4: the scan IS the handover and a manifest nobody closed is
+    // the ordinary case, so PENDING_DISPATCH never happens. SKIPPED is
+    // the honest word for that rung — this is the behaviour the fix
+    // above must not take away.
+    const { svc } = makeService({
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.PACKED,
+          description: null,
+          createdAt: new Date('2026-08-27T12:00:00Z'),
+        },
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.DISPATCHED,
+          description: null,
+          createdAt: new Date('2026-08-27T13:00:00Z'),
+        },
+      ],
+      orderShipments: [shipment()],
+    });
+
+    const j = await svc.forOrder('order-1', 'seller-1');
+    const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
+    expect(by['packed']?.state).toBe('DONE');
+    expect(by['ready_to_dispatch']?.state).toBe('SKIPPED');
+    // The last rung with a real time, so CURRENT rather than DONE.
+    expect(by['dispatched']?.state).toBe('CURRENT');
+  });
+
   it("carries the courier's ETA on Delivered, flagged as an estimate", async () => {
     const { svc } = makeService({ orderShipments: [shipment()] });
     const j = await svc.forOrder('order-1', 'seller-1');

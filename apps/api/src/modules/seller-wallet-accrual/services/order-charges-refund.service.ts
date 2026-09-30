@@ -5,6 +5,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
 import { ResellerOrderMoneyService } from '../../reseller-order-money/services/reseller-order-money.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import { unrefundedCharge } from '../../../common/money/order-charge-pairing';
 
 /**
  * Giving the delivery fee back when an order is called off before it ships.
@@ -78,14 +79,17 @@ export class OrderChargesRefundService {
       // charge no refund points at, and only while charges outnumber
       // refunds; `OrderChargesAccrualService.debitIfNeeded` counts the
       // same pairs, so the two sides can never disagree.
+      //
+      // The pairing itself is `unrefundedCharge` (2026-09-30) so that
+      // the screen which TELLS a seller what they are about to get back
+      // asks the same question this does. It used to be open-coded here
+      // and nowhere else, and the cancel dialog's money line had nothing
+      // supplying it at all.
       const charges = await tx.sellerWalletEntry.findMany({
         where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES },
         select: { id: true, amount: true, currency: true },
         orderBy: { id: 'desc' },
       });
-      // Never charged — the ordinary case for an AT_DELIVERY seller.
-      if (charges.length === 0) return null;
-
       const refunds = await tx.sellerWalletEntry.findMany({
         where: {
           linkedOrderId: orderId,
@@ -93,10 +97,8 @@ export class OrderChargesRefundService {
         },
         select: { linkedEntryId: true },
       });
-      if (refunds.length >= charges.length) return null;
-      const refundedIds = new Set(refunds.map((r) => r.linkedEntryId));
-      const charged = charges.find((c) => !refundedIds.has(c.id));
-      if (charged === undefined) return null;
+      const charged = unrefundedCharge(charges, refunds);
+      if (charged === null) return null;
 
       await this.wallet.applyEntry(tx, {
         sellerId,

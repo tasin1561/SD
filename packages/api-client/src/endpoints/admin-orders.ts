@@ -164,6 +164,17 @@ export interface OrderView {
   readonly createdAt: string;
   readonly updatedAt: string;
 
+  /*
+    What the WALLET has actually taken for this order and not given
+    back. Present on the SELLER's own detail read alone
+    (`GET /seller/orders/:id`) — it is a display figure the cancel
+    dialog needs so the seller sees the money before they agree, and it
+    is the same pairing the refund credits, never a re-sum of the
+    charge lines. Absent from the list and the admin read, hence
+    optional.
+  */
+  readonly chargedInr?: string | null;
+
   // Children
   readonly items: readonly OrderItemView[];
   // Events / delivery attempts are NOT on ORDER_VIEW_INCLUDE today;

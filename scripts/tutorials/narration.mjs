@@ -2017,6 +2017,73 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'cancelling-an-order',
+    title: 'Cancelling an order',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Calling an order off is one button. What it actually costs depends on how far along the order is — and the page tells you which of those you are about to do before you agree.',
+      },
+      {
+        id: 'open-pending',
+        say: 'This one is waiting on our call centre. Nobody has rung the customer yet, nothing has been picked, and no stock is being held anywhere for it.',
+      },
+      {
+        id: 'buttons',
+        say: 'Three actions along the top of an order this early — raise an issue about it, edit it, or call it off. Cancel is the last of them.',
+      },
+      {
+        id: 'dialog',
+        say: 'It names the order in its own title, and it opens with the sentence that matters most. This cannot be undone: to ship to this customer afterwards you would place a new order.',
+      },
+      {
+        id: 'consequence-pending',
+        say: 'Then what cancelling does at this particular point. It comes out of the call queue, so nobody will phone this customer about it, and there is no stock to give back because none was ever held.',
+      },
+      {
+        id: 'reason',
+        say: 'The reason is optional and it is kept on the order. Worth typing anyway — in a month it is the only thing that will tell you why this one was called off.',
+      },
+      {
+        id: 'confirm',
+        say: 'And that is it. The order is cancelled, the actions on it have gone, and it stays in your list as a record rather than disappearing out of it.',
+      },
+      {
+        id: 'history',
+        say: 'The history carries the whole thing — when it happened and the words you typed. Like every line on this page, it is written once and never edited.',
+      },
+      {
+        id: 'open-confirmed',
+        say: 'Now one that has got further. An agent has spoken to this customer and confirmed the order, and that is the moment stock is set aside for it and a waybill is booked.',
+      },
+      {
+        id: 'tracker',
+        say: 'The tracker says exactly that. Confirmed by phone, and the warehouse steps still to come — nothing has been picked and no box has been packed.',
+      },
+      {
+        id: 'cancel-confirmed',
+        say: 'The same button, and the same dialog. Read the middle of it, because the order is somewhere else now and so is the sentence.',
+      },
+      {
+        id: 'consequence-confirmed',
+        say: 'The stock held for this order goes back to available straight away. That is the whole difference between the two: a moment ago there was nothing to give back, and now there is.',
+      },
+      {
+        id: 'confirm-confirmed',
+        say: 'Confirm, and it is called off — and the parcel has gone from the page with it. The waybill that was booked is ours to close with the courier; you do not have to ring anybody.',
+      },
+      {
+        id: 'window',
+        say: 'Once the box is packed and sealed this is past. Here is a parcel already out with a driver, and there is no Cancel button on it at all.',
+      },
+      {
+        id: 'outro',
+        say: 'What you get instead is the other button up here — ask us to act on the parcel. Chase the courier, ring the customer, or turn it round and send it back. Each is a different job, and they have their own tutorial.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
