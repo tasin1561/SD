@@ -228,7 +228,20 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
               format={rawCount}
               unit="units"
               tone={progress.stillToCome > 0 ? 'pending' : 'neutral'}
-              hint="In Dhaka or in the air — not sellable yet."
+              /*
+                A counted leg that came up short is a LOSS, not something
+                outstanding, and the seller needs to be told which. With
+                nothing still travelling this tile reads zero, and the
+                hint is the only place that can say why the arithmetic
+                does not reach what Dhaka counted. The per-line
+                difference is in the arrival card below, which is where
+                the hint points.
+              */
+              hint={
+                progress.lostInTransit > 0
+                  ? `${progress.lostInTransit} unit${progress.lostInTransit === 1 ? '' : 's'} left Bangladesh and did not arrive — see the arrival count below.`
+                  : 'In Dhaka or in the air — not sellable yet.'
+              }
             />
           </>
         )}

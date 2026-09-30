@@ -68,14 +68,16 @@ corrected; **when an entry is named in the pick-up order, check it has a heading
 of its own.**
 
 **F4 LANDED 2026-09-30 and SECTION F IS COMPLETE.** The whole of the seller app
-is now filmed except the CONSIGNMENT block — **C1, C2 and E5** — which is one
-seeding job wearing three hats and is the next thing anybody should take. C1 is
-the prerequisite for both of the others: a consignment declared, counted in
-Dhaka, dispatched and arrived in India, with the two counts deliberately
-disagreeing by one unit, and then BILLED with some of its units already shipped
-so `/freight` shows a bill that is genuinely part-owed (FRT-3's amortisation is
-what makes it part-owed). `docs/consignment-two-leg.md` and the CNS rules in
-CLAUDE.md are what it has to be built against.
+is now filmed except the CONSIGNMENT block — **C1, C2 and E5**.
+
+**AND THEIR SEEDING IS NOW BUILT: see [C0](#c0-not-a-tutorial-the-consignment-seeding--built--libconsignmentsmjs).**
+`node scripts/tutorials/seed-demo-data.mjs --consignments` leaves two
+consignments on the box — one landed with its counts deliberately disagreeing
+twice, one still in the air so `/inventory`'s in-transit column is not zero. C1
+and C2 are therefore narration-and-flow jobs now; add their slugs to
+`CONSIGNMENT_SLUGS` as they are filmed. **E5 still needs one more thing** — a
+freight bill that is genuinely part-owed — and C0's entry says exactly what that
+costs and why it is harder than recording a bill.
 
 **B4 and B5 landed 2026-09-30 and needed NO new seeding at all**, which is worth
 knowing before costing anything else in section B: D0's nine parcels already
@@ -127,7 +129,7 @@ configured on camera. Keep them apart.
 Still `ready` without D0: C1, C2, E5. (B3, B4 and F4 are filmed; there is no
 C7 — see above.)
 
-**Filming these screens is finding real bugs at a steady rate — twenty-eight so
+**Filming these screens is finding real bugs at a steady rate — twenty-nine so
 far, plus seven in the seeding itself.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -556,14 +558,75 @@ server's own cancellable set while the button was offered on it.
 
 ## C — Stock
 
+### C0. (not a tutorial) The consignment seeding · **BUILT** — `lib/consignments.mjs`
+
+```bash
+node scripts/tutorials/seed-demo-data.mjs --consignments
+```
+
+TWO consignments, built through the real endpoints — declare, count,
+dispatch, count again — because C1, C2 and E5 are the same thing seen from
+three sides. The same shape as D0 for section D, and it took about two minutes.
+
+| Ref              | State                              | Used by    |
+| ---------------- | ---------------------------------- | ---------- |
+| `RSH-CN-LANDED`  | COMPLETED — both legs counted      | C1, (E5)   |
+| `RSH-CN-FLYING`  | IN_TRANSIT — dispatched, not landed| C2         |
+
+**Its counts DISAGREE twice, for two different reasons**, because a page
+showing two counts that match explains nothing. One line is counted SHORT in
+Dhaka against what the seller declared (16 declared, 15 found — ours to take up
+with THEM); the same line is then counted short again in India against what
+Bangladesh dispatched (15 sent, 14 found — ours to take up with the FORWARDER,
+and CNS-4 posts it as an `IN_TRANSIT_LOSS` out of the transit bin rather than
+pretending the goods are somewhere). The other line matches all the way, so the
+page has something un-alarming beside them.
+
+**`RSH-CN-FLYING` exists for one column.** Its units sit in the destination
+warehouse's TRANSIT bin — in neither building, sellable from nowhere (CNS-1) —
+and they are the only thing on this box that makes `/inventory`'s in-transit
+figure non-zero. That column is what C2 is about.
+
+**It never rewinds, and unlike D0 it deletes rather than resumes — but only a
+consignment nobody has counted.** A leg that has been counted has written stock
+and a batch points back at it, so deleting its receipt would leave the ledger
+describing goods that arrived against nothing. Anything past that is carried
+FORWARD from wherever it is: the first build threw half way (it asked for a leg
+named `INDIA`; the enum says `IN_FINAL`), which left a consignment dispatched
+with its Indian leg uncounted — a state the next run refused to delete AND
+refused to finish, which is a state nothing can get out of. Resume was the fix,
+and it is the same rule D0 arrived at for the same reason.
+
+**BUILD-ONCE.** Neither C1 nor C2 writes on a consignment — both only read — so
+a re-take needs no rebuild and `CONSIGNMENT_SLUGS` can stay empty until one of
+them is filmed.
+
+**What it does NOT yet build, and what that costs E5.** A freight bill that is
+genuinely PART-owed. `record` is straightforward, but FRT-1 amortises a bill per
+unit as units LEAVE, and attribution walks
+`shipment_item.pickedBatchId → stock_batch → goods_receipt_lines.batchId →
+allocation` — so only parcels picked FROM THIS CONSIGNMENT'S BATCH charge it.
+The demo seller already holds older stock of both SKUs, and the allocator picks
+that first, so shipping a parcel proves nothing. The honest routes are (a) give
+the consignment's batch an earlier expiry so FEFO reaches it first, or (b) give
+the consignment a SKU the seller has no other stock of. Either is a small change
+to `TUTORIAL_CONSIGNMENTS` plus a couple of driven parcels; neither is guesswork,
+but both need checking against `StockPickAllocationService`'s real ordering
+rather than against an assumption about it.
+
+**One bug, on the page C1 films** — see
+[Bugs found](#bugs-found-while-establishing-feasibility): a consignment that had
+landed and been counted short told its seller the missing unit was "still to
+come — in Dhaka or in the air".
+
 ### C1. Following a consignment from Dhaka to the shelf · `needs demo data`
 
 **Promise** — you can tell where your goods are and why two counts exist.
 **Length** 4 min. **Prerequisites** A4.
-**Needs** a consignment part-way along: declared, counted in Dhaka, dispatched,
-and arrived in India. The local database has exactly one consignment, so this
-needs seeding — two legs with their own counts, deliberately disagreeing by one
-unit so the page has something to explain.
+**Needs** C0 above, which is BUILT: `RSH-CN-LANDED` is declared, counted in
+Dhaka, dispatched and counted in India, with its two counts deliberately
+disagreeing twice and for two different reasons. Add `follow-a-consignment` (or
+whatever the slug ends up being) to `CONSIGNMENT_SLUGS` when filming it.
 **Covers** `/inbound/[id]`: the timeline labelled by what each step **means**
 rather than by status, the declared-versus-counted table at each stop, and the
 freight section. The disagreement between the two counts is the whole reason
@@ -573,8 +636,9 @@ there are two counts, and it is the thing to narrate.
 
 **Promise** — you can tell what is sellable today from what is merely yours.
 **Length** 3 min. **Prerequisites** C1.
-**Needs** received stock (today's seed has it) plus one consignment in transit,
-so the in-transit column is not zero. Comes with C1's seeding.
+**Needs** C0 above, which is BUILT: `RSH-CN-FLYING` is dispatched and not
+landed, so its units sit in the destination TRANSIT bin and the in-transit
+column is not zero. Add the slug to `CONSIGNMENT_SLUGS` when filming it.
 **Covers** `/inventory` and its three separate numbers: India stock, reserved,
 available. Then the column that is never added to the others — **in transit** —
 and why: goods between Dhaka and Bangalore are in neither building and cannot
@@ -2692,6 +2756,23 @@ library exists to find.**
    and the order sat in the list looking like the four beside it. Seen in a
    check-run FRAME: the status chip read `Draft` where the narration said
    "waiting on the call centre". Proved red.
+
+**One from building C0 (2026-09-30), on the page C1 will film.** A consignment
+that had LANDED and been counted short told its seller the missing unit was
+`Still to come: 1 — in Dhaka or in the air, not sellable yet`. It is the
+recurring shape yet again: `stillToCome = countedInDhaka − receivedInIndia` is
+exactly right while the goods are travelling, and becomes a promise of goods
+that are never coming the moment the last carton is opened —
+`TransitArrivalService` has already posted that unit as an `IN_TRANSIT_LOSS` out
+of the transit bin (CNS-4), and the bin holds nothing. A leg that has been
+COUNTED now takes what it was SENT out of the outstanding figure whatever it
+found, so what is left is genuinely still in Dhaka or on an open flight; the
+shortfall on counted legs comes back as `lostInTransit`, and the tile's hint
+says it ("1 unit left Bangladesh and did not arrive — see the arrival count
+below") rather than leaving a zero with no explanation for why the arithmetic
+does not reach what Dhaka counted. Both halves pinned — the counted leg AND the
+open one, because the fix must not take away the case the tile exists for.
+Proved red.
 
 **Observed and deliberately NOT fixed:** the order's Full history labels every
 one of OUR events `SKYDROP`, the seller's own cancellation included — so a seller

@@ -297,7 +297,7 @@ export function eventWords(type: ConsignmentEventType): string {
  */
 export function indiaProgress(
   c: ConsignmentView,
-): { receivedInIndia: number; stillToCome: number } | null {
+): { receivedInIndia: number; stillToCome: number; lostInTransit: number } | null {
   const bdLeg = c.receipts.find((r) => r.leg === ConsignmentLeg.BD_INTAKE) ?? null;
   const indiaLegs = c.receipts.filter((r) => r.leg !== ConsignmentLeg.BD_INTAKE);
 
@@ -318,5 +318,32 @@ export function indiaProgress(
   }
 
   if (base === null) return null;
-  return { receivedInIndia, stillToCome: Math.max(0, base - receivedInIndia) };
+
+  /*
+    A COUNTED LEG IS NOT STILL COMING, and the difference on it is a LOSS.
+
+    This was `base - receivedInIndia`, which is right while the goods
+    are travelling and wrong the moment the last carton is opened. A
+    consignment counted at 39 in Dhaka, flown whole and counted at 38 in
+    India reported "Still to come: 1 — in Dhaka or in the air, not
+    sellable yet", promising a unit that is never coming: `TransitArrival`
+    has already posted it as an `IN_TRANSIT_LOSS` out of the transit bin
+    (CNS-4), and the TRANSIT bin holds nothing. Found by filming a landed
+    consignment (2026-09-30).
+
+    So a leg that has been COUNTED takes what it was SENT out of the
+    outstanding figure, whatever it found. What is left over is either
+    still in Dhaka or on an open flight — which is exactly what the tile
+    says it is — and the shortfall on the counted legs is the loss, shown
+    beside the per-line differences the arrival card already prints.
+  */
+  const sentOnCounted = indiaLegs.reduce(
+    (n, leg) => n + (countedUnits(leg) === null ? 0 : declaredUnits(leg)),
+    0,
+  );
+  return {
+    receivedInIndia,
+    stillToCome: Math.max(0, base - sentOnCounted),
+    lostInTransit: Math.max(0, sentOnCounted - receivedInIndia),
+  };
 }

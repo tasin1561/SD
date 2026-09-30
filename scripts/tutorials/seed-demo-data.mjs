@@ -35,6 +35,7 @@ import {
   LIFECYCLE_PARCELS,
 } from './lib/lifecycle.mjs';
 import { clearLoginThrottle } from './lib/clear-login-throttle.mjs';
+import { ensureConsignmentWorld, consignmentReport } from './lib/consignments.mjs';
 
 /** The staff account the seeding needs — goods receipts are received by ops, not by the seller. */
 const OPS = { email: 'tutorial-ops@skydrop.local', password: 'Tutorial-Ops-2026' };
@@ -397,6 +398,15 @@ export const STORE_REQUEST_ORDERS = {
     reason: 'The customer has stopped answering and has told us she no longer wants it.',
   },
 };
+
+/**
+ * The videos that need the CONSIGNMENT world (C0, `lib/consignments.mjs`).
+ *
+ * Expensive-ish — four goods receipts, a dispatch and an arrival, all
+ * through the real endpoints — and BUILD-ONCE, so it runs only for the
+ * videos that read it or when asked by name with `--consignments`.
+ */
+const CONSIGNMENT_SLUGS = new Set([]);
 
 /** The videos that need the second store, its orders and their held requests. */
 const STORE_ORDER_SLUGS = new Set(['answer-what-a-store-asked']);
@@ -3249,6 +3259,25 @@ async function main() {
     const bad = report.filter((r) => !r.ok);
     if (bad.length > 0) {
       throw new Error(`${bad.length} lifecycle parcel(s) are not in the state they should be.`);
+    }
+  }
+
+  // C0 — the consignment world sections C and E read (C1, C2, E5).
+  // Two consignments: one that has landed with its counts deliberately
+  // disagreeing, and one still in the air so `/inventory`'s in-transit
+  // column is not zero. BUILD-ONCE and idempotent; neither video writes
+  // on a consignment, so a re-take needs no rebuild.
+  if (CONSIGNMENT_SLUGS.has(slug ?? '') || process.argv.includes('--consignments')) {
+    console.log('\nBuilding the consignment world…');
+    await ensureConsignmentWorld({ sellerId, sellerToken, staffToken, log: (m) => console.log(m) });
+    const report = await consignmentReport(sellerId);
+    console.log('\nConsignments:');
+    for (const r of report) {
+      console.log(`  ${r.ok ? '\u2713' : '\u2717'} ${r.ref.padEnd(16)} ${r.got ?? 'missing'}`);
+    }
+    const bad = report.filter((r) => !r.ok);
+    if (bad.length > 0) {
+      throw new Error(`${bad.length} consignment(s) are not in the state they should be.`);
     }
   }
 
