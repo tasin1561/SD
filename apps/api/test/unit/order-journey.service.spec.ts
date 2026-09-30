@@ -104,6 +104,188 @@ describe('OrderJourneyService — the ladder', () => {
     expect(by['delivered']?.state).toBe('PENDING');
   });
 
+  /**
+   * A PARCEL THAT CAME BACK IS NOT STILL OUT FOR DELIVERY.
+   *
+   * The ladder had nine forward rungs and no idea a return leg exists,
+   * so an order whose goods were back on our shelf and whose seller had
+   * been refunded read, on the seller's own order page,
+   *
+   *     Current step:  Out for delivery   Courier
+   *     Still to come: Delivered          Courier
+   *
+   * — and the Delivered rung carried the courier's old ETA, so it
+   * printed a delivery DATE for a delivery that was never going to
+   * happen. Found by filming the admin order detail (2026-09-30).
+   */
+  const returnEvents = [
+    {
+      type: 'STATUS_CHANGED',
+      toStatus: OrderStatus.CONFIRMED,
+      description: null,
+      createdAt: new Date('2026-08-27T11:00:00Z'),
+    },
+    {
+      type: 'STATUS_CHANGED',
+      toStatus: OrderStatus.DISPATCHED,
+      description: null,
+      createdAt: new Date('2026-08-27T13:00:00Z'),
+    },
+    {
+      type: 'STATUS_CHANGED',
+      toStatus: OrderStatus.RTO_INITIATED,
+      description: null,
+      createdAt: new Date('2026-08-29T09:00:00Z'),
+    },
+    {
+      type: 'STATUS_CHANGED',
+      toStatus: OrderStatus.RTO_RECEIVED,
+      description: null,
+      createdAt: new Date('2026-09-01T09:00:00Z'),
+    },
+    {
+      type: 'STATUS_CHANGED',
+      toStatus: OrderStatus.RTO_RESTOCKED,
+      description: null,
+      createdAt: new Date('2026-09-01T10:00:00Z'),
+    },
+  ];
+
+  it('a returned parcel has NO Delivered rung, and ends on where it actually got to', async () => {
+    const { svc } = makeService({
+      status: OrderStatus.RTO_RESTOCKED,
+      events: returnEvents,
+      orderShipments: [
+        shipment({
+          status: ShipmentStatus.RTO_DELIVERED,
+          trackingEvents: [
+            scan(ShipmentStatus.OUT_FOR_DELIVERY, '2026-08-28T05:00:00Z'),
+            scan(ShipmentStatus.RTO_IN_TRANSIT, '2026-08-29T10:00:00Z'),
+          ],
+        }),
+      ],
+    });
+
+    const j = await svc.forOrder('order-1', 'seller-1');
+    const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
+
+    // The lie, gone: no rung promising a delivery, and none of them
+    // current on the forward leg.
+    expect(by['delivered']).toBeUndefined();
+    expect(by['out_for_delivery']?.state).toBe('DONE');
+
+    // …and the truth in its place.
+    expect(by['returning']?.state).toBe('DONE');
+    expect(by['rto_received']?.state).toBe('DONE');
+    expect(by['rto_settled']?.label).toBe('Back in your stock');
+    expect(by['rto_settled']?.state).toBe('CURRENT');
+  });
+
+  it('a return still on the road stops at what the courier has said', async () => {
+    const { svc } = makeService({
+      status: OrderStatus.RTO_IN_TRANSIT,
+      events: returnEvents.slice(0, 3),
+      orderShipments: [
+        shipment({
+          status: ShipmentStatus.RTO_IN_TRANSIT,
+          trackingEvents: [scan(ShipmentStatus.RTO_IN_TRANSIT, '2026-08-29T10:00:00Z')],
+        }),
+      ],
+    });
+
+    const j = await svc.forOrder('order-1', 'seller-1');
+    const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
+
+    expect(by['delivered']).toBeUndefined();
+    expect(by['returning']?.state).toBe('CURRENT');
+    // TRK-6: only a person at the bench writes this one, so it is
+    // genuinely still to come while the courier's own scan is already in.
+    expect(by['rto_received']?.state).toBe('PENDING');
+  });
+
+  it('a parcel DELIVERED and then sent back keeps the delivery that happened', async () => {
+    const { svc } = makeService({
+      status: OrderStatus.RTO_IN_TRANSIT,
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.DELIVERED,
+          description: null,
+          createdAt: new Date('2026-08-28T09:00:00Z'),
+        },
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.RTO_INITIATED,
+          description: null,
+          createdAt: new Date('2026-08-30T09:00:00Z'),
+        },
+      ],
+      orderShipments: [
+        shipment({
+          status: ShipmentStatus.RTO_IN_TRANSIT,
+          trackingEvents: [scan(ShipmentStatus.DELIVERED, '2026-08-28T09:00:00Z')],
+        }),
+      ],
+    });
+
+    const j = await svc.forOrder('order-1', 'seller-1');
+    const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
+
+    expect(by['delivered']?.state).toBe('DONE');
+    expect(by['returning']?.state).toBe('CURRENT');
+  });
+
+  it('a LOST parcel says so instead of promising a delivery', async () => {
+    const { svc } = makeService({
+      status: OrderStatus.LOST_IN_TRANSIT,
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.DISPATCHED,
+          description: null,
+          createdAt: new Date('2026-08-27T13:00:00Z'),
+        },
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.LOST_IN_TRANSIT,
+          description: null,
+          createdAt: new Date('2026-09-05T13:00:00Z'),
+        },
+      ],
+      orderShipments: [shipment({ status: ShipmentStatus.LOST })],
+    });
+
+    const j = await svc.forOrder('order-1', 'seller-1');
+    const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
+
+    expect(by['delivered']).toBeUndefined();
+    expect(by['lost']?.state).toBe('CURRENT');
+  });
+
+  it('a parcel still on its way keeps its Delivered rung and its ETA', async () => {
+    const { svc } = makeService({
+      events: [
+        {
+          type: 'STATUS_CHANGED',
+          toStatus: OrderStatus.DISPATCHED,
+          description: null,
+          createdAt: new Date('2026-08-27T13:00:00Z'),
+        },
+      ],
+      orderShipments: [
+        shipment({ trackingEvents: [scan(ShipmentStatus.IN_TRANSIT, '2026-08-27T15:00:00Z')] }),
+      ],
+    });
+
+    const j = await svc.forOrder('order-1', 'seller-1');
+    const by = Object.fromEntries(j.milestones.map((m) => [m.key, m]));
+
+    expect(by['delivered']?.state).toBe('PENDING');
+    expect(by['delivered']?.estimated).toBe(true);
+    expect(by['returning']).toBeUndefined();
+    expect(by['lost']).toBeUndefined();
+  });
+
   it('a stage a LATER stage overtook is SKIPPED, not pending forever', async () => {
     const { svc } = makeService({
       // Confirmed by an admin override — there was never a call, and

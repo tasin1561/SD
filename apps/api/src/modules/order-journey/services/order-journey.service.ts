@@ -419,21 +419,114 @@ export class OrderJourneyService {
         detail: this.scanLine(ofd),
         estimated: false,
       },
-      {
+    ];
+
+    /*
+      THE LADDER ENDS WHERE THE PARCEL ACTUALLY WENT.
+
+      It used to end at a Delivered rung, always, falling back to the
+      courier's ETA so the last step carried a date before it happened.
+      That is exactly right for a parcel on its way and a LIE on one
+      that came back: a restocked order — the goods on our shelf, the
+      seller already refunded their fee — read
+
+          Current step:  Out for delivery   Courier
+          Still to come: Delivered          Courier
+
+      on the SELLER's own order page, because nothing in this file had
+      ever heard of a return. Found by filming the admin order detail
+      (2026-09-30), and it is the third time this ladder has told
+      somebody a confident thing that was not so.
+
+      A parcel that never reached the customer has nothing to say on a
+      Delivered rung, so it does not get one — the return rungs say what
+      happened instead, and the state machine below then makes the last
+      of them CURRENT. A parcel DELIVERED and then sent back keeps its
+      Delivered rung, because that delivery really happened; the return
+      rungs are appended after it.
+
+      Deliberately NOT a fourth `MilestoneState`. Both apps and the ui
+      package render "· not needed" on SKIPPED unconditionally, so a
+      skipped Delivered would read "Delivered · not needed" — a second
+      wrong sentence in place of the first — and a new state is three
+      renderers and a shared type, which is more than a wording fix
+      should cost.
+    */
+    const wasDelivered = delivered !== null || input.firstEventTo(OrderStatus.DELIVERED) !== null;
+    const returnStartedAt =
+      input.firstEventTo(OrderStatus.RTO_INITIATED) ??
+      input.firstEventTo(OrderStatus.RTO_IN_TRANSIT);
+    const lostAt = input.firstEventTo(OrderStatus.LOST_IN_TRANSIT);
+
+    if (wasDelivered || (returnStartedAt === null && lostAt === null)) {
+      raw.push({
         key: 'delivered',
         label: 'Delivered',
         owner: 'COURIER',
         // Falls back to the courier's ETA so the last rung carries a
         // date before it happens — which is the question a seller is
-        // actually asking when they open the page.
+        // actually asking when they open the page. Only ever reached
+        // by a parcel still on its way, now that the branches above
+        // take the other two cases.
         at:
           delivered?.eventAt ??
           input.firstEventTo(OrderStatus.DELIVERED) ??
           input.expectedDeliveryAt,
         detail: this.scanLine(delivered),
         estimated: delivered === null && input.firstEventTo(OrderStatus.DELIVERED) === null,
-      },
-    ];
+      });
+    }
+
+    if (lostAt !== null) {
+      raw.push({
+        key: 'lost',
+        label: 'Lost in transit',
+        owner: 'COURIER',
+        at: lostAt,
+        detail: null,
+        estimated: false,
+      });
+    }
+
+    if (returnStartedAt !== null) {
+      const receivedAt = input.firstEventTo(OrderStatus.RTO_RECEIVED);
+      const restockedAt = input.firstEventTo(OrderStatus.RTO_RESTOCKED);
+      const damagedAt = input.firstEventTo(OrderStatus.RTO_DAMAGED);
+      raw.push({
+        key: 'returning',
+        label: 'Coming back to us',
+        owner: 'COURIER',
+        at: returnStartedAt,
+        detail: this.scanLine(
+          input.firstScan(ShipmentStatus.RTO_IN_TRANSIT) ??
+            input.firstScan(ShipmentStatus.RTO_INITIATED),
+        ),
+        estimated: false,
+      });
+      raw.push({
+        key: 'rto_received',
+        label: 'Back in our warehouse',
+        owner: 'SKYDROP',
+        // TRK-6: only a person at the bench writes this, never a scan —
+        // which is why it can sit pending while the courier's own
+        // "handed back" scan is already on the timeline below.
+        at: receivedAt,
+        detail: null,
+        estimated: false,
+      });
+      raw.push({
+        key: 'rto_settled',
+        // WMS-8d decides which: any restocked unit makes the order
+        // RTO_RESTOCKED, otherwise RTO_DAMAGED. The label follows the
+        // event that actually landed rather than the order's status,
+        // so a later status change cannot rewrite what happened.
+        label: damagedAt !== null && restockedAt === null ? 'Not sellable' : 'Back in your stock',
+        owner: 'SKYDROP',
+        at: restockedAt ?? damagedAt,
+        detail: null,
+        estimated: false,
+      });
+    }
 
     // CURRENT is the last rung with a real time; everything after it is
     // pending. An estimated Delivered is never "current" — nothing has
