@@ -84,8 +84,9 @@ estimate was about 2× the real spend (2,344, 2,152, 2,370 and 2,207). The
 **Balance after this batch: 85,006 of 121,027** on the one configured key,
 which is eighty-odd more admin videos.
 
-**Its subtitle is `Skydrop for ops`**, not `Skydrop for sellers`. That is the
-convention for H–P; the title card is the only place it shows.
+**Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
+sellers`. That is the convention for H–P; the title card is the only place it
+shows.
 
 **C1 was re-taken the same evening and nothing is outstanding.** E5 bills the
 very consignment C1 films, so C1's `freight` line — which said "nothing has been
