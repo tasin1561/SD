@@ -2269,6 +2269,61 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'read-your-stock',
+    title: 'Reading your stock',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Having stock and being able to sell it are two different things, and this page keeps them apart on purpose. Once you can read it you will never over-sell a product again.',
+      },
+      {
+        id: 'open',
+        say: 'Inventory is everything of yours we hold, by SKU. You cannot add to it from here — receiving happens at the warehouse, and the page says so rather than offering a button that would lie.',
+      },
+      {
+        id: 'india',
+        say: 'The first tile is the one that matters. India stock is every unit on a shelf in India, and underneath it the number splits in two.',
+      },
+      {
+        id: 'held',
+        say: 'Sellable now, and held for orders. A confirmed order has already claimed its units — they are still yours and still on the shelf, but they are spoken for, so the page will not offer them twice.',
+      },
+      {
+        id: 'transit',
+        say: 'Then the number that is never added to the others. Goods between Dhaka and India are in neither building, so they cannot be picked, and folding them into a stock figure is how a seller sells something that has not landed.',
+      },
+      {
+        id: 'value',
+        say: 'What it is all worth, at what you paid rather than what you sell it for — and split the same way, because stock in the air is not stock you can turn into money this week.',
+      },
+      {
+        id: 'uncovered',
+        say: 'And the honest line under it: units we have no cost for are left out of that total rather than counted as worthless. The unit cost is optional when you announce a consignment, and this is where skipping it shows up.',
+      },
+      {
+        id: 'register',
+        say: 'Then the register itself, one row per SKU, with the same three numbers side by side so you can compare products rather than one at a time.',
+      },
+      {
+        id: 'row',
+        say: 'India stock, reserved, available — and available is simply the first minus the second. It is the only one of the three you should ever promise a customer.',
+      },
+      {
+        id: 'transit-column',
+        say: 'In transit sits in its own column and is added to nothing. These are the two products on the consignment that is still in the air; the others have a dash, because nothing of theirs is travelling.',
+      },
+      {
+        id: 'low',
+        say: 'The last column is the low-stock warning, which is per SKU and which you set yourself. That has a tutorial of its own.',
+      },
+      {
+        id: 'outro',
+        say: 'So: one page, and two questions it answers separately. What do I own, and what may I sell today. They are rarely the same number, and this is the only place that says which is which.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

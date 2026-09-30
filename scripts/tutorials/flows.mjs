@@ -267,6 +267,41 @@ async function openOrderByRef(page, stage, ref) {
 }
 
 /**
+ * The two SKUs C2 points at on the stock register.
+ *
+ * `RESERVED_SKU` is the one D0's confirmed parcel has claimed a unit
+ * of, so its Reserved column is not a zero; `TRANSIT_SKU` is on C0's
+ * flying consignment, so its In-transit column is not a dash. Keep in
+ * step with `LIFECYCLE_SKU` in lib/lifecycle.mjs and with
+ * `TUTORIAL_CONSIGNMENTS` in lib/consignments.mjs.
+ */
+const RESERVED_SKU = 'RSH-JAMDANI-IVORY';
+const TRANSIT_SKU = 'RSH-SCARF-EMERALD';
+
+/** One SKU's row on the stock register. */
+function stockRow(page, sku) {
+  return page
+    .getByRole('row')
+    .filter({ has: page.getByText(sku, { exact: true }) })
+    .first();
+}
+
+/** One tile on the inventory page, by its label. */
+async function kpi(page, label) {
+  const card = page.locator('.inv-kpis > *').filter({ hasText: label }).first();
+  await card.waitFor({ state: 'visible', timeout: 25_000 });
+  await card.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  await page.waitForTimeout(600);
+  return card;
+}
+
+/** What the register says is reserved, across every row. */
+async function reservedUnits(page) {
+  const cells = await page.locator('table tbody tr td:nth-child(4)').allInnerTexts();
+  return cells.reduce((n, t) => n + (Number(t.replace(/[^0-9]/g, '')) || 0), 0);
+}
+
+/**
  * C0's two consignments, by the seller's own reference.
  *
  * Keep in step with `TUTORIAL_CONSIGNMENTS` in lib/consignments.mjs.
@@ -6499,6 +6534,104 @@ export const FLOWS = {
         await named.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(700);
         await stage.dwellOn(named, 3800);
+      },
+    },
+  },
+  /**
+   * C2 — reading your stock.
+   *
+   * It READS and presses nothing. Its world is C0's `RSH-CN-FLYING`
+   * (the only thing on this box that makes the in-transit column
+   * non-zero) plus D0's `RSH-LIFE-CONFIRMED`, which is the one parcel
+   * at rest holding a reservation — without it "held for orders" is a
+   * zero, and the difference between owning stock and being able to
+   * sell it is the whole video.
+   */
+  'read-your-stock': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Inventory', exact: true }).first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/inventory$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const sub = page.getByText(/Receiving happens at the warehouse/).first();
+        await sub.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(sub, 3200);
+      },
+
+      async india({ page, stage }) {
+        await stage.dwellOn(await kpi(page, 'India stock'), 3400);
+      },
+
+      async held({ page, stage }) {
+        // THE SPLIT IS THE CLAIM, and it is only interesting when
+        // something is genuinely reserved — a zero here would put the
+        // narration on a number that proves nothing. Gating on it means
+        // a seeding that lost the confirmed parcel fails the check.
+        const card = await kpi(page, 'India stock');
+        const held = card.getByText('Held for orders').first();
+        await held.waitFor({ state: 'visible', timeout: 20_000 });
+        const reserved = await reservedUnits(page);
+        if (reserved <= 0) {
+          throw new Error(
+            'Nothing is held for orders — this scene is about the difference between ' +
+              'owning stock and being able to sell it. Is `RSH-LIFE-CONFIRMED` confirmed?',
+          );
+        }
+        await stage.dwellOn(held, 3200);
+      },
+
+      async transit({ page, stage }) {
+        await stage.dwellOn(await kpi(page, 'In transit'), 3600);
+      },
+
+      async value({ page, stage }) {
+        await stage.dwellOn(await kpi(page, 'Stock value at cost'), 3400);
+      },
+
+      async uncovered({ page, stage }) {
+        const line = page.getByText(/Units with no cost/).first();
+        await line.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(line, 3600);
+      },
+
+      async register({ page, stage }) {
+        const table = page.locator('table').first();
+        await table.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(table, 3400);
+      },
+
+      async row({ page, stage }) {
+        await stage.dwellOn(stockRow(page, RESERVED_SKU), 3600);
+      },
+
+      async 'transit-column'({ page, stage }) {
+        // A row whose goods are on the flying consignment, so the
+        // column it is about is not a dash.
+        await stage.dwellOn(stockRow(page, TRANSIT_SKU), 3600);
+      },
+
+      async low({ page, stage }) {
+        await stage.dwellOn(page.getByRole('columnheader', { name: /Low-stock/ }).first(), 3000);
+      },
+
+      async outro({ page, stage }) {
+        const tiles = page.locator('.inv-kpis').first();
+        await tiles.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(tiles, 3600);
       },
     },
   },

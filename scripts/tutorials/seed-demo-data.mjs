@@ -406,7 +406,7 @@ export const STORE_REQUEST_ORDERS = {
  * through the real endpoints — and BUILD-ONCE, so it runs only for the
  * videos that read it or when asked by name with `--consignments`.
  */
-const CONSIGNMENT_SLUGS = new Set(['follow-a-consignment']);
+const CONSIGNMENT_SLUGS = new Set(['follow-a-consignment', 'read-your-stock']);
 
 /** The videos that need the second store, its orders and their held requests. */
 const STORE_ORDER_SLUGS = new Set(['answer-what-a-store-asked']);
@@ -455,6 +455,14 @@ const LIFECYCLE_SLUGS = new Set([
   // charges, return fees, a damage refund — is written by a parcel
   // having moved.
   'read-your-wallet',
+  // C2's subject is the difference between what a seller HAS and what
+  // they may sell, and the number that draws it — "held for orders" —
+  // is zero unless something is actually reserved. `RSH-LIFE-CONFIRMED`
+  // is the one parcel at rest holding a reservation (ORD-10 reserves on
+  // entry to CONFIRMED), so C2 pays for the lifecycle pass to guarantee
+  // it is there. Cheap in practice: the pass is idempotent and only
+  // rebuilds it after a B7 take has spent it.
+  'read-your-stock',
   // B7 cancels `RSH-LIFE-CONFIRMED` on camera — the second of its two
   // orders, and the one that has stock held and a waybill booked. It is
   // `spendable` for that reason, so this pass retires the spent one and

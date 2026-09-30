@@ -33,8 +33,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (40):** A1–A6, B1–B7, C1, C3, C4, C5, C6, D1–D6, E1, E2, E3,
-E4, F1–F5, G1–G7. **SECTIONS A, B, D, F and G are complete.**
+**Filmed so far (41):** A1–A6, B1–B7, C1–C6, D1–D6, E1, E2, E3, E4, F1–F5,
+G1–G7. **SECTIONS A, B, C, D, F and G are complete — the whole seller app
+except E5.**
 Every one is listed in its own entry below with what it covers and what its
 seeding does.
 
@@ -76,11 +77,17 @@ leaves two consignments on the box — one landed with its counts deliberately
 disagreeing twice, one still in the air so `/inventory`'s in-transit column is
 not zero.
 
-**The next entry is C2**, which is now a narration-and-flow job: the world it
-needs is `RSH-CN-FLYING`, already there, and the page only reads. Add its slug
-to `CONSIGNMENT_SLUGS`. **Then E5, which still needs one more thing** — a
-freight bill that is genuinely part-owed — and C0's entry says exactly what that
-costs and why it is harder than recording a bill.
+**C1 AND C2 ARE FILMED, so the only entry left in the seller app is E5**, and
+it needs one more thing than C0 builds: a freight bill that is genuinely
+part-owed. C0's entry says exactly what that costs and why it is harder than
+recording a bill — FRT-1 amortises per unit as units LEAVE, and attribution
+walks the picked BATCH, so the demo seller's older stock of the same SKUs is
+picked first and shipping a parcel proves nothing.
+
+**After E5 the seller app is done and the admin sections (H–P) begin.** They are
+44 entries and the document is explicit that they are a BET: read
+[the recommendation](#the-recommendation) before starting them, and consider
+taking support questions rather than this file's order.
 
 **B4 and B5 landed 2026-09-30 and needed NO new seeding at all**, which is worth
 knowing before costing anything else in section B: D0's nine parcels already
@@ -659,19 +666,27 @@ sections nest here (the two legs live inside "Each stop") and a parent opens
 before its child, so the last in document order is the innermost one carrying
 the words.
 
-### C2. Reading your stock · `needs demo data`
+### C2. Reading your stock · **FILMED** — `read-your-stock.mp4`
 
 **Promise** — you can tell what is sellable today from what is merely yours.
-**Length** 3 min. **Prerequisites** C1.
-**Needs** C0 above, which is BUILT: `RSH-CN-FLYING` is dispatched and not
-landed, so its units sit in the destination TRANSIT bin and the in-transit
-column is not zero. Add the slug to `CONSIGNMENT_SLUGS` when filming it.
+**Length** 2 min 30 s (12 scenes). **Prerequisites** C1.
+**Needs** TWO worlds, and the second one is the part that is easy to miss. C0's
+`RSH-CN-FLYING` is dispatched and not landed, so its units sit in the
+destination TRANSIT bin and the in-transit column is not zero — that is the
+obvious half. The other is D0's `RSH-LIFE-CONFIRMED`: **"held for orders" is a
+zero unless something is genuinely reserved**, and the difference between owning
+stock and being able to sell it is the whole video. So the slug is in
+`CONSIGNMENT_SLUGS` AND `LIFECYCLE_SLUGS`, and the flow ASSERTS the register's
+reserved column adds to more than zero rather than trusting it.
 **Covers** `/inventory` and its three separate numbers: India stock, reserved,
 available. Then the column that is never added to the others — **in transit** —
 and why: goods between Dhaka and Bangalore are in neither building and cannot
-be sold. Ends on value at cost and the honest "uncovered" count for batches
-that have no unit cost recorded, which is the consequence of skipping that
-field back in A4.
+be sold. Value at cost, split the same way; the honest "units with no cost —
+excluded" line, which is the consequence of skipping that optional field back in
+A4; the register with the same three numbers per SKU; and the low-stock column,
+which hands off to C5.
+
+**It presses nothing.**
 
 ### C3. Keeping a product up to date · **FILMED** — `keep-a-product-up-to-date.mp4`
 
