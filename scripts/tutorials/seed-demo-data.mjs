@@ -4006,6 +4006,90 @@ async function ensureBdIntakeWarehouse(staffToken) {
 }
 
 /**
+ * J1's world: the Bangladesh intake warehouse back to the day it was
+ * made — one FLOOR bin, no shelving, tracking off.
+ *
+ * ── WHY THAT WAREHOUSE AND NOT THE ONE THAT SHIPS ────────────────────
+ * The video turns location tracking ON, on camera, and that is a real
+ * behaviour change for every flow that receives or picks in the building
+ * it is switched in (BIN-1: on means the system ASKS for a bin). Doing
+ * it to `CCU-01` would quietly change the world every other video in
+ * sections C, D, E, J, K and L records against. The Dhaka intake
+ * warehouse fulfils no orders (CNS-2) and holds nothing, so the switch
+ * is visible and harmless — and an empty building is the honest setting
+ * for a video about laying shelving out in the first place.
+ *
+ * ── THE PAGE ENFORCES THE ORDER, WHICH IS WHY THE VIDEO FOLLOWS IT ───
+ * "Turn tracking on" is DISABLED while the warehouse has no real bin,
+ * and the note beside it says why: receiving would have nowhere to put
+ * anything. So the bin is added first and the switch second, which is
+ * the sequence a person is actually forced through rather than one this
+ * tutorial invented.
+ *
+ * ── AND BOTH HALVES ARE PUT BACK ─────────────────────────────────────
+ * The take adds A-01-03 and flips the switch, so a second take would
+ * open on a warehouse that already has shelving (the add is refused by
+ * name — the form says "already exists" and disables itself) and on a
+ * switch that is already on, filming a change that changes nothing. The
+ * bin is deleted and the flag set back to false. Deleting is safe
+ * BECAUSE the bin is empty: `removeBin` on the server refuses one
+ * holding stock or a live reservation, and nothing is ever received into
+ * this one.
+ */
+const J1_BIN = { aisle: 'A', rack: '1', shelf: '3', code: 'A-01-03' };
+
+async function binsWorldFor(slug, staffToken) {
+  if (slug !== 'where-things-live') return;
+
+  const warehouses = await call('/admin/warehouses', { token: staffToken });
+  const bd = warehouses.find((w) => w.code === BD_WAREHOUSE.code);
+  if (bd === undefined) {
+    throw new Error(
+      `No ${BD_WAREHOUSE.code} warehouse — \`ensureBdIntakeWarehouse\` runs before this and is ` +
+        'what the whole video is filmed in.',
+    );
+  }
+
+  const gone = await prisma.warehouseBin.deleteMany({
+    where: { warehouseId: bd.id, code: J1_BIN.code },
+  });
+  if (gone.count > 0) {
+    console.log(`  · removed the ${J1_BIN.code} bin a previous take built in ${bd.code}`);
+  }
+
+  if (bd.binTrackingEnabled === true) {
+    await prisma.warehouse.update({
+      where: { id: bd.id },
+      data: { binTrackingEnabled: false },
+    });
+    console.log(`  · location tracking in ${bd.code} back OFF — the video turns it on`);
+  }
+
+  // A bin lives in a zone, and the form has nothing to offer without
+  // one. Every warehouse is created with MAIN (BIN-1), so this is an
+  // assertion rather than a step — if it is ever not true the video
+  // opens on an empty-state asking for a zone and the narration is
+  // about a form that is not there.
+  const zones = await prisma.warehouseZone.count({ where: { warehouseId: bd.id } });
+  if (zones === 0) {
+    throw new Error(
+      `${bd.code} has no zones, so "Add a bin" renders its empty state instead of the form the ` +
+        'video fills in. Every warehouse is supposed to get a MAIN zone at creation (BIN-1).',
+    );
+  }
+
+  const real = await prisma.warehouseBin.count({
+    where: { warehouseId: bd.id, code: { not: 'FLOOR' } },
+  });
+  if (real > 0) {
+    console.log(
+      `  · note: ${bd.code} still has ${real} bin(s) besides FLOOR — the "0 bin(s) plus FLOOR" ` +
+        'line will read differently, and "Turn tracking on" will already be enabled',
+    );
+  }
+}
+
+/**
  * Remove the consignment a previous take announced, and the bank change
  * it left pending.
  *
@@ -4342,6 +4426,7 @@ async function main() {
   await callWorldFor(slug, sellerId, sellerToken, staffToken);
   await superviseWorldFor(slug, sellerId, sellerToken);
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
+  await binsWorldFor(slug, staffToken);
   await pendingRowsWorldFor(slug, sellerId, sellerToken);
   await notificationWorldFor(slug, sellerId);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);

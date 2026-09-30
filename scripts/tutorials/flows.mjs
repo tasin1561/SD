@@ -8416,6 +8416,201 @@ export const FLOWS = {
       },
     },
   },
+
+  'where-things-live': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/bins`, { waitUntil: 'domcontentloaded' });
+        await page
+          .getByRole('heading', { level: 1, name: 'Bins' })
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-ph').first(), 3000);
+      },
+
+      async overview({ page, stage }) {
+        const section = overviewSection(page);
+        // Gated on a REAL LINE, not on the section: the overview renders
+        // a perfectly good "Nothing matches" card with the same heading
+        // above it.
+        await section
+          .locator('.bin-product')
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        /*
+          THE FILTER ROW, which is what the narration lists. The section
+          itself is thousands of pixels tall — a halo round it is a halo
+          round the whole screen — and `Panel` draws no head when it is
+          given no title, so there is no card header here to point at.
+        */
+        await stage.dwellOn(section.locator('.stk-toolbar').first(), 3600);
+      },
+
+      async holds({ page, stage }) {
+        /*
+          THE TRANSIT BIN, which only exists because C0 built a
+          consignment that is still in the air (CNS-1: in-transit is a
+          PLACE, in the DESTINATION warehouse, and non-pickable). If that
+          world is ever gone this fails here rather than filming a line
+          about stock nobody can see.
+        */
+        const transit = page.locator('.stk-card', { hasText: 'not pickable' }).first();
+        await transit.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(transit, 3800);
+      },
+
+      async building({ page, stage }) {
+        /*
+          SCOPED TO THE PAGE HEADER. The overview above has a "Warehouse"
+          filter of its own, so the unscoped `getByLabel('Warehouse')`
+          matches two and dies on strict mode — and the one it would
+          otherwise find filters a TABLE rather than choosing the
+          building every panel below belongs to.
+        */
+        const picker = page.locator('.sk-ph').getByLabel('Warehouse');
+        await picker.selectOption({ label: 'BD-DHK-1 — Dhaka Intake' });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(picker, 3200);
+      },
+
+      async tracking({ page, stage }) {
+        const panel = trackingPanel(page);
+        // The note that only exists with NO real bin, which is what the
+        // narration is about and what the seeding guarantees.
+        await panel
+          .getByText(/Create at least one bin below before turning this on/)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(panel, 3800);
+      },
+
+      async compose({ page, stage }) {
+        /*
+          THE ZONE IS REQUIRED, and it is why "Add bin" stays disabled —
+          the three coordinates alone are not enough (`binForm.zoneId ===
+          ''` is in its disabled expression, and a disabled button under
+          a filled form is a slow thirty-second timeout rather than a
+          selector miss). The option's VALUE is read off the option whose
+          text names the zone, rather than restating its label, which is
+          `<code> — <name>` and would break on a rename with a message
+          about a missing option.
+        */
+        const section = addBinSection(page);
+        const zone = section.locator('option', { hasText: 'MAIN' }).first();
+        await zone.waitFor({ state: 'attached', timeout: 20_000 });
+        const zoneId = await zone.getAttribute('value');
+        if (zoneId === null || zoneId === '') {
+          throw new Error('No MAIN zone to put a bin in — the seeding asserts one exists.');
+        }
+        await section.getByLabel(/^Zone$/).selectOption(zoneId);
+        await page.waitForTimeout(600);
+        await stage.dwellOn(section.locator('.stk-card').first(), 3200);
+      },
+
+      async preview({ page, stage }) {
+        const section = addBinSection(page);
+        // By a REGEX against the whole accessible name: "Type" is a
+        // case-insensitive substring of the overview's "Bin type"
+        // filter, and `getByLabel` is substring by default.
+        await stage.typeIn(section.getByLabel(/^Aisle$/), 'A');
+        await stage.typeIn(section.getByLabel(/^Rack$/), '1');
+        await stage.typeIn(section.getByLabel(/^Shelf$/), '3');
+        await page.getByText(/Will be created as/).waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.getByText(/Will be created as/).first(), 3000);
+      },
+
+      async added({ page, stage }) {
+        await stage.clickIt(addBinSection(page).getByRole('button', { name: 'Add bin' }), {
+          after: 1400,
+        });
+        const layout = layoutSection(page);
+        await layout
+          .getByText('A-01-03', { exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(layout, 3200);
+      },
+
+      async on({ page, stage }) {
+        await stage.clickIt(trackingPanel(page).getByRole('button', { name: 'Turn tracking on' }), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByText(/Receiving will start asking which bin goods went into/)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__body').first(), 3200);
+      },
+
+      async notcollapse({ page, stage }) {
+        await stage.clickIt(page.getByRole('dialog').getByRole('button', { name: 'Confirm' }), {
+          after: 1400,
+        });
+        /*
+          THE ON-STATE NOTE, which is the sentence this whole tutorial
+          exists to teach and which can only be read while tracking is
+          ON. Gating on the button's label flipping would pass on local
+          state that never reached the server.
+        */
+        const said = page.getByText(/It does NOT collapse the bins you have built/);
+        await said.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(said, 3800);
+      },
+
+      async off({ page, stage }) {
+        /*
+          PUT BACK ON CAMERA. The seeding resets it too — a take that
+          fails after this scene must not leave the intake warehouse
+          asking for bins — but doing it here is the scene: the video's
+          claim is that the switch is reversible and changes nothing
+          physical, and saying so while leaving it on would be asking to
+          be taken on trust.
+        */
+        await stage.clickIt(
+          trackingPanel(page).getByRole('button', { name: 'Turn tracking off' }),
+          {
+            after: 1200,
+          },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByText(/Nothing moves — every bin and everything in it stays exactly as recorded/)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.clickIt(dialog.getByRole('button', { name: 'Confirm' }), { after: 1400 });
+        await trackingPanel(page)
+          .getByRole('button', { name: 'Turn tracking on' })
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(trackingPanel(page), 2600);
+      },
+
+      async move({ page, stage }) {
+        const section = page
+          .locator('.stk-section', { hasText: 'Move stock between bins' })
+          .first();
+        await section.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(section, 3800);
+      },
+
+      async collapse({ page, stage }) {
+        const line = page.getByRole('link', { name: 'Collapse its bins into FLOOR' });
+        await line.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(line, 3600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(trackingPanel(page), 3400);
+      },
+    },
+  },
 };
 
 /**
@@ -8429,4 +8624,22 @@ function firstAsk(page) {
 
 function secondAsk(page) {
   return page.locator('.oo-qcard', { hasText: 'declined over the delivery charge' }).first();
+}
+
+/** J1's four panels, each by the words in its own heading — the page is
+ *  five thousand pixels tall and nothing on it carries an id. */
+function overviewSection(page) {
+  return page.locator('.stk-section', { hasText: "What's in every bin" }).first();
+}
+
+function trackingPanel(page) {
+  return page.locator('.stk-card', { hasText: 'Location tracking' }).first();
+}
+
+function addBinSection(page) {
+  return page.locator('.stk-section', { hasText: 'Add a bin' }).first();
+}
+
+function layoutSection(page) {
+  return page.locator('.stk-section', { hasText: 'plus FLOOR' }).first();
 }

@@ -2992,6 +2992,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'where-things-live',
+    title: 'Where things live',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A warehouse is shelves, and this is where the shelves are described. Two halves: what is standing in every bin across the business, and the layout of one building.',
+      },
+      {
+        id: 'overview',
+        say: 'The top half is every bin we have, with the product, the seller and the batch on each one. Filter by building, by kind of bin, by seller, or by a SKU you are hunting for.',
+      },
+      {
+        id: 'holds',
+        say: 'Some of it is deliberately not sellable. In transit means it has left one warehouse and not arrived at the other — counted here so that neither building goes looking for it.',
+      },
+      {
+        id: 'building',
+        say: 'Everything below that is about one building at a time, and this is where you choose it. Our Dhaka intake warehouse is brand new: one floor, no shelving, nothing on it.',
+      },
+      {
+        id: 'tracking',
+        say: 'Here is the switch, and it is off. Off means everything lands on the floor and picking sheets name no shelf. Note that you cannot turn it on yet, and the line above says why.',
+      },
+      {
+        id: 'compose',
+        say: 'Because there is nowhere to put anything. So build a shelf. It goes in a zone — zones carry pick order, so a picker walks the building in a sensible sequence — and it is an ordinary shelf.',
+      },
+      {
+        id: 'preview',
+        say: 'Then three coordinates, and you never type the name. Aisle A, rack one, shelf three — and it tells you what that becomes before you commit. That is what stops one shelf having three spellings.',
+      },
+      {
+        id: 'added',
+        say: 'And there it is in the layout, empty, pickable, in the main zone. The building now has somewhere to put goods, so the switch above has come alive.',
+      },
+      {
+        id: 'on',
+        say: 'Turn it on, and read what the box promises. From now on receiving asks which bin the goods went into and picking sheets name a shelf.',
+      },
+      {
+        id: 'notcollapse',
+        say: 'And this is the sentence worth taking away. Turning it back off stops the system asking. It does not collapse what you have built — everything stays exactly where it is recorded.',
+      },
+      {
+        id: 'off',
+        say: 'Which is two different questions, and the page keeps them apart on purpose. What exists is one thing; whether anybody is asked about it is another.',
+      },
+      {
+        id: 'move',
+        say: 'Below that, re-shelving. You do not list what is in a bin — the server reads it and moves the lot in one transaction, or a list of lines that all commit or none do.',
+      },
+      {
+        id: 'collapse',
+        say: 'And one line at the very bottom for abandoning shelving altogether. That merges every bin into the floor, it cannot be undone from here, and it has a video of its own.',
+      },
+      {
+        id: 'outro',
+        say: 'So: coordinates rather than names, at least one shelf before you switch anything on, and remember that the switch changes what you are asked — never where anything is.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

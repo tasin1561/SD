@@ -48,6 +48,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `supervising-the-queue.mp4`         | The call queue from a supervisor's side — the picked-up column against the called column, which is how a call somebody claimed and never rang becomes visible; moving it off an agent who has gone home; changing when a customer gets rung without pretending a call was made; and the agent roster, what each is holding against their cap, and raising one.                        |
 | `forcing-an-outcome.mp4`            | Closing a call nobody can complete — why reassigning and closing the entry both leave the order stuck, what the panel says before you have chosen anything, reading what each outcome DOES rather than what it is called, recording the time the conversation really happened, and a press that cannot be undone.                          |
 | `sellers-asking-to-call-again.mp4`  | Deciding a seller's request to ring a customer who already said no — why a card is mostly its reason, approving one and declining the other, the extra calls an approval has to grant or the order comes back already out of chances, and a history where nothing is deleted.                                    |
+| `where-things-live.mp4`             | A warehouse's shelving — what is standing in every bin across the business, why in-transit stock is counted somewhere it cannot be sold, building a shelf from coordinates rather than typing its name, and the switch that changes what you are ASKED without moving anything.                                  |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -453,6 +454,12 @@ the file are still the words in `narration.mjs`.
   that said so — and in that case it was a product bug rather than a flow one
   (see the curriculum's Bugs found). **When a form field misbehaves under
   `clear: true`, check whether a HUMAN can clear it before working around it.**
+- **Read a submit button's whole `disabled` expression before writing the scene
+  that presses it.** A disabled button under a filled-in form fails as a
+  thirty-second CLICK timeout ("element is not enabled"), not as a selector
+  miss, so it looks like the page is broken rather than like the form is
+  incomplete. J1's "Add bin" wants a ZONE as well as the three coordinates its
+  own copy talks about.
 - **A toast lives 4.5 seconds of UNPAUSED time, and hovering it stops the
   clock.** `usePausableTimer` is deliberate — somebody reading a message should
   not be cut off — and `stage.point` moves the pointer onto whatever it

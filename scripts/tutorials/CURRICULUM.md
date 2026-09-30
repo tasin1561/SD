@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 51 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, the whole of I, and P5.** The 39 left are all in the admin app: 2 are
+**90 tutorials. 52 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, the whole of I, J1 and P5.** The 38 left are all in the admin app: 2 are
 `impractical locally` and 29 touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,38 +32,46 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (51):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4** and **I1–I4** — **the whole of
-H and the whole of I**. Every one has its own entry below saying what it covers
-and what its seeding does.
+**Filmed so far (52):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1**. Every
+one has its own entry below saying what it covers and what its seeding does.
 
-**THE NEXT ENTRY IS J1 — "Where things live".** Section J is the warehouse
-floor, eight entries, filmed in pipeline order because that is how the building
-works and the hub's own subtitle says so: consignment → receive → print → pick →
-pack → handover → dispatch. J1 is marked `ready` and needs no seeding (creating
-a warehouse provisions its own zone and floor bin), which makes it the cheap
-one to start on — but **read `/warehouse/bins` before writing a word**, because
-this curriculum has now been wrong about a screen THREE times by describing it
-from the database rather than from the page (I2's roster, twice over, and the
-`C7` that never existed).
+**THE NEXT ENTRY IS J2 — "Receiving a consignment"**, the first dangerous one on
+the warehouse floor: completing a receipt writes real stock through the one
+sanctioned writer (INV-1) and a wrong count becomes a wrong on-hand that only a
+counted adjustment will fix.
 
-**Two things J will need that nothing has built yet**, and both are worth
-knowing before J2 rather than during it: the pipeline videos want parcels
+**Two things to settle BEFORE writing a word of it.**
+
+1. **J2 SPENDS WHAT C1 READS.** C0 (`lib/consignments.mjs`) builds two
+   consignments — one landed with its two counts deliberately disagreeing, one
+   still in the air — and C1 films the seller's side of exactly that world. A
+   receipt completed on camera writes stock and closes a goods receipt, so J2
+   needs either its OWN consignment in C0 or the retire-and-remake shape D4 and
+   I3 use. **Read C0's entry and C1's before touching `lib/consignments.mjs`** —
+   it is described as build-once and idempotent, and "idempotent" there means it
+   skips what already exists rather than that it can put a spent one back.
+2. **The list OPENS ON A FILTER, and the filter decides which controls exist.**
+   `/warehouse/receive` opens on PENDING, and a PENDING goods receipt offers
+   "Start receiving" and "Cancel receipt" — the **Complete** button the video is
+   about only appears once counting has started. The flow has to change the
+   Status select before the row it wants is even in the table. That trap is
+   already written down in the README from P5; it is restated here because J2 is
+   where it bites next.
+
+**And one thing the whole of J will need**: the pipeline videos want parcels
 sitting at each station, and the only machinery that drives a parcel is D0
 (`lib/lifecycle.mjs`), which drives them ALL THE WAY. A parcel parked at PACKED
 for a video about handover is a new shape — `ensureLifecycleParcels` resumes a
-half-built parcel and NEVER rewinds one, so the seeding for J is "stop early",
-not "wind back". And J2 receives a consignment, which C0 provides
-(`CONSIGNMENT_SLUGS`) — C1 films the seller's side of the same world, so J2's
-take SPENDS what C1 reads. Check what C1 needs before completing a receipt on
-camera.
+half-built parcel and NEVER rewinds one, so the seeding for J3–J6 is "stop
+early", not "wind back".
 
 P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
 [the recommendation](#the-recommendation) goes further: if the ops team never
 grows, P5 is worth making on its own and the rest are not); H1, H2, H4 and then
-H3 and then all of I followed. From here, work sections J–P as written, and read
-[the recommendation](#the-recommendation) first — they are 35 entries and this
+H3, then all of I, then J1 followed. From here, work sections J–P as written, and read
+[the recommendation](#the-recommendation) first — they are 34 entries and this
 document is explicit that they are a BET.
 
 **WHAT I2 ACTUALLY NEEDED, and the two things the note that stood here got
@@ -168,12 +176,13 @@ P5 drove ten admin screens through it with no changes to the rig at all.
 on the one configured key) for 13 scenes and 156 s, H1 **946** for 13 and 143 s,
 H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, H3 **1,068** for
 14 and 180 s, I1 **1,067** for 14 and 172 s, and I2 **1,185** for 16 and 197 s, I3
-**1,049** for 14 and 169 s, and I4 **920** for 13 and 151 s — **9,283 for the
-nine, or roughly a third each of the 1,200 the seller videos were costing**,
-because a tour writes shorter lines than a demonstration. Every pre-flight
-estimate was about 2× the real spend (I2's said 2,695, I3's 2,386, I4's 2,087).
-The `--check` runs and the seed runs cost nothing, and there have been forty.
-**Balance after this batch: 79,717 of 121,027** on the one configured key, which
+**1,049** for 14 and 169 s, I4 **920** for 13 and 151 s, and J1 **1,024** for 14
+and 171 s — **10,307 for the ten, or roughly a third each of the 1,200 the
+seller videos were costing**, because a tour writes shorter lines than a
+demonstration. Every pre-flight estimate was about 2× the real spend (I2's said
+2,695, I3's 2,386, I4's 2,087, J1's 2,329). The `--check` runs and the seed runs
+cost nothing, and there have been forty-five.
+**Balance after this batch: 78,693 of 121,027** on the one configured key, which
 is seventy-odd more admin videos.
 
 **Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
@@ -2526,18 +2535,65 @@ Filmed in pipeline order, because that is how the building works and the hub's
 own subtitle says so: consignment → receive → print → pick → pack → handover →
 dispatch.
 
-### J1. Where things live · `ready`
+### J1. Where things live · **FILMED** — `where-things-live.mp4`
 
 **Promise** — you can build a warehouse's locations and know what the tracking
 switch does.
-**Length** 4 min. **Needs** nothing; creating a warehouse provisions its own
-zone and floor bin.
+**Length** 14 scenes, 2 min 51 s. **Needs**
+`seed-demo-data.mjs where-things-live`.
 **Covers** `/warehouse/bins` and the two separate questions it keeps apart:
 what locations **exist** (always editable) and whether the system **asks** for
 one. Then the sentence the help text makes explicitly and this tutorial
 repeats: **turning tracking off stops the system asking; it does not collapse
 the bins you have built.** Collapse is a different, destructive act — named
 here, taught in P4.
+
+**IT IS FILMED IN THE DHAKA INTAKE WAREHOUSE, and that is a safety decision.**
+The video turns location tracking ON, on camera, and that is a real behaviour
+change for every flow that receives or picks in the building it is switched in
+(BIN-1: on means the system ASKS for a bin). Doing it to `CCU-01` would quietly
+change the world sections C, D, E, J, K and L all record against. `BD-DHK-1`
+fulfils no orders (CNS-2) and holds nothing, so the switch is visible and
+harmless — and an empty building is the honest setting for a video about laying
+shelving out in the first place. The take turns it back off itself, and the
+seeding does too, because a take that dies in between must not leave the intake
+warehouse asking for bins.
+
+**THE PAGE ENFORCES THE ORDER, WHICH IS WHY THE VIDEO FOLLOWS IT.** "Turn
+tracking on" is DISABLED while the warehouse has no real bin, and the note
+beside it says why — receiving would have nowhere to put anything. So the shelf
+is built first and the switch second, which is the sequence a person is forced
+through rather than one the tutorial invented. The disabled state is VISIBLE
+(`opacity: .55`, checked against the enabled frame two scenes later), so the
+narration may say so.
+
+**The bin form needs FOUR inputs, not the three the copy talks about.** "The
+code is built from the three coordinates — you never type it" is about aisle,
+rack and shelf, but `Add bin` also stays disabled until a ZONE is chosen
+(`binForm.zoneId === ''` is in its disabled expression). A flow that fills only
+the three waits thirty seconds on a button that is right there — the failure
+arrives as a click timeout rather than as a selector miss. **Read a submit
+button's whole `disabled` expression before writing the scene that presses it.**
+
+**Selector notes.** `getByLabel('Type')` matches the overview's "Bin **type**"
+filter as well as the form's "Type" — `getByLabel` is a case-insensitive
+SUBSTRING — so every label here is reached by a whole-name regex. The page
+header's warehouse picker and the overview's warehouse FILTER are both named
+"Warehouse"; the header one is `.sk-ph`-scoped, and reaching for the wrong one
+filters a table instead of choosing the building every panel below belongs to.
+And the panels carry no ids at all on a page five thousand pixels tall, so each
+is a `.stk-section` / `.stk-card` filtered by the words in its own heading —
+`overviewSection`, `trackingPanel`, `addBinSection`, `layoutSection` in
+`flows.mjs`.
+
+**One observation, not fixed:** "Apply a list of moves" asks an operator to type
+a **seller id, a variant id and a batch id** — three uuids — and no screen in
+the admin app offers them to copy. It is the uuid-instead-of-a-readable-thing
+shape the rest of this document keeps meeting, in its INPUT form rather than its
+output form, and fixing it is adding three pickers rather than changing one
+field, which is why it is recorded here instead of done. The bulk panel is the
+advanced half of a screen whose ordinary half (move one whole bin into another)
+uses proper selects.
 
 ### J2. Receiving a consignment · `needs demo data` · **dangerous**
 
