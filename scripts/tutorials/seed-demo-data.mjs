@@ -4384,7 +4384,23 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
         `  · ${o.ref} is spent — ${spent.orderNumber} is ${spent.status}. ` +
           `Renamed ${retiredRef}; a fresh one follows`,
       );
-      if (spent.status === 'CONFIRMED' || spent.status === 'PENDING_PICK') {
+      /*
+        PICKED IS CANCELLABLE TOO, and it has to be. A full take ends its
+        three parcels at PICKED, which is exactly what the pack bench
+        selects on (WMS-2) — so left alone they pile into J4's queue
+        carrying the same pin as the live ones, and each keeps a
+        phase-2 reservation for ever. The matrix has
+        `PICKED → CANCELLED_BY_ADMIN` with RELEASE_STOCK ("the goods are
+        off the shelf and in a tote, but nothing has been handed to a
+        courier"), so the ordinary admin cancel is the right door and it
+        gives the unit back. Past that — packed or dispatched — stock has
+        really moved and it is left alone and said out loud.
+      */
+      if (
+        spent.status === 'CONFIRMED' ||
+        spent.status === 'PENDING_PICK' ||
+        spent.status === 'PICKED'
+      ) {
         await call(`/admin/orders/${spent.id}/cancel`, {
           method: 'POST',
           token: staffToken,

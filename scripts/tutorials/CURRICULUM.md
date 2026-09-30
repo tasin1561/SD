@@ -39,11 +39,21 @@ does.
 
 **THE NEXT ENTRY IS J4 — "Packing a parcel"**, and J3 has left it most of what
 it needs. `pickWorldFor` (`seed-demo-data.mjs`) places three confirmed, labelled
-parcels addressed to one pin and J3's take walks them all the way to PICKED —
-which is exactly the state the pack bench selects on (`o.status = 'picked'`,
-WMS-2). **So J4's seeding is probably `pickWorldFor` plus one step**: drive the
-three through the printing station with the API rather than the camera, and stop
-at PICKED. It is the same shape as I2 and I3 sharing `SUPERVISE_SLUGS`.
+parcels addressed to one pin, and J3's take walks them all the way to PICKED —
+**measured, not predicted: after the take the three sat at PICKED and the pack
+queue held them**, which is exactly what the bench selects on (`o.status =
+'picked'`, WMS-2). **So J4's seeding is probably `pickWorldFor` plus one step**:
+drive the three through the printing station with the API rather than the
+camera, and stop at PICKED. It is the same shape as I2 and I3 sharing
+`SUPERVISE_SLUGS`.
+
+**Its retire-forward is already PICKED-aware**, which J4 needs and would
+otherwise have had to add: a spent parcel at CONFIRMED, PENDING_PICK or PICKED
+is cancelled through the ordinary admin cancel, so it leaves every warehouse
+queue and gives its reserved unit back. Without that the pack queue grew by
+three a take, all carrying the pin J4 would want to select by. It was widened
+after J3's own take proved it: eleven orders were sitting at PICKED, eight of
+them retired.
 
 **Read PACK-1 and LBL-4 before writing a line of it**, because the pack bench is
 the most rule-dense screen in the app and every rule is a scene: the BOX is the
@@ -2715,7 +2725,13 @@ forward AND cancelled through the ordinary admin cancel, because a retired
 parcel carries the same pin for ever and three of them left CONFIRMED means the
 next take opens on six rows where the narration says three. The cancel also
 releases the reservation, which is what stops three units a take accumulating.
-Past PENDING_PICK it is left alone and said out loud.
+**PICKED is cancellable too, and it has to be**: a full take ends its three
+parcels there, which is exactly what the pack bench selects on (WMS-2), so left
+alone they pile into J4's queue carrying the same pin as the live ones. The
+matrix has `PICKED → CANCELLED_BY_ADMIN` with `RELEASE_STOCK` — "the goods are
+off the shelf and in a tote, but nothing has been handed to a courier" — so the
+ordinary admin cancel is the right door. Past that, packed or dispatched, stock
+has really moved and it is left alone and said out loud.
 
 **`RSH-PICK-` had to join `PROTECTED_REF_PREFIXES`**, for exactly the reason
 `RSH-CALL-` did and which I1's entry already states: these end the take
