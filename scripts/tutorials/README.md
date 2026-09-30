@@ -49,6 +49,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `forcing-an-outcome.mp4`            | Closing a call nobody can complete — why reassigning and closing the entry both leave the order stuck, what the panel says before you have chosen anything, reading what each outcome DOES rather than what it is called, recording the time the conversation really happened, and a press that cannot be undone.                          |
 | `sellers-asking-to-call-again.mp4`  | Deciding a seller's request to ring a customer who already said no — why a card is mostly its reason, approving one and declining the other, the extra calls an approval has to grant or the order comes back already out of chances, and a history where nothing is deleted.                                    |
 | `where-things-live.mp4`             | A warehouse's shelving — what is standing in every bin across the business, why in-transit stock is counted somewhere it cannot be sold, building a shelf from coordinates rather than typing its name, and the switch that changes what you are ASKED without moving anything.                                  |
+| `receive-a-consignment.mp4`         | Counting goods in at the door — claiming the receipt so two people cannot count the same pallet, recording what was really found rather than what was promised, and completing, which writes real stock and cannot be cancelled afterwards.                                                                   |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -454,6 +455,11 @@ the file are still the words in `narration.mjs`.
   that said so — and in that case it was a product bug rather than a flow one
   (see the curriculum's Bugs found). **When a form field misbehaves under
   `clear: true`, check whether a HUMAN can clear it before working around it.**
+- **A `--check` run SPENDS a world just as a take does.** J2's very first press
+  moves its goods receipt out of PENDING, so the second check opens on an empty
+  list and fails at scene one. That is the seed doing its job, not a flaw —
+  but it means "run the check twice with a seed in between" is not optional on
+  any flow whose first action writes something.
 - **Read a submit button's whole `disabled` expression before writing the scene
   that presses it.** A disabled button under a filled-in form fails as a
   thirty-second CLICK timeout ("element is not enabled"), not as a selector

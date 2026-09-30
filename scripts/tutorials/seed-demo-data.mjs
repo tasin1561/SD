@@ -4006,6 +4006,165 @@ async function ensureBdIntakeWarehouse(staffToken) {
 }
 
 /**
+ * J2's world: one consignment standing at the Indian door, uncounted.
+ *
+ * ── WHY IT IS ITS OWN, AND DIRECT_IN ─────────────────────────────────
+ * C0 builds two consignments and J2 would spend either of them. The
+ * landed one is already counted; the flying one's Indian leg is the
+ * ONLY thing putting units in the TRANSIT bin, which C2's in-transit
+ * column and J1's "counted somewhere it cannot be sold" scene both read
+ * — and `ensureConsignmentWorld` is build-once, so a flying consignment
+ * that is received is finished for ever and never rebuilt. Receiving it
+ * on camera would quietly take a scene out of two other videos.
+ *
+ * DIRECT_IN rather than VIA_BD because of what the two leave at the
+ * door. A counted VIA_BD dispatch creates its Indian leg ALREADY
+ * `ARRIVING` (`ConsignmentDispatchService` writes PENDING and updates it
+ * in the same transaction), so "Start receiving" — the step that CLAIMS
+ * the receipt and records who is counting — has already happened and
+ * cannot be filmed. A DIRECT_IN consignment is the seller shipping
+ * straight to India, and its one leg lands PENDING: the whole ritual,
+ * start to complete, is on camera.
+ *
+ * ── THE COUNT IS THE POINT, SO THE DECLARATION IS ROUND ──────────────
+ * The seller declares twenty and ten. The video counts eighteen good,
+ * one damaged and ten, so one line is SHORT and the other is exact —
+ * because a receipt whose numbers all match teaches nothing about the
+ * column that exists to hold the difference. CNS-3: the variance is a
+ * NUMBER, it blocks nothing, and the goods carry on.
+ *
+ * ── IT SPENDS ITSELF, SO IT IS RETIRED FORWARD ───────────────────────
+ * Completing writes real stock through the one sanctioned writer
+ * (INV-1) and a batch points back at the receipt, so nothing about it
+ * can be deleted or rewound. A consignment whose receipt has left
+ * PENDING has its `sellerReference` moved aside and a fresh one is
+ * declared — the D4 / B7 rule, fourth instance. One still PENDING is
+ * REUSED rather than replaced, so a `--check` run costs nothing and the
+ * second take opens on the same row as the first.
+ */
+const RECEIVE_CONSIGNMENT = {
+  ref: 'RSH-CN-RECEIVE',
+  lines: [
+    { sku: 'RSH-JAMDANI-IVORY', declared: 20 },
+    { sku: 'RSH-KANTHA-BLUE', declared: 10 },
+  ],
+};
+
+async function receiveWorldFor(slug, sellerId, sellerToken, staffToken) {
+  if (slug !== 'receive-a-consignment') return;
+
+  const live = await prisma.consignment.findFirst({
+    where: { sellerId, sellerReference: RECEIVE_CONSIGNMENT.ref, deletedAt: null },
+    select: {
+      id: true,
+      consignmentNumber: true,
+      status: true,
+      receipts: { select: { id: true, status: true, receiptNumber: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (live !== null) {
+    const untouched =
+      live.receipts.length > 0 && live.receipts.every((r) => r.status === 'PENDING');
+    if (untouched) {
+      console.log(
+        `  · ${RECEIVE_CONSIGNMENT.ref} is still uncounted (${live.consignmentNumber}) — reused`,
+      );
+      return;
+    }
+    const parked = await prisma.consignment.count({
+      where: { sellerId, sellerReference: { startsWith: `${RECEIVE_CONSIGNMENT.ref}-SPENT-` } },
+    });
+    const retiredRef = `${RECEIVE_CONSIGNMENT.ref}-SPENT-${parked + 1}`;
+    await prisma.consignment.update({
+      where: { id: live.id },
+      data: { sellerReference: retiredRef },
+    });
+    console.log(
+      `  · ${RECEIVE_CONSIGNMENT.ref} is spent — ${live.consignmentNumber} is ${live.status}. ` +
+        `Renamed ${retiredRef} and left intact; a fresh one follows`,
+    );
+
+    /*
+      AND A HALF-COUNTED ONE IS PUT AWAY PROPERLY.
+
+      A `--check` run spends this world exactly as a take does — it
+      presses "Start receiving", which moves the receipt PENDING →
+      ARRIVING — so on a busy afternoon these pile up, each one a receipt
+      somebody started and abandoned. It is a real state and the product
+      has a way out of it, so the seed uses that rather than leaving
+      litter: the CONSIGNMENT is cancelled (a leg cannot be cancelled on
+      its own — the goods-receipt endpoint refuses one and says to cancel
+      the consignment instead), which CNS-6 allows right up to dispatch
+      and which a DIRECT_IN consignment never reaches. A COMPLETED one is
+      left exactly alone: it has written stock through the one sanctioned
+      writer and unwinding it is an adjustment, not a tidy-up.
+    */
+    const half = live.receipts.filter((r) => r.status === 'ARRIVING');
+    if (half.length > 0 && !live.receipts.some((r) => r.status === 'COMPLETED')) {
+      await call(`/admin/consignments/${live.id}/cancel`, {
+        method: 'POST',
+        token: staffToken,
+        body: { reason: 'Abandoned half-counted by a tutorial check run; rebuilding the world.' },
+      }).catch((e) => {
+        console.log(`  · could not cancel ${live.consignmentNumber}, leaving it: ${String(e)}`);
+      });
+      console.log(`  · cancelled ${live.consignmentNumber}, which was left part-counted`);
+    }
+  }
+
+  const lines = [];
+  for (const l of RECEIVE_CONSIGNMENT.lines) {
+    const variant = await prisma.productVariant.findFirst({
+      where: { skuCode: l.sku, product: { sellerId } },
+      select: { id: true },
+    });
+    if (variant === null) {
+      throw new Error(`No ${l.sku} for this seller — the catalogue seeding runs first.`);
+    }
+    lines.push({ variantId: variant.id, expectedQty: l.declared });
+  }
+
+  const declared = await call('/seller/consignments', {
+    method: 'POST',
+    token: await sellerToken(),
+    body: { route: 'DIRECT_IN', sellerReference: RECEIVE_CONSIGNMENT.ref, lines },
+  });
+
+  // The receipt is what the video opens on, and the list opens on
+  // PENDING — so assert the state rather than assume the route made it.
+  const receipts = await call(`/admin/consignments/${declared.id}`, { token: staffToken });
+  const pending = (receipts.receipts ?? []).filter((r) => r.status === 'PENDING');
+  if (pending.length !== 1) {
+    throw new Error(
+      `${declared.consignmentNumber} has ${pending.length} PENDING leg(s), expected exactly one — ` +
+        'a DIRECT_IN consignment is supposed to land one uncounted receipt at the Indian ' +
+        'warehouse, and the receive station opens on that status.',
+    );
+  }
+  /*
+    AND IT MUST BE THE ONLY ONE ON THE BOX. The receive station opens on
+    PENDING and its columns are the receipt number, the consignment, the
+    seller and the status — the seller's own reference is not among
+    them, so there is nothing to name our row by and the flow takes the
+    single pending row. A second one from anywhere else would be filmed
+    and never explained, or counted on camera by mistake.
+  */
+  const waiting = await prisma.goodsReceipt.count({ where: { status: 'PENDING' } });
+  if (waiting !== 1) {
+    throw new Error(
+      `${waiting} goods receipt(s) are PENDING, expected exactly one — the receive station opens ` +
+        'on that list and the video acts on whichever row is in it.',
+    );
+  }
+  console.log(
+    `  · ${RECEIVE_CONSIGNMENT.ref} declared as ${declared.consignmentNumber}, ` +
+      `waiting to be counted on ${pending[0].receiptNumber} — the only receipt waiting`,
+  );
+}
+
+/**
  * J1's world: the Bangladesh intake warehouse back to the day it was
  * made — one FLOOR bin, no shelving, tracking off.
  *
@@ -4427,6 +4586,7 @@ async function main() {
   await superviseWorldFor(slug, sellerId, sellerToken);
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
   await binsWorldFor(slug, staffToken);
+  await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pendingRowsWorldFor(slug, sellerId, sellerToken);
   await notificationWorldFor(slug, sellerId);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);

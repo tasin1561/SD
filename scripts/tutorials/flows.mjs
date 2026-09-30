@@ -8611,6 +8611,137 @@ export const FLOWS = {
       },
     },
   },
+
+  'receive-a-consignment': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/receive`, { waitUntil: 'domcontentloaded' });
+        /*
+          THE LIST OPENS ON PENDING and the seeding guarantees exactly
+          one such row — ours. Gated on the row rather than on the table,
+          which the "No goods receipts match" empty state renders just as
+          convincingly (and did, on a box where nothing was waiting).
+        */
+        await receiveRow(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-ph').first(), 2800);
+      },
+
+      async queue({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-table').first(), 3600);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(receiveRow(page).getByRole('link').first(), { after: 1400 });
+        await page
+          .getByRole('heading', { level: 1 })
+          .filter({ hasText: /GR-/ })
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.wh-facts').first(), 3200);
+      },
+
+      async declared({ page, stage }) {
+        await stage.dwellOn(page.locator('.wh-item').first(), 3600);
+      },
+
+      async start({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Start receiving' }), { after: 1400 });
+        // The COUNT FIELDS, which only exist once the receipt is
+        // ARRIVING — and which are what the next scene is about. The
+        // status chip flips from local state too readily to be a gate.
+        await page
+          .getByLabel(/^Received qty$/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-ph').first(), 2600);
+      },
+
+      async fields({ page, stage }) {
+        await stage.dwellOn(kanthaLine(page).locator('.wh-fields').first(), 3600);
+      },
+
+      async exact({ page, stage }) {
+        const line = kanthaLine(page);
+        await stage.typeIn(line.getByLabel(/^Received qty$/), '10', { clear: true });
+        await stage.typeIn(line.getByLabel(/^Damaged$/), '0', { clear: true });
+        await putIntoFloor(page, line);
+        await page.waitForTimeout(400);
+        await stage.dwellOn(line.locator('.wh-fields').first(), 2600);
+      },
+
+      async short({ page, stage }) {
+        const line = jamdaniLine(page);
+        await stage.typeIn(line.getByLabel(/^Received qty$/), '18', { clear: true });
+        await stage.typeIn(line.getByLabel(/^Damaged$/), '1', { clear: true });
+        await putIntoFloor(page, line);
+        await page.waitForTimeout(400);
+        await stage.dwellOn(line.locator('.wh-fields').first(), 2600);
+      },
+
+      async recorded({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Record all products' }), {
+          after: 1400,
+        });
+        /*
+          THE SECOND LINE'S OWN TAG, which is the one the narration is
+          about — "recorded: 18 (1 dmg)". Gating on the first would pass
+          on a save that only landed one of them, which is exactly what
+          a per-line submit can do.
+        */
+        await jamdaniLine(page)
+          .getByText(/recorded:\s*18/)
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(jamdaniLine(page), 3000);
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Complete', exact: true }), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByText(/It cannot be cancelled afterwards/)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__body').first(), 3400);
+      },
+
+      async variance({ page, stage }) {
+        await stage.dwellOn(page.getByRole('dialog').getByText(/A variance does not block/), 3600);
+      },
+
+      async written({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Complete and write stock' }),
+          { after: 1600 },
+        );
+        /*
+          THE DISCREPANCY FACT, which is what the narration claims and
+          which only a COMPLETED receipt that was counted short can show.
+          The status chip would flip on any completion at all.
+        */
+        await page.getByText('Counted differently').waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.wh-facts').first(), 3200);
+      },
+
+      async labels({ page, stage }) {
+        await stage.dwellOn(page.getByRole('button', { name: 'Print product labels' }), 3600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.wh-item').first(), 3400);
+      },
+    },
+  },
 };
 
 /**
@@ -8642,4 +8773,56 @@ function addBinSection(page) {
 
 function layoutSection(page) {
   return page.locator('.stk-section', { hasText: 'plus FLOOR' }).first();
+}
+
+/** J2's row and its two product lines, each by the SKU printed on it —
+ *  "Received qty" and "Damaged" repeat per line, so every reach has to
+ *  be scoped to one of them or it matches both. */
+function receiveRow(page) {
+  /*
+    THE ONE PENDING ROW. The list's columns are the receipt number, the
+    consignment, the seller and the status — the seller's own reference
+    is NOT among them, so there is nothing stable to name it by: both
+    numbers are minted per run. The seeding asserts the whole box holds
+    exactly one PENDING goods receipt, which is what makes this
+    deterministic rather than a coin toss.
+  */
+  return page.locator('.sk-tbody .sk-tr', { hasText: 'Pending' }).first();
+}
+
+function kanthaLine(page) {
+  return page.locator('.wh-item', { hasText: 'RSH-KANTHA-BLUE' }).first();
+}
+
+function jamdaniLine(page) {
+  return page.locator('.wh-item', { hasText: 'RSH-JAMDANI-IVORY' }).first();
+}
+
+/**
+ * Put a counted line into the FLOOR bin.
+ *
+ * A BIN IS REQUIRED HERE WHATEVER THE WAREHOUSE SAYS. `onRecordAll`
+ * refuses any line with `qty > 0` and no bin — unconditionally, with no
+ * reference to `binTrackingEnabled` — so on CCU-01, where location
+ * tracking is OFF and J1's own copy says "receiving can still note one,
+ * but it is only a note", the operator is still made to choose one. It
+ * is recorded in the curriculum as an inconsistency rather than fixed:
+ * the stricter client produces a TRUER record (BIN-1 says an explicitly
+ * supplied real bin is honoured either way), and the video does what an
+ * operator must do.
+ *
+ * Reached by the option's own value, because the label is
+ * `<code> (<type>)` and restating it would break on a type change with
+ * a message about a missing option.
+ */
+async function putIntoFloor(page, line) {
+  const option = line.locator('option', { hasText: 'FLOOR' }).first();
+  await option.waitFor({ state: 'attached', timeout: 20_000 });
+  const binId = await option.getAttribute('value');
+  if (binId === null || binId === '') {
+    throw new Error(
+      'No FLOOR bin offered on this receipt line — the warehouse has nowhere to put stock.',
+    );
+  }
+  await line.getByLabel(/^Putaway bin$/).selectOption(binId);
 }

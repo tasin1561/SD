@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 52 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, the whole of I, J1 and P5.** The 38 left are all in the admin app: 2 are
+**90 tutorials. 53 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, the whole of I, J1–J2 and P5.** The 37 left are all in the admin app: 2 are
 `impractical locally` and 29 touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,46 +32,41 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (52):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1**. Every
-one has its own entry below saying what it covers and what its seeding does.
+**Filmed so far (53):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J2**.
+Every one has its own entry below saying what it covers and what its seeding
+does.
 
-**THE NEXT ENTRY IS J2 — "Receiving a consignment"**, the first dangerous one on
-the warehouse floor: completing a receipt writes real stock through the one
-sanctioned writer (INV-1) and a wrong count becomes a wrong on-hand that only a
-counted adjustment will fix.
+**THE NEXT ENTRY IS J3 — "Labels and the picking sheet"**, which is where the
+warehouse pipeline's REAL seeding problem starts, and it is worth reading this
+before starting rather than discovering it half way.
 
-**Two things to settle BEFORE writing a word of it.**
+**J3 onwards needs parcels PARKED at a station, and nothing builds those.** D0
+(`lib/lifecycle.mjs`) is the only machinery that drives a parcel and it drives
+them ALL THE WAY — `ensureLifecycleParcels` resumes a half-built parcel and
+NEVER rewinds one. A parcel standing at CONFIRMED waiting to be printed, or at
+PENDING_PICK waiting to be walked, or at PICKED waiting to be packed, is a
+"stop early" shape rather than a "wind back" one, and D0 has no notion of
+stopping early. **The cheapest honest answer is probably a `parkAt` option on a
+lifecycle parcel** — drive it to a named status and no further — rather than a
+second driver, because the steps are all in that file already and a copy would
+drift from it. Read D0's entry first; it is the longest one in this document
+for a reason.
 
-1. **J2 SPENDS WHAT C1 READS.** C0 (`lib/consignments.mjs`) builds two
-   consignments — one landed with its two counts deliberately disagreeing, one
-   still in the air — and C1 films the seller's side of exactly that world. A
-   receipt completed on camera writes stock and closes a goods receipt, so J2
-   needs either its OWN consignment in C0 or the retire-and-remake shape D4 and
-   I3 use. **Read C0's entry and C1's before touching `lib/consignments.mjs`** —
-   it is described as build-once and idempotent, and "idempotent" there means it
-   skips what already exists rather than that it can put a spent one back.
-2. **The list OPENS ON A FILTER, and the filter decides which controls exist.**
-   `/warehouse/receive` opens on PENDING, and a PENDING goods receipt offers
-   "Start receiving" and "Cancel receipt" — the **Complete** button the video is
-   about only appears once counting has started. The flow has to change the
-   Status select before the row it wants is even in the table. That trap is
-   already written down in the README from P5; it is restated here because J2 is
-   where it bites next.
-
-**And one thing the whole of J will need**: the pipeline videos want parcels
-sitting at each station, and the only machinery that drives a parcel is D0
-(`lib/lifecycle.mjs`), which drives them ALL THE WAY. A parcel parked at PACKED
-for a video about handover is a new shape — `ensureLifecycleParcels` resumes a
-half-built parcel and NEVER rewinds one, so the seeding for J3–J6 is "stop
-early", not "wind back".
+**And J3's own subject is LBL-1 and WMS-1**, which are worth reading together:
+picking is PRINT-FIRST and batched (`/warehouse/printing` — select parcels,
+print labels, confirm, print ONE consolidated picking sheet, confirm, walk, mark
+picked), **confirming the print is what ALLOCATES phase-2**, and the picking
+list decides the barcode PER LINE (a STRICT product prints "STRICT — scan each
+unit" instead of a SKU barcode). The per-parcel pick station is RETIRED from the
+nav and must not be filmed as the everyday path.
 
 P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
 [the recommendation](#the-recommendation) goes further: if the ops team never
 grows, P5 is worth making on its own and the rest are not); H1, H2, H4 and then
-H3, then all of I, then J1 followed. From here, work sections J–P as written, and read
-[the recommendation](#the-recommendation) first — they are 34 entries and this
+H3, then all of I, then J1 and J2 followed. From here, work sections J–P as written, and read
+[the recommendation](#the-recommendation) first — they are 33 entries and this
 document is explicit that they are a BET.
 
 **WHAT I2 ACTUALLY NEEDED, and the two things the note that stood here got
@@ -176,13 +171,14 @@ P5 drove ten admin screens through it with no changes to the rig at all.
 on the one configured key) for 13 scenes and 156 s, H1 **946** for 13 and 143 s,
 H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, H3 **1,068** for
 14 and 180 s, I1 **1,067** for 14 and 172 s, and I2 **1,185** for 16 and 197 s, I3
-**1,049** for 14 and 169 s, I4 **920** for 13 and 151 s, and J1 **1,024** for 14
-and 171 s — **10,307 for the ten, or roughly a third each of the 1,200 the
-seller videos were costing**, because a tour writes shorter lines than a
-demonstration. Every pre-flight estimate was about 2× the real spend (I2's said
-2,695, I3's 2,386, I4's 2,087, J1's 2,329). The `--check` runs and the seed runs
-cost nothing, and there have been forty-five.
-**Balance after this batch: 78,693 of 121,027** on the one configured key, which
+**1,049** for 14 and 169 s, I4 **920** for 13 and 151 s, J1 **1,024** for 14
+and 171 s, and J2 **994** for 14 and 163 s — **11,301 for the eleven, or roughly
+a third each of the 1,200 the seller videos were costing**, because a tour
+writes shorter lines than a demonstration. Every pre-flight estimate was about
+2× the real spend (I2's said 2,695, I3's 2,386, I4's 2,087, J1's 2,329, J2's
+2,262). The `--check` runs and the seed runs cost nothing, and there have been
+fifty.
+**Balance after this batch: 77,699 of 121,027** on the one configured key, which
 is seventy-odd more admin videos.
 
 **Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
@@ -2595,17 +2591,70 @@ field, which is why it is recorded here instead of done. The bulk panel is the
 advanced half of a screen whose ordinary half (move one whole bin into another)
 uses proper selects.
 
-### J2. Receiving a consignment · `needs demo data` · **dangerous**
+### J2. Receiving a consignment · **FILMED** — `receive-a-consignment.mp4` · **dangerous**
 
 **Promise** — you can count goods in and write them to stock.
-**Length** 4 min. **Needs** a consignment with a pending goods receipt. C1's
-seeding provides it.
+**Length** 14 scenes, 2 min 43 s. **Needs**
+`seed-demo-data.mjs receive-a-consignment`.
 **Covers** `/warehouse/receive`: start receiving (which claims it), per-line
 received and damaged and bin, then **"Complete and write stock"**.
 **Cost of getting it wrong:** completion writes real stock through the one
 sanctioned writer, and a wrong count becomes a wrong on-hand that only a
 counted adjustment will fix. Also covers the rule that a variance no longer
 blocks — the count is recorded, the gap is noted, and the goods carry on.
+
+**IT HAS ITS OWN CONSIGNMENT, AND IT IS `DIRECT_IN`.** Both halves are
+decisions rather than convenience. C0's two consignments would BOTH be spent by
+this video — the landed one is already counted, and the flying one's Indian leg
+is the only thing putting units in the TRANSIT bin, which C2's in-transit column
+and J1's "counted somewhere it cannot be sold" scene both read; and
+`ensureConsignmentWorld` is build-once, so a flying consignment that is received
+is finished for ever and never rebuilt. Receiving it on camera would quietly
+take a scene out of two other videos. And DIRECT_IN rather than VIA_BD because
+of what the two leave at the door: **a counted VIA_BD dispatch creates its
+Indian leg already `ARRIVING`** (`ConsignmentDispatchService` writes PENDING and
+updates it in the same transaction), so "Start receiving" — the step that CLAIMS
+the receipt and records who is counting — has already happened and cannot be
+filmed. A DIRECT_IN consignment's one leg lands PENDING and the whole ritual is
+on camera.
+
+**THE COUNT IS THE POINT, SO THE DECLARATION IS ROUND AND THE COUNT IS NOT.**
+The seller declares twenty and ten; the video counts eighteen good, one damaged
+and ten. One line is short by one and broken by one, the other is exact, because
+a receipt whose numbers all match teaches nothing about the column that exists
+to hold the difference. `received_qty` counts GOOD units, so a damaged unit is
+not also a missing one, and the completed receipt says so in its own words:
+"RSH-JAMDANI-IVORY: counted 18 against 20 expected".
+
+**A `--check` SPENDS THIS WORLD, not only a take** — the very first press moves
+the receipt PENDING → ARRIVING — so the seeding has to put it back on every run,
+and it does two things rather than one. A consignment whose receipt has left
+PENDING has its `sellerReference` moved aside and a fresh one declared (the D4 /
+B7 retire-forward, fourth instance); and a HALF-COUNTED one is **cancelled**
+rather than left as litter, because an abandoned ARRIVING receipt is a real
+state with a real way out. A leg cannot be cancelled on its own — the
+goods-receipt endpoint refuses one and says to cancel the CONSIGNMENT instead —
+and CNS-6 allows that right up to dispatch, which a DIRECT_IN consignment never
+reaches. A COMPLETED one is left exactly alone: it has written stock and
+unwinding it is an adjustment, not a tidy-up. One still PENDING is REUSED, so a
+failed check costs nothing.
+
+**The seed asserts the WHOLE BOX holds exactly one PENDING goods receipt**,
+because the list's columns are the receipt number, the consignment, the seller
+and the status — **the seller's own reference is not among them**, so there is
+nothing stable to name our row by (both numbers are minted per run) and the flow
+takes the single pending row.
+
+**One inconsistency found and NOT fixed: a putaway bin is required even where
+the warehouse says it is not asked for.** `onRecordAll` refuses any line with
+`qty > 0` and no bin, unconditionally, with no reference to
+`binTrackingEnabled` — while J1's own tracking panel says, with tracking OFF,
+"Receiving can still note one, but it is only a note". CCU-01 has tracking off
+and the operator is still made to choose. It is left alone on purpose: the
+stricter client produces a TRUER record (BIN-1 says an explicitly supplied real
+bin is honoured either way and is "pure upside"), so the video does what an
+operator must do and puts both lines into FLOOR. **If anybody does relax it,
+relax the COPY instead — "can still note one" is the sentence that is wrong.**
 
 ### J3. Labels and the picking sheet · `needs demo data`
 

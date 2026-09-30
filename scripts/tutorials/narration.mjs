@@ -3055,6 +3055,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'receive-a-consignment',
+    title: 'Receiving a consignment',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Goods have arrived at the door. Until somebody counts them they are a promise on a screen; the moment this receipt is completed they become stock a customer can be sold.',
+      },
+      {
+        id: 'queue',
+        say: 'The receive station opens on what is waiting, and that is the only list that matters on a delivery morning. A row says which consignment it belongs to and who sent it.',
+      },
+      {
+        id: 'open',
+        say: 'Open it and you get the declaration — who the seller is, their own reference for it, which building it landed at, and what they say is in the boxes.',
+      },
+      {
+        id: 'declared',
+        say: 'Two products, and the expected figures are the SELLER’s. Nothing here has been counted by anybody yet, which is why every line says recorded nought.',
+      },
+      {
+        id: 'start',
+        say: 'Start receiving. That claims the receipt in your name, so two people cannot count the same pallet from two ends of the building and each overwrite the other.',
+      },
+      {
+        id: 'fields',
+        say: 'Now each line asks three things: how many good ones you found, how many arrived damaged, and which shelf you are putting them on.',
+      },
+      {
+        id: 'exact',
+        say: 'The first one is exact: ten declared, ten in the carton, none of them damaged. Every line also wants somewhere to put them, and this building keeps no shelf numbers, so the floor.',
+      },
+      {
+        id: 'short',
+        say: 'The second is not. Twenty declared, eighteen good ones and one damaged — so one is missing outright and one arrived broken. Record what you found, not what was promised.',
+      },
+      {
+        id: 'recorded',
+        say: 'Both lines now carry a count, and the damaged one is shown beside it. Nothing has been written to stock yet; this is still just what the person on the bench says.',
+      },
+      {
+        id: 'confirm',
+        say: 'Complete, and read this before pressing. Stock is written for what was counted, the receipt closes, and it cannot be cancelled afterwards — a mistake needs a stock adjustment.',
+      },
+      {
+        id: 'variance',
+        say: 'And the line that matters most: a variance does not block. We record the gap and the goods carry on, because holding a seller’s stock hostage over a count helps nobody.',
+      },
+      {
+        id: 'written',
+        say: 'Done. The receipt is closed, it is marked as counted differently, and those units are now on a shelf with your name against when they got there.',
+      },
+      {
+        id: 'labels',
+        say: 'One more thing while the boxes are open. Print product labels makes a sticker per unit you actually received — not per unit anybody expected — because spares end up on the wrong thing.',
+      },
+      {
+        id: 'outro',
+        say: 'So: claim it, count what is really there, put it somewhere, and complete. The gap is a number on a record, and the only way back from a wrong one is an adjustment.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
