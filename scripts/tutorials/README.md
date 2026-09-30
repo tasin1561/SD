@@ -20,6 +20,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `where-is-my-parcel.mp4`            | Answering a customer without ringing anybody — every parcel that has left, the three tiles and what they actually count, the two filters a seller comes for, the whole scan trail, the search, and the fact that nothing on the screen is a button.                       |
 | `something-arrived-damaged.mp4`     | A damage claim end to end — the ticket the returns bench opened, what it found unit by unit, our reply, the refund, and the credit itself in the wallet ledger. Then the other half: an issue the seller raises from the order, in the courier's own categories. |
 | `the-customer-was-not-there.mp4`    | What a seller does after a failed delivery — the tracker, what the courier said, every call we have made to that customer, and then the three things you can ask for, each with what it actually costs: a van, an agent's time, or a parcel turned round on the spot.                     |
+| `the-deal.mp4`                      | The arrangement with a reseller store — the share of each Skydrop fee they pay, worked through in rupees as you type it, when each of you is credited, and publishing a version they then have to accept. Versions are kept for ever, because placed orders are priced under the one they were placed under. |
 | `what-one-store-sells.mp4`          | Deciding what one reseller store may sell — turning a product on, giving that store a price of its own, and the two stock modes: shared with everyone, or a set-aside nobody else can touch, with a share held back from what they are shown. |
 | `read-your-wallet.mp4`              | The three tabs and why they are three — the Ledger is what happened, the other two are what has merely been asked for. Then a row at a time: a delivery charge, the COD credit and when it is actually written, the tax taken out of it, and a damage settlement. |
 | `ask-for-a-parcel-back.mp4`         | Turning a parcel round — the seller's own send-back on a parcel still moving, which reaches the courier on the click and names its fee before you press it, and then "Request return" on one already delivered, which books a collection under its own waybill. Two asks, two different fees. |
@@ -311,6 +312,16 @@ the file are still the words in `narration.mjs`.
   fixture's `External Ref`s are re-usable on every take. Without that, the
   "Recent imports" table opens on the last take's run and the second take
   films a different page.
+- **A render that will not finish announces itself in the RAW file size.**
+  `record.mjs` ends with `context.close()`, which flushes the webm — and once,
+  on a three-minute video, that never returned: the page stayed open, the
+  encoder kept consuming frames, and `out/raw/<slug>/*.webm` grew past 120 MB
+  over a quarter of an hour. **A healthy three-minute recording is about
+  15 MB**, so the size is the tell long before the wall clock is. Kill the
+  `make-tutorials.sh` and `record.mjs` processes BY PID (never `pkill -f`, which
+  matches the calling shell), delete `out/raw/<slug>/`, and run it again — the
+  narration clips are cached on their words, so a re-run buys nothing and the
+  second attempt has so far always worked.
 - The recorder writes `out/verify/<slug>-failure.png` when a flow breaks. It is
   usually enough on its own — the failures during this build were all visible
   in it.

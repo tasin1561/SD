@@ -33,8 +33,10 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (29):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
-F1, F2, F3, F5, G1, G2, G3. Every one is listed in its own entry below with what it
+**Filmed so far (30):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
+F1, F2, F3, F5, G1–G4. **G5 is BUILT and not yet filmed** — its seeding,
+narration and flow are committed and all it needs is `--check` twice and a
+render. Every one is listed in its own entry below with what it
 covers and what its seeding does.
 
 **SECTION D IS COMPLETE.** D4 landed 2026-09-30 and brought the lifecycle to
@@ -44,15 +46,10 @@ actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
 unwound. Read D4's entry before filming anything else that presses a courier
 button.
 
-**The next entry is G4 (the deal — publishing terms), then G5, G6, G7, then E5,
-then B3/B4/B5/B6/B7 and C1/C2/C7, then section H onward.**
-
-**G4 is the cheapest of what is left**: `standingStoreFor` already builds the
-store G4 needs, so adding `'the-deal'` to `STORE_REQUIRED_SLUGS` is the whole
-seeding, plus clearing any terms version a take publishes (they are append-only
-versions, so a second take would open on version 2 and film different words).
-G5 is the same shape over `reseller_store_action_policy` — one row, reset to
-`DEFAULT_POLICY` between takes.
+**The next entry is G5 — and it is already written.** Seed it
+(`node scripts/tutorials/seed-demo-data.mjs what-a-store-may-do`), `--check`
+twice with a seed between, look at the frames, and render. After it: G6, G7,
+then E5, then B3/B4/B5/B6/B7 and C1/C2/C7, then section H onward.
 
 **G6 is the heaviest thing left in the seller app** and should be costed before
 it is started: it needs a store USER who has actually signed in, a store ORDER
@@ -1328,28 +1325,60 @@ this video must not open on — the form then says "set one on your price list",
 which is a different lesson. Rows are found BY SKU (`storeCatalogueRow`), never
 by position: the table is every active variant the seller has.
 
-### G4. The deal · `needs demo data`
+### G4. The deal · **FILMED** — `the-deal.mp4`
 
 **Promise** — you can publish terms and see exactly who pays what.
-**Length** 4 min. **Prerequisites** G3.
-**Needs** a store with a catalogue.
-**Covers** the "Terms" tab: the share of each Skydrop fee the store pays, each
-party's credit timing, and the **live worked example the API computes as you
-type**. Then publishing a version and the store having to accept it. Terms are
-versioned and an order snapshots the version it was placed under — which is why
-a later change never re-prices a placed order.
+**Length** 3 min 03 s (15 scenes). **Prerequisites** G3.
+**Covers** the "Terms" tab: the share of each of the six Skydrop fees the store
+pays, each party's credit timing, and the **live worked example the API computes
+as you type** — against the seller's REAL fees, so the table reads ₹148.15
+delivery and ₹200.00 customer return rather than round numbers. Then publishing
+a version, and the panel saying it is in force but not yet accepted.
 
-### G5. What a store may do without asking · `needs demo data`
+**Its seeding is one line on top of G3's.** `standingStoreFor` already builds
+the store, so `'the-deal'` joins `STORE_REQUIRED_SLUGS` and the only addition is
+clearing the terms version a take publishes. That clearing is not optional:
+versions are append-only and NUMBERED (RS-4), so a second take would open on
+"Publish version 2" over a card already holding the first take's percentages,
+and every sentence about "the first terms" would be wrong. **Deleting is safe
+for a stated reason** — an order snapshots its version through a RESTRICT
+foreign key, so a version any order points at cannot be deleted at all; the
+database refuses rather than the script having to judge. There are no store
+orders until G6.
+
+**`getByLabel` is SUBSTRING by default and it cost a run**: "Return fee — store
+pays (%)" matched the customer-return field as well and Playwright refused under
+strict mode. Every fee field is `{ exact: true }` now, whether or not it
+collides today — a seventh fee could make any of them ambiguous.
+
+**The `live-example` scene is anchored on the computed sentence's own wording**,
+not on the element: its placeholder while the request is in flight is "Working
+out an example…", so waiting for the real text is what stops the scene filming
+the placeholder and calling it a worked example.
+
+### G5. What a store may do without asking · **BUILT, NOT YET FILMED**
 
 **Promise** — you decide, per task, whether a store acts directly or needs your
 approval.
-**Length** 3 min. **Prerequisites** G4.
-**Needs** a store.
-**Covers** the "What they can do" matrix: seven tasks, each asked as two
-questions — can they, and if so, directly or with your approval. Then the
-consequences, which differ per task and are the reason this is not one switch:
-a direct **send-back calls the courier on their click**; a direct re-attempt
-opens a ticket for a person. This tutorial is also the setup for G6.
+**Length** ~2 min 45 s (14 scenes). **Prerequisites** G4.
+**Status:** the seeding, the narration and the flow are all written and
+committed; `'what-a-store-may-do'` is in `STORE_REQUIRED_SLUGS`. **What is left
+is `--check` twice and one render.**
+**Covers** the "What they can do" matrix, THREE of its seven rows rather than
+all of them: the gentlest task set to direct, the send-back set to
+needs-my-approval, and one turned off entirely. Seven rows narrated one at a
+time would be a list; three chosen for the argument they make is a tutorial. The
+consequences differ per task and are the reason this is not one switch — a
+direct send-back asks the courier to turn the parcel round the moment the store
+clicks, and the row says so in its own words.
+
+**The seeding DELETES the policy row, and that is exactly right rather than
+convenient**: a missing row IS the defaults (`DEFAULT_POLICY`, pinned against
+the migration's own column defaults), so removing it is not clearing the store's
+permissions — it is putting them back to what a store nobody has configured has.
+It also makes the page open on "Running on the defaults — you have not set this
+store yet", which is the sentence the second scene argues from and which never
+appears again once a take has saved.
 
 ### G6. Answering what a store has asked · `needs demo data`
 

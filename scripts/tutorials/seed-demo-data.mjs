@@ -1213,7 +1213,7 @@ async function resellingWorldFor(slug, sellerId, sellerToken) {
  * contradiction and `resellingWorldFor` builds one and dismantles the
  * other, exactly as `walletWorldFor` does for E1 and E3.
  */
-const STORE_REQUIRED_SLUGS = new Set(['what-one-store-sells']);
+const STORE_REQUIRED_SLUGS = new Set(['what-one-store-sells', 'the-deal', 'what-a-store-may-do']);
 
 /**
  * Three products the standing store's catalogue is built from.
@@ -1308,6 +1308,42 @@ async function standingStoreFor(sellerId, sellerToken) {
   const wiped = await prisma.resellerStoreVariant.deleteMany({ where: { storeId: store.id } });
   if (wiped.count > 0) {
     console.log(`  · cleared ${wiped.count} per-product term(s) from a previous take`);
+  }
+
+  // G4 publishes a TERMS VERSION on camera, and versions are
+  // append-only and NUMBERED (RS-4): a second take would open on
+  // "Publish version 2" over a card already holding the first take's
+  // percentages, and every sentence about "the first terms" would be
+  // wrong. So the store goes back to having none.
+  //
+  // Deleted rather than superseded, and safe for a stated reason: an
+  // ORDER snapshots the version it was placed under through a RESTRICT
+  // foreign key, so a version any order points at cannot be deleted at
+  // all — the database refuses it rather than this script having to
+  // judge. There are no store orders until G6.
+  const versions = await prisma.resellerStoreTermsVersion.deleteMany({
+    where: { storeId: store.id },
+  });
+  if (versions.count > 0) {
+    console.log(`  · cleared ${versions.count} terms version(s) from a previous take`);
+  }
+
+  // G5 SAVES the action policy on camera, and its page says two
+  // different things depending on whether a row exists: "Running on the
+  // defaults — you have not set this store yet" or "Your settings for
+  // this store". The first is what the video opens on and argues from,
+  // so the row goes.
+  //
+  // Deleting is exactly right rather than merely convenient: a MISSING
+  // ROW IS THE DEFAULTS (`DEFAULT_POLICY`, pinned against the
+  // migration's own column defaults), so removing it is not clearing the
+  // store's permissions — it is putting them back to what a store that
+  // has never been configured has.
+  const policy = await prisma.resellerStoreActionPolicy.deleteMany({
+    where: { storeId: store.id },
+  });
+  if (policy.count > 0) {
+    console.log('  · put what-they-can-do back to the Skydrop defaults');
   }
 }
 

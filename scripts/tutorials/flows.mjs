@@ -105,6 +105,74 @@ const ISSUE = {
 };
 
 /**
+ * The three tasks G5 works, by the label the page prints.
+ *
+ * Three of seven, chosen for the argument rather than for coverage: the
+ * gentlest set to direct, the most dangerous set to needs-my-approval,
+ * and one turned off entirely. A scene per row would be a list.
+ */
+const CAPABILITY = {
+  recall: 'Call the customer again',
+  sendBack: 'Send the parcel back',
+  cancel: 'Call the order off',
+};
+
+/** One row of the what-they-can-do matrix, by its task label. */
+async function capabilityRow(page, label) {
+  const row = page.getByRole('row').filter({ hasText: label }).first();
+  await row.waitFor({ state: 'visible', timeout: 25_000 });
+  await row.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(700);
+  return row;
+}
+
+/**
+ * Get to the standing reseller store's page.
+ *
+ * Shared by G4 and G5 rather than copied: both open the same store from
+ * the same list, and two copies of a navigation is two places to fix
+ * when the list's markup moves.
+ */
+async function openStandingStore(page, stage) {
+  await stage.clickIt(page.getByRole('link', { name: 'Reseller stores', exact: true }).first(), {
+    after: 1600,
+  });
+  await page.waitForURL(/\/reseller-stores$/, { timeout: 30_000 });
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(1000);
+  const row = page.getByRole('row').filter({ hasText: RESELLER.storeName }).first();
+  await row.waitFor({ state: 'visible', timeout: 25_000 });
+  await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+  await page.waitForURL(/\/reseller-stores\/[0-9a-f-]+$/, { timeout: 30_000 });
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(1000);
+}
+
+/**
+ * The deal G4 publishes.
+ *
+ * The shares are a real-looking arrangement rather than round numbers
+ * for their own sake: the store carries half the delivery and most of a
+ * CUSTOMER return (they took the order and chose the customer), a
+ * smaller slice of an RTO (a failed first delivery is more often the
+ * address than the store), and a share of the COD fees, which follow
+ * money they collected.
+ *
+ * COD_TAX and INSTANT_PAY_FEE are deliberately left at whatever the form
+ * opens on — the video types five fields, not six, and a scene per field
+ * would be a list rather than an argument.
+ */
+const TERMS = {
+  delivery: '50',
+  returnFee: '30',
+  customerReturn: '80',
+  codFee: '50',
+  codTax: '50',
+  storeDays: '7',
+  note: 'Our opening terms, as we agreed on the call. Returns are the part to watch — the customer-return share is high on purpose, because you choose the customer.',
+};
+
+/**
  * What G3 sets on one product, for one store.
  *
  * The SKU is `RSH-KANTHA-BLUE` rather than the scarf G2 uses: G2's take
@@ -4472,6 +4540,363 @@ export const FLOWS = {
         await table.scrollIntoViewIfNeeded();
         await page.waitForTimeout(800);
         await stage.dwellOn(table, 3200);
+      },
+    },
+  },
+
+  /**
+   * G4 — the deal.
+   *
+   * The store is seeded by `standingStoreFor`, which ALSO clears any
+   * terms version a previous take published: versions are append-only
+   * and numbered (RS-4), so a second take would open on "Publish version
+   * 2" over a card already holding the first take's percentages, and
+   * every sentence about "the first terms" would be wrong.
+   *
+   * Fee fields are reached BY LABEL, and the labels are built from
+   * `FEE_FIELDS` — a seventh fee added upstream appends a field rather
+   * than moving these, so the scenes stay aimed at what they name.
+   *
+   * The scene that earns the video is `live-example`: the split is
+   * computed BY THE API against the seller's real delivery fee as the
+   * percentage is typed, so what is on screen is rupees rather than the
+   * number just entered. It is anchored on that sentence's own wording,
+   * which means a preview that failed to load fails the check instead of
+   * filming "Working out an example…".
+   */
+  'the-deal': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-terms'({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Reseller stores', exact: true }).first(),
+          { after: 1600 },
+        );
+        await page.waitForURL(/\/reseller-stores$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        const row = page.getByRole('row').filter({ hasText: RESELLER.storeName }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+        await page.waitForURL(/\/reseller-stores\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.clickIt(page.getByRole('tab', { name: 'Terms' }).first(), { after: 1800 });
+        // "Publish the first terms" is the heading ONLY while the store
+        // has no version — so this is the gate that proves the seeding
+        // cleared the last take's, not merely that the tab opened.
+        await page
+          .getByText('Publish the first terms')
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.getByText('Publish the first terms').first(), 2400);
+      },
+
+      async 'fees-intro'({ page, stage }) {
+        await stage.dwellOn(page.getByText(/Inbound freight is always yours/).first(), 3400);
+      },
+
+      async 'delivery-share'({ page, stage }) {
+        await stage.typeIn(
+          page.getByLabel('Delivery fee — store pays (%)', { exact: true }),
+          TERMS.delivery,
+          {
+            after: 1400,
+            clear: true,
+          },
+        );
+        await stage.dwellOn(
+          page.getByLabel('Delivery fee — store pays (%)', { exact: true }),
+          2200,
+        );
+      },
+
+      async 'live-example'({ page, stage }) {
+        // ANCHORED ON THE COMPUTED SENTENCE, not on the element. Its
+        // placeholder while the request is in flight is "Working out an
+        // example…", so waiting for the real wording is what stops this
+        // scene filming the placeholder and calling it a worked example.
+        const line = page.locator('.rs-preview').filter({ hasText: /pays/ }).first();
+        await line.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(line, 3400);
+      },
+
+      async returns({ page, stage }) {
+        // EXACT, because "Return fee" is a substring of "Customer return
+        // fee" and Playwright's default label match is a substring — it
+        // resolved to two inputs and refused under strict mode. Every fee
+        // field here is exact for the same reason, whether or not it
+        // collides today: a seventh fee could make any of them ambiguous.
+        await stage.typeIn(
+          page.getByLabel('Return fee — store pays (%)', { exact: true }),
+          TERMS.returnFee,
+          {
+            after: 900,
+            clear: true,
+          },
+        );
+        await stage.typeIn(
+          page.getByLabel('Customer return fee — store pays (%)', { exact: true }),
+          TERMS.customerReturn,
+          { after: 1200, clear: true },
+        );
+        await stage.dwellOn(page.getByLabel('Return fee — store pays (%)', { exact: true }), 2200);
+      },
+
+      async cod({ page, stage }) {
+        await stage.typeIn(
+          page.getByLabel('COD fee — store pays (%)', { exact: true }),
+          TERMS.codFee,
+          {
+            after: 900,
+            clear: true,
+          },
+        );
+        await stage.typeIn(
+          page.getByLabel('COD tax — store pays (%)', { exact: true }),
+          TERMS.codTax,
+          {
+            after: 1200,
+            clear: true,
+          },
+        );
+        await stage.dwellOn(page.getByLabel('COD tax — store pays (%)', { exact: true }), 2400);
+      },
+
+      async 'example-table'({ page, stage }) {
+        const table = page
+          .locator('table')
+          .filter({ hasText: 'Who pays each fee, worked through' })
+          .first();
+        await table.waitFor({ state: 'visible', timeout: 25_000 });
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(900);
+        await stage.dwellOn(table, 3600);
+      },
+
+      async 'store-credit'({ page, stage }) {
+        const box = page.locator('fieldset').filter({ hasText: 'is credited' }).first();
+        await box.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        // BY VALUE, never by index — a fifth trigger added upstream would
+        // otherwise move this scene onto whatever landed second.
+        await box.getByLabel('Credited').selectOption('AFTER_DELIVERY');
+        await page.waitForTimeout(700);
+        await stage.typeIn(box.getByLabel('Days'), TERMS.storeDays, { after: 1000, clear: true });
+        await stage.dwellOn(box, 2800);
+      },
+
+      async 'seller-credit'({ page, stage }) {
+        const box = page.locator('fieldset').filter({ hasText: 'When you are credited' }).first();
+        await box.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await box.getByLabel('Credited').selectOption('ON_PAYOUT');
+        await page.waitForTimeout(900);
+        await stage.dwellOn(box, 2800);
+      },
+
+      async note({ page, stage }) {
+        await stage.typeIn(page.getByLabel(/^Note to the store/), TERMS.note, { after: 1200 });
+        await stage.dwellOn(page.getByLabel(/^Note to the store/), 2400);
+      },
+
+      async publish({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Publish version/ }).first(), {
+          after: 1400,
+        });
+        const confirm = page
+          .getByRole('dialog')
+          .filter({ hasText: /^Publish version/ })
+          .first();
+        await confirm.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(confirm, 3400);
+      },
+
+      async 'in-force'({ page, stage }) {
+        const confirm = page
+          .getByRole('dialog')
+          .filter({ hasText: /^Publish version/ })
+          .first();
+        await stage.clickIt(confirm.getByRole('button', { name: 'Publish' }).first(), {
+          after: 1600,
+        });
+        await confirm.waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // "Waiting for … to accept it" is the fact the scene claims, and
+        // it only appears once the version really exists.
+        const panel = page.getByText(/Waiting for .* to accept it/).first();
+        await panel.waitFor({ state: 'visible', timeout: 30_000 });
+        await panel.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(panel, 3200);
+      },
+
+      async versions({ page, stage }) {
+        const table = page.locator('table').filter({ hasText: 'Published' }).last();
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(table, 3200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-1800);
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 3000);
+      },
+    },
+  },
+
+  /**
+   * G5 — what a store may do without asking.
+   *
+   * The whole page is the matrix, and the scenes work THREE of its seven
+   * rows rather than all of them: the gentlest task set to direct, the
+   * most dangerous one set to needs-my-approval, and one turned off
+   * entirely. Seven rows narrated one at a time would be a list; three
+   * chosen for the argument they make is a tutorial.
+   *
+   * `standingStoreFor` DELETES the policy row between takes, and that is
+   * exactly right rather than merely convenient: a missing row IS the
+   * defaults, so the page opens on "Running on the defaults — you have
+   * not set this store yet", which is the sentence the second scene
+   * argues from and which never appears again once a take has saved.
+   *
+   * Rows are found by their TASK LABEL and the controls by their
+   * aria-label, never by position — a task added upstream would
+   * otherwise move every scene onto its neighbour.
+   */
+  'what-a-store-may-do': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-tab'({ page, stage }) {
+        await openStandingStore(page, stage);
+        await stage.clickIt(page.getByRole('tab', { name: 'What they can do' }).first(), {
+          after: 1800,
+        });
+        // "Running on the defaults" appears ONLY while the store has no
+        // policy row — so this is the gate that proves the seeding put it
+        // back, not merely that the tab opened.
+        const note = page.getByText(/Running on the defaults/).first();
+        await note.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(note, 2600);
+      },
+
+      async 'two-questions'({ page, stage }) {
+        const head = page.locator('table thead').first();
+        await head.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(head, 3200);
+      },
+
+      async 'row-anatomy'({ page, stage }) {
+        await stage.dwellOn(await capabilityRow(page, CAPABILITY.recall), 3400);
+      },
+
+      async recall({ page, stage }) {
+        await stage.dwellOn(await capabilityRow(page, CAPABILITY.recall), 3000);
+      },
+
+      async 'recall-direct'({ page, stage }) {
+        // READ, not set. `DEFAULT_POLICY` already has recall at DIRECT,
+        // so selecting it would be a click that changes nothing — and
+        // narration claiming to choose what was already chosen is a
+        // frame arguing with its voice. The scene dwells on the row's
+        // own note, which is the sentence being read out.
+        const row = await capabilityRow(page, CAPABILITY.recall);
+        await stage.dwellOn(row.locator('.rs-task__note').first(), 3200);
+      },
+
+      async 'sendback-on'({ page, stage }) {
+        await stage.dwellOn(await capabilityRow(page, CAPABILITY.sendBack), 3400);
+      },
+
+      async 'sendback-direct'({ page, stage }) {
+        const row = await capabilityRow(page, CAPABILITY.sendBack);
+        await row.getByLabel('How?').selectOption('DIRECT');
+        await page.waitForTimeout(1000);
+        // The row's own NOTE, which is the sentence the narration is
+        // about — "nobody checks it first".
+        await stage.dwellOn(row.locator('.rs-task__note').first(), 3400);
+      },
+
+      async 'sendback-ask'({ page, stage }) {
+        // Back to ASK_SELLER, which is where `DEFAULT_POLICY` had it —
+        // the scene before put it on DIRECT to show what that would
+        // mean. Net change for this row: none, deliberately. The only
+        // row this take really changes is `cancel`, which is what the
+        // confirm then lists.
+        const row = await capabilityRow(page, CAPABILITY.sendBack);
+        await row.getByLabel('How?').selectOption('ASK_SELLER');
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(row.locator('.rs-task__note').first(), 3400);
+      },
+
+      async 'cancel-off'({ page, stage }) {
+        const row = await capabilityRow(page, CAPABILITY.cancel);
+        await stage.clickIt(row.getByLabel('Can the Reseller store do this?').first(), {
+          after: 1200,
+        });
+        await stage.dwellOn(row, 3200);
+      },
+
+      async save({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Save', exact: true }).first(), {
+          after: 1400,
+        });
+        const confirm = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Save what this store can do?' })
+          .first();
+        await confirm.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(confirm, 3400);
+      },
+
+      async saved({ page, stage }) {
+        const confirm = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Save what this store can do?' })
+          .first();
+        await stage.clickIt(confirm.getByRole('button', { name: 'Save', exact: true }).first(), {
+          after: 1600,
+        });
+        await confirm.waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The NOTE flipping is the proof the save landed; a closed dialog
+        // says nothing about that.
+        const note = page.getByText('Your settings for this store.').first();
+        await note.waitFor({ state: 'visible', timeout: 30_000 });
+        await note.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(900);
+        await stage.dwellOn(note, 3000);
+      },
+
+      async told({ page, stage }) {
+        await stage.dwellOn(page.getByText(/the store is emailed what/).first(), 3400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('link', { name: /^Waiting on you/ }).first(), 3200);
       },
     },
   },

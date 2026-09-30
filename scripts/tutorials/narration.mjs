@@ -1572,6 +1572,136 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'the-deal',
+    title: 'The deal with a reseller store',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A reseller store sells your stock, and Skydrop charges fees on every parcel. Who pays which share of those, and when each of you is paid, is the deal — and you write it.',
+      },
+      {
+        id: 'open-terms',
+        say: 'On the store, the Terms tab. Nothing is published yet, which is why the page is offering to publish the first version rather than showing you one.',
+      },
+      {
+        id: 'fees-intro',
+        say: 'Six fees, and for each one the percentage the STORE pays. You pay the rest. Read the note above them: inbound freight from Bangladesh is always yours and is not on this list.',
+      },
+      {
+        id: 'delivery-share',
+        say: 'Start with the delivery fee, the one charged on every parcel. Half and half is a reasonable place to begin — and watch the sentence underneath as you type.',
+      },
+      {
+        id: 'live-example',
+        say: 'That is not a hint. Skydrop is working the split out against your actual fee, as you type, so you can see what you are agreeing to rather than the percentage you typed.',
+      },
+      {
+        id: 'returns',
+        say: 'Now the returns, which is where a deal is actually decided. A store that pays nothing towards a failed delivery has no reason to care how good its addresses are.',
+      },
+      {
+        id: 'cod',
+        say: 'The cash-on-delivery fees and the tax on them. These follow the money the store collects, so a store keeping the retail margin usually carries a share of these too.',
+      },
+      {
+        id: 'example-table',
+        say: 'And the whole thing worked through, fee by fee, in rupees. This is the table to read out loud to the store before you publish anything.',
+      },
+      {
+        id: 'store-credit',
+        say: 'Then the other half of the deal: when each of you is paid. The store first — on the courier payout plus some days, or a number of days after delivery.',
+      },
+      {
+        id: 'seller-credit',
+        say: 'And you, separately, on your own trigger. The words underneath each are the rule in plain English, computed from what you chose rather than written down once.',
+      },
+      {
+        id: 'note',
+        say: 'A note to the store, which they see with the version. On a first set of terms it is a greeting; on a later one it is what changed, which is the more useful case.',
+      },
+      {
+        id: 'publish',
+        say: 'Publishing asks first, and what it says is the important part: they must accept it before their next order, and orders already placed keep the terms they were placed under.',
+      },
+      {
+        id: 'in-force',
+        say: 'Published, and waiting. Until the store accepts, this version is on the record but the deal is not yet theirs — which the panel states rather than leaving you to infer.',
+      },
+      {
+        id: 'versions',
+        say: 'Every version is kept. Change the deal next quarter and this one does not disappear — it becomes the terms that last quarter’s orders were placed under, for ever.',
+      },
+      {
+        id: 'outro',
+        say: 'That is the whole arrangement: what each of you pays, when each of you is paid, and a record of both that no later change can rewrite.',
+      },
+    ],
+  },
+  {
+    slug: 'what-a-store-may-do',
+    title: 'What a store may do without asking',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A reseller store takes the order, but the parcel is your stock and the fees are partly your money. So some of what they might want to do, you may want to see first.',
+      },
+      {
+        id: 'open-tab',
+        say: 'On the store, the tab called What they can do. Read the note above the table: it is running on the defaults, because you have not set this store yet.',
+      },
+      {
+        id: 'two-questions',
+        say: 'Seven tasks, and each one asks two questions rather than one. Can the store do this at all — and only if yes, does it happen directly or does it come to you first.',
+      },
+      {
+        id: 'row-anatomy',
+        say: 'Every row carries the answer to a third question you did not ask: what the setting you have chosen actually causes. That line changes as you change the row.',
+      },
+      {
+        id: 'recall',
+        say: 'Start with the gentlest. Asking us to ring the customer back costs an agent a few minutes and moves no parcel — the sort of thing there is little reason to stand in the way of.',
+      },
+      {
+        id: 'recall-direct',
+        say: 'So it comes set to directly, and the row says what that means: the call is queued with our call centre the moment the store asks, with nobody in between.',
+      },
+      {
+        id: 'sendback-on',
+        say: 'Now the other end of the scale. Sending a parcel back turns it round mid-journey, ends the sale, and puts a return fee on the order that your terms split between you.',
+      },
+      {
+        id: 'sendback-direct',
+        say: 'And this is why the page spells each one out. Directly here means the courier is asked to return the parcel the moment they click — nobody checks it first, and it cannot be undone.',
+      },
+      {
+        id: 'sendback-ask',
+        say: 'Which is why it does not come set that way. On your approval, the request goes to your staff, nothing happens until somebody answers, and an unanswered one closes itself after a few days.',
+      },
+      {
+        id: 'cancel-off',
+        say: 'And a task can simply be No. The store is not offered it at all, and the note says who does it instead — you. Turning it back on remembers how it was set before.',
+      },
+      {
+        id: 'save',
+        say: 'Saving lists exactly what you are changing — from what, to what — before it commits. Nothing you left alone is touched, and nothing you left alone is listed.',
+      },
+      {
+        id: 'saved',
+        say: 'And the note at the top has changed: these are your settings for this store now, not the defaults. Every other store keeps its own.',
+      },
+      {
+        id: 'told',
+        say: 'One thing worth knowing whichever way you set it: the store is always told what happened. Approved and carried out, approved and refused by the courier, or turned down with your reason.',
+      },
+      {
+        id: 'outro',
+        say: 'Anything you put on approval arrives in one place — Waiting on you, in the sidebar, with a count on it. That queue is the next tutorial.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
