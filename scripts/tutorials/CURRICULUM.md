@@ -522,32 +522,44 @@ and every tutorial here becomes `ready`.
 node scripts/tutorials/seed-demo-data.mjs --lifecycle
 ```
 
-Six parcels, driven the whole way by the real path: an order placed by the
+SEVEN parcels, driven the whole way by the real path: an order placed by the
 seller, confirmed on a CALL, a waybill booked against the local Delhivery
 simulator, picked, packed at the bench with the box ritual, scanned at handover,
 then advanced by the simulator — which fires the same signed webhooks the real
-courier does. Takes about two minutes from cold. **Verified 2026-09-30, all six
-green, and idempotent: a second run says "already" six times and changes
-nothing.**
+courier does. Takes about two minutes from cold. **Verified 2026-09-30, all
+seven green, and idempotent: a second run says "already" and changes nothing.**
 
-| Ref                  | State                    | Used by        |
-| -------------------- | ------------------------ | -------------- |
-| `RSH-LIFE-DELIVERED` | DELIVERED                | B5, D1, E2, D6 |
-| `RSH-LIFE-FAILED`    | DELIVERY_FAILED          | D1, D2         |
-| `RSH-LIFE-RETURNING` | RTO_IN_TRANSIT           | D1, D3         |
-| `RSH-LIFE-RESTOCKED` | RTO_RESTOCKED + a ticket | D6, E2         |
-| `RSH-LIFE-REVIEW`    | AWAITING_SELLER_DECISION | D5             |
-| `RSH-LIFE-CONFIRMED` | CONFIRMED, live waybill  | B7, D4         |
+| Ref                  | State                             | Used by        |
+| -------------------- | --------------------------------- | -------------- |
+| `RSH-LIFE-DELIVERED` | DELIVERED                         | B5, D1, E2, D6 |
+| `RSH-LIFE-FAILED`    | DELIVERY_FAILED                   | D1, D2         |
+| `RSH-LIFE-RETURNING` | RTO_IN_TRANSIT                    | D1, D3         |
+| `RSH-LIFE-RESTOCKED` | RTO_RESTOCKED + a REFUNDED ticket | D6, E2         |
+| `RSH-LIFE-REVIEW`    | AWAITING_SELLER_DECISION          | D5             |
+| `RSH-LIFE-CONFIRMED` | CONFIRMED, live waybill           | B7, D4         |
+| `RSH-LIFE-OVERDUE`   | OUT_FOR_DELIVERY, flagged day 3   | D3             |
 
-It also leaves behind what those states imply and the videos will want: a
-`SCRAP_DAMAGE` ticket, an OPEN early-reservation review, delivery attempts,
-tracking events, and `ORDER_CHARGES` and `RTO_FEE` wallet entries.
+It also leaves behind what those states imply and the videos will want: the
+`SCRAP_DAMAGE` ticket **with our reply on it and a `SCRAP_REFUND` credit in the
+wallet**, an OPEN early-reservation review, delivery attempts, tracking events,
+and `ORDER_CHARGES` and `RTO_FEE` wallet entries.
 
-**Wiring:** `LIFECYCLE_SLUGS` in `seed-demo-data.mjs` is EMPTY. A D-section
-video adds its slug there, and the pass then runs before that video's take —
-it is expensive (a courier booking and a warehouse run per parcel) so it does
-not run for videos that do not need it. `--lifecycle` forces it, which is how
-it is built the first time.
+**`RSH-LIFE-OVERDUE` is the seventh, and it is the one the simulator cannot
+produce.** `/needs-attention`'s second list is parcels out for delivery three
+nights or more, and the simulator moves a parcel through every scan in seconds.
+Its two courier scans are recorded through the product's own admin manual-scan
+endpoint with back-dated `eventAtIso` (TRK-9 requires the operator to supply
+it, for exactly this), and the flag is raised by running the real NSA sweep
+(`POST /admin/nsa/sweep`) rather than by stamping `nsa_*`.
+
+**`RSH-LIFE-REVIEW` is REBUILT rather than resumed** — see D5 for why, and why
+it is the only parcel that may be.
+
+**Wiring:** `LIFECYCLE_SLUGS` in `seed-demo-data.mjs` holds the five D-section
+slugs filmed so far. A new video that needs a moved parcel adds its slug there,
+and the pass then runs before that video's take — it is expensive (a courier
+booking and a warehouse run per parcel) so it does not run for videos that do
+not need it. `--lifecycle` forces it, which is how it is built the first time.
 
 **The open question is settled: yes, D5 is filmable.** `handleNdrCap` resolves
 `inventory.early_reservation_ndr_action` (MANUAL_REVIEW by default) and nothing
@@ -606,23 +618,44 @@ one-unit line is a contradiction — a restock means the unit was GOOD. WMS-8d i
 exactly the answer, so the line is inspected BY QUANTITY: one unit back on the
 shelf, one written off. Order status RTO_RESTOCKED, scrap ticket beside it.
 
-#### The one thing D0 does NOT produce, and what D3 needs
+#### The one thing D0 did NOT produce — BUILT 2026-09-30, and it found a bug
 
-**A parcel stuck with a courier.** `/needs-attention` has two lists — orders
-the call centre could not confirm, and parcels that went out for delivery
-**three nights or more** ago and never arrived. D0 gives the first
-(`RSH-LIFE-REVIEW`) and cannot give the second: the simulator moves a parcel
-through every scan in seconds, so nothing is ever three days old. D3's video is
-therefore half a screen until somebody adds it.
+**A parcel stuck with a courier** — `RSH-LIFE-OVERDUE`, now built. Driven to
+DISPATCHED like the others, then given its IN_TRANSIT and OUT_FOR_DELIVERY
+scans through the admin manual-scan endpoint with back-dated `eventAtIso`, and
+flagged by running the real NSA sweep. No column is written that the product
+does not write itself.
 
-It is a small addition and the shape is already legal. TRK-3 is explicit that
-`eventAt` is the SCAN time and never `now()`, that past-dated scans stay
-past-dated, and that `ManualTrackingService.recordScan` **requires the operator
-to supply `eventAtIso`** precisely so a backfill lands in the right place on the
-timeline. So: a seventh parcel, driven to DISPATCHED like the others, then one
-OUT_FOR_DELIVERY scan recorded through the admin manual-scan endpoint with an
-`eventAt` four days ago. No column is written that the product does not write
-itself.
+**AND IT DID NOT WORK, WHICH WAS THE FINDING.** The sweep raised nothing. Its
+`outForDeliveryAt` read `order_events.created_at` — when WE RECORDED the
+courier's scan, not when the courier made it. On a healthy evening the two
+agree, which is why it had never shown; they part company in exactly the cases
+the sweep exists for. A webhook queue stuck for a day and then drained writes
+today's order event for yesterday's scan. A scan recorded by hand writes one
+dated now for a scan a week old. Either way the clock restarts at zero, so the
+parcels whose scans were themselves late — the ones most likely to be genuinely
+stuck — are the ones never flagged. The same shape as the returns worklist's
+`shipments.updatedAt` bug (rule 4b), one directory over. It reads
+`tracking_events.eventAt` through `reachedStatusAt` now, with the order event
+as the fallback for a parcel that has no scan at all, and `list()` stopped
+asking per row against the tracking hypertable while it was there.
+
+#### Two findings left OPEN, for whoever films next
+
+**The `/tickets` "Raise an issue" modal asks for an order by UUID.** Its hint
+says "copy the ID from the order page", and the order page shows an order
+NUMBER. `CreateSellerTicketDto.orderId` is `@IsUUID()`, so a number is refused
+at validation with a generic message. The path that works is "Raise an issue"
+ON the order, where the field is not asked for at all — which is what D6 films.
+Fixing it means teaching `TicketService.open`'s scoped lookup to accept a
+number as well, and five other callers share that method.
+
+**The D-section parcels now carry a take's leavings unless the seeding clears
+them.** `clearDeliveryTakeArtefacts` removes the delivery-action request, the
+requested call and the ticket of either kind. **A new D/E video that WRITES on
+a lifecycle parcel must add its leavings there in the same change** — those
+parcels are never rebuilt, so anything written on one survives into every later
+take.
 
 **Consequence for every OTHER video:** once this has been run on a box, the
 demo seller has delivered and returned parcels for good — `clearPreviousOrders`
