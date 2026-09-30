@@ -6,9 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 26 filmed, and D0 is built — so section D is no longer
-blocked. Of the 64 left, 12 are `ready` without any lifecycle at all, most of
-D / E / K is `ready` now that D0 exists, and 2 are `impractical locally`. 29 touch
+**90 tutorials. 42 filmed — sections A to G, which is the WHOLE SELLER APP.**
+The 48 left are all in the admin app: 2 are `impractical locally` and 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -33,34 +32,46 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (41):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E4, F1–F5, G1–G7.
-**Sections A, B, C, D, F and G are complete — the whole seller app except E5.**
-Every one has its own entry below saying what it covers and what its seeding
-does.
+**Filmed so far (42):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7.
+**THE WHOLE SELLER APP IS FILMED.** Every one has its own entry below saying
+what it covers and what its seeding does.
 
-**THE NEXT ENTRY IS E5**, and then the admin sections.
+**THE NEXT ENTRY IS P5 — "What we cannot undo".** Not H1, and the reordering is
+deliberate (decided 2026-09-30, after E5): this document already argues that P5
+"should arguably be the first admin tutorial anybody watches", and
+[the recommendation](#the-recommendation) goes further — if the ops team never
+grows past the people who built the screens, **P5 is worth making on its own and
+the rest are not.** So it is the entry with the highest value per
+credit in sections H–P, and it is the one to make before betting on the rest.
 
-**What E5 needs that nothing has built: a freight bill that is genuinely
-PART-OWED.** C0 has built the consignment it hangs on (`RSH-CN-LANDED`), and
-recording a bill against its India receipt is straightforward. Making it
-part-owed is not, and the reason is worth reading before starting: FRT-1
-amortises a bill per unit as units LEAVE, and attribution walks
-`shipment_item.pickedBatchId → stock_batch → goods_receipt_lines.batchId →
-allocation` — so ONLY parcels picked from that consignment's own batch charge
-it. The demo seller already holds older stock of both its SKUs and the allocator
-reaches that first, so shipping a parcel proves nothing. The two honest routes
-are (a) give the consignment's batch an earlier expiry so FEFO reaches it first,
-or (b) give the consignment a SKU the seller has no other stock of. Check either
-against `StockPickAllocationService`'s real ordering rather than against an
-assumption about it. `docs/consignment-two-leg.md` and the FRT rules in
-CLAUDE.md are the rest of the brief.
+Three practical reasons to take it first as well as the argument above. It is
+`ready` and needs **no seeding at all** — it is a tour, not a demonstration, and
+clicks nothing. It therefore doubles as the shake-down of the admin recording
+rig: apps/admin has never been driven by this pipeline, and finding out what
+`signIn` needs for a STAFF identity is cheaper on a video that presses nothing
+than on one that forces an order's status. And because it clicks nothing, the
+two entries marked `impractical locally` (P4's emailed six-digit code, N10's
+month close) are perfectly filmable INSIDE it — P5 can show the screens it
+cannot demonstrate.
 
-**After E5 the seller app is done and sections H–P (the admin app) begin.**
-They are 44 entries and this document is explicit that they are a BET — read
-[the recommendation](#the-recommendation) first, and consider taking support
-questions rather than this file's order.
+**The admin app is not running.** Bring it up on its own port (it is
+`apps/admin`, and `next start -p 3002` is the port its CP1 doc uses) and write
+down how in `README.md` — there is no staff `signIn` in `flows.mjs` yet, and no
+staff equivalent of `peek.mjs`.
 
-### The three seeded worlds, and which list puts a video in one
+**One cheap re-take is owed: C1.** E5 bills the very consignment C1 films, so
+C1's `freight` line — which said "nothing has been billed against this one yet"
+— is no longer true of the world. The line is ALREADY REWRITTEN in
+`narration.mjs`; what is outstanding is re-recording C1 against it, and that is
+about as cheap as a re-take gets, because clips are cached on their words and
+only the one changed line is bought again. `follow-a-consignment` is in
+`FREIGHT_SLUGS` so its world is built before its take.
+
+**After that, sections H–P are 48 entries** and this document is explicit that
+they are a BET — read [the recommendation](#the-recommendation) first, and
+consider taking support questions rather than this file's order.
+
+### The four seeded worlds, and which list puts a video in one
 
 Every video that needs more than the standing catalogue names itself in one of
 these Sets in `seed-demo-data.mjs`. Forget it and the take runs against a box
@@ -75,6 +86,12 @@ that has never been driven.
 - **`CONSIGNMENT_SLUGS` → C0 (`lib/consignments.mjs`)** — two consignments, one
   landed with its two counts deliberately disagreeing and one still in the air.
   Build-once and idempotent; C1 and C2 only read it.
+- **`FREIGHT_SLUGS` → E5 (`lib/freight.mjs`)** — the freight world: a PAY_LATER
+  bill on `RSH-CN-LANDED`'s Indian arrival, with some of its units already
+  delivered so the bill is PART-owed. It BUILDS ON C0 rather than replacing it,
+  so E5 is in both lists. Read its own note below before changing what it bills
+  — three separate things have to be true at once for `/freight` to say anything
+  at all, and two of them are not obvious.
 - **`STORE_REQUIRED_SLUGS` / `STORE_ORDER_SLUGS` / `STORE_REPORT_SLUGS`** — the
   reselling worlds. Two SEPARATE stores and they must stay apart: `Kolkata Silk
   Room` is configured on camera by G3–G5 (`standingStoreFor` wipes its terms
@@ -105,8 +122,8 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — twenty-nine so
-far, plus seven in the seeding itself.** Every one is on a path nothing else
+**Filming these screens is finding real bugs at a steady rate — THIRTY so far,
+plus seven in the seeding itself.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
 column mappings that drove nothing, a tracking filter that 500'd, a stuck
@@ -120,6 +137,21 @@ as a literal in the copy over a setting that is per seller and per currency —
 beside a second return path that charged a DIFFERENT fee and named no figure at
 all — and a refund's ledger note naming its ticket by uuid, which is the SAME
 defect as the order one, in a second place, found by filming the wallet.
+**And on 2026-09-30, the last one filmed found a defect that could not exist
+until that day.** The consignment page's freight tile printed
+`charge.status.toLowerCase()` — which reads perfectly for three of the five
+values and is wrong for the two a bill has to actually REACH: `PARTIALLY_SETTLED`
+came out as "partially_settled", an underscore straight out of the database on a
+seller's own screen, and `VOIDED` came out as "voided" where `statusLabel` and
+every sentence beside it say "Withdrawn". It survived because no bill on any box
+had ever been in either state, and the reason nothing could catch it is one
+type: `ConsignmentView.freightCharges[].status` was `string`, so every reader
+had to word the enum for itself and nothing could disagree with them. **That is
+the same shape as the "Waiting on you" crash below** — a return type that
+promises nothing — in a second place, found by seeding a state the product had
+never reached. **A seeding pass that puts a row into a status nothing has used
+before is a bug hunt in its own right.**
+
 **And, on 2026-09-30, TWO that had never worked at all.** The order tracker told
 every confirmed seller that picking and packing were "not needed" — a fallback
 onto the waybill's own timestamp, correct until CUR-2b moved the booking to
@@ -195,11 +227,17 @@ is down or gated wrong fails the check instead of filming prose.
   thing, in a voice clip it is a re-take nobody notices is needed. It nearly
   happened twice more: "ten in the morning" over a 09:00 dropdown, and "the one
   ABOVE it reads Expired" over a list sorted the other way.
-- **A video costs about 800 credits all in**, measured over nine of them
-  (2026-09-30). The pre-flight estimate over-states it. At that rate the
-  remaining balance is worth well over a hundred videos, so **a re-take to fix a
-  line that misreads the screen is nearly free and shipping a wrong one is
-  not.**
+- **A video written from SCRATCH costs about 2,700 credits; a re-take that
+  changes one line costs about 170.** Measured on E5 (2026-09-30): 16 clips,
+  177 s of speech, 2,677 credits — roughly 15 credits a second of narration, and
+  the pre-flight estimate was within a few per cent of it. An earlier note here
+  said "about 800 credits all in, measured over nine of them", which is the
+  AVERAGE of a batch in which most clips were already cached; it under-states a
+  new video by more than three times, and this is the correction. **The
+  conclusion it drew still holds and is the important half: a re-take to fix a
+  line that misreads the screen is nearly free — only the changed line is bought
+  again — and shipping a wrong one is not.** Balance after E5: 87,588 of 121,027
+  on the one configured key, which is about thirty more fresh videos.
 - **Budget time for FIXING as well as filming.** Six real bugs in one session,
   every one on a path nothing else exercises. If a screen behaves oddly during a
   `--check`, that is the finding — do not narrate around it.
@@ -586,18 +624,20 @@ and it is the same rule D0 arrived at for the same reason.
 a re-take needs no rebuild and `CONSIGNMENT_SLUGS` can stay empty until one of
 them is filmed.
 
-**What it does NOT yet build, and what that costs E5.** A freight bill that is
-genuinely PART-owed. `record` is straightforward, but FRT-1 amortises a bill per
-unit as units LEAVE, and attribution walks
-`shipment_item.pickedBatchId → stock_batch → goods_receipt_lines.batchId →
-allocation` — so only parcels picked FROM THIS CONSIGNMENT'S BATCH charge it.
-The demo seller already holds older stock of both SKUs, and the allocator picks
-that first, so shipping a parcel proves nothing. The honest routes are (a) give
-the consignment's batch an earlier expiry so FEFO reaches it first, or (b) give
-the consignment a SKU the seller has no other stock of. Either is a small change
-to `TUTORIAL_CONSIGNMENTS` plus a couple of driven parcels; neither is guesswork,
-but both need checking against `StockPickAllocationService`'s real ordering
-rather than against an assumption about it.
+**The freight bill it does NOT build is now `lib/freight.mjs` (E5, 2026-09-30),
+and it deliberately does not live here.** Route (a) won — the consignment's
+batches are given an expiry so FEFO reaches them ahead of the seller's older
+stock — but it is applied to the BATCHES after the fact rather than declared in
+`TUTORIAL_CONSIGNMENTS`, because C0 is BUILD-ONCE and never rewinds: on every
+box that has already filmed C1 the consignment is counted, its batches exist,
+and a declaration-time field can no longer reach them. See E5's entry.
+
+**E5's bill changed what C1 SAYS.** A bill now sits on `RSH-CN-LANDED`, so C1's
+freight line no longer describes the page; it is rewritten and C1 owes a
+re-take. That is the cost of the two videos sharing one consignment, and it was
+taken knowingly — a third consignment would have put a third row in the register
+C1 films and a SECOND landed one under its line "open the one that has landed",
+which is worse.
 
 **One bug, on the page C1 films** — see
 [Bugs found](#bugs-found-while-establishing-feasibility): a consignment that had
@@ -626,6 +666,15 @@ one each.
 
 **It presses nothing**, so its take leaves the world byte-identical and C0's
 consignments never need rebuilding.
+
+**RE-TAKE OWED (2026-09-30).** E5 raises a freight bill against THIS
+consignment, so the `freight` scene's line — "nothing has been billed against
+this one yet" — became false the moment that world existed. The line is
+rewritten in `narration.mjs` to describe the bill instead; what is outstanding
+is re-recording. It is the cheapest kind of re-take, because clips are cached on
+their words: only the one changed line is bought again. `follow-a-consignment`
+is in `FREIGHT_SLUGS` as well as `CONSIGNMENT_SLUGS`, so the take finds the
+bill.
 
 **Its narration names no quantity.** The counts are the subject, and repeating
 them would make the video wrong the day somebody edits
@@ -1336,16 +1385,70 @@ list is whatever `GET /seller/wallet/settings` returns, so a scene aimed at
 day one is added upstream — the quietest way a tutorial goes wrong. A rule
 removed upstream is skipped rather than failing the take.
 
-### E5. What the freight cost · `needs demo data`
+### E5. What the freight cost · **FILMED** — `what-the-freight-cost.mp4`
 
 **Promise** — you understand why a freight bill is only partly owed.
-**Length** 3 min. **Prerequisites** C1, E2.
-**Needs** a consignment received **and billed**, with some of its units having
-shipped. Comes with C1's seeding plus a freight bill.
-**Covers** `/freight` and the one idea it exists to teach: a bill is spread
-**per unit**, and a unit owes its share only when it leaves. Stock still on the
-shelf owes nothing yet. Read-only, because freight is billed by Skydrop and
-settled from the wallet.
+**Length** 3 min 12 s (16 scenes). **Prerequisites** C1, E2. **Needs** C0 AND
+its own world; it is in `CONSIGNMENT_SLUGS` and `FREIGHT_SLUGS`.
+**Covers** `/freight` — the four tiles, the status tabs, the one row and its
+terms, and the page's own paragraph about why a bill stays partly owed — then
+through the row's link to `/inbound/[id]`, where the same bill is a six-fact
+panel with the forwarder's own note under it and a "Freight billed" entry on the
+timeline. **It presses one link and nothing else**, so its take leaves the world
+byte-identical and none of this is rebuilt for a re-take.
+
+**Its world (`lib/freight.mjs`) needs THREE things true at once, and two of them
+are not obvious.** A consignment landed and counted — C0 already builds it. A
+bill against the ARRIVAL, which must be **PAY_LATER**: FRT-5 decides the leg
+from the mode, and PAY_NOW is debited in full at record time and never
+amortises, so on any other mode this video has no subject at all. And then the
+part that took the longest:
+
+**Some of the consignment's OWN units having left.** FRT-1 charges a unit's
+share when it leaves and attributes it by walking `shipment_item.pickedBatchId →
+stock_batch → goods_receipt_lines.batchId → inbound_freight_allocations`, so
+only a parcel picked from THIS consignment's batch charges THIS bill. Shipping a
+parcel is not enough: FEFO is `expiresAt ASC NULLS LAST, then receivedAt ASC`,
+every batch on this box has a null expiry, and the consignment's batch is the
+NEWEST thing in the warehouse — so the allocator reaches the seller's standing
+stock every time. `giveTheConsignmentAnExpiry` is the fix and it is a real
+field, not a thumb on the scale: a seller may declare a manufacture and expiry
+date per line, `GoodsReceiptService.complete` copies it onto the batch, and the
+child `<parent>-IN` batch inherits it across the flight. It writes the receipt
+LINES and the BATCHES, only where null, so the data is what it would have been
+had the seller filled that box in.
+
+**And then the money is dated the SEVENTH.** The first build produced a perfect
+parcel, a perfect bill, and a page reading "0 of 38 units charged" — because the
+default accrual tier is `T_PLUS_N` with `wallet.accrual_delay_days` of seven
+(R2c chose it deliberately), so `DeliveredAccrualService` SCHEDULES the whole
+delivered-money step — the order charges, the COD credit, and the freight share
+— as a `pending_accruals` row a week out. `letTheClockRun` pulls that one row's
+due date forward and adds the job the hourly cron adds, which is an early TICK
+rather than a bypass: `PendingAccrualSweepService` does every bit of the work
+and none of its gates are touched. **Both halves are needed** — back-dating
+alone waits for the top of the hour, and the job alone sweeps nothing, because
+the sweep takes `eligibleAt <= now`. Anything later that needs a delivered
+order's money to have LANDED has the same problem and the same answer.
+
+**The pass ASSERTS what it cannot see**, and that is the lesson worth copying: a
+parcel can be delivered perfectly and charge a different batch's freight, or
+none, and the only symptom is a page saying "0 of 38" under narration claiming
+otherwise. `ensureFreightWorld` refuses to finish unless the bill is
+PART-charged, and the flow's `open` scene gates on the words "Partially settled"
+rather than on the tile that would contain them.
+
+**`RSH-FRT-01` is in `PROTECTED_REF_PREFIXES`.** It is delivered, it carries a
+freight charge in the wallet, and re-driving it would charge the bill twice.
+
+**Filming it found a bug on the page it clicks through to** — the consignment's
+freight tile printed the raw enum, "partially_settled", on a seller's own
+screen. See [Bugs found](#bugs-found-while-establishing-feasibility).
+
+**Its narration names no figure the screen prints.** Not the total, not the
+taka, not "five of thirty-eight" — every line describes the SHAPE and lets the
+table carry the numbers, which is what stops the video going wrong the day
+somebody edits the invoice in `lib/freight.mjs`.
 
 ---
 
@@ -2570,7 +2673,7 @@ The curriculum is written so it can be reordered without being rewritten, and a
 fair part of it may turn out not to be worth making. **The admin sections in
 particular are a bet** — they assume the ops team grows past the people who
 built the screens. If it does not, P5 ("What we cannot undo") is worth making on
-its own and the other forty-three are not.
+its own and the other forty-seven are not.
 
 ---
 

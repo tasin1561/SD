@@ -36,6 +36,7 @@ import {
 } from './lib/lifecycle.mjs';
 import { clearLoginThrottle } from './lib/clear-login-throttle.mjs';
 import { ensureConsignmentWorld, consignmentReport } from './lib/consignments.mjs';
+import { ensureFreightWorld, freightReport } from './lib/freight.mjs';
 
 /** The staff account the seeding needs — goods receipts are received by ops, not by the seller. */
 const OPS = { email: 'tutorial-ops@skydrop.local', password: 'Tutorial-Ops-2026' };
@@ -406,7 +407,30 @@ export const STORE_REQUEST_ORDERS = {
  * through the real endpoints — and BUILD-ONCE, so it runs only for the
  * videos that read it or when asked by name with `--consignments`.
  */
-const CONSIGNMENT_SLUGS = new Set(['follow-a-consignment', 'read-your-stock']);
+const CONSIGNMENT_SLUGS = new Set([
+  'follow-a-consignment',
+  'read-your-stock',
+  // E5's bill hangs on the landed consignment's INDIA arrival, so that
+  // consignment has to exist before the freight pass can bill it.
+  'what-the-freight-cost',
+]);
+
+/**
+ * The videos that need the FREIGHT world (E5, `lib/freight.mjs`).
+ *
+ * Separate from the list above because the two costs are different: C0
+ * is four goods receipts and is build-once, and this adds a real bill
+ * plus a whole parcel driven to DELIVERED so some of that bill has
+ * actually been charged.
+ */
+const FREIGHT_SLUGS = new Set([
+  'what-the-freight-cost',
+  // C1 is here because E5 BILLS the consignment C1 films. Its freight
+  // scene used to say "nothing has been billed against this one yet";
+  // it now describes the bill, so a re-take on a box without the freight
+  // world would film the old page under the new words.
+  'follow-a-consignment',
+]);
 
 /** The videos that need the second store, its orders and their held requests. */
 const STORE_ORDER_SLUGS = new Set(['answer-what-a-store-asked']);
@@ -501,7 +525,7 @@ const LIFECYCLE_REF_PREFIX = 'RSH-LIFE-';
  * this function's delete list knows about, so sweeping one would fail on
  * a foreign key half way through somebody else's seed run.
  */
-const PROTECTED_REF_PREFIXES = [LIFECYCLE_REF_PREFIX, 'RSH-STORE-'];
+const PROTECTED_REF_PREFIXES = [LIFECYCLE_REF_PREFIX, 'RSH-STORE-', 'RSH-FRT-'];
 
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
@@ -3286,6 +3310,26 @@ async function main() {
     const bad = report.filter((r) => !r.ok);
     if (bad.length > 0) {
       throw new Error(`${bad.length} consignment(s) are not in the state they should be.`);
+    }
+  }
+
+  // E5 — a freight bill that is genuinely PART-owed. Needs C0's landed
+  // consignment (above) and drives a whole parcel out of its batch, so
+  // it runs last of the world-builders and only when asked.
+  if (FREIGHT_SLUGS.has(slug ?? '') || process.argv.includes('--freight')) {
+    console.log('\nBuilding the freight world…');
+    await ensureFreightWorld({ sellerId, sellerToken, staffToken, log: (m) => console.log(m) });
+    const report = await freightReport(sellerId);
+    console.log('\nFreight bills:');
+    for (const r of report) {
+      console.log(
+        `  ${r.ok ? '\u2713' : '\u2717'} ${r.receiptNumber.padEnd(26)} ${r.status.padEnd(18)} ` +
+          `\u20b9${r.chargedInr} of \u20b9${r.totalInr} \u00b7 ${r.unitsSettled}/${r.units} units`,
+      );
+    }
+    const bad = report.filter((r) => !r.ok);
+    if (bad.length > 0) {
+      throw new Error(`${bad.length} freight bill(s) are not part-owed as E5 needs.`);
     }
   }
 

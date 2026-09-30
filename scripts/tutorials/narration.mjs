@@ -2261,7 +2261,7 @@ export const VIDEOS = [
       },
       {
         id: 'freight',
-        say: 'Below it, the freight. Nothing has been billed against this one yet — a bill appears here once the forwarder has invoiced us, and when that is depends on the terms you are on.',
+        say: 'Below it, the freight for that move — what it cost to get this consignment into India, and how much of that has been charged to you so far. Why it is only partly charged has a tutorial of its own.',
       },
       {
         id: 'outro',
@@ -2321,6 +2321,77 @@ export const VIDEOS = [
       {
         id: 'outro',
         say: 'So: one page, and two questions it answers separately. What do I own, and what may I sell today. They are rarely the same number, and this is the only place that says which is which.',
+      },
+    ],
+  },
+  {
+    slug: 'what-the-freight-cost',
+    title: 'What the freight cost',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Getting your stock from Dhaka to our warehouse in India costs money, and that cost is yours. This page is the whole of it — and the one idea behind it surprises most sellers.',
+      },
+      {
+        id: 'open',
+        say: 'Inbound freight, under Money. There is nothing to press on it. A bill is raised by us once the forwarder has invoiced us, and it is settled out of your wallet.',
+      },
+      {
+        id: 'owed',
+        say: 'The first tile is the one you came for: what is still to be taken from your wallet. It is not due on a date. It comes out a little at a time.',
+      },
+      {
+        id: 'billed',
+        say: 'Beside it, the two figures that make the point. What you have been billed altogether, and underneath, what has actually been charged so far. They are not the same, and nothing is wrong.',
+      },
+      {
+        id: 'units',
+        say: 'Here is the reason, in one line. A unit is charged its share when it is delivered. The bill is divided across every unit that landed, and each one pays as it leaves.',
+      },
+      {
+        id: 'terms',
+        say: 'One row per bill, because a bill is raised per arrival. The terms on this one are pay as it sells, which is the only kind that works a share at a time.',
+      },
+      {
+        id: 'total',
+        say: 'The total, and underneath it the figure that was actually agreed — in taka, with the rupees it came to at the rate on the day it was billed. That is what makes it checkable.',
+      },
+      {
+        id: 'progress',
+        say: 'Then the same story along the row. Charged so far, still to come, and how many of the consignment’s units have gone. The rest are on a shelf in India, and they have been charged nothing.',
+      },
+      {
+        id: 'tabs',
+        say: 'The tabs are every state a bill can be in. Nothing charged yet, partly charged, fully charged, forgiven — and withdrawn, which means the bill was wrong and anything it took has gone back.',
+      },
+      {
+        id: 'note',
+        say: 'The page says it in its own words at the bottom, and it is worth reading once. A bill can stay partly owed for a very long time without anything being wrong with it.',
+      },
+      {
+        id: 'consignment',
+        say: 'The bill names the arrival it belongs to, and that name is a link. It goes to the consignment itself, where the same figures sit next to what was actually counted off the plane.',
+      },
+      {
+        id: 'panel',
+        say: 'Here is the bill in full. The total, what has been charged, what is still to come, the terms in a sentence, and how many units have been through.',
+      },
+      {
+        id: 'service',
+        say: 'And the line that is easy to miss. Credit terms can carry a service charge on top of the freight. Yours do not, and the page says so out loud rather than leaving the row off.',
+      },
+      {
+        id: 'invoice',
+        say: 'Underneath, what the bill actually was — the forwarder, their invoice number, and how the weight was arrived at. If you want to query it, that is the sentence to quote.',
+      },
+      {
+        id: 'timeline',
+        say: 'And further up, the day it was raised, on the same timeline as the counts. You are told a bill exists at the moment it is made, rather than finding it in your wallet later.',
+      },
+      {
+        id: 'outro',
+        say: 'So: freight is one bill, spread over the units it brought in, and paid off as those units are delivered. Stock still sitting on the shelf owes nothing yet.',
       },
     ],
   },

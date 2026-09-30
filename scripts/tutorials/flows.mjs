@@ -286,9 +286,16 @@ function stockRow(page, sku) {
     .first();
 }
 
-/** One tile on the inventory page, by its label. */
+/**
+ * One tile on the inventory or freight page, by its label.
+ *
+ * Both grids are listed rather than a second helper written: `.inv-kpis`
+ * is the consignment/stock pages' grid and `.frt-kpis` is `/freight`'s,
+ * and a tile is a tile. Only one of the two is ever on screen, so the
+ * union cannot match the wrong page's card.
+ */
 async function kpi(page, label) {
-  const card = page.locator('.inv-kpis > *').filter({ hasText: label }).first();
+  const card = page.locator('.inv-kpis > *, .frt-kpis > *').filter({ hasText: label }).first();
   await card.waitFor({ state: 'visible', timeout: 25_000 });
   await card.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
   await page.waitForTimeout(600);
@@ -307,6 +314,21 @@ async function reservedUnits(page) {
  * Keep in step with `TUTORIAL_CONSIGNMENTS` in lib/consignments.mjs.
  */
 const CONSIGNMENTS = { landed: 'RSH-CN-LANDED', flying: 'RSH-CN-FLYING' };
+
+/**
+ * The one freight bill's row on `/freight`.
+ *
+ * Found by its TERMS rather than by its receipt number: the number is
+ * `CN-…-000061` and changes with every rebuild of the consignment world,
+ * while "Pay as it sells" is what the video is about and is wrong on any
+ * other kind of bill.
+ */
+function freightRow(page) {
+  return page
+    .getByRole('row')
+    .filter({ has: page.getByText('Pay as it sells', { exact: true }) })
+    .first();
+}
 
 /** A consignment's row in the register, by its reference. */
 function consignmentRow(page, ref) {
@@ -6632,6 +6654,155 @@ export const FLOWS = {
         await tiles.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(700);
         await stage.dwellOn(tiles, 3600);
+      },
+    },
+  },
+
+  /**
+   * E5 — what the freight cost.
+   *
+   * READ-ONLY: it presses one link and nothing else, so its take leaves
+   * the world byte-identical and `lib/freight.mjs` never needs rebuilding
+   * for a re-take.
+   *
+   * Its world is that library's whole job — a PAY_LATER bill on
+   * `RSH-CN-LANDED`'s Indian arrival with five of its thirty-eight units
+   * already delivered. Every gate below is anchored on the thing the
+   * narration CLAIMS rather than on the panel that would contain it: a
+   * bill at nought or at a hundred per cent renders the same layout, the
+   * same tiles and the same table, so a scene gated on "the tile is
+   * visible" would film the exact failure this video exists to explain
+   * under a line saying the opposite.
+   */
+  'what-the-freight-cost': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Inbound freight', exact: true }).first(),
+          { after: 1800 },
+        );
+        await page.waitForURL(/\/freight$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        /*
+          THE GATE FOR THE WHOLE VIDEO. "Partially settled" is the state
+          the entire script describes, and it is the one thing the
+          seeding can silently fail to produce: a parcel that picked the
+          seller's older stock delivers perfectly and leaves this bill
+          PENDING, with every tile, tab and row still on screen.
+        */
+        const chip = page.getByText('Partially settled', { exact: true }).first();
+        await chip.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.frt-page').first(), 1800);
+      },
+
+      async owed({ page, stage }) {
+        await stage.dwellOn(await kpi(page, 'Still owed'), 3400);
+      },
+
+      async billed({ page, stage }) {
+        // One tile carrying BOTH figures — the total and, in its foot,
+        // what has actually been charged. The gap between them is the
+        // sentence, so the scene has to hold the two together.
+        const card = await kpi(page, 'Billed to you');
+        await stage.dwellOn(card, 2200);
+        await stage.dwellOn(card.locator('.sk-kpi__foot').first(), 2000);
+      },
+
+      async units({ page, stage }) {
+        await stage.dwellOn(await kpi(page, 'Units charged'), 3400);
+      },
+
+      async terms({ page, stage }) {
+        const row = freightRow(page);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await row.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row.locator('.frt-terms').first(), 3200);
+      },
+
+      async total({ page, stage }) {
+        // The cell carrying the AGREED figure, not the row: the point of
+        // the line is the taka underneath the rupees, and a bill raised
+        // in rupees would have no second line at all.
+        const agreed = freightRow(page).locator('td').filter({ hasText: 'agreed' }).first();
+        await agreed.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(agreed, 3400);
+      },
+
+      async progress({ page, stage }) {
+        await stage.dwellOn(freightRow(page), 3600);
+      },
+
+      async tabs({ page, stage }) {
+        await stage.dwellOn(page.getByRole('tablist', { name: 'Filter by status' }).first(), 3600);
+      },
+
+      async note({ page, stage }) {
+        // The page's own paragraph, which says what the narration says.
+        // It renders ONLY while a PAY_LATER bill is on screen, so it is
+        // a second, independent gate on the world being right.
+        const note = page.locator('.frt-note').first();
+        await note.waitFor({ state: 'visible', timeout: 20_000 });
+        await note.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(note, 3800);
+      },
+
+      async consignment({ page, stage }) {
+        await stage.clickIt(freightRow(page).locator('.frt-cons__link').first(), { after: 1800 });
+        await page.waitForURL(/\/inbound\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const ref = page.getByText(CONSIGNMENTS.landed, { exact: true }).first();
+        await ref.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(ref, 2400);
+      },
+
+      async panel({ page, stage }) {
+        const freight = await invSection(page, 'Inbound freight');
+        await stage.dwellOn(freight.locator('.inv-dl').first(), 3600);
+      },
+
+      async service({ page, stage }) {
+        const freight = await invSection(page, 'Inbound freight');
+        await stage.dwellOn(
+          freight.locator('.inv-dl__row').filter({ hasText: 'Service charge' }).first(),
+          3400,
+        );
+      },
+
+      async invoice({ page, stage }) {
+        // The bill's own note. Gated on the forwarder's name rather than
+        // on the panel: a bill recorded without one renders the panel
+        // perfectly and simply omits this paragraph.
+        const freight = await invSection(page, 'Inbound freight');
+        const note = freight.getByText(/Meghna Forwarders/).first();
+        await note.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(note, 3600);
+      },
+
+      async timeline({ page, stage }) {
+        const history = await invSection(page, 'What has happened');
+        const billed = history.getByText(/^Freight billed/).first();
+        await billed.waitFor({ state: 'visible', timeout: 20_000 });
+        await billed.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(billed, 3600);
+      },
+
+      async outro({ page, stage }) {
+        const tile = await kpi(page, 'Inbound freight');
+        await stage.dwellOn(tile, 3600);
       },
     },
   },
