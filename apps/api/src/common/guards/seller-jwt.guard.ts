@@ -21,6 +21,10 @@ import {
   REQUIRE_SELLER_PERMISSIONS_KEY,
   SELLER_SELF_SERVICE_KEY,
 } from '../auth/require-seller-permissions.decorator';
+import {
+  ENDPOINT_NOT_AUTHORIZED_MESSAGE,
+  sellerAuthorizationVerdict,
+} from '../auth/seller-authorization';
 
 /**
  * Bearer-token auth for seller routes. Crucially, this guard re-checks
@@ -211,44 +215,44 @@ export class SellerJwtGuard implements CanActivate {
         ctx.getClass(),
       ]) === true;
 
-    if (!selfService) {
-      const required = this.reflector.getAllAndOverride<readonly SellerPermissionKey[] | undefined>(
-        REQUIRE_SELLER_PERMISSIONS_KEY,
-        [ctx.getHandler(), ctx.getClass()],
-      );
+    const required = this.reflector.getAllAndOverride<readonly SellerPermissionKey[] | undefined>(
+      REQUIRE_SELLER_PERMISSIONS_KEY,
+      [ctx.getHandler(), ctx.getClass()],
+    );
+    // The decision itself is shared with `ApiKeyGuard` (see
+    // `seller-authorization.ts`): two doors into the same rooms must not
+    // be able to disagree about who may come in. Only the audit row and
+    // the wording below are this guard's own.
+    const verdict = sellerAuthorizationVerdict({ selfService, required, held });
 
-      if (required === undefined || required.length === 0) {
-        throw new ForbiddenException({
-          code: 'ENDPOINT_NOT_AUTHORIZED',
-          message:
-            'This endpoint declares no permission and is refused by default. ' +
-            'Add @RequireSellerPermissions(...) or @SellerSelfService() to it.',
-        });
-      }
-
-      if (!required.some((perm) => held.includes(perm))) {
-        await this.audit.log({
-          actorType: ActorType.SELLER,
-          sellerId: seller.id,
-          actorId: user.id,
-          action: 'seller.access_denied_permission',
-          entityType: 'seller_user',
-          entityId: user.id,
-          metadata: {
-            role: user.sellerRole.key,
-            required: [...required],
-            path: req.url,
-            method: req.method,
-            ipAddress: req.ip ?? null,
-            userAgent: req.header('user-agent') ?? null,
-          },
-          severity: 'LOW',
-        });
-        throw new ForbiddenException({
-          code: 'INSUFFICIENT_PERMISSION',
-          message: `${user.sellerRole.name} does not hold: ${required.join(' or ')}`,
-        });
-      }
+    if (verdict.kind === 'ENDPOINT_NOT_AUTHORIZED') {
+      throw new ForbiddenException({
+        code: 'ENDPOINT_NOT_AUTHORIZED',
+        message: ENDPOINT_NOT_AUTHORIZED_MESSAGE,
+      });
+    }
+    if (verdict.kind === 'INSUFFICIENT_PERMISSION') {
+      await this.audit.log({
+        actorType: ActorType.SELLER,
+        sellerId: seller.id,
+        actorId: user.id,
+        action: 'seller.access_denied_permission',
+        entityType: 'seller_user',
+        entityId: user.id,
+        metadata: {
+          role: user.sellerRole.key,
+          required: [...verdict.required],
+          path: req.url,
+          method: req.method,
+          ipAddress: req.ip ?? null,
+          userAgent: req.header('user-agent') ?? null,
+        },
+        severity: 'LOW',
+      });
+      throw new ForbiddenException({
+        code: 'INSUFFICIENT_PERMISSION',
+        message: `${user.sellerRole.name} does not hold: ${verdict.required.join(' or ')}`,
+      });
     }
 
     req.seller = {

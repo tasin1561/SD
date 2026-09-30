@@ -12,7 +12,12 @@ import { TextField } from '@skydrop/ui/app/text-field';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
-import type { CreatedSellerApiKey } from '@skydrop/api-client';
+import { Checkbox } from '@skydrop/ui/app/checkbox';
+import {
+  SELLER_API_KEY_SCOPES,
+  type CreatedSellerApiKey,
+  type SellerApiKeyScope,
+} from '@skydrop/api-client';
 import { useApiKeysList, useCreateApiKey, useRevokeApiKey } from '@/lib/api-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { RevealCard, SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
@@ -69,6 +74,7 @@ export function ApiKeysIndex(): ReactElement {
   const toast = useToast();
   const [name, setName] = useState('');
   const [ttlDays, setTtlDays] = useState('');
+  const [scopes, setScopes] = useState<readonly SellerApiKeyScope[]>([]);
   const [revealed, setRevealed] = useState<CreatedSellerApiKey | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmCreate, setConfirmCreate] = useState(false);
@@ -82,9 +88,20 @@ export function ApiKeysIndex(): ReactElement {
     return serverVerdict(e, 'Action failed');
   }
 
+  function toggleScope(scope: SellerApiKeyScope, on: boolean): void {
+    setScopes((prev) => (on ? [...prev, scope] : prev.filter((s) => s !== scope)));
+  }
+
   function onCreate(e: FormEvent): void {
     e.preventDefault();
     setError(null);
+    // Cosmetic, per FE-2 — the server refuses an empty list too. Saying
+    // it here stops somebody minting a key that fails on first use with
+    // a message about a field they never saw.
+    if (scopes.length === 0) {
+      setError('Choose at least one thing this key may do.');
+      return;
+    }
     setConfirmCreate(true);
   }
 
@@ -93,11 +110,13 @@ export function ApiKeysIndex(): ReactElement {
     try {
       const res = await create.mutateAsync({
         name: name.trim(),
+        scopes,
         ...(ttlDays ? { expiresInDays: Number(ttlDays) } : {}),
       });
       setRevealed(res);
       setName('');
       setTtlDays('');
+      setScopes([]);
       toast.success('API key created.');
     } catch (e) {
       setError(fmtError(e));
@@ -196,6 +215,31 @@ export function ApiKeysIndex(): ReactElement {
               inputClassName="sk-figure"
               className="set-narrow"
             />
+            {/*
+              What the key may do. Ticked boxes rather than a role, because
+              a key belongs to the COMPANY and there is no person behind it
+              to read a role off — and because a key that can do everything
+              is exactly what this replaced.
+            */}
+            <fieldset className="set-scopes">
+              <legend>What may this key do?</legend>
+              <p className="set-muted">
+                Pick as little as the integration needs. Your wallet, withdrawals, company profile
+                and bank account, team, roles, other keys and webhooks are never reachable by a key,
+                whatever is ticked here.
+              </p>
+              <div className="set-scopes__list">
+                {SELLER_API_KEY_SCOPES.map((scope) => (
+                  <Checkbox
+                    key={scope.key}
+                    label={scope.label}
+                    description={scope.description}
+                    checked={scopes.includes(scope.key)}
+                    onChange={(e) => toggleScope(scope.key, e.target.checked)}
+                  />
+                ))}
+              </div>
+            </fieldset>
             <div className="set-buttons" data-align="start">
               <AsyncButton
                 type="submit"
@@ -229,6 +273,7 @@ export function ApiKeysIndex(): ReactElement {
                 <Tr>
                   <Th>Name</Th>
                   <Th>Prefix</Th>
+                  <Th>Scopes</Th>
                   <Th>Last used</Th>
                   <Th>Expires</Th>
                   <Th>State</Th>
@@ -237,7 +282,7 @@ export function ApiKeysIndex(): ReactElement {
               </THead>
               <TBody>
                 {rows.length === 0 ? (
-                  <TableEmpty colSpan={6}>No API keys yet.</TableEmpty>
+                  <TableEmpty colSpan={7}>No API keys yet.</TableEmpty>
                 ) : (
                   rows.map((k) => {
                     const state = keyState(k);
@@ -247,6 +292,9 @@ export function ApiKeysIndex(): ReactElement {
                         <Td className="set-cell-strong">{k.name}</Td>
                         <Td>
                           <span className="sk-ident">{k.keyPrefix}…</span>
+                        </Td>
+                        <Td className="set-cell-muted">
+                          {k.scopes.length === 0 ? 'None — reissue this key' : k.scopes.join(', ')}
                         </Td>
                         <Td className="set-cell-muted">
                           {k.lastUsedAt !== null ? new Date(k.lastUsedAt).toLocaleString() : '—'}
@@ -291,7 +339,9 @@ export function ApiKeysIndex(): ReactElement {
         onOpenChange={setConfirmCreate}
         title="Create this API key?"
         entity={name.trim()}
-        consequence={`A new key that can call the seller API for this company the moment it exists. ${
+        consequence={`A new key that can call the seller API for this company the moment it exists, limited to: ${scopes.join(
+          ', ',
+        )}. ${
           ttlDays
             ? `It expires in ${ttlDays} ${ttlDays === '1' ? 'day' : 'days'}.`
             : 'It never expires.'

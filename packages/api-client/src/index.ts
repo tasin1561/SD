@@ -140,7 +140,12 @@ export type {
   SellerApiKeyView,
   CreatedSellerApiKey,
   CreateSellerApiKeyRequest,
+  SellerApiKeyScope,
 } from './endpoints/seller-api-keys';
+// A VALUE, not a type: the scope picker draws a box per entry. The
+// SERVER still decides what each one covers and refuses one it does not
+// know — this is labels only.
+export { SELLER_API_KEY_SCOPES } from './endpoints/seller-api-keys';
 export type {
   WalletBalanceView,
   WalletEntryView,

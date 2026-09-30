@@ -1,0 +1,31 @@
+-- What a seller's API key may reach (2026-09-30).
+--
+-- `ApiKeyGuard` synthesised `ALL_SELLER_PERMISSION_KEYS` minus
+-- `roles.manage` for every key — the built-in Admin role handed to a
+-- credential a seller pastes into somebody else's software, able to
+-- request a withdrawal, change the bank account it is paid into, invite
+-- a colleague and mint more keys. Nothing was exposed, because the guard
+-- is wired to no controller and the keys the UI mints therefore
+-- authenticate nothing; the point of doing this now is that a key which
+-- has been issued cannot be un-issued.
+--
+-- The empty default is deliberate and is NOT a backfill to be filled in
+-- later: a key created before scopes existed had no scope decision
+-- behind it, so the honest reading is that it grants nothing, and the
+-- guard refuses an empty set by name (`API_KEY_NO_SCOPES`) so the answer
+-- is "mint a new one" rather than a 403 on each endpoint in turn. It
+-- costs nothing on production, which holds 0 seller API keys.
+--
+-- TEXT[] rather than an enum: the vocabulary is code
+-- (`seller-api-key-scopes.ts`), the same split as seller permissions —
+-- a line of code checks each scope, so adding one is a release, and an
+-- enum would make it a release plus a migration for no extra safety.
+-- An unrecognised value is dropped when permissions are derived, never
+-- treated as wider.
+--
+-- The DDL is exactly what Prisma emits for a `String[] @default([])`
+-- scalar list — `TEXT[] DEFAULT ARRAY[]::TEXT[]`, no NOT NULL, because
+-- Prisma's client never hands a list field null. Spelling it any other
+-- way (`NOT NULL DEFAULT '{}'`) would read as schema drift on CI's
+-- `migrate diff` gate.
+ALTER TABLE "seller_api_keys" ADD COLUMN "scopes" TEXT[] DEFAULT ARRAY[]::TEXT[];

@@ -31,6 +31,12 @@ export class SellerApiKeyService {
         keyPrefix: prefix,
         keyHash: hash,
         expiresAt,
+        // Stored as chosen. The DTO has already refused an unknown one
+        // and an empty list, so nothing here needs to guess; what the
+        // key MAY DO is derived from these at every request, never
+        // frozen into a permission list that a later release could not
+        // narrow.
+        scopes: input.scopes,
       },
       select: {
         id: true,
@@ -38,6 +44,7 @@ export class SellerApiKeyService {
         keyPrefix: true,
         createdAt: true,
         expiresAt: true,
+        scopes: true,
       },
     });
 
@@ -50,6 +57,7 @@ export class SellerApiKeyService {
       metadata: {
         name: input.name,
         keyPrefix: prefix,
+        scopes: [...input.scopes],
         expiresAt: expiresAt?.toISOString() ?? null,
         ipAddress: ctx.ipAddress,
         userAgent: ctx.userAgent,
@@ -62,6 +70,7 @@ export class SellerApiKeyService {
       keyPrefix: row.keyPrefix,
       createdAt: row.createdAt,
       expiresAt: row.expiresAt,
+      scopes: row.scopes,
       plaintext,
     };
   }
@@ -78,6 +87,7 @@ export class SellerApiKeyService {
         createdAt: true,
         expiresAt: true,
         revokedAt: true,
+        scopes: true,
       },
     });
     return rows;

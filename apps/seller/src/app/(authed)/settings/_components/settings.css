@@ -651,3 +651,29 @@ tr[data-dead] > td {
 .set-chips[data-end] {
   justify-content: flex-end;
 }
+
+/*
+  The API-key scope picker: one question, a stack of checkboxes.
+  fieldset/legend because that is the grouping assistive tech reads for
+  "these boxes answer one question"; the reset is because the browser's
+  own border and inset legend fight the card around them.
+*/
+.set-scopes {
+  /* Its own row inside the flex form, so the name and TTL fields keep
+     theirs — the fieldset belongs INSIDE the form it submits with. */
+  flex: 1 1 100%;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  border: 0;
+}
+.set-scopes > legend {
+  padding: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.set-scopes__list {
+  display: grid;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}

@@ -406,6 +406,20 @@ model SellerApiKey {
   name       String
   keyPrefix  String    @map("key_prefix")
   keyHash    String    @unique @map("key_hash")
+  /// What this key may reach, chosen when it was minted.
+  ///
+  /// `ApiKeyGuard` used to grant every key the built-in Admin role —
+  /// the whole seller catalogue bar `roles.manage` — so a credential
+  /// pasted into third-party software could have requested a
+  /// withdrawal, changed the bank account it is paid into and minted
+  /// more keys. The vocabulary is `seller-api-key-scopes.ts`, which is
+  /// also the ONE place a scope becomes permissions.
+  ///
+  /// Empty is a real state and means the key grants nothing: it was
+  /// issued before this column existed, or every scope it named has
+  /// since been retired. The guard refuses it by name rather than
+  /// falling back to anything wider.
+  scopes     String[]  @default([])
   lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz
   expiresAt  DateTime? @map("expires_at") @db.Timestamptz
   revokedAt  DateTime? @map("revoked_at") @db.Timestamptz

@@ -15,6 +15,7 @@ interface KeyRow {
   revokedAt: Date | null;
   deletedAt: Date | null;
   createdAt: Date;
+  scopes: string[];
 }
 
 function buildClient() {
@@ -47,6 +48,7 @@ function buildClient() {
             keyPrefix: row.keyPrefix,
             createdAt: row.createdAt,
             expiresAt: row.expiresAt,
+            scopes: row.scopes,
           };
         },
       ),
@@ -100,7 +102,7 @@ const ctx = { ipAddress: '1.2.3.4', userAgent: 'jest', requestId: 'req-1' };
 describe('SellerApiKeyService', () => {
   it('create: returns plaintext ONCE; stores prefix + hash; never persists plaintext', async () => {
     const { svc, fixt, hashes } = makeSut();
-    const result = await svc.create('seller-1', { name: 'Prod' }, ctx);
+    const result = await svc.create('seller-1', { name: 'Prod', scopes: ['orders:read'] }, ctx);
 
     expect(result.plaintext.startsWith('skd_')).toBe(true);
     expect(result.plaintext.length).toBe(36);
@@ -118,7 +120,11 @@ describe('SellerApiKeyService', () => {
 
   it('create: respects expiresInDays', async () => {
     const { svc, fixt } = makeSut();
-    await svc.create('seller-1', { name: 'short-lived', expiresInDays: 7 }, ctx);
+    await svc.create(
+      'seller-1',
+      { name: 'short-lived', scopes: ['orders:read'], expiresInDays: 7 },
+      ctx,
+    );
     const exp = fixt.rows[0]!.expiresAt!;
     const days = (exp.getTime() - Date.now()) / 86400000;
     expect(days).toBeGreaterThan(6.9);
@@ -127,9 +133,9 @@ describe('SellerApiKeyService', () => {
 
   it('list: returns only the caller’s keys, never the hash, sorted newest-first', async () => {
     const { svc } = makeSut();
-    await svc.create('seller-1', { name: 'A' }, ctx);
-    await svc.create('seller-1', { name: 'B' }, ctx);
-    await svc.create('seller-OTHER', { name: 'X' }, ctx);
+    await svc.create('seller-1', { name: 'A', scopes: ['orders:read'] }, ctx);
+    await svc.create('seller-1', { name: 'B', scopes: ['orders:read'] }, ctx);
+    await svc.create('seller-OTHER', { name: 'X', scopes: ['orders:read'] }, ctx);
 
     const rows = await svc.list('seller-1');
     expect(rows.map((r) => r.name).sort()).toEqual(['A', 'B']);
@@ -141,7 +147,7 @@ describe('SellerApiKeyService', () => {
 
   it('revoke: sets revokedAt + audits', async () => {
     const { svc, fixt } = makeSut();
-    const created = await svc.create('seller-1', { name: 'K' }, ctx);
+    const created = await svc.create('seller-1', { name: 'K', scopes: ['orders:read'] }, ctx);
     await svc.revoke('seller-1', created.id, ctx);
 
     expect(fixt.rows[0]!.revokedAt).toBeInstanceOf(Date);
@@ -151,14 +157,14 @@ describe('SellerApiKeyService', () => {
 
   it('revoke: 404 for missing or cross-seller id', async () => {
     const { svc } = makeSut();
-    const created = await svc.create('seller-1', { name: 'K' }, ctx);
+    const created = await svc.create('seller-1', { name: 'K', scopes: ['orders:read'] }, ctx);
     await expect(svc.revoke('seller-OTHER', created.id, ctx)).rejects.toThrow(NotFoundException);
     await expect(svc.revoke('seller-1', 'missing', ctx)).rejects.toThrow(NotFoundException);
   });
 
   it('revoke: re-revoking → 400 ALREADY_REVOKED', async () => {
     const { svc } = makeSut();
-    const created = await svc.create('seller-1', { name: 'K' }, ctx);
+    const created = await svc.create('seller-1', { name: 'K', scopes: ['orders:read'] }, ctx);
     await svc.revoke('seller-1', created.id, ctx);
     await expect(svc.revoke('seller-1', created.id, ctx)).rejects.toThrow(BadRequestException);
   });
