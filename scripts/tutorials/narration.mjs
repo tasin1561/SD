@@ -1061,11 +1061,125 @@ export const VIDEOS = [
       },
       {
         id: 'through-to-order',
-        say: 'What every row does instead is take you to the order, which is where the things you can actually do have always lived.',
+        say: 'What every row does instead is take you to the order — and there is the point of the whole screen. The decision waiting on you has a button on it, right at the top.',
       },
       {
         id: 'outro',
         say: 'So open it in the morning, clear the top half yourself, and leave the bottom half with us. On a quiet day it says nothing needs you, and it means it.',
+      },
+    ],
+  },
+  {
+    slug: 'the-customer-would-not-answer',
+    title: 'The customer would not answer',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Before anything ships, we ring your customer to confirm the order. Usually they answer. When they never do, the order stops — and it waits for you rather than being thrown away.',
+      },
+      {
+        id: 'open',
+        say: 'Unreachable customers is where those wait. Read the subtitle, because it is the promise: nothing happens to any of these until you say so.',
+      },
+      {
+        id: 'tiles',
+        say: 'Two figures. How many orders are waiting on you, and how many calls we made in total getting nowhere. That second one is worth a glance before you decide anything.',
+      },
+      {
+        id: 'units',
+        say: 'You may expect a third, for stock held against these orders. Holding stock the moment an order is placed is something you switch on, and this account has not — so rather than show you a zero, we show you nothing.',
+      },
+      {
+        id: 'register',
+        say: 'The register itself. The order, units held, calls made, where it stands, and a button. A dash rather than a zero in that column, for the same reason.',
+      },
+      {
+        id: 'decide-open',
+        say: 'Decide opens the question in as few words as we can manage: we tried this many times, nobody answered, and nothing happens until you tell us what you want.',
+      },
+      {
+        id: 'let-it-go',
+        say: 'Let it go rejects the order and returns anything held to your available stock. It is the end of that sale — though you can still ask us to call again afterwards.',
+      },
+      {
+        id: 'confirm',
+        say: 'Because that is not reversible on its own, pressing it asks once more, naming the order, and says in plain words what will happen. Cancel steps back out.',
+      },
+      {
+        id: 'keep-trying',
+        say: 'Keep trying is the other half, and it is what the dialog opens on. The order goes back into the call queue and we ring again. It is the choice you can undo tomorrow.',
+      },
+      {
+        id: 'note',
+        say: 'Add a note if you know something we do not — they are abroad this week, this number is their office. It goes to the agent who makes the next call.',
+      },
+      {
+        id: 'send',
+        say: 'Send it, and the order leaves this list straight away, because it is no longer waiting on anybody. That is what the empty screen underneath is telling you.',
+      },
+      {
+        id: 'decided',
+        say: 'The decisions you have already made are still here under All — what you chose, and when. Nothing is deleted, so the question of what happened to an order always has an answer.',
+      },
+    ],
+  },
+  {
+    slug: 'something-arrived-damaged',
+    title: 'Something arrived damaged',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A parcel came back to our warehouse, and when somebody opened it one of the two things inside was ruined. This is what happens next, and where the money ends up.',
+      },
+      {
+        id: 'open',
+        say: 'Tickets is where that conversation lives. Two kinds share the list — damage we found ourselves on a return, and anything you raise about a parcel.',
+      },
+      {
+        id: 'tiles',
+        say: 'How many are still being argued, how much has actually been refunded to you, and how many you are looking at. The middle one reads as a dash until something has landed.',
+      },
+      {
+        id: 'register',
+        say: 'The column worth reading is Raised by. Skydrop means we found it and told you. You means the other way round. Same queue, same settlement, either way.',
+      },
+      {
+        id: 'our-ticket',
+        say: 'This one is ours. A return came in, somebody at the bench inspected it, one unit was written off — and a ticket opened against your account without you asking for it.',
+      },
+      {
+        id: 'refund-banner',
+        say: 'And the first thing it tells you is the money, because that is what you came for. Credited to your wallet, with the date, and the ledger line it turned into.',
+      },
+      {
+        id: 'facts',
+        say: 'Underneath, the facts. What kind of ticket, where it stands, the courier, and the order and parcel it belongs to — so a phone call about it has something to quote.',
+      },
+      {
+        id: 'conversation',
+        say: 'Then the conversation itself. It opens with what the warehouse actually found, in words rather than a code, and carries everything said since.',
+      },
+      {
+        id: 'wallet-link',
+        say: 'The link at the end goes where the money went. There it is in your ledger as a credit — part of your balance now, and going out with your next withdrawal.',
+      },
+      {
+        id: 'raise',
+        say: 'The other half is yours to start. Raise an issue asks the courier’s own question first: these are Delhivery’s categories, so nothing is lost translating your words into theirs.',
+      },
+      {
+        id: 'describe',
+        say: 'Then say what happened. Notice the title is built from what you chose rather than typed, so the label on the ticket and the story inside it cannot disagree.',
+      },
+      {
+        id: 'raised',
+        say: 'Raised. It joins the same list, saying this time that it came from you, and we answer on the ticket rather than in an email you have to go and find.',
+      },
+      {
+        id: 'outro',
+        say: 'Both kinds end the same way: a conversation with a record, a decision, and where money is owed, a credit in your wallet you can point at.',
       },
     ],
   },

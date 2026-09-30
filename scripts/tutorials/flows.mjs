@@ -88,6 +88,10 @@ const CATALOGUE_MAPPING = {
  * `RSH-LIFE-FAILED` recipient — keep in step with `lib/lifecycle.mjs`.
  */
 const FAILED_CUSTOMER = 'Vikram Desai';
+/** What D5 types on the review before answering it. */
+const HOLD_NOTE =
+  'They are travelling until Sunday — please try again early next week rather than this evening.';
+
 /** D0's back-dated parcel, on `/needs-attention`'s overdue list. */
 const OVERDUE_CUSTOMER = 'Priyanka Joshi';
 
@@ -3016,8 +3020,15 @@ export const FLOWS = {
         await stage.dwellOn(page.locator('.nat-page').first(), 3400);
       },
 
+      // Through the WAITING row, not the overdue one. Both link to their
+      // order and the narration says "every row", but the overdue
+      // parcel's scans are BACK-DATED by the seeding (D0's seventh
+      // parcel) while its warehouse leg happened minutes ago, so its
+      // tracker reads "handed to courier" after "in transit" — true of
+      // this box and confusing on camera. The waiting order has no
+      // courier scans at all, and its page is where D5 goes next.
       async 'through-to-order'({ page, stage }) {
-        const row = page.getByText(OVERDUE_CUSTOMER, { exact: false }).first();
+        const row = page.getByText('Waiting on your decision').first();
         await row.scrollIntoViewIfNeeded();
         await page.waitForTimeout(600);
         await stage.clickIt(page.locator('a').filter({ has: row }).first(), { after: 1800 });
@@ -3038,6 +3049,155 @@ export const FLOWS = {
         await page.waitForLoadState('networkidle').catch(() => {});
         await page.waitForTimeout(1200);
         await stage.dwellOn(page.locator('.nat-kpis').first(), 3200);
+      },
+    },
+  },
+
+  /**
+   * D5 — the call cap.
+   *
+   * D0's `RSH-LIFE-REVIEW`: rung to the cap with NO_ANSWER, and paused
+   * at AWAITING_SELLER_DECISION rather than rejected, because
+   * `inventory.early_reservation_ndr_action` is MANUAL_REVIEW.
+   *
+   * The video PRESSES KEEP TRYING, which is the reversible half: the
+   * order goes back to PENDING_CONFIRMATION and the seeding rings it to
+   * the cap again on the next take (`noAnswerToCap` stops as soon as the
+   * order stops being callable, so a resumed one takes one ring rather
+   * than three). "Let it go" is SELECTED and its confirm is opened so it
+   * can be read — and then cancelled: it is a terminal reject, and D0
+   * cannot rebuild a rejected order.
+   */
+  'the-customer-would-not-answer': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Unreachable customers', exact: true }).first(),
+          { after: 1600 },
+        );
+        await page.waitForURL(/\/holds$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3000);
+      },
+
+      async tiles({ page, stage }) {
+        const kpis = page.locator('.inv-kpis, [class*="kpi"]').first();
+        await kpis.waitFor({ state: 'visible', timeout: 20_000 });
+        // The FIGURE, not the card: both tiles read a dash until the
+        // list has answered, and a scene about "two figures" opening on
+        // two dashes is the thing check mode cannot see.
+        await page
+          .getByText('Calls already made')
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(kpis, 3200);
+      },
+
+      async units({ page, stage }) {
+        // There is no third tile — that is the scene. Dwelling on the
+        // pair is what shows the gap where it would be.
+        await stage.dwellOn(page.locator('.inv-kpis, [class*="kpi"]').first(), 3400);
+      },
+
+      async register({ page, stage }) {
+        const table = page.getByRole('table').first();
+        await table.waitFor({ state: 'visible', timeout: 20_000 });
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(table, 3400);
+      },
+
+      async 'decide-open'({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Decide' }).first(), { after: 1600 });
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(dialog, 3000);
+      },
+
+      async 'let-it-go'({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByText('Let it go', { exact: true }).first(), {
+          after: 1400,
+        });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog, 3000);
+      },
+
+      async confirm({ page, stage }) {
+        // The button's label follows the choice: on RELEASE it reads
+        // "Let it go" and is destructive.
+        await stage.clickIt(
+          page.getByRole('dialog').first().getByRole('button', { name: 'Let it go' }).first(),
+          { after: 1600 },
+        );
+        // The SECOND dialog, which names the order. Matched on its own
+        // title rather than on `.last()` — a confirm that never opened
+        // would otherwise pass by dwelling on the first one again.
+        const confirmDialog = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Let this order go?' })
+          .first();
+        await confirmDialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(confirmDialog, 3200);
+        // Backed out IN THIS SCENE, so the next one opens on the choice
+        // rather than on a closing modal.
+        await stage.clickIt(confirmDialog.getByRole('button', { name: 'Cancel' }).first(), {
+          after: 1400,
+        });
+        await confirmDialog.waitFor({ state: 'hidden', timeout: 20_000 });
+        await page.waitForTimeout(600);
+      },
+
+      async 'keep-trying'({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByText('Keep trying', { exact: true }).first(), {
+          after: 1400,
+        });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog, 3000);
+      },
+
+      async note({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.typeIn(dialog.getByLabel('Note'), HOLD_NOTE, { after: 1600 });
+        await stage.dwellOn(dialog.getByLabel('Note'), 2400);
+      },
+
+      async send({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Keep trying' }).first(), {
+          after: 1400,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
+        // The EMPTY state, which is what proves the decision landed: the
+        // list is filtered to OPEN and the review has left it.
+        await page
+          .getByText('Nothing waiting on you')
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.inv-panel, [class*="panel"]').first(), 3200);
+      },
+
+      async decided({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: 'All' }).first(), { after: 1600 });
+        const table = page.getByRole('table').first();
+        await table.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(table, 3600);
       },
     },
   },
