@@ -33,111 +33,77 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (41):** A1–A6, B1–B7, C1–C6, D1–D6, E1, E2, E3, E4, F1–F5,
-G1–G7. **SECTIONS A, B, C, D, F and G are complete — the whole seller app
-except E5.**
-Every one is listed in its own entry below with what it covers and what its
-seeding does.
+**Filmed so far (41):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E4, F1–F5, G1–G7.
+**Sections A, B, C, D, F and G are complete — the whole seller app except E5.**
+Every one has its own entry below saying what it covers and what its seeding
+does.
 
-**SECTION G IS COMPLETE**, and with it the whole of the reselling side of the
-seller app.
+**THE NEXT ENTRY IS E5**, and then the admin sections.
 
-**SECTION D IS COMPLETE.** D4 landed 2026-09-30 and brought the lifecycle to
-NINE parcels: it is the one video that SPENDS what it films — both of its
-actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
-`RSH-LIFE-RETURNREQ`, retired and remade on every seed run rather than
-unwound. Read D4's entry before filming anything else that presses a courier
-button.
+**What E5 needs that nothing has built: a freight bill that is genuinely
+PART-OWED.** C0 has built the consignment it hangs on (`RSH-CN-LANDED`), and
+recording a bill against its India receipt is straightforward. Making it
+part-owed is not, and the reason is worth reading before starting: FRT-1
+amortises a bill per unit as units LEAVE, and attribution walks
+`shipment_item.pickedBatchId → stock_batch → goods_receipt_lines.batchId →
+allocation` — so ONLY parcels picked from that consignment's own batch charge
+it. The demo seller already holds older stock of both its SKUs and the allocator
+reaches that first, so shipping a parcel proves nothing. The two honest routes
+are (a) give the consignment's batch an earlier expiry so FEFO reaches it first,
+or (b) give the consignment a SKU the seller has no other stock of. Check either
+against `StockPickAllocationService`'s real ordering rather than against an
+assumption about it. `docs/consignment-two-leg.md` and the FRT rules in
+CLAUDE.md are the rest of the brief.
 
-**B7 LANDED 2026-09-30**, and with it SECTION B is complete except B3. It is the
-THIRD video to spend what it films: `RSH-LIFE-CONFIRMED` is now `spendable` and
-`RSH-CANCEL-PENDING` is placed fresh by `cancelWorldFor` on every run. Read B7's
-entry before writing another seeding that has to survive its own take.
+**After E5 the seller app is done and sections H–P (the admin app) begin.**
+They are 44 entries and this document is explicit that they are a BET — read
+[the recommendation](#the-recommendation) first, and consider taking support
+questions rather than this file's order.
 
-**B3 LANDED 2026-09-30 and SECTION B IS COMPLETE.** Its seeding
-(`pendingRowsWorldFor`) runs B2's own fixture through the real presign →
-process → poll and stops, which is the pattern to copy whenever a video needs
-the OUTPUT of a flow another video films: drive the endpoints, never insert the
-row the worker would have written.
+### The three seeded worlds, and which list puts a video in one
 
-**THERE IS NO C7.** Two earlier passes over this file listed one as the next
-entry and put it in the ready list; section C runs C1 to C6 and always has. It
-is the same class of mistake the document warns about at the end — a number
-written down and then trusted — and it cost a few minutes rather than a video,
-because there was nothing to film and no page to look at. Both references are
-corrected; **when an entry is named in the pick-up order, check it has a heading
-of its own.**
+Every video that needs more than the standing catalogue names itself in one of
+these Sets in `seed-demo-data.mjs`. Forget it and the take runs against a box
+that has never been driven.
 
-**F4 LANDED 2026-09-30 and SECTION F IS COMPLETE.** The whole of the seller app
-is now filmed except the CONSIGNMENT block — **C1, C2 and E5**.
+- **`LIFECYCLE_SLUGS` → D0 (`lib/lifecycle.mjs`)** — nine parcels driven the
+  whole way, so the videos about something GOING WRONG have something to film.
+  Three of them are SPENT by their own take and retired-and-remade rather than
+  rewound (`retireSpentParcel`): D4's `RSH-LIFE-SENDBACK` and
+  `RSH-LIFE-RETURNREQ`, and B7's `RSH-LIFE-CONFIRMED`. **Read D4's and B7's
+  entries before writing any seeding that has to survive its own take.**
+- **`CONSIGNMENT_SLUGS` → C0 (`lib/consignments.mjs`)** — two consignments, one
+  landed with its two counts deliberately disagreeing and one still in the air.
+  Build-once and idempotent; C1 and C2 only read it.
+- **`STORE_REQUIRED_SLUGS` / `STORE_ORDER_SLUGS` / `STORE_REPORT_SLUGS`** — the
+  reselling worlds. Two SEPARATE stores and they must stay apart: `Kolkata Silk
+  Room` is configured on camera by G3–G5 (`standingStoreFor` wipes its terms
+  versions on every run), while `Pune Silk Studio` is the one that TRADES
+  (`tradingStoreWorld`: a signed-in store user, `reseller.orders_enabled`,
+  accepted terms, priced products, an action policy and five orders). An order
+  pins a terms version through a RESTRICT FK, so a store order on the standing
+  one would break G4 permanently. Anything later needing a reseller store that
+  trades reuses `tradingStoreWorld` rather than building a third.
 
-**THEIR SEEDING IS BUILT: see [C0](#c0-not-a-tutorial-the-consignment-seeding--built--libconsignmentsmjs),
-and C1 IS FILMED.** `node scripts/tutorials/seed-demo-data.mjs --consignments`
-leaves two consignments on the box — one landed with its counts deliberately
-disagreeing twice, one still in the air so `/inventory`'s in-transit column is
-not zero.
+### What the last few rounds learned about cost
 
-**C1 AND C2 ARE FILMED, so the only entry left in the seller app is E5**, and
-it needs one more thing than C0 builds: a freight bill that is genuinely
-part-owed. C0's entry says exactly what that costs and why it is harder than
-recording a bill — FRT-1 amortises per unit as units LEAVE, and attribution
-walks the picked BATCH, so the demo seller's older stock of the same SKUs is
-picked first and shipping a parcel proves nothing.
+**Anything that only READS is now a narration-and-flow job.** D0's nine parcels
+spread orders across every status the lists filter on, its delivered one carries
+charges, an invoice, a tracker and a full history, and C0 supplies the two
+consignments. B4, B5 and C2 needed no new seeding of their own beyond naming a
+list; F4 needed none at all, only a RESET.
 
-**After E5 the seller app is done and the admin sections (H–P) begin.** They are
-44 entries and the document is explicit that they are a BET: read
-[the recommendation](#the-recommendation) before starting them, and consider
-taking support questions rather than this file's order.
+**A video that PRESSES needs its world put back, and how depends on what the
+press wrote.** F4's seeding is the worked example of all three shapes at once:
+an append-only ledger row is UN-MARKED and never deleted (NOTIF-21), a
+row-absence default is DELETED, and a row the page does not recreate on read is
+UPSERTED back to its defaults. Getting the third one wrong left a table empty
+under a line describing it, and only the frame showed it.
 
-**B4 and B5 landed 2026-09-30 and needed NO new seeding at all**, which is worth
-knowing before costing anything else in section B: D0's nine parcels already
-spread orders across every status the list filters on, and its delivered one
-already carries charges, an invoice, a tracker and a full history. Anything in B
-that only READS is now a narration-and-flow job.
-
-**E5 is the only entry in E with no seeding at all** and it is the one thing
-left in the seller app that needs a world nobody has built: a consignment
-RECEIVED and then BILLED with some of its units already shipped, so `/freight`
-shows a bill that is genuinely part-owed. C1's consignment seeding is its
-prerequisite and is itself unwritten — so whoever takes E5 is really taking C1
-first. `FRT-3`'s amortisation is what makes a bill part-owed, and
-`docs/consignment-two-leg.md` plus the CNS rules in CLAUDE.md are what it has to
-be built against.
-
-**The reselling world G6 and G7 built is in `seed-demo-data.mjs` under
-`tradingStoreWorld`** — a second reseller store (`Pune Silk Studio`), a signed-in
-store user, `reseller.orders_enabled` on for this seller, published and accepted
-terms, two priced products, an action policy, and five orders covering held
-requests, a delivered parcel and a returned one. `driveOrderThrough` on
-`lib/lifecycle.mjs` is the general driver those parcels go through. Anything
-later that needs a reseller store that TRADES should reuse that rather than
-build a third.
-
-**E5 is the only entry in E with no seeding at all**: it needs a consignment
-RECEIVED and then BILLED with some of its units shipped, so `/freight` shows a
-bill that is genuinely part-owed. C1's consignment seeding is its prerequisite
-and is itself unwritten.
-
-**Add the slug to `LIFECYCLE_SLUGS` in `seed-demo-data.mjs`** when you film one,
-or its take runs against a box that has never been driven. The seven D/E slugs
-already there are the worked examples.
-
-**And add it to `STORE_REQUIRED_SLUGS` when it needs the STANDING reseller
-store**, which is the same idea one section over: `standingStoreFor` opens the
-store, prices three products on the default list, and wipes the per-product
-terms, the published terms versions and the action policy — everything G3, G4
-and G5 write on camera. G1 and G2 must NOT be in it, because they build a store
-and an unpriced row on camera and would collide with what it seeds.
-
-**G6 and G7 use `STORE_ORDER_SLUGS` instead, and a DIFFERENT store.** A store
-with an order on it can never have its terms versions deleted again (RS-4's
-RESTRICT), which is exactly what `standingStoreFor` does on every run — so
-putting store orders on the standing store would break G4 permanently. `Pune
-Silk Studio` is the one that trades; `Kolkata Silk Room` is the one that gets
-configured on camera. Keep them apart.
-
-Still `ready` without D0: C1, C2, E5. (B3, B4 and F4 are filmed; there is no
-C7 — see above.)
+**There is no C7.** Two earlier passes over this file listed one as the next
+entry and put it in the ready list; section C runs C1 to C6 and always has.
+**When an entry is named in the pick-up order, check it has a heading of its
+own.**
 
 **Filming these screens is finding real bugs at a steady rate — twenty-nine so
 far, plus seven in the seeding itself.** Every one is on a path nothing else
