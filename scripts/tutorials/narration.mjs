@@ -1167,7 +1167,7 @@ export const VIDEOS = [
       },
       {
         id: 'raise',
-        say: 'The other half is yours to start. Raise an issue asks the courier’s own question first: these are Delhivery’s categories, so nothing is lost translating your words into theirs.',
+        say: 'The other half is yours to start, and the place to start it is the order itself. Raise an issue asks the courier’s own question first — these are Delhivery’s categories, not ours.',
       },
       {
         id: 'describe',
@@ -1175,7 +1175,7 @@ export const VIDEOS = [
       },
       {
         id: 'raised',
-        say: 'Raised. It joins the same list, saying this time that it came from you, and we answer on the ticket rather than in an email you have to go and find.',
+        say: 'Raised, and it joins the same list — saying this time that it came from you. We answer on the ticket, rather than in an email you then have to go and find.',
       },
       {
         id: 'outro',

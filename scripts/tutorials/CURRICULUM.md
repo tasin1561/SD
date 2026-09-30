@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials.** 22 filmed, and D0 is built — so section D is no longer
-blocked. Of the 68 left, 12 are `ready` without any lifecycle at all, most of
+**90 tutorials.** 26 filmed, and D0 is built — so section D is no longer
+blocked. Of the 64 left, 12 are `ready` without any lifecycle at all, most of
 D / E / K is `ready` now that D0 exists, and 2 are `impractical locally`. 29 touch
 something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
@@ -33,30 +33,41 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (22):** A1–A6, B1, B2, C3, C4, C5, C6, D1, E1, E3, E4, F1, F2,
-F3, F5, G1, G2. Every one is listed in its own entry below with what it covers
-and what its seeding does.
+**Filmed so far (26):** A1–A6, B1, B2, C3, C4, C5, C6, D1, D2, D3, D5, D6, E1,
+E3, E4, F1, F2, F3, F5, G1, G2. Every one is listed in its own entry below with
+what it covers and what its seeding does.
 
-**D0 IS BUILT** and D1 is filmed against it, which proves the world end to end.
-So the next agent carries on through SECTION D: **D2** (the customer was not
-there), **D3** (it is coming back), **D5** (the call cap), **D6** (damaged in
-our hands). Read D0's entry first — it says what the world contains and the
-three faults the build uncovered.
+**SECTION D IS DONE except D4** (asking for a parcel back). D4 is the one that
+presses the send-back, which reaches the courier on the click — so it needs the
+`RSH-LIFE-CONFIRMED` parcel and a decision about whether the take may consume
+it. **The next entry is D4, then E2 (reading your wallet) and E5 (what the
+freight cost), then G3–G7, then B3/B4/B5/B6/B7 and C1/C2/C7, then section H
+onward.**
 
 **Add the slug to `LIFECYCLE_SLUGS` in `seed-demo-data.mjs`** when you film one,
-or its take runs against a box that has never been driven.
+or its take runs against a box that has never been driven. The five D/E slugs
+already there are the worked examples.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
-**Filming these screens is finding real bugs at a steady rate** — five so far,
-each one on a path nothing else exercises: a gallery that rendered every fresh
-picture broken, a webhook switch that was a silent dead end, a catalogue
-importer whose preview crashed, saved column mappings that drove nothing, and a
-tracking filter that 500'd. **Budget time for the fix as well as the film.**
+**Filming these screens is finding real bugs at a steady rate — twelve so far,
+plus five in the seeding itself.** Every one is on a path nothing else
+exercises: a gallery that rendered every fresh picture broken, a webhook switch
+that was a silent dead end, a catalogue importer whose preview crashed, saved
+column mappings that drove nothing, a tracking filter that 500'd, a stuck
+parcel's clock that started when we WROTE DOWN the courier's scan rather than
+when the courier made it, a delivery attempt drawn against every scan in the
+order history, an auto-approval note describing a send-back on a request that
+was not one, a ticket that existed but a panel saying "nothing raised yet" a
+few centimetres below it, and an order named by eight characters of a uuid on
+the one screen whose job is to say which order needs you.
+**Budget time for the fix as well as the film.**
 
-**Then build D0** (below) — the lifecycle seeding. It is still the single
-highest-leverage thing in this document: it unblocks 20+ entries in D, E and K
-and most of the admin side.
+**The recurring shape is worth naming: a value that is CLOSE ENOUGH most of the
+time.** `order_events.created_at` really is the scan time on a healthy evening;
+a delivery attempt really is in the same minute as its scan; a uuid really does
+identify an order. Each is wrong exactly where it matters, and none of them
+fails loudly.
 
 ### What a following agent needs to know that is not obvious
 
@@ -714,7 +725,7 @@ delivered one. Both charge a return fee; the tutorial says the figure.
 
 **Promise** — you can decide what happens to an order our agents could not
 confirm.
-**Length** 2 min 28 s. **Prerequisites** D3. **Needs** D0's
+**Length** 2 min 23 s. **Prerequisites** D3. **Needs** D0's
 AWAITING_SELLER_DECISION order, and it is in `LIFECYCLE_SLUGS`.
 **Covers** `/holds` ("Unreachable customers"): how many calls were made, the
 two choices — **let it go**, which rejects the order and returns any held units,
@@ -750,16 +761,32 @@ the same reason; and putting our entry at the front of the queue computed
 "earliest minus a minute", which on a queue holding only a backed-off retry is
 still in the FUTURE, so `pullNext` correctly handed back nothing.
 
-### D6. Something arrived damaged · `needs demo data`
+### D6. Something arrived damaged · **FILMED** — `something-arrived-damaged.mp4`
 
 **Promise** — you can follow a damage claim from the warehouse finding it to
 the refund landing in your wallet.
-**Length** 4 min. **Prerequisites** B5. **Needs** D0's damage ticket, resolved
-with a refund.
+**Length** 2 min 26 s. **Prerequisites** B5. **Needs** D0's damage ticket,
+which the lifecycle pass now REPLIES TO and SETTLES WITH A REFUND, and it is in
+`LIFECYCLE_SLUGS`.
 **Covers** both halves of `/tickets`: the ticket **Skydrop raised** when a
-returned parcel was inspected, and one the **seller raises** with "Raise an
-issue". Then `/tickets/[id]` — the conversation, and the resolution leading
-with the money and linking through to where it now sits in the wallet.
+returned parcel was inspected, and one the **seller raises**. Then
+`/tickets/[id]` — the conversation, which opens with what the bench actually
+found unit by unit (WMS-8d's own wording), and the resolution leading with the
+money — followed through to the `Damage settlement` credit sitting in the
+wallet ledger.
+
+**The issue is raised FROM THE ORDER, not from `/tickets`.** That is the path a
+seller uses, and it is the one that works: the modal's own order field is a
+paste box for a UUID whose hint says "copy the ID from the order page", and the
+order page shows an order NUMBER. From the order the field is not asked for at
+all. **Reported, not fixed** — `CreateSellerTicketDto.orderId` is `@IsUUID()`
+and accepting a number as well means changing `TicketService.open`'s scoped
+lookup, which five other callers share.
+
+**The category is chosen BY LABEL, never by index.** Delhivery's list is
+ordered by their own id, so the first entry is "Behaviour complaint against
+staff" — which a first cut selected, under narration about a missing saree. A
+frame check is what caught it.
 
 ---
 

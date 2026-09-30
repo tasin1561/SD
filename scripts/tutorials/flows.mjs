@@ -88,9 +88,21 @@ const CATALOGUE_MAPPING = {
  * `RSH-LIFE-FAILED` recipient — keep in step with `lib/lifecycle.mjs`.
  */
 const FAILED_CUSTOMER = 'Vikram Desai';
-/** What D6 types when it raises an issue on camera. */
-const RAISED_ISSUE =
-  'Customer says the box arrived open and one of the two sarees is missing. They sent photographs of the packaging, which I can forward.';
+/**
+ * The issue D6 raises on camera, and D0's delivered parcel it is about.
+ *
+ * The category is chosen BY LABEL: the list is Delhivery's own and is
+ * ordered by their id, so the first entry is "Behaviour complaint
+ * against staff" — which has nothing to do with a missing saree.
+ */
+const DELIVERED_CUSTOMER = 'Lakshmi Raghavan';
+
+const ISSUE = {
+  category: 'Damage / Missing / Mismatch',
+  subcategory: 'Missing shipment delivered/returned',
+  description:
+    'Customer says the box arrived open and one of the two sarees is missing. They have sent photographs of the packaging, which I can forward.',
+};
 
 /** What D5 types on the review before answering it. */
 const HOLD_NOTE =
@@ -3312,13 +3324,24 @@ export const FLOWS = {
         await stage.dwellOn(entry, 3400);
       },
 
+      // Raised FROM THE ORDER, which is the path a seller actually
+      // uses and the one that works: the modal's own order field is a
+      // paste box for a uuid, and the order page shows a NUMBER (see
+      // CURRICULUM.md D6 for the finding). From here the field is not
+      // asked for at all — the order is already known.
       async raise({ page, stage }) {
-        await stage.clickIt(page.getByRole('link', { name: 'Tickets', exact: true }).first(), {
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
           after: 1600,
         });
-        await page.waitForURL(/\/tickets$/, { timeout: 30_000 });
+        await page.waitForURL(/\/orders$/, { timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
-        await page.waitForTimeout(900);
+        await page.waitForTimeout(1000);
+        const row = page.getByRole('row').filter({ hasText: DELIVERED_CUSTOMER }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
         await stage.clickIt(page.getByRole('button', { name: 'Raise an issue' }).first(), {
           after: 1600,
         });
@@ -3331,22 +3354,21 @@ export const FLOWS = {
           .locator('option')
           .nth(1)
           .waitFor({ state: 'attached', timeout: 25_000 });
-        await stage.clickIt(dialog.getByLabel('What is the problem'), { after: 1200 });
-        await dialog.getByLabel('What is the problem').selectOption({ index: 1 });
-        await page.waitForTimeout(1000);
-        await stage.dwellOn(dialog, 2600);
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.getByLabel('What is the problem'), 2800);
       },
 
       async describe({ page, stage }) {
         const dialog = page.getByRole('dialog').first();
-        // Its subcategory step exists only for categories that HAVE any
-        // — several of Delhivery's go straight to the description.
-        const sub = dialog.getByLabel('Which one');
-        if ((await sub.count()) > 0) {
-          await sub.selectOption({ index: 1 });
-          await page.waitForTimeout(700);
-        }
-        await stage.typeIn(dialog.getByLabel('What happened'), RAISED_ISSUE, { after: 1600 });
+        // BY LABEL, never by index. The list is Delhivery's own and is
+        // alphabetical, so index 1 is "Behaviour complaint against
+        // staff" — narrating a missing saree over that would be a video
+        // of the wrong sentence.
+        await dialog.getByLabel('What is the problem').selectOption({ label: ISSUE.category });
+        await page.waitForTimeout(800);
+        await dialog.getByLabel('Which one').selectOption({ label: ISSUE.subcategory });
+        await page.waitForTimeout(700);
+        await stage.typeIn(dialog.getByLabel('What happened'), ISSUE.description, { after: 1400 });
         await stage.dwellOn(dialog, 2600);
       },
 
@@ -3356,12 +3378,20 @@ export const FLOWS = {
           after: 1600,
         });
         await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
-        // The ROW, by its "Raised by = You" cell: the register is the
-        // proof, and a closed dialog says nothing about it.
-        const mine = page.getByRole('row').filter({ hasText: 'You' }).first();
-        await mine.waitFor({ state: 'visible', timeout: 25_000 });
-        await page.waitForTimeout(900);
-        await stage.dwellOn(page.getByRole('table').first(), 3200);
+        await stage.clickIt(page.getByRole('link', { name: 'Tickets', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/tickets$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The ROW, by the subject the chosen subcategory DERIVED — the
+        // register is the proof, and a closed dialog says nothing.
+        await page
+          .getByRole('row')
+          .filter({ hasText: ISSUE.subcategory })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.getByRole('table').first(), 3400);
       },
 
       async outro({ page, stage }) {
