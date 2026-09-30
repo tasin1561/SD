@@ -33,8 +33,8 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (28):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
-F1, F2, F3, F5, G1, G2. Every one is listed in its own entry below with what it
+**Filmed so far (29):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
+F1, F2, F3, F5, G1, G2, G3. Every one is listed in its own entry below with what it
 covers and what its seeding does.
 
 **SECTION D IS COMPLETE.** D4 landed 2026-09-30 and brought the lifecycle to
@@ -44,13 +44,26 @@ actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
 unwound. Read D4's entry before filming anything else that presses a courier
 button.
 
-**The next entry is E5 (what the freight cost), then G3–G7, then
-B3/B4/B5/B6/B7 and C1/C2/C7, then section H onward.** E5 is the last one in E
-and it is the only one in the section with NO seeding at all: it needs a
-consignment RECEIVED and then BILLED, with some of its units shipped, so the
-`/freight` page has a bill that is genuinely part-owed. Nothing builds that
-today — C1's consignment seeding is the prerequisite and is itself unwritten.
-G3–G7 need reseller stores, which `resellingWorldFor` already seeds for G1/G2.
+**The next entry is G4 (the deal — publishing terms), then G5, G6, G7, then E5,
+then B3/B4/B5/B6/B7 and C1/C2/C7, then section H onward.**
+
+**G4 is the cheapest of what is left**: `standingStoreFor` already builds the
+store G4 needs, so adding `'the-deal'` to `STORE_REQUIRED_SLUGS` is the whole
+seeding, plus clearing any terms version a take publishes (they are append-only
+versions, so a second take would open on version 2 and film different words).
+G5 is the same shape over `reseller_store_action_policy` — one row, reset to
+`DEFAULT_POLICY` between takes.
+
+**G6 is the heaviest thing left in the seller app** and should be costed before
+it is started: it needs a store USER who has actually signed in, a store ORDER
+placed by them, and a request raised against it — and `reseller.orders_enabled`
+is seeded FALSE and must be switched on per seller first. G7 needs store orders
+that have been through D0's lifecycle.
+
+**E5 is the only entry in E with no seeding at all**: it needs a consignment
+RECEIVED and then BILLED with some of its units shipped, so `/freight` shows a
+bill that is genuinely part-owed. C1's consignment seeding is its prerequisite
+and is itself unwritten.
 
 **Add the slug to `LIFECYCLE_SLUGS` in `seed-demo-data.mjs`** when you film one,
 or its take runs against a box that has never been driven. The five D/E slugs
@@ -1280,17 +1293,40 @@ back up and dwells on it.
 teaches the guard on removal (a store already selling at your default price
 must be given one of its own first). The seed clears it anyway, as the backstop.
 
-### G3. What one store sells · `needs demo data`
+### G3. What one store sells · **FILMED** — `what-one-store-sells.mp4`
 
 **Promise** — you can decide which products a store sees, at what price, and
 how much of your stock it may have.
-**Length** 4 min. **Prerequisites** G2.
-**Needs** a store plus priced products. Seedable in a few rows.
-**Covers** the "Catalogue & stock" tab: enabling products, a price that
-overrides the default, the overlay name and pictures the store shows its own
-customers, and the two stock modes — **shared** versus a **set-aside**
-quantity — with the hidden share. The moment worth filming is the real
-availability shown beside what the store will actually see.
+**Length** 2 min 58 s (16 scenes). **Prerequisites** G2.
+**Covers** the "Catalogue & stock" tab, one product end to end: enabling it, a
+price that overrides the default, the two stock modes — **shared** versus a
+**set-aside** quantity — the hidden share, and the overlay name the store's own
+customers read. It closes on the row's last two columns DISAGREEING, which is
+the whole idea of the page: 40 really available, 9 that the store is shown
+(a 12-unit set-aside, a quarter of it held back).
+
+**Its seeding is the mirror image of G1's and G2's, and that is the interesting
+part.** G1 opens a store on camera and would collide on the name
+(`STORE_NAME_TAKEN`); G2's fourth scene is an UNPRICED row whose button reads
+"Set price". So `resellingWorldFor` REMOVES the store and the price for those
+two and `standingStoreFor` BUILDS both for this one — the same shape
+`walletWorldFor` uses for E1 and E3, where each video's world is the other's
+contradiction.
+
+What it deliberately does not leave is any per-variant term:
+`reseller_store_variants` is wiped on every run, because a second take starting
+from a row already enabled would film the switch going the other way over a form
+pre-filled with the first take's figures. The store and the prices are built
+through the REAL endpoints — `initialStatusFor` maps a SELLER-created store to
+ACTIVE and an ADMIN-created one to PENDING_SELLER_APPROVAL (derived from the
+actor, never the body), and the price PUT is what applies
+`RETAIL_RANGE_INVERTED` / `SUGGESTED_OUTSIDE_RANGE`.
+
+**The product is `RSH-KANTHA-BLUE`, not the scarf.** G2's take clears the
+scarf's default price on every run, and a product with no default is the one
+this video must not open on — the form then says "set one on your price list",
+which is a different lesson. Rows are found BY SKU (`storeCatalogueRow`), never
+by position: the table is every active variant the seller has.
 
 ### G4. The deal · `needs demo data`
 

@@ -105,6 +105,47 @@ const ISSUE = {
 };
 
 /**
+ * What G3 sets on one product, for one store.
+ *
+ * The SKU is `RSH-KANTHA-BLUE` rather than the scarf G2 uses: G2's take
+ * clears the scarf's default price on every run, and a product with no
+ * default is exactly the one this video should not open with (the form
+ * then says "set one on your price list", which is a different lesson).
+ *
+ * The figures hang together: the transfer price is below the range, the
+ * suggestion sits inside it, and the override is deliberately BELOW the
+ * default list's 1400 — the store has earned a better rate, which is
+ * what an override is for.
+ */
+const STORE_CATALOGUE = {
+  sku: 'RSH-KANTHA-BLUE',
+  transfer: '1250',
+  min: '1800',
+  max: '2600',
+  suggested: '2100',
+  setAside: '12',
+  hidden: '25',
+  title: 'Handwoven Kantha Throw',
+};
+
+/**
+ * One row of a store's catalogue, found by SKU.
+ *
+ * The table is every ACTIVE variant the seller has, so a product added
+ * upstream moves every row — the same argument as `ledgerRow` and
+ * `dwellOnTerms`. Throws rather than returning nothing, because a dwell
+ * on an empty locator passes a `--check` exactly as loudly as one that
+ * works.
+ */
+async function storeCatalogueRow(page, sku) {
+  const row = page.getByRole('row').filter({ hasText: sku }).first();
+  await row.waitFor({ state: 'visible', timeout: 25_000 });
+  await row.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(700);
+  return row;
+}
+
+/**
  * One ledger row, found by the ENTRY KIND it is about.
  *
  * Never by position. The ledger is newest-first and every seed run can
@@ -4225,6 +4266,212 @@ export const FLOWS = {
         await tabs.scrollIntoViewIfNeeded();
         await page.waitForTimeout(800);
         await stage.dwellOn(tabs, 3400);
+      },
+    },
+  },
+
+  /**
+   * G3 — what one store sells.
+   *
+   * The store is SEEDED, not opened on camera (`standingStoreFor`), and
+   * so are the default prices behind it: a video about choosing what a
+   * store may sell should not spend its first scene on a product with no
+   * price, which the tab itself refuses to make sellable.
+   *
+   * What the seeding deliberately does NOT leave is any per-variant term
+   * — `reseller_store_variants` is wiped on every run. The take enables
+   * a product, overrides its price and sets a set-aside, all on camera,
+   * and a second take starting from a row already enabled would film the
+   * switch going the other way over a form pre-filled with the first
+   * take's figures.
+   *
+   * The product is chosen BY SKU, never by row position: the table is
+   * every active variant the seller has, so a product added upstream
+   * moves every row.
+   */
+  'what-one-store-sells': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-store'({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Reseller stores', exact: true }).first(),
+          { after: 1600 },
+        );
+        await page.waitForURL(/\/reseller-stores$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        const row = page.getByRole('row').filter({ hasText: RESELLER.storeName }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
+        await page.waitForURL(/\/reseller-stores\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1000);
+        await stage.clickIt(page.getByRole('tab', { name: 'Catalogue & stock' }).first(), {
+          after: 1800,
+        });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 1800);
+      },
+
+      async table({ page, stage }) {
+        const table = page.locator('table').first();
+        await table.waitFor({ state: 'visible', timeout: 25_000 });
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(table.locator('thead').first(), 3400);
+      },
+
+      async 'sold-here'({ page, stage }) {
+        // THE WHOLE BODY, not one row: the line is "every one of them is
+        // off", and haloing a single row while saying "all of them" is
+        // the frame arguing with the voice.
+        const body = page.locator('table tbody').first();
+        await body.waitFor({ state: 'visible', timeout: 25_000 });
+        await body.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(body, 3000);
+      },
+
+      async 'price-source'({ page, stage }) {
+        // The page's own subtitle, which says where a price with no
+        // override comes from and links to the list it comes from.
+        await stage.dwellOn(
+          page.getByText('A price with no override comes from your price list.').first(),
+          3200,
+        );
+      },
+
+      async 'edit-open'({ page, stage }) {
+        const row = await storeCatalogueRow(page, STORE_CATALOGUE.sku);
+        await stage.clickIt(row.getByRole('button', { name: 'Edit' }).first(), { after: 1600 });
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        // The DESCRIPTION line, which carries the two numbers the rest of
+        // this form is spent deciding between.
+        await stage.dwellOn(dialog.getByText(/available now;/).first(), 3400);
+      },
+
+      async enable({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByLabel('This store may sell it').first(), { after: 1200 });
+        await stage.dwellOn(dialog.getByLabel('This store may sell it').first(), 2600);
+      },
+
+      async 'own-price'({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByLabel('Give this store its own price').first(), {
+          after: 1400,
+        });
+        await stage.dwellOn(dialog.getByLabel('Give this store its own price').first(), 2600);
+      },
+
+      async 'price-fields'({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.typeIn(dialog.getByLabel('Transfer price (₹)'), STORE_CATALOGUE.transfer, {
+          after: 500,
+          clear: true,
+        });
+        await stage.typeIn(dialog.getByLabel('Lowest retail (₹)'), STORE_CATALOGUE.min, {
+          after: 500,
+          clear: true,
+        });
+        await stage.typeIn(dialog.getByLabel('Highest retail (₹)'), STORE_CATALOGUE.max, {
+          after: 500,
+          clear: true,
+        });
+        await stage.typeIn(dialog.getByLabel('Suggested retail (₹)'), STORE_CATALOGUE.suggested, {
+          after: 900,
+          clear: true,
+        });
+        await stage.dwellOn(dialog.getByLabel('Transfer price (₹)'), 1800);
+      },
+
+      async 'stock-shared'({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        // BY VALUE on the labelled select, never by index.
+        await dialog.getByLabel('Stock').selectOption('SHARED');
+        await page.waitForTimeout(900);
+        await stage.dwellOn(dialog.getByLabel('Stock'), 3000);
+      },
+
+      async 'stock-setaside'({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await dialog.getByLabel('Stock').selectOption('SET_ASIDE');
+        await page.waitForTimeout(900);
+        // The qty field appears only on this choice, and its HINT is the
+        // scene: how many are free to commit right now.
+        await stage.typeIn(dialog.getByLabel('Units set aside'), STORE_CATALOGUE.setAside, {
+          after: 900,
+          clear: true,
+        });
+        await stage.dwellOn(dialog.getByLabel('Units set aside'), 2600);
+      },
+
+      async hidden({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.typeIn(dialog.getByLabel('Hidden share (%)'), STORE_CATALOGUE.hidden, {
+          after: 900,
+          clear: true,
+        });
+        await stage.dwellOn(dialog.getByLabel('Hidden share (%)'), 3000);
+      },
+
+      async overlay({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.typeIn(dialog.getByLabel('What the store calls it'), STORE_CATALOGUE.title, {
+          after: 900,
+        });
+        await stage.dwellOn(dialog.getByLabel('Description for the store'), 2800);
+      },
+
+      async confirm({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.clickIt(dialog.getByRole('button', { name: 'Save' }).first(), { after: 1400 });
+        const confirm = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Save these terms for the store?' })
+          .first();
+        await confirm.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(confirm, 3200);
+      },
+
+      async result({ page, stage }) {
+        const confirm = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Save these terms for the store?' })
+          .first();
+        await stage.clickIt(confirm.getByRole('button', { name: /^Save/ }).first(), {
+          after: 1600,
+        });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The ROW, now disagreeing with itself across its last two
+        // columns — which is the claim the narration makes. Waiting for
+        // the set-aside to appear in its Stock cell is what proves the
+        // save landed rather than the dialog merely closing.
+        const row = await storeCatalogueRow(page, STORE_CATALOGUE.sku);
+        await row
+          .getByText(new RegExp(`Set aside ${STORE_CATALOGUE.setAside}`))
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(row, 3400);
+      },
+
+      async outro({ page, stage }) {
+        const table = page.locator('table').first();
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(800);
+        await stage.dwellOn(table, 3200);
       },
     },
   },

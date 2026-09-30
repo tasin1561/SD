@@ -212,6 +212,14 @@ export const INTEGRATIONS = {
 export const RESELLING = {
   storeName: 'Kolkata Silk Room',
   priceSku: 'RSH-SCARF-EMERALD',
+  // The rest of the store's own details, needed from G3 on — where the
+  // store is SEEDED rather than opened on camera. Keep in step with
+  // `RESELLER` in flows.mjs, which types these into the G1 form.
+  displayName: 'Silk Room',
+  contactEmail: 'hello@kolkatasilkroom.test',
+  contactPhone: '+919833014477',
+  inviteEmail: 'priya@kolkatasilkroom.test',
+  inviteName: 'Priya Bose',
 };
 
 /**
@@ -1152,7 +1160,15 @@ async function integrationsWorldFor(slug, sellerId) {
  * order against it is somebody's real work, and a video is not a reason
  * to take it.
  */
-async function resellingWorldFor(slug, sellerId) {
+async function resellingWorldFor(slug, sellerId, sellerToken) {
+  // G3 onwards need the store to EXIST, which is the opposite of what
+  // G1 and G2 need. Handled first and returned from, so the removal
+  // below can stay unconditional for the two videos that build one on
+  // camera.
+  if (STORE_REQUIRED_SLUGS.has(slug ?? '')) {
+    await standingStoreFor(sellerId, sellerToken);
+    return;
+  }
   if (slug !== 'open-a-reseller-store' && slug !== 'set-a-reseller-price') return;
 
   const store = await prisma.sellerStore.findFirst({
@@ -1185,6 +1201,113 @@ async function resellingWorldFor(slug, sellerId) {
     if (priced.count > 0) {
       console.log(`  · cleared the reseller price of ${RESELLING.priceSku}`);
     }
+  }
+}
+
+/**
+ * The videos that need a reseller store ALREADY OPEN.
+ *
+ * G1 and G2 want the opposite — G1 opens one on camera and would collide
+ * on the name (`STORE_NAME_TAKEN`), G2's fourth scene is an UNPRICED row
+ * whose button says "Set price" — so these two worlds are each other's
+ * contradiction and `resellingWorldFor` builds one and dismantles the
+ * other, exactly as `walletWorldFor` does for E1 and E3.
+ */
+const STORE_REQUIRED_SLUGS = new Set(['what-one-store-sells']);
+
+/**
+ * Three products the standing store's catalogue is built from.
+ *
+ * All three are PRICED on the seller's default price list, because the
+ * catalogue tab's own copy turns on that: an unpriced row tells the
+ * store "set one on your price list, or give this store its own", and a
+ * video about choosing what a store sells should not spend its first
+ * scene on a product that cannot be sold at all.
+ *
+ * G3 then gives ONE of them a price of its own on camera, which is the
+ * override the tab exists for.
+ */
+const STANDING_STORE_PRICES = [
+  { sku: 'RSH-JAMDANI-IVORY', transfer: '1850', min: '2400', max: '3200', suggested: '2800' },
+  { sku: 'RSH-SCARF-EMERALD', transfer: '620', min: '850', max: '1100', suggested: '950' },
+  { sku: 'RSH-KANTHA-BLUE', transfer: '1400', min: '1900', max: '2600', suggested: '2200' },
+];
+
+/**
+ * A reseller store that is already open, with a priced catalogue behind
+ * it and NO per-variant terms of its own.
+ *
+ * The last part is what makes the take repeatable: G3 enables a product,
+ * gives it a price override and sets a set-aside, all on camera. A
+ * second take starting from a row that is already enabled would film the
+ * switch going the other way and a form pre-filled with the first take's
+ * figures, which is a different video.
+ *
+ * Built through the REAL endpoints, not Prisma inserts: `initialStatusFor`
+ * maps a SELLER-created store to ACTIVE and an ADMIN-created one to
+ * PENDING_SELLER_APPROVAL (derived from the actor, never the body), and a
+ * row written by hand would not have been through that at all. The invite
+ * is required by the DTO for its own good reason — "a store with nobody
+ * able to sign in is a row that looks open and can do nothing".
+ */
+async function standingStoreFor(sellerId, sellerToken) {
+  const token = await sellerToken();
+  let store = await prisma.sellerStore.findFirst({
+    where: { sellerId, name: RESELLING.storeName, kind: 'RESELLER', deletedAt: null },
+    select: { id: true, status: true },
+  });
+
+  if (store === null) {
+    const created = await call('/seller/reseller-stores', {
+      method: 'POST',
+      token,
+      body: {
+        name: RESELLING.storeName,
+        displayName: RESELLING.displayName,
+        contactEmail: RESELLING.contactEmail,
+        contactPhone: RESELLING.contactPhone,
+        invite: {
+          email: RESELLING.inviteEmail,
+          fullName: RESELLING.inviteName,
+          roleKey: 'owner',
+        },
+      },
+    });
+    store = { id: created.store?.id ?? created.id, status: 'ACTIVE' };
+    console.log(`  · opened the standing "${RESELLING.storeName}" store`);
+  } else {
+    console.log(`  · "${RESELLING.storeName}" is already open`);
+  }
+
+  // The default price list, through the real PUT — which is what applies
+  // the ordering rules (`RETAIL_RANGE_INVERTED`, `SUGGESTED_OUTSIDE_RANGE`),
+  // so a figure set here is a figure the product would accept.
+  for (const price of STANDING_STORE_PRICES) {
+    const variant = await prisma.productVariant.findFirst({
+      where: { skuCode: price.sku, product: { sellerId } },
+      select: { id: true },
+    });
+    if (variant === null) continue;
+    await call(`/seller/reseller-price-list/${variant.id}`, {
+      method: 'PUT',
+      token,
+      body: {
+        transferPriceInr: price.transfer,
+        minRetailInr: price.min,
+        maxRetailInr: price.max,
+        suggestedRetailInr: price.suggested,
+      },
+    });
+  }
+  console.log(`  · ${STANDING_STORE_PRICES.length} product(s) priced on the default list`);
+
+  // The store's OWN terms, wiped. Deleted rather than reset through the
+  // API: "no row at all" is the state the tab renders as a product this
+  // store has never been given, and a row saying enabled=false is not
+  // the same thing on screen.
+  const wiped = await prisma.resellerStoreVariant.deleteMany({ where: { storeId: store.id } });
+  if (wiped.count > 0) {
+    console.log(`  · cleared ${wiped.count} per-product term(s) from a previous take`);
   }
 }
 
@@ -1856,7 +1979,7 @@ async function main() {
   if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
   await integrationsWorldFor(slug, sellerId);
-  await resellingWorldFor(slug, sellerId);
+  await resellingWorldFor(slug, sellerId, sellerToken);
 
   // D0 — the parcels sections D, E and K are about. EXPENSIVE (a real
   // courier booking and a warehouse run per parcel) and IDEMPOTENT, so

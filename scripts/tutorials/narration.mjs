@@ -1501,6 +1501,77 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'what-one-store-sells',
+    title: 'What one store sells',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A reseller store sells your stock under its own name. Which of your products it may sell, at what price, and how much of your stock it can have, are all yours to decide — per store, per product.',
+      },
+      {
+        id: 'open-store',
+        say: 'Open the store from Reseller stores, and go to its Catalogue and stock tab. This is the store you already opened; everything here is about it and no other.',
+      },
+      {
+        id: 'table',
+        say: 'Every active product you have, and what this store may do with each. Read the last two columns together, because the gap between them is the whole idea on this page.',
+      },
+      {
+        id: 'sold-here',
+        say: 'Sold here, and every one of them is off. That is the safe default: a store you open sees nothing at all until you turn products on, one at a time.',
+      },
+      {
+        id: 'price-source',
+        say: 'The transfer price is what the store pays you per unit. These say default, meaning they come from your price list — the page says so in its own subtitle, and links to it.',
+      },
+      {
+        id: 'edit-open',
+        say: 'Edit opens everything about one product for this one store. The line under the title is the number to read first: what is really available, and how much of it could be set aside here.',
+      },
+      {
+        id: 'enable',
+        say: 'First switch: this store may sell it. That alone is enough — leave everything else and it sells at your default price out of your shared stock.',
+      },
+      {
+        id: 'own-price',
+        say: 'Second switch gives this store a price of its own. Use it when one store has earned a better rate, or when you are testing a higher one somewhere.',
+      },
+      {
+        id: 'price-fields',
+        say: 'The same four figures as your price list: what they pay you, and the range they may charge their own customer within, with a suggestion inside it.',
+      },
+      {
+        id: 'stock-shared',
+        say: 'Then stock, and this is the decision worth understanding. Shared means this store draws from the same pile as everyone else — first come, first served.',
+      },
+      {
+        id: 'stock-setaside',
+        say: 'A set-aside reserves units for this store alone. Nobody else can sell them, and the hint tells you how many are free to commit right now.',
+      },
+      {
+        id: 'hidden',
+        say: 'And the hidden share holds a percentage back from what they are shown. Not from what exists — from what they see, which keeps a buffer you can still sell yourself.',
+      },
+      {
+        id: 'overlay',
+        say: 'The rest is what their customers read: their own name for the product, their own description, and their own pictures. Leave any of them blank and yours is used.',
+      },
+      {
+        id: 'confirm',
+        say: 'Saving restates the terms in one sentence before it commits them, because four settings on one form is exactly where a mistake hides.',
+      },
+      {
+        id: 'result',
+        say: 'And now the two columns disagree, which is the point. That is what you have; this is what the store is shown — the set-aside and the hidden share between them.',
+      },
+      {
+        id: 'outro',
+        say: 'Do that for every product you want the store selling. Nothing you have not turned on will ever appear to them, and nothing about your other stores has changed.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
