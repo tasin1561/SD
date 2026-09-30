@@ -2736,6 +2736,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'taking-calls',
+    title: 'Taking calls',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'In India most parcels are paid in cash at the door, so somebody rings first and asks whether the customer still wants it. This is that desk, and this is your whole shift on one screen.',
+      },
+      {
+        id: 'availability',
+        say: 'It opens saying you are not taking calls, and that is deliberate. Being signed in is not the same as being at your desk, and an order handed to an empty chair just waits.',
+      },
+      {
+        id: 'start',
+        say: 'One switch, and you are on the roster. This is the control that matters most: leave it on when you walk away and customers wait on you without anybody knowing.',
+      },
+      {
+        id: 'arrives',
+        say: 'You do not ask for work. The next customer in the queue is handed to you, oldest first, and claimed the moment it appears so no two agents can be given the same one.',
+      },
+      {
+        id: 'purpose',
+        say: 'Read this line before you dial. A call to confirm a new order and a call because a seller asked us to chase one open with completely different sentences, and the wrong one loses the customer.',
+      },
+      {
+        id: 'risk',
+        say: 'Then the customer themselves. This strip only appears when there is something to say — here, parcels of theirs have come back before, which is worth knowing before you agree to send another.',
+      },
+      {
+        id: 'recipient',
+        say: 'Who they are, where it is going and what they will be asked to hand over at the door. That last figure is the thing to say out loud: agreeing to the parcel is agreeing to the money.',
+      },
+      {
+        id: 'outcome',
+        say: 'Then you record what happened. Nine outcomes, and the line underneath tells you what each one does before you pick it rather than after.',
+      },
+      {
+        id: 'permanent',
+        say: 'Confirmed is the one to be careful with. It holds stock for this order and sends it to the warehouse. And every attempt you log is permanent and counts toward the limit before we stop trying.',
+      },
+      {
+        id: 'note',
+        say: 'Write what they actually said. This is read by other people later — the next agent who rings them, and the seller asking why their order has not moved.',
+      },
+      {
+        id: 'record',
+        say: 'Record it. The attempt is written, the order moves by itself, and nothing here needs a second confirmation — which is exactly why you check the outcome before pressing rather than after.',
+      },
+      {
+        id: 'next',
+        say: 'And the next one is already on the screen. You were not asked; the desk simply carries on, which is the point of marking yourself available in the first place.',
+      },
+      {
+        id: 'release',
+        say: 'If you cannot take this one, release it. No attempt is recorded and it goes back in the queue for somebody else, which is the honest thing to do rather than logging a call you did not make.',
+      },
+      {
+        id: 'stop',
+        say: 'And at the end of your shift, the same switch the other way. Nothing new is assigned, the queue keeps its place, and the next person on takes over. That is the whole job.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

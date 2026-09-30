@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 47 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H and P5.** The 43 left are all in the admin app: 2 are
+**90 tutorials. 48 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I1 and P5.** The 42 left are all in the admin app: 2 are
 `impractical locally` and 29 touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,23 +32,22 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (47):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5** and **H1–H4**, which is the whole of
-section H. Every one has its own entry below saying what it covers and what its
+**Filmed so far (48):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4** (the whole of section H) and
+**I1**. Every one has its own entry below saying what it covers and what its
 seeding does.
 
-**THE NEXT ENTRY IS I1 — "Taking calls", the first of section I.** Section H is
-complete. P5 was taken out of order on purpose (this document argues it should
+**THE NEXT ENTRY IS I2 — "Supervising the queue".** Section H is complete and
+I1 is filmed. P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
 [the recommendation](#the-recommendation) goes further: if the ops team never
 grows, P5 is worth making on its own and the rest are not); H1, H2, H4 and then
-H3 followed. From here, work sections I–P as written, and read
-[the recommendation](#the-recommendation) first — they are 39 entries and this
+H3 and then I1 followed. From here, work sections I–P as written, and read
+[the recommendation](#the-recommendation) first — they are 38 entries and this
 document is explicit that they are a BET.
 
-**What I1 will need, read from the code rather than guessed (2026-10-01).**
-Three things are NOT what its entry below assumes, and each would have cost a
-check run:
+**What I1 needed, read from the code rather than guessed (2026-10-01) — kept
+here because I2 and I3 are about the same queue and inherit every one of them:**
 
 - **The station AUTO-ADVANCES.** `CallCenterStation` pulls the next call on an
   interval and again straight after an outcome, gated on availability and on
@@ -70,9 +69,17 @@ check run:
   reserves stock (ORD-10) and books a waybill (CUR-2b). So its seeding is the
   `cancelWorldFor` shape — place and submit a fresh order under a stable
   reference on every run, retire the spent one forward rather than rewinding
-  (the D4 / B7 rule) — plus a `call_agent_settings` row for `tutorial-ops`,
-  which has none: `MyAvailability` renders NOTHING for a staff user who is not a
-  call agent, so without it the station has no switch at all.
+  (the D4 / B7 rule). **`tutorial-ops` turned out to HAVE an
+  `agent_call_settings` row already**, which was the one guess in this list that
+  was wrong in our favour; had it not, `MyAvailability` renders NOTHING for a
+  staff user who is not a call agent and the station would have had no switch at
+  all.
+- **And two the code did not warn about, both found in frames.** A released call
+  JUMPS the whole queue (`ORDER BY (scheduled_attempts > 0) DESC, …`), so
+  `callThisOneFirst` is not enough and the seeding has to put that counter back;
+  and a second order for the same customer is refused as
+  `DUPLICATE_ORDER_SUSPECTED` while the previous take's one is still unpacked,
+  so the seed acknowledges it exactly as the real form makes a person do.
 
 **Every admin flow so far has `app: 'admin'` and nothing else special.** The
 three selector traps H2 hit are in its entry and are worth reading before
@@ -91,12 +98,12 @@ P5 drove ten admin screens through it with no changes to the rig at all.
 **WHAT THE ADMIN VIDEOS COST, MEASURED:** P5 **1,032 credits** (89,000 → 87,968
 on the one configured key) for 13 scenes and 156 s, H1 **946** for 13 and 143 s,
 H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, and H3 **1,068** for
-14 and 180 s — **5,062 for the five, or roughly a third each of the 1,200 the
-seller videos were costing**, because a tour writes shorter lines than a
-demonstration. Every pre-flight estimate was about 2× the real spend. The
-`--check` runs and the seed runs cost nothing, and there have been two dozen.
-**Balance after this batch: 83,938 of 121,027** on the one configured key,
-which is eighty-odd more admin videos.
+14 and 180 s, and I1 **1,067** for 14 and 172 s — **6,129 for the six, or
+roughly a third each of the 1,200 the seller videos were costing**, because a
+tour writes shorter lines than a demonstration. Every pre-flight estimate was
+about 2× the real spend. The `--check` runs and the seed runs cost nothing, and
+there have been thirty. **Balance after this batch: 82,871 of 121,027** on the
+one configured key, which is eighty-odd more admin videos.
 
 **Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
 sellers`. That is the convention for H–P; the title card is the only place it
@@ -2219,18 +2226,84 @@ the people moved off first.
 
 ## I — The call centre
 
-### I1. Taking calls · `needs demo data`
+### I1. Taking calls · **FILMED** — `taking-calls.mp4`
 
 **Promise** — you can work the call queue from your first shift.
-**Length** 4 min. **Needs** orders in PENDING_CONFIRMATION — today's seed has
-159 — and the agent marked available. **Note:** an agent who has not switched
-themselves on is refused by the server, which is the first thing that goes
-wrong on a real first shift and belongs in the tutorial.
-**Covers** `/call-center`: availability first, pull next, the recipient and
-items, the customer-risk strip for repeat customers, picking an outcome and
-recording it, and releasing a call. The consequence to state: recording
-**confirmed holds stock**, and every attempt is permanent and counts toward the
-cap.
+**Length** 14 scenes. **Prerequisites** none. **Needs**
+`seed-demo-data.mjs taking-calls`.
+**Covers** `/call-center` as a whole shift: the station opening on "not taking
+calls" and why that is the default, turning availability on, a call arriving by
+itself, why-this-call, the customer-risk strip, the recipient and the COD figure,
+choosing an outcome and reading what it does before pressing, the note, recording
+it, the next call arriving unasked, releasing one, and switching off at the end.
+
+**THE STATION AUTO-ADVANCES, and that is the whole shape of the video.** It
+pulls the moment availability turns on and again every fifteen seconds, and once
+more immediately after an outcome is recorded — so "pull next" is not a button
+the video presses. **Availability IS the control**, which is why
+`MyAvailability` sits at the top of the station and why the second, third and
+last scenes are all about one switch. "Check for a call now" exists and is the
+manual nudge for an empty queue; the video never needs it. This entry used to
+say "pull next"; it was wrong, and reading `CallCenterStation` rather than the
+sidebar is what corrected it.
+
+**Its seeding PLACES an order, because what is there is the wrong shape.** The
+box has 157 orders in `PENDING_CONFIRMATION` and THREE live
+`call_queue_entries` — H1's entry explains that split — and two of the three are
+`DELIVERY_FAILED` follow-ups, which the station gives a different vocabulary
+(one outcome, "Called", and the note is the answer). So a video about a
+confirmation call cannot be filmed against whatever sorts first.
+`callThisOneFirst` (now exported from `lib/lifecycle.mjs`) puts ours at the
+head — ahead of the queue AND in the past, because an entry scheduled forward is
+correctly handed back as nothing.
+
+**The customer is a LIFECYCLE one on purpose.** `CustomerRiskStrip` renders
+NOTHING for a first-time customer, by design — most calls are first-time
+customers and a strip that always says "nothing known" is one nobody reads on
+the call where it matters. The order is placed for the phone D0's returned
+parcels belong to, so the strip reads "60.0% of this customer's parcels came
+back · 2 delivered · 3 returned". The seeding ASSERTS that history exists and
+throws naming `--lifecycle` if it has gone, rather than letting the scene film
+an empty space under a line about it.
+
+**It SPENDS what it films** — recording CONFIRMED is append-only (CC-1),
+reserves stock (ORD-10) and books a waybill (CUR-2b). Nothing is undone: the
+spent order is renamed `RSH-CALL-1-SPENT-<n>` and left exactly as it is, a fresh
+one follows, and **`RSH-CALL-` had to join `PROTECTED_REF_PREFIXES`** because
+CONFIRMED is in `REMOVABLE_STATUSES` — without it the next seed run would try to
+delete an order holding a live reservation and a booked waybill. The only reset
+is the agent: any entry still ASSIGNED to them goes back to PENDING (released,
+not completed — no attempt was made) and availability goes back to OFF.
+
+**THREE SELECTOR TRAPS, and two of them are one lesson from opposite ends.**
+
+1. **`getByText('available', { exact: true })` waited twenty seconds for a word
+   plainly on the screen.** The chip is title-cased by CSS and lower-case in the
+   DOM — but the real fix was not casing: the chip flips from a query and the
+   BUTTON flips from local state, so neither is what "the write landed" means.
+   The gate is the sentence beside the chip, "Orders will be assigned to you."
+2. **`getByLabel('Outcome', { exact: true })` finds nothing**, because
+   `requiredMark` puts a character in the label — the accessible name is
+   `Outcome*`. And the plain form is WORSE: `getByLabel` is a case-insensitive
+   SUBSTRING, so it also matched the "Record outcome" BUTTON and died on strict
+   mode. A REGEX is matched against the whole accessible name and is the only
+   form that means "this field and nothing else": `/^Outcome\*?$/`.
+   **Together with H2's `getByText(…, { exact: true })` trap, the pair is worth
+   holding in mind: `exact` means opposite things on the two, and a required
+   field's label is not the word you read.**
+3. **The closing gate cannot be the empty state.** "You are marked unavailable"
+   belongs to the panel that renders only when the agent holds NOTHING, and the
+   auto-advance runs every fifteen seconds — so a call landing between the
+   release and the last click makes that text unreachable for ever while the
+   screen is perfectly correct. The gate is the availability card's own
+   sentence, which does not care what is in hand.
+
+**One bug found, on this screen** — the card head named the order by its uuid
+while the panel below it named the same order by its number. See
+[Bugs found](#bugs-found-while-establishing-feasibility). **apps/admin had to be
+rebuilt and restarted before the take**, or the video would have filmed the
+defect that had just been fixed — the README's rule about restarting by the
+LISTENING pid, applied to a frontend.
 
 ### I2. Supervising the queue · `needs demo data`
 

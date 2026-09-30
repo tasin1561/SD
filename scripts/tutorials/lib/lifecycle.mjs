@@ -483,7 +483,15 @@ async function reconcileStaleCallQueue(log) {
   }
 }
 
-async function callThisOneFirst(orderId) {
+/**
+ * Put one order at the head of the call queue.
+ *
+ * EXPORTED for I1's seeding as well as this file's own use: the station
+ * hands an agent whatever is at the front, and a video about a
+ * CONFIRMATION call cannot be filmed against whichever leftover
+ * delivery-follow-up happens to sort first.
+ */
+export async function callThisOneFirst(orderId) {
   // CC-6 enqueues POST-COMMIT and best-effort, so the row is a heartbeat
   // behind the submit that caused it. Wait for it rather than racing it.
   await waitFor(`${orderId} to reach the call queue`, () =>

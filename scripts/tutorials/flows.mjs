@@ -7703,4 +7703,195 @@ export const FLOWS = {
       },
     },
   },
+
+  'taking-calls': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/call-center`, { waitUntil: 'domcontentloaded' });
+        /*
+          GATED ON THE UNAVAILABLE EMPTY STATE, which is what the seeding
+          guarantees and what the next scene acts on. The availability
+          card renders a SKELETON until its query settles and then, for a
+          staff user who is not a call agent, renders NOTHING at all —
+          so a gate on the card would pass on a station with no switch.
+        */
+        await page
+          .getByText('You are marked unavailable')
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async availability({ page, stage }) {
+        await stage.dwellOn(page.locator('.cc-avail').first(), 3600);
+      },
+
+      async start({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Start taking calls' }).first(), {
+          after: 1400,
+        });
+        /*
+          THE SENTENCE BESIDE THE CHIP, not the chip and not the button.
+          The button's label flips from local state the moment it is
+          pressed, so it says nothing about the write; the chip's own
+          text is title-cased by CSS but lower-cased in the DOM, which is
+          how `getByText('available', { exact: true })` spent twenty
+          seconds waiting for a word plainly on the screen. This line
+          exists only in the available state and comes from the settings
+          query the auto-advance is gated on.
+        */
+        await page
+          .getByText('Orders will be assigned to you.')
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.cc-avail').first(), 2600);
+      },
+
+      async arrives({ page, stage }) {
+        /*
+          NOTHING IS PRESSED HERE. The station auto-advances: it pulls
+          the moment availability turns on and again every fifteen
+          seconds, so "pull next" is not a button the video presses —
+          availability IS the control. The wait is generous because the
+          first look happens on its own schedule.
+        */
+        await page.locator('.cc-purpose').first().waitFor({ state: 'visible', timeout: 40_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.cc-call-head').first(), 3200);
+      },
+
+      async purpose({ page, stage }) {
+        // The HEADLINE, which is what the narration is about — an empty
+        // banner renders the kicker just as happily.
+        const head = page.locator('.cc-purpose__headline').first();
+        await head.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.cc-purpose').first(), 3600);
+      },
+
+      async risk({ page, stage }) {
+        /*
+          `CustomerRiskStrip` renders NOTHING for a first-time customer,
+          by design — so this scene is the seeding's assertion made
+          visible. The order is placed for a phone whose parcels have
+          come back before; if that history ever goes, this fails here
+          rather than filming an empty space under a line about it.
+        */
+        const strip = page.locator('.cc-risk').first();
+        /*
+          GATED ON THE WORDS THE NARRATION CLAIMS, never on the strip
+          itself. A first-time customer gets no strip at all — but a
+          customer with ONE clean previous order gets a perfectly good
+          one reading "1 previous order · 0 delivered · 0 returned",
+          which is not what this scene says. That is what a released
+          entry jumping the queue filmed once, passing every step on the
+          way there.
+        */
+        await strip.getByText(/came back/).waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(strip, 3600);
+      },
+
+      async recipient({ page, stage }) {
+        await stage.dwellOn(page.locator('.cc-recipient').first(), 4000);
+      },
+
+      async outcome({ page, stage }) {
+        /*
+          By LABEL, never by index — the nine options are reordered on a
+          follow-up call, where the confirmation pair sinks to the
+          bottom. And NOT `{ exact: true }`: `requiredMark` puts a
+          character in the label, so the accessible name is not the word
+          on its own and the exact form waited thirty seconds for a
+          field that was right there. But the plain form is worse: it is
+          a CASE-INSENSITIVE SUBSTRING, so `getByLabel('Outcome')` also
+          matched the "Record outcome" BUTTON and failed on strict mode.
+          A regex is matched against the WHOLE accessible name, which is
+          the only form that says "this field and nothing else".
+        */
+        await page.getByLabel(/^Outcome\*?$/).selectOption({ label: 'Confirmed' });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.cc-form').first(), 3000);
+      },
+
+      async permanent({ page, stage }) {
+        // The helper line only exists once an outcome is chosen, and it
+        // is the sentence the narration is quoting.
+        const helper = page.locator('.cc-form__helper').first();
+        await helper.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(helper, 3600);
+      },
+
+      async note({ page, stage }) {
+        await stage.typeIn(
+          page.getByLabel(/^Notes\*?$/).first(),
+          'Confirmed on the phone — happy to pay cash at the door.',
+        );
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.cc-form').first(), 2600);
+      },
+
+      async record({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Record outcome' }).first(), {
+          after: 1400,
+        });
+        // The ORDER moved, said by the toast the service itself writes.
+        // Gating on the form disappearing would pass on a refusal that
+        // reset the card.
+        await page
+          .getByText(/Recorded CONFIRMED/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.locator('.cc-actions').first(), 2600);
+      },
+
+      async next({ page, stage }) {
+        // Recording triggers an immediate advance, so a second call
+        // arrives with nobody asking for it. That is the scene.
+        await page.locator('.cc-purpose').first().waitFor({ state: 'visible', timeout: 40_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.cc-call-head').first(), 3200);
+      },
+
+      async release({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Release without attempt' }).first(), {
+          after: 1400,
+        });
+        // Back to waiting. Gated on the empty state rather than on the
+        // toast, because the toast fades and the next auto-advance may
+        // hand another call straight back.
+        await page
+          .getByText(/Waiting for the next call|You are marked unavailable/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.cc-actions').first(), 2600);
+      },
+
+      async stop({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Stop taking calls' }).first(), {
+          after: 1400,
+        });
+        /*
+          THE AVAILABILITY CARD'S OWN SENTENCE, not the empty state.
+          "You are marked unavailable" belongs to the panel that renders
+          only when the agent is holding NOTHING — and the auto-advance
+          runs every fifteen seconds, so a call landing between the
+          release and this click leaves that text unreachable for ever
+          while the screen is perfectly correct. This line is in the
+          availability card and does not care what is in hand.
+        */
+        await page
+          .getByText('Nothing new will be assigned until you turn this back on.')
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.cc-avail').first(), 3400);
+      },
+    },
+  },
 };

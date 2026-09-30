@@ -28,6 +28,7 @@ import { MOCK_ROOT, mockObjectPath } from './lib/spaces-shim.mjs';
 import { TUTORIALS_DIR } from './lib/paths.mjs';
 import { API, call } from './lib/api.mjs';
 import {
+  callThisOneFirst,
   driveOrderThrough,
   driveOrderToOutForDelivery,
   ensureLifecycleParcels,
@@ -536,7 +537,11 @@ const LIFECYCLE_REF_PREFIX = 'RSH-LIFE-';
  * this function's delete list knows about, so sweeping one would fail on
  * a foreign key half way through somebody else's seed run.
  */
-const PROTECTED_REF_PREFIXES = [LIFECYCLE_REF_PREFIX, 'RSH-STORE-', 'RSH-FRT-'];
+// I1's order is CONFIRMED by its own take, and CONFIRMED is in
+// `REMOVABLE_STATUSES` — so without this the next seed run would try to
+// delete an order holding a live stock reservation and a booked waybill.
+// It is retired forward by `callWorldFor` instead, the D4 / B7 rule.
+const PROTECTED_REF_PREFIXES = [LIFECYCLE_REF_PREFIX, 'RSH-STORE-', 'RSH-FRT-', 'RSH-CALL-'];
 
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
 const DELIVERY_FEE_KEY = 'orders.default_customer_delivery_fee_inr';
@@ -2267,6 +2272,191 @@ const CANCEL_PENDING = {
   unitPriceInr: '1850',
 };
 
+/**
+ * I1's world: ONE confirmation call waiting at the head of the queue.
+ *
+ * ── WHY IT PLACES AN ORDER RATHER THAN USING WHAT IS THERE ───────────
+ * The box has 157 orders in PENDING_CONFIRMATION and THREE live
+ * `call_queue_entries`, because 153 of those were bulk-loaded straight
+ * into the status without ever being submitted (H1's entry explains the
+ * split, and it is why no figure is spoken on that video). Of the three
+ * that are live, two are `DELIVERY_FAILED` follow-ups on parcels that
+ * have since come back — a TICKET call, which the station gives a
+ * different vocabulary (one outcome, "Called", and the note is the
+ * answer). So filming "the next customer in the queue" against whatever
+ * is there would film the wrong kind of call.
+ *
+ * `callThisOneFirst` puts ours at the head — ahead of the queue and in
+ * the past, because the entry is claimed on `available_at` and an entry
+ * scheduled into the future is correctly handed back as nothing.
+ *
+ * ── WHY THE CUSTOMER IS A LIFECYCLE ONE ──────────────────────────────
+ * `CustomerRiskStrip` renders NOTHING for a first-time customer, on
+ * purpose — most calls are first-time customers and a strip that always
+ * says "nothing known" is a strip nobody reads on the call where it
+ * finally matters. The video is about the call where it matters, so the
+ * order is placed for the phone D0's returned parcels belong to, and the
+ * strip has a return rate to show. Assert it rather than hope: a box
+ * whose lifecycle orders were wiped would film an empty space under a
+ * line about reading the customer's history.
+ *
+ * ── WHAT THE TAKE SPENDS, AND WHAT PUTS IT BACK ──────────────────────
+ * Recording an outcome is append-only (CC-1), a CONFIRMED one reserves
+ * stock (ORD-10) and books a waybill (CUR-2b). None of that is undone —
+ * the spent order is RENAMED and left exactly as it is, and a fresh one
+ * follows, which is the D4 rule. The only thing reset is the agent: any
+ * entry still ASSIGNED to them goes back to PENDING, and their
+ * availability goes back to OFF, because the video's second scene is
+ * turning it on.
+ */
+const CALL_WAITING = {
+  ref: 'RSH-CALL-1',
+  sku: 'RSH-JAMDANI-IVORY',
+  // The phone D0's RETURNREQ parcels belong to — five orders, three of
+  // them returned, so the risk strip has something to say.
+  recipientName: 'RSH Kaushik Iyer',
+  phone: '+919845060099',
+  line1: '14, Nandidurga Road',
+  line2: 'Beside the Jayamahal Palace gate',
+  postalCode: '560046',
+  codAmountInr: '2400',
+  unitPriceInr: '2400',
+};
+
+async function callWorldFor(slug, sellerId, sellerToken, staffToken) {
+  if (slug !== 'taking-calls') return;
+
+  const ops = await prisma.staffUser.findUniqueOrThrow({
+    where: { email: OPS.email },
+    select: { id: true },
+  });
+
+  // Whatever the last take was left holding. Released rather than
+  // completed: no attempt was recorded against it, so it is still
+  // somebody's to make.
+  const held = await prisma.callQueueEntry.updateMany({
+    where: { assignedAgentId: ops.id, status: 'ASSIGNED' },
+    data: { status: 'PENDING', assignedAgentId: null, assignedAt: null },
+  });
+  if (held.count > 0) {
+    console.log(`  · released ${held.count} call(s) a previous take was still holding`);
+  }
+  // OFF, because turning it on is the video's second scene.
+  await call('/agent/settings', {
+    method: 'PATCH',
+    token: staffToken,
+    body: { isAvailable: false },
+  });
+
+  const spent = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: CALL_WAITING.ref },
+    select: { id: true, orderNumber: true, status: true },
+  });
+  if (spent !== null && spent.status !== 'PENDING_CONFIRMATION') {
+    const parked = await prisma.order.count({
+      where: { sellerId, sellerOrderRef: { startsWith: `${CALL_WAITING.ref}-SPENT-` } },
+    });
+    const retiredRef = `${CALL_WAITING.ref}-SPENT-${parked + 1}`;
+    await prisma.order.update({ where: { id: spent.id }, data: { sellerOrderRef: retiredRef } });
+    console.log(
+      `  · ${CALL_WAITING.ref} is spent — ${spent.orderNumber} is ${spent.status}. ` +
+        `Renamed ${retiredRef} and left intact; a fresh one follows`,
+    );
+  }
+
+  let orderId = spent !== null && spent.status === 'PENDING_CONFIRMATION' ? spent.id : null;
+  if (orderId === null) {
+    const variant = await prisma.productVariant.findFirst({
+      where: { skuCode: CALL_WAITING.sku, product: { sellerId } },
+      select: { id: true },
+    });
+    if (variant === null) {
+      throw new Error(`No ${CALL_WAITING.sku} for this seller — the catalogue seeding runs first.`);
+    }
+    const token = await sellerToken();
+    const order = await call('/seller/orders', {
+      method: 'POST',
+      token,
+      body: {
+        recipientName: CALL_WAITING.recipientName,
+        recipientPhoneE164: CALL_WAITING.phone,
+        recipientAddressLine1: CALL_WAITING.line1,
+        recipientAddressLine2: CALL_WAITING.line2,
+        recipientPostalCode: CALL_WAITING.postalCode,
+        paymentMode: 'COD',
+        codAmountInr: CALL_WAITING.codAmountInr,
+        sellerOrderRef: CALL_WAITING.ref,
+        items: [{ variantId: variant.id, quantity: 1, unitPriceInr: CALL_WAITING.unitPriceInr }],
+        // The take before this one confirmed an order for the SAME
+        // customer and it is still unpacked, so `create` refuses the
+        // next one as `DUPLICATE_ORDER_SUSPECTED` — correctly: a repeat
+        // order for a customer whose last parcel has not left is
+        // usually somebody submitting twice. Here it is deliberate, and
+        // acknowledging is what the real form makes a person do too.
+        acknowledgeDuplicate: true,
+      },
+    });
+    // Submitting is what puts it on the queue (CC-6), post-commit.
+    await call(`/seller/orders/${order.id}/submit`, { method: 'POST', token });
+    orderId = order.id;
+    console.log(`  · placed ${order.orderNumber} (${CALL_WAITING.ref}) for the call station`);
+  }
+
+  /*
+    AND `callThisOneFirst` IS NOT ENOUGH ON ITS OWN.
+
+    The pull is `ORDER BY (scheduled_attempts > 0) DESC, available_at
+    ASC, created_at ASC` — a call somebody has already pulled and given
+    back goes to the FRONT of the whole queue, ahead of every unstarted
+    one whatever its time. Correct product behaviour, and it is exactly
+    what the previous TAKE leaves behind: the release scene hands an
+    entry back with its pull counter at one, so the next run's first
+    call is that one rather than the seeded one.
+
+    It did exactly that, and the check PASSED — every step found its
+    target, the risk strip rendered, and nine scenes were filmed about a
+    reseller store's order whose customer has one clean previous parcel,
+    under a line about a customer whose parcels keep coming back. Only
+    the frame said so.
+
+    So the counter is put back on everything the take could have
+    touched. That is the seed contract rather than a rewrite of history:
+    the take is what incremented it, `call_queue_entries` is mutable
+    state (CC-1's append-only rule is about `call_attempts`), and the
+    entry goes back to being what it was before the camera reached it.
+  */
+  const jumped = await prisma.callQueueEntry.updateMany({
+    // OURS INCLUDED. A check run that released the seeded call leaves it
+    // at one, and the card then opens on "pull #2" for what the video
+    // calls a first call — true of the box's history and false of the
+    // shift being filmed.
+    where: { status: 'PENDING', scheduledAttempts: { gt: 0 } },
+    data: { scheduledAttempts: 0 },
+  });
+  if (jumped.count > 0) {
+    console.log(
+      `  \u00b7 put ${jumped.count} released call(s) back behind the queue \u2014 a pulled one jumps it`,
+    );
+  }
+
+  await callThisOneFirst(orderId);
+  console.log('  · moved it to the head of the call queue');
+
+  // The risk strip is a SCENE, and it renders nothing without history.
+  const history = await prisma.order.count({
+    where: { sellerId, recipientPhoneE164: CALL_WAITING.phone, id: { not: orderId } },
+  });
+  if (history === 0) {
+    throw new Error(
+      `${CALL_WAITING.phone} has no previous orders, so the customer-risk strip will render ` +
+        'nothing and I1 has a scene about an empty space. Run `seed-demo-data.mjs --lifecycle` ' +
+        'first: the strip is about a customer whose parcels have come back before, and D0 is ' +
+        'where those parcels are.',
+    );
+  }
+  console.log(`  · the customer has ${history} previous order(s) — the risk strip will render`);
+}
+
 async function cancelWorldFor(slug, sellerId, sellerToken) {
   if (slug !== 'cancelling-an-order') return;
 
@@ -3630,6 +3820,7 @@ async function main() {
   if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
   await editDraftWorldFor(slug, sellerId, sellerToken);
   await cancelWorldFor(slug, sellerId, sellerToken);
+  await callWorldFor(slug, sellerId, sellerToken, staffToken);
   await pendingRowsWorldFor(slug, sellerId, sellerToken);
   await notificationWorldFor(slug, sellerId);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
