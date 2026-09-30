@@ -24,6 +24,7 @@ ROOT="$PWD"
 
 API_URL="${SKYDROP_API_URL:-http://127.0.0.1:4000}"
 SELLER_URL="${SELLER_APP_URL:-http://127.0.0.1:3003}"
+ADMIN_URL="${ADMIN_APP_URL:-http://127.0.0.1:3002}"
 
 # The seed talks to Prisma directly as well as to the API.
 if [ -z "${DATABASE_URL:-}" ] && [ -f "$ROOT/apps/api/.env" ]; then
@@ -42,6 +43,7 @@ fi
 # is what stops the checker and the camera looking at different apps.
 export SKYDROP_API_URL="$API_URL"
 export SELLER_APP_URL="$SELLER_URL"
+export ADMIN_APP_URL="$ADMIN_URL"
 
 need() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing $1 on PATH."; exit 1; }
@@ -54,7 +56,6 @@ up() {
   curl -fsS -o /dev/null --max-time 5 "$1" 2>/dev/null
 }
 up "$API_URL/health" || { echo "apps/api is not answering on $API_URL — start it first."; exit 1; }
-up "$SELLER_URL/login" || { echo "apps/seller is not answering on $SELLER_URL — start it first."; exit 1; }
 
 # The key LIST wins, and this order is load-bearing. There is more than
 # one ElevenLabs account because one month's allowance is smaller than one
@@ -87,6 +88,28 @@ if [ ${#SLUGS[@]} -eq 0 ]; then
     announce-a-consignment
   )
 fi
+
+# WHICH CONSOLE each requested video drives, asked of `flows.mjs` rather
+# than guessed from the slug. Sections A–G are apps/seller and H–P are
+# apps/admin, so a run of one does not need the other to be up — and a
+# missing admin app should say "start apps/admin", not fail thirty
+# seconds later inside Playwright with a connection refused.
+APPS_NEEDED="$(node -e '
+import("./scripts/tutorials/flows.mjs").then(({ FLOWS }) => {
+  const apps = new Set(process.argv.slice(1).map((s) => FLOWS[s]?.app ?? "seller"));
+  process.stdout.write([...apps].join(" "));
+});' "${SLUGS[@]}")"
+
+case " $APPS_NEEDED " in
+  *" seller "*)
+    up "$SELLER_URL/login" \
+      || { echo "apps/seller is not answering on $SELLER_URL — start it first."; exit 1; } ;;
+esac
+case " $APPS_NEEDED " in
+  *" admin "*)
+    up "$ADMIN_URL/login" \
+      || { echo "apps/admin is not answering on $ADMIN_URL — start it first."; exit 1; } ;;
+esac
 
 for slug in "${SLUGS[@]}"; do
   echo

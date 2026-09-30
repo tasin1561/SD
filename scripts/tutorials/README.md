@@ -51,9 +51,24 @@ pnpm db:up
 pnpm --filter @skydrop/api build && (cd apps/api && node dist/main.js &)
 pnpm --filter @skydrop/seller build && (cd apps/seller && npx next start -p 3003 &)
 
+# …and, from section H onward, the ADMIN console as well
+pnpm --filter @skydrop/admin build
+(cd apps/admin && API_ORIGIN=http://127.0.0.1:4000 npx next start -p 3002 -H 127.0.0.1 &)
+
 scripts/tutorials/make-tutorials.sh                 # all of them
 scripts/tutorials/make-tutorials.sh place-an-order  # just one
 ```
+
+**Which console a video drives is declared on its FLOW**, not guessed from its
+slug: `app: 'admin'` in `flows.mjs` sends `record.mjs` to :3002 and signs in as
+`tutorial-ops@skydrop.local` — the SUPER_ADMIN the seed already creates, because
+goods receipts are received by ops rather than by the seller. Saying nothing
+gets :3003 and the demo seller, which is every video before section H.
+`make-tutorials.sh` asks `flows.mjs` which consoles the run needs and
+health-checks only those, so a seller video does not require the admin app to be
+up and an admin one says "start apps/admin" rather than failing inside
+Playwright half a minute later. `peek.mjs --admin /system-issues` photographs an
+admin screen the same way.
 
 **To check a flow without spending anything**, which is what you want after a UI
 change:

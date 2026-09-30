@@ -24,10 +24,36 @@ import { makeStage, markerFor, MARKER_IDLE, stageInitScript } from './lib/stage.
 import { armMockSpaces } from './lib/spaces-shim.mjs';
 import { CANVAS_HEIGHT, FRAME_WIDTH, MARKER_STRIP, RAW_DIR, VERIFY_DIR } from './lib/paths.mjs';
 
-const BASE_URL = process.env.SELLER_APP_URL ?? 'http://127.0.0.1:3003';
-const SELLER = {
-  email: process.env.DEMO_SELLER_EMAIL ?? 'demo@rangpursilk.test',
-  password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
+/**
+ * Which app a flow drives, and who it signs in as.
+ *
+ * A flow says `app: 'admin'` and gets apps/admin on :3002 and the
+ * tutorial OPS staff user; say nothing and it gets apps/seller on :3003
+ * and the demo seller, which every video before section H does. One
+ * table rather than a second recorder, for the same reason `peek.mjs`
+ * took a flag: the two consoles are the same shape by construction
+ * (FE-5), and the only things that differ are the port and the
+ * credentials.
+ *
+ * `tutorial-ops@skydrop.local` is created by `seed-demo-data.mjs` as a
+ * SUPER_ADMIN — it exists because goods receipts are received by ops
+ * rather than by the seller — so the admin videos need no new account.
+ */
+const APPS = {
+  seller: {
+    baseUrl: process.env.SELLER_APP_URL ?? 'http://127.0.0.1:3003',
+    identity: {
+      email: process.env.DEMO_SELLER_EMAIL ?? 'demo@rangpursilk.test',
+      password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
+    },
+  },
+  admin: {
+    baseUrl: process.env.ADMIN_APP_URL ?? 'http://127.0.0.1:3002',
+    identity: {
+      email: process.env.TUTORIAL_OPS_EMAIL ?? 'tutorial-ops@skydrop.local',
+      password: process.env.TUTORIAL_OPS_PASSWORD ?? 'Tutorial-Ops-2026',
+    },
+  },
 };
 
 /**
@@ -48,6 +74,15 @@ const SELLER = {
 export async function record(slug, { check = false } = {}) {
   const video = videoBySlug(slug);
   const flow = FLOWS[slug];
+  // Named rather than defaulted, so a typo in a flow's `app` is a
+  // thrown error and not a video quietly filmed against the wrong
+  // console.
+  const app = APPS[FLOWS[slug]?.app ?? 'seller'];
+  if (app === undefined) {
+    throw new Error(`Flow "${slug}" names an app that does not exist: ${FLOWS[slug].app}`);
+  }
+  const BASE_URL = app.baseUrl;
+  const SELLER = app.identity;
   if (flow === undefined) throw new Error(`No flow for "${slug}" in flows.mjs`);
 
   // Fail before the browser opens rather than filming a still frame: a
@@ -230,12 +265,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (slug === undefined) {
     throw new Error('usage: node scripts/tutorials/record.mjs [--check] <slug>');
   }
+  const where = (APPS[FLOWS[slug]?.app ?? 'seller'] ?? APPS.seller).baseUrl;
   if (check) {
-    console.log(`Checking the ${slug} flow against ${BASE_URL} (no audio, no video)`);
+    console.log(`Checking the ${slug} flow against ${where} (no audio, no video)`);
     const result = await record(slug, { check: true });
     console.log(`\n  every step reached: ${result.scenes.join(', ')}`);
   } else {
-    console.log(`Recording ${slug} against ${BASE_URL}`);
+    console.log(`Recording ${slug} against ${where}`);
     const manifest = await record(slug);
     console.log(`\n  raw video ${manifest.rawVideo}`);
     console.log(`  wall clock ${manifest.wallSeconds.toFixed(1)}s`);
