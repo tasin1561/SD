@@ -6539,7 +6539,19 @@ export const FLOWS = {
       },
 
       async freight({ page, stage }) {
-        await stage.dwellOn(await invSection(page, 'Inbound freight'), 3600);
+        /*
+          GATED ON THE BILL, not on the section. Until E5 existed this
+          scene's line was "nothing has been billed against this one
+          yet", and the section renders a "Nothing billed yet" note just
+          as happily as it renders a bill — so a world without the
+          freight pass would film the empty panel under the new words
+          and nothing would fail. `follow-a-consignment` is in
+          `FREIGHT_SLUGS` for the same reason.
+        */
+        const freight = await invSection(page, 'Inbound freight');
+        const charged = freight.getByText('Charged so far', { exact: true }).first();
+        await charged.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(freight, 3600);
       },
 
       async outro({ page, stage }) {

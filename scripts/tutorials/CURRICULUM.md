@@ -59,13 +59,14 @@ cannot demonstrate.
 down how in `README.md` — there is no staff `signIn` in `flows.mjs` yet, and no
 staff equivalent of `peek.mjs`.
 
-**One cheap re-take is owed: C1.** E5 bills the very consignment C1 films, so
-C1's `freight` line — which said "nothing has been billed against this one yet"
-— is no longer true of the world. The line is ALREADY REWRITTEN in
-`narration.mjs`; what is outstanding is re-recording C1 against it, and that is
-about as cheap as a re-take gets, because clips are cached on their words and
-only the one changed line is bought again. `follow-a-consignment` is in
-`FREIGHT_SLUGS` so its world is built before its take.
+**C1 was re-taken the same evening and nothing is outstanding.** E5 bills the
+very consignment C1 films, so C1's `freight` line — which said "nothing has been
+billed against this one yet" — stopped being true the moment that world existed.
+The line now describes the bill, `follow-a-consignment` is in `FREIGHT_SLUGS` so
+its world is built before its take, and its `freight` scene is gated on the words
+"Charged so far" rather than on the section, which renders an empty panel just as
+happily. **The whole re-take cost 86 credits**, because clips are cached on their
+words and only the one that changed was bought again.
 
 **After that, sections H–P are 48 entries** and this document is explicit that
 they are a BET — read [the recommendation](#the-recommendation) first, and
@@ -227,17 +228,22 @@ is down or gated wrong fails the check instead of filming prose.
   thing, in a voice clip it is a re-take nobody notices is needed. It nearly
   happened twice more: "ten in the morning" over a 09:00 dropdown, and "the one
   ABOVE it reads Expired" over a list sorted the other way.
-- **A video written from SCRATCH costs about 2,700 credits; a re-take that
-  changes one line costs about 170.** Measured on E5 (2026-09-30): 16 clips,
-  177 s of speech, 2,677 credits — roughly 15 credits a second of narration, and
-  the pre-flight estimate was within a few per cent of it. An earlier note here
-  said "about 800 credits all in, measured over nine of them", which is the
-  AVERAGE of a batch in which most clips were already cached; it under-states a
-  new video by more than three times, and this is the correction. **The
-  conclusion it drew still holds and is the important half: a re-take to fix a
-  line that misreads the screen is nearly free — only the changed line is bought
-  again — and shipping a wrong one is not.** Balance after E5: 87,588 of 121,027
-  on the one configured key, which is about thirty more fresh videos.
+- **A video written from SCRATCH costs about 1,200 credits; a re-take that
+  changes one line costs about 90.** Measured on E5 (2026-09-30) by the BALANCE,
+  not by the estimate: 16 clips, 177 s of speech, and the key went from 90,265 to
+  89,086 — so about 7 credits a second of narration, and a whole video for a
+  fraction of one per cent of the allowance.
+  **The pre-flight estimate is a CHARACTER count and is roughly twice the real
+  spend** (it said 2,677 for that run). That is worth knowing before it misleads
+  somebody: this line was first written from the estimate and had to be
+  rewritten from the balance an hour later. The earlier note here — "about 800
+  credits all in, measured over nine of them… the pre-flight estimate
+  over-states it" — was right on both counts.
+  **The conclusion it drew is the important half and stands: a re-take to fix a
+  line that misreads the screen is nearly free, because only the changed line is
+  bought again, and shipping a wrong one is not.** C1's re-take the same evening
+  bought exactly one clip. Balance with the seller app complete: about 89,000 of
+  121,027 on the one configured key, which is seventy more fresh videos.
 - **Budget time for FIXING as well as filming.** Six real bugs in one session,
   every one on a path nothing else exercises. If a screen behaves oddly during a
   `--check`, that is the finding — do not narrate around it.
@@ -633,8 +639,8 @@ box that has already filmed C1 the consignment is counted, its batches exist,
 and a declaration-time field can no longer reach them. See E5's entry.
 
 **E5's bill changed what C1 SAYS.** A bill now sits on `RSH-CN-LANDED`, so C1's
-freight line no longer describes the page; it is rewritten and C1 owes a
-re-take. That is the cost of the two videos sharing one consignment, and it was
+freight line no longer described the page; it was rewritten and C1 re-taken the
+same evening for 86 credits. That is the cost of the two videos sharing one consignment, and it was
 taken knowingly — a third consignment would have put a third row in the register
 C1 films and a SECOND landed one under its line "open the one that has landed",
 which is worse.
@@ -667,14 +673,16 @@ one each.
 **It presses nothing**, so its take leaves the world byte-identical and C0's
 consignments never need rebuilding.
 
-**RE-TAKE OWED (2026-09-30).** E5 raises a freight bill against THIS
-consignment, so the `freight` scene's line — "nothing has been billed against
-this one yet" — became false the moment that world existed. The line is
-rewritten in `narration.mjs` to describe the bill instead; what is outstanding
-is re-recording. It is the cheapest kind of re-take, because clips are cached on
-their words: only the one changed line is bought again. `follow-a-consignment`
-is in `FREIGHT_SLUGS` as well as `CONSIGNMENT_SLUGS`, so the take finds the
-bill.
+**RE-TAKEN 2026-09-30, and the reason is worth keeping.** E5 raises a freight
+bill against THIS consignment, so the `freight` scene's line — "nothing has been
+billed against this one yet" — became false the moment that world existed. The
+line describes the bill now, and the scene is **gated on the words "Charged so
+far"** rather than on the section: the panel renders a "Nothing billed yet" note
+just as happily as it renders a bill, so a box without the freight pass would
+have filmed the empty version under the new words and nothing would have failed.
+`follow-a-consignment` is in `FREIGHT_SLUGS` as well as `CONSIGNMENT_SLUGS` for
+the same reason. The re-take cost **86 credits and one clip** — which is what
+makes "fix the line rather than live with it" the right call every time.
 
 **Its narration names no quantity.** The counts are the subject, and repeating
 them would make the video wrong the day somebody edits
@@ -2566,8 +2574,10 @@ smaller one.** Narration is ElevenLabs, billed per character. The first batch
 ran against a single 10,000-credit allowance — roughly **eight tutorials'
 worth** — and ran out part-way through the third video.
 
-There are now **two accounts of 121,000 credits, 242,000 in total**, and
-`generate-voice.mjs` moves between them: it spends the first until it answers
+There are **two accounts of 121,000 credits, 242,000 in total** — though this
+machine currently has **only one of them in `~/.config/skydrop/elevenlabs-keys`**
+(`generate-voice.mjs --quota` says "1 key(s)"), which is worth knowing before
+planning against 242,000. `generate-voice.mjs` moves between them: it spends the first until it answers
 `quota_exceeded`, then retries **that same clip** on the second. See
 [The keys](README.md#the-keys) for the rotation rule and the two ways it can
 go silently wrong.
