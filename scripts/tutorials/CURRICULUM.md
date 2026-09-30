@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 50 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I1–I3 and P5.** The 40 left are all in the admin app: 2 are
+**90 tutorials. 51 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, the whole of I, and P5.** The 39 left are all in the admin app: 2 are
 `impractical locally` and 29 touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,34 +32,38 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (50):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4** (the whole of section H) and
-**I1–I3**. Every one has its own entry below saying what it covers and what its
-seeding does.
+**Filmed so far (51):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4** and **I1–I4** — **the whole of
+H and the whole of I**. Every one has its own entry below saying what it covers
+and what its seeding does.
 
-**THE NEXT ENTRY IS I4 — "Sellers asking us to call again".** It is the natural
-close of section I and **I3's take sets its world up for it**: I3 forces
-`CUSTOMER_DECLINED`, so the box now carries a `RSH-QUEUE-1-SPENT-<n>` order
-sitting in `REJECTED_BY_CUSTOMER`, which is exactly the order a seller would
-raise a re-attempt request against. What I4 still needs is the REQUEST itself —
-a `call_reattempt_requests` row placed by the SELLER (there is a seller-side
-endpoint; find it rather than writing the row by hand, so the video films
-something a seller could really have done) — and it should read
-`apps/admin/src/app/(authed)/reattempt-requests/` first: this curriculum has
-twice now been wrong about a screen because it was written from the database
-rather than from the page. Its promise is the load-bearing sentence, so check
-it against the code before narrating it: **approving is the only way out of a
-customer-rejected order**, because it puts the order back in the call queue.
-The grant of EXTRA attempts (`extraAttempts` on the approve body, which
-`CallCapService.grantedExtraByOrder` then adds to the cap) is the half nobody
-would guess and is worth a scene of its own.
+**THE NEXT ENTRY IS J1 — "Where things live".** Section J is the warehouse
+floor, eight entries, filmed in pipeline order because that is how the building
+works and the hub's own subtitle says so: consignment → receive → print → pick →
+pack → handover → dispatch. J1 is marked `ready` and needs no seeding (creating
+a warehouse provisions its own zone and floor bin), which makes it the cheap
+one to start on — but **read `/warehouse/bins` before writing a word**, because
+this curriculum has now been wrong about a screen THREE times by describing it
+from the database rather than from the page (I2's roster, twice over, and the
+`C7` that never existed).
+
+**Two things J will need that nothing has built yet**, and both are worth
+knowing before J2 rather than during it: the pipeline videos want parcels
+sitting at each station, and the only machinery that drives a parcel is D0
+(`lib/lifecycle.mjs`), which drives them ALL THE WAY. A parcel parked at PACKED
+for a video about handover is a new shape — `ensureLifecycleParcels` resumes a
+half-built parcel and NEVER rewinds one, so the seeding for J is "stop early",
+not "wind back". And J2 receives a consignment, which C0 provides
+(`CONSIGNMENT_SLUGS`) — C1 films the seller's side of the same world, so J2's
+take SPENDS what C1 reads. Check what C1 needs before completing a receipt on
+camera.
 
 P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
 [the recommendation](#the-recommendation) goes further: if the ops team never
 grows, P5 is worth making on its own and the rest are not); H1, H2, H4 and then
-H3, I1, I2 and I3 followed. From here, work sections I–P as written, and read
-[the recommendation](#the-recommendation) first — they are 36 entries and this
+H3 and then all of I followed. From here, work sections J–P as written, and read
+[the recommendation](#the-recommendation) first — they are 35 entries and this
 document is explicit that they are a BET.
 
 **WHAT I2 ACTUALLY NEEDED, and the two things the note that stood here got
@@ -163,13 +167,13 @@ P5 drove ten admin screens through it with no changes to the rig at all.
 **WHAT THE ADMIN VIDEOS COST, MEASURED:** P5 **1,032 credits** (89,000 → 87,968
 on the one configured key) for 13 scenes and 156 s, H1 **946** for 13 and 143 s,
 H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, H3 **1,068** for
-14 and 180 s, I1 **1,067** for 14 and 172 s, and I2 **1,185** for 16 and 197 s, and I3
-**1,049** for 14 and 169 s — **8,363 for the eight, or roughly a third each of
-the 1,200 the seller videos were costing**, because a tour writes shorter lines
-than a demonstration. Every pre-flight estimate was about 2× the real spend
-(I2's said 2,695, I3's 2,386). The `--check` runs and the seed runs cost
-nothing, and there have been thirty-six.
-**Balance after this batch: 80,637 of 121,027** on the one configured key, which
+14 and 180 s, I1 **1,067** for 14 and 172 s, and I2 **1,185** for 16 and 197 s, I3
+**1,049** for 14 and 169 s, and I4 **920** for 13 and 151 s — **9,283 for the
+nine, or roughly a third each of the 1,200 the seller videos were costing**,
+because a tour writes shorter lines than a demonstration. Every pre-flight
+estimate was about 2× the real spend (I2's said 2,695, I3's 2,386, I4's 2,087).
+The `--check` runs and the seed runs cost nothing, and there have been forty.
+**Balance after this batch: 79,717 of 121,027** on the one configured key, which
 is seventy-odd more admin videos.
 
 **Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
@@ -239,7 +243,7 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 own.**
 
 **Filming these screens is finding real bugs at a steady rate — THIRTY-SEVEN so
-far, plus seven in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
+far, plus EIGHT in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
 column mappings that drove nothing, a tracking filter that 500'd, a stuck
@@ -2474,13 +2478,45 @@ and the reading scene both outline the toast itself, and the first scene to
 point anywhere else lets it fade. **If a flow needs a toast to survive more than
 one scene, keep the halo on it**; there is no other lever.
 
-### I4. Sellers asking us to call again · `needs demo data`
+### I4. Sellers asking us to call again · **FILMED** — `sellers-asking-to-call-again.mp4`
 
 **Promise** — you can decide a re-attempt request.
-**Length** 2 min. **Needs** a rejected order with a seller request against it.
-**Covers** `/reattempt-requests`: approve or decline, and the fact that
-approving is **the only way out of a customer-rejected order** — it puts the
-order back in the queue.
+**Length** 13 scenes, 2 min 31 s. **Needs**
+`seed-demo-data.mjs sellers-asking-to-call-again`.
+**Covers** `/reattempt-requests`: why a card is mostly its reason, reading two
+requests and deciding them opposite ways, and the fact that approving is **the
+only way out of a customer-rejected order** — it puts the order back in the
+queue. It ends on the filter set to "all", where nothing has been deleted and
+both decisions carry what was granted and what was written beside them.
+
+**THE SCENE NOBODY WOULD HAVE WRITTEN FROM THE OUTSIDE is the extra calls.**
+Approving does not reset the attempt count, so an approval that grants none puts
+the order back ALREADY AT ITS CAP and the first unanswered ring rejects it
+again — the approval spent on a customer who simply was not in. The dialog's own
+hint says so; the video reads it. `extraAttempts` is 1–5
+(`DecideReattemptRequestDto`) and `CallCapService.grantedExtraByOrder` adds it
+to the effective cap, which is the same figure `/call-center/queue` shows in its
+Calls column.
+
+**Its seeding drives the orders rather than writing their status.** Each is
+placed, submitted, and then put through the very endpoint I3 films —
+`POST /admin/call-queue/:entryId/force-outcome` with `CUSTOMER_DECLINED` — so a
+real `call_attempts` row exists behind the refusal (CC-1) and the order moves by
+the ordinary mapping (CC-2). The request itself is raised through the SELLER's
+endpoint with a real reason, because the whole point of the screen is that a
+person asked and gave one; a row inserted by hand would film a request nobody
+made.
+
+**It CLEARS the previous take's requests, and that is not tidiness.** The last
+scene switches the filter to "all" and reads the two decisions just made —
+nothing in the app deletes a decided request (which is what that scene says), and
+the order it points at is retired forward rather than removed, so without the
+clear the list grows by one card per take and the second take narrates "both
+decisions" over three of them. The seed asserts BOTH counts, waiting and total,
+because the video reads both lists.
+
+**One seeding bug found, and it is the MUST #12 shape one level along** — see
+[Bugs found](#bugs-found-while-establishing-feasibility).
 
 ---
 
@@ -3582,3 +3618,23 @@ one-digit cap edited by select-all-and-type works perfectly; it is only clearing
 first, or going past nine, that writes the wrong number. And a gate on "the save
 succeeded" would have passed: the PATCH really did succeed, with 13 in it.
 **A check proves a step was REACHED. Only the frame says what it reached.**
+
+
+**AND AN EIGHTH SEEDING BUG, which is MUST #12 one level along (2026-10-01).**
+`clearPreviousOrders` removes a previous take's pre-dispatch orders in one
+transaction, deleting the child rows it knows about first — charges, queue
+entries, items, events. `order_reattempt_requests` FKs `orders` with RESTRICT
+and was not among them, and **approving a re-attempt puts its order back to
+`PENDING_CONFIRMATION`** — the first entry in `REMOVABLE_STATUSES`. So I4's take
+left an order this function would try to delete and a row that refused to let
+it, and the failure landed on the NEXT run, in the shared clearing, as a wall of
+Prisma text about a constraint name, nowhere near the video that caused it.
+
+The rule CLAUDE.md states for the e2e reset — "when a new table FKs
+`sellers`/`orders` with RESTRICT, add it to the reset helper in the same commit"
+— holds here word for word, and the seed is the reset. **When a take creates a
+row that FKs `orders`, add its `deleteMany` to `clearPreviousOrders` in the same
+commit.** There is now a catch around that transaction that reads the constraint
+name out of the error and says which table is blocking and what to do, because
+the next instance of this is a matter of time: Prisma defaults a required
+relation to RESTRICT, and roughly twenty tables carry an `orderId`.

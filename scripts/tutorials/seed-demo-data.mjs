@@ -2771,6 +2771,182 @@ async function superviseWorldFor(slug, sellerId, sellerToken) {
   }
 }
 
+/**
+ * I4's world: two sellers asking us to ring a customer who said no.
+ *
+ * ── WHY IT DRIVES THE ORDER RATHER THAN WRITING THE ROW ──────────────
+ * `REJECTED_BY_CUSTOMER` is where a re-attempt request is allowed from
+ * (`orders.reattempt_requestable_statuses`, seeded to exactly that one),
+ * and the honest way to an order in it is the way one really gets there:
+ * an attempt recorded with outcome `CUSTOMER_DECLINED`. So each order is
+ * placed, submitted, and then FORCED through the very endpoint I3 films
+ * — `POST /admin/call-queue/:entryId/force-outcome` — which appends a
+ * real `call_attempts` row (CC-1) under the ops account and moves the
+ * order by the ordinary mapping (CC-2). Nothing here reaches past a
+ * service to write a status.
+ *
+ * The request itself is then raised by the SELLER through the seller
+ * endpoint, because the whole point of the screen is that a person asked
+ * for this and gave a reason. A row inserted by hand would film a
+ * request nobody made.
+ *
+ * ── RETIRED FORWARD, LIKE EVERY SPENT ORDER ──────────────────────────
+ * Approving on camera puts the order back to PENDING_CONFIRMATION and
+ * marks the request APPROVED; declining leaves it rejected. Either way
+ * the world is used up, and either way the order is NOT rebuildable in
+ * place — `REJECTED_BY_CUSTOMER` is outside `REMOVABLE_STATUSES`, and a
+ * second request on an order that already has one is refused by the
+ * partial unique (`REQUEST_ALREADY_OPEN`). So the order's NAME moves
+ * aside and a fresh pair is built, which is the D4 / B7 rule again.
+ *
+ * ── AND IT ASSERTS THE LIST IS OURS ──────────────────────────────────
+ * The screen opens on "waiting for a decision" and the video acts on
+ * both cards, so a third request from somewhere else would put an
+ * unnarrated card between them. Two, or it says so.
+ */
+const REATTEMPT_ORDERS = [
+  {
+    ref: 'RSH-REATTEMPT-1',
+    sku: 'RSH-JAMDANI-IVORY',
+    recipientName: 'Parvati Deshmukh',
+    phone: '+919845080201',
+    line1: '61, Richmond Road',
+    line2: 'Beside the Baldwin girls school gate',
+    postalCode: '560025',
+    codAmountInr: '2400',
+    unitPriceInr: '2400',
+    declinedNotes: 'Said she had ordered by mistake and did not want it.',
+    // ≥20 chars (CreateReattemptRequestDto). Written as a seller would
+    // write it, because it is read out on camera.
+    reason:
+      'She rang our shop an hour later to say she had confused this with another order and does want the saree. Please try her once more.',
+  },
+  {
+    ref: 'RSH-REATTEMPT-2',
+    sku: 'RSH-MUSLIN-ROSE',
+    recipientName: 'Tarun Ghoshal',
+    phone: '+919845080202',
+    line1: '3, Pottery Road',
+    line2: 'Opposite the Frazer Town market',
+    postalCode: '560005',
+    codAmountInr: '1650',
+    unitPriceInr: '1650',
+    declinedNotes: 'Said the price was higher than he expected and refused it.',
+    reason:
+      'Customer only declined over the delivery charge. We will absorb it ourselves, so please put him back in the queue and call again today.',
+  },
+];
+
+async function reattemptWorldFor(slug, sellerId, sellerToken, staffToken) {
+  if (slug !== 'sellers-asking-to-call-again') return;
+
+  /*
+    EVERY PREVIOUS TAKE'S REQUESTS GO FIRST, and that is not a detail:
+    the video's last scene switches the filter to "all" and reads the
+    two decisions it just made. A decided request is not removed by
+    anything — the order it points at is retired forward, not deleted —
+    so without this the list grows by one card per take and the second
+    take narrates "both decisions" over three of them.
+
+    Deleting them here is between-takes housekeeping rather than a
+    product act: nothing in the app removes one, which is exactly what
+    that scene says.
+  */
+  const cleared = await prisma.orderReattemptRequest.deleteMany({ where: { sellerId } });
+  if (cleared.count > 0) {
+    console.log(`  · removed ${cleared.count} re-attempt request(s) a previous take decided`);
+  }
+
+  for (const o of REATTEMPT_ORDERS) {
+    const spent = await prisma.order.findFirst({
+      where: { sellerId, sellerOrderRef: o.ref },
+      select: { id: true, orderNumber: true, status: true },
+    });
+    if (spent !== null) {
+      const parked = await prisma.order.count({
+        where: { sellerId, sellerOrderRef: { startsWith: `${o.ref}-SPENT-` } },
+      });
+      const retiredRef = `${o.ref}-SPENT-${parked + 1}`;
+      await prisma.order.update({ where: { id: spent.id }, data: { sellerOrderRef: retiredRef } });
+      console.log(
+        `  · ${o.ref} is spent — ${spent.orderNumber} is ${spent.status}. ` +
+          `Renamed ${retiredRef} and left intact; a fresh one follows`,
+      );
+    }
+
+    const variant = await prisma.productVariant.findFirst({
+      where: { skuCode: o.sku, product: { sellerId } },
+      select: { id: true },
+    });
+    if (variant === null) {
+      throw new Error(`No ${o.sku} for this seller — the catalogue seeding runs first.`);
+    }
+    const token = await sellerToken();
+    const order = await call('/seller/orders', {
+      method: 'POST',
+      token,
+      body: {
+        recipientName: o.recipientName,
+        recipientPhoneE164: o.phone,
+        recipientAddressLine1: o.line1,
+        recipientAddressLine2: o.line2,
+        recipientPostalCode: o.postalCode,
+        paymentMode: 'COD',
+        codAmountInr: o.codAmountInr,
+        sellerOrderRef: o.ref,
+        items: [{ variantId: variant.id, quantity: 1, unitPriceInr: o.unitPriceInr }],
+      },
+    });
+    await call(`/seller/orders/${order.id}/submit`, { method: 'POST', token });
+
+    const entry = await waitFor(`${o.ref} to reach the call queue`, () =>
+      prisma.callQueueEntry.findFirst({
+        where: { orderId: order.id, status: 'PENDING' },
+        select: { id: true },
+      }),
+    );
+    await call(`/admin/call-queue/${entry.id}/force-outcome`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        outcome: 'CUSTOMER_DECLINED',
+        startedAt: new Date(Date.now() - 90 * 60_000).toISOString(),
+        endedAt: new Date(Date.now() - 89 * 60_000).toISOString(),
+        outcomeNotes: o.declinedNotes,
+      },
+    });
+    // The transition is POST-COMMIT of the attempt (CC-3), so the order
+    // is a heartbeat behind the call that moved it.
+    await waitFor(`${o.ref} to reach REJECTED_BY_CUSTOMER`, async () => {
+      const row = await prisma.order.findUnique({
+        where: { id: order.id },
+        select: { status: true },
+      });
+      return row?.status === 'REJECTED_BY_CUSTOMER' ? row : null;
+    });
+
+    await call(`/seller/orders/${order.id}/reattempt-request`, {
+      method: 'POST',
+      token,
+      body: { reason: o.reason },
+    });
+    console.log(`  · ${order.orderNumber} (${o.ref}) declined, and the seller has asked again`);
+  }
+
+  // BOTH LISTS, because the video reads both: it opens on "waiting for
+  // a decision" and closes on "all". A third request from anywhere puts
+  // an unnarrated card between the two this world is about.
+  const waiting = await prisma.orderReattemptRequest.count({ where: { status: 'PENDING' } });
+  const everything = await prisma.orderReattemptRequest.count();
+  if (waiting !== REATTEMPT_ORDERS.length || everything !== REATTEMPT_ORDERS.length) {
+    throw new Error(
+      `${waiting} re-attempt request(s) waiting and ${everything} in all, expected ` +
+        `${REATTEMPT_ORDERS.length} of each — the video acts on every card on this screen, ` +
+        'so one from anywhere else would be filmed and never explained.',
+    );
+  }
+}
+
 async function cancelWorldFor(slug, sellerId, sellerToken) {
   if (slug !== 'cancelling-an-order') return;
 
@@ -3611,13 +3787,42 @@ async function clearPreviousOrders(sellerId) {
   if (removable.length === 0) return;
 
   const ids = removable.map((o) => o.id);
-  await prisma.$transaction([
-    prisma.orderCharge.deleteMany({ where: { orderId: { in: ids } } }),
-    prisma.callQueueEntry.deleteMany({ where: { orderId: { in: ids } } }),
-    prisma.orderItem.deleteMany({ where: { orderId: { in: ids } } }),
-    prisma.orderEvent.deleteMany({ where: { orderId: { in: ids } } }),
-    prisma.order.deleteMany({ where: { id: { in: ids } } }),
-  ]);
+  try {
+    await prisma.$transaction([
+      prisma.orderCharge.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.callQueueEntry.deleteMany({ where: { orderId: { in: ids } } }),
+      /*
+        I4's LANDMINE, and it is the MUST #12 shape one level along:
+        `order_reattempt_requests` FKs `orders` with RESTRICT, and
+        APPROVING a re-attempt puts its order back to
+        PENDING_CONFIRMATION — the first entry in `REMOVABLE_STATUSES`.
+        So the take that films an approval leaves an order this function
+        will try to delete and a request row that refuses to let it, and
+        the NEXT run dies here rather than in the video's own seeding.
+        The request is about an order that is being removed, so it goes
+        with it.
+
+        **When a tutorial's take creates a row that FKs `orders`, add it
+        here in the same commit.** The catch below is the backstop, not
+        a substitute: it names the table instead of printing a wall of
+        Prisma.
+      */
+      prisma.orderReattemptRequest.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.orderItem.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.orderEvent.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.order.deleteMany({ where: { id: { in: ids } } }),
+    ]);
+  } catch (e) {
+    const blocked = /foreign key constraint "([a-z_]+)_[a-z_]*order_id_fkey"/.exec(String(e));
+    if (blocked !== null) {
+      throw new Error(
+        `Cannot clear a previous take's orders: rows in "${blocked[1]}" reference them and that ` +
+          'foreign key is RESTRICT. A take created them; add a deleteMany for that table to ' +
+          '`clearPreviousOrders`, beside the others, so the next run starts from the same world.',
+      );
+    }
+    throw e;
+  }
   console.log(`  · removed a previous take's ${removable.length} order(s)`);
 
   // The customer row outlives the order and makes the recipient panel
@@ -4136,6 +4341,7 @@ async function main() {
   await cancelWorldFor(slug, sellerId, sellerToken);
   await callWorldFor(slug, sellerId, sellerToken, staffToken);
   await superviseWorldFor(slug, sellerId, sellerToken);
+  await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
   await pendingRowsWorldFor(slug, sellerId, sellerToken);
   await notificationWorldFor(slug, sellerId);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);

@@ -8278,4 +8278,155 @@ export const FLOWS = {
       },
     },
   },
+
+  'sellers-asking-to-call-again': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/reattempt-requests`, { waitUntil: 'domcontentloaded' });
+        /*
+          GATED ON A CARD THE SEEDING WROTE, by the words in its reason
+          rather than by position — the order numbers are minted per run
+          and the empty state renders a perfectly good card-shaped panel
+          of its own.
+        */
+        await firstAsk(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2800);
+      },
+
+      async why({ page, stage }) {
+        // The page's own subtitle, which states the rule the narration
+        // is explaining.
+        await stage.dwellOn(page.locator('.sk-ph').first(), 3400);
+      },
+
+      async card({ page, stage }) {
+        await stage.dwellOn(firstAsk(page), 3600);
+      },
+
+      async read({ page, stage }) {
+        await stage.dwellOn(firstAsk(page).locator('.oo-body').first(), 3800);
+      },
+
+      async approve({ page, stage }) {
+        await stage.clickIt(firstAsk(page).getByRole('button', { name: 'Approve — call again' }), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByText(/returns to PENDING_CONFIRMATION and is queued for calling/)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__head').first(), 3200);
+      },
+
+      async extra({ page, stage }) {
+        // The hint under the select is the sentence the narration is
+        // quoting, and it only exists on the APPROVE side of the dialog.
+        await page
+          .getByText(/puts the order back already out of chances/)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.getByRole('dialog').locator('#ra-extra'), 3600);
+      },
+
+      async note({ page, stage }) {
+        await stage.typeIn(
+          page.getByRole('dialog').locator('#ra-note'),
+          'Seller called the shop; customer confirmed she still wants it.',
+        );
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.getByRole('dialog').locator('#ra-note'), 2400);
+      },
+
+      async approved({ page, stage }) {
+        /*
+          SCOPED TO THE DIALOG. Its footer button is "Approve" while the
+          card behind it says "Approve — call again", and `getByRole`
+          matches a name as a SUBSTRING by default — so the unscoped
+          reach finds both and dies on strict mode.
+        */
+        await stage.clickIt(page.getByRole('dialog').getByRole('button', { name: 'Approve' }), {
+          after: 1400,
+        });
+        // The card LEAVES the waiting list, which is what the narration
+        // claims. The dialog closing would be true of a cancel too.
+        await firstAsk(page).waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.oo-queue').first(), 3000);
+      },
+
+      async second({ page, stage }) {
+        await stage.dwellOn(secondAsk(page).locator('.oo-body').first(), 3600);
+      },
+
+      async decline({ page, stage }) {
+        await stage.clickIt(secondAsk(page).getByRole('button', { name: 'Decline' }), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByText(/The order stays rejected/)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        // A DECLINE NEEDS ITS NOTE TOO. The field is optional on both
+        // sides, and a rejected card with nothing written on it is the
+        // one shape the history scene cannot teach anything from.
+        await stage.typeIn(
+          dialog.locator('#ra-note'),
+          'Nothing has changed — the customer declined on price and has not been spoken to since.',
+        );
+        await page.waitForTimeout(400);
+        await stage.dwellOn(dialog.locator('.oo-stack').first(), 2600);
+      },
+
+      async declined({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Decline request' }),
+          { after: 1400 },
+        );
+        // The EMPTY STATE by its own words, not the absence of a card —
+        // a list still loading has no cards either.
+        await page.getByText('Nothing waiting').waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-empty').first(), 3000);
+      },
+
+      async history({ page, stage }) {
+        await page.selectOption('#ra-status', '');
+        /*
+          GATED ON WHAT THE APPROVAL GRANTED, which is the half of the
+          card that only exists after a decision. A gate on the cards
+          coming back would pass on a filter that had shown them all
+          along.
+        */
+        await page
+          .getByText(/Granted:/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.oo-queue').first(), 3600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph').first(), 3400);
+      },
+    },
+  },
 };
+
+/**
+ * I4's two request cards, each by a phrase from the reason its seeding
+ * wrote — the order numbers are minted per run, so there is nothing
+ * stable to name them by except the words on them.
+ */
+function firstAsk(page) {
+  return page.locator('.oo-qcard', { hasText: 'confused this with another order' }).first();
+}
+
+function secondAsk(page) {
+  return page.locator('.oo-qcard', { hasText: 'declined over the delivery charge' }).first();
+}

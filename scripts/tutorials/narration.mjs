@@ -2933,6 +2933,65 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'sellers-asking-to-call-again',
+    title: 'Sellers asking us to call again',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Every order here has a customer who was rung, answered, and said no. The seller thinks that was a misunderstanding and is asking us to try once more.',
+      },
+      {
+        id: 'why',
+        say: 'A refusal is a terminal state on purpose, and approving here is the only way back out of it. That is why it is a request the seller makes rather than a button the seller has.',
+      },
+      {
+        id: 'card',
+        say: 'Which is also why a card is mostly its reason, printed at full width instead of squeezed into a column. You are being asked to ring somebody who already declined; the reason is the decision.',
+      },
+      {
+        id: 'read',
+        say: 'This one says the customer rang the shop back an hour later and does want it. That is a good reason — it is new information from the customer rather than the seller hoping.',
+      },
+      {
+        id: 'approve',
+        say: 'Approve, and read what the dialog restates. The order comes out of rejected, goes back to waiting for confirmation, and joins the call queue like any other.',
+      },
+      {
+        id: 'extra',
+        say: 'Then the part nobody expects. Its attempt count is untouched, so unless you grant extra calls it comes back already out of chances and the first unanswered ring rejects it again.',
+      },
+      {
+        id: 'note',
+        say: 'A note, if the decision needs one. It is optional here because the seller already wrote the reason — this is only for anything you know that they do not.',
+      },
+      {
+        id: 'approved',
+        say: 'And it is gone from the waiting list. Somewhere in the call centre that customer is now sitting in a queue again, with the extra calls you just allowed.',
+      },
+      {
+        id: 'second',
+        say: 'The other one is different. Nothing new has happened — the customer declined over the delivery charge and the seller would simply like another go at them.',
+      },
+      {
+        id: 'decline',
+        say: 'So decline it \u2014 and say why, because the seller reads this. The order stays rejected, and they may ask again the moment something actually does change.',
+      },
+      {
+        id: 'declined',
+        say: 'Empty, which is the state this page should be in most days. A queue here means somebody is waiting on a decision that only a person can make.',
+      },
+      {
+        id: 'history',
+        say: 'Nothing is deleted, though. Switch the filter and both decisions are still here, each carrying what was granted and whatever was written beside it.',
+      },
+      {
+        id: 'outro',
+        say: 'So: read the reason rather than the order, ask whether anything has actually changed, and remember that approving without granting a call is the same as declining slowly.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
