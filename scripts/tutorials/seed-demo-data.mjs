@@ -26,7 +26,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { prisma, argon2 } from './lib/deps.mjs';
 import { MOCK_ROOT, mockObjectPath } from './lib/spaces-shim.mjs';
 import { TUTORIALS_DIR } from './lib/paths.mjs';
-import { API, call } from './lib/api.mjs';
+import { API, call, waitFor } from './lib/api.mjs';
 import {
   callThisOneFirst,
   driveOrderThrough,
@@ -2457,6 +2457,282 @@ async function callWorldFor(slug, sellerId, sellerToken, staffToken) {
   console.log(`  · the customer has ${history} previous order(s) — the risk strip will render`);
 }
 
+/**
+ * I2's world: a supervisor's queue with somebody's name on a stuck call.
+ *
+ * ── THE ROSTER WAS EMPTY, AND NOTHING SAID SO ────────────────────────
+ * `AdminAgentService.listAgents` selects `staff_users` by the LEGACY
+ * `role` enum being `CALL_AGENT`. This box had 39 staff users and NOT
+ * ONE of them carried it — every sim-e2e account is a SUPER_ADMIN — so
+ * `/call-center/agents` rendered its empty state ("No call agents") and,
+ * far worse for a video about moving work between people, the Reassign
+ * dialog's dropdown was EMPTY: it lists `useAgents()` filtered to
+ * available, so with no agents at all there is nobody to reassign to and
+ * the dialog says so in red.
+ *
+ * The curriculum's own note for this entry said the roster was "five
+ * rows, four of them debris". That was measured off `agent_call_settings`
+ * (5 rows, all on SUPER_ADMINs) rather than off the PAGE, which reads a
+ * different table. Both halves matter and only one of them was true —
+ * which is the standing lesson of this library restated: LOOK at the
+ * screen before writing what the video does to it.
+ *
+ * So this seeds two real call agents, upserted exactly as `ensureOps`
+ * upserts the ops account: the legacy enum AND the RBAC row together,
+ * which is what `StaffInvitationService.accept` writes for a staff
+ * member invited for real (`role: inv.role` beside
+ * `staffRole: { connect: { key: staffRoleKeyForEnum(inv.role) } }`). One
+ * without the other is a staff user who either holds no permissions or
+ * is invisible to every screen that asks the enum.
+ *
+ * ── WHY ONE IS OFF AND HOLDING, AND THE OTHER IS ON AND IDLE ─────────
+ * It is the shape `QueueIndex`'s own docstring names as the reason the
+ * screen exists: "an entry assigned to someone who went home stayed
+ * assigned until its timer expired and nobody could see that it had".
+ * Marking yourself unavailable does NOT hand back what you are already
+ * holding — `AgentSettingsService.apply` upserts the row and nothing
+ * else — so an agent who closed their laptop keeps the customer's order.
+ * Asha holds the call and is marked off; Imran is on and idle, and is
+ * therefore the only name the Reassign dropdown can offer.
+ *
+ * ── THE PRESENCE SWEEP IS ON A ONE-MINUTE CRON AND WILL EAT THIS ─────
+ * `AgentPresenceService.sweep` stands down every agent who is AVAILABLE
+ * and whose `lastSeenAt` is older than `ops.agent_presence_timeout_minutes`
+ * (10), and hands back whatever they were holding. A seeded available
+ * agent with a null `lastSeenAt` is stood down inside sixty seconds and
+ * the Reassign dropdown is empty again — so `lastSeenAt` is stamped NOW,
+ * which is honest (they are at their desk) and buys the ten minutes a
+ * take needs. Generate the voice BEFORE the take rather than inside it
+ * if the clips are not cached: that step is the only thing between this
+ * seed and the camera.
+ *
+ * The one holding the call is deliberately NOT available, so the sweep
+ * has no interest in her and the assignment cannot evaporate mid-scene.
+ *
+ * ── THE ASSIGNMENT IS WRITTEN, NOT PULLED ────────────────────────────
+ * Pulling it through `/agent/calls/next` as Asha would cost a login and
+ * arm CC-7's fifteen-minute expiry job, which would hand the row back
+ * part-way through a take that started late — a take failing on the
+ * scene AFTER the one that broke it. `call_queue_entries` is mutable
+ * state (CC-1's append-only rule is about `call_attempts`, which this
+ * writes none of) and `callWorldFor` above already writes it directly,
+ * so the row is set ASSIGNED here with no timer behind it.
+ *
+ * `scheduledAttempts` is set to 1 because somebody DID pull it — the
+ * column counts claims, not conversations, and leaving it at 0 beside an
+ * agent's name would contradict the screen's own explanation of itself.
+ * `attemptsCounting` stays 0, which is the whole point: a row somebody
+ * took and never rang.
+ *
+ * ── AND EXACTLY ONE ASSIGNED ROW, ACROSS THE WHOLE QUEUE ─────────────
+ * "Reassign" renders only on an ASSIGNED row, so with one such row the
+ * flow can reach for the button by name and cannot land on the wrong
+ * parcel (P5's lesson: when a seed stages one row and a flow takes
+ * `.first()`, they can be different rows). Anything else left ASSIGNED
+ * by an earlier take — I1's release scene can leave one behind — is
+ * released back to PENDING first.
+ */
+const SUPERVISE_AGENTS = [
+  {
+    email: 'asha.pillai@skydrop.local',
+    // Holds the stuck call, and has gone off shift while holding it.
+    isAvailable: false,
+    languages: ['en', 'hi', 'bn'],
+    holdsTheCall: true,
+  },
+  {
+    email: 'imran.shaikh@skydrop.local',
+    // On the roster and idle — the only name Reassign can offer.
+    isAvailable: true,
+    languages: ['en', 'hi'],
+    holdsTheCall: false,
+  },
+];
+
+/** Every seeded agent shares one password; nothing signs in as them. */
+const SUPERVISE_AGENT_PASSWORD = 'Tutorial-Agent-2026';
+
+/**
+ * Three confirmation calls waiting, so the queue reads as a queue.
+ *
+ * `waitedMinutes` back-dates the queue entry's `createdAt`, which is
+ * what the "Waiting since" column is computed from. Everything placed in
+ * one seed run is otherwise the same age, and a column where every row
+ * says "0m" teaches nothing about the column. The ORDERS keep their real
+ * timestamps; this moves the queue row only, which is the thing on
+ * screen.
+ */
+const SUPERVISE_ORDERS = [
+  {
+    ref: 'RSH-QUEUE-1',
+    sku: 'RSH-JAMDANI-IVORY',
+    recipientName: 'Sunita Bhattacharya',
+    phone: '+919845070101',
+    line1: '27, Cunningham Road',
+    line2: 'Above the Sikh gurudwara',
+    postalCode: '560052',
+    codAmountInr: '2400',
+    unitPriceInr: '2400',
+    waitedMinutes: 305,
+    assigned: true,
+  },
+  {
+    ref: 'RSH-QUEUE-2',
+    sku: 'RSH-KANTHA-BLUE',
+    recipientName: 'Farhan Qureshi',
+    phone: '+919845070102',
+    line1: '5, Tannery Road',
+    line2: 'Next to the Kaval Byrasandra post office',
+    postalCode: '560005',
+    codAmountInr: '1850',
+    unitPriceInr: '1850',
+    waitedMinutes: 164,
+    assigned: false,
+  },
+  {
+    ref: 'RSH-QUEUE-3',
+    sku: 'RSH-SCARF-EMERALD',
+    recipientName: 'Lakshmi Venkatesh',
+    phone: '+919845070103',
+    line1: '112, Sarjapur Road',
+    line2: 'Opposite the Wipro gate',
+    postalCode: '560035',
+    codAmountInr: '990',
+    unitPriceInr: '990',
+    waitedMinutes: 38,
+    assigned: false,
+  },
+];
+
+async function superviseWorldFor(slug, sellerId, sellerToken) {
+  if (slug !== 'supervising-the-queue') return;
+
+  const callAgentRole = await prisma.staffRoleDefinition.findFirstOrThrow({
+    where: { key: 'call_agent' },
+    select: { id: true },
+  });
+  const passwordHash = await hash(SUPERVISE_AGENT_PASSWORD);
+
+  const seeded = [];
+  for (const a of SUPERVISE_AGENTS) {
+    const staff = await prisma.staffUser.upsert({
+      where: { email: a.email },
+      update: {
+        passwordHash,
+        role: 'CALL_AGENT',
+        staffRole: { connect: { id: callAgentRole.id } },
+        deletedAt: null,
+      },
+      create: {
+        email: a.email,
+        emailDisplay: a.email,
+        passwordHash,
+        role: 'CALL_AGENT',
+        staffRole: { connect: { id: callAgentRole.id } },
+      },
+      select: { id: true, email: true },
+    });
+    // maxActiveCalls back to 1 on EVERY run: the video raises it to
+    // three on camera, and a second take opening on a cap that is
+    // already three films a change that changes nothing.
+    const settings = {
+      isAvailable: a.isAvailable,
+      maxActiveCalls: 1,
+      languages: a.languages,
+      // See the presence-sweep note above. NOW, not null.
+      lastSeenAt: new Date(),
+    };
+    await prisma.agentCallSettings.upsert({
+      where: { agentId: staff.id },
+      create: { agentId: staff.id, ...settings },
+      update: settings,
+    });
+    seeded.push({ ...a, id: staff.id });
+  }
+  console.log(
+    `  · two call agents on the roster: ${seeded
+      .map((a) => `${a.email} (${a.isAvailable ? 'available' : 'off'})`)
+      .join(', ')}`,
+  );
+
+  // Nothing else may be ASSIGNED, or "Reassign" is not a unique button.
+  const released = await prisma.callQueueEntry.updateMany({
+    where: { status: 'ASSIGNED' },
+    data: { status: 'PENDING', assignedAgentId: null, assignedAt: null },
+  });
+  if (released.count > 0) {
+    console.log(`  · released ${released.count} call(s) an earlier take was still holding`);
+  }
+
+  const holder = seeded.find((a) => a.holdsTheCall);
+  if (holder === undefined) throw new Error('No seeded agent is marked as holding the call.');
+
+  for (const o of SUPERVISE_ORDERS) {
+    const variant = await prisma.productVariant.findFirst({
+      where: { skuCode: o.sku, product: { sellerId } },
+      select: { id: true },
+    });
+    if (variant === null) {
+      throw new Error(`No ${o.sku} for this seller — the catalogue seeding runs first.`);
+    }
+    const token = await sellerToken();
+    const order = await call('/seller/orders', {
+      method: 'POST',
+      token,
+      body: {
+        recipientName: o.recipientName,
+        recipientPhoneE164: o.phone,
+        recipientAddressLine1: o.line1,
+        recipientAddressLine2: o.line2,
+        recipientPostalCode: o.postalCode,
+        paymentMode: 'COD',
+        codAmountInr: o.codAmountInr,
+        sellerOrderRef: o.ref,
+        items: [{ variantId: variant.id, quantity: 1, unitPriceInr: o.unitPriceInr }],
+      },
+    });
+    // Submitting is what puts it on the queue (CC-6), post-commit — so
+    // the row is a heartbeat behind the call that caused it.
+    await call(`/seller/orders/${order.id}/submit`, { method: 'POST', token });
+    const entry = await waitFor(`${o.ref} to reach the call queue`, () =>
+      prisma.callQueueEntry.findFirst({
+        where: { orderId: order.id, status: 'PENDING' },
+        select: { id: true },
+      }),
+    );
+
+    const waitedSince = new Date(Date.now() - o.waitedMinutes * 60_000);
+    await prisma.callQueueEntry.update({
+      where: { id: entry.id },
+      data: {
+        createdAt: waitedSince,
+        availableAt: waitedSince,
+        ...(o.assigned
+          ? {
+              status: 'ASSIGNED',
+              assignedAgentId: holder.id,
+              // Taken about an hour after it arrived, and never rung.
+              assignedAt: new Date(waitedSince.getTime() + 60 * 60_000),
+              scheduledAttempts: 1,
+            }
+          : {}),
+      },
+    });
+    console.log(
+      `  · ${order.orderNumber} (${o.ref}) waiting ${o.waitedMinutes}m` +
+        (o.assigned ? ` — assigned to ${holder.email}, who is marked off` : ''),
+    );
+  }
+
+  const assigned = await prisma.callQueueEntry.count({ where: { status: 'ASSIGNED' } });
+  if (assigned !== 1) {
+    throw new Error(
+      `${assigned} ASSIGNED call-queue entries, and the flow reaches for "Reassign" by name — ` +
+        'it renders on every assigned row, so anything but exactly one films the wrong parcel.',
+    );
+  }
+}
+
 async function cancelWorldFor(slug, sellerId, sellerToken) {
   if (slug !== 'cancelling-an-order') return;
 
@@ -3821,6 +4097,7 @@ async function main() {
   await editDraftWorldFor(slug, sellerId, sellerToken);
   await cancelWorldFor(slug, sellerId, sellerToken);
   await callWorldFor(slug, sellerId, sellerToken, staffToken);
+  await superviseWorldFor(slug, sellerId, sellerToken);
   await pendingRowsWorldFor(slug, sellerId, sellerToken);
   await notificationWorldFor(slug, sellerId);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);

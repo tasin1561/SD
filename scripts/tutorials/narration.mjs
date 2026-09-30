@@ -2799,6 +2799,77 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'supervising-the-queue',
+    title: 'Supervising the queue',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'The station hands agents one call at a time and shows them nothing else. This is the other view — everything waiting to be confirmed, and whose hands it is in.',
+      },
+      {
+        id: 'tiles',
+        say: 'Four counts across the top. Open is the two live states together; then how many nobody has taken, how many somebody has, and how many people are holding work right now.',
+      },
+      {
+        id: 'filter',
+        say: 'It opens on open, and that is deliberate. A finished attempt leaves its own row behind, and an order we retried has one per round, so showing everything buries the live queue in history.',
+      },
+      {
+        id: 'row',
+        say: 'Each row is one order. How long it has been waiting, when it next becomes callable, how many calls have actually been logged against the limit, and how many times it has been picked up.',
+      },
+      {
+        id: 'stuck',
+        say: 'Those last two columns are the whole reason this page exists. This one has been picked up once and called zero times. Somebody took it and never rang, and until now nobody could see that.',
+      },
+      {
+        id: 'reassign',
+        say: 'So move it. Read what the dialog promises first: the order keeps its place in the queue and every attempt already logged against it. Only the name changes.',
+      },
+      {
+        id: 'pick',
+        say: 'Only agents marked available are offered, and each one says what they are already carrying — because handing a stuck call to somebody who is also at their limit moves the problem rather than solving it.',
+      },
+      {
+        id: 'moved',
+        say: 'Done. The row still says assigned, the attempt count has not moved, and the name beside it is somebody who is actually at their desk.',
+      },
+      {
+        id: 'reschedule',
+        say: 'The other lever is timing. Every queued call has a time it becomes callable, and until this existed there was no way to bring one forward when a customer rang back.',
+      },
+      {
+        id: 'when',
+        say: 'Three shortcuts for the cases that actually happen, and a reason of your own. Moving when somebody gets telephoned is a decision you should be able to account for later.',
+      },
+      {
+        id: 'rescheduled',
+        say: 'And the callable column moves with it. Nothing else did: not the attempt count, not the order, not its place in the list. Only when somebody gets rung.',
+      },
+      {
+        id: 'force',
+        say: 'The third button is not like these two. It records a call that did not happen, under your name, permanently. It is sometimes the right answer, and it has a video of its own.',
+      },
+      {
+        id: 'agents',
+        say: 'Then the people. Who is on, what hours they work, which languages they speak, and how many calls each is carrying against their cap.',
+      },
+      {
+        id: 'holding',
+        say: 'Off does not mean empty. Going off shift hands nothing back, which is why that call had somebody\u2019s name on it at all. And an amber figure is an agent at their limit.',
+      },
+      {
+        id: 'capacity',
+        say: 'And the cap itself. One at a time is the default, so an agent who has just taken a call is already full. Raise it only when somebody is genuinely idle, and lower it when they are drowning.',
+      },
+      {
+        id: 'outro',
+        say: 'So: watch the picked-up column against the called column, move work off anybody who is not there, and change the timing rather than inventing a conversation. That is supervising.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

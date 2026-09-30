@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Num } from '@skydrop/ui/components';
 import { Headset, PhoneCall, UserCheck } from 'lucide-react';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
@@ -38,9 +38,17 @@ import { serverVerdict } from '@/lib/server-verdict';
 export function AgentsIndex(): ReactElement {
   const list = useAgents();
   const update = useUpdateAgentSettings();
-  const [openAgent, setOpenAgent] = useState<AgentListRow | null>(null);
+  /*
+    THE ID, NOT THE ROW. Holding the row itself made the detail panel a
+    SNAPSHOT of the moment it was opened, so a successful capacity save
+    left it still showing the old figure with its Save button enabled —
+    pressing again re-sent the same number. Looking the agent up in the
+    list means the panel reads whatever the server last said.
+  */
+  const [openAgentId, setOpenAgentId] = useState<string | null>(null);
 
   const items = list.data ?? [];
+  const openAgent = items.find((a) => a.agentId === openAgentId) ?? null;
   const availableCount = items.filter((a) => a.settings.isAvailable).length;
   const holding = items.reduce((n, a) => n + a.activeAssigned, 0);
 
@@ -153,7 +161,7 @@ export function AgentsIndex(): ReactElement {
                       >
                         {a.settings.isAvailable ? 'Mark off' : 'Mark available'}
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => setOpenAgent(a)}>
+                      <Button variant="ghost" size="sm" onClick={() => setOpenAgentId(a.agentId)}>
                         Details
                       </Button>
                     </span>
@@ -171,7 +179,7 @@ export function AgentsIndex(): ReactElement {
         </p>
       )}
 
-      <AgentDetail agent={openAgent} onClose={() => setOpenAgent(null)} />
+      <AgentDetail agent={openAgent} onClose={() => setOpenAgentId(null)} />
     </div>
   );
 }
@@ -186,6 +194,25 @@ function AgentDetail({
   const metrics = useAgentMetrics(agent?.agentId ?? null);
   const update = useUpdateAgentSettings();
   const [maxActiveCalls, setMaxActiveCalls] = useState('');
+
+  /*
+    The field OWNS its value, seeded when the panel opens on an agent.
+
+    It used to render `maxActiveCalls === '' ? String(cap) : …`, using
+    the empty string as a sentinel for "not edited" — which meant the
+    field could not be EMPTIED: clearing it put the current cap straight
+    back, and the next keystroke landed beside that rather than
+    replacing it. Clearing "1" and typing "3" saved thirteen, with the
+    button enabled and nothing to say so. Found by filming this screen.
+
+    Keyed on the agent id rather than on the row, so a background
+    refetch of the list cannot overwrite what somebody is typing.
+  */
+  const openOn = agent?.agentId ?? null;
+  useEffect(() => {
+    setMaxActiveCalls(agent === null ? '' : String(agent.settings.maxActiveCalls));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openOn]);
 
   function close(): void {
     setMaxActiveCalls('');
@@ -357,7 +384,7 @@ function AgentDetail({
               label="Maximum concurrent calls"
               type="number"
               min={1}
-              value={maxActiveCalls === '' ? String(agent.settings.maxActiveCalls) : maxActiveCalls}
+              value={maxActiveCalls}
               onChange={(e) => setMaxActiveCalls(e.target.value)}
             />
           </section>

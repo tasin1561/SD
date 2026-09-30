@@ -45,6 +45,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `the-permission-model.mp4`          | Why somebody cannot see a screen, and how to fix it safely — a role is yours to shape and the permissions are not, every one carries a sentence saying what its holder can actually do, and the marked ones move money or stock. The editor is opened on a real role and closed with Cancel; nothing is saved. |
 | `things-the-system-has-raised.mp4`  | The system-issue board — everything that could not be fixed automatically, worst first, with the severity as a word and not only a colour. What to read on a card, the link to the order it is about, claiming one so two people do not chase it, and why closing is a different act. The Close and Notify dialogs are opened and cancelled. |
 | `taking-calls.mp4`                  | A whole call-centre shift — why the station opens saying you are not taking calls, one switch that puts you on the roster, a customer handed to you without asking, why this call is happening, what their history says, choosing an outcome and reading what it does before pressing, and releasing one you cannot take. |
+| `supervising-the-queue.mp4`         | The call queue from a supervisor's side — the picked-up column against the called column, which is how a call somebody claimed and never rang becomes visible; moving it off an agent who has gone home; changing when a customer gets rung without pretending a call was made; and the agent roster, what each is holding against their cap, and raising one.                        |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -435,6 +436,27 @@ the file are still the words in `narration.mjs`.
   the WHOLE accessible name and is the only form that says "this field and
   nothing else". Read it beside the `getByText(…, { exact: true })` trap above:
   `exact` means opposite things on the two.
+- **Inside a dialog, `getByRole('button', { name: 'Close' })` matches TWO.**
+  Every `Dialog` header carries an X with `aria-label="Close"` beside whatever
+  the footer holds, so the unscoped form dies on strict mode; reach through
+  `.sk-dialog__foot`. Same shape one level along: a row's action button and the
+  dialog it opens usually share a WORD (`Reassign`, `Reschedule`), so the row
+  reach only works while the dialog is shut and every later one has to be
+  `getByRole('dialog')`-scoped.
+- **A controlled field that uses the empty string as "not edited" CANNOT BE
+  CLEARED, and `typeIn(..., { clear: true })` then types onto the end of it.**
+  `fill('')` fires onChange, the component puts its default straight back, and
+  `pressSequentially` appends: the agent capacity field took a cleared "1" plus a
+  typed "3" and saved THIRTEEN. Every step passed. The frame is the only thing
+  that said so — and in that case it was a product bug rather than a flow one
+  (see the curriculum's Bugs found). **When a form field misbehaves under
+  `clear: true`, check whether a HUMAN can clear it before working around it.**
+- **The call-centre presence sweep runs EVERY MINUTE**, and it stands down any
+  agent marked available whose `lastSeenAt` is older than ten minutes — handing
+  back whatever they were holding. A seeded available agent with a null
+  `lastSeenAt` is gone before the first `--check` reaches them. Stamp it, and
+  generate the voice BEFORE the take: that step is the only thing between the
+  seed and the camera.
 - **A gate on a panel that only renders in ONE state cannot be the last gate of
   a flow that might leave that state.** I1's closing scene waited for "You are
   marked unavailable", which belongs to the panel shown when the agent holds

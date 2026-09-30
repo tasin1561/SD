@@ -7894,4 +7894,234 @@ export const FLOWS = {
       },
     },
   },
+
+  'supervising-the-queue': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/call-center/queue`, { waitUntil: 'domcontentloaded' });
+        /*
+          GATED ON THE ASSIGNED ROW, which is the whole subject of the
+          video and the one thing the seeding guarantees. The table
+          renders just as happily with five pending rows and no name on
+          any of them, and the empty state renders a perfectly good card
+          too — so a gate on the table or on the card would pass on a box
+          where the world had not been built.
+        */
+        await page
+          .locator('.sk-tr', { hasText: 'asha.pillai' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2800);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(page.locator('.oo-kpis').first(), 3600);
+      },
+
+      async filter({ page, stage }) {
+        // Nothing is pressed: the narration is about what the page OPENS
+        // on, and changing it to say so would film the opposite.
+        await stage.dwellOn(page.locator('.cc-filters').first(), 3400);
+      },
+
+      async row({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-table').first(), 3800);
+      },
+
+      async stuck({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-tr', { hasText: 'asha.pillai' }).first(), 3800);
+      },
+
+      async reassign({ page, stage }) {
+        /*
+          "Reassign" renders ONLY on an ASSIGNED row, and the seeding
+          asserts there is exactly one — so this reaches for the button
+          by name rather than by position. Once the dialog is open its
+          SUBMIT button carries the same word, which is why every later
+          reach is scoped to the dialog.
+        */
+        await stage.clickIt(page.getByRole('button', { name: 'Reassign' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByText('only who is holding it changes')
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__head').first(), 3200);
+      },
+
+      async pick({ page, stage }) {
+        /*
+          By the OPTION'S OWN value, read off the option whose text names
+          the agent. `selectOption({ label })` would have to restate the
+          capacity the option prints beside the email ("… — holding 0 of
+          1"), so a seed that changed the cap would break this with a
+          message about a missing option rather than about a cap.
+        */
+        const option = page.locator('#q-to option', { hasText: 'imran.shaikh' }).first();
+        await option.waitFor({ state: 'attached', timeout: 20_000 });
+        const value = await option.getAttribute('value');
+        if (value === null || value === '') {
+          throw new Error(
+            'The reassign dropdown has no agent to offer — nobody is marked available.',
+          );
+        }
+        await page.selectOption('#q-to', value);
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.getByRole('dialog').locator('.oo-stack').first(), 3200);
+      },
+
+      async moved({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Reassign' }).first(),
+          { after: 1400 },
+        );
+        // The ROW carrying the new name — not the dialog closing, which
+        // a cancel does just as well.
+        const row = page.locator('.sk-tr', { hasText: 'imran.shaikh' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row, 3200);
+      },
+
+      async reschedule({ page, stage }) {
+        /*
+          The TOP row, which is the most recently queued one: the table
+          is ordered `createdAt DESC` and the seeding gives its three
+          entries distinct ages, so this is deterministic. Every pending
+          row would serve the scene equally, which is what makes
+          `.first()` honest here rather than a coin toss (P5's lesson is
+          about a seed staging ONE row and a flow taking whichever came
+          first).
+        */
+        await stage.clickIt(
+          page.locator('.sk-tbody .sk-tr').first().getByRole('button', { name: 'Reschedule' }),
+          { after: 1200 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByText('the attempt count and the order are untouched')
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__head').first(), 3200);
+      },
+
+      async when({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.clickIt(dialog.getByRole('button', { name: 'Tomorrow' }), { after: 800 });
+        await stage.typeIn(dialog.locator('#q-why'), 'Customer asked to be rung tomorrow instead.');
+        await page.waitForTimeout(500);
+        await stage.dwellOn(dialog.locator('.oo-stack').first(), 2800);
+      },
+
+      async rescheduled({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Reschedule' }).first(),
+          { after: 1400 },
+        );
+        /*
+          THE CALLABLE COLUMN, which is the thing the narration claims
+          moved. Every other row reads "now", so this is unique — and
+          "Tomorrow" rather than "In 1 hour" on purpose: the column
+          rounds to whole minutes below an hour, so a preset of exactly
+          sixty minutes lands on "59m" or "1h" depending on where in the
+          minute the click fell.
+        */
+        await page
+          .getByText(/^in 24h$/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3000);
+      },
+
+      async force({ page, stage }) {
+        /*
+          THE ASSIGNED ROW'S actions, where there really are three
+          buttons. Every other row carries two — "Reassign" renders only
+          on an assigned entry — so a halo round the first row would put
+          "the third button" over a pair of them.
+        */
+        await stage.dwellOn(
+          page.locator('.sk-tr', { hasText: 'imran.shaikh' }).first().locator('.cc-row-actions'),
+          3600,
+        );
+      },
+
+      async agents({ page, stage, baseUrl }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Call agents' }).first(), {
+          after: 1200,
+        });
+        await page.waitForURL(`${baseUrl}/call-center/agents`, { timeout: 20_000 });
+        await page
+          .locator('.sk-tr', { hasText: 'imran.shaikh' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3200);
+      },
+
+      async holding({ page, stage }) {
+        // BOTH ROWS: the line is about the pairing of the two columns —
+        // an agent marked off who is holding nothing, beside one at
+        // their cap in amber — and a halo round one row would be
+        // pointing at half of it.
+        await stage.dwellOn(page.locator('.sk-table').first(), 3600);
+      },
+
+      async capacity({ page, stage }) {
+        const row = page.locator('.sk-tr', { hasText: 'imran.shaikh' }).first();
+        await stage.clickIt(row.getByRole('button', { name: 'Details' }), { after: 1000 });
+        const dialog = page.getByRole('dialog');
+        await dialog.locator('#ag-max').waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.typeIn(dialog.locator('#ag-max'), '3', { clear: true });
+        await stage.clickIt(dialog.getByRole('button', { name: 'Save capacity' }), { after: 1200 });
+        /*
+          THE FOOTER'S Close, not `getByRole('button', { name: 'Close' })`
+          — every dialog's header carries an X with `aria-label="Close"`,
+          so the unscoped form matches two and dies on strict mode.
+        */
+        await stage.clickIt(
+          dialog.locator('.sk-dialog__foot').getByRole('button', { name: 'Close' }),
+          { after: 1200 },
+        );
+        /*
+          AND THE GATE IS OUTSIDE THE DIALOG, because it has to be: the
+          detail panel holds the agent row it was OPENED with in local
+          state and nothing refreshes it, so the cap inside it still
+          reads the old number after a perfectly successful save. The
+          list behind it is the only place the write becomes visible.
+        */
+        await page
+          .locator('.sk-tr', { hasText: 'imran.shaikh' })
+          .getByText('1 of 3')
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-tr', { hasText: 'imran.shaikh' }).first(), 3000);
+      },
+
+      async outro({ page, stage, baseUrl }) {
+        // BACK TO THE QUEUE, because that is what the closing line is
+        // about. Left on the agents page it would be summarising the
+        // queue's columns over a table of people.
+        await stage.clickIt(page.getByRole('link', { name: 'Call queue' }).first(), {
+          after: 1200,
+        });
+        await page.waitForURL(`${baseUrl}/call-center/queue`, { timeout: 20_000 });
+        await page
+          .locator('.sk-tr', { hasText: 'imran.shaikh' })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3400);
+      },
+    },
+  },
 };

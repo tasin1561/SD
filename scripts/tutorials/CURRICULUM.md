@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 48 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I1 and P5.** The 42 left are all in the admin app: 2 are
+**90 tutorials. 49 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I1, I2 and P5.** The 41 left are all in the admin app: 2 are
 `impractical locally` and 29 touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,48 +32,82 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (48):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (49):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4** (the whole of section H) and
-**I1**. Every one has its own entry below saying what it covers and what its
+**I1–I2**. Every one has its own entry below saying what it covers and what its
 seeding does.
 
-**THE NEXT ENTRY IS I2 — "Supervising the queue".** Section H is complete and
-I1 is filmed. P5 was taken out of order on purpose (this document argues it should
+**THE NEXT ENTRY IS I3 — "Forcing an outcome on a stuck call".** It is the
+first DANGEROUS one in section I, and I2's world is most of what it needs: the
+force-outcome panel is the third button on every row of `/call-center/queue`,
+it is gated on `callcenter.queue.manage` (SUPER_ADMIN in the seeded roles, which
+`tutorial-ops` holds), and `seed-demo-data.mjs supervising-the-queue` already
+leaves five open entries to press it on. **What I3 must decide before a frame is
+shot is WHICH outcome it forces**, because every one of them is real: the panel
+routes through the same `CallAttemptService` an agent does, so the attempt is
+appended under the supervisor's id, the order moves by the ordinary mapping, and
+a forced CONFIRMED reserves stock and books a waybill (CUR-2b). A forced
+`WRONG_NUMBER` or `CUSTOMER_DECLINED` on one of the three `RSH-QUEUE-` orders is
+the cheap version and is the one to use — it is spent-and-remade in exactly the
+`RSH-CALL-` shape I1 uses, because the seed rebuilds those three on every run.
+Read I1's entry on what a spent order costs before writing it.
+
+P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
 [the recommendation](#the-recommendation) goes further: if the ops team never
 grows, P5 is worth making on its own and the rest are not); H1, H2, H4 and then
-H3 and then I1 followed. From here, work sections I–P as written, and read
-[the recommendation](#the-recommendation) first — they are 38 entries and this
+H3, I1 and I2 followed. From here, work sections I–P as written, and read
+[the recommendation](#the-recommendation) first — they are 37 entries and this
 document is explicit that they are a BET.
 
-**What I2 will need, measured on this box on 2026-10-01 rather than guessed.**
-I1's work left most of it in place, and two things about it are NOT obvious:
+**WHAT I2 ACTUALLY NEEDED, and the two things the note that stood here got
+wrong.** That note was written from the database rather than from the page, and
+both halves of it were wrong in the same way.
 
-- **There is already an ASSIGNED entry, and it is the one I1 left behind.**
-  `SD-2026-26-000326` (`RSH-STORE-RETURNED-1`, a `DELIVERY_FAILED` follow-up on
-  an order that has since been restocked) came out of I1's take holding
-  `pulls=2` — the release scene handed it back and the auto-advance took it
-  again before "Stop taking calls". So "an assigned entry" is free, but it is
-  the WRONG SHAPE for a video about a confirmation queue and it belongs to G6's
-  world; seed a deliberate one instead, by pulling a seeded confirmation call as
-  `tutorial-ops` and leaving it held.
-- **The agent roster is five rows and four are debris.**
-  `sim-staff-1790671328532@skydrop.local` and three like it, left by
-  `scripts/sim-e2e.ts`, sit beside `tutorial-ops` on `/call-center/agents` — and
-  that page's whole subject is "who is on, what they are holding". Reassign also
-  needs somewhere to reassign TO. **Seed one well-named second agent** (a
-  `staff_users` row with the call-agent role plus an `agent_call_settings` row —
-  `ensureOps` is the pattern) rather than reassigning to a timestamp. Deleting
-  the sim accounts is NOT a filming task: they hold call attempts.
-- **Both writes are seedable-back.** Reassign moves `assigned_agent_id` and
-  Reschedule moves `available_at` behind a reason of at least five characters
-  (`MIN_RESCHEDULE_REASON`), and neither touches the attempt count on purpose —
-  the panel's own comment says reaching for force-outcome to move a call records
-  a conversation nobody had, which is I3's subject and is worth quoting.
-- **The queue list opens on `OPEN`, not on everything** — a `COMPLETED` row is
-  the record of a finished attempt, and an order retried has one row per attempt
-  cycle, so the default keeps the history out of the live view. Read what the
-  LIST opens on before writing what the video does to it.
+- **It said "the agent roster is five rows and four are debris". The roster was
+  EMPTY.** `AdminAgentService.listAgents` selects `staff_users` by the LEGACY
+  `role` enum being `CALL_AGENT`, and not one of this box's 39 staff users
+  carried it — every `sim-staff-*` account is a SUPER_ADMIN. The five rows are
+  `agent_call_settings`, which is a DIFFERENT TABLE and is not what that page
+  reads. So `/call-center/agents` rendered "No call agents", and — far worse for
+  a video about moving work between people — the **Reassign dropdown had nobody
+  in it**, because it lists `useAgents()` filtered to available. **Read the
+  SCREEN, not the table you think it reads.**
+- **It said "there is already an ASSIGNED entry". There was not** — the queue
+  held two PENDING rows and nothing else, I1's seeding having released what its
+  take left behind. Which is the correct behaviour and exactly why the note went
+  stale between being written and being acted on.
+- **And a THIRD thing nothing warned about: the presence sweep runs EVERY
+  MINUTE.** `AgentPresenceService.sweep` stands down any agent who is AVAILABLE
+  with a `lastSeenAt` older than `ops.agent_presence_timeout_minutes` (10) — or
+  null — and hands back whatever they were holding. A seeded available agent is
+  therefore gone inside sixty seconds unless `lastSeenAt` is stamped, and the
+  Reassign dropdown is empty again. The seed stamps it NOW, which is honest and
+  buys ten minutes. **Generate the voice before the take** if the clips are not
+  cached: that step is the only thing between the seed and the camera.
+
+So `superviseWorldFor` in `seed-demo-data.mjs` builds the whole thing: two real
+call agents upserted exactly as `ensureOps` upserts ops (the legacy enum AND the
+RBAC row together — one without the other is a staff user who either holds no
+permissions or is invisible to every screen that asks the enum), three
+confirmation calls placed and submitted, and one of them written ASSIGNED to the
+agent who is marked OFF. That last pairing is the story: `AgentSettingsService`
+does not release holds when somebody marks themselves unavailable, so an agent
+who closed their laptop keeps the customer's order — which is what
+`QueueIndex`'s own docstring names as the reason the screen exists.
+
+**Two things it does NOT do, each for a reason.** It does not PULL the
+assignment through `/agent/calls/next`: that would cost a login and arm CC-7's
+fifteen-minute expiry, which hands the row back part-way through a take that
+started late — a take failing on the scene AFTER the one that broke it. And it
+does not touch the two pre-existing stale entries; they are genuine
+DELIVERY_FAILED follow-ups and they give the "Waiting since" column a range
+(14h and 4h beside the seeded 5h, 3h and 39m) that three rows placed in one
+breath cannot.
+
+**"Reassign" renders only on an ASSIGNED row**, so the seed asserts there is
+EXACTLY ONE across the whole queue and the flow reaches for the button by name.
+That is the P5 lesson applied rather than re-learned.
 
 **What I1 needed, read from the code rather than guessed (2026-10-01) — kept
 here because I2 and I3 are about the same queue and inherit every one of them:**
@@ -126,13 +160,14 @@ P5 drove ten admin screens through it with no changes to the rig at all.
 
 **WHAT THE ADMIN VIDEOS COST, MEASURED:** P5 **1,032 credits** (89,000 → 87,968
 on the one configured key) for 13 scenes and 156 s, H1 **946** for 13 and 143 s,
-H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, and H3 **1,068** for
-14 and 180 s, and I1 **1,067** for 14 and 172 s — **6,129 for the six, or
-roughly a third each of the 1,200 the seller videos were costing**, because a
-tour writes shorter lines than a demonstration. Every pre-flight estimate was
-about 2× the real spend. The `--check` runs and the seed runs cost nothing, and
-there have been thirty. **Balance after this batch: 82,871 of 121,027** on the
-one configured key, which is eighty-odd more admin videos.
+H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, H3 **1,068** for
+14 and 180 s, I1 **1,067** for 14 and 172 s, and I2 **1,185** for 16 and 197 s —
+**7,314 for the seven, or roughly a third each of the 1,200 the seller videos
+were costing**, because a tour writes shorter lines than a demonstration. Every
+pre-flight estimate was about 2× the real spend (I2's said 2,695). The `--check`
+runs and the seed runs cost nothing, and there have been thirty-four.
+**Balance after this batch: 81,686 of 121,027** on the one configured key, which
+is seventy-odd more admin videos.
 
 **Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
 sellers`. That is the convention for H–P; the title card is the only place it
@@ -200,7 +235,7 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — THIRTY-FIVE so
+**Filming these screens is finding real bugs at a steady rate — THIRTY-SEVEN so
 far, plus seven in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -2334,12 +2369,64 @@ rebuilt and restarted before the take**, or the video would have filmed the
 defect that had just been fixed — the README's rule about restarting by the
 LISTENING pid, applied to a frontend.
 
-### I2. Supervising the queue · `needs demo data`
+### I2. Supervising the queue · **FILMED** — `supervising-the-queue.mp4`
 
 **Promise** — you can see what is waiting, who holds it, and move it.
-**Length** 3 min. **Prerequisites** I1. **Needs** an assigned entry.
-**Covers** `/call-center/queue`: reassign, reschedule, and `/call-center/agents`
-— who is on, how many calls each holds, and the capacity bump.
+**Length** 16 scenes, 3 min 17 s. **Prerequisites** I1. **Needs**
+`seed-demo-data.mjs supervising-the-queue`.
+**Covers** `/call-center/queue` — the four counts, why the list opens on OPEN
+rather than on everything, reading a row, the PICKED-UP column against the
+CALLED column, reassigning a stuck call, rescheduling one, and naming
+force-outcome as the thing that is not like the other two — then
+`/call-center/agents`: who is on, what they are holding against their cap, and
+raising a cap. It closes back on the queue, because the closing line is about
+the queue's columns and would otherwise be summarising them over a table of
+people.
+
+**THE PAIR OF COLUMNS IS THE WHOLE VIDEO.** "Pulls 1, Calls 0/3" is an entry
+somebody claimed and never rang, and before this screen existed nobody could see
+it at all — the entry sat assigned to whoever went home until CC-7's
+fifteen-minute timer noticed. Everything else on the page is in service of that
+one reading, which is why the narration spends a scene on it before touching
+anything.
+
+**Its seeding builds the world from nothing, because there was none** — see
+[Where to pick up](#where-to-pick-up) for what the note that stood there got
+wrong and why. Two call agents (`asha.pillai@skydrop.local`, marked OFF and
+holding the stuck call; `imran.shaikh@skydrop.local`, on and idle), three
+confirmation calls placed and submitted, one written ASSIGNED, and every agent's
+`lastSeenAt` stamped NOW so the one-minute presence sweep does not take the
+world away before the camera reaches it. `maxActiveCalls` goes back to 1 on every
+run, because the video raises it to three on camera and a second take opening on
+a cap already at three films a change that changes nothing.
+
+**Back-dated on purpose:** the three queue entries' `createdAt` is moved to 5h,
+3h and 39m, which is what the "Waiting since" column is computed from. Everything
+placed in one seed run is otherwise the same age, and a column where every row
+says "0m" teaches nothing about the column. The ORDERS keep their real
+timestamps; only the queue row moves, which is the thing on screen.
+
+**Three selector notes, one of them a general trap.**
+
+1. **Every dialog's header carries an X with `aria-label="Close"`**, so
+   `getByRole('button', { name: 'Close' })` inside one matches TWO and dies on
+   strict mode. The footer's is `.sk-dialog__foot` scoped. Same shape as I1's
+   `getByLabel('Outcome')` matching the "Record outcome" button: **in a dialog,
+   assume the word you want is also somewhere you did not think of.**
+2. **"Reschedule" and "Reassign" are each TWO buttons once the dialog is open** —
+   the row's and the dialog's submit. The row reach happens while the dialog is
+   shut; every later one is `getByRole('dialog')`-scoped.
+3. **The reschedule preset is "Tomorrow", not "In 1 hour"**, and that is a
+   gating decision rather than a story one: the Available column rounds to whole
+   minutes below an hour, so a preset of exactly sixty minutes lands on "59m" or
+   "1h" depending on where in the minute the click fell. A day out is "in 24h"
+   either way.
+
+**Two bugs found, both on the agent detail panel**, and the first was caught by
+the frame rather than by the check — see
+[Bugs found](#bugs-found-while-establishing-feasibility). apps/admin was rebuilt
+and restarted by its LISTENING pid before the take, or the video would have
+filmed the defect that had just been fixed.
 
 ### I3. Forcing an outcome on a stuck call · `needs demo data` · **dangerous**
 
@@ -3430,3 +3517,35 @@ field the head reads, and a rendered assertion passes on either.
 **apps/admin had to be REBUILT AND RESTARTED before the take**, or the video
 would have filmed the defect that had just been fixed — the README's rule about
 restarting by the LISTENING pid, applied to a frontend rather than to the API.
+
+**THE EIGHTH AND NINTH, on the agent detail panel, found by filming I2
+(2026-10-01).** One root, and the first of them is the interesting one because
+the CHECK PASSED and only the FRAME said so.
+
+The capacity field rendered
+`value={maxActiveCalls === '' ? String(agent.settings.maxActiveCalls) : maxActiveCalls}`,
+using the empty string as a sentinel for "not edited" — so **the field could not
+be EMPTIED.** Clearing it put the current cap straight back on the next render,
+and the next keystroke landed BESIDE that value rather than replacing it. The
+recorder cleared "1", typed "3", pressed Save capacity, and the row behind the
+panel read **"1 of 13"**. No error, no refusal, button perfectly enabled — a
+number nobody typed, saved. A supervisor raising a cap from 1 to 10 by
+backspacing first would have written 110.
+
+And the panel held the agent row it was OPENED with in `useState`, so after a
+successful save it still showed the old cap with its Save button enabled;
+pressing again re-sent the same value. Reading the live row out of the list
+(`openAgentId` + a `find`, rather than the row itself) fixes both: the field owns
+its own value, seeded by an effect keyed on the agent id so a background refetch
+cannot overwrite what somebody is typing, and the comparison the button is
+disabled on is made against what the server now holds.
+
+**`agent-capacity-field.test.tsx` pins both, and both were proved red first.**
+The tell for the first one is a single line — `expect(field).toHaveValue(null)`
+after `user.clear()` — which is the whole defect stated as an assertion.
+
+**This is the "a value that is CLOSE ENOUGH most of the time" shape again.** A
+one-digit cap edited by select-all-and-type works perfectly; it is only clearing
+first, or going past nine, that writes the wrong number. And a gate on "the save
+succeeded" would have passed: the PATCH really did succeed, with 13 in it.
+**A check proves a step was REACHED. Only the frame says what it reached.**
