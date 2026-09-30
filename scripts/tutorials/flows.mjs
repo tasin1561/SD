@@ -175,6 +175,25 @@ async function storeRequestRow(page, asked) {
 }
 
 /**
+ * The TRADING store, as its rows print it — the display name, because
+ * that is what every table on the reports page shows. Keep in step with
+ * `REQUEST_STORE` in seed-demo-data.mjs.
+ */
+const REQUEST_STORE_NAME = { full: 'Pune Silk Studio', display: 'Silk Studio' };
+
+/** What G7 sets on the auto-pause rule. Re-settable, so its own take never spends it. */
+const AUTO_PAUSE = { ratePercent: '25', minDecided: '15' };
+
+/** One store's scorecard row, found by name rather than by position. */
+async function storeScoreRow(page, name) {
+  const row = page.getByRole('row').filter({ hasText: name }).first();
+  await row.waitFor({ state: 'visible', timeout: 25_000 });
+  await row.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(700);
+  return row;
+}
+
+/**
  * The deal G4 publishes.
  *
  * The shares are a real-looking arrangement rather than round numbers
@@ -5079,6 +5098,170 @@ export const FLOWS = {
         // The BADGE, which is the first thing the line is about and the
         // one thing on this page that follows a person to every other.
         await stage.dwellOn(page.getByRole('link', { name: /^Waiting on you/ }).first(), 3400);
+      },
+    },
+  },
+
+  /**
+   * G7 — how the reseller stores are doing.
+   *
+   * It READS almost everything and writes exactly one thing: the
+   * auto-pause rule, which is the only control on a reports page. That
+   * write is idempotent and re-settable, so nothing here is spent by its
+   * own take and the world stands from one to the next.
+   *
+   * Rows are found by STORE NAME rather than by position. The scorecard
+   * lists every reseller store the seller has, in the service's own
+   * order, and the standing store G3–G5 configure sits in that table too
+   * — with nothing against it, which is the empty half this video is
+   * also about.
+   */
+  'how-your-stores-are-doing': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'open-reports'({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Reseller reports', exact: true }).first(),
+          { after: 1800 },
+        );
+        await page.waitForURL(/\/reseller-stores\/reports$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The header's own facts only render once the scorecards have
+        // answered — so this is the gate that proves the page has its
+        // numbers rather than that the route resolved.
+        const facts = page.locator('.rs-facts').first();
+        await facts.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(facts, 2600);
+      },
+
+      async cards({ page, stage }) {
+        await stage.dwellOn(page.locator('.rs-kpis').first(), 3600);
+      },
+
+      async coverage({ page, stage }) {
+        // The MARGIN card's own footer, which is the sentence being read
+        // out — "Lines we could price". A card that is merely present
+        // says nothing about whether the coverage rendered.
+        const foot = page.getByText('Lines we could price').first();
+        await foot.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(foot, 3400);
+      },
+
+      async window({ page, stage }) {
+        const dates = page.locator('.rs-dates').first();
+        await dates.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dates, 3000);
+      },
+
+      async 'scorecard-rates'({ page, stage }) {
+        // The WHOLE table, not one row: half the sentence is about the
+        // store with nothing settled, whose rates are dashes, and that is
+        // a different row from the one with the numbers.
+        const table = page.getByRole('table', { name: 'Scorecards' });
+        await table.waitFor({ state: 'visible', timeout: 25_000 });
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(table, 3800);
+      },
+
+      async 'margin-column'({ page, stage }) {
+        const row = await storeScoreRow(page, REQUEST_STORE_NAME.display);
+        // The coverage line under the margin — the one cell this scene
+        // is about, rather than the whole row again.
+        await stage.dwellOn(row.getByText(/cost known/).first(), 3400);
+      },
+
+      async ranking({ page, stage }) {
+        const note = page
+          .getByText(/Wallet credits less charges, less the cost of the goods delivered/)
+          .first();
+        await note.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(note, 3400);
+      },
+
+      async timing({ page, stage }) {
+        const table = page.getByRole('table', { name: 'Stores ranked by what they made you' });
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(table, 3800);
+      },
+
+      async 'transfer-revenue'({ page, stage }) {
+        const table = page.getByRole('table', { name: 'Transfer revenue by store' });
+        await table.waitFor({ state: 'visible', timeout: 25_000 });
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700);
+        await stage.dwellOn(table, 3800);
+      },
+
+      async 'auto-pause-open'({ page, stage }) {
+        const row = await storeScoreRow(page, REQUEST_STORE_NAME.display);
+        await stage.clickIt(row.getByRole('button', { name: 'Change' }).first(), { after: 1400 });
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Auto-pause' }).first();
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(dialog, 3200);
+      },
+
+      async 'auto-pause-fields'({ page, stage }) {
+        const dialog = page.getByRole('dialog').filter({ hasText: 'Auto-pause' }).first();
+        await stage.typeIn(
+          dialog.getByRole('textbox', { name: /Return rate above/ }).first(),
+          AUTO_PAUSE.ratePercent,
+          { clear: true, after: 600 },
+        );
+        await stage.typeIn(
+          dialog
+            .getByRole('textbox', { name: /parcels must have an outcome|Once at least/ })
+            .first(),
+          AUTO_PAUSE.minDecided,
+          { clear: true, after: 600 },
+        );
+        await stage.clickIt(dialog.getByRole('button', { name: 'Save', exact: true }).first(), {
+          after: 1600,
+        });
+        await dialog.waitFor({ state: 'hidden', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The rule LANDING is the proof, and the row prints it in its own
+        // words — "> 25% over 30d" where it read "Off".
+        const row = await storeScoreRow(page, REQUEST_STORE_NAME.display);
+        // The rate is printed to two decimals (`toFixed(2)` on the
+        // server), so "25% over" matches nothing at all — and a gate that
+        // matches nothing is a gate that fails on a save that worked.
+        const rule = row.getByText(`> ${AUTO_PAUSE.ratePercent}.00% over`).first();
+        await rule.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(rule, 3000);
+      },
+
+      async forecast({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('link', { name: 'Stock forecast', exact: true }).first(),
+          {
+            after: 1800,
+          },
+        );
+        await page.waitForURL(/\/reseller-stores\/stock-forecast$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const table = page.getByRole('table', { name: 'Stock forecast' });
+        await table.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(table, 3800);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.rs-kpis').first(), 3400);
       },
     },
   },

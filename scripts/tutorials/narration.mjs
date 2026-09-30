@@ -1765,6 +1765,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'how-your-stores-are-doing',
+    title: 'How your reseller stores are doing',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A reseller store is somebody else’s business selling your stock. You cannot run it for them — but you can see what it is doing to your goods and your money, and decide.',
+      },
+      {
+        id: 'open-reports',
+        say: 'Reseller reports, under Reselling. Two facts before anything else: how many stores you have, and the window everything below is measured over.',
+      },
+      {
+        id: 'cards',
+        say: 'Four figures across every store. How many orders they placed, how many units actually stayed with a customer, what those were worth to you, and how many stores are armed to pause themselves.',
+      },
+      {
+        id: 'coverage',
+        say: 'And read the line under the margin. It says how many of the lines it could put a cost against — because margin needs what you paid, and Skydrop shows you the coverage rather than a number that looks complete.',
+      },
+      {
+        id: 'window',
+        say: 'The window is yours to move, and days are counted in Indian time, the same as everything else on your account. Every figure on this page follows it.',
+      },
+      {
+        id: 'scorecard-rates',
+        say: 'Then a scorecard per store. The rates divide by orders whose outcome is actually known — so a store with nothing settled yet shows dashes rather than a flattering zero.',
+      },
+      {
+        id: 'margin-column',
+        say: 'Its own margin sits beside its coverage again, and then the store’s wallet balance — what that business owes you, or what you are holding for it, right now.',
+      },
+      {
+        id: 'ranking',
+        say: 'Underneath, the stores ranked. Read the note: this is the money that has actually moved on your wallet, less what the goods you delivered cost you.',
+      },
+      {
+        id: 'timing',
+        say: 'Which is why a store that has delivered can still show a loss. The goods have gone; the credit for them falls due on the timing in that store’s terms, and until it runs, only the charges are on your wallet.',
+      },
+      {
+        id: 'transfer-revenue',
+        say: 'The last table is that same money, opened up: what each store put on your wallet, what it took off, the net of the two, and the transfer value of everything it got delivered.',
+      },
+      {
+        id: 'auto-pause-open',
+        say: 'One thing on this page writes rather than reads. A store can be told to stop itself when too many of its parcels come back.',
+      },
+      {
+        id: 'auto-pause-fields',
+        say: 'Three numbers: the return rate you will not go past, how many parcels must have an outcome before it counts, and over how many days. Pausing stops new orders only — what is placed carries on.',
+      },
+      {
+        id: 'forecast',
+        say: 'And the other half of watching a store is watching what it is selling. Stock forecast turns recent sales into days of stock left, for every product any of your stores may sell.',
+      },
+      {
+        id: 'outro',
+        say: 'Under your own reorder threshold a product is flagged and you are told in-app once a week. Your own channel counts here too — your stores and your shop draw on the same shelf.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

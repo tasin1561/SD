@@ -33,9 +33,12 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (32):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
-F1, F2, F3, F5, G1–G6. Every one is listed in its own entry below with what it
+**Filmed so far (33):** A1–A6, B1, B2, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
+F1, F2, F3, F5, G1–G7. Every one is listed in its own entry below with what it
 covers and what its seeding does.
+
+**SECTION G IS COMPLETE**, and with it the whole of the reselling side of the
+seller app.
 
 **SECTION D IS COMPLETE.** D4 landed 2026-09-30 and brought the lifecycle to
 NINE parcels: it is the one video that SPENDS what it films — both of its
@@ -44,22 +47,26 @@ actions are irreversible — so it has its own `RSH-LIFE-SENDBACK` and
 unwound. Read D4's entry before filming anything else that presses a courier
 button.
 
-**The next entry is G7.** After it: E5, then B3/B4/B5/B6/B7 and C1/C2/C7, then
-section H onward.
+**The next entry is E5.** After it: B3/B4/B5/B6/B7 and C1/C2/C7, then section H
+onward.
 
-**G6 landed 2026-09-30 and built the whole store-order world**, which is most of
-what G7 needs: `storeRequestsWorldFor` in `seed-demo-data.mjs` opens a SECOND
-reseller store (`Pune Silk Studio`), signs its owner in, switches
-`reseller.orders_enabled` on for this seller, publishes and accepts terms,
-prices one product for it, and places three orders — one of them driven the
-whole way to OUT_FOR_DELIVERY through `driveOrderToOutForDelivery`, the new
-export on `lib/lifecycle.mjs`. **What G7 still needs is OUTCOMES**: its
-scorecards divide by orders whose fate is known, so at least one store order has
-to reach DELIVERED and one has to come back. Nothing in that world does yet —
-the delivery parcel is deliberately parked out for delivery for ever, because
-G6's take re-uses it. **Give G7 its OWN parcels rather than moving G6's**, for
-exactly the reason D4's entry gives: a video that spends another video's world
-is a video that breaks it.
+**E5 is the only entry in E with no seeding at all** and it is the one thing
+left in the seller app that needs a world nobody has built: a consignment
+RECEIVED and then BILLED with some of its units already shipped, so `/freight`
+shows a bill that is genuinely part-owed. C1's consignment seeding is its
+prerequisite and is itself unwritten — so whoever takes E5 is really taking C1
+first. `FRT-3`'s amortisation is what makes a bill part-owed, and
+`docs/consignment-two-leg.md` plus the CNS rules in CLAUDE.md are what it has to
+be built against.
+
+**The reselling world G6 and G7 built is in `seed-demo-data.mjs` under
+`tradingStoreWorld`** — a second reseller store (`Pune Silk Studio`), a signed-in
+store user, `reseller.orders_enabled` on for this seller, published and accepted
+terms, two priced products, an action policy, and five orders covering held
+requests, a delivered parcel and a returned one. `driveOrderThrough` on
+`lib/lifecycle.mjs` is the general driver those parcels go through. Anything
+later that needs a reseller store that TRADES should reuse that rather than
+build a third.
 
 **E5 is the only entry in E with no seeding at all**: it needs a consignment
 RECEIVED and then BILLED with some of its units shipped, so `/freight` shows a
@@ -1499,18 +1506,64 @@ The queue CRASHED outright as soon as any store asked for a change, taking the
 two working queues down with it; and one store appeared under two different
 names in one stack of tables.
 
-### G7. How your stores are doing · `needs demo data`
+### G7. How your stores are doing · **FILMED** — `how-your-stores-are-doing.mp4`
 
-**Promise** — you can see which store makes you money and stop one that is
-losing it.
-**Length** 3 min. **Prerequisites** G6.
-**Needs** stores with orders inside the window. Needs D0's lifecycle applied to
-store orders.
-**Covers** `/reseller-stores/reports`: scorecards over a date window, stores
-ranked by what they made you, and every margin figure carrying **how many lines
-it could price** rather than a bare number. Then the write hiding on a reports
-page — the **auto-pause rule**, which pauses a store above a return rate — and
-`/reseller-stores/stock-forecast`, days of stock left at the recent rate.
+**Promise** — you can see what each reseller store is doing to your goods and
+your money, and stop one that keeps sending them back.
+**Length** 3 min 04 s (14 scenes). **Prerequisites** G6.
+**Covers** `/reseller-stores/reports` — the four figures across every store, the
+per-store scorecards, the ranking, and the transfer revenue each store put on
+your wallet — then the one WRITE hiding on a reports page, the auto-pause rule,
+and finally `/reseller-stores/stock-forecast`.
+
+**Two of its scenes exist because the page is honest about what it does not
+know, and those are the ones worth keeping.**
+
+- **Coverage.** Every margin on this page carries how many of its lines it could
+  put a cost against, because a cost is not recorded for every line and a bare
+  rupee figure would read as complete (TRE-6's rule, applied to a store). The
+  seeding records a unit cost on ONE of the store's two products for exactly
+  that reason — through the goods receipt, which takes it per line, never
+  written onto the batch by hand.
+- **Why a store that has delivered can show a LOSS.** The ranking is "wallet
+  credits less charges, less the cost of the goods delivered", and under the
+  terms the seeding publishes both parties are credited three days after
+  delivery — so on the day it is filmed the goods have gone, the charges are on
+  the wallet and the credit is DUE rather than paid. The figure is negative and
+  it is correct. **This was left as it is rather than engineered away**: INSTANT
+  credit timing would have made it positive, but an order snapshots the terms it
+  was placed under (RS-4), so a box that had already traded could never be made
+  to agree with a fresh one — and a narration that is right on one box and wrong
+  on the other is worse than a number that needs a sentence. The sentence is the
+  scene, and it is the most useful thing in the video.
+
+**Its seeding shares G6's world and adds two parcels whose FATE IS KNOWN.** The
+scorecards divide by outcomes, never by orders placed (`reseller-scorecard.ts`),
+so G6's world alone — two cancels, one order waiting on a call and one parked out
+for delivery for ever — leaves four dashes where the rates should be. One order
+is driven all the way to DELIVERED and one through the returns bench to
+RTO_RESTOCKED, on two different products. Neither is ever answered or spent:
+**this take writes the auto-pause rule and touches no order at all**, which is
+what makes it re-takeable without a courier booking.
+
+**`driveOrderThrough` is the generalised form of G6's driver** (`lib/lifecycle.mjs`):
+the same call, the same box ritual, the same signed webhooks, plus whatever
+scans the caller names and optionally the returns bench. It can also pick a
+parcel up MID-ROAD — `MID_JOURNEY` — because its caller names a target several
+scans away and a run that died between two of them leaves a parcel it knows how
+to finish. Replaying a scan the order is already past costs nothing: TRK-4 drops
+it.
+
+**The seeding DELETES the auto-pause rule**, for the same reason G5's deletes the
+action policy: the page draws a missing row as "Off" and the dialog behind it
+falls back to Skydrop's own defaults, so removing it is not switching the rule
+off — it is putting the store back to one nobody has configured, which is what
+the take opens on and changes on camera.
+
+**Two things it deliberately does not do.** It does not engineer a stock
+shortage, so the forecast reads "Nothing to reorder" — the video explains what
+the flag means rather than staging one. And it names no figure the screen
+prints, which on a page that is nothing but figures took some care.
 
 ---
 

@@ -268,6 +268,27 @@ const STILL_CALLABLE = new Set(['PENDING_CONFIRMATION', 'CALL_NO_RESPONSE', 'CAL
 /** …and of those, the ones that have already been through the bench. */
 const ALREADY_DISPATCHED = new Set(['DISPATCHED']);
 
+/**
+ * Where a parcel can be picked up MID-ROAD and carried on to a later
+ * scan.
+ *
+ * `RESUMABLE_FROM` deliberately stops at DISPATCHED, because a run of
+ * `ensureLifecycleParcels` knows every parcel's whole story and any
+ * further state means one it should leave alone. `driveOrderThrough` is
+ * the other case: its caller names a target that is several scans away,
+ * so a run that died between two of them leaves a parcel these know how
+ * to finish. No stock, no money and no booking is touched by a scan the
+ * order is already past — TRK-4 drops it.
+ */
+const MID_JOURNEY = new Set([
+  'IN_TRANSIT',
+  'OUT_FOR_DELIVERY',
+  'DELIVERY_FAILED',
+  'RTO_INITIATED',
+  'RTO_IN_TRANSIT',
+  'RTO_RECEIVED',
+]);
+
 /** A parcel's line: one unit of a stocked SKU. */
 const LIFECYCLE_SKU = 'RSH-JAMDANI-IVORY';
 
@@ -1253,12 +1274,38 @@ async function raiseOverdueFlags(sellerId, staffToken, log) {
  * cannot carry forward from is NAMED and left rather than unwound.
  */
 export async function driveOrderToOutForDelivery({ orderId, staffToken, log }) {
+  return driveOrderThrough({
+    orderId,
+    staffToken,
+    log,
+    want: 'OUT_FOR_DELIVERY',
+    stages: ['IN_TRANSIT', 'OUT_FOR_DELIVERY'],
+  });
+}
+
+/**
+ * The general form: confirm, warehouse, and then whatever scans the
+ * caller asks for — optionally finishing at the returns bench.
+ *
+ * `stages` is the simulator's own vocabulary, exactly as
+ * `LIFECYCLE_PARCELS` uses it, and `receiveAndFinalize` is the warehouse
+ * leg a webhook may NOT drive (TRK-6): somebody has to physically have
+ * the carton before the conservation-critical finalize chain can run.
+ */
+export async function driveOrderThrough({
+  orderId,
+  staffToken,
+  log,
+  want,
+  stages,
+  disposition = null,
+}) {
   const sim = await assertSimulator();
   await reconcileStaleCallQueue(log);
 
   const before = await statusOf(orderId);
-  if (before === 'OUT_FOR_DELIVERY') return { moved: false, status: before };
-  if (before !== null && !RESUMABLE_FROM.has(before)) {
+  if (before === want) return { moved: false, status: before };
+  if (before !== null && !RESUMABLE_FROM.has(before) && !MID_JOURNEY.has(before)) {
     log(`  · order is ${before}, which this cannot carry forward from — left alone`);
     return { moved: false, status: before };
   }
@@ -1278,24 +1325,33 @@ export async function driveOrderToOutForDelivery({ orderId, staffToken, log }) {
   });
 
   const now = await statusOf(orderId);
-  const dispatched = ALREADY_DISPATCHED.has(now ?? '')
-    ? {
-        awb: (
-          await prisma.shipment.findFirstOrThrow({
-            where: {
-              orderShipments: { some: { orderId } },
-              deletedAt: null,
-              supersededAt: null,
-              awbNumber: { not: null },
-            },
-            select: { awbNumber: true },
-          })
-        ).awbNumber,
-      }
-    : await driveToDispatched(orderId, staffToken, log);
+  // Past the warehouse already? Then the waybill we just read IS the one
+  // on the road and the scans are all that is left. Replaying the whole
+  // stage list is safe either way: TRK-4 skips a scan whose target the
+  // order is already at, silently and by design.
+  const dispatched =
+    ALREADY_DISPATCHED.has(now ?? '') || MID_JOURNEY.has(now ?? '')
+      ? {
+          awb: (
+            await prisma.shipment.findFirstOrThrow({
+              where: {
+                orderShipments: { some: { orderId } },
+                deletedAt: null,
+                supersededAt: null,
+                awbNumber: { not: null },
+              },
+              select: { awbNumber: true },
+            })
+          ).awbNumber,
+        }
+      : await driveToDispatched(orderId, staffToken, log);
 
-  for (const stage of ['IN_TRANSIT', 'OUT_FOR_DELIVERY']) {
-    await advance(sim, dispatched.awb, stage);
+  for (const stage of stages) {
+    const [name, note] = Array.isArray(stage) ? stage : [stage, undefined];
+    await advance(sim, dispatched.awb, name, note);
+  }
+  if (disposition !== null) {
+    await receiveAndFinalize(dispatched.awb, staffToken, disposition);
   }
   return { moved: true, status: await statusOf(orderId), awb: dispatched.awb };
 }

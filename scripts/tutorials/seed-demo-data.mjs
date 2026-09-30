@@ -27,6 +27,7 @@ import { prisma, argon2 } from './lib/deps.mjs';
 import { MOCK_ROOT } from './lib/spaces-shim.mjs';
 import { API, call } from './lib/api.mjs';
 import {
+  driveOrderThrough,
   driveOrderToOutForDelivery,
   ensureLifecycleParcels,
   lifecycleReport,
@@ -53,7 +54,29 @@ const CATALOGUE = [
     sku: 'RSH-JAMDANI-IVORY',
     weightGrams: 450,
     valueInr: 2400,
-    qty: 60,
+    /**
+     * Raised from 60 when G7 landed, and the number matters less than
+     * the reason: `ensureStockedVariant` receives only the SHORTFALL, so
+     * on a box already holding 60 nothing would be received and the
+     * costed batch below would never exist. The bump buys one receipt
+     * that carries a cost; after it the target is met and nothing more
+     * happens. No narration names this figure.
+     */
+    qty: 72,
+    /**
+     * What the seller paid for one, which is what makes a MARGIN real —
+     * the reseller reports read `stock_batches.unitCostInr` (the picked
+     * batch, else the latest costed batch for the variant) and show a
+     * zero with "cost known 0 / N" when there is none. Recorded through
+     * the goods receipt, which takes it per line, rather than written
+     * onto the batch by hand.
+     *
+     * Deliberately on THIS product only: the reports page carries a
+     * coverage figure beside every margin precisely because a cost is
+     * not always known, and a world where every line is priced cannot
+     * show what a partial looks like.
+     */
+    costInr: 1150,
   },
   {
     name: 'Nakshi Kantha Throw',
@@ -266,6 +289,67 @@ export const REQUEST_STORE = {
   minRetailInr: '2400',
   maxRetailInr: '3200',
   suggestedRetailInr: '2800',
+  /**
+   * A SECOND product, added for G7 and deliberately WITHOUT a recorded
+   * unit cost (the first one has one — see `CATALOGUE`).
+   *
+   * Margin needs a cost, and the cost is not known for every line, which
+   * is why every margin figure on the reports page carries how many
+   * lines it could price. One costed product and one uncosted is what
+   * makes that figure read as a partial rather than as none or as all —
+   * and a page whose every number is complete cannot teach what an
+   * incomplete one looks like.
+   */
+  secondSku: 'RSH-KANTHA-BLUE',
+  secondTransferPriceInr: '1400',
+  secondMinRetailInr: '1900',
+  secondMaxRetailInr: '2600',
+  secondSuggestedRetailInr: '2200',
+};
+
+/**
+ * The two store orders whose FATE IS KNOWN — what G7's scorecards divide
+ * by. Built once and never spent: G7's take writes the auto-pause rule
+ * and touches no order.
+ */
+export const STORE_REPORT_ORDERS = {
+  delivered: {
+    family: 'RSH-STORE-DELIVERED',
+    want: 'DELIVERED',
+    sku: REQUEST_STORE.sku,
+    recipientName: 'Kavya Srinivasan',
+    phone: '+919845070044',
+    line1: '7, Langford Road',
+    line2: 'The blue gate beside the chemist',
+    postalCode: '560025',
+    stages: ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED'],
+  },
+  returned: {
+    family: 'RSH-STORE-RETURNED',
+    want: 'RTO_RESTOCKED',
+    sku: REQUEST_STORE.secondSku,
+    recipientName: 'Harish Kumar',
+    phone: '+919845070055',
+    line1: '21, Wheeler Road',
+    line2: 'Above the tailor, opposite the temple',
+    postalCode: '560005',
+    retailInr: REQUEST_STORE.secondSuggestedRetailInr,
+    stages: [
+      'IN_TRANSIT',
+      'OUT_FOR_DELIVERY',
+      ['NDR', 'Customer refused the parcel at the door'],
+      'RTO_INITIATED',
+      'RTO_IN_TRANSIT',
+    ],
+    // One unit, one verdict: it came back unopened and goes back on the
+    // shelf. A write-off would open a scrap ticket and make this parcel
+    // D6's subject as well as G7's.
+    disposition: {
+      condition: 'GOOD',
+      disposition: 'RESTOCK',
+      notes: 'Refused at the door, unopened and sellable.',
+    },
+  },
 };
 
 /**
@@ -315,6 +399,17 @@ export const STORE_REQUEST_ORDERS = {
 
 /** The videos that need the second store, its orders and their held requests. */
 const STORE_ORDER_SLUGS = new Set(['answer-what-a-store-asked']);
+
+/**
+ * …and the ones that need that store to have TRADED: parcels whose fate
+ * is known, so the scorecards have outcomes to divide by.
+ *
+ * A separate list rather than a flag on the one above, because the two
+ * are genuinely different costs: G6's world is three cheap orders and one
+ * driven parcel, and this adds two more full journeys, one of them
+ * through the returns bench.
+ */
+const STORE_REPORT_SLUGS = new Set(['how-your-stores-are-doing']);
 
 /**
  * What the CATALOGUE IMPORT video uploads. Keep in step with
@@ -556,6 +651,11 @@ async function ensureStockedVariant(sellerToken, staffToken, binId, item) {
           lineId: gr.lines[0].id,
           receivedQty: want,
           ...(binId === null ? {} : { putawayBinId: binId }),
+          // What it cost, where the fixture records one. It lands on the
+          // BATCH, which is where every margin in the product reads it
+          // from; an item with no `costInr` is received without one, on
+          // purpose.
+          ...(item.costInr === undefined ? {} : { unitCostInr: item.costInr }),
         },
       ],
     },
@@ -1486,8 +1586,29 @@ const RESELLER_ORDERS_KEY = 'reseller.orders_enabled';
  *     stand from one take to the next.
  */
 async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
-  if (!STORE_ORDER_SLUGS.has(slug ?? '')) return;
+  if (!STORE_ORDER_SLUGS.has(slug ?? '') && !STORE_REPORT_SLUGS.has(slug ?? '')) return;
   const log = (m) => console.log(m);
+  const world = await tradingStoreWorld(sellerId, sellerToken, staffToken, log);
+
+  if (STORE_ORDER_SLUGS.has(slug ?? '')) {
+    await ensureHeldCancel(sellerId, world.storeToken, world.variantId, log);
+    await ensureHeldChangeAndIssue(sellerId, world.storeToken, world.variantId, log);
+    await ensureHeldDeliveryAsk(sellerId, world.storeToken, staffToken, world.variantId, log);
+  }
+  if (STORE_REPORT_SLUGS.has(slug ?? '')) {
+    await ensureSettledStoreOrders(sellerId, world, staffToken, log);
+  }
+}
+
+/**
+ * The store that TRADES, and everything it needs before it can.
+ *
+ * Shared by G6 and G7 rather than built twice: they film two halves of
+ * one world — what the store has ASKED for, and how it has DONE — and
+ * two copies of this would be two places for the terms, the catalogue
+ * and the policy to drift apart.
+ */
+async function tradingStoreWorld(sellerId, sellerToken, staffToken, log) {
   const token = await sellerToken();
   const storeId = await ensureRequestStore(sellerId, token, log);
   const storeToken = await ensureStoreSession(storeId, log);
@@ -1506,7 +1627,7 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
   const variantId = await ensureStoreCatalogue(sellerId, storeId, token, log);
 
   // What the seller wants to see first — the G5 lesson applied. Only a
-  // task set to "ask me first" ever reaches this queue, so every row the
+  // task set to "ask me first" ever reaches G6's queue, so every row that
   // video films is a row this policy put there.
   await call(`/seller/reseller-stores/${storeId}/action-policy`, {
     method: 'PUT',
@@ -1521,10 +1642,7 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
       sendBack: 'ASK_SELLER',
     },
   });
-
-  await ensureHeldCancel(sellerId, storeToken, variantId, log);
-  await ensureHeldChangeAndIssue(sellerId, storeToken, variantId, log);
-  await ensureHeldDeliveryAsk(sellerId, storeToken, staffToken, variantId, log);
+  return { storeId, storeToken, sellerTok: token, variantId };
 }
 
 /** The store itself, opened through the real endpoint (`initialStatusFor`). */
@@ -1748,13 +1866,17 @@ async function placeStoreOrder(sellerId, storeTok, variantId, spec, log) {
       recipientAddressLine2: spec.line2,
       recipientPostalCode: spec.postalCode,
       paymentMode: 'COD',
-      codAmountInr: REQUEST_STORE.suggestedRetailInr,
+      // The RETAIL the store sells at — per spec, because a store may
+      // sell two products and each has its own range; sending one
+      // product's suggestion for another is refused by name
+      // (`RETAIL_OUT_OF_RANGE`), which is the check doing its job.
+      codAmountInr: spec.retailInr ?? REQUEST_STORE.suggestedRetailInr,
       sellerOrderRef: `${spec.family}-${placed + 1}`,
       items: [
         {
           variantId,
           quantity: 1,
-          retailUnitPriceInr: Number(REQUEST_STORE.suggestedRetailInr),
+          retailUnitPriceInr: Number(spec.retailInr ?? REQUEST_STORE.suggestedRetailInr),
         },
       ],
     },
@@ -1916,6 +2038,144 @@ async function ensureHeldDeliveryAsk(sellerId, storeTok, staffToken, variantId, 
   });
   log(`  · the store has asked for ${order.orderNumber} to be sent back`);
 }
+
+/**
+ * G7's world: two store orders whose FATE IS KNOWN — one delivered, one
+ * come back and restocked.
+ *
+ * The scorecards divide by outcomes, not by orders (`reseller-scorecard.ts`:
+ * a delivery rate over delivered + returned + lost, never over everything
+ * placed), so a store whose parcels are all still moving has four dashes
+ * where its rates should be. G6's world leaves exactly that: two cancels,
+ * one order waiting on a call and one parked out for delivery for ever,
+ * because G6's take re-uses it.
+ *
+ * THESE TWO ARE NEVER ANSWERED, ANSWERABLE OR SPENT. G7's take writes one
+ * thing — the auto-pause rule — and touches no order at all, so the pair
+ * is built once and stands. They are also the most expensive rows in this
+ * file: a courier booking, a warehouse run and a full set of scans each,
+ * and the returned one goes through the returns bench as well. Idempotent
+ * and forward-only, exactly as the D0 parcels are.
+ *
+ * TWO DIFFERENT PRODUCTS, ON PURPOSE. Margin needs a unit cost, and the
+ * cost is not known for every line — which is why every margin figure on
+ * that page carries how many lines it could price (TRE-6's rule applied
+ * to a store). One product is received WITH a cost and one without, so
+ * the coverage figure reads one of two rather than none of two or all of
+ * them: a partial, which is the state the column exists for.
+ */
+async function ensureSettledStoreOrders(sellerId, world, staffToken, log) {
+  const second = await ensureSecondStoreProduct(sellerId, world, log);
+
+  /*
+    G7 SAVES the auto-pause rule on camera, so the row it opens on must
+    read "Off" — and the dialog behind it must open on Skydrop's own
+    defaults rather than on the last take's figures. Deleting the row is
+    exactly right rather than merely convenient: the page draws a missing
+    row AS "Off" and the dialog falls back to the defaults, so removing
+    it is not switching the rule off, it is putting the store back to one
+    nobody has configured. The same shape as G5's action policy.
+  */
+  const rule = await prisma.resellerStoreAutoPause.deleteMany({
+    where: { storeId: world.storeId },
+  });
+  if (rule.count > 0) {
+    log('  · removed a previous take’s auto-pause rule');
+  }
+
+  for (const spec of [STORE_REPORT_ORDERS.delivered, STORE_REPORT_ORDERS.returned]) {
+    const variantId = spec.sku === REQUEST_STORE.sku ? world.variantId : second;
+    if (variantId === null) {
+      log(`  · no ${spec.sku} for this seller — skipping ${spec.family}`);
+      continue;
+    }
+    let order = await newestStoreOrder(sellerId, spec.family);
+    if (order !== null && order.status !== spec.want) {
+      if (SETTLED_UNREACHABLE.has(order.status)) {
+        log(
+          `  · ${order.sellerOrderRef} is ${order.status}, not ${spec.want} — a fresh one follows`,
+        );
+        order = null;
+      }
+    }
+    if (order === null) {
+      order = await placeStoreOrder(sellerId, world.storeToken, variantId, spec, log);
+    }
+    if (order.status === spec.want) {
+      log(`  · ${order.sellerOrderRef} is already ${spec.want}`);
+      continue;
+    }
+    console.log(`\nDriving ${spec.family} to ${spec.want} (this takes a minute)…`);
+    const out = await driveOrderThrough({
+      orderId: order.id,
+      staffToken,
+      log,
+      want: spec.want,
+      stages: spec.stages,
+      disposition: spec.disposition ?? null,
+    });
+    if (out.status !== spec.want) {
+      throw new Error(`${spec.family} is ${out.status}, not ${spec.want}.`);
+    }
+    log(`  · ${order.orderNumber} → ${out.status}`);
+  }
+}
+
+/**
+ * A SECOND product on the store's shelf, deliberately without a recorded
+ * unit cost.
+ *
+ * `ensureStockedVariant` receives the first one WITH a cost (see
+ * `CATALOGUE`), so the reports page can show a real margin; this one has
+ * none, so the coverage figure beside that margin reads a partial rather
+ * than a full house. A page whose every figure is complete cannot teach
+ * what the incomplete ones look like.
+ */
+async function ensureSecondStoreProduct(sellerId, world, log) {
+  const variant = await prisma.productVariant.findFirst({
+    where: { skuCode: REQUEST_STORE.secondSku, product: { sellerId } },
+    select: { id: true },
+  });
+  if (variant === null) return null;
+  await call(`/seller/reseller-stores/${world.storeId}/catalogue/${variant.id}`, {
+    method: 'PUT',
+    token: world.sellerTok,
+    body: {
+      enabled: true,
+      priceOverride: {
+        transferPriceInr: REQUEST_STORE.secondTransferPriceInr,
+        minRetailInr: REQUEST_STORE.secondMinRetailInr,
+        maxRetailInr: REQUEST_STORE.secondMaxRetailInr,
+        suggestedRetailInr: REQUEST_STORE.secondSuggestedRetailInr,
+      },
+      stockMode: 'SHARED',
+      hiddenPercent: 0,
+    },
+  });
+  log(`  · ${REQUEST_STORE.secondSku} is on "${REQUEST_STORE.storeName}"’s shelf too`);
+  return variant.id;
+}
+
+/**
+ * States a settled parcel cannot be carried on from, so a NEW one is
+ * built instead.
+ *
+ * Everything else is resumed where it stands — these two are expensive
+ * and are never rewound. A parcel that reached a different terminal
+ * (cancelled, rejected, written off) is not the row G7 needs and cannot
+ * be turned into it, so it is left exactly as it is and replaced.
+ */
+const SETTLED_UNREACHABLE = new Set([
+  'CANCELLED',
+  'CANCELLED_BY_ADMIN',
+  'REJECTED_BY_CUSTOMER',
+  'REJECTED_NDR',
+  'RTO_DAMAGED',
+  'LOST_IN_TRANSIT',
+  'OUT_OF_STOCK',
+  'DELIVERED',
+  'RTO_RESTOCKED',
+]);
 
 /**
  * States the delivery parcel can be carried forward from.
