@@ -544,8 +544,20 @@ export function CallCenterStation(): ReactElement {
                   call. It counts claims rather than conversations —
                   an expiry and re-pull raises it without anyone
                   having phoned — so it is worded as such. */}
-              Order <span className="sk-ident">{assignment.orderId}</span> · pull #
-              <span className="sk-figure">{assignment.scheduledAttempts}</span>
+              {/* The NUMBER, not the uuid. This line read
+                  "Order 01a0f2a6-4f66-7bb0-9657-872a6237734b" while the
+                  panel a few centimetres below it said
+                  SD-2026-26-000365 — two identifiers for one order, and
+                  the unreadable one on top, on a screen somebody is
+                  reading with a phone ringing. The id is what the
+                  assignment carries; the number is what the order
+                  snapshot carries, so it falls back only when the order
+                  vanished under the entry. */}
+              Order{' '}
+              <span className="sk-ident">
+                {assignment.order?.orderNumber ?? assignment.orderId}
+              </span>{' '}
+              · pull #<span className="sk-figure">{assignment.scheduledAttempts}</span>
             </span>
           </div>
 

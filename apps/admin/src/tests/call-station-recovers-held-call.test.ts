@@ -55,4 +55,23 @@ describe('call-centre station', () => {
     // "attempt #2" on an agent's first call.
     expect(src).not.toMatch(/scheduledAttempts \+ 1/);
   });
+
+  /*
+    THE ORDER IS NAMED BY ITS NUMBER, NOT ITS UUID.
+
+    The card head read "Order 01a0f2a6-4f66-7bb0-9657-872a6237734b · pull
+    #1" while the recipient panel a few centimetres below said
+    SD-2026-26-000365 — two identifiers for one order on a screen an
+    agent reads with a phone already ringing, and the unreadable one on
+    top. The seventh place this defect has been found while filming.
+
+    Structural for the same reason as the rest of this file: what is
+    wrong is WHICH field the head reads, and a rendered assertion would
+    pass on either as long as some string appeared.
+  */
+  it('names the order by its number in the card head, never its uuid', () => {
+    const head = src.slice(src.indexOf('cc-call-head'), src.indexOf('CallPurposeBanner'));
+    expect(head).toContain('assignment.order?.orderNumber ?? assignment.orderId');
+    expect(head).not.toMatch(/sk-ident">\{assignment\.orderId\}/);
+  });
 });
