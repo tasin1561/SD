@@ -14,6 +14,7 @@ type AnyArgs = Record<string, unknown>;
 function makeSut(
   opts: {
     order?: AnyArgs | null;
+    orderNumber?: string | null;
     openRequest?: AnyArgs | null;
     attempt?: AnyArgs | null;
   } = {},
@@ -36,7 +37,15 @@ function makeSut(
   // the re-read after it behave like the real thing.
   let current: AnyArgs | null = null;
   const client: AnyArgs = {
-    order: { findFirst: async () => order },
+    order: {
+      findFirst: async () => order,
+      // The issue a courier refusal raises names the order to a PERSON,
+      // so it reads the number. Nullable on purpose: the fallback when
+      // the row cannot be read is the id, and that branch is tested too.
+      findUnique: jest.fn(async () =>
+        opts.orderNumber === null ? null : { orderNumber: opts.orderNumber ?? 'SD-2026-26-000404' },
+      ),
+    },
     orderDeliveryActionRequest: {
       findFirst: jest.fn(async () => opts.openRequest ?? null),
       findMany: async () => [],
@@ -444,5 +453,44 @@ describe('DeliveryActionService — final writes are guarded on APPROVED (2026-0
         title: 'A reseller store asked to return a parcel and the courier refused',
       }),
     );
+  });
+
+  /*
+    THE ISSUE BOARD'S JOB IS TO SAY WHICH ORDER NEEDS A PERSON, and this
+    one said `order 01a0f016-4863-7b76-85f2-df0e319f1a7f`. Found by
+    filming `/system-issues` for H3 — the sixth place this defect has
+    turned up (the seller order list, a refund's ledger note, and four
+    order-event notes were the others). A uuid cannot be typed into a
+    search box or read down a phone, and the card carries an "Open the
+    order" link already, so the id in the prose was pure noise.
+  */
+  it('names the order by its NUMBER on the issue board, never its uuid', async () => {
+    const sut = makeSut({ orderNumber: 'SD-2026-26-000404' });
+    sut.cancelWithCourier.mockResolvedValueOnce({
+      success: false,
+      awbNumber: 'AWB1',
+      message: 'waybill not found',
+    });
+    await sut.svc.request({ ...BASE, action: DeliveryActionKind.RTO });
+    const raised = (sut.issues.raise as jest.Mock).mock.calls.at(-1)?.[0] as {
+      detail: string;
+      metadata: { orderId: string };
+    };
+    expect(raised.detail).toContain('order SD-2026-26-000404 was refused');
+    expect(raised.detail).not.toContain('o1');
+    // The id stays in the metadata, which is where the deep link reads it.
+    expect(raised.metadata.orderId).toBe('o1');
+  });
+
+  it('falls back to the id when the order row cannot be read', async () => {
+    const sut = makeSut({ orderNumber: null });
+    sut.cancelWithCourier.mockResolvedValueOnce({
+      success: false,
+      awbNumber: 'AWB1',
+      message: 'waybill not found',
+    });
+    await sut.svc.request({ ...BASE, action: DeliveryActionKind.RTO });
+    const raised = (sut.issues.raise as jest.Mock).mock.calls.at(-1)?.[0] as { detail: string };
+    expect(raised.detail).toContain('order o1 was refused');
   });
 });

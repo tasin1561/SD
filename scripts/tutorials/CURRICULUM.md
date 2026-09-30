@@ -6,9 +6,9 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 42 filmed — sections A to G, which is the WHOLE SELLER APP.**
-The 48 left are all in the admin app: 2 are `impractical locally` and 29 touch
-something dangerous. Sections A–G are the seller app, H–P the admin app; the
+**90 tutorials. 47 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H and P5.** The 43 left are all in the admin app: 2 are
+`impractical locally` and 29 touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
 **Ninety is a large number and it is meant to be read as one.** It is what
@@ -32,33 +32,47 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (46):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1**, **H2** and **H4** on the admin
-side. Every one has its own entry below saying what it covers and what its
+**Filmed so far (47):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5** and **H1–H4**, which is the whole of
+section H. Every one has its own entry below saying what it covers and what its
 seeding does.
 
-**THE NEXT ENTRY IS H3 — "Things the system has raised", the one gap left in
-section H.** P5 was taken out of order on purpose (this document argues it
-should be the first admin tutorial anybody watches, and
+**THE NEXT ENTRY IS I1 — "Taking calls", the first of section I.** Section H is
+complete. P5 was taken out of order on purpose (this document argues it should
+be the first admin tutorial anybody watches, and
 [the recommendation](#the-recommendation) goes further: if the ops team never
-grows, P5 is worth making on its own and the rest are not); H1, H2 and H4
-followed. H4 was taken before H3 because it is `ready` and H3 is not. From here,
-work sections I–P as written, and read
-[the recommendation](#the-recommendation) first — they are 40 entries and this
+grows, P5 is worth making on its own and the rest are not); H1, H2, H4 and then
+H3 followed. From here, work sections I–P as written, and read
+[the recommendation](#the-recommendation) first — they are 39 entries and this
 document is explicit that they are a BET.
 
-**H3 is the first admin entry whose world does NOT already exist.** Nothing on
-this box raises a system issue on its own schedule, so its seeding has to make
-them — `SystemIssueService.raise` is the only writer, the sweeps that call it
-are hourly, and a row written by hand would skip the notification NOTIF-16 sends
-on a NEW issue (and skipping it is arguably right for a seed: the alternative is
-a tutorial run that mails somebody). Read H3's entry and NOTIF-16 before
-choosing. **An easier route exists and is worth trying first**: several sweeps
-raise real issues against state that IS seedable —
-`OrderAttentionService.checkStalledReturns` wants an EXECUTED RTO request with no
-return scan, and `checkLiveWaybills` wants a voided shipment still holding a
-waybill, which a cancel after confirmation produces. Driving the sweep is more
-honest than writing the row.
+**What I1 will need, read from the code rather than guessed (2026-10-01).**
+Three things are NOT what its entry below assumes, and each would have cost a
+check run:
+
+- **The station AUTO-ADVANCES.** `CallCenterStation` pulls the next call on an
+  interval and again straight after an outcome, gated on availability and on
+  the tab being visible. So "pull next" is not a button the video presses —
+  **availability IS the control**, which is why `MyAvailability` sits at the top
+  of the station, and the narration has to say that rather than describe a
+  queue you ask for work from.
+- **The queue is nearly empty and two of its three entries are STALE.** There
+  are 3 PENDING `call_queue_entries` against 157 orders in
+  `PENDING_CONFIRMATION` (H1's entry explains the split), and two of the three
+  are `DELIVERY_FAILED` calls on orders that have since been returned and
+  restocked — so the station would open on a TICKET call, which has a different
+  vocabulary (one outcome, "Called", and the note is the answer) from the
+  CONFIRMATION call the video is about. `reconcileStaleCallQueue` in
+  `lib/lifecycle.mjs` deliberately does NOT touch those (its comment says why),
+  and `callThisOneFirst(orderId)` — same file — is the lever that puts a seeded
+  order at the head of the FIFO.
+- **It SPENDS what it films.** Recording `CONFIRMED` is append-only (CC-1),
+  reserves stock (ORD-10) and books a waybill (CUR-2b). So its seeding is the
+  `cancelWorldFor` shape — place and submit a fresh order under a stable
+  reference on every run, retire the spent one forward rather than rewinding
+  (the D4 / B7 rule) — plus a `call_agent_settings` row for `tutorial-ops`,
+  which has none: `MyAvailability` renders NOTHING for a staff user who is not a
+  call agent, so without it the station has no switch at all.
 
 **Every admin flow so far has `app: 'admin'` and nothing else special.** The
 three selector traps H2 hit are in its entry and are worth reading before
@@ -76,12 +90,12 @@ P5 drove ten admin screens through it with no changes to the rig at all.
 
 **WHAT THE ADMIN VIDEOS COST, MEASURED:** P5 **1,032 credits** (89,000 → 87,968
 on the one configured key) for 13 scenes and 156 s, H1 **946** for 13 and 143 s,
-H2 **1,044** for 14 and 159 s, and H4 **972** for 13 and 148 s — **3,994 for the
-four, or roughly a third each of the 1,200 the seller videos were costing**,
-because a tour writes shorter lines than a demonstration. Every pre-flight
-estimate was about 2× the real spend (2,344, 2,152, 2,370 and 2,207). The
-`--check` runs and the seed runs cost nothing, and there were twenty of them.
-**Balance after this batch: 85,006 of 121,027** on the one configured key,
+H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, and H3 **1,068** for
+14 and 180 s — **5,062 for the five, or roughly a third each of the 1,200 the
+seller videos were costing**, because a tour writes shorter lines than a
+demonstration. Every pre-flight estimate was about 2× the real spend. The
+`--check` runs and the seed runs cost nothing, and there have been two dozen.
+**Balance after this batch: 83,938 of 121,027** on the one configured key,
 which is eighty-odd more admin videos.
 
 **Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
@@ -150,7 +164,7 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — THIRTY-THREE so
+**Filming these screens is finding real bugs at a steady rate — THIRTY-FOUR so
 far, plus seven in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -2074,16 +2088,87 @@ ledger note), and it is worse here only in quantity. These are
 future events alone — it wants doing deliberately, at the five write sites, with
 the shipment NUMBER that already exists, not inside a filming session.
 
-### H3. Things the system has raised · `needs demo data`
+### H3. Things the system has raised · **FILMED** — `things-the-system-has-raised.mp4`
 
 **Promise** — you can work the system-issue queue and know which to act on
 first.
-**Length** 3 min. **Needs** seeded system issues at two severities; a failed
-auto-pickup and a stalled tracking issue are the natural pair.
-**Covers** `/system-issues`: severity with the word always on the chip, age,
-acknowledge versus resolve, and the deep links that take you to the screen that
-fixes the thing. "Notify unannounced" is shown and explained — it fans out real
-notifications, which is why it asks first.
+**Length** 14 scenes. **Prerequisites** H1. **Needs**
+`seed-demo-data.mjs things-the-system-has-raised`.
+**Covers** `/system-issues`: the three counts and the different questions they
+answer, worst-first with the severity as a WORD on the chip, the card body as
+the thing to read, the "Open the order" deep link, the source and age line,
+"I'm on it" (and what it pointedly does not do), a MEDIUM card as the contrast,
+the Close dialog's required note — cancelled, because that one clears itself —
+"Show closed too", and the "Notify unannounced" confirmation, also cancelled.
+
+**NOTHING IS WRITTEN BY HAND. The seeding runs the REAL sweep** — `POST
+/admin/nsa/sweep`, which is `OrderAttentionService.sweep`, the same call the
+hourly cron makes, under two seconds. So every card on camera was raised by the
+code that raises it in production, in production's words. A row written straight
+into `system_issues` would have skipped the notification NOTIF-16 sends on a new
+issue and carried whatever severity the seed felt like.
+
+**What the seeding then does is SUBTRACT.** The board here is 37 open and 25 of
+them are one issue repeated — `awb-label-missing`, because every parcel on this
+box is booked against the local courier SIMULATOR, which has no label endpoint
+at all ("The label was asked for again just now and failed: URL must use
+https"). That is a dev-box artifact, not a lesson, and left in place it buries
+the twelve that teach something — the exact failure the service's own comments
+warn about. They are CLOSED with a note rather than deleted, because a closed
+row is the record and "Show closed too" is a scene. **The closed history
+therefore grows by ~25 a take**; `list()` takes 200, so prune here if it ever
+gets near.
+
+**THE HOURLY SWEEP WILL RUIN A TAKE THAT STRADDLES IT, and it did.** The label
+leg raises those 25 again on the next tick, as FRESH rows. The second `--check`
+ran through minute 10 and its closing frame showed a board of thirty-seven where
+the opening frame showed twelve, cards moving under the camera the whole way —
+every step passed, and only the frame said so. `refuseNearTheSweep` in the
+seeding now REFUSES a run between minute 4 and minute 11 and says how long to
+wait, and the flow's `intro` gates on there being no label card at all, so a tick
+that lands anyway fails the take instead of filming it. **There is no honest
+alternative**: the candidate set is a pre-dispatch shipment with a waybill and no
+label, which those parcels genuinely are, and the only ways out are to store a
+label that does not exist or to back-date the waybill so the watchdog looks past
+it. **Eight minutes an hour is the price; pay it.**
+
+**The acknowledge scene works because the KPIs move and the card does not.**
+Pressing "I'm on it" takes "Nobody on it" from 12 to 11 and leaves "Open" at 12,
+which is the narration's whole claim — acknowledging is about people not
+colliding, closing is a statement about the problem. The gate is the CARD saying
+"being looked at", never the button: an `AsyncButton` rolls to "Noted" on its own
+timer, so a gate on the control passes whether or not the write landed.
+
+**The closing frame was wrong on the first check and the frame is what said so.**
+The history toggle was still on, so the video ended on a screen of CLOSED rows
+under a line about an empty page being the good outcome — true, and the wrong
+picture. `outro` clicks "Open only" first.
+
+**Cards are picked by their WORDS, never by position** (`issueCard` in
+`flows.mjs`). The board sorts by severity then by when each was last seen, and
+the sweep the seeding runs immediately beforehand bumps several to the same
+second — so which High card is third is a coin toss between runs, and an index
+would film a different problem each time while passing perfectly. The
+live-waybill card is the protagonist because it is the one kind here that carries
+an order link, and `checkLiveWaybills` raises nothing but HIGH, so the "high
+means money or parcels are affected now" line cannot be filmed over a Medium
+chip.
+
+**Two `Close` traps.** Every card carries a "Close" button AND the dialog's own X
+carries `aria-label="Close"`, so an unscoped name matches a dozen elements —
+`dialogFoot()` scopes the footer. "Notify unannounced" is both the header button
+and the confirm button of the dialog it opens, for the same reason.
+
+**One bug found and fixed** — the `seller-rto-refused` card said "The
+cancellation for order 01a0f016-4863-7b76-85f2-df0e319f1a7f was refused", naming
+an order by uuid on the one screen whose job is to say which order needs a
+person. Sixth instance of that defect. See
+[Bugs found](#bugs-found-while-establishing-feasibility). **The row already on
+this box predates the fix and still shows the uuid** (it is never bumped, and
+`raise` only re-states the detail on a recurrence); it is mid-board and no scene
+dwells on it. **Observed and NOT fixed:** `AwbGenerationWorker gave up on a job`
+carries a shipment uuid too, but that string is `err.message` from the worker's
+own throw and is genuinely engineer-facing.
 
 ### H4. The permission model · **FILMED** — `the-permission-model.mp4`
 
@@ -3202,3 +3287,25 @@ seller shell and IGNORED by the component that renders it. Both were written
 into entries above and then corrected against the source. It is the argument
 for deriving a curriculum from code rather than from a tour of the UI — and for
 re-deriving anything in it that is a number.
+
+**THE SIXTH PLACE AN ORDER IS NAMED BY ITS UUID, found by filming the issue
+board (2026-10-01).** `/system-issues` carried "A seller asked to return a parcel
+and the courier refused — The cancellation for order
+01a0f016-4863-7b76-85f2-df0e319f1a7f was refused: waybill not found", on the ONE
+screen whose entire job is to say which order needs a person. Not a rendering
+slip: `DeliveryActionService.executeRto` had `who.orderId` and nothing else, so
+the id went into the prose while the card's own "Open the order" link — which
+reads the same id out of `metadata` — sat two lines below it, unused by anybody
+reading the sentence. A uuid cannot be typed into a search box or read down a
+phone. Fixed by reading the order NUMBER on the refusal path (one query, and it
+falls back to the id rather than losing the issue), with the id left in
+`metadata` where the link wants it. Proved red on the old code first, and the
+spec covers both branches. **The row already on this box predates the fix and
+still shows the uuid**: the dedupe key is the request, nothing bumps it, and
+`raise` re-states a detail only on a recurrence — so this one will read the old
+way until a seller's send-back is refused again.
+
+**Observed and NOT fixed, same screen:** `AwbGenerationWorker gave up on a job`
+also carries a shipment uuid, but that string is `err.message` from the worker's
+own throw rather than prose written for a reader, and it is one of the few
+places on the board that is genuinely addressed to an engineer.

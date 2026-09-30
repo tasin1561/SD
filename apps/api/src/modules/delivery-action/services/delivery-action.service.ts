@@ -547,12 +547,20 @@ export class DeliveryActionService {
       // Name who actually asked: a reseller store's send-back is not the
       // seller's, and whoever picks this up rings a different party.
       const asker = who.store === undefined ? 'seller' : 'reseller store';
+      // The NUMBER, not the id. This lands on `/system-issues`, whose
+      // whole job is to say which order needs a person — and a uuid is
+      // not something anybody can type into a search box or read down a
+      // phone. The order is read here rather than carried through `who`
+      // because this is the refusal path and costs one query on it; a
+      // read that somehow fails falls back to the id rather than losing
+      // the issue.
+      const label = await this.orderLabel(who.orderId);
       await this.issues.raise({
         kind: SystemIssueKind.INTEGRATION,
         severity: SystemIssueSeverity.HIGH,
         title: `A ${asker} asked to return a parcel and the courier refused`,
         detail:
-          `The cancellation for order ${who.orderId} was refused: ${message}\n\n` +
+          `The cancellation for order ${label} was refused: ${message}\n\n` +
           `The ${asker} has been told it did not go through, but they are expecting this parcel ` +
           'back. Someone needs to either cancel it by hand in the courier portal or tell them ' +
           'why it cannot be returned — the parcel is still out for delivery until then.',
@@ -561,6 +569,23 @@ export class DeliveryActionService {
         metadata: { requestId, orderId: who.orderId, sellerId: who.sellerId, error: message },
       });
       return failed;
+    }
+  }
+
+  /**
+   * How to NAME an order to a person: its number, or its id if the row
+   * cannot be read. Never throws — every caller is already inside a
+   * failure path.
+   */
+  private async orderLabel(orderId: string): Promise<string> {
+    try {
+      const order = await this.prisma.client.order.findUnique({
+        where: { id: orderId },
+        select: { orderNumber: true },
+      });
+      return order?.orderNumber ?? orderId;
+    } catch {
+      return orderId;
     }
   }
 

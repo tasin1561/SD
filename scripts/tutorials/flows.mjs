@@ -880,6 +880,25 @@ function ooSection(page, title) {
     .first();
 }
 
+/**
+ * One card on the system-issue board, by words that are IN it.
+ *
+ * Never by position. The board is sorted by severity and then by when
+ * each was last seen, and the sweep the seeding runs immediately before
+ * a take bumps several of them to the same second — so which High card
+ * is third is a coin toss between runs, and an index would film a
+ * different problem each time while passing perfectly.
+ */
+function issueCard(page, re) {
+  return page.locator('li.af-qcard').filter({ hasText: re }).first();
+}
+
+/** The dialog's own footer. Its X carries `aria-label="Close"` and every
+ *  card carries a "Close" button, so an unscoped name matches several. */
+function dialogFoot(page) {
+  return page.locator('.sk-dialog__foot').first();
+}
+
 function attnCard(page, area) {
   return page.locator('.db-attn').filter({ hasText: area }).first();
 }
@@ -7481,6 +7500,206 @@ export const FLOWS = {
 
       async outro({ page, stage }) {
         await stage.dwellOn(page.locator('table').first(), 3400);
+      },
+    },
+  },
+
+  'things-the-system-has-raised': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/system-issues`, { waitUntil: 'domcontentloaded' });
+        /*
+          GATED ON A CARD, NOT ON THE HEADER. The header, the loading
+          skeleton and the "Nothing needs you" empty state all render
+          within a frame of each other, so waiting for the heading proves
+          only that the route resolved — and an empty board is a page
+          this video has nothing to say about. `networkidle` is not the
+          answer either: it is what cost H1 a thirty-second wait.
+        */
+        await issueCard(page, /is still live/).waitFor({ state: 'visible', timeout: 25_000 });
+        /*
+          AND THE BOARD IS THE CURATED ONE. The hourly sweep raises a
+          fresh issue per pre-dispatch waybill with no label — twenty-five
+          on this box — and the seeding closes them so the twelve that
+          teach something are readable. If a tick has landed since, the
+          take would film a board three times the size with cards moving
+          under the camera, and pass. `refuseNearTheSweep` in the seeding
+          keeps a run out of that window; this is the half that notices
+          when it happened anyway.
+        */
+        await issueCard(page, /no shipping label stored/).waitFor({
+          state: 'detached',
+          timeout: 5_000,
+        });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async why({ page, stage }) {
+        const line = page.getByText(/could not fix by itself/).first();
+        await line.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(line, 3400);
+      },
+
+      async counts({ page, stage }) {
+        await stage.dwellOn(page.locator('.af-kpis').first(), 3400);
+      },
+
+      async severity({ page, stage }) {
+        // The LIVE WAYBILL card is the one the next five scenes are
+        // about, and it is High by construction (checkLiveWaybills
+        // raises nothing else), so the narration's "high means money or
+        // parcels are affected now" cannot be filmed over a Medium chip.
+        await stage.dwellOn(
+          issueCard(page, /is still live/)
+            .locator('.si-head')
+            .first(),
+          3200,
+        );
+      },
+
+      async detail({ page, stage }) {
+        const body = issueCard(page, /is still live/)
+          .locator('.si-detail')
+          .first();
+        // The MONEY sentence, which is what the narration claims. An
+        // issue whose detail were ever reworded should fail the check
+        // rather than film prose that no longer says it.
+        await body
+          .filter({ hasText: /credits it back/ })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(body, 4000);
+      },
+
+      async link({ page, stage }) {
+        await stage.dwellOn(
+          issueCard(page, /is still live/)
+            .getByRole('link', { name: 'Open the order' })
+            .first(),
+          3200,
+        );
+      },
+
+      async meta({ page, stage }) {
+        await stage.dwellOn(
+          issueCard(page, /is still live/)
+            .locator('.si-meta')
+            .first(),
+          3600,
+        );
+      },
+
+      async acknowledge({ page, stage }) {
+        const card = issueCard(page, /is still live/);
+        // The accessible name is the IDLE label — AsyncButton's rolling
+        // strip is aria-hidden, so the other three words never reach a
+        // role query.
+        await stage.clickIt(card.getByRole('button', { name: /I.m on it/ }).first(), {
+          after: 1200,
+        });
+        /*
+          GATED ON THE CARD SAYING SOMEBODY HAS IT, never on the button.
+          An AsyncButton rolls to "Noted" on its own timer, so a gate on
+          the control passes whether or not the write landed — and this
+          scene's whole claim is that the board now records a person.
+        */
+        await card.getByText(/being looked at/).waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(card.locator('.si-actions').first(), 3400);
+      },
+
+      async medium({ page, stage }) {
+        const card = issueCard(page, /stale exchange rate/);
+        await card.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(card.locator('.si-detail').first(), 3800);
+      },
+
+      async closedialog({ page, stage }) {
+        await stage.clickIt(
+          issueCard(page, /stale exchange rate/)
+            .getByRole('button', { name: 'Close', exact: true })
+            .first(),
+          { after: 1200 },
+        );
+        await page
+          .locator('.sk-dialog__title')
+          .filter({ hasText: 'Close this issue' })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        // The hint under the box is the line the narration quotes.
+        const hint = page.getByText(/it is the record/).first();
+        await hint.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-dialog__body').first(), 3600);
+      },
+
+      async cancelclose({ page, stage }) {
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: 'Cancel' }).first(), {
+          after: 1200,
+        });
+        await page
+          .locator('.sk-dialog__title')
+          .filter({ hasText: 'Close this issue' })
+          .waitFor({ state: 'detached', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(issueCard(page, /stale exchange rate/).locator('.si-detail'), 3000);
+      },
+
+      async history({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Show closed too' }).first(), {
+          after: 1400,
+        });
+        // A CLOSED row, not merely the button flipping — the toggle is
+        // client state and would read as done against an empty history.
+        const closed = page
+          .locator('.si-actions')
+          .filter({ hasText: /^closed / })
+          .first();
+        await closed.waitFor({ state: 'visible', timeout: 20_000 });
+        await closed.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(800);
+        await stage.dwellOn(closed, 3600);
+      },
+
+      async notify({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Notify unannounced' }).first(), {
+          after: 1400,
+        });
+        const consequence = page.locator('.sk-confirm__consequence').first();
+        await consequence.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(consequence, 3800);
+        // CANCELLED, never confirmed: it fans out a real notification per
+        // unannounced issue, to everybody the issue's audience names.
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: 'Cancel' }).first(), {
+          after: 1200,
+        });
+      },
+
+      async outro({ page, stage }) {
+        await page
+          .locator('.sk-confirm__consequence')
+          .waitFor({ state: 'detached', timeout: 20_000 });
+        /*
+          BACK TO THE OPEN BOARD before the closing line. The history
+          toggle is still on from two scenes ago, so the first take ended
+          on a screen of CLOSED rows under a sentence about an empty page
+          being the good outcome — true, and the wrong picture. Only the
+          frame said so; every step had passed.
+        */
+        await stage.clickIt(page.getByRole('button', { name: 'Open only' }).first(), {
+          after: 1200,
+        });
+        await page
+          .getByRole('button', { name: 'Show closed too' })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.af-kpis').first(), 3400);
       },
     },
   },

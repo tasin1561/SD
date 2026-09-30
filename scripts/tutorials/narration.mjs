@@ -2673,6 +2673,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'things-the-system-has-raised',
+    title: 'Things the system has raised',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Some failures break nothing you can see. A login expires, a nightly job stops running, and the only sign is a figure that quietly stops moving. Everything like that lands here.',
+      },
+      {
+        id: 'why',
+        say: 'The page says it in its own words. These are the things the system could not fix by itself, gathered in one place instead of left in a log nobody reads.',
+      },
+      {
+        id: 'counts',
+        say: 'Three numbers, answering three different questions. How many are open, how many nobody has claimed yet, and how many are urgent — which is the one to look at on a busy morning.',
+      },
+      {
+        id: 'severity',
+        say: 'They are sorted worst first, and the severity is a word on the chip and not only a colour. High means money or parcels are affected right now.',
+      },
+      {
+        id: 'detail',
+        say: 'The body of the card is the point of it. This one is a cancelled order whose waybill was never cancelled with the courier — so the courier charged for it, has not credited it back, and could still collect the box.',
+      },
+      {
+        id: 'link',
+        say: 'Where an issue is about one order, it links straight to it. You are not meant to copy anything out of here: the card takes you to the screen that fixes the thing.',
+      },
+      {
+        id: 'meta',
+        say: 'Underneath, three facts. Which part of the system said it, when it was first seen, and how often. Seen once is usually one bad row. Seen every hour for days is not going to fix itself.',
+      },
+      {
+        id: 'acknowledge',
+        say: 'I am on it records that somebody is chasing it, so two people do not ring the same courier. Now read what it did not do. The issue is still open, because the problem is still there.',
+      },
+      {
+        id: 'medium',
+        say: 'Further down, a different kind of wrong. Nothing is broken; an exchange rate has not been touched in a while and fees are being priced from it. Medium means stopped, and staying stopped.',
+      },
+      {
+        id: 'closedialog',
+        say: 'Closing asks what was done, and insists on a few words, because that note is the record. Acknowledging is about people not colliding. Closing is a statement about the problem.',
+      },
+      {
+        id: 'cancelclose',
+        say: 'And this one gets cancelled, on purpose. Its own text says it clears itself once the rate is set. Closing by hand is for the ones that genuinely needed a person.',
+      },
+      {
+        id: 'history',
+        say: 'Show closed too brings back the ones already dealt with, each carrying when it closed and the note somebody left. Nothing is deleted here — a closed issue is the record that it happened.',
+      },
+      {
+        id: 'notify',
+        say: 'Last, the button that reaches people. It sends a notification for every open issue nobody was ever told about, so it asks first and says what it is about to do. Cancel.',
+      },
+      {
+        id: 'outro',
+        say: 'So: worst first, read the body, claim it so nobody duplicates you, and close it only when it needed you. An empty page here is the good outcome, not a missing feature.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

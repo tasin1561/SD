@@ -1100,6 +1100,177 @@ async function settleOneCodForLedger(sellerId, staffToken) {
  * The return AT OUR DOOR is not here — it is `RSH-LIFE-ATDOOR` in D0,
  * because it is a parcel and parcels are built there.
  */
+/**
+ * H3's world: the system-issue board, made REAL and made readable.
+ *
+ * ── WHY IT DRIVES THE SWEEP RATHER THAN WRITING ROWS ─────────────────
+ * `SystemIssueService.raise` is the only writer, and a row inserted by
+ * hand skips the notification NOTIF-16 sends on a NEW issue — so a
+ * hand-written board is one the product could never have produced. It
+ * would also carry whatever severity and wording the seed felt like,
+ * which is the opposite of a tutorial's job.
+ *
+ * `POST /admin/nsa/sweep` runs the SAME sweep the hourly cron runs
+ * (`OrderAttentionService.sweep`) — every check, against real state. So
+ * each card on camera was raised by the code that raises it in
+ * production, saying what it says in production. On this box it takes
+ * under two seconds.
+ *
+ * ── WHY IT THEN CLOSES TWENTY-ODD OF THEM ────────────────────────────
+ * The board here is ~37 open, and 25 of those are one issue repeated:
+ * `awb-label-missing`, because every lifecycle parcel is booked against
+ * the local courier SIMULATOR, which has no label endpoint at all. That
+ * is a dev-box artifact, not a lesson — a real deployment does not have
+ * twenty-five of them — and left in place it buries the twelve that
+ * teach something, which is the exact failure the service's own comments
+ * warn about ("alerts like that bury the ones that matter").
+ *
+ * They are CLOSED, with a note saying why, rather than deleted: the
+ * board's whole contract is that a row stays until a person closes it,
+ * and "Show closed too" is a scene in the video. A future run's sweep
+ * raises them again as fresh rows and closes them again, so the closed
+ * history grows by ~25 a take. Harmless for a long while; `list()` takes
+ * 200, so if the history ever reaches that, prune it here.
+ *
+ * ── WHAT THE TAKE WRITES, AND WHAT PUTS IT BACK ──────────────────────
+ * The video presses "I'm on it" on one card and opens the Close dialog
+ * on another WITHOUT closing it (a closed issue would have to be
+ * re-opened, and re-opening is a rewind — the D4 rule). So the only
+ * thing to undo is the acknowledgement, which is cleared below on every
+ * open issue, not just the one filmed: whichever card the flow picks,
+ * the board starts with nobody on anything.
+ */
+const SYSTEM_ISSUE_SLUGS = new Set(['things-the-system-has-raised']);
+
+/** The dedupe-key prefix of the issue the video films first. */
+const LIVE_WAYBILL_PREFIX = 'live-waybill:';
+
+/** Why the label noise is closed. It is on camera under "Show closed too". */
+const LABEL_NOISE_NOTE =
+  'Booked against the local courier simulator, which serves no label — there was never one to ' +
+  'store.';
+
+async function openIssuesWithPrefix(prefix) {
+  return prisma.systemIssue.findMany({
+    where: { dedupeKey: { startsWith: prefix }, resolvedAt: null },
+    select: { id: true, title: true },
+  });
+}
+
+/**
+ * Refuse a seed that a take could not survive.
+ *
+ * The NSA sweep runs on the hour at minute 10 (`NSA_SWEEP_CRON`), and
+ * its label leg raises a fresh issue per pre-dispatch waybill with no
+ * label — twenty-five of them on this box, every time, because the
+ * courier simulator serves no label and never will. Closing them is
+ * therefore only true until the next tick.
+ *
+ * It is not hypothetical: the second `--check` of this flow straddled
+ * :10 and the closing frame showed a board of thirty-seven where the
+ * opening frame showed twelve, cards moving under the camera the whole
+ * way. Every step passed; only the frame said so.
+ *
+ * So a seed that lands in the window a take would run through is
+ * REFUSED rather than left to produce a take somebody has to notice is
+ * wrong. Eight minutes an hour, and the message says how long to wait.
+ * There is no honest alternative: the candidate set is
+ * `status = CREATED` with a waybill and no label, which those parcels
+ * genuinely are, and the only ways out are to store a label that does
+ * not exist or to back-date the waybill so the watchdog looks past it.
+ */
+function refuseNearTheSweep() {
+  const minute = new Date().getMinutes();
+  const SWEEP_MINUTE = 10;
+  const FIRST_UNSAFE = 4;
+  if (minute < FIRST_UNSAFE || minute > SWEEP_MINUTE + 1) return;
+  const wait = SWEEP_MINUTE + 2 - minute;
+  throw new Error(
+    `The hourly attention sweep runs at minute ${SWEEP_MINUTE} and it is minute ${minute}, so a ` +
+      'take started now would have twenty-five label issues appear on the board half way ' +
+      `through. Wait ${wait} minute(s) and run this again.`,
+  );
+}
+
+async function systemIssueWorldFor(slug, staffToken) {
+  if (!SYSTEM_ISSUE_SLUGS.has(slug ?? '')) return;
+  refuseNearTheSweep();
+
+  await call('/admin/nsa/sweep', { method: 'POST', token: staffToken });
+  console.log('  · ran the real attention sweep');
+
+  // The card the video acknowledges is a LIVE WAYBILL — the one kind on
+  // this board that carries an order link, which is the scene about deep
+  // links. It comes from a cancelled order whose waybill was never
+  // cancelled with the courier, and `checkLiveWaybills` only raises once
+  // the void is older than `ops.cancelled_waybill_alert_hours` (2). A
+  // cancel filmed by B7 half an hour ago is therefore invisible here, so
+  // a candidate that is merely TOO RECENT is aged and the sweep re-run.
+  let waybills = await openIssuesWithPrefix(LIVE_WAYBILL_PREFIX);
+  if (waybills.length === 0) {
+    const candidates = await prisma.shipment.findMany({
+      where: {
+        status: 'CANCELLED',
+        awbNumber: { not: null },
+        isManualCourier: false,
+        courierCancelledAt: null,
+      },
+      select: { id: true, shipmentNumber: true },
+      take: 2,
+    });
+    if (candidates.length === 0) {
+      throw new Error(
+        'No cancelled shipment is still holding a waybill, so the board has nothing for H3 to ' +
+          'film its deep-link scene on. Take B7 (`cancelling-an-order`), or seed and cancel one: ' +
+          'a confirmed order books a waybill (CUR-2b) and cancelling voids the shipment without ' +
+          'telling the courier.',
+      );
+    }
+    const aged = new Date(Date.now() - 6 * 3_600_000);
+    await prisma.shipment.updateMany({
+      where: { id: { in: candidates.map((s) => s.id) } },
+      data: { deletedAt: aged },
+    });
+    console.log(
+      `  · aged ${candidates.length} voided waybill(s) past the alert window ` +
+        `(${candidates.map((s) => s.shipmentNumber).join(', ')})`,
+    );
+    await call('/admin/nsa/sweep', { method: 'POST', token: staffToken });
+    waybills = await openIssuesWithPrefix(LIVE_WAYBILL_PREFIX);
+    if (waybills.length === 0) {
+      throw new Error('Aged a voided waybill and the sweep still raised nothing for it.');
+    }
+  }
+
+  const noise = await openIssuesWithPrefix('awb-label-missing:');
+  if (noise.length > 0) {
+    await prisma.systemIssue.updateMany({
+      where: { id: { in: noise.map((r) => r.id) } },
+      data: { resolvedAt: new Date(), resolutionNote: LABEL_NOISE_NOTE },
+    });
+    console.log(`  · closed ${noise.length} simulator label issue(s) so the board reads`);
+  }
+
+  // Whatever a previous take pressed "I'm on it" on.
+  const unacked = await prisma.systemIssue.updateMany({
+    where: { resolvedAt: null, acknowledgedAt: { not: null } },
+    data: { acknowledgedAt: null, acknowledgedByStaffId: null },
+  });
+  if (unacked.count > 0) {
+    console.log(`  · un-acknowledged ${unacked.count} issue(s) a previous take claimed`);
+  }
+
+  const board = await prisma.systemIssue.findMany({
+    where: { resolvedAt: null },
+    orderBy: [{ severity: 'desc' }, { lastSeenAt: 'desc' }],
+    select: { severity: true, occurrenceCount: true, title: true },
+  });
+  console.log(`\nThe board the take will film (${board.length} open):`);
+  for (const r of board) {
+    console.log(`  ${r.severity.padEnd(8)} ${String(r.occurrenceCount).padStart(3)}x  ${r.title}`);
+  }
+}
+
 async function dangerousActsWorldFor(slug, sellerId, sellerToken, staffToken) {
   if (slug !== 'what-we-cannot-undo') return;
 
@@ -3471,6 +3642,9 @@ async function main() {
   // P5's three — a bank change waiting, a month frozen, and (through D0
   // below) a return standing at the door.
   await dangerousActsWorldFor(slug, sellerId, sellerToken, staffToken);
+  // H3's board — the real attention sweep, then the simulator's label
+  // noise closed so the twelve issues that teach something are visible.
+  await systemIssueWorldFor(slug, staffToken);
 
   // D0 — the parcels sections D, E and K are about. EXPENSIVE (a real
   // courier booking and a warehouse run per parcel) and IDEMPOTENT, so
