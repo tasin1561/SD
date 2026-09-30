@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, HttpException, Injectable, Logger } from '@nestjs/common';
 import { ActorType, BulkUploadStatus, OrderSource, OrderStatus, PaymentMode } from '@skydrop/db';
 import Papa from 'papaparse';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -26,6 +26,45 @@ interface ErrorRow {
 function csvSafe(v: unknown): string {
   const s = v === null || v === undefined ? '' : String(v);
   return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+}
+
+/**
+ * What the SELLER is told a row failed for.
+ *
+ * A row can fail for two completely different reasons and only one of
+ * them is theirs. "No variant with SKU RSH-X" is a refusal our own API
+ * made about their data, and repeating it verbatim is the whole value
+ * of this screen. A Prisma transaction timeout, a lost connection or a
+ * bug in us is not about their data at all, and it used to be written
+ * into `staged_order_rows.problems[].reason` — and into the error-report
+ * CSV they can download — exactly as it arrived.
+ *
+ * Two things were wrong with that, and it took filming B3 to see either
+ * (2026-09-30). The message Prisma raises carries the ABSOLUTE PATH of
+ * the file on our server, an excerpt of our source and the name of the
+ * advisory lock it was inside, all of which was then shown to a seller
+ * and stored in their downloadable report. And the row was presented as
+ * "1 value to fix" with `field: ''`, so the page marked no field at all:
+ * the seller was asked to correct something that no value they could
+ * type would ever fix.
+ *
+ * An HttpException below 500 is a refusal we MEANT to make about their
+ * row — Nest lifts the DTO's own `message` onto `err.message`, which is
+ * the sentence the seller should read. Anything else is OURS: the row is
+ * still staged (so nothing is lost, and "Import as order" re-runs it,
+ * which is the right recovery for a timeout), the seller is told plainly
+ * that it is not their data, and the real error goes to the log.
+ */
+export function rowFailureForSeller(err: unknown): { sellerSafe: boolean; reason: string } {
+  if (err instanceof HttpException && err.getStatus() < 500) {
+    return { sellerSafe: true, reason: err.message };
+  }
+  return {
+    sellerSafe: false,
+    reason:
+      'Skydrop could not import this row. Nothing is wrong with what you sent — ' +
+      'try importing it again, and tell us if it keeps failing.',
+  };
 }
 
 /**
@@ -193,10 +232,12 @@ export class OrderCsvImportProcessorService {
             counters.rowsFailed += rowsInOrder;
           }
         } catch (err) {
+          const failure = rowFailureForSeller(err);
+          if (!failure.sellerSafe) this.logRowFailure(uploadId, rowNumber, err);
           errorRows.push({
             rowNumber,
             errorField: '',
-            errorReason: err instanceof Error ? err.message : 'Unexpected error importing row',
+            errorReason: failure.reason,
             original: raw,
           });
           counters.rowsFailed += rowsInOrder;
@@ -230,10 +271,12 @@ export class OrderCsvImportProcessorService {
         // carrying the orders it might duplicate rather than into an
         // error report that offers no way to answer it.
         const dup = this.asDuplicate(err);
+        const failure = rowFailureForSeller(err);
+        if (!dup && !failure.sellerSafe) this.logRowFailure(uploadId, rowNumber, err);
         errorRows.push({
           rowNumber,
           errorField: dup ? 'customerPhone' : '',
-          errorReason: err instanceof Error ? err.message : 'Unexpected error importing row',
+          errorReason: failure.reason,
           original: raw,
         });
         await this.staged.stage({
@@ -241,14 +284,7 @@ export class OrderCsvImportProcessorService {
           sellerId,
           rowNumber,
           data: this.mappedValues(raw, mapping),
-          problems: dup
-            ? []
-            : [
-                {
-                  field: '',
-                  reason: err instanceof Error ? err.message : 'Unexpected error importing row',
-                },
-              ],
+          problems: dup ? [] : [{ field: '', reason: failure.reason }],
           ...(dup ? { duplicateOf: dup } : {}),
         });
         counters.rowsFailed += rowsInOrder;
@@ -309,7 +345,12 @@ export class OrderCsvImportProcessorService {
       row.lines.map(async (l) => {
         const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
         if (!resolved || resolved.sellerId !== sellerId) {
-          throw new Error(`Variant SKU "${l.productSku}" is not in this store's catalogue`);
+          // A 400 ABOUT THEIR ROW, not a bare Error: `rowFailureForSeller`
+          // shows a 4xx of ours verbatim and hides everything else, and an
+          // unrecognised SKU is the commonest thing a seller has to fix.
+          throw new BadRequestException(
+            `Variant SKU "${l.productSku}" is not in this store's catalogue`,
+          );
         }
         return {
           variantId: resolved.variantId,
@@ -395,7 +436,12 @@ export class OrderCsvImportProcessorService {
       row.lines.map(async (l) => {
         const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
         if (!resolved || resolved.sellerId !== sellerId) {
-          throw new Error(`Variant SKU "${l.productSku}" is not in this store's catalogue`);
+          // A 400 ABOUT THEIR ROW, not a bare Error: `rowFailureForSeller`
+          // shows a 4xx of ours verbatim and hides everything else, and an
+          // unrecognised SKU is the commonest thing a seller has to fix.
+          throw new BadRequestException(
+            `Variant SKU "${l.productSku}" is not in this store's catalogue`,
+          );
         }
         return {
           variantId: resolved.variantId,
@@ -458,7 +504,8 @@ export class OrderCsvImportProcessorService {
       row.lines.map(async (l) => {
         const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
         if (!resolved || resolved.sellerId !== sellerId) {
-          throw new Error(`Variant SKU "${l.productSku}" not found for this seller`);
+          // See above: the seller's own data, so the seller reads it.
+          throw new BadRequestException(`Variant SKU "${l.productSku}" not found for this seller`);
         }
         return {
           variantId: resolved.variantId,
@@ -592,6 +639,20 @@ export class OrderCsvImportProcessorService {
   }
 
   /** The duplicate 409's payload, or null if this was some other error. */
+  /**
+   * OUR failure on one row, where somebody can find it.
+   *
+   * The seller is told plainly that it is not their data; this is the
+   * other half of that, and without it the real cause would be lost
+   * entirely — the row itself no longer carries it.
+   */
+  private logRowFailure(uploadId: string, rowNumber: number, err: unknown): void {
+    this.logger.error(
+      { uploadId, rowNumber, err: err instanceof Error ? err.stack : String(err) },
+      `Order CSV import: row ${rowNumber} failed for a reason that is not the seller's`,
+    );
+  }
+
   private asDuplicate(err: unknown): unknown {
     if (typeof err !== 'object' || err === null) return null;
     const res = (err as { response?: unknown }).response;

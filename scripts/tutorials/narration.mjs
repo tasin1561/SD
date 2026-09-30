@@ -2084,6 +2084,65 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'fix-the-rows-that-failed',
+    title: 'Fixing the rows that would not import',
+    subtitle: 'Skydrop for sellers',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Most of a spreadsheet becomes orders without anybody looking at it. This is about the rows that did not — and how to fix one without touching the file again.',
+      },
+      {
+        id: 'pending-button',
+        say: 'You find them here, and only when there are any. Nothing in the sidebar links this page, because on most days there is nothing to link to.',
+      },
+      {
+        id: 'open',
+        say: 'Rows from an upload that need a decision before they can become orders. Everything else in that file is already an order — these are all that is left of it.',
+      },
+      {
+        id: 'tiles',
+        say: 'Three counts, all of them from the list below. How many are waiting, how many have a value that is wrong, and how many look like a parcel this customer is already getting.',
+      },
+      {
+        id: 'band',
+        say: 'One band per row, headed by the row number from your own spreadsheet and your own reference. Those are the two things you can match against the file open beside you.',
+      },
+      {
+        id: 'problem',
+        say: 'And the page marks the field that stopped it, in its own words. This address has no second line — and our second line is the landmark, which is what decides whether a driver finds the place at all.',
+      },
+      {
+        id: 'fix',
+        say: 'So type one in. The whole row is here and every field of it can be edited, not only the one that was wrong, so anything else you notice can go at the same time.',
+      },
+      {
+        id: 'buttons',
+        say: 'Three things you can do with a row. Turn it into an order, save the correction and come back to it, or throw the row away.',
+      },
+      {
+        id: 'discard',
+        say: 'Throwing it away asks first, and says exactly what that means: it leaves this list and no order is made from it. That is for the line you never meant to send us.',
+      },
+      {
+        id: 'keep',
+        say: 'This one we do want, so back out of that. Import as an order saves what you typed before it imports — a correction is never lost to pressing the wrong button.',
+      },
+      {
+        id: 'confirm',
+        say: 'It asks too, and it tells you the same thing from the other side: it becomes an order and it leaves this list.',
+      },
+      {
+        id: 'empty',
+        say: 'And nothing is waiting, which is the state you are aiming for. Every row of that upload is now an order.',
+      },
+      {
+        id: 'outro',
+        say: 'There it is on the orders list with the rest of the file, waiting on the call centre like every other order you have placed.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

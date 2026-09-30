@@ -33,9 +33,10 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (37):** A1–A6, B1, B2, B4, B5, B6, B7, C3, C4, C5, C6, D1–D6,
-E1, E2, E3, E4, F1, F2, F3, F5, G1–G7. Every one is listed in its own entry
-below with what it covers and what its seeding does.
+**Filmed so far (38):** A1–A6, B1–B7, C3, C4, C5, C6, D1–D6, E1, E2, E3, E4,
+F1, F2, F3, F5, G1–G7. **SECTIONS A, B, D, F (bar F4) and G are complete.**
+Every one is listed in its own entry below with what it covers and what its
+seeding does.
 
 **SECTION G IS COMPLETE**, and with it the whole of the reselling side of the
 seller app.
@@ -52,17 +53,18 @@ THIRD video to spend what it films: `RSH-LIFE-CONFIRMED` is now `spendable` and
 `RSH-CANCEL-PENDING` is placed fresh by `cancelWorldFor` on every run. Read B7's
 entry before writing another seeding that has to survive its own take.
 
-**The next entry is B3** — run B2's import and stop, which is the cheapest new
-demo data left in the library. After it: **C7**, then the CONSIGNMENT block —
-**C1, C2 and E5** — which is one seeding job wearing three hats and is the last
-big piece of the seller app.
+**B3 LANDED 2026-09-30 and SECTION B IS COMPLETE.** Its seeding
+(`pendingRowsWorldFor`) runs B2's own fixture through the real presign →
+process → poll and stops, which is the pattern to copy whenever a video needs
+the OUTPUT of a flow another video films: drive the endpoints, never insert the
+row the worker would have written.
 
-**What B3 needs:** an order CSV import that produced a failed row.
-`fixtures/rangpur-bulk-orders.csv` — the file B2 already uploads — produces
-exactly one, so the seeding is "run the B2 import and stop". The staged rows and
-the import record are already cleared between takes (see the bulk-import gotcha
-in README.md), so the only new work is running the import from the seed rather
-than from the camera.
+**The next entry is C7**, then the CONSIGNMENT block — **C1, C2 and E5** —
+which is one seeding job wearing three hats and is the last big piece of the
+seller app.
+
+**What C7 needs** is written in its own entry below. It is the last small one
+in C; everything after it in the seller app is the consignment world.
 
 **B4 and B5 landed 2026-09-30 and needed NO new seeding at all**, which is worth
 knowing before costing anything else in section B: D0's nine parcels already
@@ -113,7 +115,7 @@ configured on camera. Keep them apart.
 
 Still small and `ready` without D0: B3, B4, C1, C2, C7, E5, F4.
 
-**Filming these screens is finding real bugs at a steady rate — twenty-five so
+**Filming these screens is finding real bugs at a steady rate — twenty-eight so
 far, plus seven in the seeding itself.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -366,19 +368,38 @@ Covers `/orders/import`: the template, the check before importing, rows versus
 orders, the row that will not import, the job, and the two rows that became one
 order with two lines.
 
-### B3. Fixing the rows that would not import · `needs demo data`
+### B3. Fixing the rows that would not import · **FILMED** — `fix-the-rows-that-failed.mp4`
 
 **Promise** — every row of your spreadsheet becomes an order, including the
 ones the check refused.
-**Length** 3 min. **Prerequisites** B2 — this is its direct sequel.
-**Needs** a CSV import that produced failed rows. The fixture the bulk video
-already uploads produces exactly one, so the seeding is: **run the B2 import
-and stop**. Cheapest new demo data in the library.
+**Length** 2 min 18 s (13 scenes). **Prerequisites** B2 — this is its direct sequel.
+**Needs** a CSV import that produced a failed row, and it really was the
+cheapest new demo data in the library: `pendingRowsWorldFor` runs B2's own
+fixture through the real presign → process → poll and stops. Exactly one of the
+six rows cannot become an order — Kavya Reddy's, which carries no Address
+line 2, and ORD-5 made the landmark required. **Through the endpoints, never by
+inserting a staged row**: the row's `problems` are written by the import
+worker, and a hand-made one would be a fixture somebody wrote to look like what
+the worker produces — which goes on passing after the worker's output changes
+shape. It asserts the row it needs is there, so an importer that suddenly
+accepts everything fails the seed instead of leaving the video filming an empty
+state.
 **Covers** `/orders/pending`, which the nav never links — the only way in is
-the "N pending" button on `/orders`, which appears only when the count is
-non-zero, and that is worth showing rather than explaining. Then the per-row
-address form (the band number is the spreadsheet's own row number), "Import
-this row", and discarding one you do not want.
+the "N pending" button on `/orders`, which renders only when the count is
+non-zero, so the video shows that rather than explaining it. Then the three
+tiles, the band headed by the spreadsheet's own row number and the seller's
+reference, the marked field and the sentence under it, the fix typed in, the
+three things you can do with a row, the Discard confirmation BACKED OUT OF, and
+Import — which saves what was typed before it imports. Ends on the order in the
+list with the rest of the file.
+
+**Three bugs, and the last one is the kind this library exists to find** — see
+[Bugs found](#bugs-found-while-establishing-feasibility). A raw Prisma error,
+absolute server path and source excerpt included, was written verbatim into a
+seller-facing field; every "X is required" message named our internal key under
+a field labelled something else; and **a row fixed on this page became a DRAFT**
+— so nobody ever rang that customer, while the dialog said "it becomes an
+order" and the row left the queue.
 
 ### B4. Finding an order · **FILMED** — `finding-an-order.mp4`
 
@@ -2598,6 +2619,45 @@ one answered was a coin toss on the heap; it came up SENDBACK in the middle of a
 take and threw "the sweep did not flag it" about a parcel that could not possibly
 have been flagged. It selects on `backdatedScans` now, which is the only thing
 that can make a parcel old enough.
+
+**Three from filming B3 (2026-09-30), and the last of them is the kind this
+library exists to find.**
+
+1. **A raw Prisma error was written into a seller-facing field.** Every failure
+   the import worker caught on one row went into
+   `staged_order_rows.problems[].reason` — and into the error-report CSV the
+   seller downloads — as `err.message`, verbatim. A transaction timeout on one
+   row therefore put this on the seller's Pending page: the ABSOLUTE PATH of the
+   file on our server, an excerpt of our source, and the advisory lock it was
+   inside. And because those rows carry `field: ''` the page said "1 value to
+   fix" and marked no field, so the seller was asked to correct something no
+   value they could type would ever fix. `rowFailureForSeller` splits the two:
+   a 4xx of our own is a refusal we MEANT to make about their row and is shown
+   verbatim (that is the whole value of the screen); anything else is ours, so
+   the row is still staged — "Import as order" re-runs it, which is the right
+   recovery for a timeout — the seller is told plainly it is not their data, and
+   the real error goes to the log. The three `Variant SKU … not found` throws
+   became `BadRequestException`s in the same change, because the commonest
+   seller-fixable case was a bare `Error` and would otherwise have been hidden.
+2. **Every "is required" message named our internal key.** `addressLine2 is
+   required`, under a form field labelled "Address line 2" and over a
+   spreadsheet column headed "Address Line2". `orderCsvFieldLabel` reads the
+   FIRST alias of each field, which is already its human name and the spelling
+   the seller's own file most likely carries — so there is no second list to
+   maintain and a field added to the alias map gets a label by construction.
+3. **A row fixed on the pending page became a DRAFT.**
+   `StagedOrderRowService.importRow` passed neither `source` nor
+   `initialStatus`, so `OrderService.create` used its own defaults — while the
+   bulk processor passes PENDING_CONFIRMATION because ORD-9 says in as many
+   words that "CSV is submission, not drafting". One row of a spreadsheet, fixed
+   five minutes after the rest imported, quietly became a different KIND of
+   order from its siblings. **And it failed in the worst way available**: a
+   DRAFT is never enqueued for a confirmation call (CC-6 enqueues on entry to
+   PENDING_CONFIRMATION), so nobody ever rang that customer and the parcel never
+   moved — while the row left the queue, the dialog said "it becomes an order",
+   and the order sat in the list looking like the four beside it. Seen in a
+   check-run FRAME: the status chip read `Draft` where the narration said
+   "waiting on the call centre". Proved red.
 
 **Observed and deliberately NOT fixed:** the order's Full history labels every
 one of OUR events `SKYDROP`, the seller's own cancellation included — so a seller

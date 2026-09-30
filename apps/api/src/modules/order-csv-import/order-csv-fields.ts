@@ -260,6 +260,25 @@ export const ORDER_CSV_STORE_REQUIRED_FIELDS: OrderCsvField[] = [...ORDER_CSV_RE
 export const ORDER_CSV_TARGET_FIELDS = Object.keys(ORDER_CSV_ALIAS_MAP) as OrderCsvField[];
 
 /**
+ * What to CALL a field when telling a seller something is wrong with it.
+ *
+ * The messages read `addressLine2 is required` and `customerPhone is
+ * required` — our internal key, printed under a form field labelled
+ * "Address line 2" and over a spreadsheet column headed "Address Line2".
+ * Nobody outside this codebase has ever seen that word.
+ *
+ * The FIRST alias is already the human name of the field and is the one
+ * their own file most likely uses, so there is nothing new to maintain
+ * and nothing that can drift: a field added to the map gets a label by
+ * construction.
+ */
+export function orderCsvFieldLabel(field: OrderCsvField): string {
+  const first = ORDER_CSV_ALIAS_MAP[field][0];
+  if (first === undefined || first.length === 0) return field;
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
+/**
  * Case-insensitive, punctuation-insensitive header key.
  *
  * Every run of anything that is not a letter or a digit becomes one

@@ -266,6 +266,27 @@ async function openOrderByRef(page, stage, ref) {
   await page.waitForTimeout(900);
 }
 
+/**
+ * The staged row B3 fixes, and how it is found.
+ *
+ * BY ITS OWN REFERENCE. It is the only row waiting today, and a
+ * `.first()` would work — but the number of rows on that page is the
+ * whole subject of the video, so a gate that cannot tell one from two is
+ * the wrong gate. Keep in step with `PENDING_IMPORT` in
+ * seed-demo-data.mjs and with `fixtures/rangpur-bulk-orders.csv`.
+ */
+const PENDING_ROW = {
+  ref: 'RSH-2026-0505',
+  landmark: 'The lane behind the Hoodi circle bus stop',
+};
+
+/** That row's band, by the reference in its heading. */
+async function pendingRow(page) {
+  const row = page.locator('section').filter({ hasText: PENDING_ROW.ref }).last();
+  await row.waitFor({ state: 'visible', timeout: 25_000 });
+  return row;
+}
+
 /** The header's Cancel — exact, so "Cancel this order" is not it. */
 function cancelButton(page) {
   return page.getByRole('button', { name: 'Cancel', exact: true });
@@ -5971,6 +5992,160 @@ export const FLOWS = {
         // changes is which of them is outlined — which is the point:
         // Cancel has gone and this has taken its place.
         await stage.dwellOn(page.getByRole('button', { name: 'Ask admin to act' }).first(), 4000);
+      },
+    },
+  },
+  /**
+   * B3 — the rows a CSV upload could not turn into orders.
+   *
+   * Its world is B2's import RUN AND STOPPED (`pendingRowsWorldFor`),
+   * which leaves exactly one row waiting: Kavya Reddy's, which carries
+   * no landmark. The take SPENDS it — the row becomes an order — and
+   * the next seed run re-imports the file from scratch, so there is
+   * nothing to unwind.
+   *
+   * THE ROW IS FOUND BY ITS REFERENCE, never by position. It is the only
+   * one today, but a `.first()` on a list whose length is the whole point
+   * of the video is the kind of gate that passes on the wrong row the
+   * day the fixture grows.
+   */
+  'fix-the-rows-that-failed': {
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async 'pending-button'({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/orders$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The button renders ONLY while the count is above zero, so
+        // waiting for it is what proves the seeding left a row waiting.
+        const pending = page.getByRole('link', { name: /pending$/ }).first();
+        await pending.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(pending, 3000);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: /pending$/ }).first(), { after: 1800 });
+        await page.waitForURL(/\/orders\/pending$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const sub = page.getByText(/need a decision before they can become orders/).first();
+        await sub.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(sub, 3200);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(page.locator('.ord-kpis').first(), 3800);
+      },
+
+      async band({ page, stage }) {
+        await stage.dwellOn(await pendingRow(page), 3400);
+      },
+
+      async problem({ page, stage }) {
+        // THE MESSAGE THE NARRATION READS, not the field. The row is
+        // here because a value is missing, and which value is the whole
+        // scene — a gate on the input would pass on a row refused for
+        // something else entirely.
+        const msg = page.getByText(/is required — it is the landmark/).first();
+        await msg.waitFor({ state: 'visible', timeout: 25_000 });
+        await msg.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(msg, 3600);
+      },
+
+      async fix({ page, stage }) {
+        const field = (await pendingRow(page)).getByLabel('Address line 2');
+        await stage.typeIn(field, PENDING_ROW.landmark, { after: 1000 });
+        await stage.dwellOn(field, 2400);
+      },
+
+      async buttons({ page, stage }) {
+        await stage.dwellOn((await pendingRow(page)).locator('.ord-row').first(), 3400);
+      },
+
+      async discard({ page, stage }) {
+        await stage.clickIt((await pendingRow(page)).getByRole('button', { name: 'Discard' }), {
+          after: 1400,
+        });
+        const d = page.getByRole('dialog').filter({ hasText: 'Discard this row?' }).first();
+        await d.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(d, 3400);
+      },
+
+      async keep({ page, stage }) {
+        const d = page.getByRole('dialog').filter({ hasText: 'Discard this row?' }).first();
+        await stage.clickIt(d.getByRole('button', { name: 'Cancel', exact: true }).first(), {
+          after: 1200,
+        });
+        await d.waitFor({ state: 'hidden', timeout: 20_000 });
+        // The row is still here — which is the claim, and a dialog that
+        // closed says nothing about whether it took the row with it.
+        const row = await pendingRow(page);
+        await row.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(row.getByRole('button', { name: 'Import as order' }), 2600);
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(
+          (await pendingRow(page)).getByRole('button', { name: 'Import as order' }),
+          { after: 1400 },
+        );
+        const d = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Import this row as an order?' })
+          .first();
+        await d.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(d, 3200);
+      },
+
+      async empty({ page, stage }) {
+        const d = page
+          .getByRole('dialog')
+          .filter({ hasText: 'Import this row as an order?' })
+          .first();
+        await stage.clickIt(d.getByRole('button', { name: 'Import as order' }).first(), {
+          after: 1800,
+        });
+        // The EMPTY STATE, by its own words: a list that merely no longer
+        // holds the row could equally be one that failed to load.
+        const done = page.getByText('Nothing waiting').first();
+        await done.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(done, 3200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Orders', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/orders$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.typeIn(page.getByLabel('Search orders'), PENDING_ROW.ref, {
+          clear: true,
+          after: 500,
+        });
+        await page.keyboard.press('Enter');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = page
+          .getByRole('row')
+          .filter({ has: page.getByText(PENDING_ROW.ref, { exact: true }) })
+          .first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(row, 3400);
       },
     },
   },

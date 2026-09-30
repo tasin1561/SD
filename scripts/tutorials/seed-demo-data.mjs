@@ -24,7 +24,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { prisma, argon2 } from './lib/deps.mjs';
-import { MOCK_ROOT } from './lib/spaces-shim.mjs';
+import { MOCK_ROOT, mockObjectPath } from './lib/spaces-shim.mjs';
+import { TUTORIALS_DIR } from './lib/paths.mjs';
 import { API, call } from './lib/api.mjs';
 import {
   driveOrderThrough,
@@ -1640,6 +1641,99 @@ async function editDraftWorldFor(slug, sellerId, sellerToken) {
 }
 
 /**
+ * B3's world — B2's import, RUN AND STOPPED.
+ *
+ * The bulk video uploads `fixtures/rangpur-bulk-orders.csv` on camera
+ * and the file is written so that exactly one of its six rows cannot
+ * become an order: Kavya Reddy's has no Address Line 2, and ORD-5's
+ * 2026-08-07 amendment made the landmark REQUIRED, because it is the
+ * field that decides whether a rural address is found at all. That one
+ * row is the whole of B3, and it is why this seeding is the cheapest in
+ * the library — it runs the import B2 already owns and stops.
+ *
+ * THROUGH THE REAL ENDPOINTS, not by inserting a staged row. The row's
+ * `problems` are written by the import worker, and a hand-made row would
+ * be one somebody wrote to look like what the worker produces — which is
+ * exactly the kind of fixture that goes on passing after the worker's
+ * output changes shape. Presign, put the bytes where `SpacesService`
+ * will look for them (`mockObjectPath`, the one place that knows the
+ * layout), process, and wait for the job to land.
+ *
+ * NOTHING CLEARS IT SPECIALLY: `clearPreviousImports` already removes
+ * every upload, its staged rows and the objects behind them, and it runs
+ * before this. So a take that imported the row, discarded it, or did
+ * neither all leave the same nothing behind.
+ */
+/** `BulkUploadStatus`, the values a finished job can carry. */
+const TERMINAL_IMPORT = ['COMPLETED', 'COMPLETED_WITH_ERRORS', 'FAILED', 'CANCELLED'];
+
+const PENDING_IMPORT = {
+  fileName: 'rangpur-bulk-orders.csv',
+  /** The row the camera fixes: the one with no landmark. */
+  customer: 'Kavya Reddy',
+  ref: 'RSH-2026-0505',
+  landmark: 'The lane behind the Hoodi circle bus stop',
+};
+
+async function pendingRowsWorldFor(slug, sellerId, sellerToken) {
+  if (slug !== 'fix-the-rows-that-failed') return;
+  const token = await sellerToken();
+
+  const presign = await call('/seller/order-imports/presign', {
+    method: 'POST',
+    token,
+    body: { fileName: PENDING_IMPORT.fileName },
+  });
+  const target = mockObjectPath(presign.uploadUrl);
+  if (target === null) {
+    throw new Error(
+      `The API handed back a non-mock upload URL (${presign.uploadUrl}). ` +
+        'Is DEV_MOCK_SPACES off?',
+    );
+  }
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.copyFile(path.join(TUTORIALS_DIR, 'fixtures', PENDING_IMPORT.fileName), target);
+
+  const job = await call('/seller/order-imports/process', {
+    method: 'POST',
+    token,
+    body: { spacesKey: presign.spacesKey, fileName: PENDING_IMPORT.fileName },
+  });
+
+  // The worker runs in-process (SCALE-1) but not synchronously, so wait
+  // for a terminal status rather than for a fixed beat.
+  let landed = null;
+  for (let i = 0; i < 60; i += 1) {
+    landed = await call(`/seller/order-imports/${job.id}`, { token });
+    if (TERMINAL_IMPORT.includes(landed.status)) break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  if (landed === null || !TERMINAL_IMPORT.includes(landed.status)) {
+    throw new Error(`The import never finished (last status ${landed?.status ?? 'unknown'}).`);
+  }
+
+  // THE ROW IS THE POINT, so it is asserted rather than assumed. An
+  // import that suddenly accepts every row would leave B3 filming an
+  // empty state under a line about fixing one.
+  const rows = await prisma.stagedOrderRow.findMany({
+    where: { upload: { sellerId } },
+    select: { rowNumber: true, data: true },
+  });
+  const wanted = rows.find((r) => String(r.data?.customerName ?? '') === PENDING_IMPORT.customer);
+  if (wanted === undefined) {
+    throw new Error(
+      `The import left ${rows.length} row(s) waiting and none of them is ` +
+        `${PENDING_IMPORT.customer}'s — B3 has nothing to film. Has the landmark stopped ` +
+        'being required (ORD-5)?',
+    );
+  }
+  console.log(
+    `  · imported ${PENDING_IMPORT.fileName}: ${landed.ordersCreated} order(s), ` +
+      `row ${wanted.rowNumber} (${PENDING_IMPORT.customer}) waiting on a landmark`,
+  );
+}
+
+/**
  * B7's cheap half — an order WAITING ON THE CALL CENTRE, to be called
  * off on camera.
  *
@@ -3043,6 +3137,7 @@ async function main() {
   if (slug === 'invite-a-colleague') await ensureTeamColleague(sellerId, sellerToken);
   await editDraftWorldFor(slug, sellerId, sellerToken);
   await cancelWorldFor(slug, sellerId, sellerToken);
+  await pendingRowsWorldFor(slug, sellerId, sellerToken);
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
   await integrationsWorldFor(slug, sellerId);
   await resellingWorldFor(slug, sellerId, sellerToken);

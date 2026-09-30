@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, Prisma, StagedRowStatus } from '@skydrop/db';
+import { ActorType, OrderSource, OrderStatus, Prisma, StagedRowStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { OrderService } from '../../order/services/order.service';
 
@@ -259,7 +259,29 @@ export class StagedOrderRowService {
       } as Parameters<OrderService['create']>[1],
       { type: ActorType.SELLER, id: sellerId },
       { ipAddress: null, userAgent: null, requestId: `staged:${rowId}` },
-      { bulkUploadId: row.uploadId },
+      {
+        /*
+          THE SAME ORDER THE OTHER ROWS OF THAT FILE BECAME.
+
+          This passed neither, so `OrderService.create` used its own
+          defaults: a MANUAL order in DRAFT. ORD-9 says in as many words
+          that "CSV is submission, not drafting", and the bulk processor
+          passes PENDING_CONFIRMATION for exactly that reason — so one
+          row of a spreadsheet, fixed on this page five minutes after
+          the rest imported, quietly became a different KIND of order
+          from its siblings.
+
+          It failed silently in the worst way available: a DRAFT is
+          never enqueued for a confirmation call (CC-6 enqueues on entry
+          to PENDING_CONFIRMATION), so nobody ever rang that customer and
+          the parcel never moved — while the row left this queue, the
+          dialog said "it becomes an order", and the order sat in the
+          list looking like the others. Found by filming B3 (2026-09-30).
+        */
+        source: OrderSource.BULK_UPLOAD,
+        initialStatus: OrderStatus.PENDING_CONFIRMATION,
+        bulkUploadId: row.uploadId,
+      },
     );
 
     await this.prisma.client.stagedOrderRow.update({

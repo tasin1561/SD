@@ -5,6 +5,7 @@ import {
   ORDER_CSV_REQUIRED_FIELDS,
   ignoredReasonForHeader,
   lookupFieldForHeader,
+  orderCsvFieldLabel,
   suggestFieldForHeader,
   type OrderCsvField,
 } from '../order-csv-fields';
@@ -302,7 +303,7 @@ export class OrderCsvParserService {
       if (f === 'quantity') continue;
       const v = get(f);
       if (v === undefined) {
-        errors.push({ field: f, reason: `${f} is required` });
+        errors.push({ field: f, reason: `${orderCsvFieldLabel(f)} is required` });
       } else {
         values[f] = v;
       }
@@ -499,8 +500,8 @@ export class OrderCsvParserService {
                 ? // ORD-5: line 2 is the landmark, and the courier address is
                   // line 1 + line 2 — nothing else reaches the driver. Say what
                   // it is, not just that a column is empty.
-                  `addressLine2 is required — it is the landmark, and it is the part of the address that makes a delivery findable. Delhivery's template leaves it optional; ours does not.`
-                : `${f} is required`,
+                  `${orderCsvFieldLabel(f as OrderCsvField)} is required — it is the landmark, and it is the part of the address that makes a delivery findable. Delhivery's template leaves it optional; ours does not.`
+                : `${orderCsvFieldLabel(f as OrderCsvField)} is required`,
           });
         }
       }
