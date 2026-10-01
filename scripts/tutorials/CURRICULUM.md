@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 62 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1, and P5.** The 28 left are all in the admin app: 2 are
+**90 tutorials. 65 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1, L2, N1, N9 and P5.** The 25 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (64):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (65):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1**, **N1** and **N9**.
+**L1–L2**, **N1** and **N9**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -46,7 +46,8 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**THE NEXT ENTRY IS L2 — "Counting stock"**, and sections K and L1 are done.
+**THE NEXT ENTRY IS L3 — "Reading the stock ledger"**, and sections K, L1 and
+L2 are done.
 
 **ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N2 —
 "Accepting a top-up".** N1 and N9 are filmed. `moneyDeskWorldFor` is the shared
@@ -89,6 +90,41 @@ three units there as an INCREASE with reason `DAMAGED_IN_WAREHOUSE` — which is
 what that reason means and the honest way to put a damaged unit on that shelf.
 **L2 should reuse it**: a cycle count's discrepancies become adjustments under
 the same threshold rules, so the same queue is the second half of that video.
+
+**WHAT L2 LEFT BEHIND, MEASURED (2026-10-01).** It did reuse that queue, but
+through `clearUndecidedAdjustments` rather than `adjustmentWorldFor`: L2 raises
+its own correction on camera and the only thing that would spoil the shot is an
+undecided row from a previous take sitting above it. A COMPLETED count is
+history and is left alone — `cycleCountWorldFor` deletes only `SCHEDULED` and
+`IN_PROGRESS` ones, which is why the `open` step asserts there is EXACTLY ONE
+scheduled count before it opens the first. Nothing is scheduled by the seed:
+the video schedules its own, that being the first act of the lifecycle it
+teaches, and seeding one would film a form being filled in and then open a row
+that already existed.
+
+**AND THE THING THAT MADE IT POSSIBLE: `lib/fixture.mjs`, a sheet the seed
+writes and the flow reads.** A cycle count is recorded per (variant, bin,
+batch), and this console prints those three ids NOWHERE together — the
+movements report carries the variant and a bin CODE and no batch at all. Every
+flow before this got its handles from the PAGE, which is the right default and
+is exactly why the file did not exist. It is **not** a back door for that: it
+carries only what the operator is expected to arrive already holding, which is
+the numbers off the sheet the floor walked with, and the narration says so out
+loud (`ids`: "those identifiers are not printed on any screen here"). It is
+per stack and gitignored. `record.mjs` now hands ONE context object to the
+prologue and to every step so the sheet is read once at sign-in; **M's stock
+transfer is addressed the same way and should reuse both.**
+
+**A NAVIGATION SCENE'S VERIFY FRAME IS A SKELETON, AND THAT IS THE SAMPLING
+RATHER THAN THE VIDEO.** `verify.mjs` grabs each frame 1.2 s into its scene —
+early enough to miss a fade, and on a step that begins with a `page.goto` that
+is before React Query has answered. L2's `queue` frame therefore reads
+"Rows shown 0" over a loading table while the line says "which is exactly where
+it has gone", and its `intro` frame reads 0 / 0 / 0. **Pull a second frame
+three or four seconds in before concluding anything** — at 134.5 s the queue
+scene shows the one PENDING `CYCLE_COUNT` / `COUNTING_ERROR` row at +₹0.00,
+which is the sentence exactly. The skeleton lasts about two seconds of an
+eleven-second scene.
 
 **WHAT K2 LEFT BEHIND, MEASURED (2026-10-01).** The returns bench now holds
 exactly ONE un-finalised return on any run, and it is K2's own: three things
@@ -4244,3 +4280,25 @@ hook additionally refreshes `admin-inventory` and `admin-movements` — stock
 really moves there — named by their real query roots rather than a tidy-looking
 `['inventory']`, which matches no query on this app and would have read as a
 refresh that never happens.
+
+**AND A FORTIETH, found by filming L2 (2026-10-01): a field told the counter it
+was REQUIRED when nothing requires it, and gave a reason belonging to two other
+fields.** The Notes box on a cycle count's recording form carried the hint
+"Required — a count is per bin and batch" — copied down from the Bin id and
+Batch id fields above it, where it is true and load-bearing (both really are
+required, the server refuses a line without them, and the submit button is
+disabled until they are filled). Notes are `@IsOptional()` on
+`RecordCountItemDto`, and the button does not look at them at all.
+
+So the only thing a counter can do with that sentence is obey it: write
+something into a free-text box on every single line, because the form said they
+had to, with a justification that is about bin and batch and therefore reads as
+authoritative. Nothing throws, nothing fails, and there is no symptom anywhere —
+which is why it survived, and why a video was what found it. The hint now says
+what the field is for ("Optional. Kept on the line, and read by whoever has to
+explain the difference"), and `cycle-count-notes-hint.test.tsx` pins BOTH halves:
+that bin and batch still say required, and that notes do not.
+
+**The shape to remember: a hint copied between neighbouring fields is invisible
+to every gate there is.** It typechecks, it renders, it is grammatical, and the
+two fields it is now wrong about are the two it is sitting between.
