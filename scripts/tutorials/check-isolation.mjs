@@ -173,7 +173,12 @@ async function main() {
     const key = `bull:${PROBE_QUEUE}:${jobId}`;
 
     const theirBullBefore = await theirRedis.dbsize();
-    const queue = new BullMQ.Queue(PROBE_QUEUE, { connection: await connect(mine.redisUrl) });
+    // The queue's connection is kept so it can be disconnected: BullMQ
+    // does not close a connection it was HANDED, so leaving it
+    // anonymous left the process sitting there after printing its
+    // verdict, which reads as a hung check.
+    const queueConn = await connect(mine.redisUrl);
+    const queue = new BullMQ.Queue(PROBE_QUEUE, { connection: queueConn });
     await queue.add(PROBE_JOB, { probe: true }, { jobId, attempts: 1, removeOnFail: false });
     console.log(
       `  queued ${PROBE_JOB} as ${jobId} on stack ${mine.name} (redis DB ${mine.redisDb})`,
@@ -207,6 +212,7 @@ async function main() {
 
     await queue.remove(jobId).catch(() => {});
     await queue.close();
+    queueConn.disconnect();
     console.log('  ✓ the probe never existed in the other stack’s queue namespace\n');
   } finally {
     myRedis.disconnect();
