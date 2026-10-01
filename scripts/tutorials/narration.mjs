@@ -4231,6 +4231,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'is-the-courier-healthy',
+    title: 'Is the courier integration healthy',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'One page for the three things that decide whether we can still move a parcel \u2014 and all three fail quietly. Nothing breaks. Parcels simply stop.',
+      },
+      {
+        id: 'tracking',
+        say: 'Start with the poll, because Delhivery pushes us nothing. Every order that reaches delivered gets there because a scheduled job asked. Stop it and nothing errors; the parcels just stop updating.',
+      },
+      {
+        id: 'lookup',
+        say: 'Underneath it, the safe version of the same question. Give it a waybill and it asks the courier directly what they know about that parcel.',
+      },
+      {
+        id: 'reads',
+        say: 'And read the promise on it, because it is the difference between this and the button above. It reads. No tracking event is written, no order moves \u2014 so you can ask about anything, as often as you like.',
+      },
+      {
+        id: 'result',
+        say: 'And the answer comes back a line per waybill: whether they know it at all, every scan they hold, and what our mapping makes of each one. A parcel we believe we sent that they have never heard of shows up right there \u2014 which is the first thing to check when an order has simply stopped.',
+      },
+      {
+        id: 'connection',
+        say: 'Then the connection itself, and it has two halves that people conflate. The first is whether calls leave this process at all.',
+      },
+      {
+        id: 'guard',
+        say: 'The second is separate and independent: whether we are allowed to do anything PHYSICAL. Manifesting, pickups, cancels, re-attempts \u2014 all of those reach the real account, and the sentence tells you to turn it off again when you are done.',
+      },
+      {
+        id: 'pool',
+        say: 'Waybills. We fetch them in bulk and keep a pile, because the courier allows only five bulk requests every five minutes \u2014 so asking for one per parcel at the moment you need it does not work. An empty pile stops manifests.',
+      },
+      {
+        id: 'states',
+        say: 'Which is why there is a row of them rather than one. What is usable right now, what exists but has not settled yet, what is already spoken for, what has been spent, and what was thrown away. It is the first that matters at four in the afternoon.',
+      },
+      {
+        id: 'budget',
+        say: 'The rate budget, per endpoint, in five-minute windows, and deliberately short of what the courier actually allows. Bulk waybills is the tight one, and it is tight on purpose.',
+      },
+      {
+        id: 'waf',
+        say: 'Because of what is written underneath. Exhaust one of these and their firewall blocks our egress address \u2014 not the endpoint, not the account, the whole of us. One runaway loop takes the building off the air.',
+      },
+      {
+        id: 'reach',
+        say: 'Last, two things that have to be true before a real parcel can move. The first is simply whether the stored credential still works, asked with a live serviceability call that creates nothing.',
+      },
+      {
+        id: 'pickup',
+        say: 'The second is the warehouse name. Every shipment sends it and the courier matches it exactly \u2014 case and spaces included \u2014 so one character out fails every booking. They offer no way to list what is registered, so this page cannot show you: the audit log is the only record.',
+      },
+      {
+        id: 'outro',
+        say: 'So read it in that order \u2014 is the poll running, is the pile deep enough, is there budget left \u2014 and remember the guard is a separate decision from the connection. Every one of these is fine until it is suddenly expensive.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

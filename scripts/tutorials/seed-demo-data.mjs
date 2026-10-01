@@ -5440,6 +5440,57 @@ async function biggestPickableLine(sellerId, warehouseId, staffToken, min) {
 const M1_ACCOUNT_LABEL = 'Delhivery — second contract';
 
 /**
+ * M2's world — "Is the courier integration healthy".
+ *
+ * ── IT WRITES NOTHING ────────────────────────────────────────────────
+ * The whole video is reads: the poll's own status, one waybill lookup,
+ * the write guard, the pool, the rate budget and one serviceability
+ * probe. Every one of those is a question rather than an act, which is
+ * exactly the half of that page M2 is for — the poller itself is M3 and
+ * is dangerous.
+ *
+ * ── SO WHY A SEED AT ALL ─────────────────────────────────────────────
+ * The AWB box is EMPTY with a placeholder, and the two numbers in it
+ * are an example rather than a value (`getByText` does not see a
+ * placeholder — the trap is already in the README). So the video has to
+ * TYPE a waybill, and a waybill is minted per box. It arrives holding
+ * one, exactly as an operator does off a label or a customer's email.
+ *
+ * It picks one the courier has actually SEEN — a parcel still at
+ * `CREATED` has a waybill and no scans, and the scene is about reading
+ * what came back rather than about an empty answer.
+ */
+async function delhiveryHealthWorldFor(slug) {
+  if (slug !== 'is-the-courier-healthy') return;
+
+  const moved = await prisma.shipment.findFirst({
+    where: {
+      courierCode: 'delhivery',
+      awbNumber: { not: null },
+      deletedAt: null,
+      status: { notIn: ['CREATED', 'AWB_GENERATED', 'FAILED_AT_CREATION', 'CANCELLED'] },
+    },
+    select: { awbNumber: true, shipmentNumber: true, status: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (moved === null) {
+    throw new Error(
+      'No Delhivery parcel on this box has left the building with a waybill on it, so the ' +
+        'lookup scene has nothing to ask about. Film a dispatch first (J8), or run the ' +
+        'lifecycle seeding.',
+    );
+  }
+  await writeFixture('is-the-courier-healthy', {
+    awbNumber: moved.awbNumber,
+    shipmentNumber: moved.shipmentNumber,
+    shipmentStatus: moved.status,
+  });
+  console.log(
+    `  · the waybill to look up: ${moved.awbNumber} (${moved.shipmentNumber}, ${moved.status})`,
+  );
+}
+
+/**
  * M1's world — "Courier accounts and credentials".
  *
  * ── IT SPENDS ONE ROW AND NOTHING ELSE ───────────────────────────────
@@ -6220,7 +6271,24 @@ const DESK_PAYOUT_SHORT_INR = 50;
 
 async function writeRemittanceExport(sellerId) {
   const orders = await prisma.order.findMany({
-    where: { sellerId, status: 'DELIVERED', codAmountInr: { not: null } },
+    where: {
+      sellerId,
+      status: 'DELIVERED',
+      codAmountInr: { not: null },
+      /*
+        NOT ALREADY SETTLED. The demo world carries one COD that an
+        earlier payout covers (`settleOneCodForLedger`'s, which every
+        other money-desk slug writes and `unrecordTutorialPayouts`
+        deliberately leaves alone), and a file naming it made the form
+        warn "Already settled on an earlier payout" in the middle of the
+        scene about allocating — honest, and about something the
+        narration is not saying. Worse, the figure the operator types
+        then only matched by luck: it is the total of the rows that WERE
+        allocated, which is the file's total minus whatever happened to
+        be settled. The file now holds exactly what this payout pays for.
+      */
+      courierSettlementLines: { none: {} },
+    },
     select: { id: true, orderNumber: true, codAmountInr: true },
     orderBy: { createdAt: 'asc' },
   });
@@ -6238,12 +6306,22 @@ async function writeRemittanceExport(sellerId) {
     });
     if (shipment?.awbNumber == null) continue;
     const cod = Number(o.codAmountInr);
-    // The SECOND one short. Which one hardly matters; that exactly one
-    // is does — a file where everything balances has no short-payment
-    // scene in it, and a file where nothing does teaches the opposite.
-    const payable = i === 1 ? cod - DESK_PAYOUT_SHORT_INR : cod;
-    rows.push({ awb: shipment.awbNumber, cod, payable, ref: o.orderNumber });
+    rows.push({ awb: shipment.awbNumber, cod, payable: cod, ref: o.orderNumber });
   }
+  /*
+    THE LAST ROW IS THE SHORT ONE, and which row it is matters because a
+    scene points at it. It used to be the one at index 1 of every
+    delivered COD order, which is not the same as index 1 of the lines
+    the FORM draws — rows the file names and the form cannot place are
+    left out, so the short row moved as soon as anything was skipped,
+    and the scene about a short payment haloed a line that had been paid
+    in full. Last is the one position the flow can name without counting
+    (`.last()`), and that exactly one row is short is what the scene
+    needs — a file where everything balances has no short-payment scene
+    in it, and a file where nothing does teaches the opposite.
+  */
+  const short = rows.at(-1);
+  if (short !== undefined) short.payable = short.cod - DESK_PAYOUT_SHORT_INR;
   if (rows.length < 2) {
     throw new Error(
       `N5 needs two delivered COD parcels with waybills; found ${rows.length}. ` +
@@ -6259,6 +6337,20 @@ async function writeRemittanceExport(sellerId) {
   const file = path.join(GENERATED_DIR, REMITTANCE_EXPORT_FILE);
   await fs.writeFile(file, `${csv}\n`, 'utf8');
   const total = rows.reduce((n, r) => n + r.payable, 0);
+  /*
+    WHAT THE OPERATOR TYPES, written down rather than guessed.
+
+    The amount is typed from the BANK STATEMENT before the file is
+    uploaded, so the flow cannot read it off the lines — and a constant
+    in `flows.mjs` was only ever right for the set of parcels this box
+    happened to have. It is exactly the thing `lib/fixture.mjs` exists
+    for: a number the operator arrives already holding.
+  */
+  await writeFixture('record-a-courier-payout', {
+    totalInr: total,
+    shortInr: DESK_PAYOUT_SHORT_INR,
+    parcels: rows.length,
+  });
   console.log(
     `  · remittance export written: ${rows.length} parcel(s), ₹${total} payable ` +
       `(one short by ₹${DESK_PAYOUT_SHORT_INR})`,
@@ -6377,6 +6469,7 @@ async function main() {
   await adjustmentWorldFor(slug, sellerId, staffToken, warehouse);
   await cycleCountWorldFor(slug, sellerId, staffToken, warehouse);
   await courierAccountWorldFor(slug);
+  await delhiveryHealthWorldFor(slug);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);

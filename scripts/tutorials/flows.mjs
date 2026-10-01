@@ -11172,6 +11172,11 @@ export const FLOWS = {
     app: 'admin',
 
     async prologue(ctx) {
+      // What the statement says, off the sheet the seed wrote with the
+      // file — see `lib/fixture.mjs`. It is typed BEFORE the upload, so
+      // it cannot be read off the lines, and a constant here was only
+      // ever right for the set of parcels one box happened to have.
+      ctx.payout = await readFixture('record-a-courier-payout');
       await signIn(ctx);
       await ctx.page.goto(`${ctx.baseUrl}/settlements`, { waitUntil: 'domcontentloaded' });
       await ctx.page.waitForLoadState('networkidle').catch(() => {});
@@ -11195,7 +11200,7 @@ export const FLOWS = {
         await stage.dwellOn(page.getByText(/Delhivery states 5–10 days/i).first(), 4200);
       },
 
-      async record({ page, stage }) {
+      async record({ page, stage, payout }) {
         await stage.clickIt(page.getByRole('button', { name: 'Record payout' }).first(), {
           after: 1500,
         });
@@ -11207,13 +11212,9 @@ export const FLOWS = {
           .first()
           .selectOption({ index: 1 });
         await page.waitForTimeout(500);
-        await stage.typeIn(
-          dialog.getByLabel(/^Amount received/).first(),
-          String(PAYOUT_TOTAL_INR),
-          {
-            after: 600,
-          },
-        );
+        await stage.typeIn(dialog.getByLabel(/^Amount received/).first(), String(payout.totalInr), {
+          after: 600,
+        });
       },
 
       async reference({ page, stage }) {
@@ -11234,10 +11235,21 @@ export const FLOWS = {
         const dialog = page.getByRole('dialog');
         await stage.point(dialog.locator('.mk-drop').first(), { settle: 900 });
         await dialog.locator('input[type="file"]').first().setInputFiles(REMITTANCE_EXPORT);
-        // The lines the file filled. Gated on a VALUE in the first
-        // amount box, not on the box: the form ships with one empty line
-        // and an upload that matched nothing leaves exactly that.
-        const firstAmount = dialog.getByLabel('Amount', { exact: true }).first();
+        /*
+          The lines the file filled. Gated on a VALUE in the first amount
+          box, not on the box: the form ships with one empty line and an
+          upload that matched nothing leaves exactly that.
+
+          AND IT IS NOT CALLED "Amount". The input carries
+          `aria-label="Amount attributed to this order"` beside its
+          visible `label="Amount"`, and an `aria-label` on the control
+          WINS — so the exact name is the long one and `'Amount'` matches
+          nothing at all, which arrives as a wait for a box plainly in
+          the frame with a number already in it. (Its `Order ID` sibling
+          carries an `aria-label` that happens to equal its label, which
+          is why the scene after this one was fine.)
+        */
+        const firstAmount = allocationAmount(dialog).first();
         await firstAmount.waitFor({ state: 'visible', timeout: 25_000 });
         for (let i = 0; i < 40; i += 1) {
           if (((await firstAmount.inputValue()) ?? '') !== '') break;
@@ -11248,7 +11260,16 @@ export const FLOWS = {
         }
         await page.waitForTimeout(800);
         await stage.clearHalo();
-        await stage.dwellOn(dialog.locator('.mk-panel').first(), 2600);
+        /*
+          THE LINES, THEN WHAT WAS LEFT OUT. `.mk-panel` was the first
+          reach here and it is NOT ALWAYS THERE: it carries the file's own
+          summary line, which the parser fills from a UTR column the
+          seed's export does not have, so on this box it renders for
+          nobody and the scene waited thirty seconds for it. The lines
+          are the subject of the sentence and the warn callout is its
+          second half.
+        */
+        await stage.dwellOn(dialog.locator('.mk-stack--tight').first(), 3200);
       },
 
       async expected({ page, stage }) {
@@ -11256,9 +11277,18 @@ export const FLOWS = {
         await stage.dwellOn(dialog.getByLabel('Order ID', { exact: true }).first(), 4200);
       },
 
+      /*
+        THE LAST LINE IS THE SHORT ONE, by arrangement with the seed —
+        which writes the file and shorts its final row for exactly this
+        scene. It was `.nth(1)` and that is a different thing: rows the
+        form cannot place are left out, so the file's second row and the
+        form's second line are not the same line, and this haloed a
+        parcel that had been paid in full under a sentence about paying
+        less.
+      */
       async short({ page, stage }) {
         const dialog = page.getByRole('dialog');
-        await stage.dwellOn(dialog.getByLabel('Amount', { exact: true }).nth(1), 4600);
+        await stage.dwellOn(allocationAmount(dialog).last(), 4600);
       },
 
       async credit({ page, stage }) {
@@ -11858,6 +11888,166 @@ export const FLOWS = {
       },
     },
   },
+  /*
+    M2 — the courier health page, and it WRITES NOTHING.
+
+    Every scene is a question: the poll's own status (the button beside
+    it is M3 and is dangerous — this video does not press it), one
+    waybill lookup that is reads-only by its own promise, and one
+    serviceability probe that creates nothing. It does NOT press "Refill
+    waybill pool" (that spends the account's real allocation) and does
+    NOT register a warehouse.
+  */
+  'is-the-courier-healthy': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      // The waybill the lookup scene types. An operator arrives holding
+      // one too — off a label, or a customer's email.
+      ctx.sheet = await readFixture('is-the-courier-healthy');
+      await ctx.page.goto(`${ctx.baseUrl}/delhivery`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Delhivery', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2800);
+      },
+
+      async tracking({ page, stage }) {
+        const said = page.getByText(/sends us no webhooks/i).first();
+        await said.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(said, 3600);
+      },
+
+      async lookup({ page, stage, sheet }) {
+        const box = page.getByLabel(/^AWB numbers$/);
+        await box.waitFor({ state: 'visible', timeout: 20_000 });
+        /*
+          IT IS TYPED, NOT READ. The two numbers already in that box are
+          a PLACEHOLDER — `getByText` cannot see them and neither can a
+          person who clicks into it. A waybill is minted per box, so the
+          seed hands one over.
+        */
+        await stage.typeIn(box, sheet.awbNumber, { delay: 28, after: 700 });
+      },
+
+      async reads({ page, stage }) {
+        await stage.dwellOn(
+          page.getByText(/no tracking event is written and no order moves/i).first(),
+          3400,
+        );
+      },
+
+      async result({ page, stage, sheet }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Look up$|^Looked up$/ }).first(), {
+          after: 2200,
+        });
+        const card = page.locator('.af-strong.sk-ident', { hasText: sheet.awbNumber }).first();
+        await card.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(900);
+        /*
+          IT HAS TO HAVE ANSWERED — and BOTH answers are the scene.
+
+          The line is about the SHAPE of the reply: whether they know
+          the waybill at all, their scans, and what our mapping makes of
+          each one. "Delhivery has no scans" beside "we hold this
+          shipment" is the most useful thing this panel ever says, so it
+          is not a failure here. What WOULD be is a card with neither —
+          a lookup that errored or never returned, which looks identical
+          to a quiet one.
+        */
+        const panel = card.locator('xpath=ancestor::*[contains(@class,"af-card")][1]');
+        const said = await panel.innerText();
+        if (!/scans/i.test(said)) {
+          throw new Error(
+            `The lookup card for ${sheet.awbNumber} reads "${said}" — it names neither scans ` +
+              'nor their absence, so the call did not come back.',
+          );
+        }
+        await stage.dwellOn(panel, 3200);
+      },
+
+      async connection({ page, stage }) {
+        const card = page
+          .locator('.af-card')
+          .filter({ hasText: /Live API|Stub mode/ })
+          .first();
+        await card.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(card, 3000);
+      },
+
+      async guard({ page, stage }) {
+        const card = page
+          .locator('.af-card')
+          .filter({ hasText: /Live writes (enabled|blocked)/ })
+          .first();
+        await stage.dwellOn(card, 3600);
+      },
+
+      async pool({ page, stage }) {
+        const said = page.getByText(/five bulk requests per five minutes/i).first();
+        await said.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(said, 3400);
+      },
+
+      async states({ page, stage }) {
+        const kpis = page.locator('.af-kpis').first();
+        await kpis.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(kpis, 3200);
+      },
+
+      async budget({ page, stage }) {
+        /*
+          THE TIGHT ROW BY NAME. "waybill bulk" is five per five minutes
+          against everything else's thousands, and it is the one the
+          narration singles out — reaching for the first row instead
+          would film whichever the API happened to return first.
+        */
+        const row = page.locator('.sk-tbody .sk-tr').filter({ hasText: 'waybill bulk' }).first();
+        await row.waitFor({ state: 'visible', timeout: 20_000 });
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(row, 3200);
+      },
+
+      async waf({ page, stage }) {
+        await stage.dwellOn(page.getByText(/blocks our whole egress IP/i).first(), 3400);
+      },
+
+      async reach({ page, stage }) {
+        const card = page.locator('.af-card').filter({ hasText: 'Reachability' }).first();
+        await card.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.clickIt(card.getByRole('button', { name: 'Check connection' }), {
+          after: 2400,
+        });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(card, 2600);
+      },
+
+      async pickup({ page, stage }) {
+        const card = page.locator('.af-card').filter({ hasText: 'Pickup location' }).first();
+        await card.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.getByText(/Delhivery matches it exactly/i).first(), 3600);
+      },
+
+      async outro({ page, stage }) {
+        await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+    },
+  },
 };
 
 /**
@@ -12338,19 +12528,30 @@ function bankField(page, label) {
 }
 
 /**
- * N5's payout, and the export the seed wrote for it.
+ * N5's payout reference, and the export the seed wrote for it.
  *
- * The TOTAL is what the two delivered parcels come to after one of them
- * is short-paid — keep in step with `writeRemittanceExport` and
- * `DESK_PAYOUT_SHORT_INR` in `seed-demo-data.mjs`. It is typed by the
- * operator from the STATEMENT rather than taken from the file, which is
- * the form's own rule: the file is the courier's claim and the bank is
- * the fact.
+ * The prefix is what `unrecordTutorialPayouts` finds to undo a previous
+ * take, so the two must agree or the second take opens on a float of
+ * zero.
  *
- * The reference prefix is what `unrecordTutorialPayouts` finds to undo a
- * previous take, so the two must agree or the second take opens on a
- * float of zero.
+ * The AMOUNT is not here. It is typed by the operator from the
+ * STATEMENT rather than taken from the file — the form's own rule: the
+ * file is the courier's claim and the bank is the fact — and it is read
+ * from the seed's fixture, because a constant was only ever right for
+ * the set of parcels one box happened to have unsettled.
  */
-const PAYOUT_TOTAL_INR = 4750;
 const PAYOUT_REFERENCE = 'UTR-TUT-20261001-4417';
 const REMITTANCE_EXPORT = path.join(GENERATED_DIR, 'courier-remittance.csv');
+
+/**
+ * One allocation line's amount box, BY ITS `aria-label`.
+ *
+ * The input carries `aria-label="Amount attributed to this order"` next
+ * to a visible `label="Amount"`, and an `aria-label` on the control is
+ * the accessible name — so the word on screen is not the handle. Named
+ * once here because two scenes reach for it and the next person to read
+ * either of them would otherwise have to rediscover why.
+ */
+function allocationAmount(dialog) {
+  return dialog.getByLabel('Amount attributed to this order', { exact: true });
+}

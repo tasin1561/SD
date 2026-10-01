@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 70 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1, N1–N4, N9 and P5.** The 20 left are all in the admin app: 2 are
+**90 tutorials. 71 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N4, N9 and P5.** The 19 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (70):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (71):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1**, **N1–N4** and **N9**.
+**L1–L3**, **M1–M2**, **N1–N4** and **N9**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -46,8 +46,8 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**THE NEXT ENTRY IS M2 — "Is the courier integration healthy"**, and K, L1–L3
-and M1 are done.
+**THE NEXT ENTRY IS M3 — "Making parcels move"**, and K, L1–L3, M1 and M2 are
+done. M3 is `dangerous`: it presses the one button M2 deliberately does not.
 
 **L4 IS SKIPPED FOR NOW, ON PURPOSE, and it is the one entry out of order.** It
 is `needs demo data` and `dangerous`, and its form asks for NINE ids — seller,
@@ -221,6 +221,43 @@ one side leaves the other clearing nothing, and two takes later the list has
 three identical rows on it. The test reads both sources and compares the
 declarations. **Any future "the flow types it, the seed removes it" string goes
 in there in the same commit.**
+
+**WHAT M2 LEFT BEHIND, MEASURED (2026-10-01).** NOTHING that persists. Every
+scene is a question: the poll's own status, one waybill lookup, the write guard,
+the pool, the rate budget and one serviceability probe. It spends two units of
+rate budget (the lookup and the probe, both visible as `599 / 600` on the
+tracking row the next time you open it), and that is the whole of its footprint.
+
+**It does NOT press three buttons that are on the same page**, each for its own
+reason, and the reasons are worth keeping together because this is the densest
+page of dangerous controls in the console: **"Run a cycle now"** is M3 and it
+ACTS (writes tracking events, moves orders, credits money downstream);
+**"Refill waybill pool"** spends the account's real AWB allocation; **"Register
+a warehouse"** writes to the courier's own records. M2 narrates what the first
+one is for and never touches it.
+
+**THE AWB BOX IS EMPTY AND THOSE TWO NUMBERS ARE A PLACEHOLDER.** This is the
+README's `getByText` trap arriving as a seeding question rather than a selector
+one: the video has to TYPE a waybill, and a waybill is minted per box, so
+`delhiveryHealthWorldFor` writes one into the fixture — a parcel the courier has
+actually seen, not one still at `CREATED`.
+
+**AND THE THING THAT DECIDED THE NARRATION: THE SIMULATOR IS IN-MEMORY.**
+`/_sim/parcels` was EMPTY against 78 waybills in the database, because the
+simulator had been restarted with the stack and the database had not. So the
+lookup comes back `Delhivery has no scans · we hold this shipment` — which is
+not a defect and is arguably the most useful thing that panel ever says, so the
+line was written to be true of BOTH answers: whether they know the waybill at
+all, their scans, and what our mapping makes of each one. The flow asserts the
+card names scans or their absence (proving the call returned) and deliberately
+does not require scans. **Do not "fix" this by advancing the parcel in the
+simulator before the take** — every advance fires a signed webhook, which
+appends real tracking events to a parcel that already finished its journey.
+
+**A courier that cannot be asked announces itself, and it lands in the frame.**
+The lookup toasts `shiprocket could not be asked — no active courier account, so
+no token` (TRK-12). It is correct and it is in shot for a few seconds of the
+result scene; worth knowing it is the system working rather than a fault.
 
 **WHAT K2 LEFT BEHIND, MEASURED (2026-10-01).** The returns bench now holds
 exactly ONE un-finalised return on any run, and it is K2's own: three things
