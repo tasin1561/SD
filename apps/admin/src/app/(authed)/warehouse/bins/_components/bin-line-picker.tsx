@@ -3,6 +3,7 @@
 import { type ReactElement } from 'react';
 import { Select } from '@skydrop/ui/app/select';
 import { useBinContents, type BinStockLine } from '@/lib/bin-contents-hooks';
+import { Note } from '../../../inventory/_components/stock-kit';
 
 /**
  * WHICH line in this bin is moving — asked by NAME, never typed.
@@ -127,10 +128,17 @@ function LoadedBinLinePicker({
         // Saying so beats a dropdown that silently ends: a FLOOR bin can
         // hold every SKU we stock, and "it is not in the list" and "the
         // list stopped" are different problems with different answers.
-        <p className="stk-hint">
+        //
+        // `Note`, not a hand-written class. The first cut said
+        // `className="stk-hint"` — a class that exists nowhere in the
+        // estate, so the sentence rendered with no styling at all and
+        // nothing failed: not typecheck, which does not read CSS, not
+        // lint, and not the test, which asserts the WORDS. A component
+        // cannot be misspelled without the build saying so.
+        <Note tone="warn">
           Showing the first {items.length} of {contents.data?.total ?? 0}. Move in smaller batches,
           or move the whole bin.
-        </p>
+        </Note>
       )}
     </>
   );

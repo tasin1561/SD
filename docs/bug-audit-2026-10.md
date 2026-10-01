@@ -334,6 +334,21 @@ premise at L489-510 / L799.
    in the gate can see that.
 2. **The bulk-move panel put a request on the wire per empty draft row** —
    `/api/admin/bin-contents/` with no bin id. Harmless, and gone with the picker.
-3. **`docs/phase-1a-debt.md` has no entry for either bug fixed here**, and had
+3. **A misspelled class name is invisible to every gate we have.** The first cut
+   of `bin-line-picker.tsx` wrote `className="stk-hint"`; the real class is
+   `stk-note`. Typecheck does not read CSS, lint does not know which names are
+   real, and its own spec asserts the WORDS — which were there, unstyled. Fixed
+   by using the `Note` component (a component cannot be misspelled without the
+   build saying so) and guarded by `apps/admin/src/tests/class-names-exist.test.ts`,
+   which checks every hand-written `stk-`/`wh-`/`sk-`/`bin-` class against the
+   CSS. **Estate-wide that scan now returns zero**, so the guard is cheap and
+   should stay green.
+
+   It also reproduced this codebase's own recorded trap on the first run: the
+   scan flagged the *comment* explaining the fix, because `className="stk-hint"`
+   inside a sentence about `className="stk-hint"` is the same bytes. Prose about
+   a rule reads exactly like the rule to a regex — the `@SellerRoles` lesson —
+   so the test strips comments before it reads anything.
+4. **`docs/phase-1a-debt.md` has no entry for either bug fixed here**, and had
    no entry for any of the eight curriculum notes. The two documents do not
    cross-reference, so a note parked in one is invisible from the other.
