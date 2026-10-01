@@ -5,7 +5,7 @@
  * notification templates and FX; `seed-demo-data.mjs` writes the demo
  * seller, its catalogue, its stock and its orders. Between them they
  * build almost the whole world — and on a genuinely empty database they
- * still leave three gaps, every one of which was filled BY HAND in the
+ * still leave FOUR gaps, every one of which was filled BY HAND in the
  * original dev database through the admin UI and therefore exists
  * nowhere in the repository:
  *
@@ -26,7 +26,14 @@
  *      rupee account for payouts and one taka account for seller
  *      remittances, which is what the money flows need.
  *
- *   3. THE SIMULATOR POINTER. `courier.delhivery_api_base_url` is
+ *   3. THE PICKUP LOCATION. `DelhiveryAwbService` refuses to manifest
+ *      a parcel without one, and the refusal happens inside the AWB job
+ *      rather than at confirmation — so the only thing the seed says is
+ *      "gave up waiting for a waybill after 30s", with the real reason
+ *      three BullMQ retries deep in the API's log. Found exactly that
+ *      way by the first from-scratch stack.
+ *
+ *   4. THE SIMULATOR POINTER. `courier.delhivery_api_base_url` is
  *      seeded EMPTY (stub mode) and `courier.delhivery_live_writes_enabled`
  *      seeded FALSE, both correctly — a repository must not ship a
  *      configuration that books parcels. A stack points them at ITS OWN
@@ -53,6 +60,13 @@ import { assertStackEnvironment, resolveStack } from './lib/stacks.mjs';
 
 /** The throwaway credential. The simulator authenticates nobody; the row has to exist. */
 const SIM_API_TOKEN = 'simulator-token-not-a-secret';
+
+/**
+ * The name the warehouse is registered under with the courier. Matched
+ * EXACTLY on every manifest, which is why it is a value and not a guess
+ * — and why the real one is immutable once registered (courier-ops).
+ */
+const PICKUP_LOCATION = 'Skydrop';
 
 const COURIER_ACCOUNTS = [
   { label: 'Simulator account', environment: 'PRODUCTION', isDefault: true },
@@ -86,6 +100,20 @@ function stackSettings(stack) {
     // OFF deliberately: the pool refill consumes a real account's waybill
     // allocation, and against the simulator it is simply noise.
     { key: 'courier.delhivery_waybill_pool_refill_enabled', valueType: 'BOOLEAN', value: false },
+    // THE PICKUP LOCATION, which is the fourth thing nobody had written
+    // down. It was found by a from-scratch stack failing the lifecycle:
+    // `DelhiveryAwbService` refuses to manifest without one — "this
+    // account has no pickup_location_name and
+    // system_settings 'courier.delhivery_pickup_location' is unset" —
+    // and because the refusal happens inside the AWB job rather than at
+    // confirmation, the seed simply reported "Gave up waiting for a
+    // waybill on RSH-LIFE-DELIVERED after 30s" with the real reason
+    // three retries deep in the API's log. The original dev database
+    // carries 'Skydrop' in the SETTING rather than on either account, so
+    // that is what a stack gets; the simulator accepts any name, and
+    // using the same one keeps the two stacks' courier payloads
+    // identical.
+    { key: 'courier.delhivery_pickup_location', valueType: 'STRING', value: PICKUP_LOCATION },
   ];
 }
 

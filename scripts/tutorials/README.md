@@ -735,6 +735,19 @@ created_at ASC` — a released call goes in front of every unstarted one
   system settings and 86 notification templates upserted into a database
   somebody is filming against. So `migrate_and_seed` counts the target
   database's tables afterwards and stops if the migration landed elsewhere.
+- **A from-scratch stack cannot book a waybill until `courier.delhivery_pickup_location`
+  is set, and the failure says nothing useful.** `DelhiveryAwbService` refuses
+  to manifest without a pickup location — the name the warehouse is registered
+  under with the courier, matched exactly on every manifest — and the refusal
+  happens inside the AWB job rather than at confirmation. So the seed reports
+  `Gave up waiting for a waybill on RSH-LIFE-DELIVERED after 30s` and the real
+  reason sits three BullMQ retries deep in the API's log. `provision-stack.mjs`
+  sets it; this is here because that is the shape of EVERY missing hand-made
+  row: a from-scratch stack tells you about it as a timeout somewhere else.
+  **After three failed attempts the AWB job is not retried** (and nothing
+  re-enqueues it until ATT-1's hourly sweep), so fixing the cause is not
+  enough on its own — re-run `provision-stack.mjs`, then `stack.sh up <name>`
+  to restart the API, then let the sweep pick it up or re-enqueue by hand.
 - **The login throttle is now per stack**, because the counters live in Redis
   and each stack owns its own logical DB. `lib/clear-login-throttle.mjs`
   clears only its own stack's, which is also why it is safe to run while
