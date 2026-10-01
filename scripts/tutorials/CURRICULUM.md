@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 66 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1, L2, N1, N2, N9 and P5.** The 24 left are all in the admin app: 2 are
+**90 tutorials. 67 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, N1, N2, N9 and P5.** The 23 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (66):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (67):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L2**, **N1**, **N2** and **N9**.
+**L1–L3**, **N1**, **N2** and **N9**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -46,8 +46,8 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**THE NEXT ENTRY IS L3 — "Reading the stock ledger"**, and sections K, L1 and
-L2 are done.
+**THE NEXT ENTRY IS L4 — "Moving stock between warehouses"**, and sections K,
+L1, L2 and L3 are done. Section M follows L4.
 
 **ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N3 —
 "Paying a seller out".** N1, N2 and N9 are filmed. `moneyDeskWorldFor` is the
@@ -128,6 +128,34 @@ three or four seconds in before concluding anything** — at 134.5 s the queue
 scene shows the one PENDING `CYCLE_COUNT` / `COUNTING_ERROR` row at +₹0.00,
 which is the sentence exactly. The skeleton lasts about two seconds of an
 eleven-second scene.
+
+**WHAT L3 LEFT BEHIND, MEASURED (2026-10-01).** NOTHING, and that is the entry.
+It is the first admin video with **no seeding function at all** — no world, no
+fixture, not a byte written — because every handle it needs is on the screen and
+it changes nothing it looks at. The variant it traces is read off a ROW
+(`ctx.variantId`, handed from the `transfer` scene to the `variant` one through
+the shared context `record.mjs` now passes), which is where an operator gets one
+too. `lib/fixture.mjs` stays the exception it was written as.
+
+**Three things about filming a dense table, all paid for here.**
+
+- **`SkeletonRows` renders INSTEAD of the table**, and every filter change mints
+  a new query key, so a gate on "a row exists" is satisfied by the placeholder
+  on every single one of them. `ledgerRows` waits for the TABLE, which only
+  exists once there is data behind it. The whole flow goes through it.
+- **NEVER halo a table that is taller than the screen.** `stage.point` calls
+  `scrollIntoViewIfNeeded`, so pointing at this one scrolls to its middle and
+  takes the filter toolbar — which most of these scenes are ABOUT — out of the
+  picture. Halo a ROW, or the control that was just used. The `bin` scene
+  haloes `#mv-bin` and the filters stay in frame above its own result.
+- **A cleared field keeps its focus ring.** `fill('')` on the variant filter
+  left it outlined through the next scene, which is about the two selects beside
+  it; `blur()` gives it back.
+
+**And `stage.glide` is the right answer when the narration says to READ
+something.** L3's `trace` line is "read it downwards and the story is there", so
+it scrolls down slowly and back rather than haloing one row in the middle of a
+history — a halo would point at the one row the sentence is not about.
 
 **WHAT K2 LEFT BEHIND, MEASURED (2026-10-01).** The returns bench now holds
 exactly ONE un-finalised return on any run, and it is K2's own: three things
@@ -4330,3 +4358,39 @@ that bin and batch still say required, and that notes do not.
 **The shape to remember: a hint copied between neighbouring fields is invisible
 to every gate there is.** It typechecks, it renders, it is grammatical, and the
 two fields it is now wrong about are the two it is sitting between.
+
+**AND A FORTY-FIRST AND A FORTY-SECOND, both on the stock ledger, both found by
+writing L3's narration against the screen (2026-10-01).** Neither failed
+anything; both made the page quietly worse at the one job it has.
+
+**41. "Caused by" printed a uuid and never said WHAT it named.** A movement is
+caused by exactly one of three things — an order, a parcel, or a correction
+somebody raised — and `cause()` rendered all three as a bare `<Ident>`. So the
+one column on the ledger whose entire purpose is to answer "what caused this"
+answered with thirty-six characters that could equally be any of them: three
+different screens to go and look at, and nothing on the row saying which. The
+row already knew (only one of the three fields is ever set). `BinCell`, directly
+above it in the same file, carries the same argument in its own comment — "the
+code somebody can walk to, not a uuid" — and had simply not been applied one
+function further down. It now reads `order <id>` / `parcel <id>` /
+`adjustment <id>`, with the id intact, because the point of the id is pasting
+it somewhere.
+
+**42. The Type filter offered thirteen of fourteen kinds.** `MOVEMENT_TYPES` was
+a hand-kept literal and the schema has `PACK_REVERSED` — the give-back that
+returns a packed parcel's stock when its order is cancelled before any courier
+takes it (CUR-3). Of every kind to be unable to filter for, that is the one
+somebody comes to this page hunting: *we cancelled it, did the stock come
+back?* This box had eleven of them. The rows themselves showed up perfectly in
+the unfiltered list, so nothing was missing and nothing failed — the filter was
+just short, silently, and an operator who filtered and found nothing would
+conclude the give-back had never happened. It is `Object.values(StockMovementType)`
+now, in schema declaration order, which is lifecycle order and is what the
+literal was reaching for anyway; a fifteenth kind appears the day it is added.
+
+`movements-ledger.test.tsx` pins both and both were proved red first (the kind
+words absent, and thirteen offered against fourteen). **The shape they share: a
+list or a label that is CLOSE ENOUGH to right has no symptom.** One printed a
+true id with a missing noun; the other offered a true list with a missing
+member. Nothing throws, nothing renders wrong, and the only thing that notices
+is somebody trying to explain the screen out loud.

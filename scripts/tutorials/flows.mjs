@@ -1031,6 +1031,49 @@ async function pickVariant({ page, stage }, query) {
   await stage.clickIt(option, { after: 700 });
 }
 
+/**
+ * The stock ledger's rows, once they are REAL ones.
+ *
+ * `MovementsIndex` renders `SkeletonRows` INSTEAD of the table while a
+ * query is in flight, and every filter change mints a new query key —
+ * so a gate on "a row exists" is satisfied by the placeholder on every
+ * single one of them. The table itself is the honest question: it only
+ * exists once there is data behind it.
+ */
+async function ledgerRows(page) {
+  const table = page.getByRole('table').first();
+  await table.waitFor({ state: 'visible', timeout: 25_000 });
+  const rows = page.locator('.sk-tbody .sk-tr');
+  await rows.first().waitFor({ state: 'visible', timeout: 25_000 });
+  await page.waitForTimeout(400);
+  return rows;
+}
+
+/** One ledger row's cells, by the column names the header carries. */
+const LEDGER_COL = {
+  when: 0,
+  type: 1,
+  variant: 2,
+  bin: 3,
+  change: 4,
+  after: 5,
+  reason: 6,
+  cause: 7,
+};
+
+function ledgerCell(row, name) {
+  return row.locator('td').nth(LEDGER_COL[name]);
+}
+
+/** Change a filter and wait for the rows it asked for, not the ones on screen. */
+async function applyLedgerFilter({ page, stage }, locator, choose) {
+  await stage.point(locator, { settle: 300 });
+  await choose();
+  await page.waitForTimeout(600);
+  await stage.clearHalo();
+  return ledgerRows(page);
+}
+
 export const FLOWS = {
   'place-an-order': {
     /** Everything before scene one: sign in and land where the intro expects. */
@@ -10831,7 +10874,19 @@ export const FLOWS = {
         await page.waitForLoadState('networkidle').catch(() => {});
       },
 
+      /*
+        THE LIST OPENS ON PENDING AND NEVER LEAVES IT BY ITSELF. Approving
+        is exactly what takes the request OUT of the filter the page
+        opened on, so the row this scene is about has gone — which arrives
+        as a thirty-second wait for a row that was on screen a moment ago
+        rather than as anything about a filter. Drive the control.
+      */
       async approved({ page, stage }) {
+        await page
+          .getByLabel(/^Status$/)
+          .first()
+          .selectOption('APPROVED');
+        await page.waitForLoadState('networkidle').catch(() => {});
         const row = payoutRow(page);
         await row.waitFor({ state: 'visible', timeout: 25_000 });
         // The state the narration names, not the row that holds it: a
@@ -10890,9 +10945,15 @@ export const FLOWS = {
         await stage.dwellOn(dialog.getByLabel(/Wallet currency/).first(), 2400);
       },
 
+      /*
+        NO `$` ON EITHER OF THESE. `requiredMark` puts a `*` inside the
+        label, so a required field's accessible name is `FX rate*` and an
+        anchored-at-both-ends regex matches nothing at all — which arrives
+        as a thirty-second scroll timeout on a field plainly in the frame.
+      */
       async rate({ page, stage }) {
         const dialog = page.getByRole('dialog');
-        await stage.dwellOn(dialog.getByLabel(/^FX rate$/).first(), 2600);
+        await stage.dwellOn(dialog.getByLabel(/^FX rate/).first(), 2600);
         await stage.dwellOn(dialog.getByLabel(/^Destination amount/).first(), 2800);
       },
 
@@ -10909,7 +10970,7 @@ export const FLOWS = {
 
       async reference({ page, stage }) {
         const dialog = page.getByRole('dialog');
-        await stage.typeIn(dialog.getByLabel(/^Bank reference$/).first(), 'TRF-2026-10-01-88412', {
+        await stage.typeIn(dialog.getByLabel(/^Bank reference/).first(), 'TRF-2026-10-01-88412', {
           after: 700,
         });
         await page.waitForTimeout(900);
@@ -10930,8 +10991,19 @@ export const FLOWS = {
         await stage.dwellOn(page.locator('table').last(), 2800);
       },
 
+      /*
+        `?status=PAID` is NOT a thing: the filter is `useState` and reads
+        no query string, so the link lands on Pending and the closing
+        shot would be an empty table under a line about the request
+        closing itself. The select is the only way in.
+      */
       async outro({ page, stage, baseUrl }) {
-        await page.goto(`${baseUrl}/withdrawals?status=PAID`, { waitUntil: 'domcontentloaded' });
+        await page.goto(`${baseUrl}/withdrawals`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page
+          .getByLabel(/^Status$/)
+          .first()
+          .selectOption('PAID');
         await page.waitForLoadState('networkidle').catch(() => {});
         const row = payoutRow(page);
         await row.waitFor({ state: 'visible', timeout: 25_000 });
@@ -11349,6 +11421,217 @@ export const FLOWS = {
         await page.waitForURL(/\/seller-wallets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
         await stage.dwellOn(await ledgerRow(page, 'Debited by Skydrop'), 3600);
+      },
+    },
+  },
+  /*
+    L3 — the stock ledger, read-only and entirely page-driven.
+
+    NO FIXTURE and no seeding: every handle this video needs is on the
+    screen, which is the default `lib/fixture.mjs` exists to stay the
+    exception to. The variant it traces is read off a ROW rather than
+    minted, because that is where an operator gets one too.
+  */
+  'read-the-stock-ledger': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/inventory/movements`, { waitUntil: 'domcontentloaded' });
+        await ledgerRows(page);
+        await stage.dwellOn(page.getByRole('heading', { name: 'Stock movements' }).first(), 3000);
+      },
+
+      async appendonly({ page, stage }) {
+        // The promise this screen makes about itself, in its own words.
+        const said = page.locator('.sk-ph__subtitle').first();
+        await said.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(said, 3400);
+      },
+
+      async row({ page, stage }) {
+        const rows = await ledgerRows(page);
+        await stage.dwellOn(rows.first(), 3600);
+      },
+
+      async change({ page, stage }) {
+        /*
+          THE HALO MOVES, which is the sentence. "What it changed, and
+          what the shelf held afterwards" is two cells, and the second
+          is the one the line is really about — so it is pointed at
+          second and held, rather than both being gestured at once.
+        */
+        const first = (await ledgerRows(page)).first();
+        await stage.point(ledgerCell(first, 'change'), { settle: 1500 });
+        await stage.dwellOn(ledgerCell(first, 'after'), 2600);
+      },
+
+      async cause({ page, stage }) {
+        const rows = await ledgerRows(page);
+        const n = await rows.count();
+        for (let i = 0; i < n; i += 1) {
+          const cell = ledgerCell(rows.nth(i), 'cause');
+          const said = (await cell.innerText()).trim();
+          if (/^(order|parcel|adjustment) /.test(said)) {
+            await stage.dwellOn(cell, 3600);
+            return;
+          }
+        }
+        throw new Error(
+          'No row names what caused it. The column renders the kind before the id ' +
+            '(order / parcel / adjustment) and the narration says so — a column of bare ' +
+            'uuids is the bug this video found.',
+        );
+      },
+
+      async types({ page, stage }) {
+        await stage.dwellOn(page.locator('#mv-type'), 3200);
+      },
+
+      async pack({ page, stage }) {
+        const rows = await applyLedgerFilter({ page, stage }, page.locator('#mv-type'), () =>
+          page.locator('#mv-type').selectOption('PACK_CONFIRM'),
+        );
+        const n = await rows.count();
+        if (n === 0) throw new Error('No pack-confirm movements — the whole scene is about them.');
+        await page.waitForTimeout(500);
+        /*
+          A ROW, NEVER THE TABLE. `stage.point` calls
+          `scrollIntoViewIfNeeded`, and this table is several screens
+          tall — pointing at it scrolls to its middle and takes the
+          filter toolbar, which every one of these scenes is about, out
+          of the picture entirely.
+        */
+        await stage.dwellOn(rows.first(), 2800);
+      },
+
+      async transfer(ctx) {
+        const { page, stage } = ctx;
+        const rows = await applyLedgerFilter({ page, stage }, page.locator('#mv-type'), () =>
+          page.locator('#mv-type').selectOption(''),
+        );
+        /*
+          THE PAIR, PROVED rather than assumed. A transfer is a
+          TRANSFER_OUT and a TRANSFER_IN written together and carrying
+          the same cause, so the scene asserts both halves are on screen
+          before haloing one of them — the other is the row beside it.
+        */
+        const n = await rows.count();
+        let out = null;
+        const ins = [];
+        for (let i = 0; i < n; i += 1) {
+          const row = rows.nth(i);
+          const kind = (await ledgerCell(row, 'type').innerText()).trim();
+          if (kind === 'transfer out' && out === null) out = { row, i };
+          if (kind === 'transfer in') ins.push(i);
+        }
+        if (out === null || ins.length === 0) {
+          throw new Error(
+            'No transfer pair on the first page of the ledger — the scene says a move is ' +
+              'always two rows and needs both of them visible.',
+          );
+        }
+        await out.row.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(600);
+        await stage.dwellOn(out.row, 3200);
+        /*
+          CARRIED FORWARD ON THE CONTEXT, which is the one object the
+          prologue and every step share (see `record.mjs`). The next
+          scene traces THIS product — the one the viewer has just been
+          watching move — rather than whichever happens to be first.
+        */
+        ctx.variantId = (await ledgerCell(out.row, 'variant').innerText()).trim();
+      },
+
+      async variant({ page, stage, variantId }) {
+        if (variantId === undefined) {
+          throw new Error('The transfer scene did not hand a variant forward.');
+        }
+        await stage.typeIn(page.locator('#mv-variant'), variantId, { delay: 16, after: 900 });
+        const rows = await ledgerRows(page);
+        const n = await rows.count();
+        if (n === 0) throw new Error(`Filtering to ${variantId} left no rows.`);
+        await stage.dwellOn(page.locator('#mv-variant'), 2400);
+      },
+
+      async trace({ page, stage }) {
+        const rows = await ledgerRows(page);
+        const n = await rows.count();
+        if (n < 3) {
+          throw new Error(
+            `Only ${n} row(s) for this product — the scene reads a HISTORY downwards.`,
+          );
+        }
+        // "Read it downwards" — so it is read downwards, slowly, rather
+        // than jumped to a halo somewhere in the middle of it.
+        await stage.glide(520);
+        await page.waitForTimeout(1200);
+        await stage.glide(-520);
+      },
+
+      async bin({ page, stage }) {
+        await page.locator('#mv-variant').fill('');
+        // …and give the focus ring back, or the emptied field stays
+        // outlined through a scene that is about the two selects beside it.
+        await page.locator('#mv-variant').blur();
+        await page.waitForTimeout(400);
+        await applyLedgerFilter({ page, stage }, page.locator('#mv-wh'), () =>
+          page.locator('#mv-wh').selectOption({ label: 'Kolkata Main' }),
+        );
+        /*
+          THE BIN SELECT IS DISABLED UNTIL A WAREHOUSE IS PICKED — a
+          shelf belongs to one building — and its own placeholder says
+          "Pick a warehouse" while it is. That ordering IS the scene, so
+          it is done in that order on camera rather than set up off it.
+        */
+        const rows = await applyLedgerFilter({ page, stage }, page.locator('#mv-bin'), () =>
+          page.locator('#mv-bin').selectOption({ label: 'A-01-01' }),
+        );
+        const n = await rows.count();
+        if (n === 0) throw new Error('No movements on A-01-01 — the scene is about one shelf.');
+        for (let i = 0; i < n; i += 1) {
+          const said = (await ledgerCell(rows.nth(i), 'bin').innerText()).trim();
+          if (!said.startsWith('A-01-01')) {
+            throw new Error(`Filtered to one shelf and a row reads "${said}".`);
+          }
+        }
+        await stage.dwellOn(page.locator('#mv-bin'), 2600);
+      },
+
+      async reason({ page, stage }) {
+        // Back out to every warehouse (which clears the bin with it) and
+        // ask for corrections alone: the reason column is empty on the
+        // movements an ordinary parcel writes, and full on these.
+        await applyLedgerFilter({ page, stage }, page.locator('#mv-wh'), () =>
+          page.locator('#mv-wh').selectOption(''),
+        );
+        const rows = await applyLedgerFilter({ page, stage }, page.locator('#mv-type'), () =>
+          page.locator('#mv-type').selectOption('ADJUSTMENT_DECREASE'),
+        );
+        const n = await rows.count();
+        const reasons = [];
+        for (let i = 0; i < n; i += 1) {
+          reasons.push((await ledgerCell(rows.nth(i), 'reason').innerText()).trim());
+        }
+        const first = reasons.findIndex((r) => r !== '' && r !== '—');
+        if (first === -1) {
+          throw new Error(
+            'Every decrease here is missing its reason code — INV-7 requires one on an ' +
+              'adjustment, and the scene is about reading it months later.',
+          );
+        }
+        await stage.dwellOn(ledgerCell(rows.nth(first), 'reason'), 3000);
+      },
+
+      async outro({ page, stage }) {
+        await applyLedgerFilter({ page, stage }, page.locator('#mv-type'), () =>
+          page.locator('#mv-type').selectOption(''),
+        );
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
       },
     },
   },

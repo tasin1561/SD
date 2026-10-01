@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactElement } from 'react';
+import { StockMovementType } from '@skydrop/db';
 import { Ident, Num } from '@skydrop/ui/components';
 import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
 import { EmptyState } from '@skydrop/ui/app/empty-state';
@@ -225,30 +226,53 @@ function BinCell({ m }: { readonly m: StockMovementView }): ReactElement {
   );
 }
 
-/** Which upstream record explains this row. */
+/**
+ * Which upstream record explains this row — SAYING WHICH KIND IT IS.
+ *
+ * All three of these are uuids and they used to render identically, so
+ * the one column on this screen whose entire job is to answer "what
+ * caused it" answered with thirty-six characters that could equally be
+ * an order, a parcel or a correction. Three different places to go and
+ * look, and nothing on the row said which. The row already knows: only
+ * one of the three fields is set. `BinCell` directly above has the same
+ * argument in its own comment — the code somebody can walk to, not a
+ * uuid — and this is that one step further: the id is still here to
+ * paste, with the word that says where to paste it.
+ */
 function cause(m: {
   orderId: string | null;
   shipmentId: string | null;
   adjustmentId: string | null;
 }): ReactElement {
-  if (m.orderId !== null) return <Ident value={m.orderId} />;
-  if (m.shipmentId !== null) return <Ident value={m.shipmentId} />;
-  if (m.adjustmentId !== null) return <Ident value={m.adjustmentId} />;
+  if (m.orderId !== null) return <Caused kind="order" id={m.orderId} />;
+  if (m.shipmentId !== null) return <Caused kind="parcel" id={m.shipmentId} />;
+  if (m.adjustmentId !== null) return <Caused kind="adjustment" id={m.adjustmentId} />;
   return <span className="stk-faint">—</span>;
 }
 
-const MOVEMENT_TYPES = [
-  'RECEIVING',
-  'PUT_AWAY',
-  'PICK',
-  'PACK_CONFIRM',
-  'DISPATCH',
-  'RETURN_RECEIVE',
-  'RETURN_RESTOCK',
-  'ADJUSTMENT_INCREASE',
-  'ADJUSTMENT_DECREASE',
-  'TRANSFER_OUT',
-  'TRANSFER_IN',
-  'CYCLE_COUNT_ADJUST',
-  'EXPIRY_WRITE_OFF',
-] as const;
+function Caused({ kind, id }: { readonly kind: string; readonly id: string }): ReactElement {
+  return (
+    <span>
+      <span className="stk-muted">{kind} </span>
+      <Ident value={id} />
+    </span>
+  );
+}
+
+/**
+ * EVERY kind, DERIVED — never a hand-kept copy of the enum.
+ *
+ * It was a literal of thirteen, and the schema has fourteen: it was
+ * missing `PACK_REVERSED`, the give-back that returns a packed parcel's
+ * stock when its order is cancelled before the courier ever takes it
+ * (CUR-3). That is the one movement an operator is most likely to come
+ * here hunting for — "we cancelled it, did the stock come back?" — and
+ * the filter simply had no entry for it, while the rows themselves
+ * showed up perfectly in the unfiltered list. Nothing failed; the list
+ * was quietly short.
+ *
+ * `Object.values` is in schema declaration order, which is lifecycle
+ * order, which is what the hand-written list was reaching for anyway.
+ * A fifteenth kind now appears here the day it is added.
+ */
+const MOVEMENT_TYPES = Object.values(StockMovementType);

@@ -4109,6 +4109,65 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'read-the-stock-ledger',
+    title: 'Reading the stock ledger',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'The stock ledger. Every change to a quantity we have ever made, and what caused it \u2014 which makes it the last page of almost every argument about inventory.',
+      },
+      {
+        id: 'appendonly',
+        say: 'Read the line under the title, because it is a promise about this screen. Append only. Nothing here was ever edited, nothing was ever deleted, and there is no endpoint that could do either.',
+      },
+      {
+        id: 'row',
+        say: 'A row is one movement. When it happened, what kind, which product, which shelf \u2014 and then the two numbers that make it evidence rather than a note.',
+      },
+      {
+        id: 'change',
+        say: 'What it changed, and what the shelf held afterwards. The second one is the part people forget to ask for: without it you can see every step and still not know whether they add up.',
+      },
+      {
+        id: 'cause',
+        say: 'And what caused it. An order, a parcel, or a correction somebody raised \u2014 said in a word, because the identifier beside it would be the same shape whichever of the three it was.',
+      },
+      {
+        id: 'types',
+        say: 'The kinds are a vocabulary worth knowing, because each one means a different thing happened in the building. Receiving is goods arriving. Pack confirm is goods leaving.',
+      },
+      {
+        id: 'pack',
+        say: 'That one surprises people. Stock comes off the shelf when the box is sealed, not when the van takes it \u2014 so a parcel that is packed and still here has already been taken out of what we can sell.',
+      },
+      {
+        id: 'transfer',
+        say: 'And a move between shelves is always two rows, never one. Out of somewhere and into somewhere else, at the same moment, with the same cause. Stock is never created here and never destroyed.',
+      },
+      {
+        id: 'variant',
+        say: 'Then the filters, which are the two questions people actually arrive with. Paste a product and you get its whole history \u2014 what happened to this SKU.',
+      },
+      {
+        id: 'trace',
+        say: 'Read it downwards and the story is there: what came in, what went out, and where the number you are arguing about came from.',
+      },
+      {
+        id: 'bin',
+        say: 'The other question is about a place rather than a product. Pick the warehouse first \u2014 a shelf belongs to one building \u2014 and then the shelf, and you get everything that has happened on it.',
+      },
+      {
+        id: 'reason',
+        say: 'Corrections carry a reason, and this is where it earns its keep. Lost, returned to the seller, a counting error, something that never finished its journey \u2014 months later that word is the whole of what anybody remembers.',
+      },
+      {
+        id: 'outro',
+        say: 'So come here when a number does not add up, filter by the product or the shelf, and read until the rows stop agreeing with you. Nothing on this page can be changed, which is exactly why it settles it.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
