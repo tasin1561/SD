@@ -32,8 +32,8 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (59):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J8** — **the whole of section J**.
+**Filmed so far (60):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8** — **the whole of section J** — and **K1**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -2939,15 +2939,50 @@ is not.
 
 ## K — Returns
 
-### K1. Taking a return in · `needs demo data`
+### K1. Taking a return in · **FILMED** — `take-a-return-in.mp4`
 
 **Promise** — you can book a returned parcel in at the door.
-**Length** 3 min. **Needs** an RTO_IN_TRANSIT parcel. D0 provides one.
+**Length** 10 scenes, ~1 min 50 s. **Needs**
+`seed-demo-data.mjs take-a-return-in` (D0's lifecycle pass).
 **Covers** `/warehouse/rto`'s four tabs, then receiving by waybill — and the
 rule behind it: a courier scan **never** drives "received", because the
 conservation-critical chain past this point needs physical confirmation. The
 units are booked into the returns hold at this moment, so a received-but-
 undecided return is on the ledger rather than nowhere.
+
+**ITS PARCEL IS `RSH-LIFE-ATDOOR`, WHICH ALREADY EXISTED** — built for P5, and
+the ONE parcel in D0 whose order and shipment deliberately part company: the
+order stays at RTO_IN_TRANSIT while the shipment goes on to RTO_DELIVERED,
+because TRK-6 forbids a scan moving the order to RTO_RECEIVED. That is exactly
+what puts a row on "At our door", and exactly what `receive` accepts.
+
+**P5 only READ that worklist; K1 SPENDS it**, so the parcel gained
+`spendable: true` — `retireSpentParcel`'s first test is already
+`status !== want`, so the spent one is retired with every row it has and a fresh
+one is driven through its six stages on the next lifecycle run. Without it the
+second take of either video would open on "Nothing waiting to be received".
+
+**The waybill on the row is a BUTTON**, and that is the scene the narration is
+about: clicking it fills the receive box and moves to the Receive tab in one
+act, because the person doing this has a carton in their hands rather than a
+mouse.
+
+**AND BUILDING IT FOUND TWO SEEDING BUGS, both latent until `spendable` met a
+failed drive.** (1) `retireSpentParcel`'s spent test was `status !== want`,
+which is ALSO true of a half-built parcel sitting at PENDING_CONFIRMATION — so
+the next run retired a brand-new order as spent, tried to place a replacement
+for the same customer, and was refused `DUPLICATE_ORDER_SUSPECTED`. The parcel
+could then never be rebuilt. It returns early for anything in `RESUMABLE_FROM`
+now, which is already the list of states the pass can carry forward from, and
+the create acknowledges the duplicate its own retired parcel causes. (2) The
+stale-queue reconciler only closed ORDER_CONFIRMATION entries — deliberately,
+because the other three reasons exist to ring a customer PAST confirmation — but
+a DELIVERY_FAILED entry on an order that had reached RTO_RESTOCKED sat ASSIGNED
+with six reschedules, and the FIFO is `(scheduled_attempts > 0) DESC`, so it
+outranked every genuine call on the box and release put it straight back at the
+front. **Nothing could be confirmed through the call centre at all.** A second
+pass now closes follow-ups on orders that have FINISHED — restocked, written
+off, cancelled, rejected, lost — where no call of any reason can help.
 
 ### K2. Inspecting and finalising · `needs demo data` · **dangerous**
 
@@ -3984,3 +4019,33 @@ backstop; a failure releasing a box must never undo a parcel that is packed.
 `pack.service.spec.ts` pins three things — the forced path cancels, the ordinary
 path touches `pack_boxes` not at all, and a forced pack with no open box says
 nothing (the naked API call has none) — and the first was proved red first.
+
+**AND A THIRTY-NINTH, found by a frame rather than by a test (2026-10-01).**
+After receiving a return, the RTO station **kept listing it at our door**.
+
+`useReceiveRto`, `useInspectRtoItem` and `useFinalizeRto` invalidated NOTHING.
+So receiving a parcel left "At our door" showing the row and its red count,
+"On the bench" not showing it, and a FINALISED parcel on the bench for ever.
+The next person picks the same carton up — and `receive` is idempotent, so it
+answers "already received", which reads as a no-op rather than an explanation,
+and the pile gets handled twice. On a returns bench that is how a box is
+inspected by two people with two different answers.
+
+The handover bench three files away had already learnt this and says so in its
+own comment ("somebody loading a van reads a stale count as parcels they have
+missed"); the three RTO mutations beside it were missed.
+
+**Found by LOOKING at the check frame**, which showed `At our door 1` beside a
+panel reading "RTO received" — both correct in isolation, and together a
+contradiction. Nothing threw: a stale list is correct React Query behaviour over
+a correct server response, which is exactly why no behavioural test is positioned
+to see it.
+
+`rto-worklists-refresh.test.ts` reads the source, because what is wrong is a
+MISSING declaration and the cheapest way to pin one of those is to look for it.
+It was proved red first (5 of 6 failing) and it also pins the handover bench's
+own invalidation, so the precedent cannot quietly go the same way. The finalize
+hook additionally refreshes `admin-inventory` and `admin-movements` — stock
+really moves there — named by their real query roots rather than a tidy-looking
+`['inventory']`, which matches no query on this app and would have read as a
+refresh that never happens.

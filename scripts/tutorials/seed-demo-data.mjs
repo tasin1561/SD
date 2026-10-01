@@ -504,6 +504,12 @@ const LIFECYCLE_SLUGS = new Set([
   // `spendable` for that reason, so this pass retires the spent one and
   // builds a fresh one each run.
   'cancelling-an-order',
+  // K1 RECEIVES `RSH-LIFE-ATDOOR`, which P5 only reads. That spends it
+  // — the order goes to RTO_RECEIVED and its units are booked into the
+  // returns hold — so the parcel is `spendable` now and this pass
+  // retires and rebuilds it. K1 also needs `RSH-LIFE-RETURNING` for its
+  // "still with the courier" scene, which the same pass keeps alive.
+  'take-a-return-in',
 ]);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */

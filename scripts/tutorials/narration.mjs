@@ -3440,6 +3440,53 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'take-a-return-in',
+    title: 'Taking a return in',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A parcel has come back. It opens on the only urgent tab — these are standing at our door, and every hour they do is an hour the seller still thinks their goods are moving.',
+      },
+      {
+        id: 'door',
+        say: 'And read what it says about how one gets off this list. Receiving it is what starts the inspection, and nothing does that automatically. That is deliberate, not an omission.',
+      },
+      {
+        id: 'why',
+        say: 'Because the courier saying a parcel is back is not a parcel being back. Everything after this point moves real stock, and it needs somebody with the carton in front of them.',
+      },
+      {
+        id: 'transit',
+        say: 'The second tab is what is still travelling. Nothing to do here — it exists so the bench knows what is coming, and so a return on the road for weeks is visible somewhere.',
+      },
+      {
+        id: 'bench',
+        say: 'The third is what is already here and not finished with. Two different hold-ups live on it: boxes nobody has opened, and lines somebody looked at and could not decide about.',
+      },
+      {
+        id: 'pick',
+        say: 'Back to the door, and click the waybill. That fills it into the receive box and takes you to the bench — because the person doing this has a parcel in their hands, not a mouse.',
+      },
+      {
+        id: 'receive',
+        say: 'Receive. One press, and the parcel is ours again: the order moves, the clock on it stops, and its units are booked into the returns hold at this exact moment.',
+      },
+      {
+        id: 'hold',
+        say: 'That hold matters. Until a decision is made these units are somewhere real rather than nowhere — counted, not sellable, and findable by anybody who asks where they went.',
+      },
+      {
+        id: 'lines',
+        say: 'And here is what came back, line by line, each one waiting on somebody to say what condition it is in and what should happen to it.',
+      },
+      {
+        id: 'outro',
+        say: 'So: it arrives, somebody receives it, and the units land in the hold. Deciding what becomes of them is the next job — and that one cannot be taken back.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

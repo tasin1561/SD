@@ -276,6 +276,17 @@ export const LIFECYCLE_PARCELS = [
     */
     want: 'RTO_IN_TRANSIT',
     wantShipment: 'RTO_DELIVERED',
+    /*
+      SPENDABLE SINCE K1 (2026-10-01). P5 only READS this worklist, so
+      the parcel survived every take; K1 RECEIVES it, which moves the
+      order to RTO_RECEIVED and books its units into the returns hold
+      (WMS-8e). `retireSpentParcel`'s first test is `status !== want`,
+      so that is exactly what it already detects — the spent one keeps
+      every row it has and a fresh one is driven through the six stages
+      on the next run. Without this the second K1 take would open on
+      "Nothing waiting to be received" and P5 would film the same.
+    */
+    spendable: true,
     customer: { name: 'Deepa Ramanathan', phone: '+919845060110' },
     stages: [
       'IN_TRANSIT',
@@ -318,6 +329,24 @@ const RESUMABLE_FROM = new Set([
  * `CONFIRMATION_CALL_STATUSES` includes it for a different reason.
  */
 const STILL_CALLABLE = new Set(['PENDING_CONFIRMATION', 'CALL_NO_RESPONSE', 'CALL_RESCHEDULED']);
+
+/**
+ * Orders no call of ANY reason can help any more.
+ *
+ * The goods are back on a shelf, written off, with somebody else, or
+ * the order was called off. A follow-up queued against one of these is
+ * debris, and debris with reschedules on it outranks real work (the
+ * FIFO is `(scheduled_attempts > 0) DESC`).
+ */
+const FINISHED_FOR_CALLS = new Set([
+  'RTO_RESTOCKED',
+  'RTO_DAMAGED',
+  'LOST_IN_TRANSIT',
+  'CANCELLED',
+  'CANCELLED_BY_ADMIN',
+  'REJECTED_BY_CUSTOMER',
+  'REJECTED_NDR',
+]);
 
 /** …and of those, the ones that have already been through the bench. */
 const ALREADY_DISPATCHED = new Set(['DISPATCHED']);
@@ -480,6 +509,43 @@ async function reconcileStaleCallQueue(log) {
   });
   if (count > 0) {
     log(`  · closed ${count} call-queue entr${count === 1 ? 'y' : 'ies'} whose order had moved on`);
+  }
+
+  /*
+    ── AND THE OTHER REASONS, ONLY ONCE THE ORDER IS FINISHED ─────────
+    The paragraph above is deliberately narrow: SELLER_ASKED,
+    STORE_ASKED and DELIVERY_FAILED exist to ring a customer whose order
+    is PAST confirmation, so "the order moved on" is true of a perfectly
+    live entry. But an order that has FINISHED — restocked, written off,
+    cancelled, rejected, lost — cannot be helped by any call of any
+    reason, and the entry is then pure debris.
+
+    It is not theoretical: a DELIVERY_FAILED entry on an order that had
+    reached RTO_RESTOCKED sat ASSIGNED with six reschedules on it, and
+    the FIFO is `(scheduled_attempts > 0) DESC` — so it OUTRANKED every
+    genuine call on the box, release put it straight back at the front
+    (release does not touch `available_at`), and nothing could be
+    confirmed through the call centre at all. That blocked K1's world
+    being built on 2026-10-01 and would have blocked every later
+    lifecycle run the same way.
+
+    Listed rather than derived, because this file has no access to
+    `OrderStateMachineService.isTerminalStatus` and a restated list is
+    honest about being one.
+  */
+  const finished = await prisma.callQueueEntry.updateMany({
+    where: {
+      status: { in: ['PENDING', 'ASSIGNED'] },
+      reason: { not: 'ORDER_CONFIRMATION' },
+      order: { status: { in: [...FINISHED_FOR_CALLS] } },
+    },
+    data: { status: 'COMPLETED', assignedAgentId: null, assignedAt: null },
+  });
+  if (finished.count > 0) {
+    log(
+      `  · closed ${finished.count} follow-up call${finished.count === 1 ? '' : 's'} ` +
+        'on orders that have finished',
+    );
   }
 }
 
@@ -829,6 +895,27 @@ async function retireSpentParcel(sellerId, ref, want, log, opts = {}) {
   });
   if (order === null) return;
 
+  /*
+    A HALF-BUILT PARCEL IS NOT A SPENT ONE.
+
+    "Spent" is a parcel that has moved PAST what the video needs, not
+    one that has not got there yet — and a parcel this pass created and
+    then failed to drive sits at PENDING_CONFIRMATION, which differs
+    from every `want` in this file. Without this test the next run
+    retires the brand-new order as spent, tries to place a replacement
+    for the same customer, and is refused with DUPLICATE_ORDER_SUSPECTED
+    — so the parcel can never be rebuilt and the video it serves has no
+    world at all. `RESUMABLE_FROM` is already the list of states this
+    pass can carry a parcel forward from, so it is exactly the right
+    test: anything in it is resumed below rather than retired here.
+
+    Found on 2026-10-01 the moment `RSH-LIFE-ATDOOR` became spendable
+    for K1. It is latent for every other spendable parcel — the only
+    reason it never bit is that a build and its drive normally happen in
+    one run.
+  */
+  if (RESUMABLE_FROM.has(order.status)) return;
+
   // Spent means "no longer the parcel the video needs". Three ways.
   //
   // The status moved (a send-back or a return request both do that), or
@@ -1082,6 +1169,16 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
           codAmountInr: '2400',
           sellerOrderRef: parcel.ref,
           items: [{ variantId: variant.id, quantity: parcel.quantity ?? 1 }],
+          /*
+            The parcel this one REPLACES is retired, not deleted, and it
+            is for the same customer — which is exactly what `create`
+            refuses a second order against (`DUPLICATE_ORDER_SUSPECTED`:
+            a repeat for a customer whose last parcel has not left is
+            usually somebody submitting twice). Here it is deliberate,
+            and acknowledging is what the real form makes a person do
+            too. Same trap as I1's and J3's seeding.
+          */
+          acknowledgeDuplicate: true,
         },
       }));
     if (existing === null) {

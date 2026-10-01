@@ -9521,6 +9521,109 @@ export const FLOWS = {
       },
     },
   },
+
+  'take-a-return-in': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/rto`, { waitUntil: 'domcontentloaded' });
+        /*
+          D0's `RSH-LIFE-ATDOOR` is the only parcel that ever puts a row
+          on this list — a return the courier has handed back that nobody
+          has received — and it is reached by the CUSTOMER's name, since
+          both numbers on the row are minted per run. The seeding retires
+          and rebuilds it after a take spends it (`spendable: true`).
+        */
+        await atDoorRow(page).waitFor({ state: 'visible', timeout: 25_000 });
+        const waiting = await page.locator('.sk-tbody .sk-tr').count();
+        if (waiting !== 1) {
+          throw new Error(
+            `${waiting} parcel(s) are at our door, expected exactly 1 — the flow receives ` +
+              'whichever is first, so a second would be taken in on camera without being narrated.',
+          );
+        }
+        await page.waitForTimeout(600);
+        await stage.dwellOn(rtoTabs(page), 2800);
+      },
+
+      async door({ page, stage }) {
+        // The tab panel's own sentence about how a parcel gets off this
+        // list, which is what the narration reads rather than restates.
+        await stage.dwellOn(page.locator('.wh-rto-panel > .wh-note').first(), 3200);
+      },
+
+      async why({ page, stage }) {
+        await stage.dwellOn(atDoorRow(page), 3200);
+      },
+
+      async transit({ page, stage }) {
+        await stage.clickIt(rtoTab(page, 'Still with the courier'), { after: 1400 });
+        await page
+          .locator('.sk-tbody .sk-tr')
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.sk-table').first(), 3000);
+      },
+
+      async bench({ page, stage }) {
+        await stage.clickIt(rtoTab(page, 'On the bench'), { after: 1400 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.wh-stack').first(), 3000);
+      },
+
+      async pick({ page, stage }) {
+        await stage.clickIt(rtoTab(page, 'At our door'), { after: 1200 });
+        await atDoorRow(page).waitFor({ state: 'visible', timeout: 20_000 });
+        /*
+          THE WAYBILL IS A BUTTON. Clicking it fills the receive box and
+          moves to the Receive tab in one act — which is the whole point
+          of the control, and is what the narration is about.
+        */
+        await stage.clickIt(atDoorRow(page).locator('button.wh-awb-pick'), { after: 1400 });
+        const field = page.getByLabel(/^AWB number/);
+        await field.waitFor({ state: 'visible', timeout: 20_000 });
+        const typed = (await field.inputValue()).trim();
+        if (!/^\d{6,}$/.test(typed)) {
+          throw new Error(`Clicking the waybill put "${typed}" in the receive box.`);
+        }
+        await stage.dwellOn(field, 2800);
+      },
+
+      async receive({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Receive', exact: true }), {
+          after: 1800,
+        });
+        await page
+          .getByText(/Shipment/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.wh-title').first(), 2800);
+      },
+
+      async hold({ page, stage }) {
+        await stage.dwellOn(page.locator('.wh-card').last(), 3200);
+      },
+
+      async lines({ page, stage }) {
+        const lines = page.locator('.wh-stack--tight > *');
+        const n = await lines.count();
+        if (n === 0) {
+          throw new Error('The received parcel shows no lines to inspect.');
+        }
+        await stage.dwellOn(lines.first(), 3200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.wh-card').last(), 3400);
+      },
+    },
+  },
 };
 
 /**
@@ -9658,6 +9761,30 @@ const FORCE = {
   half: 'Barcode torn',
   rest: ' off the carton in transit; contents counted by hand against the picking sheet',
 };
+
+/**
+ * K1's parcel at the door — the ONLY row on that worklist.
+ *
+ * There is nothing on the row to name it by: the columns are the
+ * waybill, the order, the item count, what the courier says and how long
+ * it has waited, and the one name among them is the SELLER's, which six
+ * other parcels share. Both numbers are minted per run. So the handle is
+ * the list itself, and `intro` asserts it holds exactly one —
+ * `RSH-LIFE-ATDOOR` is the only parcel in D0 that ever puts a row here,
+ * and the seeding retires and rebuilds it after a take receives it.
+ */
+function atDoorRow(page) {
+  return page.locator('.sk-tbody .sk-tr').first();
+}
+
+/** The RTO station's tab bar, and one tab of it by its label. */
+function rtoTabs(page) {
+  return page.locator('.wh-rto-tabs').first();
+}
+
+function rtoTab(page, label) {
+  return rtoTabs(page).getByRole('tab', { name: new RegExp(`^${label}`) });
+}
 
 /**
  * J8's open manifest, by the one status word that can appear once.
