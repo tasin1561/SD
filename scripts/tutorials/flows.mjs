@@ -15,6 +15,7 @@
  */
 import path from 'node:path';
 import { TUTORIALS_DIR } from './lib/paths.mjs';
+import { readFixture } from './lib/fixture.mjs';
 
 /**
  * The CSV the bulk-import video uploads. A COMMITTED fixture rather than
@@ -10118,6 +10119,195 @@ export const FLOWS = {
       },
     },
   },
+
+  'count-the-shelves': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      /*
+        THE COUNT SHEET. A cycle count is recorded per (variant, bin,
+        batch) and the console prints those three ids nowhere together,
+        so the video arrives holding them exactly as an operator does —
+        off the sheet the floor walked with. `lib/fixture.mjs` says why
+        this is not a back door for ordinary selectors; the narration
+        says the same thing out loud.
+      */
+      ctx.sheet = await readFixture('count-the-shelves');
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/inventory/cycle-counts`, { waitUntil: 'domcontentloaded' });
+        const subtitle = page.locator('.sk-ph__subtitle').first();
+        await subtitle.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(subtitle, 3000);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(page.locator('.stk-kpis').first(), 3000);
+      },
+
+      async schedule({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Schedule a count' }).first(), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // The dialog's OWN promise, which is the line: scheduling changes
+        // nothing until somebody starts it.
+        const said = dialog.locator('.sk-dialog__desc').first();
+        await said.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(said, 2600);
+        /*
+          THE WAREHOUSE BY ITS CODE, read off the option rather than
+          restated: the label is `<name> (<code>)` and spelling it out
+          here would break on a rename with a message about a missing
+          option.
+        */
+        const option = page.locator('#cc-wh option', { hasText: 'CCU-01' }).first();
+        await option.waitFor({ state: 'attached', timeout: 15_000 });
+        const value = await option.getAttribute('value');
+        await stage.point(page.locator('#cc-wh'));
+        await page.locator('#cc-wh').selectOption(value ?? '');
+        await page.waitForTimeout(500);
+      },
+
+      async scope({ page, stage }) {
+        await stage.dwellOn(page.locator('#cc-type'), 2600);
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: /^Schedule$/ }), {
+          after: 1800,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+      },
+
+      async open({ page, stage }) {
+        const row = scheduledCountRow(page);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        const n = await page.locator('.sk-tbody .sk-tr', { hasText: 'scheduled' }).count();
+        if (n !== 1) {
+          throw new Error(
+            `${n} count(s) are scheduled, expected exactly 1 — the flow opens the first, and a ` +
+              'leftover from an earlier take would be worked on camera instead.',
+          );
+        }
+        await stage.clickIt(row.getByRole('button', { name: 'Open' }), { after: 1600 });
+        await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(dialogFoot(page), 2400);
+      },
+
+      async start({ page, stage }) {
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: /^Start counting/ }), {
+          after: 1800,
+        });
+        /*
+          GATED ON THE SENTENCE, not the panel. "System quantity is
+          snapshotted when you record, not when the count was scheduled"
+          is the whole of this scene, and the panel renders with or
+          without it.
+        */
+        const note = page.getByText(/snapshotted when you record/i).first();
+        await note.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(note, 3000);
+      },
+
+      async ids({ page, stage, sheet }) {
+        const dialog = page.getByRole('dialog');
+        // Briskly: this is three uuids and a video, not a typing test.
+        const fast = { delay: 16, after: 200 };
+        await stage.typeIn(dialog.locator('#cc-variant'), sheet.variantId, fast);
+        await stage.typeIn(dialog.locator('#cc-bin'), sheet.binId, fast);
+        await stage.typeIn(dialog.locator('#cc-batch'), sheet.batchId, fast);
+        await page.waitForTimeout(500);
+      },
+
+      async record({ page, stage, sheet }) {
+        const dialog = page.getByRole('dialog');
+        // ONE SHORT. The whole video turns on a difference existing.
+        await stage.typeIn(dialog.locator('#cc-qty'), String(sheet.qtyOnHand - 1), { delay: 90 });
+        await stage.clickIt(dialog.getByRole('button', { name: /^Record line/ }), { after: 1800 });
+        const table = dialog.getByRole('table').first();
+        await table.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(table, 2600);
+      },
+
+      async diff({ page, stage }) {
+        const said = page.getByText(/differ from the system/i).first();
+        await said.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(said, 1800);
+        /*
+          AND THE COLUMNS THE LINE IS ABOUT, which are off to the right.
+
+          Two uuid columns at the front of that table are wider than a
+          dialog, so System, Counted and Difference start out of frame.
+          The table scrolls — `.sk-table-wrap` is `overflow-x: auto` and
+          that is deliberate, not a defect — so the scene scrolls it, the
+          way the person reading it would. Smoothly: a jump reads as a
+          glitch in a recording.
+        */
+        const wrap = page.getByRole('dialog').locator('.sk-table-wrap').first();
+        await wrap.evaluate((el) => el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' }));
+        await page.waitForTimeout(900);
+        await stage.dwellOn(wrap, 2400);
+      },
+
+      async button({ page, stage }) {
+        /*
+          THE LABEL IS THE SCENE. It counts the corrections it is about
+          to raise, so a gate on the word "Complete" alone would pass
+          against a button that had stopped doing the arithmetic.
+        */
+        const complete = dialogFoot(page).getByRole('button', { name: /^Complete — raises/ });
+        await complete.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(complete, 3200);
+      },
+
+      async complete({ page, stage }) {
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: /^Complete — raises/ }), {
+          after: 1800,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        const row = page.locator('.sk-tbody .sk-tr', { hasText: 'completed' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-table').first(), 2800);
+      },
+
+      async queue({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/inventory/adjustments`, { waitUntil: 'domcontentloaded' });
+        const row = page.locator('.sk-tbody .sk-tr').first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        const said = await row.innerText();
+        /*
+          IT IS WAITING, AND IT IS PRICED AT NOTHING — both narrated, so
+          both gated. A cycle count's adjustment is created PENDING
+          whatever it is worth (`CycleCountService.complete` snapshots
+          the threshold and never compares it), and the batch carries no
+          unit cost, so the impact is zero. If a later box records costs
+          this fails loudly and the line gets rewritten, which is the
+          point of asking.
+        */
+        if (!/Pending/i.test(said)) {
+          throw new Error(`The adjustment the count raised reads "${said}" — expected Pending.`);
+        }
+        if (!/₹0/.test(said)) {
+          throw new Error(
+            `The adjustment reads "${said}" — the narration says it is priced at nothing ` +
+              'because the batch has no recorded cost.',
+          );
+        }
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3000);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+    },
+  },
   /*
     N1 — the money desk, read-only.
 
@@ -10394,6 +10584,428 @@ export const FLOWS = {
       },
     },
   },
+  /*
+    N2 — accepting a top-up, which IS the credit.
+
+    The take SPENDS the claim it accepts, which is why its seeding makes
+    two: one to credit on camera, and one left for the refusal scene to
+    point at. Each row is reached by the AMOUNT printed on it — the
+    reference is minted per run, deliberately, because two claims sharing
+    one would teach the opposite of what this video says about matching,
+    and nothing else on a claim is both stable and visible.
+  */
+  'accept-a-top-up': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/topups`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Wallet top-ups', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        // Both claims, so the scene opens on a QUEUE. Gated on the second
+        // as well as the first: with one row this video's last act has
+        // nothing to point at, and an empty queue renders a perfectly
+        // calm page that says nothing is wrong.
+        await claimRow(page, TOPUP_TO_ACCEPT).waitFor({ state: 'visible', timeout: 25_000 });
+        await claimRow(page, TOPUP_TO_REFUSE).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.getByText(/check it against the statement first/i).first(), 2800);
+      },
+
+      async stakes({ page, stage }) {
+        await stage.dwellOn(page.locator('table').first(), 3400);
+      },
+
+      async row({ page, stage }) {
+        await stage.dwellOn(claimRow(page, TOPUP_TO_ACCEPT), 4000);
+      },
+
+      async account({ page, stage }) {
+        await stage.dwellOn(claimRow(page, TOPUP_TO_ACCEPT).locator('td').nth(2), 4200);
+      },
+
+      async evidence({ page, stage }) {
+        await stage.dwellOn(claimRow(page, TOPUP_TO_ACCEPT).locator('td').nth(4), 4200);
+      },
+
+      async statement({ page, stage }) {
+        await stage.dwellOn(claimRow(page, TOPUP_TO_ACCEPT).locator('td').nth(4), 4600);
+      },
+
+      async accept({ page, stage }) {
+        await stage.clickIt(
+          claimRow(page, TOPUP_TO_ACCEPT).getByRole('button', { name: 'Accept' }).first(),
+          { after: 1400 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(dialog.locator('.mk-subject').first(), 3200);
+      },
+
+      async warning({ page, stage }) {
+        await stage.dwellOn(
+          page
+            .getByRole('dialog')
+            .getByText(/not reversible without an adjusting entry/i)
+            .first(),
+          4200,
+        );
+      },
+
+      async note({ page, stage }) {
+        const field = page.getByRole('dialog').getByRole('textbox').first();
+        await stage.typeIn(field, 'Seen on the HDFC statement, 1 Oct, same reference.', {
+          after: 600,
+        });
+        await page.waitForTimeout(1200);
+      },
+
+      /*
+        The press. `AsyncButton` relabels itself through busy → done, so
+        the wait is on the DIALOG going away rather than on the button —
+        a button that has become "Credited" is still a button with a
+        different name, and reaching for it again would find nothing.
+      */
+      async credit({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.clickIt(
+          dialog.getByRole('button', { name: /Credit the wallet|Credited|Working/ }).first(),
+          { after: 1800 },
+        );
+        await dialog.waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForTimeout(800);
+      },
+
+      async credited({ page, stage }) {
+        await page
+          .getByLabel(/^Status$/)
+          .first()
+          .selectOption('ACCEPTED');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = claimRow(page, TOPUP_TO_ACCEPT);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row.locator('td').nth(5), 4200);
+      },
+
+      async reject({ page, stage }) {
+        await page
+          .getByLabel(/^Status$/)
+          .first()
+          .selectOption('PENDING');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = claimRow(page, TOPUP_TO_REFUSE);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(row.getByRole('button', { name: 'Reject' }).first(), { after: 1400 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(dialog.getByText(/the seller sees this reason/i).first(), 3600);
+      },
+
+      /*
+        Closed from the FOOTER. Every `Dialog` header carries an X with
+        `aria-label="Close"` beside whatever the footer holds, so the
+        unscoped reach dies on strict mode — and a dialog left open would
+        put the next video's first frame behind a modal if anything ever
+        followed this one.
+      */
+      async outro({ page, stage }) {
+        await page
+          .getByRole('dialog')
+          .locator('.sk-dialog__foot')
+          .getByRole('button', { name: 'Cancel' })
+          .first()
+          .click();
+        await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(claimRow(page, TOPUP_TO_REFUSE), 3400);
+      },
+    },
+  },
+  /*
+    N3 — approving a withdrawal, then paying it.
+
+    TWO screens because the product deliberately splits the act in two:
+    `/withdrawals` decides, `/remittances` pays, and only the second
+    moves money (WAL-3). The take SPENDS both halves — the request ends
+    PAID and a remittance exists — so its seeding removes the previous
+    take's request and raises a fresh one.
+
+    The request is reached by its AMOUNT. The seller's name is on every
+    row of a one-seller demo world, and the id is minted per run.
+  */
+  'pay-a-seller-out': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/withdrawals`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Withdrawals', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await payoutRow(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.getByText(/Nothing here moves money/i).first(), 3000);
+      },
+
+      async request({ page, stage }) {
+        await stage.dwellOn(payoutRow(page), 4200);
+      },
+
+      async rule({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-kpis, .mk-kpis').first(), 4400);
+      },
+
+      async approve({ page, stage }) {
+        await stage.clickIt(payoutRow(page).getByRole('button', { name: 'Approve' }).first(), {
+          after: 1500,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog, 2600);
+      },
+
+      async confirm({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.dwellOn(dialog.getByText(/Nothing is paid yet/i).first(), 3200);
+        await stage.clickIt(
+          dialog
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /^Approve$/ })
+            .first(),
+          { after: 1800 },
+        );
+        await dialog.waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+      },
+
+      async approved({ page, stage }) {
+        const row = payoutRow(page);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        // The state the narration names, not the row that holds it: a
+        // failed approval leaves the row exactly where it was and the
+        // scene would film "Pending" under a line about it being approved.
+        await row
+          .getByText(/approved/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 4000);
+      },
+
+      async remittances({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/remittances`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.dwellOn(
+          page.getByText(/debits the seller's wallet|debits the seller’s wallet/i).first(),
+          2600,
+        );
+        await stage.clickIt(page.getByRole('button', { name: /^Pay$/ }).first(), { after: 1600 });
+        await page.getByRole('dialog').waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(800);
+      },
+
+      async destination({ page, stage }) {
+        const panel = page.getByRole('dialog').locator('.mk-panel').first();
+        await panel.waitFor({ state: 'visible', timeout: 25_000 });
+        await panel.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(600);
+        await stage.dwellOn(panel.locator('.mk-panel__part').first(), 4600);
+      },
+
+      async cover({ page, stage }) {
+        const parts = page.getByRole('dialog').locator('.mk-panel .mk-panel__part');
+        await stage.dwellOn(parts.last(), 4800);
+      },
+
+      /*
+        BDT, deliberately: a Bangladeshi seller is paid in taka out of
+        the taka account, which is what makes the next two scenes about
+        two currencies rather than one. The select is changed before the
+        amount is typed, because the amount field's own label carries the
+        source currency and changing it afterwards would re-label a field
+        the frame has already shown.
+      */
+      async currencies({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByLabel(/Bank currency/)
+          .first()
+          .selectOption('BDT');
+        await page.waitForTimeout(700);
+        await stage.typeIn(dialog.getByLabel(/^Source amount/).first(), '7500', { after: 500 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(dialog.getByLabel(/Wallet currency/).first(), 2400);
+      },
+
+      async rate({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.dwellOn(dialog.getByLabel(/^FX rate$/).first(), 2600);
+        await stage.dwellOn(dialog.getByLabel(/^Destination amount/).first(), 2800);
+      },
+
+      async fee({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByLabel(/^Paid from/)
+          .first()
+          .selectOption({ index: 1 });
+        await page.waitForTimeout(600);
+        await stage.typeIn(dialog.getByLabel(/^Bank fee/).first(), '250', { after: 600 });
+        await page.waitForTimeout(900);
+      },
+
+      async reference({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/^Bank reference$/).first(), 'TRF-2026-10-01-88412', {
+          after: 700,
+        });
+        await page.waitForTimeout(900);
+      },
+
+      async record({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.clickIt(
+          dialog
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /Record|Recording|Recorded|Working/ })
+            .first(),
+          { after: 2000 },
+        );
+        await dialog.waitFor({ state: 'detached', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('table').last(), 2800);
+      },
+
+      async outro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/withdrawals?status=PAID`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = payoutRow(page);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row, 3600);
+      },
+    },
+  },
+  /*
+    N4 — approving a change of bank account. One screen, one dialog, one
+    press, and the shortest video in the section.
+
+    The take SPENDS the request: approving WRITES THE NEW ACCOUNT
+    THROUGH, so `pendingBankChange` would raise nothing on a second run
+    (it compares what is on file). The seeding therefore puts the
+    original account back before raising it again.
+  */
+  'approve-a-bank-change': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/bank-changes`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Bank detail changes', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        // The CARD, not the page: the empty state renders the same
+        // heading and the same subtitle just as happily, and a video
+        // about approving one cannot open on "Nothing waiting".
+        await page.locator('.mk-card').first().waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2400);
+      },
+
+      async until({ page, stage }) {
+        await stage.dwellOn(page.getByText(/until you approve one/i).first(), 4000);
+      },
+
+      async first({ page, stage }) {
+        await stage.dwellOn(page.locator('.mk-card__sub').first(), 3600);
+      },
+
+      async diff({ page, stage }) {
+        await stage.dwellOn(page.locator('table').first(), 4200);
+      },
+
+      async number({ page, stage }) {
+        await stage.dwellOn(bankField(page, 'Account number'), 4400);
+      },
+
+      async attack({ page, stage }) {
+        await stage.dwellOn(bankField(page, 'Bank'), 4600);
+      },
+
+      async verify({ page, stage }) {
+        await stage.dwellOn(page.locator('.mk-card').first(), 4600);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Approve' }).first(), { after: 1500 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.locator('.mk-subject').first(), 3400);
+      },
+
+      async undo({ page, stage }) {
+        await stage.dwellOn(
+          page
+            .getByRole('dialog')
+            .getByText(/another change request and another approval/i)
+            .first(),
+          4400,
+        );
+      },
+
+      async approve({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.clickIt(
+          dialog
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /Approve the new account|Approved|Working/ })
+            .first(),
+          { after: 1800 },
+        );
+        await dialog.waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+      },
+
+      async after({ page, stage }) {
+        const empty = page.getByText(/Nothing waiting/i).first();
+        await empty.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(empty, 3800);
+      },
+
+      async outro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/withdrawals`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 3600);
+      },
+    },
+  },
 };
 
 /**
@@ -10574,6 +11186,11 @@ function benchRow(page) {
 /** L1's one waiting adjustment, and the link out of the damaged shelf. */
 function reviewButton(page) {
   return page.getByRole('button', { name: 'Review' }).first();
+}
+
+/** L2's one scheduled count, by the status word on its chip. */
+function scheduledCountRow(page) {
+  return page.locator('.sk-tbody .sk-tr', { hasText: 'scheduled' }).first();
 }
 
 /**
@@ -10812,5 +11429,58 @@ function pnlLine(page, label) {
         hasText: new RegExp(`^${label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
       }),
     })
+    .first();
+}
+
+/**
+ * N2's two claims, by the figure printed on them.
+ *
+ * Keep in step with `DESK_TOPUP_INR` and `DESK_SECOND_TOPUP_INR` in
+ * `seed-demo-data.mjs`. Not by the reference, which is minted per run on
+ * purpose — the video's whole subject is matching a claim against a
+ * statement, and two claims sharing a reference would teach the opposite.
+ */
+const TOPUP_TO_ACCEPT = 18000;
+const TOPUP_TO_REFUSE = 4250;
+
+/** One claim's row, by its amount however the API chose to render it. */
+function claimRow(page, amountInr) {
+  const grouped = amountInr.toLocaleString('en-IN');
+  return page
+    .getByRole('row')
+    .filter({
+      hasText: new RegExp(`\\b(${amountInr}|${grouped.replaceAll(',', ',?')})(\\.00)?\\b`),
+    })
+    .first();
+}
+
+/**
+ * N3's withdrawal request, by the figure printed on it.
+ *
+ * Keep in step with `DESK_WITHDRAWAL_INR` in `seed-demo-data.mjs`. The
+ * seller's name is on every row of a one-seller demo world and the id is
+ * minted per run, so the amount is the only handle that means this row
+ * and no other.
+ */
+const PAYOUT_INR = 7500;
+
+function payoutRow(page) {
+  const grouped = PAYOUT_INR.toLocaleString('en-IN').replaceAll(',', ',?');
+  return page
+    .getByRole('row')
+    .filter({ hasText: new RegExp(`\\b(${PAYOUT_INR}|${grouped})(\\.00)?\\b`) })
+    .first();
+}
+
+/**
+ * One row of the bank-change diff, by the FIELD name in its first cell.
+ *
+ * `hasText` over the row would also match the values, and a bank name
+ * and an account name share words on any real request.
+ */
+function bankField(page, label) {
+  return page
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name: label, exact: true }) })
     .first();
 }

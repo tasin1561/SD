@@ -42,6 +42,21 @@ const STACK_SUFFIX =
  */
 export const AUDIO_DIR = path.join(OUT_DIR, 'audio');
 
+/**
+ * Fixtures a SEED writes, rather than ones the repository carries.
+ *
+ * Per stack, because what is in them is this stack's world: N5's video
+ * uploads the courier's remittance export, and an export naming waybills
+ * is an export naming waybills the simulator minted on THIS box, on this
+ * run. A committed file cannot carry those, and a shared one would hand
+ * the other agent's parcels to this agent's allocation.
+ *
+ * `fixtures/` next door stays committed and is the other kind: a file
+ * whose CONTENTS are narrated word for word, which must move with the
+ * words or not at all.
+ */
+export const GENERATED_DIR = path.join(OUT_DIR, `generated${STACK_SUFFIX}`);
+
 export const RAW_DIR = path.join(OUT_DIR, `raw${STACK_SUFFIX}`);
 export const WORK_DIR = path.join(OUT_DIR, `work${STACK_SUFFIX}`);
 export const VERIFY_DIR = path.join(OUT_DIR, `verify${STACK_SUFFIX}`);

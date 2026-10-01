@@ -5198,7 +5198,7 @@ async function adjustmentWorldFor(slug, sellerId, staffToken, warehouse) {
 
   await clearUndecidedAdjustments(sellerId);
 
-  const line = await biggestPickableLine(sellerId, warehouse.id);
+  const line = await biggestPickableLine(sellerId, warehouse.id, staffToken, L1_PENDING_QTY);
   const raise = (body) =>
     call('/admin/stock-adjustments', { method: 'POST', token: staffToken, body });
 
@@ -5260,6 +5260,8 @@ async function adjustmentWorldFor(slug, sellerId, staffToken, warehouse) {
 const L1_UNIT_COST = 2400;
 const L1_PENDING_QTY = 25;
 const L1_DAMAGED_MIN = 3;
+/** L2 counts one line SHORT by one, so it wants a few units on it rather than one. */
+const L2_COUNT_MIN = 5;
 
 /**
  * The stock line the seeded adjustments are raised against: the biggest
@@ -5302,26 +5304,63 @@ async function clearUndecidedAdjustments(sellerId) {
   console.log(`  · removed ${stale.length} undecided adjustment(s) a previous take left`);
 }
 
-async function biggestPickableLine(sellerId, warehouseId) {
-  const levels = await prisma.stockLevel.findMany({
-    where: {
-      sellerId,
-      warehouseId,
-      qtyOnHand: { gt: L1_PENDING_QTY },
-      // STORAGE and PICKING, which are the shelves. `FLOOR` is a bin
-      // CODE and not a type — BIN-1's default bin is a STORAGE one
-      // called FLOOR — and naming it here makes Prisma refuse the query.
-      bin: { type: { in: ['STORAGE', 'PICKING'] }, deletedAt: null },
-    },
-    orderBy: { qtyOnHand: 'desc' },
-    select: { variantId: true, binId: true, batchId: true, qtyOnHand: true },
-  });
-  const line = levels[0];
-  if (line === undefined) {
+async function biggestPickableLine(sellerId, warehouseId, staffToken, min) {
+  const pickable = {
+    sellerId,
+    warehouseId,
+    // STORAGE and PICKING, which are the shelves. `FLOOR` is a bin CODE
+    // and not a type — BIN-1's default bin is a STORAGE one called
+    // FLOOR — and naming it here makes Prisma refuse the query.
+    bin: { type: { in: ['STORAGE', 'PICKING'] }, deletedAt: null },
+  };
+  const biggest = async () =>
+    prisma.stockLevel.findFirst({
+      where: pickable,
+      orderBy: { qtyOnHand: 'desc' },
+      select: { variantId: true, binId: true, batchId: true, qtyOnHand: true },
+    });
+
+  let line = await biggest();
+  if (line === null) {
     throw new Error(
-      `No stock line with more than ${L1_PENDING_QTY} units in a pickable bin — the seeded ` +
-        'adjustment removes that many on approval and would be refused at execution.',
+      `${sellerId} has no stock at all in a pickable bin of this warehouse — the catalogue ` +
+        'seeding runs first and is what puts it there.',
     );
+  }
+
+  /*
+    AND IT TOPS THE LINE UP IF IT HAS SHRUNK, which it does on its own.
+
+    L1's take approves an adjustment that removes twenty-five units from
+    the biggest line. `ensureStockedVariant` only receives when the
+    seller's TOTAL falls under the catalogue figure, and it receives
+    into a NEW batch — so the total is fine while the biggest single
+    LINE gets smaller every take, and three takes in there was no line
+    left that could carry the adjustment at all. It failed loudly, which
+    is right, and then needed a person; this makes it self-heal.
+  */
+  if (line.qtyOnHand < min) {
+    await call('/admin/stock-adjustments', {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        sellerId,
+        type: 'INCREASE',
+        reasonCode: 'FOUND_EXTRA',
+        description: 'Stock found behind the aisle during a tidy-up and put back on the books.',
+        lines: [
+          {
+            variantId: line.variantId,
+            binId: line.binId,
+            batchId: line.batchId,
+            qtyChange: min - line.qtyOnHand,
+            unitCostInr: L1_UNIT_COST,
+          },
+        ],
+      },
+    });
+    console.log(`  · topped the biggest shelf line up to ${min} units`);
+    line = await biggest();
   }
   return { variantId: line.variantId, binId: line.binId, batchId: line.batchId };
 }
@@ -5356,7 +5395,7 @@ async function biggestPickableLine(sellerId, warehouseId) {
  * of the lifecycle it is teaching. Seeding one would film a form being
  * filled in and then open a row that already existed.
  */
-async function cycleCountWorldFor(slug, sellerId, warehouse) {
+async function cycleCountWorldFor(slug, sellerId, staffToken, warehouse) {
   if (slug !== 'count-the-shelves') return;
 
   const open = await prisma.cycleCount.findMany({
@@ -5388,7 +5427,7 @@ async function cycleCountWorldFor(slug, sellerId, warehouse) {
     narration says so out loud rather than pretending the screen offers
     them.
   */
-  const line = await biggestPickableLine(sellerId, warehouse.id);
+  const line = await biggestPickableLine(sellerId, warehouse.id, staffToken, L2_COUNT_MIN);
   const [variant, bin] = await Promise.all([
     prisma.productVariant.findUniqueOrThrow({
       where: { id: line.variantId },
@@ -5774,6 +5813,17 @@ const MONEY_DESK_SLUGS = new Set([
 /** What a seller types on the claim N2 accepts. Shaped like a bank app's. */
 const DESK_TOPUP_INR = 18000;
 
+/**
+ * The second claim, which N2 never accepts.
+ *
+ * A DIFFERENT figure from the first on purpose: the flow reaches each
+ * row by the amount printed on it, because the reference is minted per
+ * run (two claims sharing one would teach the opposite of what the video
+ * says about matching) and there is nothing else on a claim that is both
+ * stable and visible.
+ */
+const DESK_SECOND_TOPUP_INR = 4250;
+
 /** What N3 pays out. Comfortably under the balance, so the floor is not the story. */
 const DESK_WITHDRAWAL_INR = 7500;
 
@@ -5849,6 +5899,28 @@ async function moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken) {
       },
     });
     console.log(`  · one top-up claim waiting for review (₹${DESK_TOPUP_INR})`);
+
+    // N2 needs a SECOND claim, and it is not decoration. The video
+    // accepts one and then opens the REJECT dialog to read the reason
+    // field — and the accept has already spent the first row, so without
+    // a second there is nothing left for the refusal to point at. It is
+    // also the honest shape: two transfers from one seller in a week is
+    // ordinary, and a queue of exactly one makes the screen look like a
+    // form rather than a queue.
+    if (slug === 'accept-a-top-up') {
+      await call('/seller/wallet/topups', {
+        method: 'POST',
+        token: await sellerToken(),
+        body: {
+          bankAccountId: account.id,
+          amount: DESK_SECOND_TOPUP_INR,
+          transactionRef: `NEFT${(Date.now() + 7919).toString().slice(-10)}`,
+        },
+      });
+      console.log(
+        `  · a second claim for the refusal scene to point at (₹${DESK_SECOND_TOPUP_INR})`,
+      );
+    }
   }
 
   if (slug === 'how-seller-money-works' || slug === 'pay-a-seller-out') {
@@ -6042,7 +6114,7 @@ async function main() {
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
   await binsWorldFor(slug, staffToken);
   await adjustmentWorldFor(slug, sellerId, staffToken, warehouse);
-  await cycleCountWorldFor(slug, sellerId, warehouse);
+  await cycleCountWorldFor(slug, sellerId, staffToken, warehouse);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);

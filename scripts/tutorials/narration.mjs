@@ -3810,6 +3810,187 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'accept-a-top-up',
+    title: 'Accepting a top-up',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Top-ups. A seller telling us they have sent money — and until somebody here says otherwise, that is all a claim is. It has moved nothing.',
+      },
+      {
+        id: 'stakes',
+        say: 'Which makes this screen one of the sharpest in the console, because accepting IS the credit. There is no second step. The wallet moves as you press it, and the seller can draw against it from that moment.',
+      },
+      {
+        id: 'row',
+        say: 'So read the row before you touch anything. Who claimed it, which of our accounts they say they paid into, how much, and what evidence they gave for it.',
+      },
+      {
+        id: 'account',
+        say: 'The account matters as much as the figure. The label is our own filing name; the number underneath is what will appear on the statement you are about to check this against.',
+      },
+      {
+        id: 'evidence',
+        say: 'Evidence is a bank reference, an uploaded receipt, or both — and one of the two is required when the claim is made. Without something to match on, there is nothing to check.',
+      },
+      {
+        id: 'statement',
+        say: 'And that is the job. Go to the bank, find that reference, confirm the amount and the date. The claim is a sentence somebody typed; the statement is the only fact in this process.',
+      },
+      {
+        id: 'accept',
+        say: 'Once you have seen it, accept. The dialog names the amount and the account it was claimed against, so a mis-click on the wrong row has one more chance to be caught.',
+      },
+      {
+        id: 'warning',
+        say: 'And it says the rest plainly: this adds the money immediately, and it is not reversible without an adjusting entry. There is no undo on this screen, only a correction on another one.',
+      },
+      {
+        id: 'note',
+        say: 'The note is optional and worth writing anyway. It is what you will be reading in three months when somebody asks why this particular transfer was credited.',
+      },
+      {
+        id: 'credit',
+        say: 'Then credit it.',
+      },
+      {
+        id: 'credited',
+        say: 'The claim moves to Credited, and it carries your note, the time and your name — because a decision about somebody else’s money with nobody against it is one nobody can be asked about later.',
+      },
+      {
+        id: 'reject',
+        say: 'The other way out needs a reason, and the reason is mandatory for a plain cause: the seller reads it. Write what did not match, or what you need from them.',
+      },
+      {
+        id: 'outro',
+        say: 'So: match it first, accept second, and remember that nothing about this is reversible from here. A claim you are unsure about is a claim you reject with a reason and ask again.',
+      },
+    ],
+  },
+  {
+    slug: 'pay-a-seller-out',
+    title: 'Paying a seller out',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Withdrawals. A seller asking for their money back, and the one sentence to keep in mind is at the top: nothing on this page moves any.',
+      },
+      {
+        id: 'request',
+        say: 'The row says who asked, how much, what they will actually receive in their own currency at the rate when they asked for it, and how long they have been waiting against what we promised.',
+      },
+      {
+        id: 'rule',
+        say: 'What they may ask for is the balance, less the floor we hold back, less anything already requested. And a request the balance can no longer cover is rejected for them automatically, rather than sitting here unpayable.',
+      },
+      {
+        id: 'approve',
+        say: 'Approving is the first of two steps and it is deliberately not the payment. Pressing it here re-checks the wallet against this exact amount.',
+      },
+      {
+        id: 'confirm',
+        say: 'The dialog says so: nothing is paid yet. Pay the account on the seller’s profile, record the remittance, and that is what closes this request.',
+      },
+      {
+        id: 'approved',
+        say: 'So the row is approved and still owes them every rupee. An approved request can still be rejected, because a bank transfer that bounces is a real thing and the money has not left.',
+      },
+      {
+        id: 'remittances',
+        say: 'The payment is recorded on Remittances, and this is where the money actually moves — each entry debits the seller’s wallet. The approved request is waiting at the top with a button to pay it.',
+      },
+      {
+        id: 'destination',
+        say: 'Which opens with the destination beside it: the seller’s own bank, masked, with the full number behind a deliberate reveal — reading it is an act at the moment of typing a transfer, not a side effect of opening a form.',
+      },
+      {
+        id: 'cover',
+        say: 'And underneath, whether we can actually send it. Every account in that currency with what it holds, so an account that cannot cover the payout is something you find out here rather than halfway through a bank transfer.',
+      },
+      {
+        id: 'currencies',
+        say: 'Two currencies, two amounts. The wallet is debited in rupees; the bank sends taka. Both are typed from the two statements, because deriving the second from a rate would quietly absorb every bank charge.',
+      },
+      {
+        id: 'rate',
+        say: 'The seller is credited at the rate we quoted them. Whatever we actually achieved on the day is a different number, and the gap between the two is ours — either way, recorded as a spread rather than taken off their balance.',
+      },
+      {
+        id: 'fee',
+        say: 'A bank fee goes in its own field, because it is our cost and not theirs. Netting it into the payout would charge the seller for our bank.',
+      },
+      {
+        id: 'reference',
+        say: 'Then the bank’s own reference, which is the only thing that ties this entry to a line on a statement somebody will reconcile later.',
+      },
+      {
+        id: 'record',
+        say: 'And recording it is the debit. The wallet moves, our account moves, and the request closes — one transaction, so a payment without its cause cannot exist.',
+      },
+      {
+        id: 'outro',
+        say: 'Approve, pay the bank, record it, and the request closes itself. Only the last of those four moves money, and it is the only one that cannot be undone from this screen.',
+      },
+    ],
+  },
+  {
+    slug: 'approve-a-bank-change',
+    title: 'Approving a change of bank account',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Bank detail changes. The shortest screen in this console and the one with the highest stakes on it, because what it decides is where a seller’s money goes.',
+      },
+      {
+        id: 'until',
+        say: 'Nothing has changed yet. Their withdrawals keep going to the account already on file until somebody here approves this — which is the whole reason the request exists rather than the edit simply saving.',
+      },
+      {
+        id: 'first',
+        say: 'And only a CHANGE needs approving. A seller adding bank details for the first time writes straight through, because there is no account to divert money away from.',
+      },
+      {
+        id: 'diff',
+        say: 'So the card is a diff. What is on file, what they are asking for, and a marker on every field that actually moved — read the marks rather than the rows.',
+      },
+      {
+        id: 'number',
+        say: 'The account number is the one that matters most, and here it has moved — the chip beside it says so. When it has not, the card says that too, because a request moving a branch name is a different kind of request from one moving the destination.',
+      },
+      {
+        id: 'attack',
+        say: 'Which is the thing to hold on to here. Somebody who gets into a seller’s account cannot take their money out — they can only ask us to send it somewhere else. This screen is the step that stops them.',
+      },
+      {
+        id: 'verify',
+        say: 'So verify it outside the software. Ring the number you already had for them, on the contact you already had, and ask whether they made this request. Not the number on the request.',
+      },
+      {
+        id: 'open',
+        say: 'The dialog names the seller and the destination, and it is blunt about the consequence: from this moment every withdrawal goes to the account below, and the one they had stops receiving money.',
+      },
+      {
+        id: 'undo',
+        say: 'Undoing it takes another request and another approval. So approve it because you recognise the account, as it says — not because the form was filled in correctly.',
+      },
+      {
+        id: 'approve',
+        say: 'Then approve.',
+      },
+      {
+        id: 'after',
+        say: 'The queue empties, and the new account is now the one every payout is typed against. The next remittance anybody records for this seller goes there.',
+      },
+      {
+        id: 'outro',
+        say: 'Rejecting takes a reason and the seller reads it, so say what you need from them. And when you are not sure, that is the right button — a payout delayed by a phone call costs nothing that a payout to the wrong account does.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (63):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (64):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1** and **N1**.
+**L1**, **N1** and **N9**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -48,10 +48,10 @@ required and has no default — see [Re-running](README.md#re-running).
 
 **THE NEXT ENTRY IS L2 — "Counting stock"**, and sections K and L1 are done.
 
-**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N9 — "Is
-the money picture true".** N1 is filmed; its narration, flow and seeding are
-in, and `moneyDeskWorldFor` is the shared world N2–N7 will draw on. N9's
-narration and flow are written and not yet checked.
+**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N2 —
+"Accepting a top-up".** N1 and N9 are filmed. `moneyDeskWorldFor` is the shared
+world N2–N7 draw on, and the narration and flows for **N2, N3 and N4** are
+written and not yet checked.
 
 **A REBUILD BY EITHER AGENT BREAKS THE OTHER AGENT'S RUNNING NEXT SERVER, AND
 IT PRESENTS AS A MOVED SELECTOR.** `apps/*/.next` is shared and is read-only at
@@ -3384,17 +3384,33 @@ it is split across lines by weight, settling and waiving — and **voiding**,
 because a wrong bill is withdrawn and re-raised, never edited. Editing in place
 would leave the wallet holding a figure the bill no longer claims.
 
-### N9. Is the money picture true · `ready`
+### N9. Is the money picture true · **FILMED** — `is-the-money-picture-true.mp4`
 
 **Promise** — you can tell how much of the P&L is measured and how much is
 missing.
-**Length** 3 min. **Needs** whatever data exists; the honesty of the page is
-the subject, so a thin month is fine.
+**Length** 3 min 11 s of narration over 15 scenes. **Needs** D0 and nothing
+else — it is `ready` as the entry said, and the only video in section N whose
+world is already there.
 **Covers** `/pnl` and, more importantly, the coverage figures: a missing
 courier cost is reported as **uncovered**, never as zero, because zero would
 report the whole of that revenue as profit. Also `/cost-sync` — whether the
 nightly sync is even running, since a stopped one is invisible until a margin
 looks wrong weeks later.
+
+**Every scene is gated on the SENTENCE the narration quotes**, because three of
+these lines render an identical-looking row whether or not their coverage note
+exists, and a video whose whole subject is the honesty of the page cannot film
+the version with nothing to be honest about. The `quoted` scene goes further
+and asserts on the note's own TEXT (`quoted, not billed`): a window with
+nothing merely quoted draws the same note without that sentence, and the line
+would otherwise be spoken over a paragraph that does not say it.
+
+**The drill-down is the best thing on the page and was nearly left out.**
+Opening a line gives "Revenue is made of" with the actual predicate behind each
+part, and then every record as a row with `not recorded` where the cost is
+missing — which is the whole argument of the video in one frame. `.pl-drill` is
+mounted only while the item is open and its rows are fetched then, so the wait
+is on the ROWS rather than on the click.
 
 ### N10. Closing a month · `impractical locally` · **dangerous**
 
