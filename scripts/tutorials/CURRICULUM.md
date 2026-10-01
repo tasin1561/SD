@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 79 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O4 and P5.** The 11 left are all in the admin app: 2 are
+**90 tutorials. 80 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O4, P1 and P5.** The 10 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (79):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (80):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N9** and **O1–O4**.
+**L1–L3**, **M1–M2**, **N1–N9**, **O1–O4** and **P1**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -112,11 +112,23 @@ to Kolkata, a return that came back to the wrong building. Do NOT film
 Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
 teach the wrong habit.
 
-**ON STACK B (the second agent, sections N and P): SECTION N IS DONE —
-N1–N9 are all filmed, and N10 is `impractical locally`. THE NEXT ENTRY IS P1 —
-"God mode".** **None of P1–P4 has narration or a flow yet**, and P4 is now
+**ON STACK B (the second agent, sections N and P): SECTION N IS DONE and P1 IS
+FILMED. THE NEXT ENTRY IS P2 — "Live courier writes".** N10 is `impractical
+locally`; P2, P3 and P4 have no narration or flow yet, and P4 is now
 `partly filmable` rather than impractical (read its entry: the preview half of
 `/warehouse/collapse` is the product's own first step and moves nothing).
+
+**TWO THINGS P1 SETTLED THAT P2–P4 INHERIT.** First, **the review parcel is now
+RE-TAKEABLE**: a god-mode take leaves `RSH-LIFE-REVIEW` confirmed, with a
+waybill and a reservation behind it, and `rebuildStaleReviewParcel`'s delete
+path would be refused by three foreign keys — so a forced one is CANCELLED
+through the product's own admin cancel and then retired by name, which is the
+`retireSpentParcel` idiom. Second, **the lifecycle pass stamps `lastSeenAt`
+before it rings**: going available does not renew a presence claim, the sweep
+runs every minute, and a seed that takes longer than a tick to ring three times
+loses its assignment between the pull and the attempt —
+`ASSIGNMENT_NOT_ACTIVE: Assignment is PENDING, not ASSIGNED`, which reads like a
+bug in the call flow and is a sixty-second clock. It cost one take.
 
 **Expect the slug and the number to disagree in the history.** N5 and N6 landed
 in a commit titled "N3 and N4", and N2's own commit message is inside M1's —
@@ -4146,11 +4158,12 @@ Deliberately last, deliberately their own section, and deliberately a different
 tone from everything above. Each one is something a person should have watched
 a tutorial about **before** the day they need it.
 
-### P1. God mode · `needs demo data` · **dangerous**
+### P1. God mode · **FILMED** — `god-mode.mp4` · **dangerous**
 
 **Promise** — you can force an order into a state the rules forbid, and you
 know everything that follows.
-**Length** 4 min. **Needs** a stuck order.
+**Length** 3 min 50 s of narration over 18 scenes. **Needs**
+`seed-demo-data.mjs god-mode`, which is D0.
 **Covers** force-mutate on `/orders/[id]`: the typed `FORCE-MUTATE`, the reason
 of at least thirty characters, the risk acknowledgement, the field whitelist.
 Then the half people miss — **a forced status has the same consequences as a
@@ -4161,6 +4174,62 @@ companion dialog, and the tutorial shows both.
 cleared**, the audit is CRITICAL, and stock can be left held against an order
 that no longer exists. Use it when nothing else can work, and write the reason
 for the person reading it next year.
+
+**IT FORCES `RSH-LIFE-REVIEW` TO CONFIRMED, and the premise is checked against
+the matrix rather than asserted.** That order sits at
+`AWAITING_SELLER_DECISION` — the R5b pause — and the four edges out of it are
+`PENDING_CONFIRMATION`, `REJECTED_NDR` and the two cancels. **CONFIRMED is not
+among them**, which is what makes "nothing legitimate can reach this state" a
+true sentence; it was read off `OrderStateMachineService`, not remembered. The
+force is also the richest one to film: a forced CONFIRMED attempts the reserve,
+so the result panel carries a real **Reserve attempts** row reported by the
+server, and provisions a shipment, which is what the banner's "a waybill
+already issued is NOT cancelled with the courier" is about.
+
+**The two companion dialogs are OPENED and CANCELLED.** Pressing Release here
+would be wrong — a forced CONFIRMED holds exactly the reservations a real
+confirmation would — so the narration says what the button is FOR, which is the
+other direction. **Restore stock claim** sits beside it and the panel's own
+comment is the scene: the two are halves of one question, this order's claim on
+the shelves. The cancel happens at the START of the next scene, because a
+dialog has to survive the sentence that is about it.
+
+**What the take leaves, and how it is put back.** The order ends CONFIRMED with
+`hasAdminOverride` true, a waybill at the simulator and a reservation. So
+`rebuildStaleReviewParcel` gained a second path: a review parcel found FORCED is
+**cancelled through the product's own admin cancel** — a legal matrix edge from
+CONFIRMED whose saga releases the stock and voids the unpicked shipment — and
+then **retired by name** to `RSH-LIFE-REVIEW-SPENT-<n>`, the `retireSpentParcel`
+idiom, rather than deleted: the delete path is refused by the reservation, the
+shipment and the order-shipment link, and clearing those by hand would throw
+away a courier booking and write `stock_reservations` outside INV-1. The cancel
+is not tidiness — left CONFIRMED with a waybill and no reservation, it would sit
+in the label and pick queues for ever and J3's world would grow a parcel a take.
+
+**THE NAVIGATION IS FILTERED, AND THAT IS NOT DECORATION.** The retired orders
+keep the reference as a prefix and the list's search is a SUBSTRING, so by the
+third take a plain `?search=RSH-LIFE-REVIEW` returns three rows and the
+newest-first list hands back whichever sorted top. The flow filters on
+`status=AWAITING_SELLER_DECISION` as well, which leaves exactly one and makes
+the subtitle's count a real gate. It also `waitForURL`s: the first take died on
+the DASHBOARD with a selector timeout, which reads like a moved selector and is
+the FE-1 token race O4 wrote up (`signInAndOpen` is the general answer; this
+flow predates it and is hardened instead, so a re-take should move to it).
+
+**ONE PRODUCT-ADJACENT FINDING, fixed in the seeding rather than the product.**
+Going available does NOT renew a presence claim — `AgentPresenceService.touch`
+is called by a station tab and by an agent's own actions — and the sweep runs
+every minute, standing down any available agent with a null `lastSeenAt` and
+handing back what they held. A seed that rings three times across a tick
+therefore loses its assignment between the pull and the attempt and reports
+`ASSIGNMENT_NOT_ACTIVE: Assignment is PENDING, not ASSIGNED`, which looks like a
+bug in the call flow. `pullOwnCall` stamps it now, as `callWorldFor` already did.
+
+**Two scenes are compressed by the composer** (`field` ×0.82, `reason` ×0.73):
+both type a long string at human rate and overrun their narration, and compose
+retimes a scene's picture to its clip by design. Sync is unaffected — every
+scene verified at +0.00 to +0.18 s. Shorten the typed strings if a re-take is
+ever made for another reason.
 
 ### P2. Live courier writes · `needs demo data` · **dangerous**
 
