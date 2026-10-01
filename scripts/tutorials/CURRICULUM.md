@@ -32,8 +32,8 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (56):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J5**.
+**Filmed so far (57):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J6**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -2822,11 +2822,12 @@ while the bench had already cleared that box off the screen. The fix cancels it
 (never CLOSES it — a closed box is the LBL-4 evidence the contents WERE
 scanned).
 
-### J6. Handing parcels to the courier · `needs demo data` · **dangerous**
+### J6. Handing parcels to the courier · **FILMED** — `hand-over-to-the-courier.mp4` · **dangerous**
 
 **Promise** — you can dispatch a van-load and know every parcel is accounted
 for.
-**Length** 3 min. **Prerequisites** J4. **Needs** packed parcels.
+**Length** 11 scenes, ~2 min. **Prerequisites** J4. **Needs**
+`seed-demo-data.mjs hand-over-to-the-courier`.
 **Covers** `/warehouse/handover`: **the scan is the handover** — the parcel
 dispatches there and then, and the manifest closes itself once the last one has
 gone. A running list rather than a clearing form, so "did I do all forty" is
@@ -2835,6 +2836,35 @@ courier halts **that operator** until an admin clears it, because it means
 either two boxes carry one waybill or the pile has already been done.
 **Cost of getting it wrong:** a parcel recorded as dispatched that is still on
 the bench, or a duplicate label delivered to nobody.
+
+**`PICK_STAGE` grew a third value, `PACKED`**, and the parcels reach it through
+the REAL box ritual — scan the label to open, scan each product in by its SKU
+code, scan the label again to close — driven by the API exactly as the e2e
+harness's `packAtBench()` drives it, and deliberately NOT through
+`force-complete`, which is J5's subject and which the README is explicit about
+not routing flows through.
+
+**THE DUPLICATE IS ONE OF OUR OWN PARCELS SCANNED TWICE**, which is also the
+real story (SCAN-1: "the pile has already been done"). Its waybill is read back
+off the SESSION list, because the scan has already taken it out of the waiting
+list — which is where the operator would be looking too.
+
+**AND THE STOP IS THE REASON THE SEEDING GREW A STEP.** SCAN-1's block is per
+OPERATOR, lives in `system_issues` as `blocksScanForStaffId`, and survives a
+reload, a sign-out and the end of a take. A take that ends ON the stop — which
+this one does — leaves the ops user unable to scan anything, at EITHER bench,
+for ever. `pickWorldFor` now lifts it on every run, the same rule the e2e reset
+follows, and J6's first scene THROWS if the banner is still up rather than
+letting the first scan fail thirty seconds later on a page that looks fine.
+
+**ONE SELECTOR TRAP COST A CHECK RUN, and it is a new one.** `hasText` is a
+case-insensitive SUBSTRING, so `.wh-card` filtered on "This session" matched the
+SCAN card as well — its meta line reads "1 scanned in this session." — and
+`.first()` took the wrong one, whose `.wh-list li` does not exist. It arrived as
+a thirty-second `scrollIntoViewIfNeeded` timeout on an element plainly visible in
+the failure screenshot, which is the most misleading shape a selector miss can
+take. `filter({ has: getByRole('heading', { name, exact: true }) })` is the form
+that means "the card whose TITLE is this".
 
 ### J7. Booking the van · `needs demo data` · **dangerous**
 

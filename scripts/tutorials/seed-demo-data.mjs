@@ -4808,6 +4808,86 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
  */
 const J1_BIN = { aisle: 'A', rack: '1', shelf: '3', code: 'A-01-03' };
 
+/**
+ * J7's world: a pickup day that FAILED, so the sharp edge has a button.
+ *
+ * ── WHY IT HAS TO BE STAGED ───────────────────────────────────
+ * "Free the day" renders on exactly one shape: `status === 'FAILED' &&
+ * courierPickupId === null` — an attempt that failed WITHOUT the courier
+ * returning an id, which is the only case where freeing the slot is
+ * arguably safe. Everything else on that row offers "Collected" and
+ * "Call off" instead. The local simulator succeeds, and the day's real
+ * request is raised automatically when the first box is packed
+ * (CUR-10 amendment #3), so the failure cannot be produced here by
+ * asking the courier for one.
+ *
+ * It is written directly, and that is a deliberate exception rather
+ * than a shortcut: nothing else on this box can produce a FAILED
+ * attempt, the row is inert (no stock, no money, no courier call), and
+ * the alternative is a video about a dangerous button that never shows
+ * the button. The message on it is Delhivery's own vocabulary for a
+ * timeout.
+ *
+ * ── AND IT IS TOMORROW'S DAY, NOT TODAY'S ────────────────────────
+ * The partial unique covers `(courier, warehouse, date)` for REQUESTED
+ * and FAILED together, and today's row is already REQUESTED — raised by
+ * the pack bench the seeding above drives. Tomorrow is also the honest
+ * date: a box packed after `courier.default_pickup_time` asks for the
+ * NEXT day's van, so a failed attempt for tomorrow is the ordinary way
+ * this row comes to exist.
+ */
+async function pickupWorldFor(slug, staffToken) {
+  if (slug !== 'book-the-van') return;
+
+  const warehouses = await call('/admin/warehouses', { token: staffToken });
+  const wh = warehouses.find((w) => w.fulfilsOrders === true);
+  if (wh === undefined) {
+    throw new Error('No order-fulfilling warehouse — the pickups screen has nothing to show.');
+  }
+
+  const tomorrow = new Date();
+  tomorrow.setUTCHours(0, 0, 0, 0);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+  const existing = await prisma.courierPickupRequest.findFirst({
+    where: { courierCode: 'delhivery', warehouseId: wh.id, pickupDate: tomorrow },
+    select: { id: true, status: true, courierPickupId: true },
+  });
+  if (existing !== null) {
+    if (existing.status === 'FAILED' && existing.courierPickupId === null) {
+      console.log("  · tomorrow's pickup attempt is already the failed one the video needs");
+      return;
+    }
+    /*
+      A take presses nothing on this row, but a CHECK run might have, and
+      a released day leaves the row RELEASED rather than FAILED. Put it
+      back rather than inventing a second one for the same day, which the
+      partial unique would refuse anyway.
+    */
+    await prisma.courierPickupRequest.update({
+      where: { id: existing.id },
+      data: { status: 'FAILED', courierPickupId: null },
+    });
+    console.log(`  · tomorrow's pickup attempt put back to FAILED (was ${existing.status})`);
+    return;
+  }
+
+  await prisma.courierPickupRequest.create({
+    data: {
+      courierCode: 'delhivery',
+      warehouseId: wh.id,
+      pickupLocationName: 'Skydrop',
+      pickupDate: tomorrow,
+      pickupTime: '18:00:00',
+      expectedPackageCount: 14,
+      status: 'FAILED',
+      courierPickupId: null,
+      courierMessage: 'Request timed out before the courier answered. No pickup id was returned.',
+    },
+  });
+  console.log('  · staged a FAILED pickup attempt for tomorrow — the day the video frees');
+}
+
 async function binsWorldFor(slug, staffToken) {
   if (slug !== 'where-things-live') return;
 
@@ -5197,6 +5277,7 @@ async function main() {
   await superviseWorldFor(slug, sellerId, sellerToken);
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
   await binsWorldFor(slug, staffToken);
+  await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);
   await pendingRowsWorldFor(slug, sellerId, sellerToken);

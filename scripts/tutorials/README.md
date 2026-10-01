@@ -53,6 +53,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `print-and-pick.mp4`                | A morning's parcels turned into paper — selecting a walk rather than the whole queue, a sheet that names what it could not print, confirming labels, and confirming the picking list, which is what actually claims the units on the shelves.                                                                                                                                                   |
 | `pack-a-parcel.mp4`                 | A box packed so that what is inside it is what was ordered — the waiting list and the parcel on it with no label to scan, the label scan that opens a box, products going in one at a time, one too many refused at the scan rather than at the end, the close, the manifest it joined without being asked, and a second box cancelled, which returns nothing to stock.                         |
 | `pack-without-scanning.mp4`         | The escape hatch for a parcel whose goods have nothing on them to scan — where the control is NOT (not beside the close, not a tick box), whose button it is, what the panel says it costs, the twenty-character reason the dead button is waiting for, and the fact that it lands as its own high-severity action rather than a flag inside an ordinary pack.                                  |
+| `hand-over-to-the-courier.mp4`      | A van-load going out — what is still standing at the bench, the scan that IS the handover (no form afterwards, no button when the van pulls away), a running list rather than a clearing form, the manifest closing itself, and the duplicate-scan stop: a box scanned twice halts that operator at every bench until an admin has gone and counted.                                            |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -531,6 +532,16 @@ created_at ASC` — a released call goes in front of every unstarted one
   — a frozen frame under ten seconds of narration. The composer's per-scene
   retime factors are where that shows (`x0.99` is normal; `x20` is this), so
   read them rather than trusting the run's exit code.
+- **`hasText` is a case-insensitive SUBSTRING, so one card's prose matches
+  another card's heading (J6, 2026-10-01).** The handover bench's scan card says
+  "1 scanned in this session."; the running list's heading is "This session". So
+  `page.locator('.wh-card', { hasText: 'This session' })` matched BOTH, `.first()`
+  took the scan card, and `.wh-list li` inside it does not exist — arriving as a
+  thirty-second `scrollIntoViewIfNeeded` timeout on an element plainly visible in
+  the failure screenshot, which is the most misleading shape a selector miss can
+  take. `filter({ has: page.getByRole('heading', { name: '…', exact: true }) })`
+  is the form that means "the card whose TITLE is this". Worth a count check when
+  a flow reaches for a card by words that could be anybody's.
 - The recorder writes `out/verify/<slug>-failure.png` when a flow breaks. It is
   usually enough on its own — the failures during this build were all visible
   in it.

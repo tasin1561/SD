@@ -9246,12 +9246,12 @@ export const FLOWS = {
       },
 
       async waiting({ page, stage }) {
-        const rows = page.locator('.wh-list li');
+        const rows = waitingCard(page).locator('.wh-list li');
         const n = await rows.count();
         if (n < 3) {
           throw new Error(`${n} parcel(s) waiting for a van, expected at least 3.`);
         }
-        await stage.dwellOn(page.locator('.wh-card').nth(1), 3200);
+        await stage.dwellOn(waitingCard(page), 3200);
       },
 
       async first({ page, stage }) {
@@ -9324,6 +9324,102 @@ export const FLOWS = {
 
       async outro({ page, stage }) {
         await stage.dwellOn(page.locator('.wh-stop').first(), 3400);
+      },
+    },
+  },
+
+  'book-the-van': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/pickups`, { waitUntil: 'domcontentloaded' });
+        await failedPickupRow(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-ph').first(), 3000);
+      },
+
+      async grain({ page, stage }) {
+        // The page's OWN sentence about the grain, which is the thing
+        // this video is correcting rather than asserting.
+        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 3200);
+      },
+
+      async row({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-thead').first(), 3200);
+      },
+
+      async close({ page, stage }) {
+        /*
+          "Collected" renders on a REQUESTED row only, and the day's row
+          is raised for us when the first box is packed (CUR-10 amendment
+          #3) — so this is the ordinary act, not a staged one. Pressed,
+          because it is harmless: it records that the driver has been and
+          the courier is never told.
+        */
+        const open = openPickupRow(page);
+        await open.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.clickIt(open.getByRole('button', { name: 'Collected' }), { after: 1400 });
+        await page
+          .getByText(/Marked collected/i)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-table').first(), 2800);
+      },
+
+      async failed({ page, stage }) {
+        await stage.dwellOn(failedPickupRow(page), 3200);
+      },
+
+      async danger({ page, stage }) {
+        await stage.clickIt(failedPickupRow(page).getByRole('button', { name: 'Free the day' }), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.getByText(/books a second van/).waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.getByText(/books a second van/), 3200);
+      },
+
+      async probably({ page, stage }) {
+        await stage.dwellOn(page.getByRole('dialog').locator('.pku-callout'), 3400);
+      },
+
+      async check({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/^Reason/), PICKUP.reason, { after: 600 });
+        // NOT PRESSED. Freeing a day is the one act on this screen that
+        // can put a second van at the door, and a tutorial that performs
+        // it teaches the press rather than the check. Backed out instead
+        // — which is also what the narration tells somebody to do.
+        await stage.dwellOn(dialog.getByRole('button', { name: 'Free the day' }), 2800);
+      },
+
+      async raise({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').locator('.sk-dialog__foot').getByRole('button').first(),
+          { after: 900 },
+        );
+        await stage.clickIt(page.getByRole('button', { name: 'Request a pickup' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.getByLabel(/^Courier/).waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__body').first(), 3200);
+      },
+
+      async outro({ page, stage }) {
+        // Closed without raising: there is no sandbox behind this button
+        // and a tutorial must not book a van.
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).first(),
+          { after: 1200 },
+        );
+        await stage.dwellOn(page.locator('.sk-table').first(), 3400);
       },
     },
   },
@@ -9465,6 +9561,27 @@ const FORCE = {
   rest: ' off the carton in transit; contents counted by hand against the picking sheet',
 };
 
+/** J7's reason, and the two rows its screen turns on. */
+const PICKUP = {
+  reason: 'Checked the Delhivery One panel — no request listed for this warehouse on that date.',
+};
+
+/**
+ * The FAILED attempt, by the only word on the row that tells it apart.
+ *
+ * The status chip is the status lower-cased, and the seeding asserts
+ * exactly one failed attempt exists — the date is tomorrow's and is
+ * therefore not something to hard-code.
+ */
+function failedPickupRow(page) {
+  return page.locator('.sk-tbody .sk-tr', { hasText: 'failed' }).first();
+}
+
+/** Today's open request — the one the pack bench raised for us. */
+function openPickupRow(page) {
+  return page.locator('.sk-tbody .sk-tr', { hasText: 'requested' }).first();
+}
+
 /**
  * J6's two parcels, by the recipient the handover queue prints.
  *
@@ -9479,9 +9596,30 @@ function handoverRow(page, recipient) {
   return page.locator('.wh-list li', { hasText: recipient }).first();
 }
 
-/** The running list of what this session has put on the van. */
+/**
+ * The running list of what this session has put on the van.
+ *
+ * REACHED BY ITS HEADING, not by `hasText`. `hasText` is a
+ * case-insensitive SUBSTRING, and the scan card above says "1 scanned in
+ * this session." — so `.wh-card` filtered on "This session" matched TWO
+ * cards and `.first()` took the scan card, whose `.wh-list li` does not
+ * exist. It presented as a thirty-second timeout on an element plainly
+ * on the screen in the failure shot. `has:` + an exact heading is the
+ * form that says "the card whose title is this".
+ */
 function sessionList(page) {
-  return page.locator('.wh-card', { hasText: 'This session' }).first();
+  return page
+    .locator('.wh-card')
+    .filter({ has: page.getByRole('heading', { name: 'This session', exact: true }) })
+    .first();
+}
+
+/** What is still standing at the bench, by its own heading. */
+function waitingCard(page) {
+  return page
+    .locator('.wh-card')
+    .filter({ has: page.getByRole('heading', { name: /waiting for a van$/ }) })
+    .first();
 }
 
 /**

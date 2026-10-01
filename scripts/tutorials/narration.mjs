@@ -3346,6 +3346,53 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'book-the-van',
+    title: 'Booking the van',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Most days nobody opens this. The van is asked for automatically when the day’s first box is packed — which is why there is already a request here that nobody raised.',
+      },
+      {
+        id: 'grain',
+        say: 'And read the grain, because it is the thing people get wrong. One request per warehouse per day covers the whole handover. Not one per parcel.',
+      },
+      {
+        id: 'row',
+        say: 'A row is a day. Who is collecting, where from, under which registered name, what time, and how many parcels we told them to expect.',
+      },
+      {
+        id: 'close',
+        say: 'When the driver has been, mark it collected. That is housekeeping rather than anything the courier sees — it is how tomorrow knows today is finished.',
+      },
+      {
+        id: 'failed',
+        say: 'Now the row this screen really exists for. An attempt that failed, with the courier’s own words on it rather than a code we invented for them.',
+      },
+      {
+        id: 'danger',
+        say: 'And the sharp edge. Freeing the day lets a new request be raised for it — which is the right thing when nothing registered, and sends a second van when something did.',
+      },
+      {
+        id: 'probably',
+        say: 'Read what it admits. They returned no id, so it probably never reached them. Probably is exactly why this is a deliberate act with your name on it.',
+      },
+      {
+        id: 'check',
+        say: 'So go and look in the courier’s own panel first, and say what you found. Two vans at one door is a real cost and an awkward phone call.',
+      },
+      {
+        id: 'raise',
+        say: 'Raising one by hand is a live call that books a real vehicle. The form is short because the courier needs very little — and that is exactly what makes it easy to do twice.',
+      },
+      {
+        id: 'outro',
+        say: 'So: it mostly looks after itself, mark the day collected when the driver has gone, and treat freeing a day as something you do after checking, never instead of it.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
