@@ -87,11 +87,10 @@ say() { printf '  %s\n' "$*"; }
 
 case "$CMD" in
   env)
-    if [ -f "$ROOT/apps/api/.env" ]; then
-      # Printed, not sourced: `eval`ing this is the caller's choice, and
-      # the secrets half is theirs to source as they already do.
-      :
-    fi
+    # The STACK's half only. `apps/api/.env`'s secrets are deliberately
+    # not printed — `eval`ing a block with a JWT key in it puts the key
+    # in the caller's shell history, and every path that needs those
+    # sources that file itself.
     node "$STACKS_JS" --env "$STACK_NAME"
     exit 0
     ;;
