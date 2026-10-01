@@ -982,12 +982,23 @@ export function useCancelManualPlacement(): UseMutationResult<
 // RTO
 export function useReceiveRto(): UseMutationResult<ReceiveRtoResult, Error, ReceiveRtoRequest> {
   const client = useApiClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
       client.request<ReceiveRtoResult>(`/api/warehouse/rto/receive`, {
         method: 'POST',
         body,
       }),
+    onSuccess: () => {
+      // The parcel has just left "at our door" and joined "on the
+      // bench", so BOTH lists are now wrong. Left stale, the station
+      // keeps listing a carton somebody has already taken in and the
+      // next person picks it up again — and `receive` is idempotent, so
+      // it answers "already received", which reads as a no-op rather
+      // than an explanation. Same reasoning as the handover bench's.
+      void qc.invalidateQueries({ queryKey: ['warehouse-rto', 'awaiting-receipt'] });
+      void qc.invalidateQueries({ queryKey: ['warehouse-rto', 'open'] });
+    },
   });
 }
 export function useInspectRtoItem(): UseMutationResult<
@@ -996,12 +1007,18 @@ export function useInspectRtoItem(): UseMutationResult<
   { shipmentItemId: string } & InspectRtoItemRequest
 > {
   const client = useApiClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ shipmentItemId, ...body }) =>
       client.request<InspectRtoItemResult>(`/api/warehouse/rto/items/${shipmentItemId}/inspect`, {
         method: 'POST',
         body,
       }),
+    onSuccess: () => {
+      // "On the bench" counts what is still waiting on a decision, and
+      // an inspection is exactly what moves that number.
+      void qc.invalidateQueries({ queryKey: ['warehouse-rto', 'open'] });
+    },
   });
 }
 export function useFinalizeRto(): UseMutationResult<
@@ -1010,12 +1027,26 @@ export function useFinalizeRto(): UseMutationResult<
   { shipmentId: string }
 > {
   const client = useApiClient();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ shipmentId }) =>
       client.request<FinalizeRtoResult>(`/api/warehouse/rto/shipments/${shipmentId}/finalize`, {
         method: 'POST',
         body: {},
       }),
+    onSuccess: () => {
+      /*
+        Finished with: off the bench. Stock really moved here too — a
+        restock, a damaged hold or a write-off — so the levels and the
+        ledger are stale from this moment as well. Named by their real
+        roots rather than a tidy-looking `['inventory']`, which matches
+        no query on this app and would read as a refresh that never
+        happens.
+      */
+      void qc.invalidateQueries({ queryKey: ['warehouse-rto', 'open'] });
+      void qc.invalidateQueries({ queryKey: ['admin-inventory'] });
+      void qc.invalidateQueries({ queryKey: ['admin-movements'] });
+    },
   });
 }
 
