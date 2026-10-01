@@ -10248,6 +10248,152 @@ export const FLOWS = {
       },
     },
   },
+  /*
+    N9 — how much of the P&L is measured.
+
+    Two screens, no clicks that write anything, and every scene gated on
+    the SENTENCE the narration quotes rather than on the panel holding
+    it: three of these lines render an identical-looking row whether or
+    not their coverage note exists, and a video whose whole subject is
+    the honesty of the page cannot film the version with nothing to be
+    honest about.
+  */
+  'is-the-money-picture-true': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/pnl`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Profit & loss', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.locator('.mo-kpis').first(), 2800);
+      },
+
+      async headline({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Gross margin'), 2000);
+        await stage.dwellOn(moneyKpi(page, 'Net'), 2600);
+      },
+
+      /*
+        The callout's own words. It only renders when something IS
+        uncovered, which is the state this video is about — so gating on
+        it is also the assertion that the world is the right one.
+      */
+      async honest({ page, stage }) {
+        const note = page.getByText(/nothing here is guessed to fill the gap/i).first();
+        await note.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(note, 4200);
+      },
+
+      async sources({ page, stage }) {
+        const section = page.locator('.sk-acc').first();
+        await section.waitFor({ state: 'visible', timeout: 25_000 });
+        await section.evaluate((el) => el.scrollIntoView({ block: 'start', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(pnlLine(page, 'India delivery').locator('.pl-cover').first(), 3400);
+      },
+
+      async delivery({ page, stage }) {
+        await stage.dwellOn(
+          pnlLine(page, 'India delivery').locator('.pl-line__note').first(),
+          5000,
+        );
+      },
+
+      async quoted({ page, stage }) {
+        const note = pnlLine(page, 'India delivery').locator('.pl-line__note').first();
+        // The sentence this scene is about, asserted rather than assumed:
+        // a window with nothing merely quoted renders the same note
+        // without it, and the line would be spoken over a paragraph that
+        // does not say it.
+        const words = await note.innerText();
+        if (!/quoted, not billed/i.test(words)) {
+          throw new Error(`The delivery line's note does not mention quoted charges: ${words}`);
+        }
+        await stage.dwellOn(note, 4600);
+      },
+
+      async open({ page, stage }) {
+        await stage.dwellOn(
+          pnlLine(page, 'India delivery').locator('.pl-line__note').first(),
+          4800,
+        );
+      },
+
+      async returns({ page, stage }) {
+        const line = pnlLine(page, 'Returns');
+        await line.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(600);
+        await stage.dwellOn(line.locator('.pl-line__note').first(), 4400);
+      },
+
+      async lines({ page, stage }) {
+        await stage.glide(520);
+        await stage.dwellOn(pnlLine(page, 'Damage & loss refunds to sellers'), 2400);
+        await stage.dwellOn(pnlLine(page, 'Courier COD fees'), 2400);
+      },
+
+      /*
+        Opening a line. `.pl-drill` is mounted only while the item is
+        open and its rows are fetched then, so the wait is on the rows
+        rather than on the click — the panel exists a moment before the
+        records behind it do.
+      */
+      async drill({ page, stage }) {
+        const line = pnlLine(page, 'Returns');
+        await line.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await stage.clickIt(line.locator('.sk-acc__trigger').first(), { after: 1600 });
+        const basis = page.locator('.pl-basis').first();
+        await basis.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(basis, 2600);
+        const rows = page.locator('.pl-rows').first();
+        await rows.waitFor({ state: 'visible', timeout: 25_000 });
+        await rows.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(600);
+        await stage.dwellOn(rows, 2800);
+      },
+
+      async costsync({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/cost-sync`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const sub = page.getByText(/download their wallet export/i).first();
+        await sub.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(sub, 3600);
+      },
+
+      async silence({ page, stage }) {
+        await stage.dwellOn(page.getByText(/the way this fails is silence/i).first(), 2600);
+        // The card's own state line — whichever of the three it is. The
+        // sentence is the subject, not the switch being off.
+        await stage.dwellOn(page.locator('.cs-with-icon').first(), 2600);
+      },
+
+      async counts({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Parcels with a real cost'), 2400);
+        await stage.dwellOn(moneyKpi(page, 'Returns with a real cost'), 2600);
+      },
+
+      async runs({ page, stage }) {
+        const empty = page.getByText(/it has never finished far enough to say so/i).first();
+        await empty.waitFor({ state: 'visible', timeout: 25_000 });
+        await empty.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(empty, 4200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Forward cost recorded'), 3600);
+      },
+    },
+  },
 };
 
 /**
@@ -10645,5 +10791,26 @@ function moneyCard(page, title) {
   return page
     .locator('.mk-card')
     .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+    .first();
+}
+
+/**
+ * One line of the P&L, by its label and nothing else.
+ *
+ * `hasText` over the accordion item would be a substring over the whole
+ * row — label, coverage note, four figures — and several of these labels
+ * are inside each other's notes ("COD" and "courier cost" both appear in
+ * the delivery line's prose). The label element carries exactly the
+ * line's name, so matching it exactly is the only form that means one
+ * line.
+ */
+function pnlLine(page, label) {
+  return page
+    .locator('.sk-acc__item')
+    .filter({
+      has: page.locator('.pl-line__label', {
+        hasText: new RegExp(`^${label.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
+      }),
+    })
     .first();
 }

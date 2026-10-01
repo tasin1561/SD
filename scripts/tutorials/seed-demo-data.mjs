@@ -37,6 +37,7 @@ import {
   LIFECYCLE_PARCELS,
 } from './lib/lifecycle.mjs';
 import { clearLoginThrottle } from './lib/clear-login-throttle.mjs';
+import { writeFixture } from './lib/fixture.mjs';
 import { ensureOpsStaff, hashPassword as hash, OPS } from './lib/ops-user.mjs';
 import { assertStackEnvironment, resolveStack } from './lib/stacks.mjs';
 import { ensureConsignmentWorld, consignmentReport } from './lib/consignments.mjs';
@@ -5195,24 +5196,7 @@ const L1_PENDING_NOTE =
 async function adjustmentWorldFor(slug, sellerId, staffToken, warehouse) {
   if (slug !== 'correct-a-count') return;
 
-  /*
-    A PENDING ROW IS THE ONLY ONE THAT MAY BE REMOVED, and it is removed
-    by its own words. Nothing has been applied while it is pending, so
-    deleting is not a rewind — and the alternative, leaving it, means
-    the second take opens on a queue of two identical corrections and
-    reviews whichever is first.
-  */
-  const stale = await prisma.stockAdjustment.findMany({
-    where: { sellerId, status: 'PENDING', description: L1_PENDING_NOTE },
-    select: { id: true },
-  });
-  if (stale.length > 0) {
-    await prisma.stockAdjustmentLine.deleteMany({
-      where: { adjustmentId: { in: stale.map((a) => a.id) } },
-    });
-    await prisma.stockAdjustment.deleteMany({ where: { id: { in: stale.map((a) => a.id) } } });
-    console.log(`  · removed ${stale.length} undecided adjustment(s) a previous take left`);
-  }
+  await clearUndecidedAdjustments(sellerId);
 
   const line = await biggestPickableLine(sellerId, warehouse.id);
   const raise = (body) =>
@@ -5285,6 +5269,39 @@ const L1_DAMAGED_MIN = 3;
  * is minted per run — and because the pending adjustment removes
  * twenty-five units on approval, which a thin line cannot survive.
  */
+/**
+ * Remove every UNDECIDED adjustment, which is the only kind that may be
+ * removed at all.
+ *
+ * PENDING means nothing has been applied — the executor runs on
+ * approval (INV-8) — so deleting one is not a rewind of anything. An
+ * EXECUTED or REJECTED row is history and is never touched.
+ *
+ * It clears the whole queue rather than only the row this seeding
+ * wrote, because L2 fills it too: completing a cycle count raises a
+ * PENDING adjustment for every difference, and one left behind by an L2
+ * take would be the first row L1's flow reviews — a different
+ * correction, with a different description, under narration about this
+ * one. The flow would catch it (its gate quotes the description), but
+ * catching it means a dead take rather than a clean one.
+ */
+async function clearUndecidedAdjustments(sellerId) {
+  const stale = await prisma.stockAdjustment.findMany({
+    where: { sellerId, status: 'PENDING' },
+    select: { id: true },
+  });
+  if (stale.length === 0) return;
+  await prisma.cycleCountItem.updateMany({
+    where: { adjustmentId: { in: stale.map((a) => a.id) } },
+    data: { adjustmentId: null },
+  });
+  await prisma.stockAdjustmentLine.deleteMany({
+    where: { adjustmentId: { in: stale.map((a) => a.id) } },
+  });
+  await prisma.stockAdjustment.deleteMany({ where: { id: { in: stale.map((a) => a.id) } } });
+  console.log(`  · removed ${stale.length} undecided adjustment(s) a previous take left`);
+}
+
 async function biggestPickableLine(sellerId, warehouseId) {
   const levels = await prisma.stockLevel.findMany({
     where: {
@@ -5318,6 +5335,83 @@ async function biggestPickableLine(sellerId, warehouseId) {
  * K2's take puts one there and L1's takes one away, so left alone the
  * shelf empties and the link the video is about has no line to sit on.
  */
+/**
+ * L2's world: a clean slate for a count, and nothing waiting in the
+ * queue it is going to fill.
+ *
+ * ── WHAT IT CLEARS AND WHY THAT IS SAFE ──────────────────────────────
+ * A cycle count writes NO STOCK of its own — `CycleCountService.complete`
+ * turns each difference into a PENDING adjustment and stops. So a count
+ * a previous take left SCHEDULED or IN_PROGRESS carries nothing at all
+ * and is deleted; a COMPLETED one is history and is left exactly where
+ * it is, which is also what gives the list something to show.
+ *
+ * The undecided adjustments go too, for the same reason and one more:
+ * the last scene of L2 is the queue with the row this count just
+ * raised in it, and a leftover from the take before would be the first
+ * row there.
+ *
+ * ── AND IT SCHEDULES NOTHING ─────────────────────────────────────────
+ * The video schedules its own count on camera, which is the first act
+ * of the lifecycle it is teaching. Seeding one would film a form being
+ * filled in and then open a row that already existed.
+ */
+async function cycleCountWorldFor(slug, sellerId, warehouse) {
+  if (slug !== 'count-the-shelves') return;
+
+  const open = await prisma.cycleCount.findMany({
+    where: { status: { in: ['SCHEDULED', 'IN_PROGRESS'] } },
+    select: { id: true },
+  });
+  if (open.length > 0) {
+    await prisma.cycleCountItem.deleteMany({
+      where: { cycleCountId: { in: open.map((c) => c.id) } },
+    });
+    await prisma.cycleCount.deleteMany({ where: { id: { in: open.map((c) => c.id) } } });
+    console.log(`  · removed ${open.length} unfinished cycle count(s) a previous take left`);
+  }
+
+  await clearUndecidedAdjustments(sellerId);
+
+  const done = await prisma.cycleCount.count({ where: { status: 'COMPLETED' } });
+  console.log(`  · ${done} completed cycle count(s) behind it`);
+
+  /*
+    THE LINE THE VIDEO COUNTS, written where the flow can read it.
+
+    A cycle count is recorded per (variant, bin, batch) and the console
+    prints those three ids NOWHERE together — the movements report
+    carries the variant and a bin CODE and no batch at all, which is
+    what the record form's own hint points at. So the video does what an
+    operator does: it arrives holding the numbers, off the sheet the
+    floor walked with. `lib/fixture.mjs` is that sheet, and the
+    narration says so out loud rather than pretending the screen offers
+    them.
+  */
+  const line = await biggestPickableLine(sellerId, warehouse.id);
+  const [variant, bin] = await Promise.all([
+    prisma.productVariant.findUniqueOrThrow({
+      where: { id: line.variantId },
+      select: { skuCode: true },
+    }),
+    prisma.warehouseBin.findUniqueOrThrow({ where: { id: line.binId }, select: { code: true } }),
+  ]);
+  const level = await prisma.stockLevel.findFirstOrThrow({
+    where: { variantId: line.variantId, binId: line.binId, batchId: line.batchId },
+    select: { qtyOnHand: true },
+  });
+  await writeFixture('count-the-shelves', {
+    ...line,
+    skuCode: variant.skuCode,
+    binCode: bin.code,
+    qtyOnHand: level.qtyOnHand,
+    warehouseCode: warehouse.code,
+  });
+  console.log(
+    `  · the count sheet says ${variant.skuCode} in ${bin.code}: ${level.qtyOnHand} on hand`,
+  );
+}
+
 async function ensureDamagedBinStock(sellerId, staffToken, warehouse) {
   const bin = await prisma.warehouseBin.findFirst({
     where: { warehouseId: warehouse.id, type: 'DAMAGED', deletedAt: null },
@@ -5948,6 +6042,7 @@ async function main() {
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
   await binsWorldFor(slug, staffToken);
   await adjustmentWorldFor(slug, sellerId, staffToken, warehouse);
+  await cycleCountWorldFor(slug, sellerId, warehouse);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);

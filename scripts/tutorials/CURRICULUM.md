@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (62):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2** and
-**L1**.
+**Filmed so far (63):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
+**L1** and **N1**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -47,6 +47,34 @@ N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
 **THE NEXT ENTRY IS L2 — "Counting stock"**, and sections K and L1 are done.
+
+**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N9 — "Is
+the money picture true".** N1 is filmed; its narration, flow and seeding are
+in, and `moneyDeskWorldFor` is the shared world N2–N7 will draw on. N9's
+narration and flow are written and not yet checked.
+
+**A REBUILD BY EITHER AGENT BREAKS THE OTHER AGENT'S RUNNING NEXT SERVER, AND
+IT PRESENTS AS A MOVED SELECTOR.** `apps/*/.next` is shared and is read-only at
+RUN time — which is not the same as read-only. A `pnpm --filter @skydrop/admin
+build` replaces every hashed chunk under a `next start` that keeps naming the
+ones it booted with, so the page renders, nothing hydrates, the sign-in form
+submits nothing, and the take dies at `page.waitForURL` thirty seconds later.
+It cost two check runs and a peek on 2026-10-01 before the cause was found, and
+the four processes were all answering and all healthy throughout.
+`stack.sh status` now says `STALE` by asking for the chunk the served page just
+asked for (the App Router puts no build id in the HTML, so the failure itself is
+the only honest question), `make-tutorials.sh` refuses a run against one, and
+`stack.sh restart <stack> admin` is the fix. **Restart after every rebuild,
+including the other agent's.**
+
+**AND A COMMIT BY EITHER AGENT SWEEPS IN THE OTHER'S IN-PROGRESS EDITS.** There
+is ONE working tree, so `git add scripts/tutorials/flows.mjs` stages whatever is
+in that file, including the half-finished video somebody else is writing.
+N1's narration, flow and seeding landed inside `83e56cca`, a commit titled "L1 —
+adjusting stock", for exactly this reason. Harmless here because both halves
+were complete and gated — but **check `git status` and what is already staged
+before committing a shared file**, and expect a commit message to be wrong about
+its own contents rather than assuming the file is yours.
 
 **WHAT L1 LEFT BEHIND, MEASURED (2026-10-01).** `adjustmentWorldFor` is a
 TOP-UP rather than a rebuild, because the take spends both halves of what it
@@ -3250,13 +3278,41 @@ and reaches no courier — it asks our own agents to phone.
 Ten tutorials, and the tone throughout is that none of these screens is a form.
 Each one moves money that exists.
 
-### N1. How seller money works · `needs demo data`
+### N1. How seller money works · **FILMED** — `how-seller-money-works.mp4`
 
 **Promise** — you can read a seller's wallet and explain any line in it.
-**Length** 4 min. **Needs** D0.
+**Length** 3 min 1 s of narration over 15 scenes. **Needs** D0 plus
+`moneyDeskWorldFor`.
 **Covers** `/seller-wallets` and one seller's ledger: what a top-up, a COD
-credit, a delivery charge, a return fee and a refund each are. Read-only, and
-deliberately first — every screen after this writes to what this one shows.
+credit, the tax withheld beside it, a delivery charge, a return fee and a
+damage refund each are. Read-only, and deliberately first — every screen after
+this writes to what this one shows.
+
+**Its world is `moneyDeskWorldFor`, which N2–N7 share.** The seeding is in
+`seed-demo-data.mjs` and the shape worth knowing is that **four of those five
+videos SPEND what they film**, so each is put back the way the rest of this
+file does it: forward where the product allows it, and by removing the take's
+OWN rows where it does not.
+
+- **The ledger needs six KINDS of line and D0 only writes three.** The delivery
+  charge, the return fee and the damage refund come free with the lifecycle
+  parcels; the top-up, the COD credit and the tax line beside it do not. So the
+  seeding tops the wallet up through the REAL two endpoints (a seller's claim,
+  then an acceptance) rather than inserting a ledger row — the accepted claim is
+  on camera in the Top-ups tab, note and reference in full, and a `TOPUP` entry
+  whose claim does not exist is a row the screen cannot explain.
+- **`settleOneCodForLedger` (E2's, reused) is what writes the COD credit**, and
+  it records a courier payout to do it. That is exactly what N5 films, so for
+  N5's slug alone the seeding does the opposite — `unrecordTutorialPayouts`
+  removes the payout and the wallet entries its credit wrote, refusing rather
+  than guessing if those are no longer the NEWEST rows on the wallet (a running
+  balance is stamped, not recomputed, so removing an entry with anything after
+  it would leave every later balance wrong).
+- **A PENDING top-up claim and a PENDING withdrawal request are deleted and
+  remade on every run.** Both are free to delete because neither has moved a
+  rupee — which is also the lesson of the scene that compares them with the
+  ledger — and without it the second take opens on two identical claims under a
+  line about one.
 
 ### N2. Accepting a top-up · `needs demo data` · **dangerous**
 

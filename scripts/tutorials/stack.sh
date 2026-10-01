@@ -4,6 +4,7 @@
 #
 #   scripts/tutorials/stack.sh up b          # database, migrations, seed, processes
 #   scripts/tutorials/stack.sh status b
+#   scripts/tutorials/stack.sh restart b admin
 #   scripts/tutorials/stack.sh down b
 #   scripts/tutorials/stack.sh env b         # eval "$(… env b)"
 #   scripts/tutorials/stack.sh run b -- node scripts/tutorials/record.mjs --check pack-a-parcel
@@ -105,6 +106,29 @@ esac
 
 # ── status ──────────────────────────────────────────────────────────────
 
+# Is this Next server still serving the build that is on disk?
+#
+# `apps/*/.next` is SHARED between stacks and is read-only at RUN time —
+# but it is not read-only while somebody BUILDS. A rebuild replaces every
+# hashed chunk, and a `next start` that was already running keeps
+# emitting HTML naming the chunks it booted with. The browser then gets a
+# 400 for `webpack-<old hash>.js`, the page never hydrates, and the form
+# on it does nothing at all: sign-in submits nothing and the failure
+# arrives as `page.waitForURL` timing out, which reads exactly like a
+# moved selector. It cost two check runs on 2026-10-01, on a stack whose
+# four processes were all answering and all healthy.
+#
+# The honest question is not "which build id" — the App Router puts none
+# in the HTML — but "does the chunk this page just asked for still
+# exist", which is the failure itself rather than a proxy for it.
+fresh_build() {
+  local base="$1" chunk
+  chunk="$(curl -fsS --max-time 5 "$base/login" 2>/dev/null \
+    | grep -oE '/_next/static/chunks/[A-Za-z0-9._-]+\.js' | head -1)" || return 0
+  [ -n "$chunk" ] || return 0
+  curl -fsS -o /dev/null --max-time 5 "$base$chunk" 2>/dev/null
+}
+
 status() {
   echo "Filming stack \"$STACK_NAME\""
   echo "  database   $DB_NAME"
@@ -113,7 +137,21 @@ status() {
   for pair in "api:$API_URL/health" "seller:$SELLER_URL/login" "admin:$ADMIN_URL/login" "sim:$SIM_URL_V/_sim/parcels"; do
     local what="${pair%%:*}" url="${pair#*:}"
     if up "$url"; then
-      printf '  %-9s UP    %s\n' "$what" "$url"
+      case "$what" in
+        seller | admin)
+          local base="$SELLER_URL"
+          [ "$what" = admin ] && base="$ADMIN_URL"
+          if fresh_build "$base"; then
+            printf '  %-9s UP    %s\n' "$what" "$url"
+          else
+            printf '  %-9s STALE %s  — serving a build that has been replaced; restart it:\n' \
+              "$what" "$url"
+            printf '            scripts/tutorials/stack.sh restart %s %s\n' "$STACK_NAME" "$what"
+            ok=1
+          fi
+          ;;
+        *) printf '  %-9s UP    %s\n' "$what" "$url" ;;
+      esac
     else
       printf '  %-9s down  %s\n' "$what" "$url"
       ok=1
@@ -264,6 +302,39 @@ kill_tree() {
   for child in $(pgrep -P "$pid" 2>/dev/null); do kill_tree "$child"; done
   kill "$pid" 2>/dev/null || true
 }
+
+# Stop some of this stack's processes and start them again — which is
+# almost always "the other agent rebuilt apps/admin under me".
+#
+#   scripts/tutorials/stack.sh restart b admin
+#   scripts/tutorials/stack.sh restart b            # all four
+#
+# It stops what it is told and then re-runs `up`, which starts whatever
+# is no longer answering. Deliberately not a second copy of the start
+# commands: those live in exactly one place, and a restart that drifts
+# from the start is a server running with an environment nobody chose.
+if [ "$CMD" = "restart" ]; then
+  shift 2
+  WHICH=("$@")
+  [ ${#WHICH[@]} -gt 0 ] || WHICH=(api sim seller admin)
+  if [ ! -d "$RUN_DIR" ]; then
+    echo "Stack \"$STACK_NAME\" was not started by this script (no $RUN_DIR) — nothing to restart."
+    exit 0
+  fi
+  for what in "${WHICH[@]}"; do
+    pidfile="$RUN_DIR/$what.pid"
+    [ -e "$pidfile" ] || { say "$what has no pidfile here — leaving it alone"; continue; }
+    pid="$(cat "$pidfile")"
+    if kill -0 "$pid" 2>/dev/null; then
+      kill_tree "$pid"
+      say "$what (pid $pid and children) stopped"
+    fi
+    rm -f "$pidfile"
+  done
+  # The port is not free the instant the process is signalled.
+  sleep 2
+  exec "$0" up "$STACK_NAME"
+fi
 
 if [ "$CMD" = "down" ]; then
   # ONLY processes this script started, read from its own pidfiles. Stack

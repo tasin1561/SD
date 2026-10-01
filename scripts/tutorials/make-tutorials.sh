@@ -119,15 +119,40 @@ import("./scripts/tutorials/flows.mjs").then(({ FLOWS }) => {
   process.stdout.write([...apps].join(" "));
 });' "${SLUGS[@]}")"
 
+# …and whether the one that IS up is still serving the build on disk.
+#
+# `apps/*/.next` is shared between filming stacks and is read-only at RUN
+# time, which is not the same as read-only. Somebody rebuilding the app —
+# the other agent, filming a fix of their own — replaces every hashed
+# chunk under a `next start` that keeps naming the ones it booted with.
+# The server answers, `/login` renders, and nothing on the page hydrates:
+# sign-in submits nothing and the take dies at `page.waitForURL`, which
+# is indistinguishable from a moved selector. It cost two check runs on
+# 2026-10-01. Asking for the chunk the page just asked for is the failure
+# itself rather than a proxy for it.
+fresh() {
+  local chunk
+  chunk="$(curl -fsS --max-time 5 "$1/login" 2>/dev/null \
+    | grep -oE '/_next/static/chunks/[A-Za-z0-9._-]+\.js' | head -1)" || return 0
+  [ -n "$chunk" ] || return 0
+  curl -fsS -o /dev/null --max-time 5 "$1$chunk" 2>/dev/null
+}
+stale() {
+  echo "$1 on $2 is serving a build that has been replaced — somebody rebuilt it under it."
+  echo "Restart it:  scripts/tutorials/stack.sh restart $STACK_NAME $3"
+  exit 1
+}
 case " $APPS_NEEDED " in
   *" seller "*)
     up "$SELLER_URL/login" \
-      || { echo "apps/seller is not answering on $SELLER_URL — start it first."; exit 1; } ;;
+      || { echo "apps/seller is not answering on $SELLER_URL — start it first."; exit 1; }
+    fresh "$SELLER_URL" || stale apps/seller "$SELLER_URL" seller ;;
 esac
 case " $APPS_NEEDED " in
   *" admin "*)
     up "$ADMIN_URL/login" \
-      || { echo "apps/admin is not answering on $ADMIN_URL — start it first."; exit 1; } ;;
+      || { echo "apps/admin is not answering on $ADMIN_URL — start it first."; exit 1; }
+    fresh "$ADMIN_URL" || stale apps/admin "$ADMIN_URL" admin ;;
 esac
 
 for slug in "${SLUGS[@]}"; do

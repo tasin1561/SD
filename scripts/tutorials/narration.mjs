@@ -3684,6 +3684,132 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'is-the-money-picture-true',
+    title: 'Is the money picture true',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Profit and loss. What each part of the business earns against what it costs — and, more usefully than either, how much of that we can actually see.',
+      },
+      {
+        id: 'headline',
+        say: 'Three figures at the top: the margin from the four sources, what it costs to exist, and the net of the two. Read the label underneath the net before you read the net.',
+      },
+      {
+        id: 'honest',
+        say: 'Because a cost nobody has recorded is reported as missing, never as zero. Zero would report the whole of that revenue as profit, and the page says plainly that nothing here is guessed to fill the gap.',
+      },
+      {
+        id: 'sources',
+        say: 'Underneath, every part of the business on a line of its own, each carrying a coverage figure — how many of the records on that line have a real cost against them, out of how many there are.',
+      },
+      {
+        id: 'delivery',
+        say: 'Delivery is the one to read carefully. It names, in words, every reason a parcel on it has no cost yet: the courier has not billed us, a manual courier has no ledger at all, or the parcel never got a waybill.',
+      },
+      {
+        id: 'quoted',
+        say: 'And the distinction most people miss. A charge that was worked out but never debited to the seller is a quote, not revenue — so it is named and left out, rather than counted because it exists.',
+      },
+      {
+        id: 'open',
+        say: 'Parcels still moving are on no line at all. An order is recognised when its fate is known — delivered, returned, or called off — and not when it was booked, because a booked parcel can still become any of them.',
+      },
+      {
+        id: 'returns',
+        say: 'Returns say the same thing in their own words. A return whose return cost was never recorded makes that margin flattering, and the line tells you so rather than letting you find out later.',
+      },
+      {
+        id: 'lines',
+        say: 'Then the smaller lines, and the rule they exist for: every rupee this business earns or spends is on one of them. A money flow the report cannot see reads as profit.',
+      },
+      {
+        id: 'drill',
+        say: 'Open a line and you get what it is made of, and then every record behind it, one row each. The total above and the rows below are the same computation — so a figure you cannot explain is a figure you can click.',
+      },
+      {
+        id: 'costsync',
+        say: 'Which leaves the obvious question: why is so much of it uncovered? This is the answer. Every night we sign in to the courier’s own portal and record what each parcel actually cost us.',
+      },
+      {
+        id: 'silence',
+        say: 'And this page exists because of the way that fails. It does not throw — it goes quiet, the figures simply stop moving, and nobody notices until a margin looks wrong weeks later.',
+      },
+      {
+        id: 'counts',
+        say: 'So the coverage is stated as a fraction here too, and the wording is deliberate. A parcel whose charge we have not read is uncovered, and uncovered is not the same as free.',
+      },
+      {
+        id: 'runs',
+        say: 'The run history is the thing to check first, and it is blunt about not knowing: either it has never run, or it has never finished far enough to say so. Both look identical from the margin.',
+      },
+      {
+        id: 'outro',
+        say: 'So read the coverage before you read the margin. The figure at the top is only as true as the fraction underneath it, and these two pages are the only things that tell you which.',
+      },
+    ],
+  },
+  {
+    slug: 'count-the-shelves',
+    title: 'Counting stock',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A cycle count is the floor checking the system rather than the other way round. Somebody walks the shelves with a list, and what they find is recorded against what we believe.',
+      },
+      {
+        id: 'tiles',
+        say: 'What is open, and how much disagreed. A count that finds nothing is still worth running — it is the only evidence you have that the numbers mean anything.',
+      },
+      {
+        id: 'schedule',
+        say: 'Scheduling one changes nothing at all. Read that line: it is created and it waits, because the count is a job somebody has to go and do before it can say anything.',
+      },
+      {
+        id: 'scope',
+        say: 'The scope is what the counters are being asked to walk — a whole building, one zone, a sample, a handful of products. Choose what the people have time for, not what you would like to know.',
+      },
+      {
+        id: 'open',
+        say: 'There it is, scheduled and empty. Open it, and the only thing it offers is the one act that makes it real: somebody has gone to the shelves.',
+      },
+      {
+        id: 'start',
+        say: 'Now it will take lines, and the sentence above them is the one to remember. What the system believed is read when you record, not when the count was scheduled.',
+      },
+      {
+        id: 'ids',
+        say: 'A count is per shelf and per batch, so it wants both, and this is the awkward part — those identifiers are not printed on any screen here. They come off the sheet the floor is working from.',
+      },
+      {
+        id: 'record',
+        say: 'Then the only number that matters: what was actually on the shelf. Record it, and it lands as a line beside what we thought was there.',
+      },
+      {
+        id: 'diff',
+        say: 'And there is the disagreement, said in three columns rather than one. Nothing has changed yet — this is still just two people with different numbers.',
+      },
+      {
+        id: 'button',
+        say: 'Which the button counts for you before you press it. Not complete: complete, and raise this many corrections. A screen that makes you work out the consequence is a screen people press blind.',
+      },
+      {
+        id: 'complete',
+        say: 'Press it, and notice what it does NOT do. A cycle count never moves stock itself. Every difference becomes a correction, and a correction has to be agreed by somebody.',
+      },
+      {
+        id: 'queue',
+        say: 'Which is exactly where it has gone. Waiting, with the count it came from on it — and priced at nothing, because nobody ever recorded what this batch cost us.',
+      },
+      {
+        id: 'outro',
+        say: 'So: schedule it, walk it, record what is really there, and complete. The count is evidence. What it changes goes through the same pair of eyes everything else does.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
