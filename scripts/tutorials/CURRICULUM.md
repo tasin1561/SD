@@ -37,38 +37,38 @@ a third section and roughly another fifteen tutorials.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
-**THE NEXT ENTRY IS K1 — "Taking a return in"**, and section J is finished.
+**THE NEXT ENTRY IS K2 — "Inspecting and finalising"**, and K1 has left it
+exactly where it starts.
 
-**MEASURED, not predicted (2026-10-01):** `RSH-LIFE-RETURNING`
-(`SD-2026-26-000294`) is sitting at **RTO_IN_TRANSIT** right now, which is
-exactly what K1 needs — it is on `/warehouse/rto`'s "on their way back" tab and
-is what the receive-by-waybill scene would take in. `RSH-LIFE-RESTOCKED` is
-already finalised and is H2's order, so K1 must not touch it.
+**MEASURED after K1's take, not predicted (2026-10-01):** `RSH-LIFE-ATDOOR`
+(`SD-2026-26-000435`) is at **RTO_RECEIVED** with one line awaiting inspection,
+and the RTO station's "On the bench" tab holds **three** received-and-unfinished
+parcels — its own plus the two `-SPENT-` ones earlier takes left there. **That
+pile is the first thing to decide about.** K2 acts on ONE parcel and the bench
+is reached by waybill, so three rows is not a blocker, but three identical
+"Deepa Ramanathan" returns on a worklist IS a frame a viewer will stumble over.
+The honest options are to finalise the two spent ones in the seeding (they are
+debris from a video, and finalising moves real stock) or to leave them and
+narrate "on the bench" without a count. Decide it before writing the scene.
 
-**The thing to work out before writing a line of K1** is what happens on the
-SECOND take. Receiving spends the parcel (RTO_IN_TRANSIT → RTO_RECEIVED, and
-WMS-8e books its units into the returns hold at that moment), and
-`ensureLifecycleParcels` is explicitly forward-only — it "resumes a half-built
-parcel, NEVER rewinds one".
+**K2 almost certainly shares K1's world** the way I2/I3 and J4/J5 do: K1 leaves
+the parcel RECEIVED, which is precisely where K2 begins — so `take-a-return-in`
+and K2's slug both join `LIFECYCLE_SLUGS` and nothing else changes. A take of K2
+finalises the parcel, which moves it to RTO_RESTOCKED or RTO_DAMAGED; both
+differ from `want` and neither is in `RESUMABLE_FROM`, so the `spendable: true`
+added for K1 retires and rebuilds it correctly without further work.
 
-**The machinery for that already exists and the change looks like two lines.**
-`retireSpentParcel` runs for any parcel carrying `spendable: true`, and its
-first test for "spent" is simply `order.status !== want` — which RTO_RECEIVED
-is. So `RSH-LIFE-RETURNING` gains `spendable: true` in `LIFECYCLE_PARCELS` and
-`take-a-return-in` joins `LIFECYCLE_SLUGS`; the retired parcel keeps everything
-it has and a fresh one is driven through its five stages (IN_TRANSIT,
-OUT_FOR_DELIVERY, an NDR, RTO_INITIATED, RTO_IN_TRANSIT) on the next run. **Read
-`retireSpentParcel` before writing it**, because it has a third spent-test about
-the SIMULATOR having forgotten the waybill after a restart, and a returns video
-driven against a parcel the courier has never heard of fails in a way that looks
-like the video rather than the box.
+**What K2 films** is inspection per line AND BY QUANTITY (WMS-8d — two units of
+one line can be one good and one damaged, which is the whole reason the split
+exists), the four dispositions with the screen's own "what each choice does"
+panel, and then **"Finalize disposition"**, whose confirm says plainly that
+stock moves now and this cannot be undone. The demo line is qty 1, so the
+by-quantity split has nothing to show unless the world gives it a qty-2 line —
+`LIFECYCLE_PARCELS` carries a `quantity` field already (`parcel.quantity ?? 1`).
 
-**K2 follows immediately and is the dangerous half** (inspection per line AND by
-quantity, the four dispositions, then "Finalize disposition" — which moves stock
-and cannot be undone). K1 and K2 almost certainly share one world the way I2/I3
-and J4/J5 do: K1 leaves the parcel RECEIVED, which is precisely where K2 starts.
-If they share, K1's seeding wants the parcel IN_TRANSIT and K2's wants it
-RECEIVED — one more `PICK_STAGE`-shaped map, not a second copy.
+**And the RTO station's worklists now refresh themselves** (bug 39, fixed this
+session): receiving takes the parcel off "At our door" and puts it on "On the
+bench" live, and finalising takes it off the bench. A K2 scene may rely on that.
 
 **What section J leaves behind, for whoever needs a packed or dispatched
 parcel:** `pickWorldFor`'s `PICK_STAGE` now has three values — LABELLED (J3),
