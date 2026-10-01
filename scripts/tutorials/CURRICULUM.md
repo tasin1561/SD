@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 67 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, N1, N2, N9 and P5.** The 23 left are all in the admin app: 2 are
+**90 tutorials. 69 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1, N1–N3, N9 and P5.** The 21 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (67):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (69):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **N1**, **N2** and **N9**.
+**L1–L3**, **M1**, **N1–N3** and **N9**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -46,16 +46,36 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**THE NEXT ENTRY IS L4 — "Moving stock between warehouses"**, and sections K,
-L1, L2 and L3 are done. Section M follows L4.
+**THE NEXT ENTRY IS M2 — "Is the courier integration healthy"**, and K, L1–L3
+and M1 are done.
 
-**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N3 —
-"Paying a seller out".** N1, N2 and N9 are filmed. `moneyDeskWorldFor` is the
-shared world N2–N7 draw on, and the narration and flows for **N3, N4, N5 and
-N6** are written and not yet checked — N5 and N6 landed in a commit titled "N3
-and N4", which is the slug-against-number confusion worth expecting rather than
-a mistake in the code (`record-a-courier-payout` is N5, `move-money-by-hand`
-is N6).
+**L4 IS SKIPPED FOR NOW, ON PURPOSE, and it is the one entry out of order.** It
+is `needs demo data` and `dangerous`, and its form asks for NINE ids — seller,
+variant, quantity, and a warehouse, bin and batch at each end — which is three
+times L2's fixture and needs stock staged at the Dhaka intake plus a
+destination batch at Kolkata for the same seller and variant, because a batch
+is warehouse-scoped and the form will not invent one (which is the whole point
+of the video). The rest of M is cheaper per minute and two of them are `ready`.
+**Come back to it with the service's own docstring in hand** — the use it names
+is "we may receive the RTO products at any warehouse … then we will send this to
+the designated warehouse", which is the honest direction to film: Dhaka intake
+to Kolkata, a return that came back to the wrong building. Do NOT film
+Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
+teach the wrong habit.
+
+**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N4 —
+"Approving a change of bank account".** N1, N2, N3 and N9 are filmed.
+`moneyDeskWorldFor` is the shared world N2–N7 draw on, and the narration and
+flows for **N4, N5 and N6** are written and not yet checked — N5 and N6 landed
+in a commit titled "N3 and N4", which is the slug-against-number confusion
+worth expecting rather than a mistake in the code (`record-a-courier-payout`
+is N5, `move-money-by-hand` is N6).
+
+**N3's four defects are the pattern to expect in the rest of N**, and they are
+written up in its entry: a narration line describing a form the product does
+not have, a pre-filled field that `typeIn` appends to, a list that opens on a
+filter the video's own press takes the row out of, and two stacked dialogs
+sharing a button name. Only the last of those is a selector.
 
 **A REBUILD BY EITHER AGENT BREAKS THE OTHER AGENT'S RUNNING NEXT SERVER, AND
 IT PRESENTS AS A MOVED SELECTOR.** `apps/*/.next` is shared and is read-only at
@@ -156,6 +176,51 @@ too. `lib/fixture.mjs` stays the exception it was written as.
 something.** L3's `trace` line is "read it downwards and the story is there", so
 it scrolls down slowly and back rather than haloing one row in the middle of a
 history — a halo would point at the one row the sentence is not about.
+
+**WHAT M1 LEFT BEHIND, MEASURED (2026-10-01).** ONE courier account, which it
+adds on camera and then deactivates, and which `courierAccountWorldFor` deletes
+before the next take. Adding one is not optional padding: the credential field
+is the entire subject of the video and exists on no other screen, so there is
+no way to show "typed once and never read back" without typing one.
+
+- **It is a DELETE and not a retire**, which is the one place this seeding
+  breaks the D4 / B7 rule on purpose. A courier account a video made sixty
+  seconds ago is not history somebody will have to explain — nothing shipped on
+  it and nothing was charged to it — and leaving a pile of them is noise on a
+  page whose subject is knowing which account carried what. It is removed only
+  when it carries no parcel, no settlement and no seller link, and throws by
+  name if it ever does.
+- **SANDBOX, and never the default.** The form opens on production because that
+  is the only live integration; the video changes it, because a video that
+  leaves a production-labelled account behind on every take teaches the wrong
+  habit. `isDefault` stays unticked and the flow ASSERTS the saved row carries
+  no Default badge — a default re-routes every seller nobody has linked, which
+  is not a thing to do for a camera.
+- **It touches NO master switch.** Turning a courier off diverts every unlinked
+  seller's next parcel; the narration explains what off means (and that it is
+  not a kill switch — CUR-16) without pressing it.
+
+**THE DEFAULT BADGE IS ON TWO ROWS, and the first draft of the narration said
+"one of them is the default".** It is one per courier AND per environment, so
+this box's sandbox account and its production account both carry it. Caught by
+the seed's own count line (`2 marked default`) before a credit was spent, which
+is the argument for making a seeding function print what it found rather than
+just doing it.
+
+**"Add account" IS TWO BUTTONS once the dialog is open** — the page header's and
+the dialog footer's — so the page one is pressed while there is still only one
+of it and every later reach is `dialogFoot`-scoped. Same family as the
+`Close` trap already recorded, one level along: **a button that opens a dialog
+usually shares its name with the button that commits it.**
+
+**`test/tutorial-labels.test.mjs` is new, and the shape it guards is general.**
+`flows.mjs` cannot import `seed-demo-data.mjs` (the seed opens a Prisma client
+at module load), so a label one TYPES and the other CLEARS is written down
+twice. That is fine while they agree and silent when they stop — a rename on
+one side leaves the other clearing nothing, and two takes later the list has
+three identical rows on it. The test reads both sources and compares the
+declarations. **Any future "the flow types it, the seed removes it" string goes
+in there in the same commit.**
 
 **WHAT K2 LEFT BEHIND, MEASURED (2026-10-01).** The returns bench now holds
 exactly ONE un-finalised return on any run, and it is K2's own: three things
@@ -3416,16 +3481,58 @@ nothing left for the refusal scene to open a dialog on. A take spends the first
 claim and leaves the second, so seed → check → seed → check → seed → take, as
 for D4 and J2.
 
-### N3. Paying a seller out · `needs demo data` · **dangerous**
+### N3. Paying a seller out · **FILMED** — `pay-a-seller-out.mp4`
 
 **Promise** — you can take a withdrawal request through to money leaving the
 bank.
-**Length** 4 min. **Prerequisites** N2. **Needs** a request from E3.
+**Length** 3 min 14 s of narration over 15 scenes. **Prerequisites** N2.
+**Needs** D0 plus `moneyDeskWorldFor`.
 **Covers** `/withdrawals` (approve, and what the balance rule refuses) and then
 `/remittances` — the rate, the bank fee, and the reference. Also why a request
 the wallet can no longer cover is rejected automatically.
 **Cost of getting it wrong:** real money to a real account, and the destination
 comes from the seller's bank details — which is why N4 exists.
+
+**FOUR THINGS IT GOT WRONG, AND ONLY ONE WAS A SELECTOR (2026-10-01).** Each is
+a shape worth carrying to N4–N8, and the narration one is the serious one.
+
+- **THE NARRATION DESCRIBED A FORM THE PRODUCT DOES NOT HAVE.** It said of the
+  two amounts "both are typed from the two statements, because deriving the
+  second from a rate would quietly absorb every bank charge" — which is TRE-5's
+  wording for a treasury transfer. The remittance form derives: the destination
+  is `readOnly disabled` under the literal hint **"Derived = source × FX"**, and
+  the bank charge has a field of its own (booked as OUR expense), which is how
+  that concern is actually answered here. Both lines were rewritten to say what
+  the screen says. **Nothing in the pipeline could have caught this** — the
+  check passes, the frame is correct, and the only thing wrong is the sentence
+  over it. Read the narration against the frame, not against CLAUDE.md.
+- **THE AMOUNT IS PRE-FILLED, SO TYPING IT APPENDED.** `Pay` on an approved
+  request opens the form with the request's own figure in it; `typeIn` without
+  `clear` made `7500.00` into `7500.007500`, Chromium refused the form
+  ("the two nearest valid values are 7500 and 7500.01"), and it surfaced three
+  scenes later as a dialog that simply never closed. Nothing is typed there now.
+- **THE LIST OPENS ON PENDING AND NEVER LEAVES IT BY ITSELF**, and approving is
+  exactly what takes the row out of that filter — so the scene about the
+  approved row waited thirty seconds for a row that had been on screen a moment
+  earlier. The closing scene had the same bug in a second form: `?status=PAID`
+  is not a thing, because the filter is `useState` and reads no query string.
+  Both drive the select.
+- **TWO DIALOGS SHARE A BUTTON NAME.** Submitting opens a confirm
+  ("Record this remittance?") whose footer button is also "Record remittance",
+  so `getByRole('dialog')` unscoped dies on strict mode with both open. Every
+  reach is scoped by the dialog's accessible NAME. The confirm is not an
+  obstacle — its consequence line is the clearest sentence in the product about
+  what the press does, and the scene now dwells on it.
+
+**`requiredMark` bit twice more**: `/^FX rate$/` and `/^Bank reference$/` match
+nothing, because a required field's accessible name ends in `*`. Drop the `$`.
+
+**The take SPENDS both halves** (the request ends PAID and a remittance exists)
+and `walletWorldFor` deletes every withdrawal request before `moneyDeskWorldFor`
+raises a fresh one — safe because nothing FKs a request from the remittance
+side (`linkedRemittanceId` is on the request). **Remittances accumulate across
+takes** and are left alone; the closing shot is the withdrawals list, not that
+table.
 
 ### N4. Approving a change of bank account · `needs demo data` · **dangerous**
 

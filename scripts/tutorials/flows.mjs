@@ -1074,6 +1074,15 @@ async function applyLedgerFilter({ page, stage }, locator, choose) {
   return ledgerRows(page);
 }
 
+/**
+ * M1 adds an account with this label and the seeding removes it by the
+ * same one. Restated here rather than imported, because `flows.mjs`
+ * must not import the seed — but a drift means the take films a row the
+ * next seed will not clear, so `test/tutorial-labels.test.mjs` reads
+ * both files and fails if the two strings stop matching.
+ */
+const M1_ACCOUNT_LABEL = 'Delhivery — second contract';
+
 export const FLOWS = {
   'place-an-order': {
     /** Everything before scene one: sign in and land where the intro expects. */
@@ -10928,10 +10937,16 @@ export const FLOWS = {
       /*
         BDT, deliberately: a Bangladeshi seller is paid in taka out of
         the taka account, which is what makes the next two scenes about
-        two currencies rather than one. The select is changed before the
-        amount is typed, because the amount field's own label carries the
-        source currency and changing it afterwards would re-label a field
-        the frame has already shown.
+        two currencies rather than one.
+
+        AND NOTHING IS TYPED INTO THE AMOUNT. Opening the form from an
+        approved request fills the source amount with that request's
+        figure, so `typeIn` without `clear` APPENDED to it — 7500.00
+        became 7500.007500, Chromium refused the form outright ("the two
+        nearest valid values are 7500 and 7500.01"), and it presented
+        three scenes later as the dialog simply never closing. The
+        narration says the figure comes off the request, which is both
+        true and the reason there is nothing to type.
       */
       async currencies({ page, stage }) {
         const dialog = page.getByRole('dialog');
@@ -10939,10 +10954,8 @@ export const FLOWS = {
           .getByLabel(/Bank currency/)
           .first()
           .selectOption('BDT');
-        await page.waitForTimeout(700);
-        await stage.typeIn(dialog.getByLabel(/^Source amount/).first(), '7500', { after: 500 });
         await page.waitForTimeout(900);
-        await stage.dwellOn(dialog.getByLabel(/Wallet currency/).first(), 2400);
+        await stage.dwellOn(dialog.getByLabel(/^Source amount/).first(), 2600);
       },
 
       /*
@@ -10976,16 +10989,38 @@ export const FLOWS = {
         await page.waitForTimeout(900);
       },
 
+      /*
+        TWO DIALOGS, AND THEY SHARE A BUTTON NAME. Submitting the form
+        opens a confirm ("Record this remittance?") whose own footer
+        button is also "Record remittance", so every reach here is
+        scoped by the dialog's accessible NAME — and `getByRole('dialog')`
+        unscoped dies on strict mode while both are open, which is how
+        this was found. The confirm is not an obstacle to get past: its
+        consequence line is the clearest statement in the product of what
+        this press does, which is what the narration is saying over it.
+      */
       async record({ page, stage }) {
-        const dialog = page.getByRole('dialog');
+        const form = page.getByRole('dialog', { name: 'Record remittance' });
         await stage.clickIt(
-          dialog
+          form
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /Record|Recording|Recorded|Working/ })
+            .first(),
+          { after: 1200 },
+        );
+        const confirm = page.getByRole('dialog', { name: 'Record this remittance?' });
+        await confirm.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(confirm.getByText(/Debits this seller/i).first(), 2800);
+        await stage.clickIt(
+          confirm
             .locator('.sk-dialog__foot')
             .getByRole('button', { name: /Record|Recording|Recorded|Working/ })
             .first(),
           { after: 2000 },
         );
-        await dialog.waitFor({ state: 'detached', timeout: 30_000 });
+        await confirm.waitFor({ state: 'detached', timeout: 30_000 });
+        await form.waitFor({ state: 'detached', timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
         await page.waitForTimeout(900);
         await stage.dwellOn(page.locator('table').last(), 2800);
@@ -11632,6 +11667,189 @@ export const FLOWS = {
           page.locator('#mv-type').selectOption(''),
         );
         await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
+      },
+    },
+  },
+  /*
+    M1 — courier accounts and credentials.
+
+    It ADDS an account on camera, because the credential field is the
+    whole point of the video and exists on no other screen, and then
+    DEACTIVATES it, which is the rotation the page's own notice tells
+    you to follow. `courierAccountWorldFor` removes the row before the
+    next take. It touches NO master switch: turning a courier off
+    diverts every unlinked seller's next parcel, which is not something
+    to do for a camera.
+  */
+  'courier-accounts-and-credentials': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/courier-accounts`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Courier accounts', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2800);
+      },
+
+      async several({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3600);
+      },
+
+      async credentials({ page, stage }) {
+        // The notice is the sentence the rest of the video obeys, so it
+        // is gated on its own words rather than on the panel around it.
+        const said = page.getByText(/never returned by any endpoint/i).first();
+        await said.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(said, 3800);
+      },
+
+      async rotate({ page, stage }) {
+        await stage.dwellOn(
+          page.getByText(/add a new account and deactivate the old/i).first(),
+          3400,
+        );
+      },
+
+      async switches({ page, stage }) {
+        const card = page.locator('.ca-switch').first();
+        await card.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(card, 3000);
+      },
+
+      async notakill({ page, stage }) {
+        await stage.dwellOn(
+          page.getByText(/keep being tracked, and can still be cancelled/i).first(),
+          3800,
+        );
+      },
+
+      async table({ page, stage }) {
+        const table = page.getByRole('table').first();
+        await table.waitFor({ state: 'visible', timeout: 20_000 });
+        /*
+          THE HEADER ROW, not the table: this one is short enough to sit
+          in frame whole, and haloing the head keeps the column names —
+          which the line reads out — inside the outline.
+        */
+        await stage.dwellOn(page.locator('.sk-thead').first(), 3200);
+      },
+
+      async default({ page, stage }) {
+        const chip = page.locator('.sk-tbody .sk-tr').filter({ hasText: 'Default' }).first();
+        await chip.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(chip, 3400);
+      },
+
+      async add(ctx) {
+        const { page, stage } = ctx;
+        /*
+          "ADD ACCOUNT" IS TWO BUTTONS once the dialog is open — the page
+          header's and the dialog footer's — so the page one is pressed
+          while there is still only one of it, and every later reach is
+          scoped to the dialog.
+        */
+        await stage.clickIt(page.getByRole('button', { name: 'Add account' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        /*
+          SANDBOX, deliberately. The form opens on production because
+          that is the only live integration, and a video that leaves a
+          production-labelled account behind on every take is a video
+          that teaches the wrong habit. Nothing routes to it either way
+          (it is not the default), so this costs the scene nothing.
+        */
+        await stage.point(dialog.locator('#ca-env'), { settle: 400 });
+        await dialog.locator('#ca-env').selectOption('SANDBOX');
+        await page.waitForTimeout(400);
+        await stage.clearHalo();
+        await stage.typeIn(dialog.locator('#ca-label'), M1_ACCOUNT_LABEL, {
+          delay: 36,
+          after: 700,
+        });
+      },
+
+      async shape({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        const name = dialog.getByLabel(/^Credential field name$/);
+        await name.waitFor({ state: 'visible', timeout: 15_000 });
+        const filled = await name.inputValue();
+        if (filled.trim() === '') {
+          throw new Error(
+            "The credential field name arrived empty. The line is that each courier's own " +
+              'field names are filled in for you — an empty box says the opposite.',
+          );
+        }
+        await stage.dwellOn(name, 3000);
+      },
+
+      async secret({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        const value = dialog.getByLabel(/^Credential value$/);
+        const type = await value.getAttribute('type');
+        if (type !== 'password') {
+          throw new Error(
+            `The credential value field is type="${type}". The line says it is never legible; ` +
+              'a plain text box would put a live token on screen.',
+          );
+        }
+        await stage.typeIn(value, 'sk-demo-token-not-a-real-one', { delay: 26, after: 900 });
+      },
+
+      async save({ page, stage }) {
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: 'Add account' }), {
+          after: 2000,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        const row = page.locator('.sk-tbody .sk-tr').filter({ hasText: M1_ACCOUNT_LABEL }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        const said = await row.innerText();
+        if (/Default/.test(said)) {
+          throw new Error(
+            `The new account reads "${said}" — the line says nothing routes to it yet, and a ` +
+              'default account is where every unlinked seller ships from.',
+          );
+        }
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 2800);
+      },
+
+      async retire({ page, stage }) {
+        const row = page.locator('.sk-tbody .sk-tr').filter({ hasText: M1_ACCOUNT_LABEL }).first();
+        await stage.clickIt(row.getByRole('button', { name: 'Deactivate' }), { after: 1400 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // The consequence the dialog states IS the line, so it is read
+        // on camera before the button that commits it.
+        await stage.dwellOn(
+          dialog.getByText(/parcels it already carried keep their record/i),
+          2400,
+        );
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: 'Deactivate' }), {
+          after: 1800,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        const after = page
+          .locator('.sk-tbody .sk-tr')
+          .filter({ hasText: M1_ACCOUNT_LABEL })
+          .first();
+        await after.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(after, 2400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.getByText(/never returned by any endpoint/i).first(), 3400);
       },
     },
   },

@@ -5395,6 +5395,95 @@ async function biggestPickableLine(sellerId, warehouseId, staffToken, min) {
  * of the lifecycle it is teaching. Seeding one would film a form being
  * filled in and then open a row that already existed.
  */
+/**
+ * The label M1 adds on camera, and therefore the one its seeding has to
+ * clear. Deliberately NOT one of the two accounts the provisioner
+ * makes: those two are what the video is about reading, and a take that
+ * spent one of them would leave the next take a shorter list.
+ */
+const M1_ACCOUNT_LABEL = 'Delhivery — second contract';
+
+/**
+ * M1's world — "Courier accounts and credentials".
+ *
+ * ── IT SPENDS ONE ROW AND NOTHING ELSE ───────────────────────────────
+ * The video ADDS an account on camera (which is the only way to show
+ * that a credential is write-only — the field exists nowhere else) and
+ * then DEACTIVATES it, which is the rotation story the page's own
+ * notice tells you to follow. So the row survives the take, and this
+ * removes it: a second run would otherwise open on last run's leftover
+ * and the "Saved" scene would film a duplicate.
+ *
+ * ── WHY A DELETE AND NOT A RETIRE ────────────────────────────────────
+ * Everywhere else in this seeding, a spent thing is retired FORWARD
+ * rather than rewound (the D4 / B7 rule), because the spent thing is
+ * real history somebody might have to explain. A courier account made
+ * by a video sixty seconds ago is not that: nothing shipped on it,
+ * nothing was charged to it, and leaving a pile of them is just noise
+ * on a page about knowing which account carried what. It is removed
+ * only when it carries NO parcels, no settlement and no seller link —
+ * which is true by construction for one the take just made, and a loud
+ * failure if it ever is not.
+ *
+ * The account points AT its credential (`credential_id` on the
+ * account), so the account goes first and the credential after it.
+ */
+async function courierAccountWorldFor(slug) {
+  if (slug !== 'courier-accounts-and-credentials') return;
+
+  const made = await prisma.courierAccount.findMany({
+    where: { label: M1_ACCOUNT_LABEL },
+    select: { id: true, credentialId: true, isDefault: true },
+  });
+  for (const account of made) {
+    const [shipments, settlements, links] = await Promise.all([
+      prisma.shipment.count({ where: { courierAccountId: account.id } }),
+      prisma.courierSettlement.count({ where: { courierAccountId: account.id } }),
+      prisma.sellerCourierAccountLink.count({ where: { courierAccountId: account.id } }),
+    ]);
+    if (shipments > 0 || settlements > 0 || links > 0) {
+      throw new Error(
+        `Courier account "${M1_ACCOUNT_LABEL}" carries ${shipments} parcel(s), ` +
+          `${settlements} settlement(s) and ${links} seller link(s). The video only ever ` +
+          'makes an idle one, so something else is using this label — rename it rather ' +
+          "than deleting somebody's real account.",
+      );
+    }
+    await prisma.courierAccount.delete({ where: { id: account.id } });
+    if (account.credentialId !== null) {
+      await prisma.courierCredential.delete({ where: { id: account.credentialId } });
+    }
+    console.log(`  · removed the "${M1_ACCOUNT_LABEL}" a previous take added`);
+  }
+
+  /*
+    AND THE TWO THE PAGE IS ABOUT. The video reads the list, the default
+    badge and the sandbox/production pair out loud, so a box with one
+    account would film a sentence about a distinction that is not on
+    screen. The provisioner makes both; this only asserts it, because
+    making them here would be a second place that decides what this
+    box's courier accounts are.
+  */
+  const accounts = await prisma.courierAccount.findMany({
+    where: { deletedAt: null },
+    select: { label: true, environment: true, isDefault: true, isActive: true },
+  });
+  const sandbox = accounts.filter((a) => a.environment === 'SANDBOX').length;
+  const production = accounts.filter((a) => a.environment === 'PRODUCTION').length;
+  if (sandbox === 0 || production === 0) {
+    throw new Error(
+      `The accounts list is ${sandbox} sandbox and ${production} production — the video ` +
+        'reads the difference between them off the Environment column. Run ' +
+        '`scripts/tutorials/stack.sh up a`, which provisions both.',
+    );
+  }
+  const defaults = accounts.filter((a) => a.isDefault).length;
+  console.log(
+    `  · ${accounts.length} courier account(s): ${sandbox} sandbox, ${production} production, ` +
+      `${defaults} marked default`,
+  );
+}
+
 async function cycleCountWorldFor(slug, sellerId, staffToken, warehouse) {
   if (slug !== 'count-the-shelves') return;
 
@@ -6239,6 +6328,7 @@ async function main() {
   await binsWorldFor(slug, staffToken);
   await adjustmentWorldFor(slug, sellerId, staffToken, warehouse);
   await cycleCountWorldFor(slug, sellerId, staffToken, warehouse);
+  await courierAccountWorldFor(slug);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);

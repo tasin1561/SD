@@ -3912,11 +3912,11 @@ export const VIDEOS = [
       },
       {
         id: 'currencies',
-        say: 'Two currencies, two amounts. The wallet is debited in rupees; the bank sends taka. Both are typed from the two statements, because deriving the second from a rate would quietly absorb every bank charge.',
+        say: 'Two currencies, one payment. The wallet is debited in rupees — and that figure comes straight off the request, already filled in — while the bank sends taka. So the only thing to choose here is the currency the money really left in.',
       },
       {
         id: 'rate',
-        say: 'The seller is credited at the rate we quoted them. Whatever we actually achieved on the day is a different number, and the gap between the two is ours — either way, recorded as a spread rather than taken off their balance.',
+        say: 'The taka figure is not typed. It is the rupees multiplied by the rate we quoted the seller — and whatever we actually achieved on the day is a different number. That gap is ours either way, recorded as a spread rather than taken off their balance.',
       },
       {
         id: 'fee',
@@ -4165,6 +4165,69 @@ export const VIDEOS = [
       {
         id: 'outro',
         say: 'So come here when a number does not add up, filter by the product or the shelf, and read until the rows stop agreeing with you. Nothing on this page can be changed, which is exactly why it settles it.',
+      },
+    ],
+  },
+  {
+    slug: 'courier-accounts-and-credentials',
+    title: 'Courier accounts and credentials',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Courier accounts. One courier can have more than one, and the difference between them is whose money and whose contract a parcel goes out on.',
+      },
+      {
+        id: 'several',
+        say: 'Which account carried a parcel is recorded on the parcel. That is the whole reason this list exists rather than one set of credentials in a settings file \u2014 months later, somebody asks which account a charge came from, and the answer has to be on the shipment.',
+      },
+      {
+        id: 'credentials',
+        say: 'Now the sentence that governs everything else here. The credentials are encrypted, the key that opens them is in the environment and never in the database, and no endpoint anywhere will give one back to you.',
+      },
+      {
+        id: 'rotate',
+        say: 'So read what it tells you to do instead. To change a token, you add a new account and deactivate the old one \u2014 which sounds like extra work and is actually the only way the question stays answerable.',
+      },
+      {
+        id: 'switches',
+        say: 'Above the accounts, the switch that decides whether any of them are used at all. One per courier, and it governs new parcels only.',
+      },
+      {
+        id: 'notakill',
+        say: 'Read that carefully, because it is not a kill switch. A courier you switch off is still holding real parcels moving towards real customers \u2014 so they keep being tracked, and they can still be cancelled or re-attempted. All it stops is new ones.',
+      },
+      {
+        id: 'table',
+        say: 'Then the accounts themselves. What each one is called, whose it is, whether it points at the real courier or a sandbox, and which pickup registration it ships from.',
+      },
+      {
+        id: 'default',
+        say: 'And the default is marked. It is one per courier AND per environment, which is why both of these carry it \u2014 a seller nobody has routed anywhere ships on whichever is in force. So making something default is a decision about every seller at once, not about one account.',
+      },
+      {
+        id: 'add',
+        say: 'Adding one. The courier, whether it is production or sandbox, and a label \u2014 which is what everybody will read this account by, so name it for the thing it actually is.',
+      },
+      {
+        id: 'shape',
+        say: 'The credential fields come with their names already filled in, and that matters more than it looks. Each courier reads its own: a token for one, an email and a password for another. A name typed wrong does not fail here \u2014 it fails at the first booking.',
+      },
+      {
+        id: 'secret',
+        say: 'The value is a password box, and it is the only time it will ever be legible. Typed once, sent once, encrypted. Nothing reads it back \u2014 not this form, not any screen, not any endpoint.',
+      },
+      {
+        id: 'save',
+        say: 'Saved. It is not the default, so nothing routes to it yet \u2014 which is the right order: an account exists first, and you decide what uses it afterwards.',
+      },
+      {
+        id: 'retire',
+        say: 'And retiring one is the other half of rotation. Deactivate, and no new parcel is booked on it \u2014 while every parcel it already carried keeps its record of it, which is the whole point.',
+      },
+      {
+        id: 'outro',
+        say: 'So: one account per contract, named for what it is, credentials written once and never read. Change one by adding and retiring, never by editing \u2014 and the parcel will always be able to tell you which was in force.',
       },
     ],
   },
