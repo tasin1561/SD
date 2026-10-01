@@ -3244,6 +3244,108 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'pack-without-scanning',
+    title: 'Packing without a scan',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Sometimes the goods in front of you have nothing on them to scan. Stock that was shelved before we printed product labels at all, or a sticker torn off in transit.',
+      },
+      {
+        id: 'open',
+        say: 'The box opens the same way, off the shipping label, because that part still works. What is on the parcel is right. What is missing is the proof.',
+      },
+      {
+        id: 'stuck',
+        say: 'And here is where an ordinary packer stops. Nothing goes in, the box cannot be closed, and the parcel sits on the bench while a customer waits on it.',
+      },
+      {
+        id: 'hatch',
+        say: 'There is a way past it — and notice where it is not. Not beside the close, not a tick box on the ordinary pack. Its own control, below the cancel, and most people never see it.',
+      },
+      {
+        id: 'who',
+        say: 'Because it is not a packer’s to press. Nobody waives the check they are the one performing, so this needs a supervisor — and the server enforces it, not the fact that you can see the button.',
+      },
+      {
+        id: 'cost',
+        say: 'Read what it says before anything else. This packs the parcel without checking what is inside it — and an unverified box is a wrong item at somebody’s door, with nothing saying which step was skipped.',
+      },
+      {
+        id: 'short',
+        say: 'So it wants a reason, and a short one will not do. Under twenty characters the button stays dead — because “broken” tells nobody anything when it is read back in six weeks.',
+      },
+      {
+        id: 'reason',
+        say: 'Say what was actually wrong and what you did instead. That sentence is the only thing standing between this parcel and a complete blank in the record.',
+      },
+      {
+        id: 'press',
+        say: 'And now it goes. Packed, on a manifest, out of the queue — exactly as though it had been scanned, which is the point and also the danger.',
+      },
+      {
+        id: 'recorded',
+        say: 'But not recorded the same way. It lands as its own action, high severity, under your name, with that reason on it — not a flag inside an ordinary pack nobody would filter for.',
+      },
+      {
+        id: 'outro',
+        say: 'So: use it when the labels are genuinely not there, say why in a sentence somebody can read later, and go and fix the labels. A bench that stops verifying stops being worth having.',
+      },
+    ],
+  },
+  {
+    slug: 'hand-over-to-the-courier',
+    title: 'Handing parcels to the courier',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'The van is at the door. This is the last look at a parcel before a driver takes it, and the subtitle is the rule the whole screen turns on.',
+      },
+      {
+        id: 'waiting',
+        say: 'First, what is still standing at the bench. Not a list of what you have done — a list of what is left, which is the question somebody loading a van actually has.',
+      },
+      {
+        id: 'first',
+        say: 'Scan the label as the box goes on. And that is it: no form to submit afterwards, no button to press when the van pulls away. The parcel is dispatched the moment it is read.',
+      },
+      {
+        id: 'why',
+        say: 'Which is the point. A scan happens per parcel, at the door, as the box leaves. A form afterwards is one person asserting that forty parcels went, and only one of those two was there.',
+      },
+      {
+        id: 'second',
+        say: 'The next one, and the session list grows rather than clearing. Did I do all forty is a question this screen can answer; a form that empties itself cannot.',
+      },
+      {
+        id: 'manifest',
+        say: 'And the manifest closes itself once its last parcel has gone. Nobody opens it, nobody closes it — it is the record of what went out on this van, kept for when somebody asks.',
+      },
+      {
+        id: 'again',
+        say: 'Now the mistake this is really guarding against. Scan a box that has already gone — and instead of a shrug, everything stops.',
+      },
+      {
+        id: 'stop',
+        say: 'Because it means one of two things, and both get worse the longer they run: two boxes carrying one waybill, or a pile that has already been done and whose rest is now suspect.',
+      },
+      {
+        id: 'operator',
+        say: 'The stop follows the person, not the bench. Four packers keep working; this one is held — and held at the packing station too, because the pile is what is in doubt.',
+      },
+      {
+        id: 'clear',
+        say: 'And it takes an admin to lift, which is deliberate. Somebody who is not holding the box goes and counts: is there a second one with this label on it?',
+      },
+      {
+        id: 'outro',
+        say: 'So: scan every box onto the van, watch what is left go down, and if it ever stops you, stop with it. A duplicate found at the door costs far less than one found by a customer.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

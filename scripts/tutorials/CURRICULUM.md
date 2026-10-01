@@ -32,8 +32,8 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (55):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J4**.
+**Filmed so far (56):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J5**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -2787,17 +2787,40 @@ mid-slide-in is somewhere it has already left, so the pointer lands beside it
 and the pause never arms. `/warehouse/manifests` says the same thing with a row
 that cannot fade, and it is where J8 picks up.
 
-### J5. Packing without a scan · `needs demo data` · **dangerous**
+### J5. Packing without a scan · **FILMED** — `pack-without-scanning.mp4` · **dangerous**
 
 **Promise** — you can get a parcel out when the label will not scan, and you
 know what you gave up.
-**Length** 2 min. **Prerequisites** J4.
+**Length** 11 scenes, ~2 min. **Prerequisites** J4. **Needs**
+`seed-demo-data.mjs pack-without-scanning`.
 **Covers** "Pack without scanning": a separate endpoint, a supervisor
 permission a packer does not hold, a reason of at least twenty characters, and
 its own distinct audit action so that "how often are we bypassing this" is a
 question somebody can answer.
 **Cost of getting it wrong:** an unverified parcel is a wrong item at a
 customer's door with nothing in the record saying which step was skipped.
+
+**Its world is J4's, unchanged** — `pack-without-scanning` joins `PICK_STAGE`
+with the same `'PICKED'` value and nothing else moves. **NOTHING IS SCANNED IN**
+on camera, deliberately: the premise is goods with no code on them, and a box
+with a line already ticked would be a video about convenience rather than about
+a parcel that cannot otherwise move. So the frames show `0 / 2` and `0 / 1`
+throughout, which is the shape of the problem.
+
+**The reason is typed in TWO HALVES** so the twenty-character floor has a dead
+button to point at: `disabled` is `forceReason.trim().length < 20`, read before
+the scene that presses it, and the scene THROWS if a twelve-character reason
+turns out to enable it — a moved threshold would otherwise be a thirty-second
+click timeout. Appended rather than cleared and retyped, because clearing a
+controlled field is the trap that wrote a thirteen into an agent cap.
+
+**AND IT FOUND A BUG, proved against the real database before a line of the
+fix** — see [Bugs found](#bugs-found-while-establishing-feasibility), the
+thirty-eighth: forcing a pack through left the supervisor's own box OPEN, and
+the partial unique `one open box per packer` then refused their very next scan
+while the bench had already cleared that box off the screen. The fix cancels it
+(never CLOSES it — a closed box is the LBL-4 evidence the contents WERE
+scanned).
 
 ### J6. Handing parcels to the courier · `needs demo data` · **dangerous**
 
@@ -3852,3 +3875,34 @@ commit.** There is now a catch around that transaction that reads the constraint
 name out of the error and says which table is blocking and what to do, because
 the next instance of this is a matter of time: Prisma defaults a required
 relation to RESTRICT, and roughly twenty tables carry an `orderId`.
+
+**AND A THIRTY-EIGHTH, found while writing J5's world and proved against the
+real database before a line of the fix (2026-10-01).** Forcing a pack through
+left the supervisor **locked out of their own bench**.
+
+`PackService.complete` never touches `pack_boxes` — on the real path it is
+reached FROM `PackBoxService.close`, which has already closed the box. The
+FORCED path has not: a supervisor scans a label, finds nothing on the goods that
+will scan, presses "Pack without scanning", and that box stays OPEN. The partial
+unique `one open box per packer` then refuses their very next scan with "Close
+or cancel your open box before starting another" — while the bench has already
+cleared the box off the screen, so there is nothing left to close or cancel, and
+the parcel is PACKED by then so it could not be closed properly either. The only
+way out is the abandonment sweep, up to `ops.pack_box_timeout_minutes` later.
+
+Proved by three API calls before anything was written: open a box on a picked
+parcel → force-complete it → read the box back (`OPEN`) → scan the next parcel's
+label → `409 PACK_BOX_ALREADY_OPEN`. Then re-run after the fix: `CANCELLED`, and
+the next label opens fine.
+
+**CANCELLED and deliberately not CLOSED.** A closed box IS the LBL-4 evidence
+that the contents were scanned — it is the exact row the verification gate
+reads — so recording one here would mint the proof this path exists to go
+without, and a later ordinary `complete` on the same parcel would sail through
+the gate on it. Cancelled is also simply true: nothing was verified. Best-effort
+and post-commit, because the pack is the durable fact and the sweep is the
+backstop; a failure releasing a box must never undo a parcel that is packed.
+
+`pack.service.spec.ts` pins three things — the forced path cancels, the ordinary
+path touches `pack_boxes` not at all, and a forced pack with no open box says
+nothing (the naked API call has none) — and the first was proved red first.

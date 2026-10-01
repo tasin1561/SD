@@ -52,6 +52,7 @@ meets them — is **`CURRICULUM.md`**; this file is the machinery.
 | `receive-a-consignment.mp4`         | Counting goods in at the door — claiming the receipt so two people cannot count the same pallet, recording what was really found rather than what was promised, and completing, which writes real stock and cannot be cancelled afterwards.                                                                                                                                                     |
 | `print-and-pick.mp4`                | A morning's parcels turned into paper — selecting a walk rather than the whole queue, a sheet that names what it could not print, confirming labels, and confirming the picking list, which is what actually claims the units on the shelves.                                                                                                                                                   |
 | `pack-a-parcel.mp4`                 | A box packed so that what is inside it is what was ordered — the waiting list and the parcel on it with no label to scan, the label scan that opens a box, products going in one at a time, one too many refused at the scan rather than at the end, the close, the manifest it joined without being asked, and a second box cancelled, which returns nothing to stock.                         |
+| `pack-without-scanning.mp4`         | The escape hatch for a parcel whose goods have nothing on them to scan — where the control is NOT (not beside the close, not a tick box), whose button it is, what the panel says it costs, the twenty-character reason the dead button is waiting for, and the fact that it lands as its own high-severity action rather than a flag inside an ordinary pack.                                  |
 
 Everything here is a script. **The media is gitignored**; run one command and
 it is rebuilt.
@@ -520,6 +521,16 @@ created_at ASC` — a released call goes in front of every unstarted one
   something only one function has** (a nearby comment, a constant it alone
   uses), and read `git diff --stat` plus the hunk headers afterwards: the
   function name is in `@@ ... @@` and it is the cheapest possible check.
+- **A scene that reports a FOUR-HOUR duration is the host clock jumping, not a
+  hang.** WSL2 resyncs its clock after the host sleeps, and `record.mjs`
+  measures a scene with `Date.now()` — so a check run printed
+  `press  scene 14286.71s` for a step that took six seconds, with every file
+  timestamp either side of it four hours apart. Harmless for a CHECK. On a TAKE
+  it means the scene's hold (`clip + tail − spent`) is skipped, so its picture
+  is a fraction of a second and `compose.mjs` stretches it to the clip's length
+  — a frozen frame under ten seconds of narration. The composer's per-scene
+  retime factors are where that shows (`x0.99` is normal; `x20` is this), so
+  read them rather than trusting the run's exit code.
 - The recorder writes `out/verify/<slug>-failure.png` when a flow breaks. It is
   usually enough on its own — the failures during this build were all visible
   in it.

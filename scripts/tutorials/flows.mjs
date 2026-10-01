@@ -8931,12 +8931,29 @@ export const FLOWS = {
         /*
           THE NOTE, not the list. The unlabelled-parcel callout is the
           one thing on this screen somebody has to go and DO something
-          about, and it is the sentence the narration is reading — the
-          simulator's label-less parcel is what makes it render, and it
-          is real rather than staged (the SSRF guard refuses the local
-          courier's label link; see `storeStubLabel` in the seeding).
+          about, and it is the sentence the narration is reading.
+
+          IT IS NOT SEEDED, and that is a known gap. The row behind it
+          when this was filmed was a stray `SIM-` parcel an older
+          lifecycle run had driven to PICKED through the per-parcel pick
+          station — which is the only route to PICKED that does not
+          print a label, since the printing station's pick batch is
+          gated on labels being confirmed. A later debugging pass packed
+          that parcel, so a RE-TAKE needs one placed on purpose: drive a
+          fourth parcel to PICKED through `PickExecutionService` rather
+          than through a batch. Named rather than left to time out,
+          because a missing `.wh-card__note` is otherwise thirty seconds
+          of silence and a failure screenshot of a page that looks fine.
         */
-        await stage.dwellOn(page.locator('.wh-card__note').first(), 3400);
+        const note = page.locator('.wh-card__note').first();
+        if ((await note.count()) === 0) {
+          throw new Error(
+            'No unlabelled parcel in the pack queue, so the callout this scene is about does ' +
+              'not render — see the comment here: one parcel has to reach PICKED without its ' +
+              'label being printed, which means the per-parcel pick station, not a batch.',
+          );
+        }
+        await stage.dwellOn(note, 3400);
       },
 
       async open({ page, stage }) {
@@ -9090,6 +9107,226 @@ export const FLOWS = {
       },
     },
   },
+
+  'pack-without-scanning': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/pack`, { waitUntil: 'domcontentloaded' });
+        await packRow(page, PACK.first).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.wh-scan').first(), 3000);
+      },
+
+      async open({ page, stage }) {
+        const awb = (await packRow(page, PACK.first).locator('.sk-lrow__title').innerText()).trim();
+        if (!/^\d{6,}$/.test(awb)) {
+          throw new Error(`Read "${awb}" as ${PACK.first}'s waybill, which is not a waybill.`);
+        }
+        await scanIn(page, stage, awb);
+        await page.locator('.wh-scan__meta').waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.wh-scan__meta'), 2600);
+      },
+
+      async stuck({ page, stage }) {
+        // NOTHING IS SCANNED IN, on purpose: the whole premise is goods
+        // with no code on them, and a box with a line already ticked
+        // would be a video about convenience rather than about a parcel
+        // that cannot otherwise move.
+        await stage.dwellOn(page.locator('[aria-label="What goes in this box"]'), 3200);
+      },
+
+      async hatch({ page, stage }) {
+        await forceOpener(page).waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(forceOpener(page), 3200);
+      },
+
+      async who({ page, stage }) {
+        await stage.clickIt(forceOpener(page), { after: 900 });
+        await forcePanel(page).waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(forcePanel(page), 3000);
+      },
+
+      async cost({ page, stage }) {
+        // The panel's OWN sentence about what this does, which is the
+        // one the narration reads rather than restates.
+        await stage.dwellOn(forcePanel(page).locator('.wh-note').first(), 3400);
+      },
+
+      async short({ page, stage }) {
+        /*
+          THE HALF-WRITTEN REASON, and the button still dead.
+
+          `disabled` is `forceReason.trim().length < 20 ||
+          forceComplete.isPending` \u2014 read it BEFORE writing the scene
+          that presses it, or a disabled submit under a filled-in form
+          arrives as a thirty-second CLICK timeout rather than as a
+          selector miss. Typed in two halves rather than cleared and
+          retyped: a controlled field that treats the empty string as
+          "not edited" puts its default straight back and
+          `pressSequentially` then appends to it (see the gotcha).
+        */
+        await stage.typeIn(reasonField(page), FORCE.half, { after: 500 });
+        const submit = forceSubmit(page);
+        if (await submit.isEnabled()) {
+          throw new Error(
+            `"${FORCE.half}" is ${FORCE.half.length} characters and the button is ENABLED \u2014 ` +
+              'the twenty-character floor the narration describes has moved.',
+          );
+        }
+        await stage.dwellOn(submit, 2800);
+      },
+
+      async reason({ page, stage }) {
+        await stage.typeIn(reasonField(page), FORCE.rest, { after: 500 });
+        const submit = forceSubmit(page);
+        if (!(await submit.isEnabled())) {
+          const got = await reasonField(page).inputValue();
+          throw new Error(`The button is still disabled on a ${got.length}-character reason.`);
+        }
+        await stage.dwellOn(submit, 2600);
+      },
+
+      async press({ page, stage }) {
+        await stage.clickIt(forceSubmit(page), { after: 1200 });
+        const done = page.getByText(/^Packed without scanning/).first();
+        await done.waitFor({ state: 'visible', timeout: 25_000 });
+        // Settle before pointing: the toast slides in, and its box read
+        // mid-animation is somewhere it has already left (see J4).
+        await page.waitForTimeout(700);
+        await stage.dwellOn(done, 2400);
+      },
+
+      async recorded({ page, stage }) {
+        // The parcel has left the bench \u2014 which is the picture, and is
+        // what makes the narration's point bite: it looks exactly like
+        // an ordinary pack from here, and only the audit row differs.
+        await page.locator('.wh-list li').first().waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(page.locator('.wh-card').first(), 3200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.wh-scan').first(), 3400);
+      },
+    },
+  },
+
+  'hand-over-to-the-courier': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/handover`, { waitUntil: 'domcontentloaded' });
+        await handoverRow(page, HANDOVER.first).waitFor({ state: 'visible', timeout: 25_000 });
+        /*
+          AND NOT BLOCKED. SCAN-1's stop is per OPERATOR and survives a
+          reload, a sign-out and the end of a take — which is the whole
+          of this video's last act, so a run that ends on the stop leaves
+          the next one unable to scan anything. The seeding lifts it; this
+          is the gate that says so rather than letting the first scan fail
+          thirty seconds later with the bench apparently working.
+        */
+        if ((await page.locator('.wh-stop').count()) > 0) {
+          throw new Error(
+            'The ops user is still blocked from scanning — a previous take raised the duplicate ' +
+              'stop and it was not lifted. Re-run the seeding, which clears it.',
+          );
+        }
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-ph').first(), 3000);
+      },
+
+      async waiting({ page, stage }) {
+        const rows = page.locator('.wh-list li');
+        const n = await rows.count();
+        if (n < 3) {
+          throw new Error(`${n} parcel(s) waiting for a van, expected at least 3.`);
+        }
+        await stage.dwellOn(page.locator('.wh-card').nth(1), 3200);
+      },
+
+      async first({ page, stage }) {
+        const awb = (
+          await handoverRow(page, HANDOVER.first).locator('.sk-lrow__title').innerText()
+        ).trim();
+        if (!/^\d{6,}$/.test(awb)) {
+          throw new Error(`Read "${awb}" as ${HANDOVER.first}'s waybill, which is not a waybill.`);
+        }
+        await handoverScan(page, stage, awb);
+        await sessionList(page).waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(sessionList(page), 2600);
+      },
+
+      async why({ page, stage }) {
+        // The session row's own chip \u2014 "dispatched", not "scanned" \u2014
+        // which is the sentence this scene is about stated by the screen.
+        await stage.dwellOn(sessionList(page).locator('.wh-list li').first(), 3000);
+      },
+
+      async second({ page, stage }) {
+        const awb = (
+          await handoverRow(page, HANDOVER.second).locator('.sk-lrow__title').innerText()
+        ).trim();
+        await handoverScan(page, stage, awb);
+        const rows = sessionList(page).locator('.wh-list li');
+        await rows.nth(1).waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(sessionList(page), 3000);
+      },
+
+      async manifest({ page, stage }) {
+        await stage.dwellOn(page.getByRole('link', { name: 'Manifest history' }), 3200);
+      },
+
+      async again({ page, stage }) {
+        /*
+          THE FIRST PARCEL AGAIN. Its waybill is no longer in the waiting
+          list — the scan dispatched it — so it is read back off the
+          session list, which is where the operator would be looking too.
+        */
+        const awb = (
+          await sessionList(page).locator('.wh-list li').last().locator('.sk-ident').innerText()
+        ).trim();
+        await handoverScan(page, stage, awb, { settle: 1600 });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByText(/DUPLICATE_SCAN|already/i)
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.wh-alert').first(), 3000);
+      },
+
+      async stop({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').locator('.sk-dialog__foot').getByRole('button').first(),
+          { after: 1200 },
+        );
+        // The BANNER, which is the durable half \u2014 the dialog is dismissed
+        // and this stays until an admin resolves the issue.
+        await page.locator('.wh-stop').waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.wh-stop'), 3200);
+      },
+
+      async operator({ page, stage }) {
+        await stage.dwellOn(page.locator('.wh-stop .wh-pre').first(), 3400);
+      },
+
+      async clear({ page, stage }) {
+        await stage.dwellOn(page.getByRole('link', { name: 'system issues' }), 3200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.wh-stop').first(), 3400);
+      },
+    },
+  },
 };
 
 /**
@@ -9213,6 +9450,72 @@ const PACK = {
 /** One row of the pack queue, by the recipient printed on it. */
 function packRow(page, recipient) {
   return page.locator('.wh-list li', { hasText: recipient }).first();
+}
+
+/**
+ * J5's reason, typed in two halves.
+ *
+ * The first is under the twenty characters `force-complete` insists on,
+ * so the scene about the floor has a dead button to point at; the second
+ * finishes it. Appended rather than retyped \u2014 clearing a controlled
+ * field is the trap that wrote a thirteen into an agent cap.
+ */
+const FORCE = {
+  half: 'Barcode torn',
+  rest: ' off the carton in transit; contents counted by hand against the picking sheet',
+};
+
+/**
+ * J6's two parcels, by the recipient the handover queue prints.
+ *
+ * KEEP IN STEP WITH `PICK_ORDERS` in `seed-demo-data.mjs`. Both numbers
+ * on a row are minted per run, so the name is the handle — the same
+ * reasoning as the pack queue's.
+ */
+const HANDOVER = { first: 'Ananya Iyer', second: 'Vikram Choudhury' };
+
+/** One row of what is waiting for a van. */
+function handoverRow(page, recipient) {
+  return page.locator('.wh-list li', { hasText: recipient }).first();
+}
+
+/** The running list of what this session has put on the van. */
+function sessionList(page) {
+  return page.locator('.wh-card', { hasText: 'This session' }).first();
+}
+
+/**
+ * A handover scan: the waybill typed into the one field, and Enter.
+ *
+ * Its own helper rather than the pack bench's `scanIn` because the field
+ * has a different id and this bench has no concept of a product scan —
+ * sharing one would mean a parameter that exists to tell two unrelated
+ * screens apart.
+ */
+async function handoverScan(page, stage, awb, { settle = 900 } = {}) {
+  const field = page.locator('#handover-scan');
+  await field.waitFor({ state: 'visible', timeout: 20_000 });
+  await stage.typeIn(field, awb, { after: 250 });
+  await field.press('Enter');
+  await page.waitForTimeout(settle);
+}
+
+/** The control that reveals the override \u2014 deliberately not beside the close. */
+function forceOpener(page) {
+  return page.getByRole('button', { name: 'These products have no labels to scan' });
+}
+
+/** The override block itself, by the class that marks it off from the cancel above it. */
+function forcePanel(page) {
+  return page.locator('.wh-divide').first();
+}
+
+function reasonField(page) {
+  return forcePanel(page).getByLabel(/^Reason for packing without scanning$/);
+}
+
+function forceSubmit(page) {
+  return forcePanel(page).getByRole('button', { name: 'Pack without scanning' });
 }
 
 /** One outstanding line of the open box, by the SKU printed on it. */

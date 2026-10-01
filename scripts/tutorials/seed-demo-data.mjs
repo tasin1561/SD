@@ -4255,6 +4255,8 @@ const PICK_PIN = '560103';
 const PICK_STAGE = new Map([
   ['print-and-pick', 'LABELLED'],
   ['pack-a-parcel', 'PICKED'],
+  ['pack-without-scanning', 'PICKED'],
+  ['hand-over-to-the-courier', 'PACKED'],
 ]);
 
 /**
@@ -4375,7 +4377,39 @@ async function storeStubLabel(shipmentId, shipmentNumber, awbNumber) {
 async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
   const stage = PICK_STAGE.get(slug ?? '');
   if (stage === undefined) return;
-  const wantsPicked = stage === 'PICKED';
+  // PACKED is PICKED and one more step, so the walk through the printing
+  // station is wanted for both.
+  const wantsPacked = stage === 'PACKED';
+  const wantsPicked = stage === 'PICKED' || wantsPacked;
+
+  /*
+    AND THE SCAN BLOCK IS LIFTED FIRST, for every one of these videos.
+
+    SCAN-1: a repeated box STOPS the operator who scanned it, at EVERY
+    scanning surface, until an admin resolves the issue — which is the
+    whole of J6's last scene and is therefore something a take creates on
+    purpose. Left standing, the next run's very first scan is refused and
+    the failure arrives as a bench saying "Scanning is stopped" rather
+    than as anything to do with the video being made. The same rule the
+    e2e reset follows (`resetAuthState` truncates `system_issues`), one
+    row at a time because this is a live database.
+  */
+  const ops = await prisma.staffUser.findUnique({
+    where: { email: OPS.email },
+    select: { id: true },
+  });
+  if (ops !== null) {
+    const lifted = await prisma.systemIssue.updateMany({
+      where: { blocksScanForStaffId: ops.id, resolvedAt: null },
+      data: {
+        resolvedAt: new Date(),
+        resolutionNote: 'Cleared by the tutorial seeding: raised by a previous take on camera.',
+      },
+    });
+    if (lifted.count > 0) {
+      console.log(`  · lifted ${lifted.count} scan block(s) a previous take left on the ops user`);
+    }
+  }
 
   /* Parcels this run has to walk through the printing station itself —
      only the FRESH ones. A reused parcel is already where it belongs, and
@@ -4445,12 +4479,15 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
       if (!sameContents) {
         console.log(`  · ${o.ref} holds ${has}; the video wants ${wanted} — replacing it`);
       }
-      const wherePutBack = wantsPicked
-        ? { deletedAt: null, status: 'CREATED', packCompletedAt: null }
-        : { deletedAt: null, labelPrintedAt: null, awbNumber: { not: null } };
+      const wherePutBack = wantsPacked
+        ? { deletedAt: null, status: 'CREATED', handoverScannedAt: null }
+        : wantsPicked
+          ? { deletedAt: null, status: 'CREATED', packCompletedAt: null }
+          : { deletedAt: null, labelPrintedAt: null, awbNumber: { not: null } };
+      const wantStatus = wantsPacked ? 'PACKED' : wantsPicked ? 'PICKED' : 'CONFIRMED';
       const stillWaiting =
         sameContents &&
-        spent.status === (wantsPicked ? 'PICKED' : 'CONFIRMED') &&
+        spent.status === wantStatus &&
         (await prisma.orderShipment.count({
           where: { orderId: spent.id, shipment: wherePutBack },
         })) > 0;
@@ -4653,13 +4690,74 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
   }
 
   /*
+    ── J6 ONLY: THROUGH THE PACK BENCH, BY THE REAL RITUAL ─────────────
+    The handover bench selects on a PACKED parcel waiting for a van, so
+    J6's three have to be boxed before a frame can be shot. They go
+    through the box ritual PACK-1 describes and the API e2e harness's
+    `packAtBench()` drives — scan the label to open, scan each product in
+    by its SKU code (LBL-2: the code is `barcode ?? skuCode` and this
+    catalogue has no barcodes), scan the label again to close — rather
+    than through `force-complete`, which is J5's subject and which the
+    README is explicit about not routing flows through: it would leave
+    the only exercised path the one production should not use.
+
+    Every parcel the stage wants, not only the fresh ones: a reused
+    parcel here is PACKED already and is skipped by the status read, and
+    a parcel J4 left PICKED is exactly the one that needs boxing.
+  */
+  if (wantsPacked) {
+    const toBox = await prisma.order.findMany({
+      where: { sellerId, sellerOrderRef: { in: PICK_ORDERS.map((o) => o.ref) }, status: 'PICKED' },
+      select: {
+        orderNumber: true,
+        orderShipments: {
+          select: {
+            shipment: {
+              select: {
+                id: true,
+                awbNumber: true,
+                shipmentNumber: true,
+                items: { select: { skuCode: true, quantity: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    for (const o of toBox) {
+      const parcel = o.orderShipments[0]?.shipment;
+      if (parcel?.awbNumber == null) continue;
+      const box = await call('/warehouse/packs/boxes/open', {
+        method: 'POST',
+        token: staffToken,
+        body: { awbNumber: parcel.awbNumber },
+      });
+      for (const line of parcel.items) {
+        for (let i = 0; i < line.quantity; i += 1) {
+          await call(`/warehouse/packs/boxes/${box.packBoxId}/scan`, {
+            method: 'POST',
+            token: staffToken,
+            body: { code: line.skuCode },
+          });
+        }
+      }
+      await call(`/warehouse/packs/boxes/${box.packBoxId}/close`, {
+        method: 'POST',
+        token: staffToken,
+        body: { awbNumber: parcel.awbNumber },
+      });
+      console.log(`  · ${o.orderNumber} boxed at the bench — ${parcel.shipmentNumber} is packed`);
+    }
+  }
+
+  /*
     AND THE WORLD IS ASSERTED AT WHICHEVER STAGE WAS ASKED FOR. J3's flow
     selects the label queue's rows BY THIS PIN, so a fourth parcel
     carrying it would be printed and picked without being narrated; J4's
     reaches for its parcels by recipient name off the pack queue, and a
     stray one would sit in that list being counted by a viewer.
   */
-  const want = wantsPicked ? ['PICKED'] : ['CONFIRMED', 'PENDING_PICK'];
+  const want = wantsPacked ? ['PACKED'] : wantsPicked ? ['PICKED'] : ['CONFIRMED', 'PENDING_PICK'];
   const waiting = await prisma.order.count({
     where: {
       sellerId,
