@@ -184,6 +184,15 @@ processes that is not already answering, and then runs `provision-stack.mjs`.
 A stack that is half up — somebody started the API by hand — is the ordinary
 case and it fills in the rest.
 
+**`down` walks `pgrep -P`; it never kills a process group**, and that is not
+tidiness. A non-interactive shell does not get its own process group, so
+`stack.sh up b` run from a script puts the servers in the CALLER's group and
+`kill -- -<pgid>` would have ended the caller's own shell. It also means the
+recorded pid may be a wrapper subshell rather than the server itself (`$!` of a
+backgrounded compound is the subshell), which the walk handles and a group kill
+only appeared to. Servers are started under `setsid`, so closing the terminal
+that brought a stack up does not take it with you.
+
 ### Filming on one
 
 **`TUT_STACK` is required and has no default.**

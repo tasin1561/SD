@@ -184,7 +184,12 @@ start_one() {
     return 0
   fi
   mkdir -p "$RUN_DIR"
-  ( cd "$dir" && nohup "$@" >>"$RUN_DIR/$what.log" 2>&1 & echo $! >"$RUN_DIR/$what.pid" )
+  # `setsid` puts the server in its OWN session, so it survives the
+  # terminal that started it closing, and `nohup` covers the case where
+  # setsid has to fork. `</dev/null` so nothing ever blocks on a read
+  # from a terminal that is no longer there.
+  ( cd "$dir" && setsid nohup "$@" >>"$RUN_DIR/$what.log" 2>&1 </dev/null &
+    echo $! >"$RUN_DIR/$what.pid" )
   say "$what starting (log $RUN_DIR/$what.log)"
 }
 
@@ -245,6 +250,22 @@ if [ "$CMD" = "up" ]; then
   exit 0
 fi
 
+# Kill a pid and everything under it, DEPTH FIRST — never a process group.
+#
+# `kill -- -<pgid>` is the obvious way to take down a server and its
+# children, and it is a trap here: a non-interactive shell does NOT get
+# its own process group, so `stack.sh up b` run from a script puts the
+# servers in the CALLER's group, and `down` would then kill the caller's
+# own shell. Walking `pgrep -P` costs nothing and cannot do that. The
+# recorded pid may be a wrapper subshell rather than the server itself
+# (`$!` of a backgrounded compound is the subshell), which is exactly why
+# the walk matters rather than being tidiness.
+kill_tree() {
+  local pid="$1" child
+  for child in $(pgrep -P "$pid" 2>/dev/null); do kill_tree "$child"; done
+  kill "$pid" 2>/dev/null || true
+}
+
 if [ "$CMD" = "down" ]; then
   # ONLY processes this script started, read from its own pidfiles. Stack
   # A was started by hand in somebody's terminal and has no pidfile here,
@@ -259,15 +280,14 @@ if [ "$CMD" = "down" ]; then
     what="$(basename "$pidfile" .pid)"
     pid="$(cat "$pidfile")"
     if kill -0 "$pid" 2>/dev/null; then
-      # The recorded pid is the shell/npm wrapper; its children are the
-      # server. Kill the group so `next start` does not survive its npx.
-      kill -- "-$(ps -o pgid= "$pid" | tr -d ' ')" 2>/dev/null || kill "$pid" 2>/dev/null || true
-      say "$what (pid $pid) stopped"
+      kill_tree "$pid"
+      say "$what (pid $pid and children) stopped"
     else
       say "$what (pid $pid) was not running"
     fi
     rm -f "$pidfile"
   done
+  status || true
   exit 0
 fi
 
