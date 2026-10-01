@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 71 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N4, N9 and P5.** The 19 left are all in the admin app: 2 are
+**90 tutorials. 72 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N5, N9 and P5.** The 18 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (71):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (72):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N4** and **N9**.
+**L1–L3**, **M1–M2**, **N1–N5** and **N9**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -63,10 +63,10 @@ to Kolkata, a return that came back to the wrong building. Do NOT film
 Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
 teach the wrong habit.
 
-**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N5 —
-"Recording what the courier paid us".** N1–N4 and N9 are filmed.
-`moneyDeskWorldFor` is the shared world N2–N7 draw on, and the narration and
-flows for **N5 and N6** are written and not yet checked — N5 and N6 landed
+**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N6 —
+"Moving money in or out of a seller's wallet by hand".** N1–N5 and N9 are
+filmed. `moneyDeskWorldFor` is the shared world N2–N7 draw on, and the narration
+and flow for **N6** are written and not yet checked — N5 and N6 landed
 in a commit titled "N3 and N4", which is the slug-against-number confusion
 worth expecting rather than a mistake in the code (`record-a-courier-payout`
 is N5, `move-money-by-hand` is N6).
@@ -3615,10 +3615,11 @@ not in the frame**.
 file), which is why the seeding deletes the request and puts the original
 account back before raising it again.
 
-### N5. Recording what the courier paid us · `needs demo data` · **dangerous**
+### N5. Recording what the courier paid us · **FILMED** — `record-a-courier-payout.mp4`
 
 **Promise** — you can record a COD payout and match it to the orders it covers.
-**Length** 4 min. **Prerequisites** N1. **Needs** delivered COD orders.
+**Length** 2 min 50 s of narration over 13 scenes. **Prerequisites** N1.
+**Needs** D0 plus `moneyDeskWorldFor`.
 **Covers** `/settlements`: recording the payout against its own reference —
 which is the guard against recording one bank credit twice — then allocating it
 to orders, the short-payment figure that appears when the courier paid less than
@@ -3626,6 +3627,48 @@ the order was worth, and the reversal when a parcel came back after they had
 paid.
 **Cost of getting it wrong:** the seller is credited what the **order was
 worth**, so a mis-recorded payout is money out of Skydrop's pocket, quietly.
+
+**THE FILE IS WRITTEN BY THE SEED AND SO IS THE FIGURE TYPED FROM THE
+STATEMENT.** A courier's export names WAYBILLS and this box's waybills are
+minted per run by the simulator, so a committed fixture cannot carry them —
+`writeRemittanceExport` writes it. Three things it got wrong, all of one kind:
+**the file described a different world from the one the form draws.**
+
+- **It named orders an earlier payout had already settled.** The demo world
+  carries one (`settleOneCodForLedger`'s, which every other money-desk slug
+  writes and `unrecordTutorialPayouts` deliberately leaves alone), so the form
+  warned "Already settled on an earlier payout" in the middle of the scene about
+  allocating. The export now asks for `courierSettlementLines: { none: {} }`.
+- **The typed amount was a CONSTANT in `flows.mjs` and matched only by luck** —
+  it was the total of the rows that happened to be allocated, i.e. the file's
+  total minus whatever happened to be settled. It is now a FIXTURE the seed
+  writes beside the file, which is exactly what `lib/fixture.mjs` is for: the
+  amount comes off the BANK STATEMENT and is typed before the upload, so the
+  flow cannot read it off the lines.
+- **The short-paid row was chosen by index, and the index was of the wrong
+  list.** The seed shorted row 1 of the delivered orders; rows the form cannot
+  place are left out, so the file's second row and the form's second LINE are
+  different lines, and the scene about paying less haloed a parcel paid in full.
+  The seed shorts the LAST row and the flow reaches `.last()` — the one position
+  that needs no counting.
+
+**`getByLabel('Amount', { exact: true })` matches NOTHING here**, because the
+input carries `aria-label="Amount attributed to this order"` beside its visible
+`label="Amount"` and an `aria-label` on the control wins. Its `Order ID` sibling
+has an `aria-label` that happens to equal its label, which is why the scene
+after it was fine — the pair is worth seeing together.
+
+**The reversal scene was in the wrong place and about the wrong thing.** It came
+after the payout was recorded and haloed the "Short-paid orders" tile; a
+reversal and a short payment are different, and the fields the narration is
+about (`RTO reversal`, "Add reversed order") only exist while the form is open.
+It sits inside the dialog now — and moving it broke the scene AFTER it, which
+had been relying on its navigation. **Whoever moves a scene owns the journey its
+neighbours were using.**
+
+**A take SPENDS the payout**; `unrecordTutorialPayouts` removes the take's own
+rows (prefix `UTR-TUT-`) and the wallet entries its credit wrote, refusing
+rather than guessing if those are no longer the NEWEST entries on the wallet.
 
 ### N6. Moving money in or out of a seller's wallet by hand · `needs demo data` · **dangerous**
 

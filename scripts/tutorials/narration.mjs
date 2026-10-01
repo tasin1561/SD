@@ -4029,6 +4029,10 @@ export const VIDEOS = [
         say: 'And where they paid less, the difference is recorded and absorbed. The seller is credited what the ORDER was worth, not what the courier remitted — a short payment is our dispute with the courier, not a clawback from somebody who was paid in good faith.',
       },
       {
+        id: 'reversal',
+        say: 'The other direction has fields of its own, underneath. A parcel the courier paid out on and then brought back — the customer never paid, so the credit is taken back — and the form makes you NAME those orders rather than just carry a total.',
+      },
+      {
         id: 'credit',
         say: 'Which is what recording this does. In the same transaction it credits the seller, withholds the tax, and writes the bank entry for the cash — so a credit with no payment behind it cannot exist.',
       },
@@ -4037,12 +4041,8 @@ export const VIDEOS = [
         say: 'Here it is on the seller’s side: the COD credit, the tax taken out of it, and both naming the order the money came from.',
       },
       {
-        id: 'reversal',
-        say: 'The other direction is a reversal. A parcel the courier paid out on and then brought back — the customer never paid, so the credit is taken back, and the payout has to name the orders rather than just carry a total.',
-      },
-      {
         id: 'unexplained',
-        say: 'And a payout whose parts do not add up to its whole is flagged rather than accepted. Money we cannot explain is the one thing a settlement ledger must not quietly swallow.',
+        say: 'Which is why the row carries an unallocated column of its own. This payout balances; one that did not would say so right there, rather than quietly adding to what we believe the courier has paid us.',
       },
       {
         id: 'outro',

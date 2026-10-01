@@ -11318,13 +11318,33 @@ export const FLOWS = {
         await stage.dwellOn(await ledgerRow(page, 'COD tax deduction'), 2600);
       },
 
-      async reversal({ page, stage, baseUrl }) {
-        await page.goto(`${baseUrl}/settlements`, { waitUntil: 'domcontentloaded' });
-        await page.waitForLoadState('networkidle').catch(() => {});
-        await stage.dwellOn(moneyKpi(page, 'Short-paid orders'), 4400);
+      /*
+        STILL IN THE DIALOG, and that is the point of where this scene
+        sits. It used to come after the payout was recorded and halo the
+        "Short-paid orders" tile on the page behind — a reversal and a
+        short payment are different things, and the tile is the other
+        one. The fields the narration is about are these, and they only
+        exist while the form is open.
+      */
+      async reversal({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.dwellOn(dialog.getByLabel(/^RTO reversal/).first(), 2400);
+        await stage.dwellOn(
+          dialog.getByRole('button', { name: 'Add reversed order' }).first(),
+          2600,
+        );
       },
 
-      async unexplained({ page, stage }) {
+      /*
+        BACK TO THE SETTLEMENTS PAGE. The scene before this one used to
+        do the navigating; it now stays inside the dialog (see
+        `reversal`), and `ledger` leaves the browser on the seller's
+        wallet. Whoever moves a scene owns the journey its neighbours
+        were relying on.
+      */
+      async unexplained({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/settlements`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
         const row = page.getByRole('row').filter({ hasText: PAYOUT_REFERENCE }).first();
         await row.waitFor({ state: 'visible', timeout: 25_000 });
         await row.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
