@@ -23,7 +23,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
-import { prisma, argon2, pdfLib } from './lib/deps.mjs';
+import { prisma, pdfLib } from './lib/deps.mjs';
 import { MOCK_ROOT, mockObjectPath } from './lib/spaces-shim.mjs';
 import { TUTORIALS_DIR } from './lib/paths.mjs';
 import { API, call, waitFor } from './lib/api.mjs';
@@ -36,11 +36,16 @@ import {
   LIFECYCLE_PARCELS,
 } from './lib/lifecycle.mjs';
 import { clearLoginThrottle } from './lib/clear-login-throttle.mjs';
+import { ensureOpsStaff, hashPassword as hash, OPS } from './lib/ops-user.mjs';
+import { assertStackEnvironment, resolveStack } from './lib/stacks.mjs';
 import { ensureConsignmentWorld, consignmentReport } from './lib/consignments.mjs';
 import { ensureFreightWorld, freightReport } from './lib/freight.mjs';
 
-/** The staff account the seeding needs — goods receipts are received by ops, not by the seller. */
-const OPS = { email: 'tutorial-ops@skydrop.local', password: 'Tutorial-Ops-2026' };
+/*
+ * The staff account the seeding needs — goods receipts are received by
+ * ops, not by the seller — is `OPS` from `lib/ops-user.mjs`, imported
+ * above and shared with `provision-stack.mjs`.
+ */
 
 /** The seller the camera signs in as. Both videos use this one account. */
 export const DEMO_SELLER = {
@@ -510,6 +515,11 @@ const LIFECYCLE_SLUGS = new Set([
   // retires and rebuilds it. K1 also needs `RSH-LIFE-RETURNING` for its
   // "still with the courier" scene, which the same pass keeps alive.
   'take-a-return-in',
+  // K2 works the same parcel one step further on: K1 leaves it RECEIVED
+  // and K2 inspects and finalises it, which is what moves its stock.
+  // `returnsBenchWorldFor` receives it afterwards so this video opens on
+  // the bench rather than at the door — the world K1 hands over.
+  'inspect-and-finalise-a-return',
 ]);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
@@ -579,52 +589,35 @@ const TOUR_ORDERS = [
   { name: 'Rohit Sharma', phone: '+919845030014', ref: 'RSH-TOUR-04', qty: 3 },
 ];
 
-function assertLocal() {
-  const url = process.env.DATABASE_URL ?? '';
-  if (!/(^|@|\/\/)(127\.0\.0\.1|localhost)(:|\/)/.test(url)) {
-    throw new Error(
-      `Refusing to seed: DATABASE_URL does not look local (${url.replace(/:[^:@/]*@/, ':***@')}).`,
-    );
-  }
+/**
+ * Refuse to run unless the ambient environment is THIS FILMING STACK's.
+ *
+ * It replaced a plain `assertLocal`, which asked only whether the host
+ * was local — true of both stacks, and therefore unable to tell them
+ * apart. Two agents now film at once (`lib/stacks.mjs`), and this script
+ * REBUILDS a world: a seed aimed at the wrong database deletes the
+ * product the other agent's next scene is about, clears their order
+ * list, and succeeds. The guard is a one-line question — does the
+ * connection string name the database this stack owns — and it is the
+ * only thing standing between a forgotten `TUT_STACK` and a ruined take
+ * somebody else is in the middle of.
+ */
+function assertStack() {
+  assertStackEnvironment(resolveStack());
 }
 
-function hash(password) {
-  return argon2.hash(password, {
-    type: argon2.argon2id,
-    memoryCost: 19456,
-    timeCost: 2,
-    parallelism: 1,
-  });
-}
-
-/** Ops staff, password force-set so a re-run always authenticates. */
+/**
+ * `hash` and `ensureOps` live in `lib/ops-user.mjs` now.
+ *
+ * `provision-stack.mjs` needs the same ops account — a fresh stack has
+ * no staff user at all, and nothing can be provisioned through the admin
+ * API without one — and it cannot import this file, because this file
+ * calls `main()` at its top level. Two copies of that upsert would be
+ * two answers to "what password does tutorial-ops have", and the second
+ * one to run would win silently.
+ */
 async function ensureOps() {
-  const passwordHash = await hash(OPS.password);
-  // RBAC is a ROW, not only the legacy `role` enum — a staff user without
-  // a `staffRole` cannot be created at all, and one created with the enum
-  // alone would hold no permissions.
-  const superAdmin = await prisma.staffRoleDefinition.findFirstOrThrow({
-    where: { key: 'super_admin' },
-    select: { id: true },
-  });
-  await prisma.staffUser.upsert({
-    where: { email: OPS.email },
-    update: {
-      passwordHash,
-      role: 'SUPER_ADMIN',
-      staffRole: { connect: { id: superAdmin.id } },
-      deletedAt: null,
-    },
-    create: {
-      email: OPS.email,
-      emailDisplay: OPS.email,
-      passwordHash,
-      role: 'SUPER_ADMIN',
-      staffRole: { connect: { id: superAdmin.id } },
-    },
-  });
-  const login = await call('/auth/staff/login', { method: 'POST', body: OPS });
-  return login.accessToken;
+  return ensureOpsStaff();
 }
 
 /** The demo seller, created through the real invite flow the first time. */
@@ -4030,6 +4023,77 @@ async function ensureBdIntakeWarehouse(staffToken) {
 }
 
 /**
+ * The two bins a warehouse that takes returns has to have, and the
+ * demo box did not.
+ *
+ * ── WHY THIS IS A SEEDING GAP RATHER THAN A PRODUCT ONE ──────────────
+ * WMS-8e books a returned parcel's units into the receiving warehouse's
+ * RTO_HOLD bin AT RECEIVE, so a received-but-undecided return is on the
+ * stock ledger rather than nowhere. CCU-01 had no RTO_HOLD bin and no
+ * DAMAGED one, so every receive here answered `NO_HOLD_BIN`: nothing
+ * was booked, a MEDIUM `rto-hold-bin-missing` issue was raised, and the
+ * toast said so on screen. The product degrades correctly — it is the
+ * WORLD that was wrong, and it was wrong in the exact words the owner
+ * used when WMS-8d/8e were specified: "R-01-01 should hold products
+ * that are received but not decided yet… D-01-01 (damaged) for
+ * damaged."
+ *
+ * Found on 2026-10-01 while writing K2, by reading the stock movements
+ * on K1's own parcel: no `RETURN_RECEIVE` row anywhere, under a line of
+ * narration saying the units had just been booked into the hold.
+ *
+ * ── AND WITHOUT THE DAMAGED BIN, HALF OF K2 CANNOT BE FILMED ─────────
+ * "Keep aside (damaged)" moves the unit from the hold into the DAMAGED
+ * bin at finalise and is REFUSED by name (`RTO_NO_DAMAGED_BIN`) when
+ * there is none — deliberately, because the fallbacks are both wrong
+ * (the hold would let putaway shelve it, storage would sell it). So a
+ * video about the four dispositions could only ever press three.
+ *
+ * Built through the product's own endpoint, with coordinates rather
+ * than a typed name (BIN-4), in the MAIN zone every warehouse is
+ * created with (BIN-1). Idempotent on the composed code.
+ */
+const RETURNS_BINS = [
+  { type: 'RTO_HOLD', aisle: 'R', rack: '1', shelf: '1', code: 'R-01-01', what: 'returns hold' },
+  { type: 'DAMAGED', aisle: 'D', rack: '1', shelf: '1', code: 'D-01-01', what: 'damaged' },
+];
+
+async function ensureReturnsBins(staffToken, warehouse) {
+  const bins = await call(`/admin/warehouses/${warehouse.id}/bins`, { token: staffToken });
+  const zones = await call(`/admin/warehouses/${warehouse.id}/zones`, { token: staffToken });
+  const main = zones.find((z) => z.code === 'MAIN') ?? zones[0];
+  if (main === undefined) {
+    throw new Error(
+      `${warehouse.code} has no zones, so a bin cannot be created in it — every warehouse is ` +
+        'supposed to get a MAIN zone at creation (BIN-1).',
+    );
+  }
+
+  for (const want of RETURNS_BINS) {
+    /*
+      BY TYPE FIRST, THEN BY CODE. The type is what the product looks
+      up (`findBinByType`), so a warehouse that already has a returns
+      hold under some other name needs nothing — and creating a second
+      one would leave two and make which-one-wins a coin toss.
+    */
+    if (bins.some((b) => b.type === want.type)) continue;
+    if (bins.some((b) => b.code === want.code)) continue;
+    await call(`/admin/warehouses/${warehouse.id}/bins`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        zoneId: main.id,
+        type: want.type,
+        aisle: want.aisle,
+        rack: want.rack,
+        shelf: want.shelf,
+      },
+    });
+    console.log(`  · built the ${want.what} bin ${want.code} in ${warehouse.code}`);
+  }
+}
+
+/**
  * J2's world: one consignment standing at the Indian door, uncounted.
  *
  * ── WHY IT IS ITS OWN, AND DIRECT_IN ─────────────────────────────────
@@ -4980,6 +5044,91 @@ async function binsWorldFor(slug, staffToken) {
 }
 
 /**
+ * K2's world: K1 has already happened.
+ *
+ * K1 films a return being RECEIVED; K2 films what is decided about it
+ * afterwards. So K2 opens on "On the bench" with the parcel already
+ * taken in and nothing inspected — which is the state K1 hands over,
+ * and is therefore the honest place for the next video to start rather
+ * than one it has to spend two scenes reaching.
+ *
+ * The receive goes through the product's own endpoint, so the units are
+ * booked into the returns hold exactly as they would be for a person
+ * (WMS-8e) — and the ASSERTION below is the point of doing it that way:
+ * K2's narration says the units are waiting in the hold, and a
+ * `NO_HOLD_BIN` outcome would make that a sentence about something that
+ * did not happen. That is precisely what WAS happening on this box
+ * until `ensureReturnsBins` — see its note.
+ *
+ * `alreadyReceived` is fine and expected on the second `--check` of a
+ * run that did not get as far as finalising; the booking is skipped
+ * because it already happened, which the gate allows for by name.
+ */
+async function returnsBenchWorldFor(slug, sellerId, staffToken) {
+  if (slug !== 'inspect-and-finalise-a-return') return;
+
+  const order = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: 'RSH-LIFE-ATDOOR' },
+    select: { id: true, status: true, orderNumber: true },
+  });
+  if (order === null) {
+    throw new Error(
+      'No RSH-LIFE-ATDOOR order — D0 runs before this and is the parcel the whole video is about.',
+    );
+  }
+
+  const link = await prisma.orderShipment.findFirst({
+    where: { orderId: order.id, shipment: { deletedAt: null } },
+    select: { shipment: { select: { id: true, awbNumber: true } } },
+  });
+  const awb = link?.shipment.awbNumber ?? null;
+  if (awb === null) {
+    throw new Error(`${order.orderNumber} has no live shipment carrying a waybill to receive.`);
+  }
+
+  const res = await call('/warehouse/rto/receive', {
+    method: 'POST',
+    token: staffToken,
+    body: { awbNumber: awb },
+  });
+
+  /*
+    THE GATE THE NARRATION RESTS ON. "Booked into the returns hold" is
+    a claim about a stock movement, and the only outcome that makes it
+    true is BOOKED — SKIPPED is the already-received replay, and the
+    other three each mean the units are on no ledger at all.
+  */
+  const outcome = res.holdBooking?.outcome ?? 'MISSING';
+  if (outcome !== 'BOOKED' && !(res.alreadyReceived === true && outcome === 'SKIPPED')) {
+    throw new Error(
+      `Receiving ${awb} booked nothing into the returns hold (${outcome}). K2 narrates the hold, ` +
+        'so a run against a warehouse without an RTO_HOLD bin would film a sentence about ' +
+        'something that did not happen — check `ensureReturnsBins`.',
+    );
+  }
+
+  const bench = await prisma.shipment.count({
+    where: {
+      deletedAt: null,
+      rtoReceivedAt: { not: null },
+      items: { some: { rtoDisposition: null } },
+    },
+  });
+  if (bench !== 1) {
+    throw new Error(
+      `${bench} return(s) are on the bench with lines still to inspect, expected exactly 1 — ` +
+        'the flow works whichever row is first, so a second would be finalised on camera ' +
+        'without being narrated. `settleRetiredReturns` is what clears the pile.',
+    );
+  }
+
+  console.log(
+    `  · ${order.orderNumber} received onto the returns bench ` +
+      `(${res.holdBooking?.unitsBooked ?? 0} unit(s) into the hold)`,
+  );
+}
+
+/**
  * Remove the consignment a previous take announced, and the bank change
  * it left pending.
  *
@@ -5262,7 +5411,7 @@ async function placeTourOrders(sellerToken) {
 }
 
 async function main() {
-  assertLocal();
+  assertStack();
   console.log(`Seeding tutorial demo data against ${API}`);
 
   const staffToken = await ensureOps();
@@ -5295,6 +5444,7 @@ async function main() {
   }
 
   await ensureBdIntakeWarehouse(staffToken);
+  await ensureReturnsBins(staffToken, warehouse);
 
   await clearVariantPhotos(sellerId);
   await clearTutorialProduct(sellerId);
@@ -5353,6 +5503,11 @@ async function main() {
     }
   }
 
+  // K2 — AFTER D0, because D0 is what retires a spent parcel and builds
+  // the fresh one this receives. Running it before would take in the
+  // parcel the next take was about to replace.
+  await returnsBenchWorldFor(slug, sellerId, staffToken);
+
   // C0 — the consignment world sections C and E read (C1, C2, E5).
   // Two consignments: one that has landed with its counts deliberately
   // disagreeing, and one still in the air so `/inventory`'s in-transit
@@ -5398,7 +5553,14 @@ async function main() {
   if (slug === 'read-your-wallet') await ledgerWorldForReading(sellerId, sellerToken, staffToken);
 
   console.log('\nReady.');
-  console.log(`  SELLER  http://localhost:3003  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}`);
+  // THIS stack's seller console, never a literal port: it said
+  // `localhost:3003` for every stack, so a stack-B seed finished by
+  // telling whoever read it to go and look at stack A.
+  const stack = resolveStack();
+  console.log(
+    `  SELLER  ${stack.seller.url}  ${DEMO_SELLER.email} / ${DEMO_SELLER.password}` +
+      `   [stack ${stack.name}]`,
+  );
 }
 
 main()

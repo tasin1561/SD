@@ -23,6 +23,7 @@ import { loadClips } from './generate-voice.mjs';
 import { makeStage, markerFor, MARKER_IDLE, stageInitScript } from './lib/stage.mjs';
 import { armMockSpaces } from './lib/spaces-shim.mjs';
 import { CANVAS_HEIGHT, FRAME_WIDTH, MARKER_STRIP, RAW_DIR, VERIFY_DIR } from './lib/paths.mjs';
+import { resolveStack } from './lib/stacks.mjs';
 
 /**
  * Which app a flow drives, and who it signs in as.
@@ -39,16 +40,29 @@ import { CANVAS_HEIGHT, FRAME_WIDTH, MARKER_STRIP, RAW_DIR, VERIFY_DIR } from '.
  * SUPER_ADMIN — it exists because goods receipts are received by ops
  * rather than by the seller — so the admin videos need no new account.
  */
+/**
+ * THE PORTS COME FROM THE STACK (`lib/stacks.mjs`), not from a literal.
+ *
+ * Two agents film at once against two whole stacks, and the camera
+ * pointing at the other agent's console is the one failure here that
+ * would not look like a failure: the app answers, the sign-in works, and
+ * the take is a perfectly good video of somebody else's demo world —
+ * found only by watching it. The credentials are stack-INDEPENDENT (both
+ * stacks seed the same demo seller and the same ops staff), so those
+ * keep their env overrides.
+ */
+const STACK = resolveStack();
+
 const APPS = {
   seller: {
-    baseUrl: process.env.SELLER_APP_URL ?? 'http://127.0.0.1:3003',
+    baseUrl: process.env.SELLER_APP_URL ?? STACK.seller.url,
     identity: {
       email: process.env.DEMO_SELLER_EMAIL ?? 'demo@rangpursilk.test',
       password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
     },
   },
   admin: {
-    baseUrl: process.env.ADMIN_APP_URL ?? 'http://127.0.0.1:3002',
+    baseUrl: process.env.ADMIN_APP_URL ?? STACK.admin.url,
     identity: {
       email: process.env.TUTORIAL_OPS_EMAIL ?? 'tutorial-ops@skydrop.local',
       password: process.env.TUTORIAL_OPS_PASSWORD ?? 'Tutorial-Ops-2026',

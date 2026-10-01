@@ -1,0 +1,279 @@
+#!/usr/bin/env bash
+#
+# Bring a FILMING STACK up, drive a command inside one, or look at one.
+#
+#   scripts/tutorials/stack.sh up b          # database, migrations, seed, processes
+#   scripts/tutorials/stack.sh status b
+#   scripts/tutorials/stack.sh down b
+#   scripts/tutorials/stack.sh env b         # eval "$(… env b)"
+#   scripts/tutorials/stack.sh run b -- node scripts/tutorials/record.mjs --check pack-a-parcel
+#
+# WHY A STACK AT ALL. `seed-demo-data.mjs` rebuilds the demo world before
+# EVERY take, so two agents filming against one database reseed under
+# each other mid-scene. A stack is every piece of state a take touches —
+# a Postgres database, a Redis logical DB, four ports and an
+# object-storage bucket — and `lib/stacks.mjs` is the one table that says
+# which belongs to whom. Read that file before changing anything here.
+#
+# WHAT IS SHARED, DELIBERATELY: the Postgres SERVER, the Redis SERVER,
+# the compiled builds in apps/*/dist and apps/*/.next (read-only at run
+# time), and `out/audio` (narration is keyed on the slug, so sharing it
+# is what stops the same sentence being bought twice from ElevenLabs).
+#
+# WHAT MUST NEVER BE SHARED: the database, the Redis DB index, any port,
+# and the bucket. Each has its own line in `lib/stacks.mjs` for that
+# reason, and `assertStackEnvironment` refuses a run whose ambient
+# environment is some other stack's.
+set -euo pipefail
+
+cd "$(dirname "$0")/../.."
+ROOT="$PWD"
+STACKS_JS="$ROOT/scripts/tutorials/lib/stacks.mjs"
+
+usage() {
+  sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'
+  exit 1
+}
+
+CMD="${1:-}"
+NAME="${2:-}"
+[ -n "$CMD" ] || usage
+[ -n "$NAME" ] || usage
+
+# Resolve the stack FIRST, so a typo in the name is one line of output
+# rather than a half-built database called `skydrop_tut_bb`.
+STACK_JSON="$(node "$STACKS_JS" --json "$NAME")"
+jq_of() { node -e 'const s=JSON.parse(process.argv[1]);const p=process.argv[2].split(".");let v=s;for(const k of p)v=v[k];process.stdout.write(String(v));' "$STACK_JSON" "$1"; }
+
+STACK_NAME="$(jq_of name)"
+DB_NAME="$(jq_of database)"
+REDIS_DB="$(jq_of redisDb)"
+API_PORT="$(jq_of api.port)"
+SELLER_PORT="$(jq_of seller.port)"
+ADMIN_PORT="$(jq_of admin.port)"
+SIM_PORT="$(jq_of sim.port)"
+API_URL="$(jq_of api.url)"
+SELLER_URL="$(jq_of seller.url)"
+ADMIN_URL="$(jq_of admin.url)"
+SIM_URL_V="$(jq_of sim.url)"
+
+RUN_DIR="$ROOT/scripts/tutorials/out/stack-$STACK_NAME"
+PG_CONTAINER="${TUT_PG_CONTAINER:-skydrop-postgres}"
+
+# SECRETS FROM `apps/api/.env` FIRST, THEN THE STACK ON TOP — and the
+# order is the whole point. That file hard-sets DATABASE_URL to stack A's
+# database and REDIS_URL to logical DB 0, so applying it afterwards would
+# silently point stack B's processes at stack A's world. Everything the
+# stacks table owns is re-exported below; everything else (the JWT key,
+# the courier encryption key, the webhook secret, DEV_MOCK_SPACES) is
+# shared on purpose, because a filming stack is not a second deployment.
+load_stack_env() {
+  if [ -f "$ROOT/apps/api/.env" ]; then
+    set -a
+    # shellcheck disable=SC1091
+    . "$ROOT/apps/api/.env"
+    set +a
+  fi
+  eval "$(node "$STACKS_JS" --env "$STACK_NAME")"
+}
+
+up() {
+  curl -fsS -o /dev/null --max-time 3 "$1" 2>/dev/null
+}
+
+say() { printf '  %s\n' "$*"; }
+
+# ── env / run ───────────────────────────────────────────────────────────
+
+case "$CMD" in
+  env)
+    if [ -f "$ROOT/apps/api/.env" ]; then
+      # Printed, not sourced: `eval`ing this is the caller's choice, and
+      # the secrets half is theirs to source as they already do.
+      :
+    fi
+    node "$STACKS_JS" --env "$STACK_NAME"
+    exit 0
+    ;;
+  run)
+    shift 2
+    [ "${1:-}" = "--" ] && shift
+    [ $# -gt 0 ] || { echo "stack.sh run <name> -- <command…>"; exit 1; }
+    load_stack_env
+    exec "$@"
+    ;;
+esac
+
+# ── status ──────────────────────────────────────────────────────────────
+
+status() {
+  echo "Filming stack \"$STACK_NAME\""
+  echo "  database   $DB_NAME"
+  echo "  redis DB   $REDIS_DB"
+  local ok=0
+  for pair in "api:$API_URL/health" "seller:$SELLER_URL/login" "admin:$ADMIN_URL/login" "sim:$SIM_URL_V/_sim/parcels"; do
+    local what="${pair%%:*}" url="${pair#*:}"
+    if up "$url"; then
+      printf '  %-9s UP    %s\n' "$what" "$url"
+    else
+      printf '  %-9s down  %s\n' "$what" "$url"
+      ok=1
+    fi
+  done
+  return $ok
+}
+
+# ── up ─────────────────────────────────────────────────────────────────
+
+ensure_database() {
+  docker exec "$PG_CONTAINER" pg_isready -U skydrop -d postgres >/dev/null 2>&1 || {
+    echo "Postgres container \"$PG_CONTAINER\" is not ready — run: pnpm db:up"
+    exit 1
+  }
+  if docker exec -e PGPASSWORD=skydrop "$PG_CONTAINER" \
+      psql -U skydrop -d postgres -tAc \
+      "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" 2>/dev/null | grep -q 1; then
+    say "database $DB_NAME exists"
+  else
+    docker exec -e PGPASSWORD=skydrop "$PG_CONTAINER" \
+      psql -U skydrop -d postgres -c "CREATE DATABASE $DB_NAME" >/dev/null
+    say "database $DB_NAME created"
+  fi
+  # TimescaleDB is per-DATABASE and `docker/init/01-extensions.sql` runs
+  # only against POSTGRES_DB on first container init, so a new database
+  # has no extension. The init migration does `CREATE EXTENSION IF NOT
+  # EXISTS timescaledb`, so this is belt and braces — and it is cheap
+  # insurance against a hypertable conversion failing half way through a
+  # migration, which leaves a database nobody can migrate forward.
+  docker exec -e PGPASSWORD=skydrop "$PG_CONTAINER" \
+    psql -U skydrop -d "$DB_NAME" -c 'CREATE EXTENSION IF NOT EXISTS timescaledb' >/dev/null 2>&1 || true
+}
+
+# `packages/db/.env` ALSO carries a DATABASE_URL, and it names stack A's
+# database. The Prisma CLI loads that file, so everything here rests on
+# dotenv not overriding a variable the environment already set — true,
+# and verified below rather than trusted, because if it ever stopped
+# being true this function would migrate and RESEED stack A: 169 system
+# settings and 86 notification templates upserted into a database
+# somebody is filming against.
+migrate_and_seed() {
+  say "prisma migrate deploy  → $DB_NAME"
+  (cd "$ROOT" && DATABASE_URL="$DATABASE_URL" pnpm --filter @skydrop/db migrate:deploy >/dev/null)
+  local tables
+  tables="$(docker exec -e PGPASSWORD=skydrop "$PG_CONTAINER" psql -U skydrop -d "$DB_NAME" \
+    -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'" 2>/dev/null | tr -d ' ')"
+  if [ "${tables:-0}" -lt 100 ]; then
+    echo "migrate deploy left $DB_NAME with ${tables:-0} tables — it migrated somewhere else."
+    echo "Check that packages/db/.env is not overriding DATABASE_URL."
+    exit 1
+  fi
+  say "$DB_NAME has $tables tables"
+  say "prisma db seed"
+  (cd "$ROOT" && DATABASE_URL="$DATABASE_URL" pnpm --filter @skydrop/db seed >/dev/null)
+}
+
+# Start a process unless its health URL already answers. A stack that is
+# half up is the ordinary case — somebody started the API by hand — and
+# starting a second one on the same port would fail loudly on one of them
+# and leave the take wondering which it was talking to.
+start_one() {
+  local what="$1" health="$2" dir="$3"
+  shift 3
+  if up "$health"; then
+    say "$what already answering on $health"
+    return 0
+  fi
+  mkdir -p "$RUN_DIR"
+  ( cd "$dir" && nohup "$@" >>"$RUN_DIR/$what.log" 2>&1 & echo $! >"$RUN_DIR/$what.pid" )
+  say "$what starting (log $RUN_DIR/$what.log)"
+}
+
+wait_for() {
+  local what="$1" url="$2" tries="${3:-60}"
+  for _ in $(seq 1 "$tries"); do
+    up "$url" && { say "$what up"; return 0; }
+    sleep 1
+  done
+  echo "$what never answered on $url — see $RUN_DIR/$what.log"
+  exit 1
+}
+
+if [ "$CMD" = "up" ]; then
+  echo "Bringing filming stack \"$STACK_NAME\" up"
+  load_stack_env
+  ensure_database
+  migrate_and_seed
+
+  [ -f "$ROOT/apps/api/dist/main.js" ] \
+    || { echo "apps/api is not built — pnpm --filter @skydrop/api build"; exit 1; }
+  [ -f "$ROOT/apps/seller/.next/BUILD_ID" ] \
+    || { echo "apps/seller is not built — pnpm --filter @skydrop/seller build"; exit 1; }
+  [ -f "$ROOT/apps/admin/.next/BUILD_ID" ] \
+    || { echo "apps/admin is not built — pnpm --filter @skydrop/admin build"; exit 1; }
+
+  start_one api "$API_URL/health" "$ROOT/apps/api" node dist/main.js
+  wait_for api "$API_URL/health"
+  # The simulator posts its signed webhooks at SKYDROP_API_URL, which the
+  # stack env has already pointed at THIS stack's API — that is what
+  # stops stack B's parcel scans landing in stack A's database.
+  # `PORT` IS THE API's, so the simulator must be handed its OWN. Both
+  # read `process.env.PORT` and the stack environment sets it for the
+  # API, so the first attempt at this started a simulator that tried to
+  # bind 4100, got EADDRINUSE from the API already sitting there, and
+  # died — the one process whose job is to answer on a different port
+  # being the one that inherited the wrong one.
+  start_one sim "$SIM_URL_V/_sim/parcels" "$ROOT/apps/delhivery-sim" \
+    env PORT="$SIM_PORT" SIM_SELF_URL="$SIM_URL_V" npx tsx src/server.ts
+  wait_for sim "$SIM_URL_V/_sim/parcels"
+  # `-p` beats the inherited PORT for `next start`, but PORT is unset
+  # explicitly all the same: a server that silently picks up the API's
+  # port is the failure above, and it should be impossible twice.
+  start_one seller "$SELLER_URL/login" "$ROOT/apps/seller" \
+    env PORT="$SELLER_PORT" npx next start -p "$SELLER_PORT" -H 127.0.0.1
+  start_one admin "$ADMIN_URL/login" "$ROOT/apps/admin" \
+    env PORT="$ADMIN_PORT" npx next start -p "$ADMIN_PORT" -H 127.0.0.1
+  wait_for seller "$SELLER_URL/login"
+  wait_for admin "$ADMIN_URL/login"
+
+  echo
+  node "$ROOT/scripts/tutorials/provision-stack.mjs"
+  echo
+  status
+  echo
+  echo "Film on it with:"
+  echo "  TUT_STACK=$STACK_NAME scripts/tutorials/make-tutorials.sh <slug>"
+  exit 0
+fi
+
+if [ "$CMD" = "down" ]; then
+  # ONLY processes this script started, read from its own pidfiles. Stack
+  # A was started by hand in somebody's terminal and has no pidfile here,
+  # so `down a` stops nothing rather than guessing from a port — killing
+  # a process off a port number is how you end a colleague's take.
+  if [ ! -d "$RUN_DIR" ]; then
+    echo "Stack \"$STACK_NAME\" was not started by this script (no $RUN_DIR) — nothing to stop."
+    exit 0
+  fi
+  for pidfile in "$RUN_DIR"/*.pid; do
+    [ -e "$pidfile" ] || continue
+    what="$(basename "$pidfile" .pid)"
+    pid="$(cat "$pidfile")"
+    if kill -0 "$pid" 2>/dev/null; then
+      # The recorded pid is the shell/npm wrapper; its children are the
+      # server. Kill the group so `next start` does not survive its npx.
+      kill -- "-$(ps -o pgid= "$pid" | tr -d ' ')" 2>/dev/null || kill "$pid" 2>/dev/null || true
+      say "$what (pid $pid) stopped"
+    else
+      say "$what (pid $pid) was not running"
+    fi
+    rm -f "$pidfile"
+  done
+  exit 0
+fi
+
+if [ "$CMD" = "status" ]; then
+  status || true
+  exit 0
+fi
+
+usage

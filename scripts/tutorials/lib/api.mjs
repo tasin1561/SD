@@ -7,7 +7,17 @@
  * seed dying forty calls in, and "POST /seller/orders → 400 {…}" is the
  * difference between a fix and an afternoon.
  */
-export const API = process.env.SKYDROP_API_URL ?? 'http://127.0.0.1:4000';
+import { resolveStack } from './stacks.mjs';
+
+/**
+ * WHICH API. Never a hardcoded port: two filming stacks run two APIs
+ * (`lib/stacks.mjs`), and a seed that posted orders at the other one
+ * would build the wrong world while reporting success. `SKYDROP_API_URL`
+ * is what `make-tutorials.sh` and `stack.sh run` export from the stack,
+ * and the fallback asks the stack directly rather than guessing — which
+ * is also why it throws when `TUT_STACK` is unset.
+ */
+export const API = process.env.SKYDROP_API_URL ?? resolveStack().api.url;
 
 export async function call(path, init = {}) {
   const res = await fetch(`${API}${path}`, {

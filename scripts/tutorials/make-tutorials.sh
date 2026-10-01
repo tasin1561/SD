@@ -2,14 +2,23 @@
 #
 # Make every tutorial video, end to end.
 #
-#   scripts/tutorials/make-tutorials.sh                     # all of them
-#   scripts/tutorials/make-tutorials.sh place-an-order      # just one
+#   TUT_STACK=a scripts/tutorials/make-tutorials.sh                   # all of them
+#   TUT_STACK=a scripts/tutorials/make-tutorials.sh place-an-order    # just one
+#
+# TUT_STACK IS REQUIRED AND HAS NO DEFAULT. Two agents film at once
+# against two whole stacks — a database, a Redis logical DB, four ports
+# and a bucket each — and `lib/stacks.mjs` is the one table that says
+# which belongs to whom. A default of `a` would mean an agent filming on
+# B reseeds A by forgetting a flag, and because a seed REBUILDS the demo
+# world the other agent's take would simply start showing the wrong
+# thing, with nothing anywhere reporting an error. Bring a stack up with
+# `scripts/tutorials/stack.sh up <name>`.
 #
 # Prerequisites (it checks, and says which one is missing):
 #   - Postgres + Redis:  pnpm db:up
-#   - apps/api on :4000
-#   - apps/seller on :3003, built and started (NOT `next dev` — the dev
-#     overlay would be in the picture)
+#   - the stack's api, seller and admin, built and STARTED (not
+#     `next dev` — the dev overlay would be in the picture);
+#     `stack.sh up <name>` does all of it
 #   - ffmpeg / ffprobe on PATH
 #   - an ElevenLabs key in ~/.config/skydrop/elevenlabs or $ELEVENLABS_API_KEY
 #
@@ -22,28 +31,38 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 ROOT="$PWD"
 
-API_URL="${SKYDROP_API_URL:-http://127.0.0.1:4000}"
-SELLER_URL="${SELLER_APP_URL:-http://127.0.0.1:3003}"
-ADMIN_URL="${ADMIN_APP_URL:-http://127.0.0.1:3002}"
+# WHICH STACK, resolved before anything else so a typo costs one line.
+STACK_NAME="${TUT_STACK:-}"
+if [ -z "$STACK_NAME" ]; then
+  node "$ROOT/scripts/tutorials/lib/stacks.mjs" --env || true
+  exit 1
+fi
 
-# The seed talks to Prisma directly as well as to the API.
-if [ -z "${DATABASE_URL:-}" ] && [ -f "$ROOT/apps/api/.env" ]; then
+# THE SECRETS FIRST, THE STACK SECOND — and the order is load-bearing.
+#
+# `apps/api/.env` hard-sets DATABASE_URL to stack A's database, REDIS_URL
+# to logical DB 0, and a SELLER_APP_URL of its own (port 3001, the API's
+# idea of where the seller app lives for link-building). `set -a` exports
+# every one of them into everything below, so applying it AFTER the stack
+# would point a stack-B run at stack A's world while the health checks
+# passed against B — which is exactly the shape of the bug this ordering
+# comment used to be about, one layer deeper. Everything the stacks table
+# owns is re-exported by the `eval`; everything else (the JWT key, the
+# courier encryption key, the webhook secret, DEV_MOCK_SPACES) is shared
+# on purpose, because a filming stack is not a second deployment.
+if [ -f "$ROOT/apps/api/.env" ]; then
   set -a
   # shellcheck disable=SC1091
   . "$ROOT/apps/api/.env"
   set +a
 fi
+eval "$(node "$ROOT/scripts/tutorials/lib/stacks.mjs" --env "$STACK_NAME")"
 
-# EXPORT what the checks above resolved, AFTER the .env sourcing —
-# `apps/api/.env` carries a `SELLER_APP_URL` of its own (port 3001, the
-# API's idea of where the seller app lives for link-building), and `set -a`
-# exports it into everything below. The health check ran before that and
-# passed against 3003; `record.mjs` ran after it and drove a browser at
-# 3001, where nothing was listening. Resolving the two names in one place
-# is what stops the checker and the camera looking at different apps.
-export SKYDROP_API_URL="$API_URL"
-export SELLER_APP_URL="$SELLER_URL"
-export ADMIN_APP_URL="$ADMIN_URL"
+API_URL="$SKYDROP_API_URL"
+SELLER_URL="$SELLER_APP_URL"
+ADMIN_URL="$ADMIN_APP_URL"
+
+echo "Filming on stack \"$STACK_NAME\"  (api $API_URL  seller $SELLER_URL  admin $ADMIN_URL)"
 
 need() {
   command -v "$1" >/dev/null 2>&1 || { echo "Missing $1 on PATH."; exit 1; }
@@ -132,5 +151,5 @@ for slug in "${SLUGS[@]}"; do
 done
 
 echo
-echo "Done. Videos are in scripts/tutorials/out/ :"
+echo "Done. Videos are in scripts/tutorials/out/ (shared between stacks):"
 ls -lh "$ROOT/scripts/tutorials/out"/*.mp4 2>/dev/null || true

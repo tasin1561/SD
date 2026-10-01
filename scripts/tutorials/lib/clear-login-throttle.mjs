@@ -26,8 +26,18 @@
  *   node scripts/tutorials/lib/clear-login-throttle.mjs
  */
 import { Redis } from './deps.mjs';
+import { resolveStack } from './stacks.mjs';
 
-const URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
+/**
+ * THIS stack's Redis, including its LOGICAL DB INDEX — which is what
+ * makes the clear below safe to run while another stack is filming.
+ * `SCAN` and `DEL` are per-database, so clearing index 1 cannot touch
+ * index 0's counters or, more importantly, its `bull:*` keys: the sweep
+ * below deletes every non-BullMQ key it finds, and pointed at the wrong
+ * index it would be deleting another agent's throttle state while their
+ * take was signing in.
+ */
+const URL = process.env.REDIS_URL ?? resolveStack().redisUrl;
 
 function assertLocal(url) {
   const host = new globalThis.URL(url).hostname;

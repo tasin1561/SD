@@ -42,6 +42,7 @@
  */
 import { chromium } from '@playwright/test';
 import { VERIFY_DIR } from './lib/paths.mjs';
+import { resolveStack } from './lib/stacks.mjs';
 import path from 'node:path';
 import fs from 'node:fs/promises';
 
@@ -49,14 +50,17 @@ const args = process.argv.slice(2);
 const admin = args[0] === '--admin';
 if (admin) args.shift();
 
+/** Which stack's console. Required, like everywhere else — see `lib/stacks.mjs`. */
+const STACK = resolveStack();
+
 const APP = admin
   ? {
-      base: process.env.ADMIN_APP_URL ?? 'http://127.0.0.1:3002',
+      base: process.env.ADMIN_APP_URL ?? STACK.admin.url,
       email: process.env.TUTORIAL_OPS_EMAIL ?? 'tutorial-ops@skydrop.local',
       password: process.env.TUTORIAL_OPS_PASSWORD ?? 'Tutorial-Ops-2026',
     }
   : {
-      base: process.env.SELLER_APP_URL ?? 'http://127.0.0.1:3003',
+      base: process.env.SELLER_APP_URL ?? STACK.seller.url,
       email: process.env.DEMO_SELLER_EMAIL ?? 'demo@rangpursilk.test',
       password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
     };

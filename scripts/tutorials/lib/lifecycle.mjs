@@ -41,8 +41,17 @@
  */
 import { prisma } from './deps.mjs';
 import { call, waitFor } from './api.mjs';
+import { resolveStack } from './stacks.mjs';
 
-const SIM = process.env.SIM_URL ?? 'http://127.0.0.1:4010';
+/**
+ * THIS stack's simulator, never a fixed port. Each filming stack runs its
+ * own (`lib/stacks.mjs`) because the simulator posts SIGNED webhooks at
+ * `SKYDROP_API_URL`: one shared simulator would fire a stack-B parcel's
+ * scans at stack A's API, where the waybill belongs to nobody — and the
+ * webhook would be stored, authenticated and then quietly fail to match,
+ * so the only symptom would be a parcel that never advances.
+ */
+const SIM = process.env.SIM_URL ?? resolveStack().sim.url;
 
 /**
  * The parcels, by the seller's own reference — which is the identity
@@ -287,6 +296,20 @@ export const LIFECYCLE_PARCELS = [
       "Nothing waiting to be received" and P5 would film the same.
     */
     spendable: true,
+    /*
+      TWO UNITS, FOR K2.
+
+      "Split by quantity" is the control WMS-8d exists for — the
+      owner's own case, "what if this product has 2 qty? one is good and
+      another is damaged" — and `RtoItemRow` renders it only when
+      `item.quantity > 1`. On a one-unit line the whole half of the
+      bench K2 is about is not on the screen at all.
+
+      Nothing else on this parcel cares: `RSH-LIFE-RESTOCKED` has been
+      two units since D0 was written, so every leg from the call to the
+      pack bench already handles a line of more than one.
+    */
+    quantity: 2,
     customer: { name: 'Deepa Ramanathan', phone: '+919845060110' },
     stages: [
       'IN_TRANSIT',
@@ -1090,6 +1113,74 @@ async function rebuildStaleReviewParcel(sellerId, ref, want, log) {
 }
 
 /**
+ * Finish the returns earlier takes left standing on the bench.
+ *
+ * ── THE PILE, AND WHY IT IS A PROBLEM FOR A VIDEO ────────────────────
+ * `RSH-LIFE-ATDOOR` is spendable: K1 receives it on camera, so the next
+ * run retires it to `<ref>-SPENT-<n>` and drives a fresh one. The
+ * retired one is a true record of what the take did and keeps every row
+ * it has — but it is also a return sitting at RTO_RECEIVED with nothing
+ * inspected, which means it sits on "On the bench" for ever. Three
+ * takes in, the bench held three identical Deepa Ramanathan returns and
+ * K2's opening frame was a worklist a viewer would stumble over.
+ *
+ * ── FORWARD, NEVER BACKWARD ──────────────────────────────────────────
+ * The fix is not to delete them — nothing in this file rewinds a parcel
+ * that has moved stock. It is to do what the warehouse would actually
+ * do with a carton on the bench: open it, find it sellable, and put it
+ * back. That is one more step along the same path, through the
+ * product's own endpoints (so the ledger, the hold and the order's
+ * status all move exactly as they would for a person), and it leaves
+ * the bench holding only the return the next video is about.
+ *
+ * GOOD / RESTOCK for every line, deliberately: these came back unopened
+ * and nobody inspected them, so inventing damage would put a scrap
+ * ticket and a write-off on the seller's screens for a carton nobody
+ * ever looked in.
+ *
+ * Only ever touches a RETIRED reference (`-SPENT-`): a parcel still
+ * answering to its canonical name is somebody's world.
+ */
+async function settleRetiredReturns(sellerId, staffToken, log) {
+  const stuck = await prisma.order.findMany({
+    where: {
+      sellerId,
+      status: 'RTO_RECEIVED',
+      OR: LIFECYCLE_PARCELS.map((p) => ({ sellerOrderRef: { startsWith: `${p.ref}-SPENT-` } })),
+    },
+    select: { id: true, sellerOrderRef: true, orderNumber: true },
+  });
+  if (stuck.length === 0) return;
+
+  for (const order of stuck) {
+    const link = await prisma.orderShipment.findFirst({
+      where: { orderId: order.id, shipment: { deletedAt: null, rtoReceivedAt: { not: null } } },
+      select: { shipment: { select: { id: true, items: { select: { id: true } } } } },
+    });
+    if (link === null) {
+      log(`  · ${order.sellerOrderRef} is on the bench with no received shipment — left alone`);
+      continue;
+    }
+    for (const item of link.shipment.items) {
+      await call(`/warehouse/rto/items/${item.id}/inspect`, {
+        method: 'POST',
+        token: staffToken,
+        body: {
+          condition: 'GOOD',
+          disposition: 'RESTOCK',
+          notes: 'Unopened; settled by the tutorial seeding so the bench holds one return.',
+        },
+      });
+    }
+    await call(`/warehouse/rto/shipments/${link.shipment.id}/finalize`, {
+      method: 'POST',
+      token: staffToken,
+    });
+    log(`  · ${order.sellerOrderRef} finished off the bench (${order.orderNumber})`);
+  }
+}
+
+/**
  * Build the lifecycle parcels, or leave alone the ones that exist.
  *
  * Deliberately not "the N parcels": the count is `LIFECYCLE_PARCELS`,
@@ -1298,6 +1389,13 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
     log(`  · ${parcel.ref} → ${await statusOf(order.id)} (${dispatchedAwb})`);
   }
 
+  /*
+    AFTER THE LOOP, NOT BEFORE IT. A parcel spent by the last take is
+    retired INSIDE the loop above, so running this first would clear
+    the pile and then add one more to it — which is exactly what it
+    did on the first attempt.
+  */
+  await settleRetiredReturns(sellerId, staffToken, log);
   await raiseOverdueFlags(sellerId, staffToken, log);
   await settleScrapTicket(sellerId, staffToken, log);
 }
@@ -1320,13 +1418,35 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
 const SCRAP_REFUND_INR = '2400.00';
 
 async function settleScrapTicket(sellerId, staffToken, log) {
+  /*
+    THE TICKET OF ONE NAMED PARCEL, not "the newest damage ticket".
+
+    It was the newest, which was a stable handle for exactly as long as
+    `RSH-LIFE-RESTOCKED` was the only thing on this box that ever found
+    damage. K2 broke that on 2026-10-01 — its take marks a returned unit
+    DAMAGED and keeps it aside, which opens a ticket of its own (TKT-1)
+    — and the next seed run refunded THAT one £2,400 at the declared
+    value of a unit nothing had scrapped. Two things went wrong at once:
+    the seed invented money for goods that are sitting in the damaged
+    bin waiting for the seller, and D6, which reaches for the newest
+    damage ticket on the list, would have filmed a different claim from
+    the one its narration describes.
+
+    So it is keyed on the parcel whose write-off is the whole reason the
+    ticket exists. A ticket any other video opens is left OPEN, which is
+    the right state for a claim nobody has looked at.
+  */
   const ticket = await prisma.ticket.findFirst({
-    where: { sellerId, ticketType: 'SCRAP_DAMAGE' },
+    where: {
+      sellerId,
+      ticketType: 'SCRAP_DAMAGE',
+      order: { sellerOrderRef: 'RSH-LIFE-RESTOCKED' },
+    },
     orderBy: { createdAt: 'desc' },
     select: { id: true, ticketNumber: true, status: true, resolutionWalletEntryId: true },
   });
   if (ticket === null) {
-    log('  · no damage ticket to settle (nothing was written off)');
+    log('  · no damage ticket on RSH-LIFE-RESTOCKED to settle (nothing was written off)');
     return;
   }
   if (ticket.status === 'RESOLVED_REFUND') {

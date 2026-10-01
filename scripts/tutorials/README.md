@@ -63,18 +63,29 @@ it is rebuilt.
 
 ## Re-running
 
+Every command takes a **filming stack** — see
+[Two agents filming at once](#two-agents-filming-at-once--filming-stacks).
+`TUT_STACK` is required and has no default.
+
 ```bash
-# once: docker, api, seller
+# once: docker, the builds, and the stack's four processes
 pnpm db:up
-pnpm --filter @skydrop/api build && (cd apps/api && node dist/main.js &)
-pnpm --filter @skydrop/seller build && (cd apps/seller && npx next start -p 3003 &)
-
-# …and, from section H onward, the ADMIN console as well
+pnpm --filter @skydrop/api build
+pnpm --filter @skydrop/seller build
 pnpm --filter @skydrop/admin build
-(cd apps/admin && API_ORIGIN=http://127.0.0.1:4000 npx next start -p 3002 -H 127.0.0.1 &)
+scripts/tutorials/stack.sh up a
 
-scripts/tutorials/make-tutorials.sh                 # all of them
-scripts/tutorials/make-tutorials.sh place-an-order  # just one
+TUT_STACK=a scripts/tutorials/make-tutorials.sh                 # all of them
+TUT_STACK=a scripts/tutorials/make-tutorials.sh place-an-order  # just one
+```
+
+`stack.sh up` starts any process that is not already answering, so starting
+them by hand still works and is what stack A has always done:
+
+```bash
+(cd apps/api && node dist/main.js &)
+(cd apps/seller && API_ORIGIN=http://127.0.0.1:4000 npx next start -p 3003 &)
+(cd apps/admin && API_ORIGIN=http://127.0.0.1:4000 npx next start -p 3002 -H 127.0.0.1 &)
 ```
 
 **Which console a video drives is declared on its FLOW**, not guessed from its
@@ -92,7 +103,7 @@ admin screen the same way.
 change:
 
 ```bash
-node scripts/tutorials/record.mjs --check place-an-order
+TUT_STACK=a node scripts/tutorials/record.mjs --check place-an-order
 ```
 
 It drives the real app with no narration and no video, holding each scene for a
@@ -108,7 +119,7 @@ twice while rendering two of its three pictures broken, because a broken `<img>`
 is still a visible `<img>`. So:
 
 ```bash
-TUT_CHECK_SHOTS=1 node scripts/tutorials/record.mjs --check add-product-photos
+TUT_CHECK_SHOTS=1 TUT_STACK=a node scripts/tutorials/record.mjs --check add-product-photos
 # → out/verify/add-product-photos-check/NN-<step>.png, one per scene
 ```
 
@@ -125,6 +136,155 @@ API_ORIGIN=http://127.0.0.1:4000
 
 in `apps/seller/.env.local` (gitignored) or export it before `next start`.
 Without it every call 500s and the recording fails at sign-in.
+
+## Two agents filming at once — FILMING STACKS
+
+Thirty videos at roughly 1.2 an hour is a day's work for two agents and two
+days for one, and the only thing that ever stopped two agents filming in
+parallel was the SHARED WORLD: `seed-demo-data.mjs` rebuilds the demo seller,
+its catalogue, its orders and its parcels **before every take**, so two agents
+on one database reseed under each other mid-scene. Both takes are ruined, and
+ruined _silently_ — a reseeded order list looks exactly like a flow that
+stopped working.
+
+A **stack** is therefore every piece of state a take touches, and
+**`lib/stacks.mjs` is the one table that says which belongs to whom.** Two are
+declared:
+
+| | `a` | `b` |
+| --- | --- | --- |
+| Postgres database | `skydrop` | `skydrop_tut_b` |
+| Redis logical DB | 0 | 1 |
+| apps/api | 4000 | 4100 |
+| apps/seller | 3003 | 3103 |
+| apps/admin | 3002 | 3102 |
+| Delhivery simulator | 4010 | 4110 |
+| `SPACES_BUCKET` | `skydrop-storage` | `skydrop-storage-tut-b` |
+| scratch dirs | `out/raw`, `out/work`, `out/verify` | `out/raw-b`, `out/work-b`, `out/verify-b` |
+
+Stack `a` is the original configuration, port for port and name for name, so
+nothing about it moved.
+
+### Bringing one up
+
+```bash
+pnpm db:up                                    # shared Postgres + Redis
+pnpm --filter @skydrop/api build
+pnpm --filter @skydrop/seller build
+pnpm --filter @skydrop/admin build
+
+scripts/tutorials/stack.sh up b               # database, migrations, seeds, processes
+scripts/tutorials/stack.sh status b
+scripts/tutorials/stack.sh down b             # only what IT started
+```
+
+`up` is idempotent and safe to re-run: it creates the database if it is absent,
+runs `migrate deploy` and the `packages/db` seed, starts any of the four
+processes that is not already answering, and then runs `provision-stack.mjs`.
+A stack that is half up — somebody started the API by hand — is the ordinary
+case and it fills in the rest.
+
+### Filming on one
+
+**`TUT_STACK` is required and has no default.**
+
+```bash
+TUT_STACK=a scripts/tutorials/make-tutorials.sh take-a-return-in
+TUT_STACK=b scripts/tutorials/make-tutorials.sh pack-a-parcel
+
+TUT_STACK=b node scripts/tutorials/record.mjs --check pack-a-parcel
+TUT_STACK=b node scripts/tutorials/peek.mjs --admin /warehouse/rto
+
+# ad hoc, with the stack's whole environment applied:
+scripts/tutorials/stack.sh run b -- node scripts/tutorials/seed-demo-data.mjs pack-a-parcel
+eval "$(scripts/tutorials/stack.sh env b)"    # …or apply it to your shell
+```
+
+A default of `a` was the obvious thing and is the one design decision here that
+is not a convenience: an agent filming on B who forgot the flag would **reseed
+A**, and the seed would report success the whole way through, against somebody
+else's world. So there is no default, and every script that touches a database
+additionally asks `assertStackEnvironment` whether the ambient `DATABASE_URL`,
+`REDIS_URL` and `SPACES_BUCKET` are the ones this stack owns. That second check
+is not belt and braces — `make-tutorials.sh` **sources `apps/api/.env`**, which
+hard-sets `DATABASE_URL` to stack A's database and `REDIS_URL` to logical DB 0,
+so a stack-B run depends on the stack environment being applied *after* it.
+Asking the connection string which database it names is the cheapest possible
+proof that the override landed.
+
+```
+$ TUT_STACK=b node scripts/tutorials/seed-demo-data.mjs      # without the stack env
+Environment does not belong to filming stack "b":
+  - DATABASE_URL names database "skydrop" but stack b is "skydrop_tut_b". Seeding
+    would rebuild the WRONG world.
+  - REDIS_URL selects logical DB 0 but stack b owns DB 1. …
+```
+
+### What must NEVER be shared, and why each one
+
+- **The database.** The seed rebuilds a world; two of them is one world.
+- **The Redis logical DB index.** This is the one that fails _quietly_. Two API
+  processes on one index each pick up the other's BullMQ jobs (SCALE-1), so a
+  tracking webhook for stack B's parcel is processed against stack A's
+  database, where the waybill belongs to nobody: the webhook is authenticated,
+  stored, and then fails to match. The only symptom is a parcel that never
+  advances, hours later, in a take. `ioredis` reads the URL path as the index,
+  so `redis://127.0.0.1:6379/1` is a wholly separate `bull:*` keyspace with not
+  one shared key.
+- **Any port** — API, seller, admin, simulator. The camera pointing at the
+  other agent's console is the failure that does not look like one: the app
+  answers, sign-in works, and the take is a perfectly good video of somebody
+  else's demo world. Found only by watching it.
+- **The simulator.** It posts SIGNED webhooks at `SKYDROP_API_URL`; one shared
+  simulator fires stack B's scans at stack A's API.
+- **`SPACES_BUCKET`.** `DEV_MOCK_SPACES` keeps objects under
+  `/tmp/skydrop-spaces-mock/<bucket>/`, so the bucket name _is_ the directory.
+  Share it and two stacks overwrite each other's labels, logos and invoices.
+
+### What IS shared, deliberately
+
+- **The Postgres server and the Redis server.** Only the namespaces inside them
+  differ. One container each is plenty.
+- **`apps/*/dist` and `apps/*/.next`.** Read-only at run time, and `API_ORIGIN`
+  is read per request by the Next proxy (FE-3), so one build serves both
+  stacks.
+- **The secrets in `apps/api/.env`** — the JWT key, the courier encryption key,
+  the webhook secret, `DEV_MOCK_SPACES`. A filming stack is not a second
+  deployment.
+- **`out/audio`.** A clip is keyed on the slug and the narration line, so
+  sharing it means a video another stack already voiced costs nothing to
+  re-take instead of buying the same sentence from ElevenLabs twice.
+- **`out/<slug>.mp4`**, the finished video. Which leaves exactly one convention
+  to keep: **two agents must not film the SAME slug at the same time.** The
+  scratch directories are per-stack so a concurrent re-take cannot corrupt a
+  composition, but the audio directory and the final mp4 are one per slug.
+  Sections are handed out whole, so this has never come close to biting.
+- **`skydrop_test` is NOT a stack and must never be one.**
+  `apps/api/test/e2e/global-setup.ts` DROPS and recreates it on every e2e run,
+  so a take filmed against it would lose its world to a test suite somebody
+  started in another terminal. It is in `RESERVED_DATABASES`.
+
+### Proving it rather than believing it
+
+```bash
+TUT_STACK=b node scripts/tutorials/check-isolation.mjs --against a
+```
+
+It checks three things, and the third by experiment. Every namespace differs.
+Each API can see its own parcels and **404s** the other stack's waybill, over
+the public tracking endpoint — behaviour, not configuration. And a probe job
+added to this stack's `email` queue exists in its own Redis DB, never in the
+other's, and is consumed by a worker there while the other stack's keyspace
+does not move. It is read-only on the other stack; the only thing it writes is
+that one probe job, whose job NAME no worker handles, so nothing is sent.
+
+Two earlier versions of that connection check are recorded in its comments
+because both look like they ought to work: `/proc/<pid>/environ` is empty of
+`DATABASE_URL` for an API that loads `apps/api/.env` with dotenv inside the
+process, and joining `ss` to Redis's `CLIENT LIST` on the client port
+attributes nothing, because both servers sit behind Docker's userland proxy and
+every client arrives as the bridge gateway on a port belonging to
+docker-proxy.
 
 ## The keys
 
@@ -242,7 +402,7 @@ somebody watched it.
 
 | File                               | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `seed-demo-data.mjs`               | The demo seller, its catalogue, its stock and the Bangladesh intake warehouse. Idempotent, and it removes what a previous take created — the tutorial product, the orders, the imports, the consignment, a pending bank change — so a re-take starts from the same world. Takes the video's slug, and tailors: the orientation video wants a dashboard with orders on it, every other video wants the order list cleared. Refuses a non-local `DATABASE_URL`. |
+| `seed-demo-data.mjs`               | The demo seller, its catalogue, its stock and the Bangladesh intake warehouse. Idempotent, and it removes what a previous take created — the tutorial product, the orders, the imports, the consignment, a pending bank change — so a re-take starts from the same world. Takes the video's slug, and tailors: the orientation video wants a dashboard with orders on it, every other video wants the order list cleared. **Refuses an environment that is not its stack's** — not merely a non-local one (`assertStackEnvironment`). |
 | `lib/freight.mjs`                  | E5 — the freight world: a pay-as-it-sells bill on the landed consignment's Indian arrival, with a parcel driven out of ITS OWN batch so some of the bill is charged. `node scripts/tutorials/seed-demo-data.mjs --freight`. Reads C0's consignments and never rebuilds them; idempotent, forward-only, and it REFUSES to finish unless the bill ends up part-charged.                                                                                         |
 | `lib/lifecycle.mjs`                | D0 — six parcels driven the whole way (call, waybill, pick, pack bench, handover scan, simulator scans, RTO receive and inspect) so the tutorials about something GOING WRONG have something to film. `node scripts/tutorials/seed-demo-data.mjs --lifecycle`. Idempotent, resumes a half-built parcel, NEVER rewinds one, and refuses any courier that is not the local simulator.                                                                           |
 | `narration.mjs`                    | The words, one entry per scene.                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -259,7 +419,12 @@ somebody watched it.
 | `compose.mjs`                      | Retimes each segment to its narration, places each clip, renders H.264 + AAC.                                                                                                                                                                                                                                                                                                                                                                                 |
 | `peek.mjs`                         | Sign in and photograph ONE screen, full page, printing its text. Committed rather than re-invented: this library's whole discipline rests on LOOKING at a page before writing narration about it, and the throwaway version has a way of being committed by accident — which is how one push turned CI red on `format:check`.                                                                                                                                 |
 | `verify.mjs`                       | Frame per scene + `silencedetect`, so both halves can be checked.                                                                                                                                                                                                                                                                                                                                                                                             |
-| `make-tutorials.sh`                | All of the above, in order, with the prerequisites checked.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `make-tutorials.sh`                | All of the above, in order, with the prerequisites checked. Requires `TUT_STACK`.                                                                                                                                                                                                                                                                                                                                                                             |
+| `lib/stacks.mjs`                   | **The two filming stacks, declared once** — database, Redis logical DB, four ports, bucket, scratch-directory suffix — plus `resolveStack` (no default, on purpose) and `assertStackEnvironment`. Adding a third stack is a row here and nothing else. `--list`, `--env <name>`, `--json <name>`.                                                                                                                                                             |
+| `stack.sh`                         | `up` / `down` / `status` / `env` / `run` for one stack: creates its database, migrates, seeds, provisions, and starts whichever of its four processes is not already answering. `down` touches only what it started, read from its own pidfiles — never a process found by port number.                                                                                                                                                                      |
+| `provision-stack.mjs`              | The three things no existing seed creates, because they were made by hand in the original dev database: a courier ACCOUNT with an encrypted credential (without one no waybill is ever booked, so every section-D/E/K flow fails), the platform BANK accounts a courier settlement is refused without, and the pointer at this stack's own simulator. Constructed, not copied; idempotent.                                                                 |
+| `lib/ops-user.mjs`                 | `tutorial-ops@skydrop.local`, upserted and signed in, shared by the seed and the provisioner — a fresh stack has no staff user, and nothing can be provisioned through the admin API without one.                                                                                                                                                                                                                                                            |
+| `check-isolation.mjs`              | Proves two stacks cannot reach each other: every namespace differs, each API 404s the other's waybill over public tracking, and a probe job added to one stack's queue never appears in the other's Redis DB. Read-only on the other stack.                                                                                                                                                                                                                 |
 
 ## Why the marker
 
@@ -545,6 +710,28 @@ created_at ASC` — a released call goes in front of every unstarted one
   take. `filter({ has: page.getByRole('heading', { name: '…', exact: true }) })`
   is the form that means "the card whose TITLE is this". Worth a count check when
   a flow reaches for a card by words that could be anybody's.
-- The recorder writes `out/verify/<slug>-failure.png` when a flow breaks. It is
+- **`PORT` belongs to the API, and every other server reads it too.** The
+  stack environment sets `PORT` for `apps/api`, and the Delhivery simulator
+  reads `process.env.PORT` as well — so the first attempt at starting stack B
+  gave it a simulator that tried to bind 4100, met the API already sitting
+  there, and died with `EADDRINUSE`. The one process whose whole job is to
+  answer on a different port was the one that inherited the wrong one.
+  `stack.sh` now hands each server its own `PORT` explicitly. Anything else
+  added to a stack needs the same.
+- **`packages/db/.env` ALSO carries a `DATABASE_URL`, and it names stack A's
+  database.** The Prisma CLI loads that file, so `migrate deploy` and
+  `db seed` against stack B rest entirely on dotenv not overriding a variable
+  the environment already set. It does not override it — verified — but if
+  that ever changed, `stack.sh up b` would migrate and RESEED stack A: 169
+  system settings and 86 notification templates upserted into a database
+  somebody is filming against. So `migrate_and_seed` counts the target
+  database's tables afterwards and stops if the migration landed elsewhere.
+- **The login throttle is now per stack**, because the counters live in Redis
+  and each stack owns its own logical DB. `lib/clear-login-throttle.mjs`
+  clears only its own stack's, which is also why it is safe to run while
+  somebody else is signing in: `SCAN` and `DEL` are per-database, and that
+  helper deletes every non-BullMQ key it finds.
+- The recorder writes `out/verify<stack suffix>/<slug>-failure.png` when a flow
+  breaks (`out/verify/` on stack `a`, `out/verify-b/` on stack `b`). It is
   usually enough on its own — the failures during this build were all visible
   in it.
