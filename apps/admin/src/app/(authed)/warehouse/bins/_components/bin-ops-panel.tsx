@@ -20,6 +20,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { NON_PICKABLE_BIN_TYPES as NON_PICKABLE } from '@/lib/bin-policy';
+import { BinLinePicker } from './bin-line-picker';
 import {
   Actions,
   AreaSection,
@@ -53,8 +54,14 @@ import {
  * ── WHAT A MOVE IS NOT ───────────────────────────────────────────────
  * The batch never changes. A move answers WHERE, not WHAT: re-batching
  * would reorder FEFO picking and sever the goods-receipt link inbound
- * freight is attributed through. That is why the bulk form asks for a
- * batch id per line and does not offer to pick one.
+ * freight is attributed through. So a line is chosen whole — the batch
+ * comes with the thing being moved and is never a separate decision.
+ *
+ * ── THE LINE IS PICKED, NOT TYPED (since 2026-10-01) ─────────────────
+ * This asked for a seller id, a variant id and a batch id — three
+ * uuids, in three monospace boxes, none of which any screen offered to
+ * copy. See `bin-line-picker.tsx` for why one picker replaced three
+ * boxes rather than three pickers replacing them.
  *
  * ── NOT BUILT HERE, DELIBERATELY ─────────────────────────────────────
  * Collapse (merge every bin into FLOOR) is a different act with a
@@ -74,6 +81,8 @@ import {
 
 interface DraftLine {
   readonly key: number;
+  /** `stock_levels` id — the picker's own value, never sent. */
+  stockLevelId: string;
   sellerId: string;
   variantId: string;
   batchId: string;
@@ -83,7 +92,16 @@ interface DraftLine {
 }
 
 function emptyLine(key: number): DraftLine {
-  return { key, sellerId: '', variantId: '', batchId: '', qty: '', sourceBinId: '', destBinId: '' };
+  return {
+    key,
+    stockLevelId: '',
+    sellerId: '',
+    variantId: '',
+    batchId: '',
+    qty: '',
+    sourceBinId: '',
+    destBinId: '',
+  };
 }
 
 function binLabel(b: WarehouseBin): string {
@@ -136,6 +154,20 @@ export function BinOpsPanel({
   function editLine(key: number, patch: Partial<DraftLine>): void {
     setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l)));
     setError(null);
+  }
+
+  /**
+   * Choosing a different FROM bin CLEARS the product.
+   *
+   * The line that was picked belongs to the bin it was picked from; it
+   * is a different row of `stock_levels` in another bin, or not there at
+   * all. Carrying it over would submit a (seller, variant, batch) the
+   * new source does not hold — refused by the server, but only after
+   * somebody typed a quantity and pressed the button, and silently
+   * wrong-looking until then.
+   */
+  function pickSource(key: number, sourceBinId: string): void {
+    editLine(key, { sourceBinId, stockLevelId: '', sellerId: '', variantId: '', batchId: '' });
   }
 
   function addLine(): void {
@@ -322,11 +354,9 @@ export function BinOpsPanel({
         <Table responsive={false}>
           <THead>
             <Tr>
-              <Th>Seller id</Th>
-              <Th>Variant id</Th>
-              <Th>Batch id</Th>
-              <Th>Qty</Th>
               <Th>From</Th>
+              <Th>Product</Th>
+              <Th>Qty</Th>
               <Th>To</Th>
               <Th> </Th>
             </Tr>
@@ -335,30 +365,31 @@ export function BinOpsPanel({
             {lines.map((l) => (
               <Tr key={l.key}>
                 <Td>
-                  <input
-                    className="stk-input bin-lines-field"
-                    data-mono="1"
-                    value={l.sellerId}
-                    aria-label="Seller id"
-                    onChange={(e) => editLine(l.key, { sellerId: e.target.value })}
-                  />
+                  <Select
+                    value={l.sourceBinId}
+                    aria-label="From bin"
+                    onChange={(e) => pickSource(l.key, e.target.value)}
+                  >
+                    <option value="">Choose…</option>
+                    {binOptions.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.code}
+                      </option>
+                    ))}
+                  </Select>
                 </Td>
                 <Td>
-                  <input
-                    className="stk-input bin-lines-field"
-                    data-mono="1"
-                    value={l.variantId}
-                    aria-label="Variant id"
-                    onChange={(e) => editLine(l.key, { variantId: e.target.value })}
-                  />
-                </Td>
-                <Td>
-                  <input
-                    className="stk-input bin-lines-field"
-                    data-mono="1"
-                    value={l.batchId}
-                    aria-label="Batch id"
-                    onChange={(e) => editLine(l.key, { batchId: e.target.value })}
+                  <BinLinePicker
+                    binId={l.sourceBinId}
+                    value={l.stockLevelId}
+                    onChange={(picked) =>
+                      editLine(
+                        l.key,
+                        picked === null
+                          ? { stockLevelId: '', sellerId: '', variantId: '', batchId: '' }
+                          : picked,
+                      )
+                    }
                   />
                 </Td>
                 <Td>
@@ -372,20 +403,6 @@ export function BinOpsPanel({
                     aria-label="Quantity"
                     onChange={(e) => editLine(l.key, { qty: e.target.value })}
                   />
-                </Td>
-                <Td>
-                  <Select
-                    value={l.sourceBinId}
-                    aria-label="From bin"
-                    onChange={(e) => editLine(l.key, { sourceBinId: e.target.value })}
-                  >
-                    <option value="">Choose…</option>
-                    {binOptions.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.code}
-                      </option>
-                    ))}
-                  </Select>
                 </Td>
                 <Td>
                   <Select
