@@ -3487,6 +3487,69 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'inspect-and-finalise-a-return',
+    title: 'Inspecting and finalising',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A parcel has been taken in and nobody has decided about it yet. That is this list, and it counts the two hold-ups apart, because they need different people.',
+      },
+      {
+        id: 'open',
+        say: 'Open it. Here is what came back, line by line, with no verdict on any of it — and from this point on, everything you press moves real stock.',
+      },
+      {
+        id: 'where',
+        say: 'They are not nowhere in the meantime. Taking the parcel in booked its units into the returns hold: a real place on the shelf plan, counted, and deliberately not sellable.',
+      },
+      {
+        id: 'condition',
+        say: 'Two questions per line, and the first is what you actually found in the box. Damaged or missing opens a claim with the seller, and that is where any money is settled.',
+      },
+      {
+        id: 'choices',
+        say: 'The second is what happens to it, and the screen will tell you what each choice does. Back in stock, kept aside, written off, or decide later. Read it rather than remembering it.',
+      },
+      {
+        id: 'mismatch',
+        say: 'And when the pair does not make sense it says so without refusing you. Damaged, back in stock, means that unit goes to the next customer. It is your call; it is just not a quiet one.',
+      },
+      {
+        id: 'split',
+        say: 'But this line holds more than one, and they need not have come back in the same state. That is what splitting by quantity is for, and it appears only when there is something to split.',
+      },
+      {
+        id: 'arith',
+        say: 'The rows have to add up to the units on the line exactly, and the sentence above them keeps the count. Anything else and the server refuses the whole save.',
+      },
+      {
+        id: 'good',
+        say: 'The first row is the good one, so correct it and the warning goes. Put it back in stock, and read what that means: at finalise it leaves the hold for a sellable shelf.',
+      },
+      {
+        id: 'aside',
+        say: 'The second is the damaged one, and this is the choice people forget exists. Keep it aside: it goes to the damaged bin, stays the seller’s, and is never sold to anybody.',
+      },
+      {
+        id: 'save',
+        say: 'Save, and the line is marked inspected. Nothing has moved yet — this is a verdict written down, and you can come back and change it.',
+      },
+      {
+        id: 'confirm',
+        say: 'Finalising is the part that cannot be taken back, so it restates what it is about to do in units rather than lines, and says plainly that stock moves now.',
+      },
+      {
+        id: 'press',
+        say: 'Press it. One unit is back on a shelf and sellable this second, one is in the damaged bin, and the order has moved on to say the return has been dealt with.',
+      },
+      {
+        id: 'outro',
+        say: 'So: condition, then consequence, per unit when they differ. And if you genuinely do not know, decide later is honest — it just leaves the parcel on this bench until somebody does.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

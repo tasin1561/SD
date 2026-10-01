@@ -33,6 +33,7 @@ import {
   driveOrderToOutForDelivery,
   ensureLifecycleParcels,
   lifecycleReport,
+  settleRetiredReturns,
   LIFECYCLE_PARCELS,
 } from './lib/lifecycle.mjs';
 import { clearLoginThrottle } from './lib/clear-login-throttle.mjs';
@@ -5085,6 +5086,14 @@ async function returnsBenchWorldFor(slug, sellerId, staffToken) {
   if (awb === null) {
     throw new Error(`${order.orderNumber} has no live shipment carrying a waybill to receive.`);
   }
+
+  /*
+    AND NOTHING ELSE ON THE BENCH. The lifecycle pass deliberately
+    LEAVES the newest retired return standing, because an empty bench is
+    a worse picture for K1 than a used one — but K2 reaches its parcel by
+    position and would otherwise open on two.
+  */
+  await settleRetiredReturns(sellerId, staffToken, (m) => console.log(m), { keep: 0 });
 
   const res = await call('/warehouse/rto/receive', {
     method: 'POST',

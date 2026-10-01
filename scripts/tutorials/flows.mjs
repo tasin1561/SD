@@ -3836,7 +3836,23 @@ export const FLOWS = {
       },
 
       async 'our-ticket'({ page, stage }) {
-        const row = page.getByRole('row').filter({ hasText: 'RTO DAMAGED' }).first();
+        /*
+          THE REFUNDED ONE, not the newest.
+
+          "The newest damage ticket" stopped being a handle on
+          2026-10-01: K2's take marks a returned unit damaged and keeps
+          it aside, which opens a scrap ticket of its own and puts it at
+          the top of this list. `settleScrapTicket` refunds only
+          `RSH-LIFE-RESTOCKED`'s and leaves every other claim OPEN, so
+          the status is what tells this one from the rest — and the next
+          scene waits for a refund banner that an open ticket does not
+          have, which is how a selector miss here would have presented.
+        */
+        const row = page
+          .getByRole('row')
+          .filter({ hasText: 'RTO DAMAGED' })
+          .filter({ hasText: 'Closed · refunded' })
+          .first();
         await row.waitFor({ state: 'visible', timeout: 25_000 });
         await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
         await page.waitForURL(/\/tickets\/[0-9a-f-]+$/, { timeout: 30_000 });
@@ -9624,6 +9640,228 @@ export const FLOWS = {
       },
     },
   },
+
+  'inspect-and-finalise-a-return': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        /*
+          STRAIGHT TO THE BENCH. The tab lives in the URL on purpose
+          ("look at this one" is a link somebody sends), so the video
+          opens where K1 left off rather than clicking its way there.
+
+          `returnsBenchWorldFor` receives `RSH-LIFE-ATDOOR` and then
+          asserts the whole box holds exactly ONE return with lines
+          still to inspect; this re-asserts it from the SCREEN, because
+          the flow works whichever row is first and a second would be
+          finalised on camera without being narrated.
+        */
+        await page.goto(`${baseUrl}/warehouse/rto?tab=bench`, { waitUntil: 'domcontentloaded' });
+        await benchRow(page).waitFor({ state: 'visible', timeout: 25_000 });
+        const open = await page.locator('.sk-tbody .sk-tr').count();
+        if (open !== 1) {
+          throw new Error(
+            `${open} return(s) are on the bench, expected exactly 1 \u2014 the flow opens the first.`,
+          );
+        }
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3000);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Work it' }), { after: 1600 });
+        await rtoLine(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(rtoLine(page), 3000);
+      },
+
+      async where({ page, stage }) {
+        // The parcel's header: its number, how many lines, and the
+        // status chip that says it has been taken in — which is the act
+        // that booked the units into the hold the narration is about.
+        await stage.dwellOn(page.locator('.wh-row--between').first(), 3200);
+      },
+
+      async condition({ page, stage }) {
+        const field = page.getByLabel(/^Condition$/);
+        await stage.point(field);
+        await field.selectOption('DAMAGED');
+        await page.waitForTimeout(500);
+        /*
+          GATED ON THE SENTENCE THE NARRATION QUOTES, not on the field:
+          the line says a damaged unit opens a claim with the seller,
+          and that is the field's own hint rather than anything this
+          video invented.
+        */
+        const hint = page.getByText(/opens a damage ticket to the seller/i).first();
+        await hint.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(hint, 3000);
+      },
+
+      async choices({ page, stage }) {
+        await stage.point(page.getByLabel(/^What happens to it$/));
+        await page.waitForTimeout(700);
+        // The screen's OWN account of the four choices, which is what
+        // the narration tells the viewer to read.
+        await stage.clickIt(page.getByText('What each choice does').first(), { after: 900 });
+        const panel = page.locator('.wh-details p').first();
+        await panel.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(panel, 3200);
+      },
+
+      async mismatch({ page, stage }) {
+        const field = page.getByLabel(/^What happens to it$/);
+        await stage.point(field);
+        await field.selectOption('RESTOCK');
+        /*
+          THE NOTICE, NOT THE FIELD. `dispositionMismatch` says a
+          damaged unit put back in stock will be sold to the next
+          customer — and says it WITHOUT refusing, which is the whole
+          point of the scene. Gating on the field would pass against a
+          build that had quietly stopped warning.
+        */
+        const notice = page.locator('.sk-field__msg[data-kind="notice"]').first();
+        await notice.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(400);
+        await stage.dwellOn(notice, 3200);
+      },
+
+      async split({ page, stage }) {
+        /*
+          THIS BUTTON ONLY EXISTS ON A LINE OF MORE THAN ONE UNIT
+          (`split === null && item.quantity > 1`), which is why
+          `RSH-LIFE-ATDOOR` carries two — see its note in
+          lib/lifecycle.mjs. On a one-unit line the whole half of the
+          bench this video is about is not on the screen at all.
+        */
+        await stage.clickIt(page.getByRole('button', { name: 'Split by quantity' }), {
+          after: 1200,
+        });
+        await splitBlock(page).waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(splitBlock(page), 3000);
+      },
+
+      async arith({ page, stage }) {
+        const counter = splitBlock(page).locator('> p.wh-note').first();
+        await counter.waitFor({ state: 'visible', timeout: 15_000 });
+        const said = (await counter.innerText()).trim();
+        if (!/units? (have a decision|still need a decision)|more than the/i.test(said)) {
+          throw new Error(`The split counter reads "${said}", which is not the arithmetic line.`);
+        }
+        await stage.dwellOn(counter, 3200);
+      },
+
+      async good({ page, stage }) {
+        // Row one inherited the whole-line verdict, mismatch and all.
+        // Correcting the condition is what clears the warning, which is
+        // exactly what the narration says happens.
+        const row = splitRow(page, 0);
+        const field = row.getByLabel(/^Condition, row 1$/);
+        await stage.point(field);
+        await field.selectOption('GOOD');
+        await page.waitForTimeout(600);
+        if ((await row.locator('.sk-field__msg[data-kind="notice"]').count()) > 0) {
+          throw new Error('Row one still carries a mismatch warning after being set to Good.');
+        }
+        const effect = row.locator('> p.wh-note').first();
+        await effect.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(effect, 2800);
+      },
+
+      async aside({ page, stage }) {
+        const row = splitRow(page, 1);
+        await row.getByLabel(/^Condition, row 2$/).selectOption('DAMAGED');
+        await page.waitForTimeout(300);
+        const what = row.getByLabel(/^What happens to them, row 2$/);
+        await stage.point(what);
+        await what.selectOption('HOLD_DAMAGED');
+        const effect = row.locator('> p.wh-note').first();
+        await effect.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(400);
+        const said = (await effect.innerText()).trim();
+        if (!/Damaged bin/i.test(said)) {
+          throw new Error(`Row two's effect line reads "${said}" \u2014 expected the Damaged bin.`);
+        }
+        await stage.dwellOn(effect, 3000);
+      },
+
+      async save({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Save inspection' }), { after: 1600 });
+        /*
+          THE TAG, NOT THE TOAST. "Inspected" is written on the line and
+          stays there; the toast is four and a half seconds of unpaused
+          time and this scene has somewhere else to be.
+        */
+        const tag = rtoLine(page).locator('.wh-tag', { hasText: 'Inspected' }).first();
+        await tag.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(tag, 2800);
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Finalize disposition' }), {
+          after: 1200,
+        });
+        const said = page.locator('.sk-confirm__consequence').first();
+        await said.waitFor({ state: 'visible', timeout: 15_000 });
+        const words = (await said.innerText()).trim();
+        if (!/cannot be undone/i.test(words)) {
+          throw new Error(`The confirm reads "${words}" \u2014 the narration quotes the warning.`);
+        }
+        await stage.dwellOn(said, 3400);
+      },
+
+      async press({ page, stage }) {
+        await stage.clickIt(
+          dialogFoot(page).getByRole('button', { name: 'Finalize disposition' }),
+          {
+            after: 1400,
+          },
+        );
+        /*
+          THE TOAST CANNOT BE HELD ON THIS SCREEN, and that is a fact
+          about WHICH toast it uses rather than about the trick.
+
+          The hover-pause every other flow leans on belongs to
+          `@skydrop/ui/app/toast` (`usePausableTimer`, `data-paused`).
+          The RTO station imports `useToast` from
+          `@skydrop/ui/components` — the LEGACY provider, which is a
+          bare `setTimeout(…, 3500)` with no pointer handler at all — so
+          pointing at it does nothing and it is gone 3.5 s after it
+          appears, whatever the pointer is doing. Nineteen admin files
+          are still on that provider. Found here by the check frame
+          showing an empty panel under a line about what the toast said.
+
+          So the scene reads the toast INSIDE its life and then lands on
+          the durable half: the station has let the parcel go, which is
+          on screen from the same instant and stays.
+        */
+        const toast = page.getByText(/put back in stock/i).first();
+        await toast.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(toast, 1900);
+        const done = page.getByText('No shipment selected').first();
+        await done.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(done, 2600);
+      },
+
+      async outro({ page, stage }) {
+        /*
+          THE BENCH IS EMPTY, which is the proof the parcel is finished
+          with — and the station's worklists refetch themselves now, so
+          this needs no reload.
+        */
+        await stage.clickIt(rtoTab(page, 'On the bench'), { after: 1400 });
+        const empty = page.getByText(/Nothing waiting/i).first();
+        await empty.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.sk-table').first(), 3400);
+      },
+    },
+  },
 };
 
 /**
@@ -9784,6 +10022,41 @@ function rtoTabs(page) {
 
 function rtoTab(page, label) {
   return rtoTabs(page).getByRole('tab', { name: new RegExp(`^${label}`) });
+}
+
+/**
+ * K2's row on the returns bench, and the panel it opens.
+ *
+ * Reached by POSITION rather than by name, and the seeding is what
+ * makes that honest: `returnsBenchWorldFor` asserts the whole box holds
+ * exactly one return with lines still to inspect, and the flow
+ * re-asserts it from the screen before touching anything. Nothing on
+ * the row is stable to name — the waybill, the parcel number and the
+ * order number are all minted per run, and the seller and the customer
+ * are the same on every D0 parcel.
+ */
+function benchRow(page) {
+  return page.locator('.sk-tbody .sk-tr').first();
+}
+
+/** The one returned line in the station below. */
+function rtoLine(page) {
+  return page.locator('.wh-item').first();
+}
+
+/**
+ * The split-by-quantity block and one of its rows.
+ *
+ * By its `aria-label` rather than its class: `.wh-stack--tight` is also
+ * the wrapper around the LIST of returned lines, so the class alone
+ * matches the thing containing this one.
+ */
+function splitBlock(page) {
+  return page.locator('[aria-label="Split by quantity"]').first();
+}
+
+function splitRow(page, index) {
+  return splitBlock(page).locator('.wh-split-row').nth(index);
 }
 
 /**

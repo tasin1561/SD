@@ -1141,18 +1141,34 @@ async function rebuildStaleReviewParcel(sellerId, ref, want, log) {
  * Only ever touches a RETIRED reference (`-SPENT-`): a parcel still
  * answering to its canonical name is somebody's world.
  */
-async function settleRetiredReturns(sellerId, staffToken, log) {
+export async function settleRetiredReturns(sellerId, staffToken, log, { keep = 1 } = {}) {
+  /*
+    `keep` IS WHY THIS IS NOT JUST A CLEANUP.
+
+    A demo warehouse with nothing on its returns bench is a worse
+    picture than one with a pile: K1 narrates what the bench is FOR, and
+    an empty table under that line reads as a tab nobody uses. So the
+    NEWEST retired return is left standing — it is a true row, a real
+    parcel received and not yet decided about, which is exactly what
+    that worklist holds — and everything older is finished off.
+
+    K2 is the one video that needs none at all, because it asserts the
+    bench holds exactly its own parcel; `returnsBenchWorldFor` calls
+    this with `keep: 0` before receiving.
+  */
   const stuck = await prisma.order.findMany({
     where: {
       sellerId,
       status: 'RTO_RECEIVED',
       OR: LIFECYCLE_PARCELS.map((p) => ({ sellerOrderRef: { startsWith: `${p.ref}-SPENT-` } })),
     },
+    orderBy: { createdAt: 'desc' },
     select: { id: true, sellerOrderRef: true, orderNumber: true },
   });
-  if (stuck.length === 0) return;
+  const settle = stuck.slice(keep);
+  if (settle.length === 0) return;
 
-  for (const order of stuck) {
+  for (const order of settle) {
     const link = await prisma.orderShipment.findFirst({
       where: { orderId: order.id, shipment: { deletedAt: null, rtoReceivedAt: { not: null } } },
       select: { shipment: { select: { id: true, items: { select: { id: true } } } } },

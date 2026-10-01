@@ -6,9 +6,9 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 54 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, the whole of I, J1–J3 and P5.** The 36 left are all in the admin app: 2 are
-`impractical locally` and 29 touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
+**90 tutorials. 61 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, the whole of I, the whole of J, the whole of K and P5.** The 29 left are all in the admin app: 2 are
+`impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
 **Ninety is a large number and it is meant to be read as one.** It is what
@@ -32,53 +32,57 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (60):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8** — **the whole of section J** — and **K1**.
+**Filmed so far (61):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8** and **K1–K2** —
+**the whole of sections J and K**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
-**THE NEXT ENTRY IS K2 — "Inspecting and finalising"**, and K1 has left it
-exactly where it starts.
+**THE NEXT ENTRY IS L1 — "Adjusting stock"**, and section K is finished.
 
-**MEASURED after K1's take, not predicted (2026-10-01):** `RSH-LIFE-ATDOOR`
-(`SD-2026-26-000435`) is at **RTO_RECEIVED** with one line awaiting inspection,
-and the RTO station's "On the bench" tab holds **three** received-and-unfinished
-parcels — its own plus the two `-SPENT-` ones earlier takes left there. **That
-pile is the first thing to decide about.** K2 acts on ONE parcel and the bench
-is reached by waybill, so three rows is not a blocker, but three identical
-"Deepa Ramanathan" returns on a worklist IS a frame a viewer will stumble over.
-The honest options are to finalise the two spent ones in the seeding (they are
-debris from a video, and finalising moves real stock) or to leave them and
-narrate "on the bench" without a count. Decide it before writing the scene.
+**WHAT K2 LEFT BEHIND, MEASURED (2026-10-01).** The returns bench now holds
+exactly ONE un-finalised return on any run, and it is K2's own: three things
+make that true and all three are in the seeding.
 
-**K2 almost certainly shares K1's world** the way I2/I3 and J4/J5 do: K1 leaves
-the parcel RECEIVED, which is precisely where K2 begins — so `take-a-return-in`
-and K2's slug both join `LIFECYCLE_SLUGS` and nothing else changes. A take of K2
-finalises the parcel, which moves it to RTO_RESTOCKED or RTO_DAMAGED; both
-differ from `want` and neither is in `RESUMABLE_FROM`, so the `spendable: true`
-added for K1 retires and rebuilds it correctly without further work.
+- **`ensureReturnsBins` gives CCU-01 a returns hold (`R-01-01`) and a damaged
+  bin (`D-01-01`)**, which it had never had. See the K1 entry for what that
+  means for K1 — it is the most important finding of this round.
+- **`settleRetiredReturns` finishes off the returns a previous take left on the
+  bench.** A spent `RSH-LIFE-ATDOOR` is retired to `-SPENT-<n>` and keeps every
+  row it has, including the fact that it is RECEIVED and undecided, so three
+  takes in there were three identical Deepa Ramanathan returns on the worklist.
+  It inspects them GOOD / RESTOCK and finalises, through the product's own
+  endpoints — forward motion, which is what the rest of `lib/lifecycle.mjs`
+  does. It runs AFTER the retire loop, not before: before it, a parcel spent by
+  the last take is retired into the pile it has just cleared.
+- **`returnsBenchWorldFor` receives the fresh parcel**, so K2 opens on the world
+  K1 hands over rather than spending two scenes reaching it — and ASSERTS the
+  hold booking came back `BOOKED`, because K2's narration is about the hold and
+  a `NO_HOLD_BIN` outcome would make that a sentence about something that did
+  not happen.
 
-**What K2 films** is inspection per line AND BY QUANTITY (WMS-8d — two units of
-one line can be one good and one damaged, which is the whole reason the split
-exists), the four dispositions with the screen's own "what each choice does"
-panel, and then **"Finalize disposition"**, whose confirm says plainly that
-stock moves now and this cannot be undone. The demo line is qty 1, so the
-by-quantity split has nothing to show unless the world gives it a qty-2 line —
-`LIFECYCLE_PARCELS` carries a `quantity` field already (`parcel.quantity ?? 1`).
+**`RSH-LIFE-ATDOOR` IS TWO UNITS NOW.** `RtoItemRow` renders "Split by quantity"
+only when `item.quantity > 1`, so on a one-unit line the whole half of the bench
+K2 is about is not on the screen. `LIFECYCLE_PARCELS` already carried a
+`quantity` field (`RSH-LIFE-RESTOCKED` has been two since D0 was written), so it
+was one line.
 
-**And the RTO station's worklists now refresh themselves** (bug 39, fixed this
-session): receiving takes the parcel off "At our door" and puts it on "On the
-bench" live, and finalising takes it off the bench. A K2 scene may rely on that.
+**A K2 take SPENDS its parcel** — finalising moves the order to RTO_RESTOCKED,
+which differs from `want`, so the retire-and-rebuild handles it with no further
+work. Seed, check, seed, check, seed, take is three parcels, as for D4 and J2.
 
-**What section J leaves behind, for whoever needs a packed or dispatched
-parcel:** `pickWorldFor`'s `PICK_STAGE` now has three values — LABELLED (J3),
-PICKED (J4, J5) and PACKED (J6, J8) — and the whole of it is three orders
-addressed to pin `560103` whose first parcel carries TWO lines. The
-retire-forward cancels at CONFIRMED, PENDING_PICK, PICKED and PACKED (stock
-conserved at every one; measured across six takes) and leaves a DISPATCHED
-parcel alone, saying so. It also LIFTS the SCAN-1 duplicate stop from the ops
-user on every run, which J6 creates on purpose and which otherwise makes every
-later scan on the box refuse.
+**And a K2 take OPENS A DAMAGE TICKET**, because its second row is marked
+damaged. That broke `settleScrapTicket`, which took "the newest SCRAP_DAMAGE
+ticket for this seller" — a stable handle for exactly as long as
+`RSH-LIFE-RESTOCKED` was the only thing on the box that ever found damage. The
+next seed run refunded K2's ticket ₹2,400 at the declared value of a unit
+nothing had scrapped, and D6, which reaches for the newest damage ticket,
+would have filmed a different claim from the one its narration describes. It is
+keyed on `RSH-LIFE-RESTOCKED` now and D6's row reach asks for the REFUNDED one.
+**One stray refund happened before the fix and is still on the box** (a resolved
+ticket on `RSH-LIFE-ATDOOR-SPENT-4`); a wallet entry is append-only and it is
+one demo row, so it was left rather than reversed. A D6 re-take should check
+which ticket it lands on.
 
 P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
@@ -266,8 +270,8 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — THIRTY-SEVEN so
-far, plus EIGHT in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
+**Filming these screens is finding real bugs at a steady rate — THIRTY-EIGHT so
+far, plus TEN in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
 column mappings that drove nothing, a tracking filter that 500'd, a stuck
@@ -393,6 +397,22 @@ lint` does. A spec constructing a service with the wrong number of arguments
 - **A scene must open on the thing it is about.** Put a dialog dismissal in the
   PREVIOUS scene's tail, or the frame check shows the next scene opening on a
   closing modal.
+- **THERE ARE TWO TOASTS IN THIS ESTATE AND ONLY ONE OF THEM CAN BE HELD
+  OPEN.** `@skydrop/ui/app/toast` pauses on hover and says so through
+  `data-paused`; `@skydrop/ui/components`' legacy provider is a bare
+  `setTimeout(…, 3500)` with no pointer handler, so a halo over it does nothing
+  and the message is gone 3.5 s after it appears. Sixty-one admin files import
+  the first and nineteen the second. **Check which `useToast` the screen imports
+  before writing a scene that leans on a toast** — the failure is a check frame
+  showing an empty panel under a line about what the toast said (K2,
+  2026-10-01), which is indistinguishable from a flow that filmed nothing.
+- **A seeding handle that is "the newest row of this kind" lasts exactly until a
+  second video makes one.** `settleScrapTicket` refunded the newest
+  SCRAP_DAMAGE ticket, which was `RSH-LIFE-RESTOCKED`'s for months — and then
+  K2's take marked a returned unit damaged, which opens a ticket of its own. The
+  next seed run paid ₹2,400 against goods nothing had scrapped, and D6 would
+  have filmed a claim its narration does not describe. **Key a seeded row on the
+  PARCEL it belongs to**, not on recency.
 
 ---
 
@@ -2967,6 +2987,22 @@ about: clicking it fills the receive box and moves to the Receive tab in one
 act, because the person doing this has a carton in their hands rather than a
 mouse.
 
+**ITS NARRATION WAS NOT TRUE WHEN IT WAS FILMED, AND IS NOW — read this before
+trusting any line about the returns hold.** K1 says the units are booked into
+the returns hold at the moment the parcel is received (WMS-8e). On 2026-10-01,
+writing K2, the stock movements on K1's own parcel were read and there was **no
+`RETURN_RECEIVE` row anywhere**: `CCU-01` had no `RTO_HOLD` bin, so every
+receive here answered `NO_HOLD_BIN`, nothing was booked, and the toast on screen
+said so — under a line claiming the opposite. The product degraded exactly as
+designed; the WORLD was wrong, and wrong in the words the owner used when
+WMS-8d/8e were specified ("R-01-01 should hold products that are received but
+not decided yet… D-01-01 (damaged) for damaged"). `ensureReturnsBins` builds
+both, through the product's own endpoint, on every seed run.
+**K1 was re-taken against the corrected world** — free, because not one line
+changed and clips are cached on their words. **The lesson generalises: a frame
+that shows a WARNING under narration describing the happy path is the same class
+of defect as a wrong figure, and only the frame shows it.**
+
 **AND BUILDING IT FOUND TWO SEEDING BUGS, both latent until `spendable` met a
 failed drive.** (1) `retireSpentParcel`'s spent test was `status !== want`,
 which is ALSO true of a half-built parcel sitting at PENDING_CONFIRMATION — so
@@ -2984,16 +3020,51 @@ front. **Nothing could be confirmed through the call centre at all.** A second
 pass now closes follow-ups on orders that have FINISHED — restocked, written
 off, cancelled, rejected, lost — where no call of any reason can help.
 
-### K2. Inspecting and finalising · `needs demo data` · **dangerous**
+### K2. Inspecting and finalising · **FILMED** — `inspect-and-finalise-a-return.mp4` · **dangerous**
 
 **Promise** — you can decide what happens to each unit that came back.
-**Length** 4 min. **Prerequisites** K1.
-**Covers** inspection per line **and by quantity** — two units of one line can
-be one good and one damaged, which is the reason the split exists — across the
-four dispositions, then **"Finalize disposition"**.
+**Length** 14 scenes, 2 min 47 s. **Prerequisites** K1. **Needs**
+`seed-demo-data.mjs inspect-and-finalise-a-return` — D0 plus the three seeding
+pieces in [Where to pick up](#where-to-pick-up).
+**Covers** the bench and what the two counts on a row mean, the condition field
+and the claim a damaged or missing unit opens, the four dispositions read off
+the screen's own "What each choice does" panel, the mismatch warning that says
+a damaged unit put back in stock goes to the next customer **without refusing
+you**, the split **by quantity**, the arithmetic line that has to add up
+exactly, and then **"Finalize disposition"**.
 **Cost of getting it wrong:** its own confirm says it plainly — stock moves now
 and this cannot be undone. A unit written off by mistake is a stock adjustment
 and an apology; a damaged unit put back in stock is a second unhappy customer.
+
+**ITS SECOND ROW IS "KEEP ASIDE (DAMAGED)", WHICH IS THE CHOICE THE SURVEY
+FORGOT EXISTS** — and it was unfilmable until this round, because finalising it
+is REFUSED by name (`RTO_NO_DAMAGED_BIN`) when the warehouse has no damaged bin
+and CCU-01 had none. The write-off is already shown by `RSH-LIFE-RESTOCKED`'s
+own seeding, so the video presses the one nothing else does.
+
+**AND IT FOUND A BUG IN THE SENTENCE READ IMMEDIATELY BEFORE THE IRREVERSIBLE
+PRESS.** The confirm used one template for every number, so the commonest split
+of all — one unit good and one damaged, which is the case WMS-8d exists for —
+rendered as **"1 unit go back in stock, 1 unit are kept aside damaged and 0
+units are written off"**: the noun pluralised, the verb not, and a clause about
+units that are not moving in front of the ones that are. It is
+`finalizeConsequence` now, pinned by
+`apps/admin/src/tests/rto-finalize-consequence.test.ts`, and reads "1 unit goes
+back in stock and 1 unit is kept aside damaged — stock moves now and this
+cannot be undone." Found by LOOKING AT THE FRAME; every gate passed either way.
+
+**THE TOAST ON THIS SCREEN CANNOT BE HELD OPEN, and that is about WHICH toast it
+is.** The hover-pause every other flow leans on belongs to
+`@skydrop/ui/app/toast` (`usePausableTimer`, which exposes `data-paused`). The
+RTO station imports `useToast` from `@skydrop/ui/components` — the LEGACY
+provider, a bare `setTimeout(…, 3500)` with no pointer handler at all — so
+pointing at it does nothing and it is gone 3.5 s after it appears. **Nineteen
+admin files are still on that provider and sixty-one are on the new one**, so
+before writing a scene that leans on a toast, check which `useToast` the screen
+imports. It presented here as a check frame showing an empty panel under a line
+about what the toast said. The scene reads the toast inside its life and then
+lands on the station's own "No shipment selected", which appears at the same
+instant and stays.
 
 ---
 

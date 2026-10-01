@@ -86,6 +86,54 @@ function finalizeSummary(items: ReadonlyArray<RtoShipmentItem>): {
   return { restock, hold, writeOff, later, uninspectedLines };
 }
 
+/**
+ * What finalising is about to do, in a sentence — the LAST thing anybody
+ * reads before an act that moves stock and cannot be undone.
+ *
+ * ── THE VERB HAS TO AGREE WITH THE COUNT ─────────────────────────────
+ * It did not: one template was used for every number, so the commonest
+ * split of all — one unit good, one damaged, which is the case WMS-8d
+ * exists for — came out as "1 unit go back in stock, 1 unit are kept
+ * aside damaged and 0 units are written off". Pluralising the noun and
+ * not the verb reads as broken English, and it reads that way in the
+ * one place on this screen where somebody is supposed to slow down.
+ *
+ * ── AND A ZERO IS NOT A CONSEQUENCE ──────────────────────────────────
+ * "0 units are written off" is a sentence about units that are not
+ * moving, in front of the ones that are. Each outcome earns its clause
+ * by having something in it.
+ *
+ * Nothing is ready to move only when every decided unit is "decide
+ * later" — the server refuses that anyway, and the dialog's own note
+ * already says so; this says it in the headline rather than leaving the
+ * consequence empty.
+ */
+export function finalizeConsequence(t: {
+  readonly restock: number;
+  readonly hold: number;
+  readonly writeOff: number;
+}): string {
+  const unit = (n: number): string => `${n} unit${n === 1 ? '' : 's'}`;
+  const clauses: string[] = [];
+  if (t.restock > 0) {
+    clauses.push(`${unit(t.restock)} ${t.restock === 1 ? 'goes' : 'go'} back in stock`);
+  }
+  if (t.hold > 0) {
+    clauses.push(`${unit(t.hold)} ${t.hold === 1 ? 'is' : 'are'} kept aside damaged`);
+  }
+  if (t.writeOff > 0) {
+    clauses.push(`${unit(t.writeOff)} ${t.writeOff === 1 ? 'is' : 'are'} written off`);
+  }
+  if (clauses.length === 0) {
+    return 'Nothing is ready to move — every unit is still waiting on a decision.';
+  }
+  const listed =
+    clauses.length === 1
+      ? clauses[0]
+      : `${clauses.slice(0, -1).join(', ')} and ${clauses[clauses.length - 1]}`;
+  return `${listed} — stock moves now and this cannot be undone.`;
+}
+
 export function RtoStation(): ReactElement {
   const toast = useToast();
   const router = useRouter();
@@ -415,7 +463,7 @@ function FinalizeConfirm({
       title="Finalize this return?"
       entity={shipmentNumber}
       entityIsIdentifier
-      consequence={`${unit(t.restock)} go back in stock, ${unit(t.hold)} are kept aside damaged and ${unit(t.writeOff)} are written off — stock moves now and this cannot be undone.`}
+      consequence={finalizeConsequence(t)}
       confirmLabel="Finalize disposition"
       destructive={t.writeOff > 0}
       error={error}
