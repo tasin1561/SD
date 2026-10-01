@@ -32,39 +32,53 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (58):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J7**.
+**Filmed so far (59):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J8** — **the whole of section J**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
-**THE NEXT ENTRY IS J5 — "Packing without a scan"**, and J4 has left it almost
-everything. **MEASURED after J4's take, not predicted:** the three `RSH-PICK-*`
-parcels end it as one PACKED, one PICKED whose box was cancelled, and one PICKED
-never touched — so **two parcels are sitting on the pack bench the moment J5
-opens**, which is exactly what it needs. `pickWorldFor`'s `PICK_STAGE` already
-serves `pack-a-parcel`; J5 almost certainly joins that map with the same
-`'PICKED'` value and nothing else changes. Its own retire-forward is already
-PACKED-aware.
+**THE NEXT ENTRY IS K1 — "Taking a return in"**, and section J is finished.
 
-**What J5 actually films** is the escape hatch LBL-4 names: open a box as usual,
-then "These products have no labels to scan" — which is a SEPARATE endpoint
-(`POST /warehouse/packs/:id/force-complete`), carries `warehouse.pick.supervise`
-so a packer cannot waive the check they are performing, wants a reason of at
-least twenty characters (the button stays disabled under that — read the whole
-`disabled` expression before writing the press), and writes its own distinct
-audit action `warehouse_pack.completed_unverified` rather than a flag on the
-ordinary one, so "how often are we bypassing this" is answerable by filtering.
-The button is ALREADY VISIBLE in J4's frames (`canForce` is cosmetic; the server
-holds the permission), so the selector is known to work. The real case it exists
-for is goods shelved before product labelling existed — say that, rather than
-presenting it as a convenience.
+**MEASURED, not predicted (2026-10-01):** `RSH-LIFE-RETURNING`
+(`SD-2026-26-000294`) is sitting at **RTO_IN_TRANSIT** right now, which is
+exactly what K1 needs — it is on `/warehouse/rto`'s "on their way back" tab and
+is what the receive-by-waybill scene would take in. `RSH-LIFE-RESTOCKED` is
+already finalised and is H2's order, so K1 must not touch it.
 
-**The scan field, for every J-section flow after this one.** There is no submit
-button on that bench: `scanIn` in `flows.mjs` types a code and presses Enter,
-which is literally what a barcode reader does. `expectCount` asserts the LINE
-reads what the narration says it reads — a refused scan clears the field and
-leaves the page otherwise identical, so without it a take sails past a rejection
-and films a counter that never moved.
+**The thing to work out before writing a line of K1** is what happens on the
+SECOND take. Receiving spends the parcel (RTO_IN_TRANSIT → RTO_RECEIVED, and
+WMS-8e books its units into the returns hold at that moment), and
+`ensureLifecycleParcels` is explicitly forward-only — it "resumes a half-built
+parcel, NEVER rewinds one".
+
+**The machinery for that already exists and the change looks like two lines.**
+`retireSpentParcel` runs for any parcel carrying `spendable: true`, and its
+first test for "spent" is simply `order.status !== want` — which RTO_RECEIVED
+is. So `RSH-LIFE-RETURNING` gains `spendable: true` in `LIFECYCLE_PARCELS` and
+`take-a-return-in` joins `LIFECYCLE_SLUGS`; the retired parcel keeps everything
+it has and a fresh one is driven through its five stages (IN_TRANSIT,
+OUT_FOR_DELIVERY, an NDR, RTO_INITIATED, RTO_IN_TRANSIT) on the next run. **Read
+`retireSpentParcel` before writing it**, because it has a third spent-test about
+the SIMULATOR having forgotten the waybill after a restart, and a returns video
+driven against a parcel the courier has never heard of fails in a way that looks
+like the video rather than the box.
+
+**K2 follows immediately and is the dangerous half** (inspection per line AND by
+quantity, the four dispositions, then "Finalize disposition" — which moves stock
+and cannot be undone). K1 and K2 almost certainly share one world the way I2/I3
+and J4/J5 do: K1 leaves the parcel RECEIVED, which is precisely where K2 starts.
+If they share, K1's seeding wants the parcel IN_TRANSIT and K2's wants it
+RECEIVED — one more `PICK_STAGE`-shaped map, not a second copy.
+
+**What section J leaves behind, for whoever needs a packed or dispatched
+parcel:** `pickWorldFor`'s `PICK_STAGE` now has three values — LABELLED (J3),
+PICKED (J4, J5) and PACKED (J6, J8) — and the whole of it is three orders
+addressed to pin `560103` whose first parcel carries TWO lines. The
+retire-forward cancels at CONFIRMED, PENDING_PICK, PICKED and PACKED (stock
+conserved at every one; measured across six takes) and leaves a DISPATCHED
+parcel alone, saying so. It also LIFTS the SCAN-1 duplicate stop from the ops
+user on every run, which J6 creates on purpose and which otherwise makes every
+later scan on the box refuse.
 
 P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
