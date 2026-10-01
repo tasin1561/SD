@@ -577,10 +577,13 @@ export class GoodsReceiptService {
           message: `Line ${l.lineId} is not part of this receipt`,
         });
       }
-      // BinPolicyService is the ONE reader of the tracking flag. When
-      // the warehouse is not tracking locations the agent's choice is
-      // ignored entirely rather than defaulted — honouring it would
-      // silently bin half a building nobody decided to bin.
+      // BinPolicyService is the ONE reader of the tracking flag (BIN-1).
+      // What it answers, and what this comment used to get backwards:
+      // tracking OFF honours a bin that WAS chosen and falls back to
+      // FLOOR when none was, so a bin here is never required; tracking
+      // ON refuses by name (`BIN_REQUIRED`). A bin is a true fact about
+      // where the goods went either way, which is why an explicit one
+      // is kept rather than discarded — BIN-1 calls that "pure upside".
       const resolved = await this.binPolicy.resolvePutawayBin(
         receipt.warehouseId,
         l.putawayBinId,

@@ -12,7 +12,6 @@ import { Select } from '@skydrop/ui/app/select';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { TextField } from '@skydrop/ui/app/text-field';
-import type { RecordReceiptLineInput } from '@skydrop/api-client';
 import {
   useCancelGoodsReceipt,
   useCompleteGoodsReceipt,
@@ -27,6 +26,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { SerialScanner, scanCountMet } from '@/components/ui/serial-scanner';
 import { SkuLabelSheetView } from '@/components/sku-label-sheet';
+import { buildReceiptLines } from './receive-lines';
 import '../../_components/benches.css';
 
 /**
@@ -139,41 +139,21 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
   async function onRecordAll(): Promise<void> {
     setError(null);
     setBusy('record');
-    const lines: RecordReceiptLineInput[] = [];
-    for (const l of r.lines) {
-      const recv = received[l.id]?.trim() ?? '';
-      const dmg = damaged[l.id]?.trim() ?? '0';
-      const bin = binByLine[l.id]?.trim() ?? '';
-      if (recv === '') continue;
-      const n = Number(recv);
-      if (!Number.isFinite(n) || n < 0) {
-        setError(`Invalid received qty on line ${l.variant.skuCode}`);
-        setBusy(null);
-        return;
-      }
-      const d = Number(dmg);
-      if (!Number.isFinite(d) || d < 0) {
-        setError(`Invalid damaged qty on line ${l.variant.skuCode}`);
-        setBusy(null);
-        return;
-      }
-      if (n > 0 && !bin) {
-        setError(`Bin required for ${l.variant.skuCode} (qty > 0)`);
-        setBusy(null);
-        return;
-      }
-      lines.push({
-        lineId: l.id,
-        receivedQty: n,
-        damagedQty: d,
-        ...(bin ? { putawayBinId: bin } : {}),
-      });
-    }
-    if (lines.length === 0) {
-      setError('Nothing to record — fill in at least one line.');
+    // Whether a bin is REQUIRED is the server's answer, never ours —
+    // `BinPolicyService` is the one reader of the tracking flag (BIN-1)
+    // and refuses by name when it matters. See `receive-lines.ts`.
+    const built = buildReceiptLines(
+      r.lines.map((l) => ({ id: l.id, skuCode: l.variant.skuCode })),
+      received,
+      damaged,
+      binByLine,
+    );
+    if (!built.ok) {
+      setError(built.error);
       setBusy(null);
       return;
     }
+    const lines = built.lines;
     try {
       await record.mutateAsync({ id, lines });
       toast.success(`Recorded ${lines.length} line(s).`);
@@ -515,9 +495,12 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
                     ))}
                   </Select>
                   {putawayBins.length === 0 && (
-                    // An empty REQUIRED dropdown with no explanation is a
-                    // dead end: the operator cannot complete the receipt
-                    // and nothing on the screen says why or what to do.
+                    // An empty dropdown with no explanation is a dead
+                    // end wherever the bin matters: a warehouse that
+                    // tracks locations refuses the receipt (BIN_REQUIRED)
+                    // and nothing on the screen would say why or what to
+                    // do. Shown in either mode — knowing the building has
+                    // nowhere to shelve stock is worth saying regardless.
                     <p className="wh-note">
                       Its only locations are ones stock cannot be shelved in.{' '}
                       <Link href="/warehouse/bins" className="wh-link">
