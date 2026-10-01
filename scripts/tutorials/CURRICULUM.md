@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 77 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O2 and P5.** The 13 left are all in the admin app: 2 are
+**90 tutorials. 78 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O3 and P5.** The 12 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (77):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (78):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N9** and **O1–O2**.
+**L1–L3**, **M1–M2**, **N1–N9** and **O1–O3**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -46,18 +46,19 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**THE NEXT ENTRY IS O3 — "Per-seller settings and courier routing"**, and K,
-L1–L3, M1, M2, O1 and O2 are done. O3 is the cheapest entry left in the
-section: both of its halves are sections of the seller detail page O2 already
-films, and `sellerAccountWorldFor` happens to leave `Khulna Handloom` in
-exactly the two states O3 has to show FIRST — every setting on the system
-default, and no courier links at all — so it can set one of each on camera.
-Its seeding needs ONE addition: clear whatever override and link the previous
-take left, exactly as O2's clears its hold. **Two courier accounts have to
-exist for the weight column to mean anything**, and `provision-stack.mjs` makes
-only one; M1's second account is deleted by M1's own seeding
-(`M1_ACCOUNT_LABEL`), so O3 needs an account of its own under a label nothing
-else clears.
+**THE NEXT ENTRY IS O4 — "Changing how the platform behaves"**, and K,
+L1–L3, M1, M2 and O1–O3 are done. O4 is `ready` — no new demo data — and the
+one thing already measured about it is that **`/settings` is SIXTEEN THOUSAND
+PIXELS TALL**: it renders every group at once, three times the next longest
+screen in the console. `sectionToTop` (added for O3, in `flows.mjs`) is the
+tool for that — reach a group by its heading and put it under the toolbar,
+rather than haloing a row and letting `scrollIntoViewIfNeeded` choose. Whatever
+it edits has to be put back by its seeding, and a setting with a PHYSICAL
+consequence (the NDR cap, the auto-pickup switches) is the wrong thing to
+demonstrate on: pick one that decides a display or a threshold. O3 overrode
+`pricing.flat_delivery_fee` for exactly that reason and the same argument
+applies one level up — but note the two videos must not edit the SAME key, or
+O4's take and O3's seeding are arguing about one row.
 
 **M3–M6 ARE SKIPPED FOR NOW, with L4, and the reason for M3 is worth reading
 before anybody picks it up.** M3 is "Run a cycle now" on the tracking poll, and
@@ -4004,15 +4005,71 @@ printed `Blocked: ORDER_CREATE` while the dialog that chose it said "Placing new
 orders", with the map sitting forty lines above the `join`. See
 [Bugs found](#bugs-found-while-establishing-feasibility).
 
-### O3. Per-seller settings and courier routing · `needs demo data` · **dangerous**
+### O3. Per-seller settings and courier routing · **FILMED** — `per-seller-settings.mp4` · **dangerous**
 
 **Promise** — you can change one seller's behaviour without touching anybody
 else's.
-**Length** 3 min. **Prerequisites** O2.
-**Covers** the settings section showing every overridable key with its
-**effective** value and where that value came from, then the courier-account
-links and their weights — which accounts carry this seller's parcels. An empty
-list is normal and means the pair's default.
+**Length** 2 min 55 s of narration over 15 scenes. **Prerequisites** O2.
+**Needs** `seed-demo-data.mjs per-seller-settings` (`sellerRoutingWorldFor`).
+**Covers** the settings section — every overridable key with its **effective**
+value, the system default beside it and where the value came from — one
+override set with its note and then RESET; then the courier-account links and
+their weights, one link, two, and an unlink. An empty list is normal and means
+each courier's default account.
+
+**ITS WORLD IS O2's, PLUS TWO THINGS PUT BACK.** `sellerRoutingWorldFor` calls
+`sellerAccountWorldFor` rather than building beside it — same seller, same
+state — and then clears every setting override and every courier link, because
+those are the two states the video has to show FIRST and they are the ones a
+previous take spends. Both are sentences the screen writes itself ("Everything
+is on the system default", "No links: this seller's parcels go to each
+courier's default account"), so a take that opened on the last take's override
+would film a line about the default over a row that is not on it.
+
+**It makes TWO courier accounts of its own, and that is not tidiness.**
+`provision-stack.mjs` provides a SANDBOX and a PRODUCTION account — a pair that
+exists to show the difference between test and live, not two contracts to
+divide real traffic between. A video about weighted routing cannot use them:
+splitting a seller's live parcels into a courier's test API is not something to
+put in a tutorial. `Delhivery — Kolkata lane` and `Delhivery — Bengaluru lane`
+are PRODUCTION, neither is the default, both carry the simulator's own token,
+and they are kept between takes — a courier account is a thing somebody signed.
+**M1's accounts list now has two more rows on it**; its narration counts
+nothing, so that is fine, but it is worth knowing before a re-take.
+
+**Three selector notes, and the first two are general.**
+
+1. **`selectOption({ label })` matches an option's WHOLE text.** The Add-link
+   dropdown reads `Delhivery — Kolkata lane — delhivery · PRODUCTION`, with
+   `(switched off)` after it when the account is inactive — so the account's
+   NAME matches nothing, and the failure is a thirty-second timeout saying
+   "did not find some options" about a dropdown that plainly contains the row.
+   `selectCourierAccount` finds the option by its text, reads its value and
+   selects that.
+2. **`scrollIntoViewIfNeeded` scrolls the MINIMUM**, so a tall section arrives
+   with its heading at the bottom of the screen and whatever is above it
+   filling the frame — here the orange "Reveal bank account number" card, under
+   a line about per-seller settings. `sectionToTop` is `block: 'start'` plus a
+   72px nudge for the sticky toolbar, and it is what the section scenes use.
+   (It cannot help the LAST section on a page: the document has nothing left to
+   scroll, which is why the credit panel still sits low in frame.)
+3. **The credit-after-confirmation panel is an `AcSection`, not an `AcCard`** —
+   its heading and note live in the section's `.sk-sh`, OUTSIDE the card — so
+   filtering `.ac-card` by that heading matches nothing at all.
+
+**The row it overrides is `pricing.flat_delivery_fee`, chosen for two
+reasons.** It is a PRICE, which is what "agreed with this seller" usually means;
+and it has no physical consequence — nothing dispatches a van or holds stock
+differently because of it, which the NDR cap and the auto-pickup switches cannot
+say. **The row beneath it is the lesson**: the fee and the currency it was
+agreed in are two separate settings, both overridable, and the dialog says so in
+its own words ("The currency is the setting 'Delivery fee currency'"). Nothing
+on the page renders `৳180`; it renders `180` with the currency a row away. That
+is a design choice rather than a defect — the two rows are adjacent and named —
+but it is the thing somebody will get wrong, so the video says it out loud.
+
+**No bug found.** Fifteen scenes, every one green on the third check, and the
+only defects were in the flow.
 
 ### O4. Changing how the platform behaves · `ready` · **dangerous**
 

@@ -5746,6 +5746,114 @@ async function sellerAccountWorldFor(slug, staffToken) {
 }
 
 /**
+ * The second courier contract O3 splits a seller's parcels across.
+ *
+ * `provision-stack.mjs` makes two accounts and they are a SANDBOX and a
+ * PRODUCTION one — a pair that exists to show the difference between
+ * test and live, not two contracts to divide real traffic between. A
+ * video about weighted routing cannot use them: sending half a seller's
+ * parcels to a courier's test API is not something anybody should watch
+ * somebody do.
+ *
+ * So O3 makes two of its own, PRODUCTION and neither the default, which
+ * is the shape CACC-1 was built for — one seller, two contracts with
+ * the same courier, split by weight. Two rather than one so that
+ * NEITHER of the names read on camera is "Simulator account": a
+ * tutorial about which contract carries a parcel should not have the
+ * viewer reading a dev artefact as the answer.
+ *
+ * They are NOT deleted between takes: a courier account is a thing
+ * somebody signed, and the dropdown the video opens should hold the
+ * same rows every time. They carry the simulator's own token, so a
+ * parcel booked against either reaches the simulator and nothing else.
+ */
+const O3_ACCOUNT_LABELS = ['Delhivery — Kolkata lane', 'Delhivery — Bengaluru lane'];
+
+/**
+ * The setting O3 overrides on camera. Deliberately a PRICE rather than
+ * a behaviour: the whole point of SET-1 is "what was agreed with this
+ * seller", and a fee is the thing most often agreed separately. It also
+ * has no physical consequence — nothing dispatches a van or holds stock
+ * differently because of it — which the NDR cap and the auto-pickup
+ * switches cannot say.
+ */
+const O3_SETTING_KEY = 'pricing.flat_delivery_fee';
+
+/**
+ * O3's world — "Per-seller settings and courier routing".
+ *
+ * BOTH HALVES ARE SECTIONS OF THE PAGE O2 ALREADY FILMS, so this builds
+ * on `sellerAccountWorldFor` rather than beside it: the same seller, in
+ * the same state, with the two things O3 has to show FIRST put back —
+ * every setting on the system default, and no courier links at all.
+ * Those are the states the screen's own copy describes ("Everything is
+ * on the system default", "No links: this seller's parcels go to each
+ * courier's default account"), and a take that opened on the last
+ * take's override would film a line about the default over a row that
+ * is not on it.
+ */
+async function sellerRoutingWorldFor(slug, staffToken) {
+  if (slug !== 'per-seller-settings') return;
+
+  await sellerAccountWorldFor('managing-a-seller', staffToken);
+
+  const seller = await prisma.seller.findUniqueOrThrow({
+    where: { email: O2_SELLER.email },
+    select: { id: true },
+  });
+
+  const overrides = await prisma.sellerSettingOverride.deleteMany({
+    where: { sellerId: seller.id },
+  });
+  if (overrides.count > 0) {
+    console.log(`  \u00b7 cleared ${overrides.count} setting override(s) a previous take set`);
+  }
+  const links = await prisma.sellerCourierAccountLink.deleteMany({
+    where: { sellerId: seller.id },
+  });
+  if (links.count > 0) {
+    console.log(`  \u00b7 removed ${links.count} courier link(s) a previous take added`);
+  }
+
+  /*
+    THE KEY HAS TO BE OVERRIDABLE AT ALL. `sellerOverridable` is a
+    column on `system_settings`, so a seed change elsewhere could take
+    the row off the list entirely — and the failure would arrive as a
+    scene that cannot find a button, three minutes into a take.
+  */
+  const key = await prisma.systemSetting.findUnique({
+    where: { key: O3_SETTING_KEY },
+    select: { sellerOverridable: true },
+  });
+  if (key === null || !key.sellerOverridable) {
+    throw new Error(
+      `"${O3_SETTING_KEY}" is ${key === null ? 'not in system_settings' : 'not seller-overridable'}, ` +
+        'so the row O3 overrides is not on the page.',
+    );
+  }
+
+  for (const label of O3_ACCOUNT_LABELS) {
+    const existing = await prisma.courierAccount.findFirst({
+      where: { label, deletedAt: null },
+      select: { id: true },
+    });
+    if (existing !== null) continue;
+    await call('/admin/courier-accounts', {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        courierCode: 'delhivery',
+        environment: 'PRODUCTION',
+        label,
+        credentialFields: { apiToken: 'simulator-token-not-a-secret' },
+        isDefault: false,
+      },
+    });
+    console.log(`  \u00b7 created the courier account "${label}"`);
+  }
+}
+
+/**
  * M2's world — "Is the courier integration healthy".
  *
  * ── IT WRITES NOTHING ────────────────────────────────────────────────
@@ -6864,6 +6972,7 @@ async function main() {
   await delhiveryHealthWorldFor(slug);
   await leadsWorldFor(slug);
   await sellerAccountWorldFor(slug, staffToken);
+  await sellerRoutingWorldFor(slug, staffToken);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);

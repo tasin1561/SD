@@ -4231,7 +4231,7 @@ export const VIDEOS = [
       },
       {
         id: 'withdrawn',
-        say: 'So it is withdrawn, whatever was already charged is credited back, and the arrival is free to be billed again properly. Both halves matter — withdrawing without re-billing is how a shipment ends up carried for nothing.',
+        say: 'So it is withdrawn, whatever was already charged is credited back, and the arrival is free to be billed again properly. The bill itself is KEPT — it is off the live list and still there under its own status, because the ledger behind it can only ever be added to.',
       },
       {
         id: 'outro',
@@ -4567,6 +4567,73 @@ export const VIDEOS = [
       {
         id: 'outro',
         say: 'So: a correction for what we got wrong, a hold for what they owe us, and suspension for everything else. Reach for the hold first \u2014 it is the only one that undoes itself.',
+      },
+    ],
+  },
+  {
+    slug: 'per-seller-settings',
+    title: 'Settings and couriers for one seller',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Further down the same page, the part that decides how we treat THIS seller in particular \u2014 every setting that can be agreed separately, and what they are actually on.',
+      },
+      {
+        id: 'columns',
+        say: 'Three columns, and the third is the one to read. What is in effect, what the system default is, and whether this seller has been moved off it at all.',
+      },
+      {
+        id: 'name',
+        say: 'Each row leads with what the setting DOES, in words. The key underneath it is for searching a log six months from now; it is not what you read to decide.',
+      },
+      {
+        id: 'open',
+        say: 'Override, and the panel repeats the value and where it came from \u2014 so you are changing something you have just read rather than something you remember.',
+      },
+      {
+        id: 'value',
+        say: 'The agreed figure, and a note saying why. The note is optional and it is the only thing that will ever explain an odd price to whoever inherits this account.',
+      },
+      {
+        id: 'saved',
+        say: 'Set. In effect has moved, the system default is still beside it unchanged, and the source now says this one is theirs rather than everybody\u2019s.',
+      },
+      {
+        id: 'currency',
+        say: 'And the row underneath is the trap. The fee and the currency it was agreed in are two separate settings. Move one without the other and you have changed the price by the exchange rate.',
+      },
+      {
+        id: 'reset',
+        say: 'Reset puts them back. There is no blank to type and no same-as-system to choose \u2014 REMOVING the override is the act, which is why it has a button of its own.',
+      },
+      {
+        id: 'couriers',
+        say: 'Then the other half: which courier accounts carry this seller\u2019s parcels. No links at all is the ordinary state, and the line says what it means.',
+      },
+      {
+        id: 'add',
+        say: 'Add one and you choose the account and a weight. A weight is a share rather than a number of parcels \u2014 two links at a hundred split the seller evenly.',
+      },
+      {
+        id: 'linked',
+        say: 'One link, so everything goes there. The share is worked out across the ACTIVE links, which is why a single one reads as all of it.',
+      },
+      {
+        id: 'second',
+        say: 'Add the second contract and the shares divide. Nothing was typed as a percentage \u2014 those are arithmetic over the weights, and the routing itself is the server\u2019s.',
+      },
+      {
+        id: 'unlink',
+        say: 'Unlinking hands that share back to the rest, and unlinking the last one returns them to the default account. Parcels already booked keep whichever account carried them.',
+      },
+      {
+        id: 'credit',
+        say: 'One switch is deliberately NOT on that list. This one lets a reseller store be paid days after a phone call and before the customer has paid, so it has an endpoint of its own and the ordinary override writer refuses it by name.',
+      },
+      {
+        id: 'outro',
+        say: 'So: read the source column before you change anything, write the note for whoever comes next, and put them back on the default when the arrangement ends \u2014 a setting and a courier account alike.',
       },
     ],
   },

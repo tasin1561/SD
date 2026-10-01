@@ -50,6 +50,19 @@ function declared(source, name) {
   return value[1];
 }
 
+/**
+ * `const NAME = ['…', '…'];` — the same question of a LIST.
+ *
+ * Prettier breaks an array that passes 100 characters onto its own
+ * lines, so this matches across newlines rather than demanding the one
+ * long form the file happens to have today.
+ */
+function declaredList(source, name) {
+  const found = new RegExp(`const ${name} =\\s*\\[([^\\]]*)\\];`).exec(source);
+  assert.ok(found !== null, `${name} is not declared as an array literal.`);
+  return [...found[1].matchAll(/'([^']*)'/g)].map((m) => m[1]);
+}
+
 describe('a label one file types and another file clears', () => {
   it('M1 adds the courier account its seeding removes', async () => {
     const [flows, seed] = await Promise.all([read('flows.mjs'), read('seed-demo-data.mjs')]);
@@ -86,6 +99,19 @@ describe('a label one file types and another file clears', () => {
       'The number the identity correction types is not the one the seeding checks against what ' +
         'it puts back, so the two can become the same and the API answers IDENTITY_NO_CHANGES.',
     );
+  });
+
+  it('O3 links the courier accounts its seeding creates', async () => {
+    const [flows, seed] = await Promise.all([read('flows.mjs'), read('seed-demo-data.mjs')]);
+    const labels = declaredList(seed, 'O3_ACCOUNT_LABELS');
+    for (const name of ['O3_FIRST_ACCOUNT', 'O3_SECOND_ACCOUNT']) {
+      const picked = declared(flows, name);
+      assert.ok(
+        labels.includes(picked),
+        `${name} is "${picked}", which O3's seeding does not create — the Add-link dropdown is ` +
+          'selected by LABEL, so a rename leaves the flow choosing an option that is not there.',
+      );
+    }
   });
 
   it('O1 invites the lead its seeding resets', async () => {

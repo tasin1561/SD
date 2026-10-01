@@ -1112,6 +1112,93 @@ function holdCard(page) {
     .first();
 }
 
+/**
+ * The two courier contracts O3 links, in the order the video links them.
+ * `sellerRoutingWorldFor` creates both; `test/tutorial-labels.test.mjs`
+ * keeps the names in step, because a renamed account is a dropdown
+ * option the flow selects by label and would stop finding.
+ */
+const O3_FIRST_ACCOUNT = 'Delhivery — Kolkata lane';
+const O3_SECOND_ACCOUNT = 'Delhivery — Bengaluru lane';
+
+/**
+ * Put a section's own heading just under the sticky top bar.
+ *
+ * `scrollIntoViewIfNeeded` scrolls the MINIMUM that makes an element
+ * visible, so a tall section arrives with its heading at the bottom of
+ * the screen and the card above it filling the frame — which on this
+ * page is the orange "Reveal bank account number" panel, under a line
+ * about per-seller settings. `block: 'start'` then a nudge for the
+ * 56px toolbar is the deterministic version; `scrollBy` is a no-op at
+ * the top of the document, so the first section on a page is safe too.
+ */
+async function sectionToTop(page, locator) {
+  await locator.evaluate((el) => {
+    el.scrollIntoView({ block: 'start' });
+    window.scrollBy(0, -72);
+  });
+  await page.waitForTimeout(450);
+}
+
+/** O3's two sections of the seller page, by their own headings. */
+function settingsSection(page) {
+  return page
+    .locator('.ac-section')
+    .filter({ has: page.getByRole('heading', { name: 'Settings for this seller', exact: true }) })
+    .first();
+}
+
+function courierSection(page) {
+  return page
+    .locator('.ac-section')
+    .filter({ has: page.getByRole('heading', { name: 'Courier accounts', exact: true }) })
+    .first();
+}
+
+/**
+ * The delivery-fee row and the currency row beneath it, BY NAME.
+ *
+ * Never by the key: `hasText` is a substring and
+ * `pricing.flat_delivery_fee` is a prefix of
+ * `pricing.flat_delivery_fee_currency`, so a reach by key takes
+ * whichever the table drew first — and those two rows are precisely
+ * the pair this video is about telling apart.
+ */
+function feeRow(page) {
+  return settingsSection(page).locator('tbody tr').filter({ hasText: 'Delivery fee per parcel' });
+}
+
+function currencyRow(page) {
+  return settingsSection(page).locator('tbody tr').filter({ hasText: 'Delivery fee currency' });
+}
+
+/** One courier link, by the account it names. */
+function linkRow(page, label) {
+  return courierSection(page).locator('tbody tr').filter({ hasText: label }).first();
+}
+
+/**
+ * Choose a courier account in the Add-link dropdown BY ITS ID.
+ *
+ * `selectOption({ label })` matches an option's WHOLE text, and these
+ * options are not just the account's name — they read
+ * "Delhivery — Kolkata lane — delhivery · PRODUCTION", with
+ * " (switched off)" after it when the account is inactive. So the name
+ * alone matches nothing and the failure arrives as a thirty-second
+ * `selectOption` timeout saying "did not find some options", on a
+ * dropdown that plainly contains the row. Find the option by its text,
+ * read its value, select THAT.
+ */
+async function selectCourierAccount(dialog, label) {
+  const option = dialog.locator('#courier-link-account option').filter({ hasText: label }).first();
+  await option.waitFor({ state: 'attached', timeout: 20_000 });
+  const value = await option.getAttribute('value');
+  if (value === null || value === '') {
+    throw new Error(`The "${label}" option carries no value — the dropdown lists it differently.`);
+  }
+  await dialog.locator('#courier-link-account').selectOption(value);
+}
+
 /** O2's account-status card, which carries both of the status buttons. */
 function statusCard(page) {
   return page
@@ -11987,9 +12074,13 @@ export const FLOWS = {
         await dialog.waitFor({ state: 'visible', timeout: 20_000 });
         await page.waitForTimeout(700);
         await stage.dwellOn(dialog.getByText(/Not the same as a waiver/i).first(), 3000);
+        // "What was wrong with it", not "Reason" — the WAIVE dialog next
+        // door is the one whose field is called Reason, and the two
+        // dialogs are deliberately worded apart because the acts are
+        // different. The copy is the thing to read, not the pattern.
         await stage.typeIn(
-          dialog.getByLabel(/^Reason/).first(),
-          'The forwarder re-issued this invoice at a lower rate after the recount.',
+          dialog.getByLabel(/^What was wrong with it/).first(),
+          "Rate typed as 300 a kilo; the forwarder's invoice says it was agreed at 30.",
           { after: 600 },
         );
       },
@@ -13043,6 +13134,237 @@ export const FLOWS = {
 
       async outro({ page, stage }) {
         await stage.dwellOn(holdCard(page).locator('.ac-card__note').first(), 3600);
+      },
+    },
+  },
+  /*
+    O3 — per-seller settings and courier routing.
+
+    THE SAME PAGE AND THE SAME SELLER AS O2, two sections further down.
+    `sellerRoutingWorldFor` calls O2's own world builder and then puts
+    back the two things this video has to show FIRST: every setting on
+    the system default, and no courier links at all. Both are states the
+    screen describes in its own words, and a take that opened on the
+    last take's override would film a line about the default over a row
+    that is not on it.
+
+    It makes TWO named courier accounts of its own rather than using the
+    pair `provision-stack.mjs` provides: those are a SANDBOX and a
+    PRODUCTION one, and splitting a seller's live parcels into a
+    courier's test API is not a thing to put in a tutorial.
+  */
+  'per-seller-settings': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/sellers`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+      await ctx.page.getByPlaceholder(/Search by name/).fill('Khulna');
+      const link = ctx.page.getByRole('link', { name: O2_SELLER_NAME, exact: true }).first();
+      await link.waitFor({ state: 'visible', timeout: 25_000 });
+      await link.click();
+      await ctx.page.waitForURL(/\/sellers\/[0-9a-f]/, { timeout: 25_000 });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        const section = settingsSection(page);
+        await section.waitFor({ state: 'visible', timeout: 25_000 });
+        await sectionToTop(page, section);
+        await stage.dwellOn(
+          section.getByText(/Everything is on the system default|keys are overridden/i).first(),
+          3200,
+        );
+      },
+
+      async columns({ page, stage }) {
+        await stage.dwellOn(settingsSection(page).locator('thead').first(), 3200);
+      },
+
+      /*
+        BY THE PLAIN-ENGLISH NAME, never by the key. `hasText` is a
+        SUBSTRING, and `pricing.flat_delivery_fee` is a prefix of
+        `pricing.flat_delivery_fee_currency` — the row underneath it,
+        which scene `currency` is about. Reaching by key would have taken
+        whichever of the two the table drew first.
+      */
+      async name({ page, stage }) {
+        const row = feeRow(page);
+        const n = await row.count();
+        if (n !== 1) throw new Error(`${n} rows match the delivery-fee name, expected 1.`);
+        await stage.dwellOn(row.locator('.sss-name').first(), 3200);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(feeRow(page).getByRole('button', { name: /^Override$|^Change$/ }), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 3400);
+      },
+
+      async value({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/^Value$/).first(), '180', {
+          clear: true,
+          after: 700,
+        });
+        await stage.typeIn(
+          dialog.locator('#ov-note'),
+          'Agreed with Nasrin when they signed: 180 taka a parcel while they are shipping under 300 a month.',
+          { delay: 14, after: 700 },
+        );
+      },
+
+      async saved({ page, stage }) {
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: /Set override|Saving/ }), {
+          after: 2000,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        /*
+          GATED ON THE SOURCE CHIP, not on the row: the row is on screen
+          either way and the figure is the only thing that moves, so a
+          dwell alone would pass over the old value while the refetch
+          was still in flight.
+        */
+        const chip = feeRow(page)
+          .locator('.sk-chip')
+          .filter({ hasText: /^override$/i })
+          .first();
+        await chip.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(feeRow(page), 3400);
+      },
+
+      async currency({ page, stage }) {
+        const row = currencyRow(page);
+        const n = await row.count();
+        if (n !== 1) throw new Error(`${n} rows match the currency name, expected 1.`);
+        await stage.dwellOn(row, 3600);
+      },
+
+      async reset({ page, stage }) {
+        await stage.clickIt(feeRow(page).getByRole('button', { name: 'Reset' }), { after: 2000 });
+        const back = feeRow(page)
+          .locator('.sk-chip')
+          .filter({ hasText: /^default$/i })
+          .first();
+        await back.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(feeRow(page), 3000);
+      },
+
+      async couriers({ page, stage }) {
+        const section = courierSection(page);
+        await sectionToTop(page, section);
+        await stage.dwellOn(
+          section
+            .getByText(
+              /go to each courier\u2019s default account|go to each courier's default account/i,
+            )
+            .first(),
+          3200,
+        );
+      },
+
+      async add({ page, stage }) {
+        await stage.clickIt(courierSection(page).getByRole('button', { name: 'Add link' }), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await selectCourierAccount(dialog, O3_FIRST_ACCOUNT);
+        await page.waitForTimeout(500);
+        await stage.dwellOn(dialog.getByText(/Two links at 100 split evenly/i).first(), 3200);
+      },
+
+      async linked({ page, stage }) {
+        await stage.clickIt(
+          dialogFoot(page).getByRole('button', { name: /Link account|Linking/ }),
+          {
+            after: 2000,
+          },
+        );
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        const row = linkRow(page, O3_FIRST_ACCOUNT);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 3200);
+      },
+
+      async second({ page, stage }) {
+        await stage.clickIt(courierSection(page).getByRole('button', { name: 'Add link' }), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await selectCourierAccount(dialog, O3_SECOND_ACCOUNT);
+        await page.waitForTimeout(400);
+        await stage.clickIt(
+          dialogFoot(page).getByRole('button', { name: /Link account|Linking/ }),
+          {
+            after: 2000,
+          },
+        );
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        const row = linkRow(page, O3_SECOND_ACCOUNT);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(courierSection(page).locator('tbody').first(), 3400);
+      },
+
+      /*
+        UNLINK IS A CONFIRM DIALOG, and its button shares the word
+        "Unlink" with the row's — so the row reach happens while the
+        dialog is shut and the second is dialog-scoped.
+      */
+      async unlink({ page, stage }) {
+        await stage.clickIt(
+          linkRow(page, O3_SECOND_ACCOUNT).getByRole('button', { name: 'Unlink' }),
+          { after: 1500 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: /^Unlink$/ }), {
+          after: 2000,
+        });
+        await dialog.waitFor({ state: 'detached', timeout: 25_000 });
+        await linkRow(page, O3_SECOND_ACCOUNT).waitFor({ state: 'detached', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(courierSection(page).locator('tbody').first(), 3000);
+      },
+
+      /*
+        AN `AcSection`, NOT AN `AcCard` — its heading and its note live
+        in the section's `.sk-sh`, OUTSIDE the card, so filtering
+        `.ac-card` by that heading matches nothing at all and the
+        failure arrives as a thirty-second wait on an element that is
+        plainly on screen.
+      */
+      async credit({ page, stage }) {
+        const section = page
+          .locator('.ac-section')
+          .filter({
+            has: page.getByRole('heading', { name: /credit after confirmation$/ }),
+          })
+          .first();
+        await sectionToTop(page, section);
+        await stage.dwellOn(section.locator('.sk-sh__note').first(), 3800);
+      },
+
+      async outro({ page, stage }) {
+        const section = settingsSection(page);
+        await sectionToTop(page, section);
+        await stage.dwellOn(
+          section.getByText(/Everything is on the system default|keys are overridden/i).first(),
+          3400,
+        );
       },
     },
   },
