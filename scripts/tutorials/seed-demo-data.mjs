@@ -521,6 +521,28 @@ const LIFECYCLE_SLUGS = new Set([
   // `returnsBenchWorldFor` receives it afterwards so this video opens on
   // the bench rather than at the door — the world K1 hands over.
   'inspect-and-finalise-a-return',
+  // SECTION N — the money desk. Every one of these reads a wallet whose
+  // interesting lines were written by a parcel moving: the delivery
+  // charge, the return fee, the damage refund and above all the COD
+  // credit, which needs a DELIVERED order for the courier to have
+  // collected against. N5 goes further and needs delivered COD that has
+  // NOT been paid for yet, which is what D0's two delivered parcels are.
+  'how-seller-money-works',
+  'accept-a-top-up',
+  'pay-a-seller-out',
+  'approve-a-bank-change',
+  'record-a-courier-payout',
+  'move-money-by-hand',
+  'the-bank-book',
+  'is-the-money-picture-true',
+  'close-a-month',
+  // P1 forces `RSH-LIFE-REVIEW`, the one order D0 parks in a state the
+  // matrix will not move on its own; P2 drives the courier-ops panel on
+  // parcels that are genuinely with the courier; P3 closes a damage
+  // ticket RTO inspection raised.
+  'god-mode',
+  'live-courier-writes',
+  'refunds-and-disputes',
 ]);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
@@ -5138,6 +5160,215 @@ async function returnsBenchWorldFor(slug, sellerId, staffToken) {
 }
 
 /**
+ * L1's world: an approval queue with something in it, a history behind
+ * it, and a unit in the damaged bin to send back.
+ *
+ * ── WHY IT HAS TO BE STAGED ──────────────────────────────────────────
+ * `stock_adjustments` was EMPTY on this box — every screen in the video
+ * was an empty state, including the one whose whole subject is the
+ * second pair of eyes. INV-8 is the rule being filmed: an adjustment
+ * whose absolute value impact meets
+ * `ops.stock_adjustment_approval_threshold_inr` (₹50,000) waits for
+ * somebody else; below it, it applies in one transaction. Both halves
+ * need a row.
+ *
+ * ── THE TAKE SPENDS BOTH ─────────────────────────────────────────────
+ * It APPROVES the pending one, which really moves stock, and raises a
+ * small one from the damaged bin, which also really moves stock. So the
+ * pass is a top-up rather than a rebuild: nothing is ever rewound, an
+ * EXECUTED or REJECTED row is history and is left exactly alone, and
+ * only an UNDECIDED row the previous take did not reach is removed —
+ * safe precisely because PENDING means nothing has been applied.
+ *
+ * ── AND THE STOCK PUTS ITSELF BACK ───────────────────────────────────
+ * The 25 units the pending adjustment removes are topped back up by
+ * `ensureStockedVariant` on the next run (it receives up to the
+ * catalogue's figure), so the warehouse does not drain over takes. The
+ * damaged bin has no such top-up, so this tops it up itself — as an
+ * INCREASE with reason `DAMAGED_IN_WAREHOUSE`, which is what that reason
+ * means and is the honest way to put a damaged unit on that shelf.
+ */
+const L1_PENDING_NOTE =
+  'Quarterly count on aisle A found twenty-five fewer than the system says. ' +
+  'Recounted twice by two people before raising this.';
+
+async function adjustmentWorldFor(slug, sellerId, staffToken, warehouse) {
+  if (slug !== 'correct-a-count') return;
+
+  /*
+    A PENDING ROW IS THE ONLY ONE THAT MAY BE REMOVED, and it is removed
+    by its own words. Nothing has been applied while it is pending, so
+    deleting is not a rewind — and the alternative, leaving it, means
+    the second take opens on a queue of two identical corrections and
+    reviews whichever is first.
+  */
+  const stale = await prisma.stockAdjustment.findMany({
+    where: { sellerId, status: 'PENDING', description: L1_PENDING_NOTE },
+    select: { id: true },
+  });
+  if (stale.length > 0) {
+    await prisma.stockAdjustmentLine.deleteMany({
+      where: { adjustmentId: { in: stale.map((a) => a.id) } },
+    });
+    await prisma.stockAdjustment.deleteMany({ where: { id: { in: stale.map((a) => a.id) } } });
+    console.log(`  · removed ${stale.length} undecided adjustment(s) a previous take left`);
+  }
+
+  const line = await biggestPickableLine(sellerId, warehouse.id);
+  const raise = (body) =>
+    call('/admin/stock-adjustments', { method: 'POST', token: staffToken, body });
+
+  // The history behind the queue. Two rows, equal and opposite, so the
+  // one-off they cost the warehouse is nothing; created once and never
+  // again, because every EXECUTED adjustment moves real stock.
+  const executed = await prisma.stockAdjustment.count({
+    where: { sellerId, status: { in: ['EXECUTED', 'APPROVED'] } },
+  });
+  if (executed < 2) {
+    await raise({
+      sellerId,
+      type: 'INCREASE',
+      reasonCode: 'FOUND_EXTRA',
+      description: 'One more on the shelf than the system had. Put it back on the books.',
+      lines: [{ ...line, qtyChange: 1, unitCostInr: L1_UNIT_COST }],
+    });
+    await raise({
+      sellerId,
+      type: 'DECREASE',
+      reasonCode: 'COUNTING_ERROR',
+      description: 'Counted twice on Monday and once again on Tuesday; the first count was wrong.',
+      lines: [{ ...line, qtyChange: -1, unitCostInr: L1_UNIT_COST }],
+    });
+    console.log('  · wrote two settled adjustments so the history is not an empty state');
+  }
+
+  const pending = await prisma.stockAdjustment.count({ where: { sellerId, status: 'PENDING' } });
+  if (pending === 0) {
+    const made = await raise({
+      sellerId,
+      type: 'DECREASE',
+      reasonCode: 'LOST',
+      description: L1_PENDING_NOTE,
+      lines: [{ ...line, qtyChange: -L1_PENDING_QTY, unitCostInr: L1_UNIT_COST }],
+    });
+    /*
+      THE WHOLE POINT IS THAT IT WAITED. A row that auto-executed would
+      leave the queue empty under a line about the second pair of eyes,
+      and the arithmetic behind it (quantity × unit cost against the
+      threshold setting) is exactly the sort of thing a settings change
+      moves without anybody noticing.
+    */
+    if (made.status !== 'PENDING') {
+      throw new Error(
+        `The seeded adjustment came back ${made.status}, not PENDING — ` +
+          `${L1_PENDING_QTY} × ₹${L1_UNIT_COST} is no longer above ` +
+          'ops.stock_adjustment_approval_threshold_inr.',
+      );
+    }
+    console.log(`  · raised one adjustment above the threshold, waiting for approval`);
+  } else {
+    console.log(`  · ${pending} adjustment(s) already waiting for approval`);
+  }
+
+  await ensureDamagedBinStock(sellerId, staffToken, warehouse);
+}
+
+const L1_UNIT_COST = 2400;
+const L1_PENDING_QTY = 25;
+const L1_DAMAGED_MIN = 3;
+
+/**
+ * The stock line the seeded adjustments are raised against: the biggest
+ * one this seller has in a pickable bin of the fulfilling warehouse.
+ *
+ * By SIZE rather than by name, because the batch a top-up receives into
+ * is minted per run — and because the pending adjustment removes
+ * twenty-five units on approval, which a thin line cannot survive.
+ */
+async function biggestPickableLine(sellerId, warehouseId) {
+  const levels = await prisma.stockLevel.findMany({
+    where: {
+      sellerId,
+      warehouseId,
+      qtyOnHand: { gt: L1_PENDING_QTY },
+      // STORAGE and PICKING, which are the shelves. `FLOOR` is a bin
+      // CODE and not a type — BIN-1's default bin is a STORAGE one
+      // called FLOOR — and naming it here makes Prisma refuse the query.
+      bin: { type: { in: ['STORAGE', 'PICKING'] }, deletedAt: null },
+    },
+    orderBy: { qtyOnHand: 'desc' },
+    select: { variantId: true, binId: true, batchId: true, qtyOnHand: true },
+  });
+  const line = levels[0];
+  if (line === undefined) {
+    throw new Error(
+      `No stock line with more than ${L1_PENDING_QTY} units in a pickable bin — the seeded ` +
+        'adjustment removes that many on approval and would be refused at execution.',
+    );
+  }
+  return { variantId: line.variantId, binId: line.binId, batchId: line.batchId };
+}
+
+/**
+ * Keep a unit or two in the DAMAGED bin, which is where the second half
+ * of L1 happens: a return kept aside (WMS-8d) leaves by a DECREASE with
+ * reason "returned to seller", raised from the bin's own "Return or
+ * scrap" link.
+ *
+ * K2's take puts one there and L1's takes one away, so left alone the
+ * shelf empties and the link the video is about has no line to sit on.
+ */
+async function ensureDamagedBinStock(sellerId, staffToken, warehouse) {
+  const bin = await prisma.warehouseBin.findFirst({
+    where: { warehouseId: warehouse.id, type: 'DAMAGED', deletedAt: null },
+    select: { id: true, code: true },
+  });
+  if (bin === null) {
+    throw new Error(
+      `${warehouse.code} has no DAMAGED bin — \`ensureReturnsBins\` builds one and runs first.`,
+    );
+  }
+  const held = await prisma.stockLevel.findMany({
+    where: { sellerId, binId: bin.id },
+    orderBy: { qtyOnHand: 'desc' },
+    select: { variantId: true, batchId: true, qtyOnHand: true },
+  });
+  const have = held.reduce((sum, l) => sum + l.qtyOnHand, 0);
+  if (have >= L1_DAMAGED_MIN) {
+    console.log(`  · ${bin.code} holds ${have} damaged unit(s) — nothing to top up`);
+    return;
+  }
+  const onto = held[0];
+  if (onto === undefined) {
+    console.log(
+      `  · note: ${bin.code} is empty and has never held anything, so there is no batch to ` +
+        'top up — run K2 once, or the "Return or scrap" half of L1 has no line.',
+    );
+    return;
+  }
+  await call('/admin/stock-adjustments', {
+    method: 'POST',
+    token: staffToken,
+    body: {
+      sellerId,
+      type: 'INCREASE',
+      reasonCode: 'DAMAGED_IN_WAREHOUSE',
+      description: 'Found damaged on the floor during a walk-round and put on the damaged shelf.',
+      lines: [
+        {
+          variantId: onto.variantId,
+          binId: bin.id,
+          batchId: onto.batchId,
+          qtyChange: L1_DAMAGED_MIN - have,
+          unitCostInr: L1_UNIT_COST,
+        },
+      ],
+    },
+  });
+  console.log(`  · topped ${bin.code} up to ${L1_DAMAGED_MIN} damaged unit(s)`);
+}
+
+/**
  * Remove the consignment a previous take announced, and the bank change
  * it left pending.
  *
@@ -5419,6 +5650,246 @@ async function placeTourOrders(sellerToken) {
   console.log(`  · placed ${TOUR_ORDERS.length} order(s) so the dashboard is not empty`);
 }
 
+/**
+ * ─── THE MONEY DESK (section N) ──────────────────────────────────────
+ *
+ * N1–N5 are five videos about ONE desk, and they share a world rather
+ * than each building their own: a seller whose wallet has actually been
+ * used, a claim waiting, a payout request waiting, a bank change
+ * waiting, and delivered COD the courier has not paid us for yet.
+ *
+ * The important property is that FOUR OF THE FIVE SPEND WHAT THEY FILM.
+ * Accepting a claim credits the wallet, approving a withdrawal and
+ * recording its remittance debits it, approving a bank change writes the
+ * new account through, and recording a payout credits the COD. So every
+ * one of those is put back the way the rest of this file does it —
+ * forward where the product allows it, and by removing the take's OWN
+ * rows where it does not. What is never removed is a row some OTHER
+ * video's narration describes.
+ */
+const MONEY_DESK_SLUGS = new Set([
+  'how-seller-money-works',
+  'accept-a-top-up',
+  'pay-a-seller-out',
+  'approve-a-bank-change',
+  'record-a-courier-payout',
+  'move-money-by-hand',
+  'the-bank-book',
+]);
+
+/** What a seller types on the claim N2 accepts. Shaped like a bank app's. */
+const DESK_TOPUP_INR = 18000;
+
+/** What N3 pays out. Comfortably under the balance, so the floor is not the story. */
+const DESK_WITHDRAWAL_INR = 7500;
+
+async function moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken) {
+  if (!MONEY_DESK_SLUGS.has(slug ?? '')) return;
+
+  // Somewhere to send a payout. The profile video's clearing takes the
+  // bank details off on every run, and a withdrawal is refused outright
+  // without them (NO_BANK_ACCOUNT_ON_FILE) — so they go back on first,
+  // exactly as `walletWorldFor` does for E3.
+  await prisma.seller.update({
+    where: { id: sellerId },
+    data: {
+      bankName: WALLET_PAYOUT_BANK.name,
+      bankBranchName: WALLET_PAYOUT_BANK.branch,
+      bankAccountName: WALLET_PAYOUT_BANK.holder,
+      bankAccountNumber: WALLET_PAYOUT_BANK.account,
+      bankAccountNumberMasked: `••••${WALLET_PAYOUT_BANK.account.slice(-4)}`,
+      bankRoutingNumber: WALLET_PAYOUT_BANK.routing,
+      bankSwiftCode: WALLET_PAYOUT_BANK.swift,
+    },
+  });
+
+  // A claim that a PREVIOUS take left waiting. Deleting a PENDING one is
+  // free — WAL-2's whole point is that it has moved no money — and
+  // without this the second take opens on two identical claims and the
+  // narration's "one claim" is wrong before it is spoken.
+  const stale = await prisma.walletTopupRequest.deleteMany({
+    where: { sellerId, status: 'PENDING' },
+  });
+  if (stale.count > 0) {
+    console.log(`  · removed ${stale.count} top-up claim(s) left waiting by a previous take`);
+  }
+
+  // Money in the wallet, through the real path: a claim, then an
+  // acceptance. That accepted claim is also what the Credited tab shows
+  // beside the pending one, so N2's screen has a before and an after on
+  // it rather than one row and an empty tab.
+  await ensureWalletHasMoney(sellerId, sellerToken, staffToken);
+
+  // The COD credit — the single most-asked-about line in a seller's
+  // ledger, and the one N5 is entirely about. N5 RECORDS the payout on
+  // camera, so for that video alone it must NOT already be on file.
+  if (slug === 'record-a-courier-payout') {
+    await unrecordTutorialPayouts(sellerId);
+  } else {
+    await settleOneCodForLedger(sellerId, staffToken);
+  }
+
+  if (slug === 'how-seller-money-works' || slug === 'accept-a-top-up') {
+    const { accounts } = await call('/seller/wallet/topups/bank-accounts', {
+      token: await sellerToken(),
+    });
+    // The RUPEE account. A claim's amount is in the account's own
+    // currency, and N2's narration quotes the figure the operator is
+    // about to credit — against the taka one it would be a different
+    // number by the exchange rate, which is a different video (E1).
+    const account = (accounts ?? []).find((a) => a.currency === 'INR');
+    if (account === undefined) {
+      throw new Error('No active rupee platform bank account — run the db seed first.');
+    }
+    await call('/seller/wallet/topups', {
+      method: 'POST',
+      token: await sellerToken(),
+      body: {
+        bankAccountId: account.id,
+        amount: DESK_TOPUP_INR,
+        // What a seller would copy off their own banking app. Unique per
+        // run, because the reference is what an operator matches against
+        // the statement and two claims sharing one would teach the
+        // opposite of what N2 says.
+        transactionRef: `NEFT${Date.now().toString().slice(-10)}`,
+      },
+    });
+    console.log(`  · one top-up claim waiting for review (₹${DESK_TOPUP_INR})`);
+  }
+
+  if (slug === 'how-seller-money-works' || slug === 'pay-a-seller-out') {
+    await call('/seller/wallet/withdrawal-requests', {
+      method: 'POST',
+      token: await sellerToken(),
+      body: {
+        currency: 'INR',
+        amount: `${DESK_WITHDRAWAL_INR}.00`,
+        note: 'Monthly payout to our BRAC account.',
+      },
+    });
+    console.log(`  · one withdrawal request waiting (₹${DESK_WITHDRAWAL_INR})`);
+  }
+
+  if (slug === 'approve-a-bank-change') {
+    // The change this take approves. Approving WRITES THE NEW ACCOUNT
+    // THROUGH, so a second take would find the seller already on the new
+    // details and `pendingBankChange` would raise nothing — it compares
+    // what is on file. Putting the original account back first is what
+    // makes the request raisable again.
+    await prisma.sellerBankChangeRequest.deleteMany({ where: { sellerId } });
+    await pendingBankChange(sellerId, sellerToken);
+  }
+}
+
+/**
+ * A wallet with money in it, reached the way a seller reaches it.
+ *
+ * Through the two real endpoints rather than a ledger insert: the
+ * accepted claim is on camera in N1 and N2 (the Credited tab prints its
+ * note and its reference in full), and a TOPUP ledger row whose claim
+ * does not exist is a row the screen cannot explain.
+ */
+async function ensureWalletHasMoney(sellerId, sellerToken, staffToken) {
+  const last = await prisma.sellerWalletEntry.findFirst({
+    where: { sellerId, currency: 'INR' },
+    orderBy: { id: 'desc' },
+    select: { runningBalanceAfter: true },
+  });
+  const balance = Number(last?.runningBalanceAfter ?? 0);
+  if (balance >= WALLET_FLOOR_INR) {
+    console.log(`  · wallet holds ₹${balance.toLocaleString('en-IN')}`);
+    return;
+  }
+  const { accounts } = await call('/seller/wallet/topups/bank-accounts', {
+    token: await sellerToken(),
+  });
+  const account = (accounts ?? []).find((a) => a.currency === 'INR');
+  if (account === undefined) {
+    throw new Error('No active rupee platform bank account — run the db seed first.');
+  }
+  const claim = await call('/seller/wallet/topups', {
+    method: 'POST',
+    token: await sellerToken(),
+    body: {
+      bankAccountId: account.id,
+      amount: WALLET_FLOOR_INR - balance,
+      transactionRef: `NEFT${Date.now().toString().slice(-10)}`,
+    },
+  });
+  await call(`/admin/wallet/topups/${claim.id}/accept`, {
+    method: 'POST',
+    token: staffToken,
+    body: { note: TOPUP_ACCEPT_NOTE },
+  });
+  console.log(`  · wallet topped up to ₹${WALLET_FLOOR_INR.toLocaleString('en-IN')}`);
+}
+
+/**
+ * Put back what an N5 take recorded.
+ *
+ * A settlement is append-mostly in production — the product's own answer
+ * to a mistake is an adjusting payout, never an edit (SETL-1) — and that
+ * is the right rule and the wrong one for a camera, because the second
+ * take would open on a float of zero under a line about money the
+ * courier has not paid us yet.
+ *
+ * So the take's OWN rows go: the payout, its lines, and the wallet
+ * entries the credit wrote. The wallet chain survives it because these
+ * are the NEWEST entries on the wallet — the take made them minutes ago
+ * — so nothing downstream of them has a running balance to be wrong.
+ * It refuses rather than guesses if that stops being true.
+ */
+async function unrecordTutorialPayouts(sellerId) {
+  const settlements = await prisma.courierSettlement.findMany({
+    where: { reference: { startsWith: DESK_PAYOUT_PREFIX } },
+    select: { id: true, reference: true },
+  });
+  if (settlements.length === 0) return;
+  const ids = settlements.map((s) => s.id);
+  const lines = await prisma.courierSettlementLine.findMany({
+    where: { settlementId: { in: ids } },
+    select: { orderId: true },
+  });
+  const orderIds = [...new Set(lines.map((l) => l.orderId))];
+
+  const touched = await prisma.sellerWalletEntry.findMany({
+    where: { sellerId, linkedOrderId: { in: orderIds } },
+    select: { id: true, direction: true },
+    orderBy: { id: 'desc' },
+  });
+  const settlementWritten = touched.filter((e) =>
+    ['COD_COLLECTION', 'GST_WITHHOLDING', 'COD_COLLECTION_FEE', 'INSTANT_PAY_FEE'].includes(
+      e.direction,
+    ),
+  );
+  const newest = await prisma.sellerWalletEntry.findMany({
+    where: { sellerId },
+    select: { id: true },
+    orderBy: { id: 'desc' },
+    take: settlementWritten.length,
+  });
+  const removable = new Set(settlementWritten.map((e) => e.id));
+  if (!newest.every((e) => removable.has(e.id))) {
+    throw new Error(
+      'The COD credit is no longer the newest thing on this wallet — removing it would leave ' +
+        'every later running balance wrong. Reseed the box instead of filming N5 on it.',
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.sellerWalletEntry.deleteMany({ where: { id: { in: [...removable] } } }),
+    prisma.courierSettlementLine.deleteMany({ where: { settlementId: { in: ids } } }),
+    prisma.courierSettlement.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+  console.log(
+    `  · un-recorded ${settlements.length} tutorial payout(s) and the ${removable.size} ` +
+      `wallet entr(ies) they wrote`,
+  );
+}
+
+/** What N5 types as the courier's own payout reference, on camera. */
+const DESK_PAYOUT_PREFIX = 'UTR-TUT-';
+
 async function main() {
   assertStack();
   console.log(`Seeding tutorial demo data against ${API}`);
@@ -5476,6 +5947,7 @@ async function main() {
   await superviseWorldFor(slug, sellerId, sellerToken);
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
   await binsWorldFor(slug, staffToken);
+  await adjustmentWorldFor(slug, sellerId, staffToken, warehouse);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);
@@ -5555,6 +6027,13 @@ async function main() {
       throw new Error(`${bad.length} freight bill(s) are not part-owed as E5 needs.`);
     }
   }
+
+  // Section N — the money desk, AFTER the parcels have moved for the
+  // same reason E2's ledger is: the COD credit it settles needs a
+  // DELIVERED order, and `walletWorldFor` above has already removed the
+  // previous take's withdrawal requests so this can re-create the one
+  // N1 and N3 film.
+  await moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken);
 
   // E2's ledger, AFTER the parcels have moved — the COD credit needs a
   // delivered order to settle, and the pending rows need a wallet that

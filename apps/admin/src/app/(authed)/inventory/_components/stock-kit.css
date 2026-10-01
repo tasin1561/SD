@@ -266,6 +266,24 @@
   color: var(--fg-strong);
   font-size: var(--fs-md);
   overflow-wrap: anywhere;
+  /*
+    A VALUE THAT CANNOT WRAP MUST NOT PAINT OVER THE ONE BESIDE IT.
+
+    `overflow-wrap: anywhere` settles ordinary prose, and an `Ident` is
+    not ordinary prose: `.sk-ident` is `white-space: nowrap` on purpose
+    ("an ID is one token: it never breaks at its hyphens"), so a uuid in
+    a three-column grid is wider than its cell and simply spills. On the
+    stock-adjustment review dialog that put the warehouse id and the
+    seller id ON TOP OF EACH OTHER, unreadable, on the one panel whose
+    whole job is to be read carefully before an act that cannot be
+    undone. Found by looking at a frame (L1, 2026-10-01); nothing throws.
+
+    The cell gives rather than the token, so the id stays whole and
+    selectable and the column beside it stays legible.
+  */
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 /* ── Notes, tones, errors ─────────────────────────────────────────────── */

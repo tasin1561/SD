@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 61 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, the whole of I, the whole of J, the whole of K and P5.** The 29 left are all in the admin app: 2 are
+**90 tutorials. 62 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1, and P5.** The 28 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,13 +32,35 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (61):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8** and **K1–K2** —
-**the whole of sections J and K**.
+**Filmed so far (62):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2** and
+**L1**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
-**THE NEXT ENTRY IS L1 — "Adjusting stock"**, and section K is finished.
+**SCOPE SPLIT, 2026-10-01: a SECOND agent is filming sections N and P on stack
+B.** `out/audio` and the final `out/<slug>.mp4` are shared between the two
+stacks and keyed on the SLUG, so two agents on one slug corrupt each other's
+output. Sections are handed out whole for that reason and it is a CONVENTION
+rather than an enforced rule. This agent's remaining list is **L, M and O**;
+N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
+required and has no default — see [Re-running](README.md#re-running).
+
+**THE NEXT ENTRY IS L2 — "Counting stock"**, and sections K and L1 are done.
+
+**WHAT L1 LEFT BEHIND, MEASURED (2026-10-01).** `adjustmentWorldFor` is a
+TOP-UP rather than a rebuild, because the take spends both halves of what it
+films: it APPROVES the waiting adjustment (which really removes twenty-five
+units) and RAISES one from the damaged shelf (which really removes one). So an
+EXECUTED or REJECTED row is history and left exactly alone; only an UNDECIDED
+row a previous take never reached is removed, which is safe precisely because
+PENDING means nothing has been applied. The twenty-five units come back on the
+next run through `ensureStockedVariant`, which receives up to the catalogue's
+figure; the damaged shelf has no such top-up, so `ensureDamagedBinStock` keeps
+three units there as an INCREASE with reason `DAMAGED_IN_WAREHOUSE` — which is
+what that reason means and the honest way to put a damaged unit on that shelf.
+**L2 should reuse it**: a cycle count's discrepancies become adjustments under
+the same threshold rules, so the same queue is the second half of that video.
 
 **WHAT K2 LEFT BEHIND, MEASURED (2026-10-01).** The returns bench now holds
 exactly ONE un-finalised return on any run, and it is K2's own: three things
@@ -270,7 +292,7 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — THIRTY-EIGHT so
+**Filming these screens is finding real bugs at a steady rate — FORTY so
 far, plus TEN in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
@@ -3070,19 +3092,49 @@ instant and stays.
 
 ## L — Correcting stock
 
-### L1. Adjusting stock · `needs demo data` · **dangerous**
+### L1. Adjusting stock · **FILMED** — `correct-a-count.mp4` · **dangerous**
 
 **Promise** — you can correct a count, and you know which corrections need a
 second person.
-**Length** 4 min. **Needs** stock in a bin.
-**Covers** `/inventory/adjustments`: posting one at the (variant, bin, batch)
-grain with ids typed rather than picked — because the operator is reading them
-off a count sheet — the mandatory reason stored permanently, and the threshold
-that routes a large adjustment to **approve or reject** while a small one
-executes in one go. Also the prefilled link from a bin's "Adjust", which is how
-a unit kept aside in the damaged bin goes back to the seller.
+**Length** 15 scenes, 3 min 3 s. **Needs**
+`seed-demo-data.mjs correct-a-count` (`adjustmentWorldFor` — no D0, so it is a
+fast seed).
+**Covers** `/inventory/adjustments`: the queue, which opens on PENDING because
+everything else is history and only that is a job; the review panel — direction,
+reason, value impact and **the threshold it was measured against, snapshotted
+when it was raised**; the description, which is all the approver gets; **Approve
+— this moves stock**, pressed; the history behind it; the form's four typed
+identifiers and why they are typed; and then the real path — the bin overview
+filtered to damaged, the shelf itself saying nothing is picked from it, and the
+control there called **"Return or scrap"** rather than Adjust, which opens the
+form already filled with the reason chosen from the bin's own TYPE.
 **Cost of getting it wrong:** the adjustment is the record; the reason you type
 is what somebody reads a year later trying to explain a variance.
+
+**AND IT FOUND TWO, ONE OF WHICH MADE THE SECOND HALF IMPOSSIBLE.**
+
+- **The form could not be submitted for most batches.** The value impact is what
+  decides whether a second person is needed, and it is `unitCostInr` × quantity
+  — the line's if it carries one, otherwise the batch's. A batch with neither is
+  refused outright (`ADJUSTMENT_LINE_COST_MISSING`). **The API has always taken a
+  per-line override and the form never offered one**, so every "Adjust" link on a
+  bin's contents led to a dead end with a verdict naming a field nobody could
+  see — and on this box **62 of 64 batches carry no unit cost**, which is an
+  ORDINARY state the product already acknowledges elsewhere (the seller's stock
+  page leaves those units out of "value at cost" and says why). An R6b child
+  batch inherits the parent's cost, so a RETURNED unit lands in exactly such a
+  batch, which makes WMS-8d's documented exit for a kept-aside unit unreachable
+  from the console. Now a "Unit cost (₹)" field with the sentence that says when
+  it is needed; pinned by `apps/admin/src/tests/adjustment-unit-cost.test.ts`,
+  red on the old component.
+- **Two uuids printed ON TOP OF EACH OTHER** on the review dialog. `.sk-ident` is
+  `white-space: nowrap` on purpose ("an ID is one token: it never breaks at its
+  hyphens"), so in a three-column `Facts` grid the warehouse id is wider than its
+  cell and spills over the seller id beside it — unreadable, on the one panel
+  whose job is to be read carefully before an act that cannot be undone. The CELL
+  gives now (`min-width: 0; overflow-x: auto` on `.stk-dl__value`) so the token
+  stays whole and selectable. **No spec: jsdom has no layout, so a unit test
+  cannot see an overlap.** It was found in a frame and it is verified in a frame.
 
 ### L2. Counting stock · `needs demo data` · **dangerous**
 

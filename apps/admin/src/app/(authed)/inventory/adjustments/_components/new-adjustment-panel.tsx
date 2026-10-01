@@ -71,6 +71,7 @@ export function NewAdjustmentPanel({
   const [binId, setBinId] = useState(prefill?.binId ?? '');
   const [batchId, setBatchId] = useState(prefill?.batchId ?? '');
   const [qty, setQty] = useState('');
+  const [unitCost, setUnitCost] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   if (!mayCreate) return null;
@@ -84,17 +85,28 @@ export function NewAdjustmentPanel({
     setBinId('');
     setBatchId('');
     setQty('');
+    setUnitCost('');
     setError(null);
   }
 
   const qtyNum = Math.abs(Number(qty));
   const qtyValid = qty.trim() !== '' && Number.isInteger(qtyNum) && qtyNum > 0;
+  /*
+    THE COST IS OPTIONAL HERE AND SOMETIMES MANDATORY ON THE SERVER, and
+    that asymmetry is deliberate: this form knows a batch id, not what
+    the batch cost, so only the server can say whether it is needed
+    (FE-2). What the form must do is make it POSSIBLE to answer — see
+    the field below.
+  */
+  const costNum = unitCost.trim() === '' ? null : Number(unitCost);
+  const costValid = costNum === null || (Number.isFinite(costNum) && costNum >= 0);
   const complete =
     sellerId.trim() !== '' &&
     variantId.trim() !== '' &&
     binId.trim() !== '' &&
     batchId.trim() !== '' &&
-    qtyValid;
+    qtyValid &&
+    costValid;
 
   async function onSubmit(): Promise<void> {
     setError(null);
@@ -114,6 +126,7 @@ export function NewAdjustmentPanel({
             binId: binId.trim(),
             batchId: batchId.trim(),
             qtyChange: signed,
+            ...(costNum === null ? {} : { unitCostInr: costNum }),
           },
         ],
       });
@@ -245,6 +258,31 @@ export function NewAdjustmentPanel({
               inputClassName="sk-ident"
               value={batchId}
               onChange={(e) => setBatchId(e.target.value)}
+            />
+            {/*
+              WITHOUT THIS FIELD, MOST BATCHES COULD NOT BE ADJUSTED AT
+              ALL. The value impact decides whether an adjustment needs a
+              second person (INV-8), and it is `unitCostInr` × quantity —
+              taken from the line if it carries one, otherwise from the
+              batch. A batch with neither is refused outright
+              (`ADJUSTMENT_LINE_COST_MISSING`), and a batch with no
+              recorded cost is an ORDINARY state the product already
+              acknowledges elsewhere: the seller's own stock page leaves
+              those units out of "value at cost" and says why. The API
+              has always accepted a per-line override; this form never
+              offered one, so every "Adjust" link on a bin's contents led
+              to a form that could not be submitted and a verdict naming
+              a field nobody could see. Found on 2026-10-01 writing L1,
+              with 62 of 64 batches on the demo box carrying no cost.
+            */}
+            <TextField
+              label="Unit cost (₹)"
+              hint="Only needed when the batch has no recorded cost. It is what decides whether this correction needs a second person."
+              inputMode="decimal"
+              inputClassName="sk-figure"
+              value={unitCost}
+              onChange={(e) => setUnitCost(e.target.value)}
+              {...(costValid ? {} : { error: 'Must be a number, zero or more.' })}
             />
           </Panel>
 

@@ -9862,6 +9862,392 @@ export const FLOWS = {
       },
     },
   },
+
+  'correct-a-count': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/inventory/adjustments`, { waitUntil: 'domcontentloaded' });
+        /*
+          IT OPENS ON PENDING, which is the whole argument of the screen
+          — everything else is history and only this is a job. The
+          seeding puts exactly one row here and asserts it came back
+          PENDING rather than auto-executing; this re-asserts it from the
+          SCREEN, because the flow reviews whichever row is first.
+        */
+        await reviewButton(page).waitFor({ state: 'visible', timeout: 25_000 });
+        const waiting = await page.locator('.sk-tbody .sk-tr').count();
+        if (waiting !== 1) {
+          throw new Error(
+            `${waiting} adjustment(s) are waiting for approval, expected exactly 1 — the flow ` +
+              'approves the first, and a second would move stock on camera unnarrated.',
+          );
+        }
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.locator('.sk-table').first(), 3000);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(page.locator('.stk-kpis').first(), 3200);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(reviewButton(page), { after: 1400 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(dialog, 2800);
+      },
+
+      async facts({ page, stage }) {
+        /*
+          THE SNAPSHOTTED THRESHOLD is the line the narration is about,
+          and it is a fact on the row rather than a setting read now — so
+          the gate is its LABEL inside the dialog, which is absent if the
+          column is ever dropped.
+        */
+        const facts = page.getByRole('dialog').locator('.stk-dl').first();
+        await facts.waitFor({ state: 'visible', timeout: 20_000 });
+        const said = await facts.innerText();
+        if (!/Approval threshold/i.test(said)) {
+          throw new Error('The review panel does not state the threshold it was measured against.');
+        }
+        await stage.dwellOn(facts, 3600);
+      },
+
+      async why({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.dwellOn(dialog.getByText(/Recounted twice by two people/i).first(), 2400);
+        await stage.dwellOn(dialog.getByRole('table').first(), 2800);
+      },
+
+      async choices({ page, stage }) {
+        await stage.dwellOn(dialogFoot(page), 3400);
+      },
+
+      async approve({ page, stage }) {
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: /^Approve/ }), {
+          after: 1600,
+        });
+        /*
+          THE DIALOG CLOSING IS THE SIGNAL, not the toast: approving
+          enqueues the executor, so the row becomes APPROVED and then
+          EXECUTED a moment later, and a gate on either word is a race.
+          The queue going empty is the durable fact and it is what the
+          next scene opens on.
+        */
+        const gone = page.getByText(/Nothing waiting/i).first();
+        await gone.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(gone, 2800);
+      },
+
+      async history({ page, stage }) {
+        await stage.point(page.locator('#adj-status'));
+        await page.locator('#adj-status').selectOption('');
+        await page.waitForTimeout(900);
+        const rows = page.locator('.sk-tbody .sk-tr');
+        await rows.first().waitFor({ state: 'visible', timeout: 20_000 });
+        const n = await rows.count();
+        if (n < 3) {
+          throw new Error(
+            `Only ${n} adjustment(s) in the whole history — the line is about the settled ones ` +
+              'sitting beside the approved one, so the seeding has not written them.',
+          );
+        }
+        await stage.dwellOn(page.locator('.sk-table').first(), 3200);
+      },
+
+      async form({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'New adjustment' }), { after: 1400 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        // The four identifiers and the sentence under them that says why
+        // they are typed rather than picked.
+        const grain = dialog.getByText(/read them off the count sheet/i).first();
+        await grain.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(grain, 3400);
+        // Dismissed HERE so the next scene opens on a page rather than a
+        // closing modal.
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: 'Cancel' }), {
+          after: 900,
+        });
+      },
+
+      async held({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/bins`, { waitUntil: 'domcontentloaded' });
+        const type = page.locator('#bc-type');
+        await type.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.point(type);
+        await type.selectOption('DAMAGED');
+        await page.waitForTimeout(1200);
+        const section = page.locator('.stk-section').first();
+        const said = await section.innerText();
+        if (!/RSH-JAMDANI-IVORY/.test(said)) {
+          throw new Error(
+            'Filtering the overview to damaged shows no line — `ensureDamagedBinStock` keeps a ' +
+              'unit or two on that shelf and is what the next three scenes act on.',
+          );
+        }
+        await stage.dwellOn(section, 3200);
+      },
+
+      async bin({ page, stage }) {
+        /*
+          THE BIN BY ITS CODE, which is COMPOSED from coordinates and not
+          typed (BIN-4), so it is the one stable handle on this page —
+          every id here is minted per box.
+        */
+        await stage.clickIt(page.getByRole('link', { name: 'D-01-01', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/\/warehouse\/bins\/[0-9a-f-]+$/, { timeout: 30_000 });
+        await returnOrScrap(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        /*
+          `.stk-card`, which is what `Panel` renders — NOT `.sk-card`,
+          and there is no `.stk-section` on this page at all. A miss
+          arrived as a thirty-second `scrollIntoViewIfNeeded` timeout on
+          a page that was plainly loaded, which is the shape a selector
+          miss takes here (see the README). The card carries both halves
+          of the line: the "not pickable" sentence and the row.
+        */
+        const card = page.locator('.stk-card').first();
+        const said = await card.innerText();
+        /*
+          THE CARD'S OWN SENTENCE, not the page header's. The header
+          subtitle says "· Damaged · not pickable" and the card says
+          "Nothing is picked from a damaged bin" — both true, and the
+          halo is on the card, so gating on the header would pass while
+          filming something that did not say it.
+        */
+        if (!/Nothing is picked from a damaged bin/i.test(said)) {
+          throw new Error(
+            `The bin card reads "${said.slice(0, 120)}" — expected it to say nothing is picked ` +
+              'from a damaged bin.',
+          );
+        }
+        await stage.dwellOn(card, 3000);
+      },
+
+      async prefilled({ page, stage }) {
+        await stage.clickIt(returnOrScrap(page), { after: 1800 });
+        await page.waitForURL(/\/inventory\/adjustments\?/, { timeout: 30_000 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 25_000 });
+        /*
+          GATED ON THE REASON, not on the dialog. The link carries a
+          whole line AND a reason chosen from the bin's TYPE
+          (`adjustmentHref`), and a form that opened empty — or on the
+          default "counting error" — would film a sentence about a choice
+          already made for you.
+        */
+        const reason = dialog.getByLabel(/^Reason/);
+        const chosen = await reason.inputValue();
+        if (chosen !== 'RETURNED_TO_SELLER') {
+          throw new Error(`The prefilled reason is "${chosen}", not returned to seller.`);
+        }
+        await stage.dwellOn(dialog.locator('.sk-field').first(), 2000);
+        await stage.dwellOn(reason, 1800);
+      },
+
+      async cost({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/^Quantity/), '1');
+        /*
+          THE UNIT COST FIELD. Without it this form could not be
+          submitted at all for a batch with no recorded cost — which is
+          most of them — because the value impact is what decides
+          whether a second person is needed and the server refuses an
+          adjustment it cannot price. Added 2026-10-01 while writing this
+          video; see the curriculum's Bugs found.
+        */
+        await stage.typeIn(dialog.getByLabel(/^Unit cost/), '2400');
+        await page.waitForTimeout(600);
+        await stage.dwellOn(
+          dialog.getByText(/decides whether this correction needs a second/i).first(),
+          2600,
+        );
+      },
+
+      async raise({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(
+          dialog.getByLabel(/^What happened/),
+          'Came back damaged and the seller asked for it back.',
+        );
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: /^Raise adjustment/ }), {
+          after: 1600,
+        });
+        /*
+          WHICH IT WAS is the line, and the toast is the only place that
+          is said. This screen's toast is the NEW provider
+          (`@skydrop/ui/app/toast`), so it pauses under the pointer —
+          unlike the RTO station's, which is the legacy one. Read K2's
+          entry before assuming either way.
+        */
+        const toast = page.locator('.sk-toast').first();
+        await toast.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.point(toast);
+        const said = await toast.innerText();
+        if (!/Applied/i.test(said)) {
+          throw new Error(`The adjustment came back "${said.trim()}" — expected it to apply.`);
+        }
+        await page.waitForTimeout(3200);
+        await stage.clearHalo();
+      },
+
+      async outro({ page, stage }) {
+        /*
+          THE SCREEN'S OWN CLOSING SENTENCE. Raising the correction sent
+          the page back to its default PENDING filter, and the empty
+          state there says exactly what this video has been about —
+          smaller corrections apply immediately, look under Executed for
+          those — which is a better last frame than a row of zeroes.
+        */
+        const empty = page.getByText(/Smaller corrections apply immediately/i).first();
+        await empty.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(empty, 3400);
+      },
+    },
+  },
+  /*
+    N1 — the money desk, read-only.
+
+    TWO screens and not one click that writes anything, which is the
+    whole argument for it being first in section N: every other video in
+    the section writes to what this one reads.
+
+    A KPI tile is reached through its OWN label element and not through
+    `hasText` on the card: `hasText` is a case-insensitive SUBSTRING, and
+    "Balance" is inside "Balance, less the floor and anything already
+    requested" on the tile beside it — so the unscoped form matches two
+    cards and `.first()` quietly takes whichever the grid puts first.
+  */
+  'how-seller-money-works': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/seller-wallets`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.getByRole('heading', { name: 'Seller wallets', exact: true }).first().waitFor({
+          state: 'visible',
+          timeout: 25_000,
+        });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.sk-kpis, .mk-kpis').first(), 2600);
+      },
+
+      async owed({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'We owe sellers'), 2400);
+        await stage.dwellOn(moneyKpi(page, 'Sellers owe us'), 2600);
+      },
+
+      async 'not-yet'({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Withdrawals held'), 2600);
+        await stage.dwellOn(moneyKpi(page, 'Top-ups in review'), 2800);
+      },
+
+      async row({ page, stage }) {
+        const table = page.locator('table').filter({ hasText: 'Available balance' }).first();
+        await table.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(table, 2200);
+        const open = page.getByRole('link', { name: /Ledger/ }).first();
+        await stage.clickIt(open, { after: 1500 });
+        await page.waitForURL(/\/seller-wallets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+      },
+
+      async balance({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Balance'), 2200);
+        await stage.dwellOn(moneyKpi(page, 'Available to withdraw'), 2600);
+      },
+
+      async held({ page, stage }) {
+        const card = moneyCard(page, 'Where their money is held');
+        await card.waitFor({ state: 'visible', timeout: 25_000 });
+        await card.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(card, 4200);
+      },
+
+      async rules({ page, stage }) {
+        const card = moneyCard(page, 'Wallet rules for this seller');
+        await card.waitFor({ state: 'visible', timeout: 25_000 });
+        await card.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(card, 4600);
+      },
+
+      /*
+        The ledger table itself. Gated on a row TYPE rather than on the
+        card, because the card renders its own empty state just as
+        happily and a video about six kinds of line cannot open on
+        "nothing moved yet".
+      */
+      async ledger({ page, stage }) {
+        const table = page.locator('table').filter({ hasText: 'Balance after' }).first();
+        await table.waitFor({ state: 'visible', timeout: 25_000 });
+        await table.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await ledgerRow(page, 'Wallet top-up');
+        await page.waitForTimeout(600);
+        await stage.dwellOn(table, 3400);
+      },
+
+      async topup({ page, stage }) {
+        await stage.dwellOn(await ledgerRow(page, 'Wallet top-up'), 4200);
+      },
+
+      async cod({ page, stage }) {
+        await stage.dwellOn(await ledgerRow(page, 'COD collected'), 4600);
+      },
+
+      async gst({ page, stage }) {
+        await stage.dwellOn(await ledgerRow(page, 'COD tax deduction'), 4400);
+      },
+
+      async charges({ page, stage }) {
+        await stage.dwellOn(await ledgerRow(page, 'Order charges'), 2400);
+        await stage.dwellOn(await ledgerRow(page, 'Return fee'), 3000);
+      },
+
+      async refund({ page, stage }) {
+        await stage.dwellOn(await ledgerRow(page, 'Damage settlement'), 4200);
+      },
+
+      async tabs({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: 'Top-ups' }).first(), { after: 1600 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('table').first(), 2600);
+        await stage.clickIt(page.getByRole('tab', { name: 'Withdrawal requests' }).first(), {
+          after: 1600,
+        });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('table').first(), 2600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: 'Ledger' }).first(), { after: 1400 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(
+          page.locator('table').filter({ hasText: 'Balance after' }).first(),
+          3400,
+        );
+      },
+    },
+  },
 };
 
 /**
@@ -10039,6 +10425,24 @@ function benchRow(page) {
   return page.locator('.sk-tbody .sk-tr').first();
 }
 
+/** L1's one waiting adjustment, and the link out of the damaged shelf. */
+function reviewButton(page) {
+  return page.getByRole('button', { name: 'Review' }).first();
+}
+
+/**
+ * The control beside a line in a DAMAGED bin.
+ *
+ * It is literally called something else there — `bin-detail.tsx` reads
+ * "Return or scrap" for a damaged bin and "Adjust" everywhere else —
+ * which is the scene. Reached by its `aria-label`, which names the SKU
+ * and the bin and is therefore the only handle that cannot match the
+ * wrong row.
+ */
+function returnOrScrap(page) {
+  return page.getByRole('link', { name: /in bin D-01-01$/ }).first();
+}
+
 /** The one returned line in the station below. */
 function rtoLine(page) {
   return page.locator('.wh-item').first();
@@ -10212,4 +10616,34 @@ async function expectCount(page, skuCode, reads) {
         (alert === '' ? '' : ` — the bench says: ${alert.trim()}`),
     );
   }
+}
+
+/**
+ * One KPI tile on a MONEY screen, by the words on its OWN label.
+ *
+ * Named apart from `kpi` above, which is the stock and freight pages'
+ * grid and a different element entirely.
+ *
+ * `page.locator('.sk-kpi', { hasText: 'Balance' })` is the obvious form
+ * and it is wrong here: `hasText` is a case-insensitive SUBSTRING over
+ * the whole card, and the tile beside Balance reads "Balance, less the
+ * floor and anything already requested" — so it matches two, `.first()`
+ * takes whichever the grid happens to put first, and the halo lands on
+ * the wrong figure while every step passes. Matching the LABEL element
+ * exactly is what says "this tile and no other".
+ */
+function moneyKpi(page, label) {
+  return page
+    .locator('.sk-kpi')
+    .filter({ has: page.locator('.sk-kpi__label', { hasText: label }) })
+    .filter({ hasText: label })
+    .first();
+}
+
+/** One card on a wallet screen, by its title rather than by its prose. */
+function moneyCard(page, title) {
+  return page
+    .locator('.mk-card')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+    .first();
 }

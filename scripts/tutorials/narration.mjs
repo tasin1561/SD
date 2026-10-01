@@ -3550,6 +3550,140 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'correct-a-count',
+    title: 'Adjusting stock',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A stock adjustment is how a count gets put right — the one way a figure changes without a parcel being involved. The screen opens on the only thing here that is a job.',
+      },
+      {
+        id: 'tiles',
+        say: 'Everything else is history. These say what is waiting and what it stands to move: the value those corrections would take off the books, or put back on.',
+      },
+      {
+        id: 'open',
+        say: 'Review opens the case for it. Somebody counted, somebody else is being asked to agree, and nothing has moved yet — which is the only reason this screen exists.',
+      },
+      {
+        id: 'facts',
+        say: 'Direction, reason, what it is worth, and the threshold it was measured against — written down when it was raised. Change that setting tomorrow and this row still says what the rule was.',
+      },
+      {
+        id: 'why',
+        say: 'Then the words, and they carry the whole thing: the approver reads this and nothing else. Underneath is the line itself — a product, a shelf, a batch, and how many.',
+      },
+      {
+        id: 'choices',
+        say: 'Two ways out. Rejecting wants a reason and keeps it for good, which is the answer to why this never happened. The other button says what it does rather than what it is called.',
+      },
+      {
+        id: 'approve',
+        say: 'Because approving is not agreeing on paper. It writes the movement, the shelf count changes from that press, and nothing on this screen can put it back.',
+      },
+      {
+        id: 'history',
+        say: 'The queue is empty and the rest is history — a correction small enough to apply on its own sitting beside the one that needed two people, each with what it actually moved.',
+      },
+      {
+        id: 'form',
+        say: 'Raising one asks for identifiers rather than dropdowns, and that is on purpose: stock is held per batch per shelf, and whoever types this has the numbers on a count sheet in front of them.',
+      },
+      {
+        id: 'held',
+        say: 'Most corrections start somewhere else, though. Filter what is in every bin down to damaged, and here is stock deliberately held back — nothing is ever picked from one of these.',
+      },
+      {
+        id: 'bin',
+        say: 'Open the shelf itself. It says plainly that it is not pickable, and the control beside the line is not called adjust here, because there are only two places a unit on this shelf can go.',
+      },
+      {
+        id: 'prefilled',
+        say: 'It opens filled in. Product, shelf, batch, and the reason already chosen — something on a damaged shelf goes back to the seller or it gets scrapped, and nothing else.',
+      },
+      {
+        id: 'cost',
+        say: 'How many, and what one of them is worth. That second figure is the gate: quantity times value is what decides whether this applies now or waits for somebody.',
+      },
+      {
+        id: 'raise',
+        say: 'This one is under it, so it applies as you press. Read which the message says — applied, or waiting — because that is the whole difference between a correction and a conversation.',
+      },
+      {
+        id: 'outro',
+        say: 'So: small ones apply themselves, large ones wait for somebody else, and the reason you type is read by a person next year trying to explain a number that will not add up.',
+      },
+    ],
+  },
+  {
+    slug: 'how-seller-money-works',
+    title: 'How seller money works',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'This is the money desk. Seller wallets adds up everything Skydrop owes a seller and everything a seller owes us, and holds every line behind those two numbers.',
+      },
+      {
+        id: 'owed',
+        say: 'The first figure is a liability, payable on demand — any seller in credit can ask for it today. The second is the other direction: a wallet that has gone negative is money we are owed.',
+      },
+      {
+        id: 'not-yet',
+        say: 'These two are deliberately not inside those totals in the same way. A withdrawal asked for is still in the balance, because a request is not a payment. A top-up claimed is in no balance at all.',
+      },
+      {
+        id: 'row',
+        say: 'One row per seller, with what they can draw and what is waiting on us. Open the ledger behind it.',
+      },
+      {
+        id: 'balance',
+        say: 'Balance is what we owe them. Available to withdraw is that, less the floor we hold back and anything already requested — so the two agree only when nothing is pending.',
+      },
+      {
+        id: 'held',
+        say: 'Where their money is held answers what a balance cannot: which of our own accounts the cash is actually sitting in. Paying taka out of an account holding only rupees is not something a balance warns you about.',
+      },
+      {
+        id: 'rules',
+        say: 'Then the rules in force for this seller. Read-only here, and already resolved — the figure shown is the one being applied, not the two places it might have come from. Anything marked override was agreed with them.',
+      },
+      {
+        id: 'ledger',
+        say: 'The ledger is the whole history, newest first, and only money that actually moved is on it. Six kinds of line here, and you should be able to explain every one.',
+      },
+      {
+        id: 'topup',
+        say: 'A top-up is money the seller sent us, matched against our statement and credited. The reference on the row is the one off their own transfer — that is the thing it was matched on.',
+      },
+      {
+        id: 'cod',
+        say: 'A COD credit is cash the courier collected from the customer at the door. It lands when the courier pays us, not when the parcel arrived — crediting at delivery would mean fronting every seller a week of their own takings.',
+      },
+      {
+        id: 'gst',
+        say: 'Beside it, the tax line. It is extracted from a price that already included the tax, never added on top, and it is its own row rather than netted into the credit — so what was withheld can be summed.',
+      },
+      {
+        id: 'charges',
+        say: 'Order charges are what we billed for carrying the parcel. A return fee is what the round trip cost when it came back, and it has a direction of its own so that what returns cost this month is answerable from here alone.',
+      },
+      {
+        id: 'refund',
+        say: 'A damage settlement is us paying for goods spoiled in our hands. It is written in the same transaction as the ticket that closed, so a refund with no ticket behind it cannot exist.',
+      },
+      {
+        id: 'tabs',
+        say: 'The other two tabs are what has merely been asked for. A claim on one, a request on the other, and neither has moved a rupee — which is why the ledger does not know about either of them yet.',
+      },
+      {
+        id: 'outro',
+        say: 'So the ledger is history, and it is append-only — nothing on this screen edits a line. Every screen after this one writes to what you have just read.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
