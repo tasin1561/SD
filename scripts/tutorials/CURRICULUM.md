@@ -7,7 +7,7 @@ order a person meets them. Derived from the code — the 47 seller pages under
 components actually perform — not from the sidebar and not from memory.
 
 **90 tutorials. 77 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N7, N9, O1–O2 and P5.** The 13 left are all in the admin app: 2 are
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O2 and P5.** The 13 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -34,7 +34,7 @@ a third section and roughly another fifteen tutorials.
 
 **Filmed so far (77):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N7**, **N9** and **O1–O2**.
+**L1–L3**, **M1–M2**, **N1–N9** and **O1–O2**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -115,10 +115,13 @@ teach the wrong habit.
 N1–N9 are all filmed, and N10 is `impractical locally`. THE NEXT ENTRY IS P1 —
 "God mode".** **None of P1–P4 has narration or a flow yet**, and P4 is now
 `partly filmable` rather than impractical (read its entry: the preview half of
-`/warehouse/collapse` is the product's own first step and moves nothing) — N5 and N6 landed
-in a commit titled "N3 and N4", which is the slug-against-number confusion
-worth expecting rather than a mistake in the code (`record-a-courier-payout`
-is N5, `move-money-by-hand` is N6).
+`/warehouse/collapse` is the product's own first step and moves nothing).
+
+**Expect the slug and the number to disagree in the history.** N5 and N6 landed
+in a commit titled "N3 and N4", and N2's own commit message is inside M1's —
+one working tree, two agents. The slugs are the durable names:
+`record-a-courier-payout` is N5, `move-money-by-hand` is N6, `the-bank-book` is
+N7 and `bill-the-freight` is N8.
 
 **N3's four defects are the pattern to expect in the rest of N**, and they are
 written up in its entry: a narration line describing a form the product does
