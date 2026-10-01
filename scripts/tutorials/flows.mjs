@@ -11131,6 +11131,11 @@ export const FLOWS = {
           { after: 1800 },
         );
         await dialog.waitFor({ state: 'detached', timeout: 25_000 });
+        // The halo is still outlining where the dialog's footer WAS, and
+        // with the dialog gone that is an empty box floating under an
+        // empty page for the rest of the scene. Nothing else here is
+        // worth pointing at — the toast says what happened.
+        await stage.clearHalo();
         await page.waitForLoadState('networkidle').catch(() => {});
       },
 

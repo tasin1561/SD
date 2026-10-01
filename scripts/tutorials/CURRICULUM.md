@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 69 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1, N1–N3, N9 and P5.** The 21 left are all in the admin app: 2 are
+**90 tutorials. 70 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1, N1–N4, N9 and P5.** The 20 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (69):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (70):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1**, **N1–N3** and **N9**.
+**L1–L3**, **M1**, **N1–N4** and **N9**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -63,10 +63,10 @@ to Kolkata, a return that came back to the wrong building. Do NOT film
 Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
 teach the wrong habit.
 
-**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N4 —
-"Approving a change of bank account".** N1, N2, N3 and N9 are filmed.
+**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N5 —
+"Recording what the courier paid us".** N1–N4 and N9 are filmed.
 `moneyDeskWorldFor` is the shared world N2–N7 draw on, and the narration and
-flows for **N4, N5 and N6** are written and not yet checked — N5 and N6 landed
+flows for **N5 and N6** are written and not yet checked — N5 and N6 landed
 in a commit titled "N3 and N4", which is the slug-against-number confusion
 worth expecting rather than a mistake in the code (`record-a-courier-payout`
 is N5, `move-money-by-hand` is N6).
@@ -3534,13 +3534,49 @@ side (`linkedRemittanceId` is on the request). **Remittances accumulate across
 takes** and are left alone; the closing shot is the withdrawals list, not that
 table.
 
-### N4. Approving a change of bank account · `needs demo data` · **dangerous**
+### N4. Approving a change of bank account · **FILMED** — `approve-a-bank-change.mp4`
 
 **Promise** — you can approve a seller's new bank details safely.
-**Length** 2 min. **Prerequisites** N3. **Needs** a pending change from A2.
+**Length** 2 min 33 s of narration over 12 scenes. **Prerequisites** N3.
+**Needs** D0 plus `moneyDeskWorldFor`.
 **Covers** `/bank-changes`. Short, and the shortest tutorial with the highest
 stakes in the library: this screen decides **where a seller's money goes**, and
 approving a change somebody else requested is the whole attack.
+
+**`pendingBankChange` ONLY EVER WORKED FROM NOTHING, and nothing said so
+(2026-10-01).** It does two PATCHes — a "first add" that writes straight
+through, then the change an admin has to approve — and `SellerProfileService`
+decides which of those a PATCH is by asking whether all six bank fields are
+already present, **never whether the values actually moved**. So with an account
+on file the first PATCH is itself a change, raises the request, and the second
+gets `BANK_CHANGE_ALREADY_PENDING`. P5 has used that helper for weeks without
+noticing, because nothing had put an account on file before it ran;
+`moneyDeskWorldFor` puts the payout details back on EVERY run (a withdrawal is
+refused outright without them), so N4 met it immediately. The helper now clears
+the six fields plus the MASK and the KEY VERSION first — clearing is the one
+other edit the product writes straight through, there being nowhere for money to
+go — which also fixes the left-hand column of the diff card: the direct
+`prisma.seller.update` upstream writes the account number in PLAINTEXT into a
+column the product keeps encrypted, and that first PATCH is what replaces it
+with a properly encrypted one. **A helper whose precondition is "nothing on
+file" should assert or establish it, not hope.**
+
+**Its closing line needed a withdrawal to point at.** The outro says the next
+withdrawal for this seller is typed against the account just approved — and
+after an N3 take there is no request left, so it was spoken over a page reading
+"No pending requests". `moneyDeskWorldFor` raises one for this slug too.
+
+**And the outro originally described the Reject dialog, which the video cannot
+reach**: the take approves the only request there is, and the product allows one
+pending change per seller (a partial unique), so there is nothing left to open
+Reject on. The line was rewritten to give the advice without claiming to show
+it. Same class as N3's narration defect — **a sentence about a control that is
+not in the frame**.
+
+**A take SPENDS the request** (approving writes the new account through, so
+`pendingBankChange` would raise nothing next time — it compares what is on
+file), which is why the seeding deletes the request and puts the original
+account back before raising it again.
 
 ### N5. Recording what the courier paid us · `needs demo data` · **dangerous**
 

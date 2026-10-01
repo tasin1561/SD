@@ -1404,6 +1404,42 @@ async function pendingBankChange(sellerId, sellerToken) {
     console.log('  · a bank change is already waiting for review');
     return;
   }
+  /*
+    CLEAR THE ACCOUNT FIRST, because the two PATCHes below only work
+    from nothing.
+
+    `SellerProfileService` writes a FIRST ADD straight through and sends
+    every later EDIT to an admin, and "on file" means all six fields are
+    present — it does not ask whether the values actually moved. So with
+    an account already on file the first PATCH below is itself a change,
+    raises the request, and the second one gets
+    `BANK_CHANGE_ALREADY_PENDING`. That is exactly what N4 hit:
+    `moneyDeskWorldFor` puts the payout details back on every run (a
+    withdrawal is refused outright without them), so by the time this
+    runs there is always an account.
+
+    Clearing is the one other edit the product writes straight through —
+    there is nowhere for money to go, so there is nothing to redirect —
+    and it must take the MASK and the KEY VERSION with it, or the row is
+    left claiming an account number it no longer holds. It is also what
+    makes the "what is on file" side of the diff card honest: the direct
+    `prisma.seller.update` upstream writes the account number in
+    PLAINTEXT into a column the product keeps encrypted, and the first
+    PATCH below is what replaces it with a properly encrypted one.
+  */
+  await prisma.seller.update({
+    where: { id: sellerId },
+    data: {
+      bankName: null,
+      bankBranchName: null,
+      bankAccountName: null,
+      bankAccountNumber: null,
+      bankAccountNumberMasked: null,
+      bankAccountNumberKeyVersion: null,
+      bankRoutingNumber: null,
+      bankSwiftCode: null,
+    },
+  });
   // `sellerToken` is the LAZY LOGIN this file passes everywhere, not a
   // string — it signs in on first use and caches.
   const token = await sellerToken();
@@ -6013,7 +6049,19 @@ async function moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken) {
     }
   }
 
-  if (slug === 'how-seller-money-works' || slug === 'pay-a-seller-out') {
+  /*
+    N4 gets one too, and it is not decoration. Its closing line is that
+    the next withdrawal for this seller is typed against the account
+    just approved — and after an N3 take there is no request left, so
+    that sentence was spoken over an empty page reading "No pending
+    requests". One waiting is both the honest picture and the thing the
+    sentence is about.
+  */
+  if (
+    slug === 'how-seller-money-works' ||
+    slug === 'pay-a-seller-out' ||
+    slug === 'approve-a-bank-change'
+  ) {
     await call('/seller/wallet/withdrawal-requests', {
       method: 'POST',
       token: await sellerToken(),

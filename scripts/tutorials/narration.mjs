@@ -3987,7 +3987,7 @@ export const VIDEOS = [
       },
       {
         id: 'outro',
-        say: 'Rejecting takes a reason and the seller reads it, so say what you need from them. And when you are not sure, that is the right button — a payout delayed by a phone call costs nothing that a payout to the wrong account does.',
+        say: 'Rejecting is the other way out, and it needs a reason the seller reads — so when you are not sure, that is the button. A payout delayed by a phone call costs nothing that a payout to the wrong account does. And this is where the decision shows up: the next withdrawal anybody pays for this seller is typed against the account you just let through.',
       },
     ],
   },
