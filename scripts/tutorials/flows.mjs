@@ -10639,7 +10639,24 @@ export const FLOWS = {
         await stage.dwellOn(claimRow(page, TOPUP_TO_ACCEPT).locator('td').nth(4), 4600);
       },
 
-      async accept({ page, stage }) {
+      /*
+        The accept, and the one piece of state this flow carries forward.
+
+        AN ACCEPTED CLAIM IS HISTORY AND THE SEED LEAVES IT ALONE — correctly:
+        it credited real money, and deleting it would leave a TOPUP ledger row
+        whose claim does not exist. So the Credited tab grows by one ₹18,000
+        row per take, and `claimRow`'s `.first()` then halos the row a PREVIOUS
+        take credited rather than the one just pressed. Every step still
+        passes and the frame still looks right — same seller, same amount, the
+        same note typed by the same flow — but the REFERENCE under the halo is
+        not the one the dialog named a moment earlier, and this video's whole
+        subject is that the reference is what a claim is matched on.
+
+        So the reference is read off the dialog — which is exactly what the
+        operator reads — and the closing scene reaches for THAT row.
+      */
+      async accept(ctx) {
+        const { page, stage } = ctx;
         await stage.clickIt(
           claimRow(page, TOPUP_TO_ACCEPT).getByRole('button', { name: 'Accept' }).first(),
           { after: 1400 },
@@ -10647,7 +10664,17 @@ export const FLOWS = {
         const dialog = page.getByRole('dialog');
         await dialog.waitFor({ state: 'visible', timeout: 20_000 });
         await page.waitForTimeout(600);
-        await stage.dwellOn(dialog.locator('.mk-subject').first(), 3200);
+        const subject = dialog.locator('.mk-subject').first();
+        const ref = (await subject.innerText()).match(/ref\s+(\S+)/)?.[1];
+        if (ref === undefined) {
+          throw new Error(
+            'The accept dialog names no reference — its subject line reads ' +
+              `"${await subject.innerText()}". The closing scene reaches for the ` +
+              'credited row by it.',
+          );
+        }
+        ctx.acceptedRef = ref;
+        await stage.dwellOn(subject, 3200);
       },
 
       async warning({ page, stage }) {
@@ -10684,14 +10711,23 @@ export const FLOWS = {
         await page.waitForTimeout(800);
       },
 
-      async credited({ page, stage }) {
+      async credited({ page, stage, acceptedRef }) {
         await page
           .getByLabel(/^Status$/)
           .first()
           .selectOption('ACCEPTED');
         await page.waitForLoadState('networkidle').catch(() => {});
-        const row = claimRow(page, TOPUP_TO_ACCEPT);
-        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        // By the reference the dialog named, never by the amount: see
+        // `accept`. A reference is minted per run, so one row or none.
+        const row = page.getByRole('row').filter({ hasText: acceptedRef });
+        await row.first().waitFor({ state: 'visible', timeout: 25_000 });
+        const found = await row.count();
+        if (found !== 1) {
+          throw new Error(
+            `${found} credited claims carry the reference ${acceptedRef}; it is ` +
+              'minted per run and the halo means this one.',
+          );
+        }
         await page.waitForTimeout(700);
         await stage.dwellOn(row.locator('td').nth(5), 4200);
       },

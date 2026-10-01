@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 65 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1, L2, N1, N9 and P5.** The 25 left are all in the admin app: 2 are
+**90 tutorials. 66 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1, L2, N1, N2, N9 and P5.** The 24 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (65):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (66):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L2**, **N1** and **N9**.
+**L1–L2**, **N1**, **N2** and **N9**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -49,10 +49,13 @@ required and has no default — see [Re-running](README.md#re-running).
 **THE NEXT ENTRY IS L3 — "Reading the stock ledger"**, and sections K, L1 and
 L2 are done.
 
-**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N2 —
-"Accepting a top-up".** N1 and N9 are filmed. `moneyDeskWorldFor` is the shared
-world N2–N7 draw on, and the narration and flows for **N2, N3 and N4** are
-written and not yet checked.
+**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N3 —
+"Paying a seller out".** N1, N2 and N9 are filmed. `moneyDeskWorldFor` is the
+shared world N2–N7 draw on, and the narration and flows for **N3, N4, N5 and
+N6** are written and not yet checked — N5 and N6 landed in a commit titled "N3
+and N4", which is the slug-against-number confusion worth expecting rather than
+a mistake in the code (`record-a-courier-payout` is N5, `move-money-by-hand`
+is N6).
 
 **A REBUILD BY EITHER AGENT BREAKS THE OTHER AGENT'S RUNNING NEXT SERVER, AND
 IT PRESENTS AS A MOVED SELECTOR.** `apps/*/.next` is shared and is read-only at
@@ -3350,15 +3353,40 @@ OWN rows where it does not.
   ledger — and without it the second take opens on two identical claims under a
   line about one.
 
-### N2. Accepting a top-up · `needs demo data` · **dangerous**
+### N2. Accepting a top-up · **FILMED** — `accept-a-top-up.mp4`
 
 **Promise** — you can credit a seller for money that has actually arrived.
-**Length** 3 min. **Prerequisites** N1. **Needs** a pending claim from E1.
+**Length** 2 min 20 s of narration over 13 scenes. **Prerequisites** N1.
+**Needs** D0 plus `moneyDeskWorldFor`.
 **Covers** `/topups`: the claim, its reference and proof, and matching it
 against the bank before accepting.
 **Cost of getting it wrong:** **accepting is the credit.** A seller declaring a
 transfer is a claim, not a payment — accept one that never landed and you have
 given away money that can then be withdrawn.
+
+**THE CLOSING SCENE REACHES BY REFERENCE, AND THAT IS THE WHOLE FINDING
+(2026-10-01).** It used to reach `claimRow(page, 18000)` — the same handle the
+first ten scenes use, which is right while the claim is PENDING because the seed
+deletes a previous take's pending claims. **An ACCEPTED claim is history and the
+seed correctly leaves it alone** (it credited real money; deleting it would
+leave a `TOPUP` ledger row whose claim does not exist), so the Credited tab
+grows by one ₹18,000 row per take and `.first()` haloed **a row an earlier take
+credited**. Every step passed, `TUT_CHECK_SHOTS` was the only thing that said
+so, and even the frame looked plausible — same seller, same amount, the same
+note typed by the same flow, a timestamp twenty minutes stale. The lie was the
+REFERENCE, which is the one thing this video is about. So `accept` reads the ref
+off the dialog's own subject line — what the operator reads — into the shared
+`ctx` (the object `record.mjs` threads through every step, added for L2 the same
+afternoon), and `credited` reaches for that row and **asserts there is exactly
+one**. **Four ₹18,000 rows on the Credited tab by the fourth take is expected
+and is left alone**: the narration names no count, and it reads as a desk with
+history rather than a demo.
+
+The seeding stages **TWO** claims (₹18,000 and ₹4,250) for a reason the flow
+cannot work around: the take accepts the first, so without a second there is
+nothing left for the refusal scene to open a dialog on. A take spends the first
+claim and leaves the second, so seed → check → seed → check → seed → take, as
+for D4 and J2.
 
 ### N3. Paying a seller out · `needs demo data` · **dangerous**
 
