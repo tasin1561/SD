@@ -3177,6 +3177,73 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'pack-a-parcel',
+    title: 'Packing a parcel',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'This is the packing bench, and it has one field on it. Scan the shipping label to open a box, scan each product in, scan the label again to close. The packer never touches a keyboard.',
+      },
+      {
+        id: 'queue',
+        say: 'With nothing in hand it shows what is coming, oldest first. Nothing here claims a parcel — the box does that — and anything with no printed label is called out, because there is nothing to scan.',
+      },
+      {
+        id: 'open',
+        say: 'Reading the label is how a packer finds out what the parcel is. Scanning it opens a box, and that box is the claim — one per parcel, one per packer, held by the database itself.',
+      },
+      {
+        id: 'lines',
+        say: 'Now the biggest thing on the screen is what still has to go in, with the quantity beside each line. That is the question somebody asks from across a bench, so it gets the room.',
+      },
+      {
+        id: 'first',
+        say: 'Scan the first one in. The count moves, and a satisfied line goes quiet rather than vanishing — a line that disappeared would leave a packer wondering whether they scanned it or imagined it.',
+      },
+      {
+        id: 'set',
+        say: 'The second of the same product finishes that line. Look at the box now: two of one thing and none of the other. A count of what is inside would wave that through.',
+      },
+      {
+        id: 'toomany',
+        say: 'So try one too many. It is refused at the scan, with the item still in your hand — not at the end, when the box is taped and something in it is wrong.',
+      },
+      {
+        id: 'fixed',
+        say: 'And a refusal stops the bench. Nothing went into the box, and the field stays dead until somebody says they have dealt with it, because a scanner types and presses Enter on its own.',
+      },
+      {
+        id: 'third',
+        say: 'Back at it, and scan the one that is genuinely missing. The box is full, and it says so along with what to do next rather than leaving you to work it out.',
+      },
+      {
+        id: 'close',
+        say: 'Scanning the label again is the packer saying the box in front of them is the one they opened. The contents are checked as a set, product by product and unit by unit.',
+      },
+      {
+        id: 'manifest',
+        say: 'And here it is. The parcel joined a manifest without anybody asking for one — a manifest being the record of what went out on a van, not a step. Made for you at the bench, finished for you at the door.',
+      },
+      {
+        id: 'second',
+        say: 'Now a box that is not going to be finished. Open the next parcel, scan its product in — and then find the outer carton crushed, which is the ordinary reason for what comes next.',
+      },
+      {
+        id: 'cancel',
+        say: 'Cancelling says the important part plainly. The scans are discarded and the parcel goes back in the queue, and nothing returns to inventory — packing takes the stock out, and this box never got there.',
+      },
+      {
+        id: 'cancelled',
+        say: 'Gone, with the parcel back on the list for whoever picks it up next. The reason is required, and it is the only record anywhere that this box was ever opened.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the label opens the box, the products go in one scan at a time, and the label closes it. Everything the bench refuses, it refuses while the thing is still in your hand.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

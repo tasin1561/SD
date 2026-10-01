@@ -32,48 +32,39 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (54):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J3**.
+**Filmed so far (55):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J4**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
-**THE NEXT ENTRY IS J4 — "Packing a parcel"**, and J3 has left it most of what
-it needs. `pickWorldFor` (`seed-demo-data.mjs`) places three confirmed, labelled
-parcels addressed to one pin, and J3's take walks them all the way to PICKED —
-**measured, not predicted: after the take the three sat at PICKED and the pack
-queue held them**, which is exactly what the bench selects on (`o.status =
-'picked'`, WMS-2). **So J4's seeding is probably `pickWorldFor` plus one step**:
-drive the three through the printing station with the API rather than the
-camera, and stop at PICKED. It is the same shape as I2 and I3 sharing
-`SUPERVISE_SLUGS`.
+**THE NEXT ENTRY IS J5 — "Packing without a scan"**, and J4 has left it almost
+everything. **MEASURED after J4's take, not predicted:** the three `RSH-PICK-*`
+parcels end it as one PACKED, one PICKED whose box was cancelled, and one PICKED
+never touched — so **two parcels are sitting on the pack bench the moment J5
+opens**, which is exactly what it needs. `pickWorldFor`'s `PICK_STAGE` already
+serves `pack-a-parcel`; J5 almost certainly joins that map with the same
+`'PICKED'` value and nothing else changes. Its own retire-forward is already
+PACKED-aware.
 
-**Its retire-forward is already PICKED-aware**, which J4 needs and would
-otherwise have had to add: a spent parcel at CONFIRMED, PENDING_PICK or PICKED
-is cancelled through the ordinary admin cancel, so it leaves every warehouse
-queue and gives its reserved unit back. Without that the pack queue grew by
-three a take, all carrying the pin J4 would want to select by. It was widened
-after J3's own take proved it: eleven orders were sitting at PICKED, eight of
-them retired.
+**What J5 actually films** is the escape hatch LBL-4 names: open a box as usual,
+then "These products have no labels to scan" — which is a SEPARATE endpoint
+(`POST /warehouse/packs/:id/force-complete`), carries `warehouse.pick.supervise`
+so a packer cannot waive the check they are performing, wants a reason of at
+least twenty characters (the button stays disabled under that — read the whole
+`disabled` expression before writing the press), and writes its own distinct
+audit action `warehouse_pack.completed_unverified` rather than a flag on the
+ordinary one, so "how often are we bypassing this" is answerable by filtering.
+The button is ALREADY VISIBLE in J4's frames (`canForce` is cosmetic; the server
+holds the permission), so the selector is known to work. The real case it exists
+for is goods shelved before product labelling existed — say that, rather than
+presenting it as a convenience.
 
-**Read PACK-1 and LBL-4 before writing a line of it**, because the pack bench is
-the most rule-dense screen in the app and every rule is a scene: the BOX is the
-claim and it is taken up front (two partial unique indexes — one open box per
-shipment, one per packer); contents are verified as a SET, per SKU and per unit,
-because a count alone passes a box with two of one thing and none of another;
-over-scanning is refused AT THE SCAN; cancelling a box returns NOTHING to
-inventory (PACK-2, and `pack-box-flow.e2e-spec.ts` asserts on-hand is
-byte-identical across a cancel, so a "fix" fails); and `PackService.complete`
-REFUSES without a closed box (LBL-4) with a supervisor-only `force-complete`
-carrying its own audit action as the escape hatch. **Do not route the flow
-through `force-complete`** — the README says so and the reason is that it would
-make the only exercised path the one production should not use.
-
-**And the scan needs a barcode to scan.** LBL-2: the code is
-`variant.barcode ?? skuCode`, nothing is minted, and `PackBoxService.scan`
-accepts BOTH scoped to the order's seller. The demo catalogue's variants have
-no `barcode`, so the SKU code is what a scan resolves — which means the flow can
-type the SKU into the scan field and it is the real path, not a workaround.
-`packAtBench()` in the API e2e harness is the worked example of the ritual.
+**The scan field, for every J-section flow after this one.** There is no submit
+button on that bench: `scanIn` in `flows.mjs` types a code and presses Enter,
+which is literally what a barcode reader does. `expectCount` asserts the LINE
+reads what the narration says it reads — a refused scan clears the field and
+leaves the page otherwise identical, so without it a take sails past a rejection
+and films a counter that never moved.
 
 P5 was taken out of order on purpose (this document argues it should
 be the first admin tutorial anybody watches, and
@@ -233,7 +224,7 @@ that has never been driven.
   at all, and two of them are not obvious.
 - **`STORE_REQUIRED_SLUGS` / `STORE_ORDER_SLUGS` / `STORE_REPORT_SLUGS`** — the
   reselling worlds. Two SEPARATE stores and they must stay apart: `Kolkata Silk
-  Room` is configured on camera by G3–G5 (`standingStoreFor` wipes its terms
+Room` is configured on camera by G3–G5 (`standingStoreFor` wipes its terms
   versions on every run), while `Pune Silk Studio` is the one that TRADES
   (`tradingStoreWorld`: a signed-in store user, `reseller.orders_enabled`,
   accepted terms, priced products, an action policy and five orders). An order
@@ -336,7 +327,7 @@ is down or gated wrong fails the check instead of filming prose.
   steps assert.
 - **Run `pnpm typecheck` after ADDING A SPEC, not only after touching src.**
   `apps/api`'s tsconfig covers `test/`, and neither the jest run nor `pnpm
-  lint` does. A spec constructing a service with the wrong number of arguments
+lint` does. A spec constructing a service with the wrong number of arguments
   passed the whole unit suite here and turned CI red on the commit after it
   (82fb69f4) — the same shape as the "gate a subset" trap, one directory over.
   **IT HAPPENED AGAIN ON 2026-09-30 (`ba413eb5`), to somebody who had read this
@@ -735,10 +726,10 @@ TWO consignments, built through the real endpoints — declare, count,
 dispatch, count again — because C1, C2 and E5 are the same thing seen from
 three sides. The same shape as D0 for section D, and it took about two minutes.
 
-| Ref              | State                              | Used by    |
-| ---------------- | ---------------------------------- | ---------- |
-| `RSH-CN-LANDED`  | COMPLETED — both legs counted      | C1, (E5)   |
-| `RSH-CN-FLYING`  | IN_TRANSIT — dispatched, not landed| C2         |
+| Ref             | State                               | Used by  |
+| --------------- | ----------------------------------- | -------- |
+| `RSH-CN-LANDED` | COMPLETED — both legs counted       | C1, (E5) |
+| `RSH-CN-FLYING` | IN_TRANSIT — dispatched, not landed | C2       |
 
 **Its counts DISAGREE twice, for two different reasons**, because a page
 showing two counts that match explains nothing. One line is counted SHORT in
@@ -1032,18 +1023,18 @@ that died between the last two scans is resumed rather than reported green.
 Only a parcel that names one pays for the extra lookup. **It needed a product
 fix to exist at all** — see [Bugs found](#bugs-found-while-establishing-feasibility).
 
-| Ref                  | State                             | Used by        |
-| -------------------- | --------------------------------- | -------------- |
-| `RSH-LIFE-DELIVERED` | DELIVERED                         | B5, D1, E2, D6 |
-| `RSH-LIFE-FAILED`    | DELIVERY_FAILED                   | D1, D2         |
-| `RSH-LIFE-RETURNING` | RTO_IN_TRANSIT                    | D1, D3         |
-| `RSH-LIFE-RESTOCKED` | RTO_RESTOCKED + a REFUNDED ticket | D6, E2         |
-| `RSH-LIFE-REVIEW`    | AWAITING_SELLER_DECISION          | D5             |
-| `RSH-LIFE-CONFIRMED` | CONFIRMED — **spent by B7**       | B7             |
-| `RSH-LIFE-OVERDUE`   | OUT_FOR_DELIVERY, flagged day 3   | D3             |
-| `RSH-LIFE-SENDBACK`  | OUT_FOR_DELIVERY — **spent by D4**| D4             |
-| `RSH-LIFE-RETURNREQ` | DELIVERED — **spent by D4**       | D4             |
-| `RSH-LIFE-ATDOOR`    | RTO_IN_TRANSIT, **parcel RTO_DELIVERED** | P5      |
+| Ref                  | State                                    | Used by        |
+| -------------------- | ---------------------------------------- | -------------- |
+| `RSH-LIFE-DELIVERED` | DELIVERED                                | B5, D1, E2, D6 |
+| `RSH-LIFE-FAILED`    | DELIVERY_FAILED                          | D1, D2         |
+| `RSH-LIFE-RETURNING` | RTO_IN_TRANSIT                           | D1, D3         |
+| `RSH-LIFE-RESTOCKED` | RTO_RESTOCKED + a REFUNDED ticket        | D6, E2         |
+| `RSH-LIFE-REVIEW`    | AWAITING_SELLER_DECISION                 | D5             |
+| `RSH-LIFE-CONFIRMED` | CONFIRMED — **spent by B7**              | B7             |
+| `RSH-LIFE-OVERDUE`   | OUT_FOR_DELIVERY, flagged day 3          | D3             |
+| `RSH-LIFE-SENDBACK`  | OUT_FOR_DELIVERY — **spent by D4**       | D4             |
+| `RSH-LIFE-RETURNREQ` | DELIVERED — **spent by D4**              | D4             |
+| `RSH-LIFE-ATDOOR`    | RTO_IN_TRANSIT, **parcel RTO_DELIVERED** | P5             |
 
 It also leaves behind what those states imply and the videos will want: the
 `SCRAP_DAMAGE` ticket **with our reply on it and a `SCRAP_REFUND` credit in the
@@ -1156,7 +1147,7 @@ the receipt warehouse", which names neither the warehouse nor the cause. It
 picks the one with `fulfilsOrders` now.
 
 **The restocked parcel carries TWO units, and that is the point.** The
-curriculum wanted it RTO_RESTOCKED *and* carrying a damage ticket, which on a
+curriculum wanted it RTO*RESTOCKED \_and* carrying a damage ticket, which on a
 one-unit line is a contradiction — a restock means the unit was GOOD. WMS-8d is
 exactly the answer, so the line is inspected BY QUANTITY: one unit back on the
 shelf, one written off. Order status RTO_RESTOCKED, scrap ticket beside it.
@@ -2748,15 +2739,53 @@ showed nothing of the sort. It now quotes what the confirm dialog says BEFORE
 the press — "any with serialised units stay behind for the pick station" — which
 is on screen and is the rule stated as a rule.
 
-### J4. Packing a parcel · `needs demo data`
+### J4. Packing a parcel · **FILMED** — `pack-a-parcel.mp4`
 
 **Promise** — you can pack a box so that what is inside it is what was ordered.
-**Length** 3 min. **Prerequisites** J3. **Needs** a picked parcel.
-**Covers** `/warehouse/pack`: scan the label to open the box, scan each product
-in, scan the label again to close. The contents are checked as a **set**,
-because a count alone passes a box with two of one thing and none of another.
-Ends on cancelling a box — which returns nothing to stock, because the stock
-has not left yet.
+**Length** 15 scenes, 2 min 57 s. **Prerequisites** J3. **Needs**
+`seed-demo-data.mjs pack-a-parcel`.
+**Covers** `/warehouse/pack`: the waiting list and its no-label callout, the
+label scan that opens a box, the products going in one at a time, the over-scan
+refused AT THE SCAN, the close, the manifest it joined without being asked, and
+a second box cancelled — which returns nothing to stock, because the stock has
+not left yet.
+
+**Its world is J3's, driven four steps further**, which is what the previous
+note predicted and is why `pickWorldFor` now takes a `PICK_STAGE` rather than
+one slug: the same three orders, the same pin, the same stored labels, and for
+J4 the API walks them through `confirm-printed` → `pick-batches` → `build-list`
+→ `confirm-printed` → `mark-picked`. Driven through the REAL endpoints rather
+than written as `PICKED`, because the phase-2 reservations the printing station
+creates are what the pack bench's close later FULFILS (CUR-3) — a hand-written
+status would leave a parcel the bench could open and never complete. The retire-
+forward grew PACKED for the same reason it grew PICKED for J3: a full take ends
+one parcel packed, `PACKED → CANCELLED_BY_ADMIN` carries `UNPACK_STOCK`, and
+measured across three takes on-hand did not move by a unit.
+
+**THE FIRST PARCEL CARRIES TWO LINES, and that is the whole of the set lesson.**
+PACK-1 says contents are verified as a SET because a count alone passes a box
+with two of one thing and none of another — and a one-line parcel cannot show
+it. `RSH-PICK-1` is now Jamdani ×2 plus Kantha ×1, so the bench reaches exactly
+that state on camera (2/2 ticked and quiet, 0/1 loud beside it) and the
+over-scan then lands on a satisfied line while another is still empty. J3 is
+unaffected — its narration names no line count.
+
+**The SKU code IS the barcode here, and that is the real path rather than a
+workaround.** LBL-2: the scannable code is `variant.barcode ?? skuCode`, nothing
+is minted, and `PackBoxService.scan` accepts both scoped to the order's seller.
+The demo catalogue has no `barcode` values, so typing the SKU into the scan
+field is precisely what a sticker printed from this catalogue would send.
+**`force-complete` is not touched** — the README's rule, and J5's subject.
+
+**TWO THINGS THE FRAMES DECIDED.** The waybill is READ OFF THE SCREEN (the
+queue row's title, located by the recipient's name) rather than hard-coded: it
+is minted per run, and reading it is also what a packer does. And the manifest
+scene was going to be the toast — it carries the number and is the only place
+the auto-attach announces itself — but the toast lives 4.5 s of unpaused time
+and the first take found it GONE at the next scene, because its bounding box
+mid-slide-in is somewhere it has already left, so the pointer lands beside it
+and the pause never arms. `/warehouse/manifests` says the same thing with a row
+that cannot fade, and it is where J8 picks up.
 
 ### J5. Packing without a scan · `needs demo data` · **dangerous**
 
@@ -3509,8 +3538,8 @@ and a render test asserting "a heading is shown" passes either way, which is why
 **And the largest one yet, from filming B6 (2026-09-30): NO ORDER EDIT COULD BE
 SAVED AT ALL.** The check run's very first Save came back
 
->   `[BAD_REQUEST] packageType must be one of the following values: BOX,
->   POLYBAG, ENVELOPE, TUBE, CUSTOM`
+> `[BAD_REQUEST] packageType must be one of the following values: BOX,
+  POLYBAG, ENVELOPE, TUBE, CUSTOM`
 
 The seller app had invented three package types of its own — STANDARD, FRAGILE
 and DOCUMENT — over an enum that has only ever held those five, and a comment
@@ -3600,7 +3629,7 @@ library exists to find.**
    became `BadRequestException`s in the same change, because the commonest
    seller-fixable case was a bare `Error` and would otherwise have been hidden.
 2. **Every "is required" message named our internal key.** `addressLine2 is
-   required`, under a form field labelled "Address line 2" and over a
+required`, under a form field labelled "Address line 2" and over a
    spreadsheet column headed "Address Line2". `orderCsvFieldLabel` reads the
    FIRST alias of each field, which is already its human name and the spelling
    the seller's own file most likely carries — so there is no second list to
@@ -3701,14 +3730,14 @@ actually renders, because proving the arithmetic was never the problem — the o
 code counted its six perfectly. Proved red.
 
 **And one capability with no screen, found by the same video: THE BIN COLLAPSE.**
-BIN-4 is a designed, guarded, destructive operation — SUPER_ADMIN, the warehouse
+BIN-4 is a designed, guarded, destructive operation — SUPER*ADMIN, the warehouse
 code typed exactly, a thirty-character reason, a six-digit code emailed to the
 actor, a snapshot taken before the merge and a restore path after it — and
 `BinCollapseService`'s four endpoints (`collapse/request`, `collapse/confirm`,
 `snapshots`, `snapshots/:id/restore`) have **no caller anywhere outside the e2e
 suite.** `/warehouse/bins` ends at "Move stock between bins". This entry's own
 survey said "the collapse control is below the fold", which is the shape the
-curriculum has already named: *a capability with an endpoint and no screen is
+curriculum has already named: \_a capability with an endpoint and no screen is
 invisible to every roadmap doc.* Not fixed — a request/confirm/snapshot/restore
 UI is a feature, not a filming task — and P5's narration says the honest thing
 instead: it is the one act on the list you cannot do from the console.
@@ -3804,7 +3833,6 @@ one-digit cap edited by select-all-and-type works perfectly; it is only clearing
 first, or going past nine, that writes the wrong number. And a gate on "the save
 succeeded" would have passed: the PATCH really did succeed, with 13 in it.
 **A check proves a step was REACHED. Only the frame says what it reached.**
-
 
 **AND AN EIGHTH SEEDING BUG, which is MUST #12 one level along (2026-10-01).**
 `clearPreviousOrders` removes a previous take's pre-dispatch orders in one

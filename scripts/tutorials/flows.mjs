@@ -8908,6 +8908,188 @@ export const FLOWS = {
       },
     },
   },
+
+  'pack-a-parcel': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/pack`, { waitUntil: 'domcontentloaded' });
+        // Gated on OUR row rather than on "a row": the bench also holds
+        // a simulator parcel with no label, and a gate on the list would
+        // be satisfied by that one while ours had not arrived.
+        await packRow(page, PACK.first).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.wh-scan').first(), 3000);
+      },
+
+      async queue({ page, stage }) {
+        /*
+          THE NOTE, not the list. The unlabelled-parcel callout is the
+          one thing on this screen somebody has to go and DO something
+          about, and it is the sentence the narration is reading — the
+          simulator's label-less parcel is what makes it render, and it
+          is real rather than staged (the SSRF guard refuses the local
+          courier's label link; see `storeStubLabel` in the seeding).
+        */
+        await stage.dwellOn(page.locator('.wh-card__note').first(), 3400);
+      },
+
+      async open({ page, stage }) {
+        /*
+          THE WAYBILL IS READ OFF THE SCREEN, which is also what a packer
+          does. It is minted per run, so there is nothing to hard-code;
+          the recipient's name is the stable handle, and the row's TITLE
+          is the waybill (`.sk-lrow__title` — the description carries the
+          order number in an `.sk-ident` too, so an unscoped reach for
+          the identifier class would take the wrong one).
+        */
+        const awb = (await packRow(page, PACK.first).locator('.sk-lrow__title').innerText()).trim();
+        if (!/^\d{6,}$/.test(awb)) {
+          throw new Error(`Read "${awb}" as ${PACK.first}'s waybill, which is not a waybill.`);
+        }
+        await scanIn(page, stage, awb);
+        await page.locator('.wh-scan__meta').waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.wh-scan__meta'), 2600);
+      },
+
+      async lines({ page, stage }) {
+        const lines = page.locator('.wh-line');
+        const n = await lines.count();
+        if (n !== 2) {
+          throw new Error(
+            `${n} line(s) in this box, expected 2 — the set-versus-count scene needs a parcel ` +
+              'with two products on it (see PICK_ORDERS in seed-demo-data.mjs).',
+          );
+        }
+        await stage.dwellOn(page.locator('[aria-label="What goes in this box"]'), 3200);
+      },
+
+      async first({ page, stage }) {
+        await scanIn(page, stage, PACK.twice);
+        await expectCount(page, PACK.twice, '1 / 2');
+        await stage.dwellOn(packLine(page, PACK.twice), 2600);
+      },
+
+      async set({ page, stage }) {
+        await scanIn(page, stage, PACK.twice);
+        await expectCount(page, PACK.twice, '2 / 2');
+        // Both lines at once: "two of one thing and none of the other"
+        // is a statement about the PAIR, so haloing one of them would
+        // show half the sentence.
+        await stage.dwellOn(page.locator('.wh-lines'), 3200);
+      },
+
+      async toomany({ page, stage }) {
+        await scanIn(page, stage, PACK.twice);
+        const dialog = page.getByRole('dialog');
+        await dialog.getByText(/one too many/).waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.wh-alert'), 3000);
+      },
+
+      async fixed({ page, stage }) {
+        // The dialog's second paragraph — "Nothing was added to the
+        // box" — which is the half of the refusal that tells a packer
+        // what to do with the item in their hand.
+        await stage.dwellOn(page.getByRole('dialog').getByText(/Nothing was added/), 3200);
+      },
+
+      async third({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'I have fixed it' }),
+          { after: 900 },
+        );
+        await scanIn(page, stage, PACK.once);
+        await expectCount(page, PACK.once, '1 / 1');
+        await page.locator('.wh-good').waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.wh-good'), 2800);
+      },
+
+      async close({ page, stage }) {
+        /*
+          THE SAME LABEL AGAIN, read from where the bench itself is
+          showing it: once a box is open the queue list is gone, and
+          "Box open on <waybill>" is the only copy on screen.
+        */
+        const awb = (await page.locator('.wh-scan__meta .sk-ident').innerText()).trim();
+        await scanIn(page, stage, awb);
+        const packed = page.getByText(/^Packed —/).first();
+        await packed.waitFor({ state: 'visible', timeout: 25_000 });
+        // Let the toast finish sliding in before pointing at it. Its
+        // bounding box mid-animation is somewhere it has already left,
+        // so the pointer lands beside it, `onPointerEnter` never fires,
+        // and the 4.5-second life runs out under a halo that looks
+        // exactly as though it were paused.
+        await page.waitForTimeout(700);
+        await stage.dwellOn(packed, 2400);
+      },
+
+      async manifest({ page, stage, baseUrl }) {
+        /*
+          THE MANIFEST ON ITS OWN SCREEN rather than in the toast.
+
+          The toast carries the number and is the only place the
+          auto-attach announces itself — but it lives 4.5 seconds of
+          UNPAUSED time, and reading it across two scenes means trusting
+          a hover to hold for the whole of the second one. It did not:
+          the first take of this scene found it gone (`scrollIntoView`
+          timing out on an element that had been there a moment before).
+          The manifests list says the same thing with a row that cannot
+          fade, and it is where J8 picks up.
+        */
+        await page.goto(`${baseUrl}/warehouse/manifests`, { waitUntil: 'domcontentloaded' });
+        const draft = page.locator('.sk-tbody .sk-tr', { hasText: 'Draft' }).first();
+        await draft.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(draft, 3400);
+      },
+
+      async second({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/pack`, { waitUntil: 'domcontentloaded' });
+        await packRow(page, PACK.other).waitFor({ state: 'visible', timeout: 25_000 });
+        const awb = (await packRow(page, PACK.other).locator('.sk-lrow__title').innerText()).trim();
+        await scanIn(page, stage, awb);
+        await page.locator('.wh-scan__meta').waitFor({ state: 'visible', timeout: 20_000 });
+        await scanIn(page, stage, PACK.once);
+        await expectCount(page, PACK.once, '1 / 1');
+        await stage.clickIt(page.getByRole('button', { name: 'Cancel this box' }), { after: 900 });
+        await stage.dwellOn(page.locator('.wh-note').first(), 2400);
+      },
+
+      async cancel({ page, stage }) {
+        await stage.typeIn(page.getByLabel(/^Reason for cancelling$/), PACK.cancelReason, {
+          after: 500,
+        });
+        await stage.dwellOn(page.locator('.wh-note').first(), 3200);
+      },
+
+      async cancelled({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Cancel the box' }), { after: 1200 });
+        // The toast is the PROOF the cancel landed; the ROW coming back
+        // is the picture. Dwelling on the toast would be a race against
+        // its 4.5-second life for the whole of a 13-second scene (see
+        // `close`), and "back in the queue" is the sentence anyway.
+        await page
+          .getByText(/Box cancelled/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await packRow(page, PACK.other).waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(packRow(page, PACK.other), 3000);
+      },
+
+      async outro({ page, stage }) {
+        // Back to the label field, which is where the bench always ends
+        // up and is the one thing on the page that does not depend on
+        // what is in hand.
+        await packRow(page, PACK.other).waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(page.locator('.wh-scan').first(), 3400);
+      },
+    },
+  },
 };
 
 /**
@@ -9005,4 +9187,78 @@ async function putIntoFloor(page, line) {
  */
 function ourParcels(page) {
   return page.locator('.sk-tbody .sk-tr', { hasText: '560103' });
+}
+
+/**
+ * J4's two parcels and the codes its scans carry.
+ *
+ * KEEP IN STEP WITH `PICK_ORDERS` in `seed-demo-data.mjs`. The recipient
+ * names are the stable handle on the pack queue — both the order number
+ * and the waybill are minted per run — and the first parcel is the
+ * two-line one, which is the only reason the set-versus-count scene has
+ * anything to show.
+ *
+ * `twice` is the product the box wants TWO of and `once` the product it
+ * wants one of, which is what makes "two of one thing and none of the
+ * other" reachable on camera, and what the over-scan lands on.
+ */
+const PACK = {
+  first: 'Ananya Iyer',
+  other: 'Vikram Choudhury',
+  twice: 'RSH-JAMDANI-IVORY',
+  once: 'RSH-KANTHA-BLUE',
+  cancelReason: 'Outer carton crushed in the aisle; repacking into a new box',
+};
+
+/** One row of the pack queue, by the recipient printed on it. */
+function packRow(page, recipient) {
+  return page.locator('.wh-list li', { hasText: recipient }).first();
+}
+
+/** One outstanding line of the open box, by the SKU printed on it. */
+function packLine(page, skuCode) {
+  return page.locator('.wh-line', { hasText: skuCode }).first();
+}
+
+/**
+ * A scan, which is a code typed into the one field and Enter.
+ *
+ * A barcode reader types the digits and presses Enter itself, so this is
+ * literally what the hardware does — and it is the ONLY way into the
+ * bench: there is no submit button to click. `typeIn` does not press
+ * Enter, so the press is here rather than left to each scene to
+ * remember.
+ */
+async function scanIn(page, stage, code) {
+  const field = page.locator('#pack-scan');
+  await field.waitFor({ state: 'visible', timeout: 20_000 });
+  await stage.typeIn(field, code, { after: 250 });
+  await field.press('Enter');
+  await page.waitForTimeout(900);
+}
+
+/**
+ * Assert a line reads what the narration says it reads.
+ *
+ * The counter is the whole subject of four of these scenes, and a scan
+ * that was refused leaves the field cleared and the page otherwise
+ * identical — so without this a take would sail past a rejected scan
+ * and film a line that never moved. Checked against the FIGURE the line
+ * prints, which is the thing a viewer is looking at.
+ */
+async function expectCount(page, skuCode, reads) {
+  const figure = packLine(page, skuCode).locator('.wh-line__figure');
+  await figure.waitFor({ state: 'visible', timeout: 20_000 });
+  const got = (await figure.innerText()).replace(/\s+/g, ' ').trim();
+  if (got !== reads) {
+    const alert = await page
+      .locator('.wh-alert')
+      .first()
+      .innerText()
+      .catch(() => '');
+    throw new Error(
+      `${skuCode} reads "${got}", expected "${reads}"` +
+        (alert === '' ? '' : ` — the bench says: ${alert.trim()}`),
+    );
+  }
 }

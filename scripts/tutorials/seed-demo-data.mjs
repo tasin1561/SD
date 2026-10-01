@@ -4183,8 +4183,14 @@ async function receiveWorldFor(slug, sellerId, sellerToken, staffToken) {
 }
 
 /**
- * J3's world: three confirmed parcels waiting on a label, and nothing
- * else of ours in the queue that the video must not touch.
+ * J3's and J4's world: three parcels of our own moving through the
+ * printing station and onto the pack bench, and nothing else of ours in
+ * either queue that the video must not touch.
+ *
+ * Which of the two it stops at is `PICK_STAGE`; everything below is
+ * shared, because building a parcel here costs a confirmation, a real
+ * waybill and a stored label, and two copies of that would drift the
+ * moment one of them was fixed.
  *
  * ── WHY IT PLACES ITS OWN RATHER THAN USING WHAT IS THERE ────────────
  * The label queue is genuinely busy on this box — two dozen parcels,
@@ -4219,43 +4225,80 @@ async function receiveWorldFor(slug, sellerId, sellerToken, staffToken) {
  * orders end at PICKED — outside `REMOVABLE_STATUSES`, holding live
  * reservations, and not rewindable. Each is retired forward by name and
  * three fresh ones are placed (the D4 / B7 rule, fifth instance).
- * **This accumulates**: three units stay reserved per take and never
- * come back, because nothing packs them. At a few dozen takes that is
- * still small against the catalogue's stock, but it is a cost, and the
- * honest fix when it matters is a J4 that PACKS them rather than a seed
- * that unwinds them.
+ *
+ * **And the retire CANCELS, which is what stops it accumulating.** An
+ * earlier version of this note said three units stayed reserved per take
+ * and that the honest fix would be a J4 that packed them. J4 exists now
+ * and packs exactly one of the three, so the seed still has to unwind
+ * them — but the ordinary admin cancel does it correctly at every stage
+ * the two takes can end in: CONFIRMED and PENDING_PICK release a
+ * reservation, PICKED releases a phase-2 one, and PACKED reverses the
+ * physical decrement through `UNPACK_STOCK` (CUR-3). Nothing leaks.
  */
 const PICK_PIN = '560103';
+
+/**
+ * The slugs this world serves, and the ONE thing that differs between
+ * them: where it stops.
+ *
+ * J3 films the printing station, so its parcels have to be sitting at
+ * CONFIRMED with a stored label NOBODY HAS PRINTED — the label queue
+ * selects on exactly that. J4 films the pack bench, which selects on
+ * `o.status = 'picked'` (WMS-2), so its parcels have to be through the
+ * printing station already. Same three orders, same pin, same waybills;
+ * `PICK_STAGE` decides whether the API walks them the last four steps.
+ *
+ * Shared rather than duplicated for the reason `SUPERVISE_SLUGS` is:
+ * building the world is a confirmation, a waybill and a label per
+ * parcel, and two copies of that would drift the moment one was fixed.
+ */
+const PICK_STAGE = new Map([
+  ['print-and-pick', 'LABELLED'],
+  ['pack-a-parcel', 'PICKED'],
+]);
+
+/**
+ * ── WHY THE FIRST PARCEL CARRIES TWO LINES ───────────────────────────
+ * Because the pack bench's whole argument is that contents are checked
+ * as a SET and not as a count (PACK-1), and a one-line box cannot show
+ * that. Two of the Jamdani and one Kantha means the bench can reach
+ * "two of one thing and none of another" ON SCREEN — the exact state a
+ * count would wave through — and the over-scan refusal then lands on a
+ * line that is already satisfied while another is still empty.
+ *
+ * J3 is unaffected: its narration names no line count, and the label
+ * queue's item-count column simply reads 2 for that row.
+ */
 const PICK_ORDERS = [
   {
     ref: 'RSH-PICK-1',
-    sku: 'RSH-JAMDANI-IVORY',
     recipientName: 'Ananya Iyer',
     phone: '+919845090301',
     line1: '4, Neeladri Road',
     line2: 'Behind the Electronic City bus depot',
-    codAmountInr: '2400',
-    unitPriceInr: '2400',
+    codAmountInr: '6650',
+    lines: [
+      { sku: 'RSH-JAMDANI-IVORY', quantity: 2, unitPriceInr: '2400' },
+      { sku: 'RSH-KANTHA-BLUE', quantity: 1, unitPriceInr: '1850' },
+    ],
   },
   {
     ref: 'RSH-PICK-2',
-    sku: 'RSH-KANTHA-BLUE',
     recipientName: 'Vikram Choudhury',
     phone: '+919845090302',
     line1: '21, Hosa Road',
     line2: 'Opposite the Infosys gate three',
     codAmountInr: '1850',
-    unitPriceInr: '1850',
+    lines: [{ sku: 'RSH-KANTHA-BLUE', quantity: 1, unitPriceInr: '1850' }],
   },
   {
     ref: 'RSH-PICK-3',
-    sku: 'RSH-SCARF-EMERALD',
     recipientName: 'Nandini Rao',
     phone: '+919845090303',
     line1: '7, Doddathoguru Main Road',
     line2: 'Next to the Konappana Agrahara temple',
     codAmountInr: '990',
-    unitPriceInr: '990',
+    lines: [{ sku: 'RSH-SCARF-EMERALD', quantity: 1, unitPriceInr: '990' }],
   },
 ];
 
@@ -4330,7 +4373,14 @@ async function storeStubLabel(shipmentId, shipmentNumber, awbNumber) {
 }
 
 async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
-  if (slug !== 'print-and-pick') return;
+  const stage = PICK_STAGE.get(slug ?? '');
+  if (stage === undefined) return;
+  const wantsPicked = stage === 'PICKED';
+
+  /* Parcels this run has to walk through the printing station itself —
+     only the FRESH ones. A reused parcel is already where it belongs, and
+     re-confirming its labels would be refused as already printed. */
+  const toDrive = [];
 
   for (const o of PICK_ORDERS) {
     /*
@@ -4358,20 +4408,56 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
     */
     const spent = await prisma.order.findFirst({
       where: { sellerId, sellerOrderRef: o.ref },
-      select: { id: true, orderNumber: true, status: true },
+      select: {
+        id: true,
+        orderNumber: true,
+        status: true,
+        items: { select: { skuCode: true, quantity: true } },
+      },
     });
     if (spent !== null) {
+      /*
+        WHERE "REUSABLE" IS depends on which video is asking, and that is
+        the whole of the difference between the two. J3 wants a parcel
+        CONFIRMED with a label nobody has printed; J4 wants one PICKED
+        with a live, un-packed parcel — which is what the pack bench
+        selects on (WMS-2). Asked of the SHIPMENT rather than of a
+        timestamp on the order, because `labelPrintedAt` and
+        `packCompletedAt` are the two columns the two queues read.
+
+        AND ITS CONTENTS HAVE TO BE THE ONES THE NARRATION DESCRIBES.
+        `PICK_ORDERS` grew a second line on the first parcel when J4 was
+        written, and the parcels a PREVIOUS run left behind carry the old
+        single-line shape. They would pass every other test for
+        reusability and then open a box with one line in it under a
+        sentence about two — the "reuse what is there" economy quietly
+        pinning the world to a stale definition of it.
+      */
+      const wanted = [...o.lines]
+        .map((l) => `${l.sku}×${l.quantity}`)
+        .sort()
+        .join(' ');
+      const has = spent.items
+        .map((i) => `${i.skuCode}×${i.quantity}`)
+        .sort()
+        .join(' ');
+      const sameContents = wanted === has;
+      if (!sameContents) {
+        console.log(`  · ${o.ref} holds ${has}; the video wants ${wanted} — replacing it`);
+      }
+      const wherePutBack = wantsPicked
+        ? { deletedAt: null, status: 'CREATED', packCompletedAt: null }
+        : { deletedAt: null, labelPrintedAt: null, awbNumber: { not: null } };
       const stillWaiting =
-        spent.status === 'CONFIRMED' &&
+        sameContents &&
+        spent.status === (wantsPicked ? 'PICKED' : 'CONFIRMED') &&
         (await prisma.orderShipment.count({
-          where: {
-            orderId: spent.id,
-            shipment: { deletedAt: null, labelPrintedAt: null, awbNumber: { not: null } },
-          },
+          where: { orderId: spent.id, shipment: wherePutBack },
         })) > 0;
       if (stillWaiting) {
         console.log(
-          `  · ${o.ref} (${spent.orderNumber}) is still waiting on a label — reused as it is`,
+          `  · ${o.ref} (${spent.orderNumber}) is ${spent.status.toLowerCase()} and ` +
+            'where the video expects it — reused as it is',
         );
         continue;
       }
@@ -4396,10 +4482,22 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
         gives the unit back. Past that — packed or dispatched — stock has
         really moved and it is left alone and said out loud.
       */
+      /*
+        PACKED JOINED THEM FOR J4, and for the same reason PICKED joined
+        them for J3: a full take of the pack bench CLOSES a box, so one
+        of the three ends PACKED holding a physical decrement rather than
+        a reservation. `PACKED → CANCELLED_BY_ADMIN` carries
+        `UNPACK_STOCK` (CUR-3) — "the parcel is boxed and sitting in the
+        warehouse, not with a courier" — so the ordinary admin cancel
+        reverses the PACK_CONFIRM and the unit comes back. Without it a
+        take would consume three units of real stock for ever and leave a
+        packed parcel on the handover bench that nobody narrated.
+      */
       if (
         spent.status === 'CONFIRMED' ||
         spent.status === 'PENDING_PICK' ||
-        spent.status === 'PICKED'
+        spent.status === 'PICKED' ||
+        spent.status === 'PACKED'
       ) {
         await call(`/admin/orders/${spent.id}/cancel`, {
           method: 'POST',
@@ -4418,12 +4516,16 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
       }
     }
 
-    const variant = await prisma.productVariant.findFirst({
-      where: { skuCode: o.sku, product: { sellerId } },
-      select: { id: true },
-    });
-    if (variant === null) {
-      throw new Error(`No ${o.sku} for this seller — the catalogue seeding runs first.`);
+    const items = [];
+    for (const l of o.lines) {
+      const variant = await prisma.productVariant.findFirst({
+        where: { skuCode: l.sku, product: { sellerId } },
+        select: { id: true },
+      });
+      if (variant === null) {
+        throw new Error(`No ${l.sku} for this seller — the catalogue seeding runs first.`);
+      }
+      items.push({ variantId: variant.id, quantity: l.quantity, unitPriceInr: l.unitPriceInr });
     }
     const token = await sellerToken();
     const order = await call('/seller/orders', {
@@ -4438,7 +4540,7 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
         paymentMode: 'COD',
         codAmountInr: o.codAmountInr,
         sellerOrderRef: o.ref,
-        items: [{ variantId: variant.id, quantity: 1, unitPriceInr: o.unitPriceInr }],
+        items,
         // The PREVIOUS take's parcel for this customer is retired but
         // still unpacked — it is confirmed or picked, which is exactly
         // what `create` refuses a second order against
@@ -4487,25 +4589,90 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
       { tries: 45 },
     );
     await storeStubLabel(booked.id, booked.shipmentNumber, booked.awbNumber);
+    toDrive.push(booked.id);
     console.log(
       `  · ${order.orderNumber} (${o.ref}) confirmed, labelled and waiting to be printed — ` +
         `${booked.shipmentNumber} / ${booked.awbNumber}`,
     );
   }
 
+  /*
+    ── J4 ONLY: THE LAST FOUR STEPS, DRIVEN BY THE API ──────────────────
+    The pack bench selects on `o.status = 'picked'`, so J4's parcels have
+    to be through the printing station before a frame can be shot. They
+    go through it by the SAME endpoints J3's camera presses — confirm the
+    labels, claim a batch, build its list (which is what ALLOCATES
+    phase-2, WMS-1), confirm the sheet printed, mark it picked — rather
+    than by writing `PICKED` onto the rows, because the phase-2
+    reservations the printing station creates are what the pack bench's
+    close later FULFILS (CUR-3), and a hand-written status would leave a
+    parcel the bench could open and never complete.
+
+    Only the FRESH parcels are driven. A reused one is already PICKED and
+    `confirmPrinted` would refuse its labels as already printed.
+  */
+  if (wantsPicked && toDrive.length > 0) {
+    await call('/admin/warehouse/printing/labels/confirm-printed', {
+      method: 'POST',
+      token: staffToken,
+      body: { shipmentIds: toDrive },
+    });
+    const batch = await call('/admin/warehouse/printing/pick-batches', {
+      method: 'POST',
+      token: staffToken,
+      body: { shipmentIds: toDrive },
+    });
+    await call(`/admin/warehouse/printing/pick-batches/${batch.id}/build-list`, {
+      method: 'POST',
+      token: staffToken,
+    });
+    await call(`/admin/warehouse/printing/pick-batches/${batch.id}/confirm-printed`, {
+      method: 'POST',
+      token: staffToken,
+    });
+    const picked = await call(`/admin/warehouse/printing/pick-batches/${batch.id}/mark-picked`, {
+      method: 'POST',
+      token: staffToken,
+    });
+    if (picked.skipped.length > 0) {
+      /*
+        `markPicked` REFUSES a serialised parcel by name (WMS-1) — in
+        STRICT mode the scan at pick is what binds units to a parcel, so
+        a sheet cannot close one. This catalogue is all NORMAL, so a
+        skip here means the mode changed and the bench would open on a
+        parcel that never arrived.
+      */
+      throw new Error(
+        `${batch.batchNumber} left ${picked.skipped.length} parcel(s) behind: ` +
+          picked.skipped.map((p) => `${p.shipmentNumber} (${p.reason})`).join(', '),
+      );
+    }
+    console.log(
+      `  · ${batch.batchNumber} printed and walked — ${picked.picked} parcel(s) are on the bench`,
+    );
+  }
+
+  /*
+    AND THE WORLD IS ASSERTED AT WHICHEVER STAGE WAS ASKED FOR. J3's flow
+    selects the label queue's rows BY THIS PIN, so a fourth parcel
+    carrying it would be printed and picked without being narrated; J4's
+    reaches for its parcels by recipient name off the pack queue, and a
+    stray one would sit in that list being counted by a viewer.
+  */
+  const want = wantsPicked ? ['PICKED'] : ['CONFIRMED', 'PENDING_PICK'];
   const waiting = await prisma.order.count({
     where: {
       sellerId,
       recipientPostalCode: PICK_PIN,
-      status: { in: ['CONFIRMED', 'PENDING_PICK'] },
+      status: { in: want },
       deletedAt: null,
     },
   });
   if (waiting !== PICK_ORDERS.length) {
     throw new Error(
-      `${waiting} parcel(s) are addressed to ${PICK_PIN} and waiting to be printed, expected ` +
-        `${PICK_ORDERS.length} — the flow selects the label queue's rows by that pin, so any ` +
-        'other parcel carrying it would be printed and picked without being narrated.',
+      `${waiting} parcel(s) are addressed to ${PICK_PIN} and ${want.join('/').toLowerCase()}, ` +
+        `expected ${PICK_ORDERS.length} — the flow acts on those rows, so any other parcel ` +
+        'carrying that pin would be worked on camera without being narrated.',
     );
   }
 }
