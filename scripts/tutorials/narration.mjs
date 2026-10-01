@@ -3991,6 +3991,124 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'record-a-courier-payout',
+    title: 'Recording what the courier paid us',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Courier settlements. Every rupee the courier pays us, matched to the orders it covers — and whatever is not matched is money we are carrying on a seller’s behalf.',
+      },
+      {
+        id: 'float',
+        say: 'That is the figure at the top. Delivered COD that no payout covers yet: the customer paid, the courier is holding it, and we are the ones who owe the seller in the meantime.',
+      },
+      {
+        id: 'window',
+        say: 'Which is why there is a window rather than a deadline. The courier states five to ten days; this is set at the top of that, and anything past it is listed as overdue rather than merely waiting.',
+      },
+      {
+        id: 'record',
+        say: 'When the money lands in our account, record it. The amount, the date, and the courier’s own payout reference — and that reference is doing more work than it looks.',
+      },
+      {
+        id: 'reference',
+        say: 'It is unique per account, so recording the same bank credit twice is a refusal instead of a double count. Without it, a payout entered twice would make us believe the courier had paid us money they have not.',
+      },
+      {
+        id: 'allocate',
+        say: 'Then allocate it to the orders it covers. The payout is one bank credit; the orders are what it was actually for, and until those are named it is just a number.',
+      },
+      {
+        id: 'expected',
+        say: 'Each line snapshots what the order was worth when it was delivered, so what the courier settled can be compared against what they collected — permanently, on that line, not worked out again later.',
+      },
+      {
+        id: 'short',
+        say: 'And where they paid less, the difference is recorded and absorbed. The seller is credited what the ORDER was worth, not what the courier remitted — a short payment is our dispute with the courier, not a clawback from somebody who was paid in good faith.',
+      },
+      {
+        id: 'credit',
+        say: 'Which is what recording this does. In the same transaction it credits the seller, withholds the tax, and writes the bank entry for the cash — so a credit with no payment behind it cannot exist.',
+      },
+      {
+        id: 'ledger',
+        say: 'Here it is on the seller’s side: the COD credit, the tax taken out of it, and both naming the order the money came from.',
+      },
+      {
+        id: 'reversal',
+        say: 'The other direction is a reversal. A parcel the courier paid out on and then brought back — the customer never paid, so the credit is taken back, and the payout has to name the orders rather than just carry a total.',
+      },
+      {
+        id: 'unexplained',
+        say: 'And a payout whose parts do not add up to its whole is flagged rather than accepted. Money we cannot explain is the one thing a settlement ledger must not quietly swallow.',
+      },
+      {
+        id: 'outro',
+        say: 'So: record it against its own reference, allocate it to real orders, and let the shortfall sit visibly against our money. Correct a mistake with another payout — never by editing this one.',
+      },
+    ],
+  },
+  {
+    slug: 'move-money-by-hand',
+    title: 'Moving money by hand',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Wallet transfers. Taking money out of a seller’s wallet into our bank, or putting ours into theirs — by hand, when nothing in the ordinary flow has a way to do it.',
+      },
+      {
+        id: 'notacorrection',
+        say: 'The first thing the screen says is what it is not. This is not an adjustment. An adjustment corrects a figure and moves no cash; this moves the cash with it, which is why it is on a page of its own behind a permission of its own.',
+      },
+      {
+        id: 'seller',
+        say: 'So: find the seller. Everything after this is about one account, and the page shows you theirs before it shows you a form.',
+      },
+      {
+        id: 'direction',
+        say: 'Which way, and the two options are written as sentences rather than as words. Debit takes from their wallet into our bank; credit gives from our bank into theirs.',
+      },
+      {
+        id: 'debit',
+        say: 'A debit takes their money where it already sits with us — rupees first, then any other currency at the rate it was credited at. Anything beyond what they actually hold is in no bank at all: their wallet goes negative and they owe it to us.',
+      },
+      {
+        id: 'reason',
+        say: 'Then the reason, and this is the field that matters. The seller reads it on their own wallet history, word for word, so write the thing they will need rather than the thing you would file.',
+      },
+      {
+        id: 'internal',
+        say: 'The internal note is the other half. Only staff see it, it is kept with the audit record, and it is where the ticket number and the half of the story the seller does not need goes.',
+      },
+      {
+        id: 'preview',
+        say: 'Preview before posting. Nothing has moved yet, and what comes back is a sentence rather than a form — what this does, said in words you can check against what you meant.',
+      },
+      {
+        id: 'numbers',
+        say: 'Underneath it, the two figures that are not the same thing: their wallet before and after, and the cash we actually hold for them before and after. On a seller already in debt the second one does not move at all.',
+      },
+      {
+        id: 'confirm',
+        say: 'And the confirm says the rest: it moves real money and cannot be undone. A mistake here is put right with a transfer the other way, which is a second entry on the seller’s history and not an erasure of the first.',
+      },
+      {
+        id: 'post',
+        say: 'Post it.',
+      },
+      {
+        id: 'history',
+        say: 'Every staff transfer is listed, with its reason, its internal note and who posted it — because this is the one money path with no document behind it, and the name is the whole record.',
+      },
+      {
+        id: 'outro',
+        say: 'So use it when the ordinary flow has no answer, write the reason for the seller rather than for the file, and remember it is the one screen here that can put a wallet into debt on purpose.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

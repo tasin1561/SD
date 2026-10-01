@@ -25,7 +25,7 @@ import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { prisma, pdfLib } from './lib/deps.mjs';
 import { MOCK_ROOT, mockObjectPath } from './lib/spaces-shim.mjs';
-import { TUTORIALS_DIR } from './lib/paths.mjs';
+import { GENERATED_DIR, TUTORIALS_DIR } from './lib/paths.mjs';
 import { API, call, waitFor } from './lib/api.mjs';
 import {
   callThisOneFirst,
@@ -5869,6 +5869,7 @@ async function moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken) {
   // camera, so for that video alone it must NOT already be on file.
   if (slug === 'record-a-courier-payout') {
     await unrecordTutorialPayouts(sellerId);
+    await writeRemittanceExport(sellerId);
   } else {
     await settleOneCodForLedger(sellerId, staffToken);
   }
@@ -5934,6 +5935,10 @@ async function moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken) {
       },
     });
     console.log(`  · one withdrawal request waiting (₹${DESK_WITHDRAWAL_INR})`);
+  }
+
+  if (slug === 'move-money-by-hand') {
+    await unpostStaffTransfers(sellerId);
   }
 
   if (slug === 'approve-a-bank-change') {
@@ -6055,6 +6060,125 @@ async function unrecordTutorialPayouts(sellerId) {
 
 /** What N5 types as the courier's own payout reference, on camera. */
 const DESK_PAYOUT_PREFIX = 'UTR-TUT-';
+
+/**
+ * N5's remittance export — the file the video uploads.
+ *
+ * WRITTEN BY THE SEED, not committed, and the reason is the whole point
+ * of the file: a courier's export names WAYBILLS, and the waybills on
+ * this box were minted by the local simulator on this run. A committed
+ * fixture cannot carry them, and the only other way to allocate a payout
+ * is to type an order's uuid into a form on camera, which teaches
+ * nothing and is unwatchable.
+ *
+ * The columns are Delhivery's own (`RemittanceParserService`): `Waybill
+ * Number` and `Amount Payable` are required, the rest are read when they
+ * are there. One of the two parcels is paid SHORT by fifty rupees,
+ * because the short-payment line is a scene of its own — the seller is
+ * credited what the ORDER was worth either way (WAL-6) and the
+ * difference sits visibly against our money rather than quietly against
+ * theirs.
+ */
+const DESK_PAYOUT_SHORT_INR = 50;
+
+async function writeRemittanceExport(sellerId) {
+  const orders = await prisma.order.findMany({
+    where: { sellerId, status: 'DELIVERED', codAmountInr: { not: null } },
+    select: { id: true, orderNumber: true, codAmountInr: true },
+    orderBy: { createdAt: 'asc' },
+  });
+  const rows = [];
+  for (const [i, o] of orders.entries()) {
+    const shipment = await prisma.shipment.findFirst({
+      where: {
+        orderShipments: { some: { orderId: o.id } },
+        supersededAt: null,
+        deletedAt: null,
+        awbNumber: { not: null },
+      },
+      select: { awbNumber: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (shipment?.awbNumber == null) continue;
+    const cod = Number(o.codAmountInr);
+    // The SECOND one short. Which one hardly matters; that exactly one
+    // is does — a file where everything balances has no short-payment
+    // scene in it, and a file where nothing does teaches the opposite.
+    const payable = i === 1 ? cod - DESK_PAYOUT_SHORT_INR : cod;
+    rows.push({ awb: shipment.awbNumber, cod, payable, ref: o.orderNumber });
+  }
+  if (rows.length < 2) {
+    throw new Error(
+      `N5 needs two delivered COD parcels with waybills; found ${rows.length}. ` +
+        'Run the lifecycle pass first.',
+    );
+  }
+
+  const csv = [
+    'Waybill Number,Order Number,COD Amount,Amount Payable,Status',
+    ...rows.map((r) => `${r.awb},${r.ref},${r.cod}.00,${r.payable}.00,Delivered`),
+  ].join('\n');
+  await fs.mkdir(GENERATED_DIR, { recursive: true });
+  const file = path.join(GENERATED_DIR, REMITTANCE_EXPORT_FILE);
+  await fs.writeFile(file, `${csv}\n`, 'utf8');
+  const total = rows.reduce((n, r) => n + r.payable, 0);
+  console.log(
+    `  · remittance export written: ${rows.length} parcel(s), ₹${total} payable ` +
+      `(one short by ₹${DESK_PAYOUT_SHORT_INR})`,
+  );
+  return total;
+}
+
+/** The name both the seed and the flow use. One place, so they cannot disagree. */
+const REMITTANCE_EXPORT_FILE = 'courier-remittance.csv';
+
+/**
+ * Put back what an N6 take posted.
+ *
+ * A staff transfer is an append-only ledger row AND a pair of bank
+ * entries, and the product has no way to withdraw one — a mistake is put
+ * right with a transfer the OTHER way, which is the lesson of the video
+ * and the wrong thing for a camera, because the second take would open
+ * on a history of four transfers under a line describing one.
+ *
+ * So the take's own rows go: the wallet entry, and every bank entry
+ * carrying its id as a reference — which is how `StaffWalletTransferService`
+ * links the pair, in both directions. Deleting BOTH halves is what keeps
+ * the bank book's "held for a seller equals the positive part of their
+ * wallet" invariant true (TRE-8); deleting the wallet row alone would
+ * leave cash attributed to somebody who is no longer owed it.
+ *
+ * Guarded on these being the NEWEST entries on the wallet, for the same
+ * reason the settlement one is: a running balance is stamped, not
+ * recomputed, so removing an entry with anything after it would leave
+ * every later balance wrong.
+ */
+async function unpostStaffTransfers(sellerId) {
+  const staff = await prisma.sellerWalletEntry.findMany({
+    where: { sellerId, direction: { in: ['STAFF_DEBIT', 'STAFF_CREDIT'] } },
+    select: { id: true },
+    orderBy: { id: 'desc' },
+  });
+  if (staff.length === 0) return;
+  const newest = await prisma.sellerWalletEntry.findMany({
+    where: { sellerId },
+    select: { id: true },
+    orderBy: { id: 'desc' },
+    take: staff.length,
+  });
+  const ids = new Set(staff.map((e) => e.id));
+  if (!newest.every((e) => ids.has(e.id))) {
+    throw new Error(
+      'A staff transfer is no longer the newest thing on this wallet — removing it would leave ' +
+        'every later running balance wrong. Reseed the box instead of filming N6 on it.',
+    );
+  }
+  const bank = await prisma.bankEntry.deleteMany({ where: { reference: { in: [...ids] } } });
+  await prisma.sellerWalletEntry.deleteMany({ where: { id: { in: [...ids] } } });
+  console.log(
+    `  · un-posted ${ids.size} staff transfer(s) and the ${bank.count} bank entr(ies) they wrote`,
+  );
+}
 
 async function main() {
   assertStack();

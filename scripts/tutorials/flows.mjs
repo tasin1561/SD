@@ -14,7 +14,7 @@
  * video was watched.
  */
 import path from 'node:path';
-import { TUTORIALS_DIR } from './lib/paths.mjs';
+import { GENERATED_DIR, TUTORIALS_DIR } from './lib/paths.mjs';
 import { readFixture } from './lib/fixture.mjs';
 
 /**
@@ -11006,6 +11006,316 @@ export const FLOWS = {
       },
     },
   },
+  /*
+    N5 — recording a courier payout.
+
+    The lines are filled by UPLOADING the courier's own remittance
+    export, which is both the real operator path and the only watchable
+    one: the allocation form takes an ORDER'S UUID, and typing one of
+    those on camera teaches nothing. The file is written by the seed
+    rather than committed, because an export names WAYBILLS and the
+    waybills here were minted by the local simulator on this run.
+
+    The take SPENDS it — a settlement is append-mostly, and recording one
+    credits the COD — so the seeding removes the previous take's payout
+    and the wallet entries its credit wrote (`unrecordTutorialPayouts`).
+  */
+  'record-a-courier-payout': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/settlements`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Courier settlements', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.getByText(/float we are carrying/i).first(), 2800);
+      },
+
+      async float({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Outstanding float'), 4000);
+      },
+
+      async window({ page, stage }) {
+        await stage.dwellOn(page.getByText(/Delhivery states 5–10 days/i).first(), 4200);
+      },
+
+      async record({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Record payout' }).first(), {
+          after: 1500,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await dialog
+          .getByLabel(/^Courier account/)
+          .first()
+          .selectOption({ index: 1 });
+        await page.waitForTimeout(500);
+        await stage.typeIn(
+          dialog.getByLabel(/^Amount received/).first(),
+          String(PAYOUT_TOTAL_INR),
+          {
+            after: 600,
+          },
+        );
+      },
+
+      async reference({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/^Payout reference/).first(), PAYOUT_REFERENCE, {
+          after: 700,
+        });
+        await page.waitForTimeout(1200);
+      },
+
+      /*
+        The upload. `setInputFiles` on the hidden input rather than a
+        click on its label: the input is `sr-only` and Playwright refuses
+        to act on something with no box, which is correct — a real
+        operator clicks the label and the browser does this for them.
+      */
+      async allocate({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.point(dialog.locator('.mk-drop').first(), { settle: 900 });
+        await dialog.locator('input[type="file"]').first().setInputFiles(REMITTANCE_EXPORT);
+        // The lines the file filled. Gated on a VALUE in the first
+        // amount box, not on the box: the form ships with one empty line
+        // and an upload that matched nothing leaves exactly that.
+        const firstAmount = dialog.getByLabel('Amount', { exact: true }).first();
+        await firstAmount.waitFor({ state: 'visible', timeout: 25_000 });
+        for (let i = 0; i < 40; i += 1) {
+          if (((await firstAmount.inputValue()) ?? '') !== '') break;
+          await page.waitForTimeout(500);
+        }
+        if (((await firstAmount.inputValue()) ?? '') === '') {
+          throw new Error('The remittance file matched no parcel — nothing was allocated.');
+        }
+        await page.waitForTimeout(800);
+        await stage.clearHalo();
+        await stage.dwellOn(dialog.locator('.mk-panel').first(), 2600);
+      },
+
+      async expected({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.dwellOn(dialog.getByLabel('Order ID', { exact: true }).first(), 4200);
+      },
+
+      async short({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.dwellOn(dialog.getByLabel('Amount', { exact: true }).nth(1), 4600);
+      },
+
+      async credit({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.clickIt(
+          dialog
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /Record|Recording|Recorded|Working/ })
+            .first(),
+          { after: 2000 },
+        );
+        await dialog.waitFor({ state: 'detached', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        const row = page.getByRole('row').filter({ hasText: PAYOUT_REFERENCE }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(row, 2600);
+      },
+
+      async ledger({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/seller-wallets`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(page.getByRole('link', { name: /Ledger/ }).first(), { after: 1500 });
+        await page.waitForURL(/\/seller-wallets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.dwellOn(await ledgerRow(page, 'COD collected'), 2400);
+        await stage.dwellOn(await ledgerRow(page, 'COD tax deduction'), 2600);
+      },
+
+      async reversal({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/settlements`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.dwellOn(moneyKpi(page, 'Short-paid orders'), 4400);
+      },
+
+      async unexplained({ page, stage }) {
+        const row = page.getByRole('row').filter({ hasText: PAYOUT_REFERENCE }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await row.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row, 4200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Outstanding float'), 3600);
+      },
+    },
+  },
+  /*
+    N6 — moving money in or out of a wallet by hand.
+
+    ONE screen, and the take POSTS a real transfer: an append-only ledger
+    row plus a pair of bank entries, with no way in the product to
+    withdraw either (a mistake is put right with a transfer the other
+    way, which is the lesson). `unpostStaffTransfers` removes the take's
+    own rows — both halves, or the bank book's "held for a seller equals
+    the positive part of their wallet" invariant stops being true.
+  */
+  'move-money-by-hand': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/wallet-transfers`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Wallet transfers', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(
+          page.getByText(/reads your reason on their wallet history/i).first(),
+          2800,
+        );
+      },
+
+      async notacorrection({ page, stage }) {
+        await stage.dwellOn(page.getByText(/Not a correction/i).first(), 4200);
+      },
+
+      async seller({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /Rangpur Silk House/ }).first(), {
+          after: 1600,
+        });
+        await page
+          .getByLabel(/^Which way/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.locator('.mk-card').first(), 2400);
+      },
+
+      async direction({ page, stage }) {
+        const field = page.getByLabel(/^Which way/).first();
+        await stage.point(field, { settle: 800 });
+        await field.selectOption('DEBIT');
+        await page.waitForTimeout(1200);
+        await stage.clearHalo();
+        await stage.dwellOn(field, 2200);
+      },
+
+      async debit({ page, stage }) {
+        await stage.dwellOn(
+          page.getByText(/their wallet goes negative and they owe it to us/i).first(),
+          4600,
+        );
+        await stage.typeIn(page.getByLabel(/^Amount/).first(), '1200', { after: 600 });
+      },
+
+      async reason({ page, stage }) {
+        await stage.typeIn(
+          page.locator('#wt-reason'),
+          'Carton 3 of your August consignment never reached us — this is the freight we had already billed you for it, taken back.',
+          { after: 700 },
+        );
+        await page.waitForTimeout(900);
+      },
+
+      async internal({ page, stage }) {
+        await stage.typeIn(
+          page.locator('#wt-note'),
+          'Ticket TK-2026-000001, forwarder claim open.',
+          {
+            after: 700,
+          },
+        );
+        await page.waitForTimeout(900);
+      },
+
+      async preview({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: /^Preview|Worked out|Working it out/ }).first(),
+          {
+            after: 1800,
+          },
+        );
+        const sentence = page.locator('[data-testid="wallet-transfer-sentence"]');
+        await sentence.waitFor({ state: 'visible', timeout: 25_000 });
+        await sentence.evaluate((el) =>
+          el.scrollIntoView({ block: 'center', behavior: 'instant' }),
+        );
+        await page.waitForTimeout(700);
+        await stage.dwellOn(sentence, 3000);
+      },
+
+      async numbers({ page, stage }) {
+        const card = moneyCard(page, 'Preview');
+        await stage.dwellOn(card.locator('.mk-dl').first(), 4600);
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Post transfer' }).first(), {
+          after: 1500,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(dialog.getByText(/cannot be undone/i).first(), 3600);
+      },
+
+      async post({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.clickIt(
+          dialog
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /Yes, post it|Working|Done/ })
+            .first(),
+          { after: 2200 },
+        );
+        await page.waitForTimeout(1800);
+      },
+
+      /*
+        The history, reached by RELOADING rather than by closing the
+        dialog: `closeOnSuccess` is false on this one, so the confirm
+        stays open with its result and the table behind it is the thing
+        the next line is about.
+      */
+      async history({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/wallet-transfers`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = page
+          .getByRole('row')
+          .filter({ hasText: /Carton 3 of your August consignment/ })
+          .first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await row.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row, 4200);
+      },
+
+      async outro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/seller-wallets`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(page.getByRole('link', { name: /Ledger/ }).first(), { after: 1500 });
+        await page.waitForURL(/\/seller-wallets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.dwellOn(await ledgerRow(page, 'Debited by Skydrop'), 3600);
+      },
+    },
+  },
 };
 
 /**
@@ -11484,3 +11794,21 @@ function bankField(page, label) {
     .filter({ has: page.getByRole('cell', { name: label, exact: true }) })
     .first();
 }
+
+/**
+ * N5's payout, and the export the seed wrote for it.
+ *
+ * The TOTAL is what the two delivered parcels come to after one of them
+ * is short-paid — keep in step with `writeRemittanceExport` and
+ * `DESK_PAYOUT_SHORT_INR` in `seed-demo-data.mjs`. It is typed by the
+ * operator from the STATEMENT rather than taken from the file, which is
+ * the form's own rule: the file is the courier's claim and the bank is
+ * the fact.
+ *
+ * The reference prefix is what `unrecordTutorialPayouts` finds to undo a
+ * previous take, so the two must agree or the second take opens on a
+ * float of zero.
+ */
+const PAYOUT_TOTAL_INR = 4750;
+const PAYOUT_REFERENCE = 'UTR-TUT-20261001-4417';
+const REMITTANCE_EXPORT = path.join(GENERATED_DIR, 'courier-remittance.csv');
