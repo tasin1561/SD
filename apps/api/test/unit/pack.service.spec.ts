@@ -1,5 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
-import { OrderStatus, ShipmentStatus } from '@skydrop/db';
+import { OrderStatus, PackBoxStatus, ShipmentStatus } from '@skydrop/db';
 import { PackService } from '../../src/modules/warehouse-pack/services/pack.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
@@ -32,6 +32,8 @@ function makeService(
      * PackBoxService.close closes the box, then calls complete.
      */
     closedBox?: boolean;
+    /** How many OPEN boxes the release sweep finds for this parcel. */
+    openBoxes?: number;
   } = {},
 ) {
   const defaultShipment = {
@@ -53,10 +55,16 @@ function makeService(
     count: opts.stampCount ?? 1,
   }));
   const packBoxFindFirst = jest.fn(async () => (opts.closedBox === false ? null : { id: 'box-1' }));
+  // How many OPEN boxes this parcel has. A forced pack leaves the
+  // supervisor's own box open unless `complete` releases it, which is
+  // what the "locked out of their own bench" test below is about.
+  const packBoxUpdateMany = jest.fn<Promise<{ count: number }>, [AnyArgs]>(async () => ({
+    count: opts.openBoxes ?? 1,
+  }));
   const client: AnyArgs = {
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn(client),
     shipment: { findFirst: shipmentFindFirst, updateMany: shipmentUpdateMany },
-    packBox: { findFirst: packBoxFindFirst },
+    packBox: { findFirst: packBoxFindFirst, updateMany: packBoxUpdateMany },
   };
 
   const getById = jest.fn(async () =>
@@ -118,6 +126,7 @@ function makeService(
     auditLog,
     unitLedger,
     packBoxFindFirst,
+    packBoxUpdateMany,
   };
 }
 
@@ -424,6 +433,53 @@ describe('PackService.complete — the verification gate', () => {
         severity: 'HIGH',
         metadata: expect.objectContaining({ overrideReason: reason }),
       }),
+    );
+  });
+
+  it('a forced pack RELEASES the box it was forced through, or the supervisor is locked out', async () => {
+    /*
+      `complete` never touches `pack_boxes`: the real path reaches here
+      from `PackBoxService.close`, which has already closed the box. The
+      FORCED path has not — the supervisor opened a box, found nothing on
+      the goods to scan, and pressed through. Left OPEN, the partial
+      unique `one open box per packer` then refuses their very NEXT scan
+      ("Close or cancel your open box before starting another") while the
+      bench has already cleared that box off the screen, and the parcel
+      is PACKED so it cannot be closed properly either. Proved against a
+      real database before this was written: open → force-complete →
+      scan the next label → 409 PACK_BOX_ALREADY_OPEN.
+    */
+    const { svc, packBoxUpdateMany, auditLog } = makeService({ closedBox: false });
+    await svc.complete(SHIP, STAFF, undefined, undefined, 'Barcode torn off; counted by hand');
+
+    expect(packBoxUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { shipmentId: SHIP, status: PackBoxStatus.OPEN },
+        data: expect.objectContaining({ status: PackBoxStatus.CANCELLED }),
+      }),
+    );
+    // CANCELLED and never CLOSED: a closed box is the LBL-4 evidence the
+    // contents WERE scanned — the exact row the verification gate reads
+    // — so recording one here would mint the proof this path exists to
+    // go without.
+    const data = packBoxUpdateMany.mock.calls[0]?.[0]?.data as { status: unknown };
+    expect(data.status).not.toBe(PackBoxStatus.CLOSED);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'pack_box.released_unverified' }),
+    );
+  });
+
+  it('the ORDINARY pack leaves pack_boxes alone — close() already closed it', async () => {
+    const { svc, packBoxUpdateMany } = makeService({ closedBox: true });
+    await svc.complete(SHIP, STAFF);
+    expect(packBoxUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it('a forced pack with no open box says nothing — the naked API call has none', async () => {
+    const { svc, auditLog } = makeService({ closedBox: false, openBoxes: 0 });
+    await svc.complete(SHIP, STAFF, undefined, undefined, 'Goods predate labelling entirely');
+    expect(auditLog).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'pack_box.released_unverified' }),
     );
   });
 

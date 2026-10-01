@@ -282,7 +282,60 @@ export class PackService {
       },
     });
 
-    // 3. POST-COMMIT auto-attach (WMS-7). Best-effort + idempotent.
+    // 3. POST-COMMIT: RELEASE THE BOX A FORCED PACK LEFT OPEN.
+    //
+    // `complete` never touches `pack_boxes` — the box is opened and
+    // closed by `PackBoxService`, and on the real path `close` has
+    // already closed it before calling here. The FORCED path has not:
+    // the supervisor opened a box, found nothing on the goods to scan,
+    // and pressed through. That box stayed OPEN, and the partial unique
+    // `one open box per packer` then refused their very NEXT scan with
+    // "Close or cancel your open box before starting another" — while
+    // the bench had already cleared the box off the screen, so there was
+    // nothing left to close or cancel. The parcel was PACKED by then, so
+    // closing it properly was not possible either: the supervisor was
+    // locked out of the bench until the abandonment sweep reclaimed it.
+    //
+    // CANCELLED and not CLOSED, deliberately. A CLOSED box is the LBL-4
+    // evidence that the contents WERE scanned — it is the exact row the
+    // verification gate above reads — so recording one here would mint
+    // the proof this path exists to go without, and a later ordinary
+    // complete on the same parcel would sail through the gate on it.
+    // Cancelled is also simply true: nothing was verified.
+    //
+    // Guarded on OPEN, scoped to this parcel, and best-effort — the pack
+    // is the durable fact and the five-minute sweep is the backstop, so
+    // a failure here must not undo a parcel that is already packed.
+    if (unverifiedOverrideReason !== undefined) {
+      try {
+        const released = await this.prisma.client.packBox.updateMany({
+          where: { shipmentId, status: PackBoxStatus.OPEN },
+          data: {
+            status: PackBoxStatus.CANCELLED,
+            cancelledAt: now,
+            cancelReason: 'Packed without scanning; the box was never verified',
+          },
+        });
+        if (released.count > 0) {
+          await this.audit.log({
+            actorType: ActorType.STAFF,
+            actorId: staffId,
+            action: 'pack_box.released_unverified',
+            entityType: 'shipment',
+            entityId: shipmentId,
+            severity: 'LOW',
+            metadata: { orderId, boxes: released.count },
+          });
+        }
+      } catch (err) {
+        this.logger.warn(
+          { shipmentId, orderId, err: (err as Error).message },
+          'Could not release the open box after a forced pack — the abandonment sweep will',
+        );
+      }
+    }
+
+    // 4. POST-COMMIT auto-attach (WMS-7). Best-effort + idempotent.
     let manifestId: string | null = null;
     let manifestNumber: string | null = null;
     try {
@@ -300,7 +353,7 @@ export class PackService {
       );
     }
 
-    // 4. POST-COMMIT auto-pickup (CUR-10 per-category switch, default
+    // 5. POST-COMMIT auto-pickup (CUR-10 per-category switch, default
     // OFF). Best-effort, independent of whether the manifest attach
     // above succeeded — a van is asked for because a parcel is ready to
     // leave the building, not because of which paperwork it landed on.
