@@ -6223,6 +6223,10 @@ async function moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken) {
     await unpostStaffTransfers(sellerId);
   }
 
+  if (slug === 'the-bank-book') {
+    await unpostTutorialReconciliations();
+  }
+
   if (slug === 'approve-a-bank-change') {
     // The change this take approves. Approving WRITES THE NEW ACCOUNT
     // THROUGH, so a second take would find the seller already on the new
@@ -6501,6 +6505,54 @@ async function unpostStaffTransfers(sellerId) {
   console.log(
     `  · un-posted ${ids.size} staff transfer(s) and the ${bank.count} bank entr(ies) they wrote`,
   );
+}
+
+/**
+ * The reason N7 types into the reconcile dialog, and therefore the
+ * handle on the entries it leaves. Kept in step with `flows.mjs` by
+ * `test/tutorial-labels.test.mjs` — the M1 pattern.
+ */
+const N7_RECONCILE_REASON =
+  'HDFC charged a wire fee on the September remittance that we had never recorded.';
+
+/**
+ * Put back what an N7 take posted.
+ *
+ * A reconciliation is APPEND-ONLY and the product has no way to withdraw
+ * one — which is the lesson of the video, so rewinding it on camera
+ * would teach the opposite. But leaving it has a sharper cost than
+ * untidiness: the take types a STATEMENT FIGURE and the adjustment moves
+ * the book to exactly it, so the SECOND take would open on a book that
+ * already agrees, post a difference of zero, and film a scene about
+ * correcting a disagreement with nothing to correct.
+ *
+ * Found by its reason rather than by its type, because a reconciliation
+ * somebody else posts is history and not ours to remove. `BankLedgerService`
+ * is the only writer of these rows and nothing downstream stores a
+ * running total — a balance on this page is the SUM of its entries,
+ * which the page says out loud — so removing one is complete.
+ */
+async function unpostTutorialReconciliations() {
+  const rows = await prisma.bankEntry.findMany({
+    where: { type: 'RECONCILIATION_ADJUSTMENT', note: { contains: N7_RECONCILE_REASON } },
+    select: { id: true, isOpeningBalance: true },
+  });
+  if (rows.length === 0) return;
+  // An entry somebody has since MARKED as the opening balance is a
+  // different thing from the one the take posted: there is one per
+  // account and the product refuses a second, so deleting it would let
+  // the next person mark another and quietly change what the P&L leaves
+  // out. Leave it and say so.
+  const removable = rows.filter((r) => !r.isOpeningBalance);
+  if (removable.length < rows.length) {
+    console.log(
+      `  · left ${rows.length - removable.length} tutorial reconciliation(s) that have been ` +
+        'marked as an opening balance',
+    );
+  }
+  if (removable.length === 0) return;
+  await prisma.bankEntry.deleteMany({ where: { id: { in: removable.map((r) => r.id) } } });
+  console.log(`  · un-posted ${removable.length} tutorial reconciliation(s)`);
 }
 
 async function main() {

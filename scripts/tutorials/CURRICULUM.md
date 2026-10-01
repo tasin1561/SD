@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 74 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N6, N9, O1 and P5.** The 16 left are all in the admin app: 2 are
+**90 tutorials. 75 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N6, N9, O1 and P5.** The 15 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,7 +32,7 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (74):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (75):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
 **L1–L3**, **M1–M2**, **N1–N6**, **N9** and **O1**.
 Every one has its own entry below saying what it covers and what its seeding
@@ -104,10 +104,9 @@ to Kolkata, a return that came back to the wrong building. Do NOT film
 Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
 teach the wrong habit.
 
-**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N7 —
-"The bank book".** N1–N6 and N9 are filmed. `moneyDeskWorldFor` is the shared
-world N2–N7 draw on; **N7 and N8 have no narration or flow yet**, and neither
-does any of P1–P4 — N5 and N6 landed
+**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N8 —
+"Freight bills".** N1–N7 and N9 are filmed, which is the whole of the money
+desk. **N8 has no narration or flow yet**, and neither does any of P1–P4 — N5 and N6 landed
 in a commit titled "N3 and N4", which is the slug-against-number confusion
 worth expecting rather than a mistake in the code (`record-a-courier-payout`
 is N5, `move-money-by-hand` is N6).
@@ -3766,15 +3765,54 @@ the take's own ledger row and the TWO bank entries its attribution pair wrote;
 they are the newest rows on the wallet, so nothing downstream of them has a
 running balance to be made wrong.
 
-### N7. The bank book · `needs demo data` · **dangerous**
+### N7. The bank book · **FILMED** — `the-bank-book.mp4`
 
 **Promise** — you can keep the treasury agreeing with the statements.
-**Length** 4 min. **Prerequisites** N5.
+**Length** 3 min 37 s of narration over 15 scenes. **Prerequisites** N5.
+**Needs** D0 plus `moneyDeskWorldFor`.
 **Covers** `/treasury`: accounts, transfers between them, reconciling against a
 statement, owner money in and out, and the opening balance.
 **Cost of getting it wrong:** a reconciliation is append-only, so a wrong one is
 corrected by another entry and never by an edit — and an opening balance
 mistyped as a reconciliation reads as **profit**.
+
+**ONE ACT, TWO READINGS.** The take POSTS a reconciliation, which is the
+screen's everyday job. The transfer and owner-money forms are OPENED and
+DESCRIBED, never submitted — both move real money, and the narration over them
+is about what the form asks for rather than about doing it. The
+opening-balance checkbox is pointed at and never ticked: it is once per account
+and the API refuses a second, so ticking it would make a take's success depend
+on what every previous take left behind, and the sentence over it is a warning
+rather than an instruction.
+
+**A DIALOG HAS TO SURVIVE THE SENTENCE THAT IS ABOUT IT.** Each of the three
+opened dialogs is closed by the NEXT scene, not by its own. Cancelling inside
+the scene that opened it looked tidier and was wrong: a scene is held for the
+length of its narration clip, so the ten seconds after the cancel were a line
+about the transfer form spoken over the page behind it. Every step passed; the
+frame was the only thing that said so.
+
+**`preview` is null on an empty field**, so the owner-money sentence the
+narration quotes ("…to our own money in this account") does not exist until an
+amount is typed. Scenes that quote a derived line have to put the thing it is
+derived from on screen first.
+
+**The take SPENDS the book, and in a way worse than untidiness.** The
+reconciliation moves the account to exactly the statement figure the flow
+types, so a SECOND take would open on a book that already agrees, post a
+difference of zero, and film a scene about correcting a disagreement with
+nothing to correct. `unpostTutorialReconciliations` removes it, found by the
+REASON the flow types rather than by its type — a reconciliation somebody else
+posted is history and not ours to remove — and deliberately leaves alone any
+entry since marked as an opening balance, since there is one per account and
+removing it would let the next person mark another and quietly change what the
+P&L leaves out. The reason is written down in both files and pinned by
+`test/tutorial-labels.test.mjs`, the M1 pattern.
+
+**That test's `declared()` could not see a WRAPPED declaration** until this
+entry: Prettier breaks a `const NAME = '…';` whose line would pass 100
+characters, and the check then reported the constant as declared ZERO times —
+which reads as a rename and is a line length.
 
 ### N8. Freight bills · `needs demo data` · **dangerous**
 

@@ -11609,9 +11609,16 @@ export const FLOWS = {
       },
 
       /*
-        Opened and CANCELLED. Closed from the footer: every `Dialog`
-        header carries an X with `aria-label="Close"` beside whatever
-        the footer holds, so the unscoped reach dies on strict mode.
+        EACH OF THESE THREE OPENS ITS DIALOG AND LEAVES IT OPEN; the
+        NEXT scene closes it. Cancelling inside the scene that opened it
+        looked tidier and was wrong: a scene is held for the length of
+        its narration clip, so the ten seconds after the cancel were a
+        line about the transfer form spoken over the page behind it. A
+        dialog has to survive the sentence that is about it.
+
+        Closed from the FOOTER: every `Dialog` header carries an X with
+        `aria-label="Close"` beside whatever the footer holds, so the
+        unscoped reach dies on strict mode.
       */
       async transfer({ page, stage }) {
         await stage.clickIt(page.getByRole('button', { name: 'Move money' }).first(), {
@@ -11621,16 +11628,11 @@ export const FLOWS = {
         await dialog.waitFor({ state: 'visible', timeout: 20_000 });
         await page.waitForTimeout(700);
         await stage.dwellOn(dialog.getByLabel(/^Left/).first(), 2200);
-        await stage.dwellOn(dialog.getByLabel(/^Arrived/).first(), 2400);
-        await dialog
-          .locator('.sk-dialog__foot')
-          .getByRole('button', { name: 'Cancel' })
-          .first()
-          .click();
-        await dialog.waitFor({ state: 'detached', timeout: 20_000 });
+        await stage.dwellOn(dialog.getByLabel(/^Arrived/).first(), 2600);
       },
 
       async ownermoney({ page, stage }) {
+        await closeOpenDialog(page);
         await stage.clickIt(
           treasuryRow(page).getByRole('button', { name: 'Owner money' }).first(),
           {
@@ -11640,17 +11642,16 @@ export const FLOWS = {
         const dialog = page.getByRole('dialog');
         await dialog.waitFor({ state: 'visible', timeout: 20_000 });
         await page.waitForTimeout(700);
-        await stage.dwellOn(dialog.getByLabel(/^Which way/).first(), 2200);
+        await stage.dwellOn(dialog.getByLabel(/^Which way/).first(), 2000);
+        // The sentence under the amount is what the narration is about,
+        // and it renders only once there IS an amount — `preview` is
+        // null on an empty field, so nothing was there to point at.
+        await stage.typeIn(dialog.getByLabel(/^Amount/).first(), '50000', { after: 500 });
         await stage.dwellOn(dialog.getByText(/our own money in this account/i).first(), 2600);
-        await dialog
-          .locator('.sk-dialog__foot')
-          .getByRole('button', { name: 'Cancel' })
-          .first()
-          .click();
-        await dialog.waitFor({ state: 'detached', timeout: 20_000 });
       },
 
       async reconcile({ page, stage }) {
+        await closeOpenDialog(page);
         await stage.clickIt(treasuryRow(page).getByRole('button', { name: 'Reconcile' }).first(), {
           after: 1500,
         });
@@ -11683,8 +11684,10 @@ export const FLOWS = {
         const dialog = page.getByRole('dialog');
         await stage.typeIn(
           dialog.getByLabel(/^Why the book was wrong/).first(),
-          'HDFC charged a wire fee on the September remittance that we had never recorded.',
-          { after: 700 },
+          N7_RECONCILE_REASON,
+          {
+            after: 700,
+          },
         );
         await page.waitForTimeout(900);
       },
@@ -12923,6 +12926,36 @@ function bankField(page, label) {
     .filter({ has: page.getByRole('cell', { name: label, exact: true }) })
     .first();
 }
+
+/**
+ * Close whatever dialog is open, from its footer.
+ *
+ * For the shape N7 needs: a scene opens a dialog and the NEXT scene
+ * shuts it, so each form survives the sentence that is about it. The
+ * footer's Cancel rather than the header's X, because every `Dialog`
+ * header carries one with `aria-label="Close"` and the unscoped reach
+ * dies on strict mode.
+ */
+async function closeOpenDialog(page) {
+  const dialog = page.getByRole('dialog').first();
+  if ((await dialog.count()) === 0) return;
+  await dialog.locator('.sk-dialog__foot').getByRole('button', { name: 'Cancel' }).first().click();
+  await dialog.waitFor({ state: 'detached', timeout: 20_000 });
+}
+
+/**
+ * The reason N7 types, and therefore the one its seeding finds.
+ *
+ * Kept in step with `seed-demo-data.mjs` by
+ * `test/tutorial-labels.test.mjs`, which is the M1 pattern: a flow
+ * cannot import the seed, so a few literals are written down twice and
+ * a test reads both files. A rename on one side here would leave every
+ * take's reconciliation on the book, and the SECOND take would type a
+ * statement figure the book already agrees with — no difference, no
+ * adjustment, and a scene about correcting one with nothing to correct.
+ */
+const N7_RECONCILE_REASON =
+  'HDFC charged a wire fee on the September remittance that we had never recorded.';
 
 /**
  * N7's rupee account row, by the account's own name.
