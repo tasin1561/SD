@@ -418,6 +418,11 @@ export const STORE_REQUEST_ORDERS = {
 const CONSIGNMENT_SLUGS = new Set([
   'follow-a-consignment',
   'read-your-stock',
+  // N8 BILLS an arrival on camera, so it needs the landed consignment
+  // and its counted India receipt. It is deliberately NOT in
+  // `FREIGHT_SLUGS` below: E5's bill occupies the only billable stop,
+  // and the form's own select would draw it disabled.
+  'bill-the-freight',
   // E5's bill hangs on the landed consignment's INDIA arrival, so that
   // consignment has to exist before the freight pass can bill it.
   'what-the-freight-cost',
@@ -5534,6 +5539,213 @@ async function leadsWorldFor(slug) {
 }
 
 /**
+ * The seller O2 works on. DELIBERATELY NOT THE DEMO SELLER.
+ *
+ * Two reasons, and the second is the one that decided it.
+ *
+ * O2 SUSPENDS an account on camera. `ensureSeller` forces the demo
+ * seller back to APPROVED on every seed, so a take that died between
+ * the suspend and the reapprove would heal itself on the next run — but
+ * only on the next run, and the videos in between would be filmed
+ * against a seller whose portal access had been revoked. Nothing in the
+ * seller app says "you are suspended" in a way a flow would notice; it
+ * simply stops signing in.
+ *
+ * And the account hold CANNOT BE SHOWN on a seller who is in credit.
+ * `SellerRestrictionService.activeFor` lifts a hold in passing the
+ * moment the balance reaches the clearing figure — applied by a person,
+ * cleared by money — so a hold placed on the demo seller's +₹63,958
+ * with the usual threshold of zero is already lifted by the time the
+ * card refetches, and the scene after the press would film "No hold.
+ * This seller can trade normally." under a line about a hold being
+ * placed. The hold exists for a seller who owes us money, so the video
+ * needs one.
+ *
+ * `phone` is what the correction types; `phoneAsRegistered` is what the
+ * seeding puts back every run, so the scene has something to correct.
+ */
+const O2_SELLER_NAME = 'Khulna Handloom';
+
+/** What registration captured, and what the seeding puts back every run. */
+const O2_PHONE_AS_REGISTERED = '+8801811556600';
+
+/**
+ * What the correction types on camera. The seeding never writes it — it
+ * is declared here ONLY so this file can refuse when the two are the
+ * same, which the API would answer with IDENTITY_NO_CHANGES three
+ * scenes into a take. `test/tutorial-labels.test.mjs` keeps it in step
+ * with the number `flows.mjs` actually types.
+ */
+const O2_PHONE_CORRECTED = '+8801811556622';
+
+const O2_SELLER = {
+  email: 'accounts@khulnahandloom.test',
+  password: 'Skydrop-Demo-2026',
+  companyName: O2_SELLER_NAME,
+  contactPersonName: 'Nasrin Sultana',
+  initials: 'KHL',
+  phoneAsRegistered: O2_PHONE_AS_REGISTERED,
+  owesInr: '18400.00',
+};
+
+/**
+ * One key, for ever. `POST /admin/wallet-transfers` is idempotent on it
+ * (IDEM-1), so the debt is posted ONCE and every later seed run returns
+ * the original transfer and moves nothing — which is what makes the
+ * figure on screen the same in every take.
+ */
+const O2_DEBT_IDEMPOTENCY_KEY = '0193b2a7-6c10-4f3a-9d21-5f0e4c8a7b31';
+
+/**
+ * O2's world — "Managing a seller".
+ *
+ * ── WHAT THE TAKE SPENDS, AND WHAT PUTS IT BACK ──────────────────────
+ * The video corrects the phone, places a hold and lifts it, then
+ * suspends the account and reapproves it. Every one of those is the
+ * subject, so none of them is faked — and each is undone here rather
+ * than on camera:
+ *
+ *   · the phone goes back to what registration captured, because the
+ *     correction scene needs something wrong to correct;
+ *   · any hold still standing is lifted, because the API refuses a
+ *     second one by name (RESTRICTION_ALREADY_ACTIVE) and the video
+ *     opens on a card that says there is no hold;
+ *   · the status is forced back to APPROVED, because the suspend scene
+ *     only offers "Suspend account" from there — from SUSPENDED the
+ *     panel offers the other button and the take films the video
+ *     backwards.
+ *
+ * ── THE DEBT ─────────────────────────────────────────────────────────
+ * Posted through the real staff-transfer endpoint rather than a ledger
+ * insert: it is the path an operator would actually use (the seller
+ * detail page links to it), it writes the reason the seller reads, and
+ * TRE-8b means a debit on a seller holding no cash writes NO bank entry
+ * at all — the wallet simply goes negative and the shortfall is a
+ * receivable. Which is exactly the state the hold is for.
+ */
+async function sellerAccountWorldFor(slug, staffToken) {
+  if (slug !== 'managing-a-seller') return;
+
+  if (O2_PHONE_CORRECTED === O2_PHONE_AS_REGISTERED) {
+    throw new Error(
+      'The phone O2 corrects TO is the one this seeding puts back, so the correction changes ' +
+        'nothing and the API answers IDENTITY_NO_CHANGES three scenes in.',
+    );
+  }
+
+  let seller = await prisma.seller.findUnique({
+    where: { email: O2_SELLER.email },
+    select: { id: true, approvedAt: true },
+  });
+  if (seller === null) {
+    const invite = await call('/admin/seller-invitations', {
+      method: 'POST',
+      token: staffToken,
+      body: { email: O2_SELLER.email },
+    });
+    await call('/auth/seller/register/invite', {
+      method: 'POST',
+      body: {
+        token: invite.token,
+        companyName: O2_SELLER.companyName,
+        contactPersonName: O2_SELLER.contactPersonName,
+        phone: O2_SELLER.phoneAsRegistered,
+        password: O2_SELLER.password,
+      },
+    });
+    seller = await prisma.seller.findUniqueOrThrow({
+      where: { email: O2_SELLER.email },
+      select: { id: true, approvedAt: true },
+    });
+    console.log(`  · created the seller "${O2_SELLER.companyName}" (${O2_SELLER.email})`);
+  }
+
+  /*
+    THE IDENTITY, PUT BACK. Both fields, not only the phone: the
+    correction dialog opens pre-filled from the current values and
+    nothing stops an operator editing the company name on camera by
+    accident, and a seller whose name drifted take by take is a page
+    the narration stops matching.
+  */
+  /*
+    BACK-DATED. An account that was approved this morning and already
+    owes us August's courier charges is a page that argues with itself,
+    and the Approved and Created rows are two lines above the hold.
+  */
+  const joined = new Date('2026-06-12T09:20:00Z');
+  await prisma.seller.update({
+    where: { id: seller.id },
+    data: {
+      status: 'APPROVED',
+      approvedAt: joined,
+      createdAt: joined,
+      emailVerifiedAt: joined,
+      companyName: O2_SELLER.companyName,
+      contactPersonName: O2_SELLER.contactPersonName,
+      phone: O2_SELLER.phoneAsRegistered,
+      initials: O2_SELLER.initials,
+    },
+  });
+  await prisma.sellerUser.updateMany({
+    where: { sellerId: seller.id },
+    data: { passwordHash: await hash(O2_SELLER.password), emailVerifiedAt: new Date() },
+  });
+
+  const standing = await prisma.sellerRestriction.findFirst({
+    where: { sellerId: seller.id, liftedAt: null },
+    select: { id: true },
+  });
+  if (standing !== null) {
+    await prisma.sellerRestriction.update({
+      where: { id: standing.id },
+      data: {
+        liftedAt: new Date(),
+        liftReason: 'Lifted by the tutorial seeding before a re-take.',
+      },
+    });
+    console.log('  · lifted the hold a previous take left standing');
+  }
+
+  /*
+    THE DEBT. Checked before it is posted only so the log says something
+    useful — the idempotency key is what actually makes this once-only,
+    and it is the same key for ever on purpose (see the constant).
+  */
+  const last = await prisma.sellerWalletEntry.findFirst({
+    where: { sellerId: seller.id, currency: 'INR' },
+    orderBy: { id: 'desc' },
+    select: { runningBalanceAfter: true },
+  });
+  const balance = Number(last?.runningBalanceAfter ?? 0);
+  if (balance >= 0) {
+    await call('/admin/wallet-transfers', {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        sellerId: seller.id,
+        direction: 'DEBIT',
+        amountInr: O2_SELLER.owesInr,
+        reason:
+          'Courier charges and return fees for August that your wallet did not cover. ' +
+          'Top up to clear this and your account unblocks itself.',
+        internalNote: 'Tutorial world for O2 — the debt the account hold exists for.',
+        idempotencyKey: O2_DEBT_IDEMPOTENCY_KEY,
+      },
+    });
+    console.log(`  · ${O2_SELLER.companyName} now owes \u20b9${O2_SELLER.owesInr}`);
+  } else {
+    console.log(`  · ${O2_SELLER.companyName} already owes \u20b9${(-balance).toFixed(2)}`);
+  }
+
+  /*
+    NO FIXTURE. The flow finds this seller the way a person does — by
+    typing part of its name into the sellers list's own search — which
+    is the standing rule: anything a VIEWER is shown is found on screen,
+    and a seller's name is the most findable thing about it.
+  */
+}
+
+/**
  * M2's world — "Is the courier integration healthy".
  *
  * ── IT WRITES NOTHING ────────────────────────────────────────────────
@@ -6555,6 +6767,40 @@ async function unpostTutorialReconciliations() {
   console.log(`  · un-posted ${removable.length} tutorial reconciliation(s)`);
 }
 
+/**
+ * Put back what an N8 take billed.
+ *
+ * The take RECORDS a bill and ends by WITHDRAWING it, so on a clean run
+ * there is nothing here to do — FRT-7 made the one-live-bill-per-receipt
+ * index partial (`WHERE voided_at IS NULL`) exactly so a withdrawn bill
+ * blocks nothing. What this is for is the run that did NOT finish: a
+ * check that failed after the record leaves a LIVE bill on the only
+ * billable arrival, and the next take's form draws that option DISABLED
+ * with nothing to say why.
+ *
+ * Withdrawn through the product's own endpoint rather than deleted,
+ * which is the rule the rest of this file follows: a void refunds
+ * whatever the bill had charged (`INBOUND_FREIGHT_REFUND`, WAL-1) and a
+ * hand-deleted row would leave that debit on the wallet with nothing to
+ * explain it. The reason says what it was, because somebody reading the
+ * seller's ledger later deserves better than a blank.
+ */
+async function withdrawTutorialFreightBills(sellerId, staffToken) {
+  const bills = await call(`/admin/inbound-freight?sellerId=${sellerId}`, { token: staffToken });
+  const live = (bills ?? []).filter((b) => b.voidedAt == null);
+  if (live.length === 0) return;
+  for (const b of live) {
+    await call(`/admin/inbound-freight/${b.id}/void`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        reason: 'Withdrawn by the tutorial seeding: a take recorded this bill and did not finish.',
+      },
+    });
+  }
+  console.log(`  · withdrew ${live.length} freight bill(s) a previous take left live`);
+}
+
 async function main() {
   assertStack();
   console.log(`Seeding tutorial demo data against ${API}`);
@@ -6617,6 +6863,7 @@ async function main() {
   await courierAccountWorldFor(slug);
   await delhiveryHealthWorldFor(slug);
   await leadsWorldFor(slug);
+  await sellerAccountWorldFor(slug, staffToken);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);
@@ -6703,6 +6950,12 @@ async function main() {
   // previous take's withdrawal requests so this can re-create the one
   // N1 and N3 film.
   await moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken);
+  // N8 is NOT a money-desk slug (its world is the consignment pass), so
+  // its cleanup hangs here rather than inside `moneyDeskWorldFor` —
+  // which would have run for every slug except the one that needs it.
+  if (slug === 'bill-the-freight') {
+    await withdrawTutorialFreightBills(sellerId, staffToken);
+  }
 
   // E2's ledger, AFTER the parcels have moved — the COD credit needs a
   // delivered order to settle, and the pending rows need a wallet that

@@ -4177,6 +4177,69 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'bill-the-freight',
+    title: 'Billing a consignment’s freight',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Inbound freight. What it cost to get a seller’s goods from Bangladesh into India, billed to them — and it is the one charge on this system that is not about a parcel at all.',
+      },
+      {
+        id: 'spread',
+        say: 'One bill per arrival, split over the units that actually landed. A unit owes its share when it LEAVES, so stock still on the shelf owes nothing yet — which is why there is an outstanding figure at the top rather than a paid or unpaid flag.',
+      },
+      {
+        id: 'record',
+        say: 'Recording one starts with which stop is being billed. On pay-now and pay-later terms that is the India arrival, which is what a forwarder actually invoices; on pay-in-advance it is the Bangladesh count, billed before the goods fly.',
+      },
+      {
+        id: 'currency',
+        say: 'Then the currency it was agreed in. A Dhaka forwarder quotes taka, so type the figures exactly as they are on the invoice — the bill is converted to rupees at the rate in force the moment you record it, and the seller is charged rupees either way.',
+      },
+      {
+        id: 'basis',
+        say: 'Per line, how it was priced. Per kilo or per piece, because a forwarder charges one or the other and a bill typed in the wrong basis is wrong by the weight of the carton.',
+      },
+      {
+        id: 'rate',
+        say: 'The rate, and the weight it applies to. Freight is priced by weight, so a line whose product has no weight recorded cannot take a weight share — that is a thing to fix in the catalogue rather than to guess at here.',
+      },
+      {
+        id: 'mode',
+        say: 'And the terms, which decide whether the wallet moves now. Pay now debits it in full the moment you record; pay later leaves a receivable collected a unit at a time as the stock sells. Choosing one here PINS the consignment to it, and that also decides which stop the bill is allowed to hang on.',
+      },
+      {
+        id: 'post',
+        say: 'Record it. On these terms nothing has left the wallet yet — the bill sits against the consignment, and the outstanding figure at the top is now what the seller still owes on it.',
+      },
+      {
+        id: 'split',
+        say: 'Open the bill and there is the split that was made at the moment you recorded it — per line, per unit, by weight. Snapshotted, so a later change to a product’s weight cannot re-price goods that have already landed.',
+      },
+      {
+        id: 'settle',
+        say: 'Settling charges whatever is still outstanding in one go, rather than waiting for the stock to sell. The dialog says the part that matters: the ledger entry is permanent.',
+      },
+      {
+        id: 'waive',
+        say: 'Waiving is a different act and the screen keeps them apart. A waived bill was CORRECT and we chose not to collect it — it still counts, on its own line, as money we decided to forgo.',
+      },
+      {
+        id: 'void',
+        say: 'Voiding says the opposite: this bill should never have existed. Nothing here is ever edited in place, because a corrected total would leave the wallet holding a figure the bill no longer claims.',
+      },
+      {
+        id: 'withdrawn',
+        say: 'So it is withdrawn, whatever was already charged is credited back, and the arrival is free to be billed again properly. Both halves matter — withdrawing without re-billing is how a shipment ends up carried for nothing.',
+      },
+      {
+        id: 'outro',
+        say: 'Bill the arrival, in the currency it was agreed in, priced the way the forwarder priced it. Settle when you want it in one go, waive when you have decided not to collect, and void only when the bill itself was wrong.',
+      },
+    ],
+  },
+  {
     slug: 'read-the-stock-ledger',
     title: 'Reading the stock ledger',
     subtitle: 'Skydrop for ops',
@@ -4421,6 +4484,89 @@ export const VIDEOS = [
       {
         id: 'outro',
         say: 'So: work the queue by how long people have waited, write the note for whoever comes next, and remember the link you just sent cannot be recovered \u2014 only replaced.',
+      },
+    ],
+  },
+  {
+    slug: 'managing-a-seller',
+    title: 'Managing a seller',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Any seller, found by any part of their name, their email or their phone. What opens is everything we know about one account \u2014 and the three levers we have over it.',
+      },
+      {
+        id: 'identity',
+        say: 'Start with the name and the number, because these two are what we approved them AS. The seller cannot change either from their own portal; a staff correction is the only route there is.',
+      },
+      {
+        id: 'open',
+        say: 'And it sits behind a button rather than in an open form, deliberately. This is a correction, not routine editing \u2014 two always-open boxes beside the profile invite a change nobody intended.',
+      },
+      {
+        id: 'phone',
+        say: 'It opens filled in with what is there now, so you edit rather than retype. Here only the number is wrong: a digit lost at registration, which is why nobody has been able to reach them.',
+      },
+      {
+        id: 'reason',
+        say: 'Then the one part that is not optional. This is the single record of why an approved identity changed, and whoever reads it next year has nothing else at all to go on.',
+      },
+      {
+        id: 'applied',
+        say: 'Applied. The profile reads the corrected number, and the row behind it carries who changed it, when, and the sentence you just wrote.',
+      },
+      {
+        id: 'holdcard',
+        say: 'Now the lever this page mostly exists for. An account hold stops a seller who owes us money from starting new work \u2014 and it takes itself off again once their balance clears.',
+      },
+      {
+        id: 'safe',
+        say: 'Four things to stop them from, and every one of them is an entry point. Block these and nothing new begins, while every parcel already moving carries on exactly as it was.',
+      },
+      {
+        id: 'inflight',
+        say: 'These three underneath are a different kind of decision, and the screen says so before you have ticked anything. They do not protect the money \u2014 a parcel already with the courier still has to be delivered, tracked and returned.',
+      },
+      {
+        id: 'warning',
+        say: 'Choose one and it says so again, and tells you that choosing it is recorded as such. Blocking those strands goods we are still paying to move \u2014 so it comes straight back off.',
+      },
+      {
+        id: 'clearat',
+        say: 'Then the figure that lifts it, which is usually zero: the point at which they no longer owe us. Applied by a person, cleared by money \u2014 nobody has to notice the payment arriving.',
+      },
+      {
+        id: 'reason2',
+        say: 'And this reason the seller reads, on every page of their own portal. Write it as you would say it to them. A hold somebody cannot understand is one they telephone about instead of fixing.',
+      },
+      {
+        id: 'placed',
+        say: 'Placed. What is blocked, where their balance stands, what lifts it, and how far off they are \u2014 and that last one is the only figure on the card they can actually act on.',
+      },
+      {
+        id: 'lift',
+        say: 'You can also take it off by hand, before the money arrives, which is the ordinary case. Somebody rings, you agree a date, and the block comes off ahead of the payment.',
+      },
+      {
+        id: 'suspend',
+        say: 'Suspension is the other lever and a far blunter one. Read what the confirmation says it does before you press anything.',
+      },
+      {
+        id: 'consequence',
+        say: 'They lose the portal immediately. Their orders and their parcels carry on under us regardless \u2014 so this stops them talking to us, and it does not stop the goods.',
+      },
+      {
+        id: 'suspended',
+        say: 'Done, and the chip at the top of the page is the whole of what anybody sees. Nothing behind the account was deleted or unwound.',
+      },
+      {
+        id: 'reapprove',
+        say: 'Which is why it goes back just as plainly, and the card offers only the way out again. The status is a door rather than a change to anything on the other side of it.',
+      },
+      {
+        id: 'outro',
+        say: 'So: a correction for what we got wrong, a hold for what they owe us, and suspension for everything else. Reach for the hold first \u2014 it is the only one that undoes itself.',
       },
     ],
   },

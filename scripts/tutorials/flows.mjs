@@ -1095,6 +1095,44 @@ function leadRow(page) {
   return page.locator('.sk-tbody .sk-tr').filter({ hasText: 'Jessore Jute Co' }).first();
 }
 
+/**
+ * The seller O2 works on, and the number it corrects the phone TO.
+ * `sellerAccountWorldFor` creates the one and refuses to run when the
+ * other matches what it puts back; `test/tutorial-labels.test.mjs`
+ * keeps both in step, for the same reason M1's account label is.
+ */
+const O2_SELLER_NAME = 'Khulna Handloom';
+const O2_PHONE_CORRECTED = '+8801811556622';
+
+/** O2's account-hold card, by its own title rather than its position. */
+function holdCard(page) {
+  return page
+    .locator('.ac-card')
+    .filter({ has: page.getByRole('heading', { name: 'Account hold', exact: true }) })
+    .first();
+}
+
+/** O2's account-status card, which carries both of the status buttons. */
+function statusCard(page) {
+  return page
+    .locator('.ac-card')
+    .filter({ has: page.getByRole('heading', { name: 'Account status', exact: true }) })
+    .first();
+}
+
+/**
+ * The status chip in the page header, by what it SAYS.
+ *
+ * Never `getByText('Suspended')`: `SellerStatusChip` renders the word
+ * lower-cased and the stylesheet capitalises it, so the only reliable
+ * form is a case-insensitive match on the chip's own element — and
+ * anchoring it (`/^approved$/i`) keeps it off the "Reapprove account"
+ * button a few hundred pixels below.
+ */
+function statusChip(page, word) {
+  return page.locator('.sk-ph__meta .sk-chip').filter({ hasText: word }).first();
+}
+
 export const FLOWS = {
   'place-an-order': {
     /** Everything before scene one: sign in and land where the intro expects. */
@@ -11741,6 +11779,242 @@ export const FLOWS = {
     },
   },
   /*
+    N8 — billing a consignment's freight.
+
+    THE TAKE RECORDS A BILL AND THEN WITHDRAWS IT, and the withdrawal is
+    both the last thing the video teaches and the whole of its cleanup.
+    FRT-7 made the one-bill-per-receipt index PARTIAL (`WHERE voided_at
+    IS NULL`) for exactly this: a voided bill blocks nothing, so the
+    next take bills the same arrival again with no seeding at all.
+
+    WHICH ARRIVAL IS FREE IS NOT OBVIOUS. C0 builds two consignments —
+    `RSH-CN-LANDED`, counted at both ends, and `RSH-CN-FLYING`, still in
+    the air — and E5's world raises a PAY_LATER bill against the landed
+    one's India arrival. So this slug is in `CONSIGNMENT_SLUGS` and
+    deliberately NOT in `FREIGHT_SLUGS`: with E5's bill present the only
+    billable stop is taken and the form's own select disables it, which
+    would arrive as a scene that cannot choose anything.
+
+    Settle and waive are OPENED AND CANCELLED. Both move money and the
+    video is about the difference between them, which the dialogs state
+    better than a narrator can — the N7 shape.
+  */
+  'bill-the-freight': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/freight`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Inbound freight', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(
+          page.getByText(/split over the units that actually landed/i).first(),
+          2800,
+        );
+      },
+
+      async spread({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Outstanding'), 4200);
+      },
+
+      async record({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Record freight bill' }).first(), {
+          after: 1500,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        const stop = dialog.getByLabel(/^Which stop is being billed/).first();
+        await stage.point(stop, { settle: 700 });
+        /*
+          THE INDIA ARRIVAL, FOUND BY ITS OWN LABEL. Not by index: the
+          option's value is the receipt's uuid, minted per box, and the
+          first real option on this one is `RSH-CN-FLYING`'s BANGLADESH
+          INTAKE — a counted stop the select offers because a
+          pay-in-advance bill would hang on it. Choosing it is refused
+          at the press with `FREIGHT_NOT_AN_ARRIVAL`, three scenes after
+          the mistake, and the form had said so in a warning the whole
+          time. The stop a pay-now bill hangs on is the arrival, so that
+          is the word to reach for.
+        */
+        const arrival = await stop.evaluate((el) => {
+          const found = [...el.options].find((o) => /india arrival/i.test(o.textContent ?? ''));
+          return found === undefined ? null : found.value;
+        });
+        if (arrival === null) {
+          throw new Error(
+            'No India arrival is billable — either the consignment world is not built, or ' +
+              "E5's bill already has the only one (this slug must stay out of FREIGHT_SLUGS).",
+          );
+        }
+        await stop.selectOption(arrival);
+        await page.waitForTimeout(1200);
+        await stage.clearHalo();
+        await stage.dwellOn(stop, 2200);
+      },
+
+      async currency({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        const agreed = dialog.getByLabel(/^Agreed in/).first();
+        await agreed.waitFor({ state: 'visible', timeout: 20_000 });
+        await agreed.selectOption('BDT');
+        await page.waitForTimeout(800);
+        await stage.dwellOn(agreed, 2600);
+      },
+
+      /*
+        PER LINE, AND BY `aria-label`. Every control in the split table
+        carries one naming its SKU — `Basis for RSH-…`, `Rate for
+        RSH-…` — and an `aria-label` on the control is the accessible
+        name, so the column heading is not the handle (the N5 lesson).
+      */
+      async basis({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        const bases = dialog.getByLabel(/^Basis for /);
+        const n = await bases.count();
+        if (n === 0) throw new Error('The arrival has no counted lines to price.');
+        for (let i = 0; i < n; i += 1) await bases.nth(i).selectOption('PER_KG');
+        await page.waitForTimeout(800);
+        await stage.dwellOn(bases.first(), 2600);
+      },
+
+      async rate({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        const rates = dialog.getByLabel(/^Rate for /);
+        const weights = dialog.getByLabel(/^Chargeable weight for /);
+        const n = await rates.count();
+        for (let i = 0; i < n; i += 1) {
+          await stage.typeIn(rates.nth(i), '300', { after: 250 });
+          await stage.typeIn(weights.nth(i), String(12 + i * 4), { after: 250 });
+        }
+        await page.waitForTimeout(900);
+        await stage.dwellOn(weights.first(), 2400);
+      },
+
+      /*
+        PAY_LATER, PINNED — and the whole rest of the video depends on
+        it. Left on the platform default (PAY_NOW) the bill is debited in
+        full the moment it is recorded, so the row comes back SETTLED
+        with its Actions column reading "Closed": no Settle, no Waive,
+        no Void, and the four scenes after this with nothing to press.
+        It also bills the same stop, so nothing about the earlier scenes
+        changes.
+      */
+      async mode({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        const mode = dialog.getByLabel(/^Mode/).first();
+        await stage.point(mode, { settle: 700 });
+        await mode.selectOption('PAY_LATER');
+        await page.waitForTimeout(1000);
+        await stage.clearHalo();
+        await stage.dwellOn(mode, 2600);
+      },
+
+      async post({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.clickIt(
+          dialog
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /Record bill|Recording|Recorded/ })
+            .first(),
+          { after: 2000 },
+        );
+        await dialog.waitFor({ state: 'detached', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.dwellOn(billableFreightRow(page), 2600);
+      },
+
+      async split({ page, stage }) {
+        await stage.clickIt(billableFreightRow(page).locator('button.mk-toggle').first(), {
+          after: 1400,
+        });
+        const split = page.getByRole('table', { name: 'Freight split by line' }).first();
+        await split.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(split, 3600);
+      },
+
+      /*
+        Settle and waive are opened, read and CANCELLED — and each is
+        shut by the scene AFTER it, so the dialog survives the sentence
+        that is about it (the N7 lesson).
+      */
+      async settle({ page, stage }) {
+        await stage.clickIt(
+          billableFreightRow(page).getByRole('button', { name: 'Settle' }).first(),
+          {
+            after: 1500,
+          },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.getByText(/ledger entry is permanent/i).first(), 3000);
+      },
+
+      async waive({ page, stage }) {
+        await closeOpenDialog(page);
+        await stage.clickIt(
+          billableFreightRow(page).getByRole('button', { name: 'Waive' }).first(),
+          {
+            after: 1500,
+          },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.getByText(/chose not to collect|forgive|waiv/i).first(), 3200);
+      },
+
+      async void({ page, stage }) {
+        await closeOpenDialog(page);
+        await stage.clickIt(
+          billableFreightRow(page).getByRole('button', { name: 'Void' }).first(),
+          {
+            after: 1500,
+          },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.getByText(/Not the same as a waiver/i).first(), 3000);
+        await stage.typeIn(
+          dialog.getByLabel(/^Reason/).first(),
+          'The forwarder re-issued this invoice at a lower rate after the recount.',
+          { after: 600 },
+        );
+      },
+
+      async withdrawn({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.clickIt(
+          dialog
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /Withdraw bill|Withdrawing|Withdrawn/ })
+            .first(),
+          { after: 2200 },
+        );
+        await dialog.waitFor({ state: 'detached', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.dwellOn(billableFreightRow(page), 3200);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Waived'), 3400);
+      },
+    },
+  },
+  /*
     L3 — the stock ledger, read-only and entirely page-driven.
 
     NO FIXTURE and no seeding: every handle this video needs is on the
@@ -12448,6 +12722,307 @@ export const FLOWS = {
       },
     },
   },
+  /*
+    O2 — managing a seller.
+
+    IT WORKS A SELLER OF ITS OWN, and that is the whole safety design.
+    The take SUSPENDS an account on camera, and suspending the demo
+    seller would leave every other video on this box filming against a
+    portal that has stopped signing in — `ensureSeller` heals it, but
+    only on the NEXT seed run. It also PLACES a hold, which cannot be
+    shown at all on a seller in credit: `activeFor` lifts a hold in
+    passing the moment the balance reaches the clearing figure, so one
+    placed on the demo seller's balance is already gone by the time the
+    card refetches. `sellerAccountWorldFor` makes "Khulna Handloom" and
+    puts it in debt; see the long note there.
+
+    Every act it performs is undone by the SEEDING rather than on
+    camera — the phone goes back, the hold is lifted, the status is
+    forced to APPROVED — because the video ends on reapproval and a
+    take that dies in the middle must not leave the next one filming
+    the second half of its own story.
+  */
+  'managing-a-seller': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/sellers`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      /*
+        FOUND THE WAY A PERSON FINDS IT. There is no fixture for this
+        video: the seller's name is the most findable thing about it and
+        the list's own search takes a fragment of one. The search is
+        live — it is not a form and there is no Enter to press — so the
+        gate is the ROW appearing rather than a navigation.
+      */
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Sellers', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.typeIn(page.getByPlaceholder(/Search by name/), 'Khulna', { after: 900 });
+        const link = page.getByRole('link', { name: O2_SELLER_NAME, exact: true }).first();
+        await link.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(link, { after: 1600 });
+        await page.waitForURL(/\/sellers\/[0-9a-f]/, { timeout: 25_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page
+          .getByRole('heading', { name: 'Profile', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.ac-meta').first(), 2400);
+      },
+
+      async identity({ page, stage }) {
+        const card = page
+          .locator('.ac-card')
+          .filter({
+            has: page.getByRole('heading', { name: 'Company name and phone', exact: true }),
+          })
+          .first();
+        await card.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(card.locator('.ac-card__note').first(), 3600);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Correct these details/ }), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc, .sk-dialog__sub').first(), 3200);
+      },
+
+      /*
+        THE PHONE ONLY. The dialog opens PRE-FILLED from the current
+        values, so this clears and retypes rather than appending — and
+        the company name is deliberately untouched, which is what the
+        field's own hint tells you to do and what keeps the seller's
+        name the same in every later take.
+      */
+      async phone({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.locator('#identity-phone'), O2_PHONE_CORRECTED, {
+          clear: true,
+          after: 800,
+        });
+      },
+
+      async reason({ page, stage }) {
+        await stage.typeIn(
+          page.getByRole('dialog').locator('#identity-reason'),
+          'Nasrin emailed on 14 September: the number on their trade licence ends 622 and we ' +
+            'captured it ending 600. Corrected to match the licence.',
+          { delay: 14, after: 800 },
+        );
+      },
+
+      async applied({ page, stage }) {
+        await stage.clickIt(
+          dialogFoot(page).getByRole('button', { name: /Apply correction|Correcting/ }),
+          { after: 2200 },
+        );
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        /*
+          GATED ON THE NEW NUMBER rather than on the panel that holds
+          it: the panel is identical before and after, so a dwell on it
+          would pass over the old value if the refetch were still in
+          flight.
+        */
+        const now = page.getByText(O2_PHONE_CORRECTED).first();
+        await now.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(now, 3000);
+      },
+
+      async holdcard({ page, stage }) {
+        const card = holdCard(page);
+        await card.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(card.locator('.ac-card__note').first(), 3600);
+      },
+
+      async safe({ page, stage }) {
+        await stage.clickIt(holdCard(page).getByRole('button', { name: 'Place a hold' }), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(
+          dialog.locator('fieldset').filter({ hasText: 'Stop them from' }).first(),
+          3600,
+        );
+      },
+
+      async inflight({ page, stage }) {
+        await stage.dwellOn(
+          page
+            .getByRole('dialog')
+            .getByText(/These do not protect the money/i)
+            .first(),
+          3000,
+        );
+      },
+
+      /*
+        TICKED, READ, AND TAKEN STRAIGHT BACK OFF. The warning only
+        exists while one of the three is chosen, so the only way to film
+        the sentence is to choose one — and the only honest thing to do
+        after reading it is to stop. The hold that is actually placed
+        blocks nothing already moving.
+      */
+      async warning({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        const box = dialog.getByRole('checkbox', {
+          name: 'Handing their parcels to the courier',
+        });
+        await stage.clickIt(box, { after: 700 });
+        const warn = dialog.getByText(/affects parcels already in transit/i).first();
+        await warn.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(warn, 3000);
+        await stage.clickIt(box, { after: 700 });
+        await warn.waitFor({ state: 'hidden', timeout: 15_000 });
+      },
+
+      /*
+        DWELT ON, NEVER TYPED. Zero is already the right answer and the
+        field's own hint says so; clearing it would only risk leaving
+        the form with a value the API refuses as not a number.
+      */
+      async clearat({ page, stage }) {
+        await stage.dwellOn(
+          page
+            .getByRole('dialog')
+            .getByLabel(/^Lifts automatically at balance/)
+            .first(),
+          3600,
+        );
+      },
+
+      async reason2({ page, stage }) {
+        await stage.typeIn(
+          page
+            .getByRole('dialog')
+            .getByLabel(/^Reason\*?$/)
+            .first(),
+          'August courier charges and return fees are unpaid. Top up to clear the balance and ' +
+            'this comes off by itself — you do not need to tell us.',
+          { delay: 14, after: 800 },
+        );
+      },
+
+      async placed({ page, stage }) {
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: /Place hold|Placing/ }), {
+          after: 2200,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        const body = holdCard(page).locator('.ac-card__body').first();
+        await body.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(body, 3600);
+      },
+
+      async lift({ page, stage }) {
+        await stage.clickIt(holdCard(page).getByRole('button', { name: /Lift now|Lifting/ }), {
+          after: 2200,
+        });
+        const gone = holdCard(page)
+          .getByText(/No hold\. This seller can trade normally/i)
+          .first();
+        await gone.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(gone, 3000);
+      },
+
+      async suspend({ page, stage }) {
+        const card = statusCard(page);
+        await card.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.clickIt(card.getByRole('button', { name: 'Suspend account' }), { after: 1600 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.locator('.sk-confirm__subject').first(), 2400);
+      },
+
+      async consequence({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3400);
+        await stage.typeIn(
+          dialog.locator('#status-reason'),
+          'Unpaid since August and not answering the phone. Suspended at the ops meeting.',
+          { delay: 14, after: 600 },
+        );
+      },
+
+      /*
+        TWO BUTTONS CALLED SUSPEND once the dialog is open — the page's
+        "Suspend account" and the confirm's "Suspend" — so the second
+        reach is dialog-scoped and exact.
+
+        AND THE CHIP HAS TO BE SCROLLED TO BY HAND. `stage.point` calls
+        `scrollIntoViewIfNeeded`, which asks whether the element is in
+        the SCROLL BOX and knows nothing about the sticky top bar — so
+        the header, sitting ten pixels from the top after the previous
+        scene scrolled down to the status card, counted as visible and
+        was never scrolled to. The halo went on behind the toolbar and
+        the frame showed the middle of the page under a line about the
+        chip at the top of it; every step passed. A glide is also the
+        gesture a person makes here.
+      */
+      async suspended({ page, stage }) {
+        await stage.clickIt(
+          dialogFoot(page).getByRole('button', { name: 'Suspend', exact: true }),
+          { after: 1800 },
+        );
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        await statusChip(page, /^suspended$/i).waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.glide(-900);
+        await stage.dwellOn(statusChip(page, /^suspended$/i), 2600);
+      },
+
+      /*
+        ENDS ON THE CARD, not on the chip. Pressing Reapprove needs the
+        status card, which is below the header the last scene scrolled
+        back up to, and coming down for the press then going up again
+        for the chip is two scrolls inside one sentence. The card's own
+        button flipping back to "Suspend account" is the same evidence,
+        in the place the gesture already happened.
+      */
+      async reapprove({ page, stage }) {
+        const card = statusCard(page);
+        await card.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.clickIt(card.getByRole('button', { name: 'Reapprove account' }), {
+          after: 1500,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.clickIt(
+          dialogFoot(page).getByRole('button', { name: 'Reapprove', exact: true }),
+          { after: 2000 },
+        );
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        await card
+          .getByRole('button', { name: 'Suspend account' })
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(card, 2600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(holdCard(page).locator('.ac-card__note').first(), 3600);
+      },
+    },
+  },
 };
 
 /**
@@ -12956,6 +13531,25 @@ async function closeOpenDialog(page) {
  */
 const N7_RECONCILE_REASON =
   'HDFC charged a wire fee on the September remittance that we had never recorded.';
+
+/**
+ * N8's LIVE bill, by the consignment it is for.
+ *
+ * Not `freightRow` — that one is E5's, on the seller side, and finds a
+ * row by the words "Pay as it sells".
+ *
+ * Reached by the CONSIGNMENT number rather than by position: a previous
+ * take's withdrawn bill is still listed (a void is not a delete — that
+ * is the point of it), so `.first()` on the table would eventually take
+ * a row that has no Settle, Waive or Void on it at all.
+ */
+function billableFreightRow(page) {
+  return page
+    .getByRole('row')
+    .filter({ hasText: /CN-\d{4}-\d{2}-\d{6}/ })
+    .filter({ has: page.getByRole('button', { name: 'Void' }) })
+    .first();
+}
 
 /**
  * N7's rupee account row, by the account's own name.

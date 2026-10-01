@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 75 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N6, N9, O1 and P5.** The 15 left are all in the admin app: 2 are
+**90 tutorials. 76 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N7, N9, O1–O2 and P5.** The 14 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (75):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (76):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N6**, **N9** and **O1**.
+**L1–L3**, **M1–M2**, **N1–N7**, **N9** and **O1–O2**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -46,8 +46,18 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**THE NEXT ENTRY IS O2 — "Managing a seller"**, and K, L1–L3, M1, M2 and O1
-are done.
+**THE NEXT ENTRY IS O3 — "Per-seller settings and courier routing"**, and K,
+L1–L3, M1, M2, O1 and O2 are done. O3 is the cheapest entry left in the
+section: both of its halves are sections of the seller detail page O2 already
+films, and `sellerAccountWorldFor` happens to leave `Khulna Handloom` in
+exactly the two states O3 has to show FIRST — every setting on the system
+default, and no courier links at all — so it can set one of each on camera.
+Its seeding needs ONE addition: clear whatever override and link the previous
+take left, exactly as O2's clears its hold. **Two courier accounts have to
+exist for the weight column to mean anything**, and `provision-stack.mjs` makes
+only one; M1's second account is deleted by M1's own seeding
+(`M1_ACCOUNT_LABEL`), so O3 needs an account of its own under a label nothing
+else clears.
 
 **M3–M6 ARE SKIPPED FOR NOW, with L4, and the reason for M3 is worth reading
 before anybody picks it up.** M3 is "Run a cycle now" on the tracking poll, and
@@ -70,17 +80,14 @@ section O went first.
 **TWO THINGS MEASURED FOR WHOEVER TAKES O2 AND O4 (2026-10-01), so neither is a
 surprise.**
 
-- **O2 suspends the seller EVERY OTHER VIDEO ON THIS BOX DEPENDS ON.** There is
-  one real seller here (`Rangpur Silk House`), and suspend → reapprove is
-  reversible only if the take reaches the second half: a run killed in between
-  leaves the seller SUSPENDED, and the next video's seeding fails somewhere
-  unrelated and unhelpful. Either make its seeding ASSERT the seller is APPROVED
-  and put it back if not (cheap, and the right answer), or film the suspension
-  against a seller made for it. The restrictions half is safer — those are rows
-  that lift cleanly — but the copy splits them into "the safe four" and "the
-  three that touch parcels in flight", and the second three strand goods we are
-  still paying to move, so the video should name one and lift it rather than
-  leaving it on.
+- **O2 IS FILMED, against a seller of its own** (`Khulna Handloom`) — the
+  second of the two answers this note offered, and it turned out to be the one
+  that was needed rather than the safer one. Suspending the demo seller is only
+  half the problem: **an account hold cannot be shown AT ALL on a seller in
+  credit**, because `activeFor` lifts one in passing the moment the balance
+  reaches the clearing figure, and zero is not a low enough figure either
+  (`0 >= 0`). The hold exists for a seller who owes us money, so the seeding
+  makes one who does. See the entry.
 - **O4's page is SIXTEEN THOUSAND PIXELS TALL.** `/settings` renders every group
   at once, which makes it the longest screen in the console by a factor of
   three. Do not try to dwell on a group by haloing it — the L3 lesson applies
@@ -3873,16 +3880,79 @@ writing this one, not filming it**, until there are real closed months.
 **Covers** `/leads` (the drawer, notes, status) and inviting them, then
 `/sellers` and the pending-invitations panel — invite, resend, delete.
 
-### O2. Managing a seller · `needs demo data` · **dangerous**
+### O2. Managing a seller · **FILMED** — `managing-a-seller.mp4` · **dangerous**
 
 **Promise** — you can suspend, restrict or correct a seller's account.
-**Length** 4 min. **Prerequisites** O1.
-**Covers** `/sellers/[id]`: suspend and reapprove, the identity correction that
-sits behind its own button because it is a correction and not routine editing,
-and the restrictions — split into **the safe four**, which stop new work, and
-**the three that touch parcels in flight**.
+**Length** 3 min 49 s of narration over 19 scenes. **Prerequisites** O1.
+**Needs** `seed-demo-data.mjs managing-a-seller` (`sellerAccountWorldFor`).
+**Covers** `/sellers/[id]`: the identity correction that sits behind its own
+button because it is a correction and not routine editing, with the reason that
+is the only record of why an approved identity ever changed; then the account
+hold — **the safe four**, which stop new work, against **the three that touch
+parcels in flight**, placed and then lifted by hand; then suspend and reapprove.
 **Cost of getting it wrong:** the copy says it — blocking those three strands
 goods we are still paying to move.
+
+**IT WORKS A SELLER OF ITS OWN, and that decision is the whole of its safety
+design.** The entry that stood here warned that O2 suspends the one real seller
+every other video depends on. It does not: `sellerAccountWorldFor` makes
+**Khulna Handloom**, a BD seller who joined in June and owes us money, and the
+video never touches `Rangpur Silk House`. Two separate reasons forced it, and
+either alone would have been enough.
+
+- **Suspending the demo seller is only reversible on the NEXT seed run.**
+  `ensureSeller` forces APPROVED on every run, so the damage heals — but every
+  video filmed in between would be running against a portal that has simply
+  stopped signing in, and nothing in apps/seller says why in a form a flow would
+  notice.
+- **A hold CANNOT BE SHOWN on a seller in credit, and that is correct
+  behaviour.** `SellerRestrictionService.activeFor` lifts a hold in passing the
+  moment the balance reaches the clearing figure — applied by a person, cleared
+  by money — so one placed on the demo seller's +₹63,958 with the usual
+  threshold of zero is already gone by the time the card refetches, and the
+  scene after the press would film "No hold. This seller can trade normally."
+  under a line about a hold being placed. **Zero balance is not enough either**
+  (`0 >= 0`): the hold exists for a seller who owes us, so the video needs one
+  who does.
+
+**The debt is posted through the real staff-transfer endpoint**, not a ledger
+insert — it is the path an operator would use (the seller's own detail page
+links to it), it writes the reason the seller reads, and TRE-8b means a debit on
+a seller holding no cash writes NO bank entry at all: the wallet goes negative
+and the shortfall is a receivable. One fixed `idempotencyKey` for ever, so the
+figure on the card is the same figure in every take.
+
+**Every act it performs is undone by the SEEDING, never on camera.** The phone
+goes back to what registration captured (or the correction scene has nothing to
+correct and the API answers `IDENTITY_NO_CHANGES` three scenes in), any hold
+still standing is lifted (`RESTRICTION_ALREADY_ACTIVE` refuses a second by
+name), and the status is forced to APPROVED (from SUSPENDED the panel offers the
+other button and the take films the video backwards). The take itself ends on
+reapproval, so a run that dies in the middle cannot leave the next one filming
+the second half of its own story.
+
+**The in-flight warning is TICKED, READ AND TAKEN STRAIGHT BACK OFF.** The
+callout only exists while one of the three is chosen, so the only way to film
+the sentence is to choose one — and the only honest thing to do after reading it
+is to stop. The hold that is actually placed blocks nothing already moving.
+
+**THE STATUS CHIP IS NOT REACHABLE BY `scrollIntoViewIfNeeded`, and this is a
+general trap.** `stage.point` scrolls an element into view *if needed*, and
+"needed" is a question about the SCROLL BOX: it knows nothing about the sticky
+top bar. After the suspend scene scrolls down to the status card, the page
+header sits about ten pixels from the top — inside the viewport rect, entirely
+behind the toolbar — so nothing scrolled, the halo was drawn behind the chrome,
+and the frame showed the middle of the page under a line about the chip at the
+top of it. Every step passed. `stage.glide(-900)` is the fix and is also the
+gesture a person makes. **And never `getByText('Suspended')`**: `SellerStatusChip`
+renders the word lower-cased and the stylesheet capitalises it, so an anchored
+case-insensitive match on the chip's own element (`/^suspended$/i`) is the only
+reliable form.
+
+**One bug found, and it is the forty-fourth** — the card that reports a hold
+printed `Blocked: ORDER_CREATE` while the dialog that chose it said "Placing new
+orders", with the map sitting forty lines above the `join`. See
+[Bugs found](#bugs-found-while-establishing-feasibility).
 
 ### O3. Per-seller settings and courier routing · `needs demo data` · **dangerous**
 
@@ -4758,6 +4828,31 @@ list or a label that is CLOSE ENOUGH to right has no symptom.** One printed a
 true id with a missing noun; the other offered a true list with a missing
 member. Nothing throws, nothing renders wrong, and the only thing that notices
 is somebody trying to explain the screen out loud.
+
+**AND A FORTY-FOURTH, found by filming O2 (2026-10-01): the screen that SETS a
+hold spoke English and the screen that REPORTS one spoke database.** The
+"Place a hold" dialog has offered "Placing new orders" and "Handing their
+parcels to the courier" since the day it was written. The card that reports a
+standing hold printed `Blocked: ORDER_CREATE` — the raw enum value — to the
+same operator, about the same decision, three inches further down the same
+page. A hold's whole job is to be explicable to the seller on the telephone,
+and the ONE line saying what it stops was the one line in database vocabulary.
+
+**The map was already in the file.** `SAFE` and `IN_FLIGHT` carry the
+plain-English name for every one of the seven capabilities, in the same
+component, forty lines above the `join(', ')` that printed the code. So this is
+not a missing translation; it is a translation that existed and was not reached
+for. `capabilityLabel` is derived from those two lists rather than written out
+again — a capability added to either is named by construction — and falls back
+to the raw code rather than hiding an unknown one, because a blocked capability
+nobody can see is worse than an ugly one.
+`restriction-blocked-labels.test.tsx` pins it and was proved red on the join.
+
+**The shape: a vocabulary is only as good as its WORST reader.** Nothing failed,
+nothing was wrong, every figure beside it was right — and the sentence an
+operator would have had to read aloud to a seller was the one written for a
+database. Worth checking, whenever a form offers choices in words, what the
+page that reads them back says.
 
 **AND A FORTY-THIRD, found by filming O1 (2026-10-01): a FIELD THAT HAS NEVER
 EXISTED, rendered as the words "Invalid Date" on every invitation anybody

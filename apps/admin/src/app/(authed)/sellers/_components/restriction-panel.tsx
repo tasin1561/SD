@@ -45,6 +45,29 @@ const IN_FLIGHT = [
   ['RTO_RECEIVE', 'Booking their returns back in'],
 ] as const;
 
+/**
+ * The plain-English name for a capability, for READING a hold back.
+ *
+ * The dialog that places one has said "Placing new orders" since the
+ * day it was written; the card that reports it printed the raw enum, so
+ * the screen that SETS a hold spoke English and the screen that reports
+ * it spoke database — to the same operator, about the same decision,
+ * three inches apart. A hold's whole job is to be understood by the
+ * person who has to explain it to a seller on the telephone.
+ *
+ * Built from the two lists above rather than written out again, so a
+ * capability added to either one is named here by construction. An
+ * unknown value falls back to the raw code rather than disappearing:
+ * a blocked capability nobody can see is worse than an ugly one.
+ */
+const CAPABILITY_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+  [...SAFE, ...IN_FLIGHT].map(([key, label]) => [key, label]),
+);
+
+export function capabilityLabel(key: string): string {
+  return CAPABILITY_LABELS[key] ?? key;
+}
+
 export function RestrictionPanel({
   sellerId,
   canManage,
@@ -122,7 +145,9 @@ export function RestrictionPanel({
       ) : (
         <div className="ac-card__body">
           <p className="ac-text">{hold.reason}</p>
-          <p className="ac-muted">Blocked: {hold.blockedCapabilities.join(', ')}</p>
+          <p className="ac-muted">
+            Blocked: {hold.blockedCapabilities.map(capabilityLabel).join(', ')}
+          </p>
           <p className="ac-muted">
             Balance <Money amount={hold.balanceInr} currency="INR" /> · lifts at{' '}
             <Money amount={hold.clearAtBalanceInr} currency="INR" /> · still needed{' '}
