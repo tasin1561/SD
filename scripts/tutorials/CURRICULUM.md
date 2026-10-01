@@ -67,6 +67,29 @@ itself (`PENDING_MANUAL_PLACEMENT`, a MANUAL-policy seller with a confirmed
 parcel, a seller's delivery-action request), which is real work and is why
 section O went first.
 
+**TWO THINGS MEASURED FOR WHOEVER TAKES O2 AND O4 (2026-10-01), so neither is a
+surprise.**
+
+- **O2 suspends the seller EVERY OTHER VIDEO ON THIS BOX DEPENDS ON.** There is
+  one real seller here (`Rangpur Silk House`), and suspend → reapprove is
+  reversible only if the take reaches the second half: a run killed in between
+  leaves the seller SUSPENDED, and the next video's seeding fails somewhere
+  unrelated and unhelpful. Either make its seeding ASSERT the seller is APPROVED
+  and put it back if not (cheap, and the right answer), or film the suspension
+  against a seller made for it. The restrictions half is safer — those are rows
+  that lift cleanly — but the copy splits them into "the safe four" and "the
+  three that touch parcels in flight", and the second three strand goods we are
+  still paying to move, so the video should name one and lift it rather than
+  leaving it on.
+- **O4's page is SIXTEEN THOUSAND PIXELS TALL.** `/settings` renders every group
+  at once, which makes it the longest screen in the console by a factor of
+  three. Do not try to dwell on a group by haloing it — the L3 lesson applies
+  with room to spare (`stage.point` scrolls to an element's middle) — reach for
+  the ROW by its plain-English name and let the group header sit above it.
+  Whatever it edits has to be put back by its seeding, and a setting with a
+  physical consequence (the NDR cap, the auto-pickup switches) is the wrong
+  thing to demonstrate on: pick one that decides a display or a threshold.
+
 **L4 IS SKIPPED FOR NOW, ON PURPOSE, and it is the one entry out of order.** It
 is `needs demo data` and `dangerous`, and its form asks for NINE ids — seller,
 variant, quantity, and a warehouse, bin and batch at each end — which is three
