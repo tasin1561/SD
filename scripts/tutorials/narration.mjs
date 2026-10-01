@@ -4110,6 +4110,73 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'the-bank-book',
+    title: 'The bank book',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Treasury. Every rupee and every taka we hold, in the account it actually sits in — and one question the rest of the page exists to answer: is the money we owe sellers still here.',
+      },
+      {
+        id: 'owed',
+        say: 'This is what we owe. The sum of every positive wallet balance — what the sellers could ask us for today, if they all asked at once.',
+      },
+      {
+        id: 'held',
+        say: 'And this is what we are holding for them: cash sitting in our accounts marked as theirs rather than ours. Two different things, worked out two different ways, and a treasury that is healthy keeps the second at or above the first.',
+      },
+      {
+        id: 'covered',
+        say: 'Which is the line underneath. Covered means we could pay everybody out of money that is already here. Uncovered is not automatically wrong — COD the courier has collected and not yet settled looks exactly like this — but it is the gap you have to be able to explain.',
+      },
+      {
+        id: 'accounts',
+        say: 'Per account, the same split again: ours, held for sellers, and the total the bank would show. And a balance here is the SUM of its entries rather than a figure stored beside them, so it cannot quietly go stale.',
+      },
+      {
+        id: 'inside',
+        say: 'Open one and it tells you whose money is inside it. This is where a seller’s top-up lands and where their payout leaves from, so it carries both at once.',
+      },
+      {
+        id: 'movements',
+        say: 'Then every movement, newest first — and this table is append-only. A correction is a new entry saying who corrected it and by how much. Nothing on this page is ever edited.',
+      },
+      {
+        id: 'transfer',
+        say: 'Moving money between our own accounts is its own form, and its shape is the lesson. What LEFT one account and what ARRIVED in the other are typed separately, from the two statements, because working the second out from a rate would quietly absorb every bank charge.',
+      },
+      {
+        id: 'ownermoney',
+        say: 'Money the owner puts in or takes out is a third thing again. It is equity — never income, never an expense — so the profit and loss does not read it at all. Anything else would show the business earning money it was simply given.',
+      },
+      {
+        id: 'reconcile',
+        say: 'And this is the one you will use most. The statement says one figure, the book says another, and the difference is posted as a new entry against whoever it belongs to — our own money, or a seller’s holding.',
+      },
+      {
+        id: 'opening',
+        say: 'With one exception, and it is the expensive one. Money the business already had when the book started is an opening balance, not a correction. Posted as a correction it reads as PROFIT — which has happened here: a hundred thousand taka of starting cash spent a day being counted as earnings.',
+      },
+      {
+        id: 'why',
+        say: 'Then why the book was wrong, at least a sentence, kept with the entry. The figure records what changed; this is the only thing that will ever record why.',
+      },
+      {
+        id: 'post',
+        say: 'Post it, and the confirm says exactly what that does. A new entry, against that owner, in that account — and nothing overwritten.',
+      },
+      {
+        id: 'after',
+        say: 'And there it is on the movements list: dated, attributed and sitting above the figure it corrected rather than in place of it.',
+      },
+      {
+        id: 'outro',
+        say: 'So: read the two totals and the line that compares them, correct with a new entry, and mark an opening balance as what it is. Being out by a little and knowing exactly why is worth more here than being right by accident.',
+      },
+    ],
+  },
+  {
     slug: 'read-the-stock-ledger',
     title: 'Reading the stock ledger',
     subtitle: 'Skydrop for ops',
@@ -4291,6 +4358,69 @@ export const VIDEOS = [
       {
         id: 'outro',
         say: 'So read it in that order \u2014 is the poll running, is the pile deep enough, is there budget left \u2014 and remember the guard is a separate decision from the connection. Every one of these is fine until it is suddenly expensive.',
+      },
+    ],
+  },
+  {
+    slug: 'letting-a-seller-in',
+    title: 'Letting a seller in',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Invite requests. Everybody here filled in the form on our own landing page and asked to be let in \u2014 so this is the top of the whole funnel, and it is a queue rather than a report.',
+      },
+      {
+        id: 'tabs',
+        say: 'Which is why there are stages across the top. New, contacted, qualified, converted, declined, and one for the rubbish \u2014 a public form gets some.',
+      },
+      {
+        id: 'waiting',
+        say: 'And the column that should decide your day. How long somebody has been waiting for an answer from us, counted from the moment they asked.',
+      },
+      {
+        id: 'open',
+        say: 'Open one and you get everything the form collected, which is more than it looks \u2014 enough to tell whether this is a business we can actually serve before anybody picks up a phone.',
+      },
+      {
+        id: 'told',
+        say: 'Which way they want to ship, roughly how much a month, what they sell, and then their own words. That last part is usually where the real answer is.',
+      },
+      {
+        id: 'status',
+        say: 'Move them along as you work them. The stage is not decoration \u2014 it is what the tabs filter on, so a lead you have spoken to and left on new is a lead somebody else will ring tomorrow.',
+      },
+      {
+        id: 'notes',
+        say: 'And the notes are ours. They never reach the person who asked, so write what the next one of us needs: what they said, what you promised, and what put you off if something did.',
+      },
+      {
+        id: 'save',
+        say: 'Save, and it leaves the tab you found it in. Which is the point \u2014 the queue should empty as you work it.',
+      },
+      {
+        id: 'invite',
+        say: 'When they are worth having, invite them. That sends a registration link to the address on the form \u2014 we never make the account ourselves.',
+      },
+      {
+        id: 'once',
+        say: 'And read what it says about the link, because it is true and it is unusual. It is shown once. Only a hash of it is stored, so nobody can look it up later, and resending issues a new one and kills this one.',
+      },
+      {
+        id: 'pending',
+        say: 'Every invitation out there is on the sellers page, folded away until you ask for it.',
+      },
+      {
+        id: 'resend',
+        say: 'From here you can send it again \u2014 which replaces the link, as the drawer warned \u2014 or delete it outright if you decide against them before they get round to it.',
+      },
+      {
+        id: 'registered',
+        say: 'And when they do register, they arrive in the list underneath, waiting for somebody to approve them. Invited is not in; the account exists and can do nothing yet.',
+      },
+      {
+        id: 'outro',
+        say: 'So: work the queue by how long people have waited, write the note for whoever comes next, and remember the link you just sent cannot be recovered \u2014 only replaced.',
       },
     ],
   },

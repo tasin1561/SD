@@ -58,12 +58,41 @@ export interface UpdateSellerStatusResponse {
   readonly newStatus: SellerStatusValue;
 }
 
+/**
+ * One row of `GET /admin/seller-invitations` — EXACTLY what that
+ * endpoint sends, and nothing it does not.
+ *
+ * It used to declare `invitedAt`, which the API has never sent (it
+ * sends `createdAt`), and `inviteUrl`, which only the CREATE and RESEND
+ * responses carry. Neither was caught by anything: a declared-but-absent
+ * field is `undefined` at runtime, so the lead drawer rendered
+ * `new Date(undefined).toLocaleString()` — the literal string
+ * "Invalid Date" — beside a perfectly correct expiry, on every
+ * invitation anybody looked at. Found by filming it (O1, 2026-10-01).
+ *
+ * `status` carries 'deleted' too: the DTO's own list is
+ * ['pending','used','expired','deleted'], and a soft-deleted invitation
+ * really can come back from a filtered read.
+ */
 export interface SellerInvitationListItem {
   readonly id: string;
   readonly email: string;
-  readonly status: 'pending' | 'used' | 'expired';
-  readonly inviteUrl: string;
-  readonly invitedAt: string;
+  readonly status: 'pending' | 'used' | 'expired' | 'deleted';
+  /** When the invitation was issued. The API's own field name. */
+  readonly createdAt: string;
   readonly usedAt: string | null;
   readonly expiresAt: string;
+}
+
+/**
+ * What CREATE and RESEND answer with: the row, plus the one-shot link.
+ *
+ * Separate from the list item on purpose — the URL exists only in the
+ * response to the act that minted it, because only a hash of the token
+ * is stored and nothing can reconstruct it afterwards. Putting it on
+ * the list type said the opposite, and said it in the one place a
+ * reader would look to find out.
+ */
+export interface SellerInvitationIssued extends SellerInvitationListItem {
+  readonly inviteUrl: string;
 }

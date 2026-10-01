@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 73 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N6, N9 and P5.** The 17 left are all in the admin app: 2 are
+**90 tutorials. 74 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N6, N9, O1 and P5.** The 16 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (73):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (74):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N6** and **N9**.
+**L1–L3**, **M1–M2**, **N1–N6**, **N9** and **O1**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -46,8 +46,26 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**THE NEXT ENTRY IS M3 — "Making parcels move"**, and K, L1–L3, M1 and M2 are
-done. M3 is `dangerous`: it presses the one button M2 deliberately does not.
+**THE NEXT ENTRY IS O2 — "Managing a seller"**, and K, L1–L3, M1, M2 and O1
+are done.
+
+**M3–M6 ARE SKIPPED FOR NOW, with L4, and the reason for M3 is worth reading
+before anybody picks it up.** M3 is "Run a cycle now" on the tracking poll, and
+the poll CANNOT BE SEEN TO WORK ON THIS BOX: the Delhivery simulator pushes a
+signed webhook on every `advance`, so by the time the poll runs there is nothing
+left for it to apply. The poll exists because the REAL Delhivery pushes nothing;
+the simulator is more helpful than the thing it stands in for, and that is the
+whole difficulty. The honest options are (a) film it as a narration over a page
+that reports "last cycle, N minutes ago" and never claim a visible state change,
+or (b) teach the simulator a no-webhook advance (`TRACKING_WEBHOOK_SECRET_DELHIVERY`
+unset only makes it refuse ALL of them, which breaks every other video's
+seeding) — so (a) unless somebody adds a per-advance switch. **Do NOT fake it by
+deleting the applied webhook row afterwards**: the order has already moved by
+then, and rewinding a lifecycle is the one thing this seeding never does.
+M4–M6 each need a parcel staged into a state nothing on this box reaches by
+itself (`PENDING_MANUAL_PLACEMENT`, a MANUAL-policy seller with a confirmed
+parcel, a seller's delivery-action request), which is real work and is why
+section O went first.
 
 **L4 IS SKIPPED FOR NOW, ON PURPOSE, and it is the one entry out of order.** It
 is `needs demo data` and `dangerous`, and its form asks for NINE ids — seller,
@@ -258,6 +276,33 @@ appends real tracking events to a parcel that already finished its journey.
 The lookup toasts `shiprocket could not be asked — no active courier account, so
 no token` (TRK-12). It is correct and it is in shot for a few seconds of the
 result scene; worth knowing it is the system working rather than a fault.
+
+**WHAT O1 LEFT BEHIND, MEASURED (2026-10-01).** One lead and one invitation,
+both of which it spends on camera and both of which `leadsWorldFor` resets.
+
+- **The lead is RESET, not retired.** There is one lead per company, and a
+  second take has to work the SAME row or the list grows a near-duplicate every
+  run — which is the opposite of the lesson, since the page is a queue you are
+  meant to empty. It goes back to NEW with its notes cleared, and `createdAt` is
+  put two days back: the Waiting column is what the subtitle is about, and a
+  lead that arrived this second reads `0d`.
+- **The unused invitation is DELETED**, because the drawer renders a different
+  card — "Resend", with different words on it — the moment one exists. A USED
+  invitation is left alone and the seed throws by name: that row is the evidence
+  of how a real seller got in.
+- **`.test` email, deliberately.** Sending really does call the mailer; in dev
+  that is a `[DEV] Would send email` line, and a video that types a reachable
+  address into a send button is one bad environment variable from mailing a
+  stranger.
+- **There was NO lead on this box but a 59-day-old one from somebody's manual
+  test**, and nothing seeds one — so a fresh box opens that page empty, which is
+  a hard place to deliver "a lead goes cold fast" from.
+
+**SAVING CLOSES THE DRAWER** (`save()` calls `onClose()`), and the row then
+leaves the tab it was found in — so the invite scene has to switch to Qualified
+and open it again. That is not a detour, it IS the line ("it leaves the tab you
+found it in"), and the flow asserts the row is gone from New rather than saying
+so in prose. **Read a dialog's save handler before writing the scene after it.**
 
 **WHAT K2 LEFT BEHIND, MEASURED (2026-10-01).** The returns bench now holds
 exactly ONE un-finalised return on any run, and it is K2's own: three things
@@ -4636,3 +4681,33 @@ list or a label that is CLOSE ENOUGH to right has no symptom.** One printed a
 true id with a missing noun; the other offered a true list with a missing
 member. Nothing throws, nothing renders wrong, and the only thing that notices
 is somebody trying to explain the screen out loud.
+
+**AND A FORTY-THIRD, found by filming O1 (2026-10-01): a FIELD THAT HAS NEVER
+EXISTED, rendered as the words "Invalid Date" on every invitation anybody
+opened.** `SellerInvitationListItem` in `@skydrop/api-client` declared
+`invitedAt`. The API has never sent that — `toListItem` sends `createdAt` — so
+the lead drawer's "Invitation sent" line ran
+`new Date(undefined).toLocaleString()`, which is the string "Invalid Date",
+immediately beside a perfectly correct expiry date and a perfectly correct
+status chip.
+
+**Nothing was positioned to catch it.** Typecheck was reading a type that agreed
+with itself; the runtime value was `undefined`, which `new Date` accepts; and
+`toLocaleString` returns a STRING rather than throwing. The two fields either
+side of it being right is what makes it read as a rendering quirk rather than a
+missing field.
+
+The same type also declared `inviteUrl`, which is on the CREATE and RESEND
+responses and on no list item — the URL exists only in the answer to the act
+that minted it, because only a hash of the token is stored. Saying otherwise on
+the list type said the opposite of the system's most important property about
+invitations, in the one place a reader would go to find out. It is split now:
+`SellerInvitationListItem` is exactly the list row, and
+`SellerInvitationIssued` extends it with the one-shot link.
+`lead-invitation-date.test.tsx` pins the date and was proved red on the literal
+string.
+
+**The shape: a hand-written client type is a CLAIM about a wire format, and
+nobody checks it.** Both halves of this one were wrong in opposite directions —
+a field that does not exist, and a field that exists somewhere else — and both
+typechecked perfectly for as long as they stood.

@@ -5440,6 +5440,100 @@ async function biggestPickableLine(sellerId, warehouseId, staffToken, min) {
 const M1_ACCOUNT_LABEL = 'Delhivery — second contract';
 
 /**
+ * The lead O1 works through. Its email is a `.test` address on purpose:
+ * sending the invite really does call the mailer, and in dev that is a
+ * `[DEV] Would send email` line — but a video that types a reachable
+ * address into a send button is one bad environment variable away from
+ * mailing a stranger.
+ */
+const O1_LEAD_EMAIL = 'farhana@jessorejute.test';
+
+/**
+ * O1's world — "Letting a seller in".
+ *
+ * ── IT SPENDS THE LEAD AND THE INVITATION ────────────────────────────
+ * The video moves the lead's status, writes an internal note, and sends
+ * an invitation. All three are the point: the lead pipeline is the
+ * subject, and the one-shot invitation link cannot be shown without
+ * issuing one.
+ *
+ * So the lead is reset rather than retired — unlike an order, a lead is
+ * a record of somebody asking to be let in and there is exactly one of
+ * them per company, so a second take has to work the SAME row or the
+ * list grows a near-duplicate every run. It goes back to NEW with its
+ * notes cleared, and the invitation the last take issued is removed so
+ * the drawer offers "Send invite" rather than "Resend" — which is a
+ * DIFFERENT scene with different words on it.
+ *
+ * ── AN UNUSED INVITATION ONLY ────────────────────────────────────────
+ * If somebody ever registers against it, the drawer says "They
+ * registered" and there is nothing to resend. Deleting that row would
+ * throw away the evidence of how a real seller got in, so it is left
+ * alone and the seeding says so loudly instead.
+ */
+async function leadsWorldFor(slug) {
+  if (slug !== 'letting-a-seller-in') return;
+
+  const used = await prisma.sellerInvitation.findFirst({
+    where: { email: O1_LEAD_EMAIL, usedAt: { not: null } },
+    select: { usedAt: true },
+  });
+  if (used !== null) {
+    throw new Error(
+      `The invitation to ${O1_LEAD_EMAIL} was accepted on ${used.usedAt.toISOString()}, so the ` +
+        'drawer now reads "They registered" and the invite scene has no button. Pick a new ' +
+        'lead email for O1 rather than deleting a real registration.',
+    );
+  }
+  const removed = await prisma.sellerInvitation.deleteMany({ where: { email: O1_LEAD_EMAIL } });
+  if (removed.count > 0) {
+    console.log(`  · removed ${removed.count} unused invitation(s) a previous take issued`);
+  }
+
+  /*
+    THE LEAD ITSELF, as the marketing form would have written it. There
+    is no seeding anywhere else that makes one, so a fresh box opens
+    this page empty — and "a lead goes cold fast" is a hard line to
+    deliver over nothing.
+
+    Dated two days back rather than now: the Waiting column is the
+    column the subtitle is about, and a lead that arrived this second
+    reads as `0d`.
+  */
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const lead = await prisma.inviteLead.findFirst({
+    where: { email: O1_LEAD_EMAIL },
+    select: { id: true },
+  });
+  const fields = {
+    fullName: 'Farhana Akter',
+    companyName: 'Jessore Jute Co',
+    email: O1_LEAD_EMAIL,
+    phone: '+8801711000412',
+    shippingDirection: 'BD_TO_IN',
+    productTypes: 'Jute bags, floor runners, table linen',
+    monthlyOrders: '500-1000',
+    message:
+      'We sell on Facebook and have customers asking from Kolkata and Delhi. ' +
+      'We have no way to ship there and no company in India.',
+    status: 'NEW',
+    notes: null,
+    contactedAt: null,
+    convertedSellerId: null,
+  };
+  if (lead === null) {
+    await prisma.inviteLead.create({ data: { ...fields, createdAt: twoDaysAgo } });
+    console.log(`  · created the lead "${fields.companyName}" (${O1_LEAD_EMAIL})`);
+  } else {
+    await prisma.inviteLead.update({
+      where: { id: lead.id },
+      data: { ...fields, createdAt: twoDaysAgo },
+    });
+    console.log(`  · reset the lead "${fields.companyName}" to NEW with no notes`);
+  }
+}
+
+/**
  * M2's world — "Is the courier integration healthy".
  *
  * ── IT WRITES NOTHING ────────────────────────────────────────────────
@@ -6470,6 +6564,7 @@ async function main() {
   await cycleCountWorldFor(slug, sellerId, staffToken, warehouse);
   await courierAccountWorldFor(slug);
   await delhiveryHealthWorldFor(slug);
+  await leadsWorldFor(slug);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);

@@ -297,7 +297,7 @@ export function LeadDrawer({
                     />
                   </span>
                   <span className="ac-muted">
-                    {new Date(existing.data.invitedAt).toLocaleString()} ·{' '}
+                    {new Date(existing.data.createdAt).toLocaleString()} ·{' '}
                     {existing.data.status === 'expired' ? 'expired' : 'expires'}{' '}
                     {new Date(existing.data.expiresAt).toLocaleDateString()}
                   </span>

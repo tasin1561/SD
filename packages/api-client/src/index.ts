@@ -25,6 +25,7 @@ export type {
   SellerStatusValue,
   UpdateSellerStatusRequest,
   UpdateSellerStatusResponse,
+  SellerInvitationIssued,
   SellerInvitationListItem,
 } from './endpoints/admin-sellers';
 export type {

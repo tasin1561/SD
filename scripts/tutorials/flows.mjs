@@ -1083,6 +1083,18 @@ async function applyLedgerFilter({ page, stage }, locator, choose) {
  */
 const M1_ACCOUNT_LABEL = 'Delhivery — second contract';
 
+/**
+ * The lead O1 works. `leadsWorldFor` writes it and resets it; the two
+ * are kept in step by `test/tutorial-labels.test.mjs`, for the same
+ * reason M1's account label is.
+ */
+const O1_LEAD_EMAIL = 'farhana@jessorejute.test';
+
+/** O1's lead, by the company nobody else on this box is called. */
+function leadRow(page) {
+  return page.locator('.sk-tbody .sk-tr').filter({ hasText: 'Jessore Jute Co' }).first();
+}
+
 export const FLOWS = {
   'place-an-order': {
     /** Everything before scene one: sign in and land where the intro expects. */
@@ -11515,6 +11527,217 @@ export const FLOWS = {
     },
   },
   /*
+    N7 — the bank book.
+
+    ONE ACT, TWO READINGS. The take POSTS a reconciliation, which is the
+    screen's everyday job and the only thing here that is append-only in
+    a way the video can show. The transfer and owner-money forms are
+    OPENED AND CANCELLED: both move real money, both are described
+    rather than performed, and the narration over them is about what the
+    form asks for rather than about doing it — the N4 lesson, which is
+    that a line claiming an act the frame does not show is the one defect
+    no check can catch.
+
+    The opening-balance checkbox is POINTED AT and never ticked. It is
+    once per account and the API refuses a second, so ticking it would
+    make the take's success depend on what every previous take left
+    behind — and the sentence over it is a warning, not an instruction.
+  */
+  'the-bank-book': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/treasury`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Treasury', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await treasuryRow(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(
+          page.getByText(/whether what we owe sellers is covered/i).first(),
+          2800,
+        );
+      },
+
+      async owed({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Owed to sellers'), 3600);
+      },
+
+      async held({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Held for sellers'), 4200);
+      },
+
+      /*
+        The coverage line, which only renders while we ARE covered — the
+        shortfall case is a Notice somewhere else entirely. The narration
+        names both, so the gate accepts either and the halo lands on
+        whichever one the world is actually in.
+      */
+      async covered({ page, stage }) {
+        await stage.dwellOn(
+          page
+            .getByText(/covered by what we hold|We owe sellers more than we are holding/i)
+            .first(),
+          4600,
+        );
+      },
+
+      async accounts({ page, stage }) {
+        await stage.dwellOn(page.getByText(/A balance is the sum of its entries/i).first(), 4200);
+      },
+
+      async inside({ page, stage }) {
+        await stage.clickIt(page.locator('button.tr-account').first(), { after: 1400 });
+        const holders = page.locator('.tr-holders').first();
+        await holders.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(holders, 3000);
+      },
+
+      async movements({ page, stage }) {
+        await stage.dwellOn(
+          page.getByText(/A correction is a new entry saying who corrected it/i).first(),
+          4200,
+        );
+      },
+
+      /*
+        Opened and CANCELLED. Closed from the footer: every `Dialog`
+        header carries an X with `aria-label="Close"` beside whatever
+        the footer holds, so the unscoped reach dies on strict mode.
+      */
+      async transfer({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Move money' }).first(), {
+          after: 1500,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.getByLabel(/^Left/).first(), 2200);
+        await stage.dwellOn(dialog.getByLabel(/^Arrived/).first(), 2400);
+        await dialog
+          .locator('.sk-dialog__foot')
+          .getByRole('button', { name: 'Cancel' })
+          .first()
+          .click();
+        await dialog.waitFor({ state: 'detached', timeout: 20_000 });
+      },
+
+      async ownermoney({ page, stage }) {
+        await stage.clickIt(
+          treasuryRow(page).getByRole('button', { name: 'Owner money' }).first(),
+          {
+            after: 1500,
+          },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.getByLabel(/^Which way/).first(), 2200);
+        await stage.dwellOn(dialog.getByText(/our own money in this account/i).first(), 2600);
+        await dialog
+          .locator('.sk-dialog__foot')
+          .getByRole('button', { name: 'Cancel' })
+          .first()
+          .click();
+        await dialog.waitFor({ state: 'detached', timeout: 20_000 });
+      },
+
+      async reconcile({ page, stage }) {
+        await stage.clickIt(treasuryRow(page).getByRole('button', { name: 'Reconcile' }).first(), {
+          after: 1500,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.getByLabel(/^Whose balance/).first(), 2200);
+        await stage.typeIn(dialog.getByLabel(/^What the statement says/).first(), '267500', {
+          after: 700,
+        });
+        await page.waitForTimeout(900);
+      },
+
+      /*
+        POINTED AT, NEVER TICKED — see the note on this flow. The
+        checkbox's own description is the sentence the narration is
+        quoting, so the halo goes on the label rather than the input.
+      */
+      async opening({ page, stage }) {
+        await stage.dwellOn(
+          page
+            .getByRole('dialog')
+            .getByText(/Money the business already had/i)
+            .first(),
+          4800,
+        );
+      },
+
+      async why({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(
+          dialog.getByLabel(/^Why the book was wrong/).first(),
+          'HDFC charged a wire fee on the September remittance that we had never recorded.',
+          { after: 700 },
+        );
+        await page.waitForTimeout(900);
+      },
+
+      /*
+        TWO DIALOGS AGAIN, and this pair does NOT share a name: the form
+        reviews ("Review adjustment") and the confirm posts ("Post
+        adjustment"). Both are still reached through their dialog's
+        accessible name, because the form unmounts as the confirm opens
+        and an unscoped `getByRole('dialog')` is a race either way.
+      */
+      async post({ page, stage }) {
+        await stage.clickIt(
+          page
+            .getByRole('dialog', { name: /^Reconcile / })
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /Review adjustment|Working/ })
+            .first(),
+          { after: 1400 },
+        );
+        const confirm = page.getByRole('dialog', { name: 'Post this adjustment?' });
+        await confirm.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(confirm.getByText(/nothing is overwritten/i).first(), 2800);
+        await stage.clickIt(
+          confirm
+            .locator('.sk-dialog__foot')
+            .getByRole('button', { name: /Post adjustment|Working|Posted/ })
+            .first(),
+          { after: 2000 },
+        );
+        await confirm.waitFor({ state: 'detached', timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+      },
+
+      async after({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/treasury`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = page
+          .getByRole('row')
+          .filter({ hasText: /reconciliation/i })
+          .first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(row, 3600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(moneyKpi(page, 'Owed to sellers'), 3600);
+      },
+    },
+  },
+  /*
     L3 — the stock ledger, read-only and entirely page-driven.
 
     NO FIXTURE and no seeding: every handle this video needs is on the
@@ -12068,6 +12291,160 @@ export const FLOWS = {
       },
     },
   },
+  /*
+    O1 — letting a seller in.
+
+    It SPENDS the lead (status and notes) and ISSUES an invitation, both
+    of which are the subject. `leadsWorldFor` resets the lead rather
+    than retiring it — there is one lead per company and a second take
+    has to work the same row — and removes the unused invitation, so the
+    drawer offers "Send invite" rather than "Resend", which is a
+    different scene with different words on it.
+  */
+  'letting-a-seller-in': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+      await ctx.page.goto(`${ctx.baseUrl}/leads`, { waitUntil: 'domcontentloaded' });
+      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Invite requests', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3000);
+      },
+
+      async tabs({ page, stage }) {
+        await stage.dwellOn(page.locator('.ac-toolbar').first(), 3000);
+      },
+
+      async waiting({ page, stage }) {
+        const row = leadRow(page);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        // The Waiting column is the last cell, and it is what the
+        // subtitle is about.
+        await stage.dwellOn(row.locator('td').last(), 3000);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(leadRow(page), { after: 1400 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(dialog.locator('.ac-meta').first(), 2800);
+      },
+
+      async told({ page, stage }) {
+        /*
+          THEIR OWN WORDS, by the text rather than by a position: the
+          form's free-text answer is the thing the line calls the real
+          answer, and reaching for "the last block in the panel" would
+          film whichever field the layout happens to end on.
+        */
+        const said = page.getByText(/customers asking from Kolkata/i).first();
+        await said.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(said, 3400);
+      },
+
+      async status({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.point(dialog.locator('#lead-status'), { settle: 500 });
+        await dialog.locator('#lead-status').selectOption('QUALIFIED');
+        await page.waitForTimeout(600);
+        await stage.clearHalo();
+      },
+
+      async notes({ page, stage }) {
+        await stage.typeIn(
+          page.getByRole('dialog').locator('#lead-notes'),
+          'Spoke to Farhana. Already selling into Kolkata through a friend carrying bags on the bus. Wants us for the call confirmation more than the shipping.',
+          { delay: 14, after: 800 },
+        );
+      },
+
+      async save({ page, stage }) {
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: /^Save$|^Saving/ }), {
+          after: 1800,
+        });
+        /*
+          SAVING CLOSES THE DRAWER (`save()` calls `onClose()`), and the
+          row then leaves the tab it was found in — which is exactly the
+          line, so the scene PROVES it instead of asserting it in prose.
+          It also means the invite scene has to go and find the lead
+          again, which is the honest consequence rather than a detour.
+        */
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        await page.waitForTimeout(1200);
+        if ((await leadRow(page).count()) !== 0) {
+          throw new Error(
+            'The lead is still on the New tab after being moved to Qualified — the line is ' +
+              'that the queue empties as you work it.',
+          );
+        }
+        await stage.dwellOn(page.locator('[role="tablist"]').first(), 2600);
+      },
+
+      async invite({ page, stage }) {
+        await stage.clickIt(page.getByRole('tab', { name: /^Qualified/ }), { after: 1400 });
+        const row = leadRow(page);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(row, { after: 1400 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        const send = dialog.getByRole('button', { name: /^Send invite$|^Sending/ });
+        await send.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.clickIt(send, { after: 2600 });
+      },
+
+      async once({ page, stage }) {
+        const said = page.getByText(/only a hash of it is stored/i).first();
+        await said.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(said, 3600);
+      },
+
+      async pending({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/sellers`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const toggle = page.getByRole('button', { name: /Pending invitations/ }).first();
+        await toggle.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(toggle, { after: 1600 });
+        const row = page.locator('.ac-row').filter({ hasText: O1_LEAD_EMAIL }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(row, 2600);
+      },
+
+      async resend({ page, stage }) {
+        const row = page.locator('.ac-row').filter({ hasText: O1_LEAD_EMAIL }).first();
+        /*
+          POINTED AT, NOT PRESSED. Resending replaces the link that was
+          just shown on camera — the drawer says so — and deleting
+          throws the invitation away. The line describes both; the take
+          performs neither, because the next scene needs the row to
+          still be there.
+        */
+        await stage.dwellOn(row.locator('.ac-row__side').first(), 3400);
+      },
+
+      async registered({ page, stage }) {
+        const filter = page.locator('select').first();
+        await filter.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.dwellOn(filter, 3000);
+      },
+
+      async outro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/leads`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.dwellOn(page.locator('.ac-toolbar').first(), 3000);
+      },
+    },
+  },
 };
 
 /**
@@ -12545,6 +12922,18 @@ function bankField(page, label) {
     .getByRole('row')
     .filter({ has: page.getByRole('cell', { name: label, exact: true }) })
     .first();
+}
+
+/**
+ * N7's rupee account row, by the account's own name.
+ *
+ * `Owner money` and `Reconcile` are on EVERY account row, so an
+ * unscoped reach takes whichever the table happens to draw first — and
+ * the taka account is a different currency, which would make the figure
+ * typed into the reconcile dialog nonsense.
+ */
+function treasuryRow(page) {
+  return page.getByRole('row').filter({ hasText: 'HDFC Current' }).first();
 }
 
 /**

@@ -32,6 +32,7 @@ import type {
   ReleaseReservationsResult,
   RestoreReservationsRequest,
   RestoreReservationsResult,
+  SellerInvitationIssued,
   SellerInvitationListItem,
   SellerListResponse,
   SystemSettingFull,
@@ -265,7 +266,7 @@ export function useSellerInvitationFor(
 }
 
 export function useCreateInvitation(): UseMutationResult<
-  SellerInvitationListItem,
+  SellerInvitationIssued,
   Error,
   { email: string }
 > {
@@ -273,7 +274,7 @@ export function useCreateInvitation(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body) =>
-      client.request<SellerInvitationListItem>(`/api/admin/seller-invitations`, {
+      client.request<SellerInvitationIssued>(`/api/admin/seller-invitations`, {
         method: 'POST',
         body,
       }),
@@ -284,7 +285,7 @@ export function useCreateInvitation(): UseMutationResult<
 }
 
 export function useResendInvitation(): UseMutationResult<
-  SellerInvitationListItem,
+  SellerInvitationIssued,
   Error,
   { id: string }
 > {
@@ -292,7 +293,7 @@ export function useResendInvitation(): UseMutationResult<
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id }) =>
-      client.request<SellerInvitationListItem>(`/api/admin/seller-invitations/${id}/resend`, {
+      client.request<SellerInvitationIssued>(`/api/admin/seller-invitations/${id}/resend`, {
         method: 'POST',
       }),
     onSuccess: () => {

@@ -52,4 +52,14 @@ describe('a label one file types and another file clears', () => {
         'another row on a page whose whole subject is knowing which account is which.',
     );
   });
+
+  it('O1 invites the lead its seeding resets', async () => {
+    const [flows, seed] = await Promise.all([read('flows.mjs'), read('seed-demo-data.mjs')]);
+    assert.equal(
+      declared(flows, 'O1_LEAD_EMAIL'),
+      declared(seed, 'O1_LEAD_EMAIL'),
+      'The lead O1 reaches for on the sellers page is not the one its seeding wrote, so the ' +
+        'pending-invitation scene looks for a row that was never issued.',
+    );
+  });
 });
