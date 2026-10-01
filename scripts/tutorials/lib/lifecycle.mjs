@@ -42,6 +42,7 @@
 import { prisma } from './deps.mjs';
 import { call, waitFor } from './api.mjs';
 import { resolveStack } from './stacks.mjs';
+import { OPS } from './ops-user.mjs';
 
 /**
  * THIS stack's simulator, never a fixed port. Each filming stack runs its
@@ -620,6 +621,27 @@ async function pullOwnCall(orderId, staffToken) {
     token: staffToken,
     body: { isAvailable: true },
   });
+  /*
+    AND SAY WE ARE STILL HERE, which going available deliberately does
+    NOT do (`AgentPresenceService.touch` is called by a foreground
+    station tab and by an agent's own actions; marking yourself
+    available renews no claim).
+
+    `AgentPresenceService.sweep` runs EVERY MINUTE and stands down any
+    available agent whose `lastSeenAt` is null or older than
+    `ops.agent_presence_timeout_minutes`, handing back whatever they
+    were holding — so a seed that goes available and then takes more
+    than a tick to ring three times loses its assignment between the
+    pull and the attempt. It surfaces as
+    `ASSIGNMENT_NOT_ACTIVE: Assignment is PENDING, not ASSIGNED` from
+    `record-attempt`, which reads like a bug in the call flow and is
+    really a sixty-second clock. `callWorldFor` stamps it for the same
+    reason; this is the other half of the same lesson.
+  */
+  await prisma.agentCallSettings.updateMany({
+    where: { agent: { email: OPS.email } },
+    data: { lastSeenAt: new Date() },
+  });
   await callThisOneFirst(orderId);
 
   // Ours is at the front, so the first pull should be it. Anything else
@@ -1058,6 +1080,13 @@ async function simKnowsParcelFor(orderId) {
 }
 
 /**
+ * Statuses a forced-and-then-cancelled review parcel can already be in,
+ * so a seed run that died between the cancel and the rename does not
+ * try to cancel a cancelled order (which the matrix refuses).
+ */
+const TERMINAL_AFTER_FORCE = new Set(['CANCELLED', 'CANCELLED_BY_ADMIN', 'REJECTED_NDR']);
+
+/**
  * Rebuild the call-cap parcel once its review has been ANSWERED.
  *
  * D5's video presses "Keep trying", which RESOLVES the review — and
@@ -1081,20 +1110,67 @@ async function simKnowsParcelFor(orderId) {
  * part-way through its ring sequence — is rebuilt, so this parcel is
  * deterministic rather than merely resumable.
  */
-async function rebuildStaleReviewParcel(sellerId, ref, want, log) {
+async function rebuildStaleReviewParcel(sellerId, ref, want, log, staffToken) {
   const order = await prisma.order.findFirst({
     where: { sellerId, sellerOrderRef: ref },
     select: {
       id: true,
       status: true,
       orderNumber: true,
+      hasAdminOverride: true,
       earlyReservationReview: { select: { status: true } },
+      _count: { select: { orderShipments: true } },
     },
   });
   if (order === null) return;
   const review = order.earlyReservationReview ?? null;
   // Exactly right: paused, with a review still open to answer.
   if (order.status === want && review !== null && review.status === 'OPEN') return;
+
+  /*
+    P1 FORCED IT, and that is a different kind of stale.
+
+    God mode confirms this order on camera, and a confirmation
+    provisions a shipment, books a real waybill at the simulator and
+    reserves stock (ORD-10) — so the delete below would be refused by
+    three separate foreign keys, and clearing the rows behind them
+    would be throwing away a courier booking and writing
+    `stock_reservations` by hand, which INV-1 reserves for one service.
+
+    So it is CANCELLED through the product's own admin cancel first — a
+    legal matrix edge from CONFIRMED whose saga releases the stock and
+    voids the unpicked shipment — and then retired by NAME, exactly as
+    `retireSpentParcel` does for the parcels their own takes spend. The
+    cancel is not tidiness: left CONFIRMED with a waybill and no
+    reservation, the order would sit in the label and pick queues for
+    ever and J3's world would grow a parcel per P1 take.
+  */
+  const forced = order.hasAdminOverride || order._count.orderShipments > 0;
+  if (forced) {
+    if (!TERMINAL_AFTER_FORCE.has(order.status)) {
+      await call(`/admin/orders/${order.id}/cancel`, {
+        method: 'POST',
+        token: staffToken,
+        body: {
+          cancellationReason: 'OTHER',
+          note: 'Tutorial seeding: putting back what the god-mode take forced.',
+        },
+      });
+    }
+    const parked = await prisma.order.count({
+      where: { sellerId, sellerOrderRef: { startsWith: `${ref}-SPENT-` } },
+    });
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { sellerOrderRef: `${ref}-SPENT-${parked + 1}` },
+    });
+    log(
+      `  · ${ref} was forced by a take (${order.orderNumber}) — cancelled, ` +
+        `renamed ${ref}-SPENT-${parked + 1} and left intact; a fresh one follows`,
+    );
+    return;
+  }
+
   const why =
     order.status !== want
       ? `mid-calling at ${order.status}`
@@ -1217,7 +1293,7 @@ export async function ensureLifecycleParcels({ sellerId, sellerToken, staffToken
 
   for (const parcel of LIFECYCLE_PARCELS) {
     if (parcel.noAnswerToCap === true)
-      await rebuildStaleReviewParcel(sellerId, parcel.ref, parcel.want, log);
+      await rebuildStaleReviewParcel(sellerId, parcel.ref, parcel.want, log, staffToken);
     if (parcel.spendable === true)
       await retireSpentParcel(sellerId, parcel.ref, parcel.want, log, {
         spentWhenCourierCancelled: parcel.spentWhenCourierCancelled === true,

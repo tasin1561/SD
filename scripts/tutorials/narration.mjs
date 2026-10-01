@@ -4176,6 +4176,93 @@ export const VIDEOS = [
       },
     ],
   },
+  /*
+    SECTION P — THE DANGEROUS ONES.
+
+    A different tone from everything above, on purpose: what the act
+    COSTS is said before the click rather than after it, because every
+    one of these is something a person should have watched a tutorial
+    about on a day they did not need it.
+  */
+  {
+    slug: 'god-mode',
+    title: 'God mode',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'This order is paused. The call centre rang the customer, nobody answered, and rather than reject it outright we stopped and asked the seller what they wanted done.',
+      },
+      {
+        id: 'stuck',
+        say: 'The seller has since rung us: the customer did answer, and does want it. There is no button for that. From here the rules allow calling again, letting it go, or calling it off.',
+      },
+      {
+        id: 'panel',
+        say: 'Which is what this panel is for. It bypasses the state machine and the edit rules, it is audited as critical, and it marks the order with a flag that is set once and never cleared.',
+      },
+      {
+        id: 'open',
+        say: 'Everything worth reading sits above the button. The dialog goes red, it names the rule it is breaking, and it opens with a warning written by whoever built it.',
+      },
+      {
+        id: 'consequences',
+        say: 'And this is the half people miss. A forced status has the same consequences as a real one, except stock. Emails to the customer and the seller, webhooks, invoices, delivery-time billing, the call queue.',
+      },
+      {
+        id: 'waybill',
+        say: 'Including a parcel. A forced confirmation gets a shipment and a waybill, which costs money the moment it is booked — and a waybill already issued is never cancelled with the courier by anything here.',
+      },
+      {
+        id: 'whitelist',
+        say: 'The fields come next, and it is a whitelist rather than a free-text editor. A fixed list, grouped, each one printing what it holds today so you can see exactly what you are replacing.',
+      },
+      {
+        id: 'field',
+        say: 'We will leave the order’s own details alone and only write down what happened, in the internal note. Ticking a field is what sends it; anything left alone is not touched at all.',
+      },
+      {
+        id: 'status',
+        say: 'Then the status, behind a checkbox of its own that says plainly what it does and where this order stands now. Every status the system has is in the list, reachable or not.',
+      },
+      {
+        id: 'reason',
+        say: 'Thirty characters at least, and the counter is there so you can see you have not finished rather than to grade you. Write it for the person reading this order next year.',
+      },
+      {
+        id: 'ack',
+        say: 'Then the acknowledgement, which is worth reading instead of ticking. Stock is attempted and not enforced. Moving an order away from confirmed leaves its reservations held. And the flag is permanent.',
+      },
+      {
+        id: 'typed',
+        say: 'A second screen restates exactly what is about to happen, and the words are typed by hand. That is not a safety net — it is a pause long enough to change your mind.',
+      },
+      {
+        id: 'press',
+        say: 'One press, and it is done. Nothing in this application undoes it: the order’s history now has an edge in it that the rules forbid, under your name, permanently.',
+      },
+      {
+        id: 'result',
+        say: 'And it reports rather than predicts. Where the order actually landed, which fields it applied, the flag now true — and a row per line it tried to reserve, with what happened to each.',
+      },
+      {
+        id: 'claim',
+        say: 'Beside it are the two halves of one question: this order’s claim on the shelves. Release gives back everything it is holding. Restore re-reserves an order that lost its claim.',
+      },
+      {
+        id: 'release',
+        say: 'Release is the cleanup for the other direction. Force an order away from confirmed and the stock it held stays held — nothing hands it back, and this is the only thing that will.',
+      },
+      {
+        id: 'badge',
+        say: 'And the order wears it from now on. A badge in the header, a critical audit row, and an entry in its own history — three places saying this past was edited by hand.',
+      },
+      {
+        id: 'outro',
+        say: 'So: only when nothing legitimate can reach the state, read the consequences before you read the fields, write the reason for a stranger, and treat the stock claim as a separate act.',
+      },
+    ],
+  },
   {
     slug: 'bill-the-freight',
     title: 'Billing a consignment’s freight',
@@ -4634,6 +4721,69 @@ export const VIDEOS = [
       {
         id: 'outro',
         say: 'So: read the source column before you change anything, write the note for whoever comes next, and put them back on the default when the arrangement ends \u2014 a setting and a courier account alike.',
+      },
+    ],
+  },
+  {
+    slug: 'change-a-system-setting',
+    title: 'Changing how the platform behaves',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'System settings. How the whole platform behaves, one row at a time \u2014 and every edit recorded with what it was before and what it is now.',
+      },
+      {
+        id: 'groups',
+        say: 'They are grouped by what a setting DECIDES rather than by the category it is filed under in the database. Charges, cash on delivery, the warehouse, failed deliveries, and so on down.',
+      },
+      {
+        id: 'row',
+        say: 'A row leads with what it does in plain words, then what KIND of value it is \u2014 which is what decides the editor you get \u2014 then the value now, with the raw key underneath for searching a log.',
+      },
+      {
+        id: 'tooltip',
+        say: 'And the little i is the part worth knowing about. What the setting decides, and an example of what happens at a given value, so you do not have to go and read the code.',
+      },
+      {
+        id: 'secret',
+        say: 'This one looks like a secret and is not. It is the NAME of the environment variable the real value lives in \u2014 nothing on this page holds a credential, because a secret in the database is a secret in every backup of it.',
+      },
+      {
+        id: 'readonly',
+        say: 'And one row here cannot be edited from this page at all. It has a route of its own with stricter guardrails, which is the same switch you saw on a seller\u2019s page a moment ago.',
+      },
+      {
+        id: 'switch',
+        say: 'Open a yes-or-no setting and it is a list rather than a tick box, deliberately. The answer you have selected says what it DOES and gives you an example of it happening.',
+      },
+      {
+        id: 'compare',
+        say: 'With every answer underneath, a line each, so you compare them before choosing rather than afterwards. This one dispatches vans at our cost, so we are reading it and closing it.',
+      },
+      {
+        id: 'number',
+        say: 'Here is one safe to actually change. How many times a minute one visitor may look up a parcel on the public tracking page \u2014 a threshold, and nothing physical behind it.',
+      },
+      {
+        id: 'type',
+        say: 'A number setting gets a number box, and the range is checked when you save rather than as you type. The server holds the authoritative bounds and says so.',
+      },
+      {
+        id: 'saved',
+        say: 'Saved, and the row carries a last-edited stamp it did not have a moment ago. That is the visible half; the audit trail has the before and the after.',
+      },
+      {
+        id: 'live',
+        say: 'And it is already true. There is no deploy between typing that and it taking effect \u2014 which is exactly why this page exists, and exactly why it is dangerous.',
+      },
+      {
+        id: 'back',
+        say: 'So we put it back, which is the same two clicks. Nothing here is harder to undo than it was to do \u2014 but on a different row, the parcels that moved while it was wrong are not coming back.',
+      },
+      {
+        id: 'outro',
+        say: 'So: read the i before you touch anything, change one row at a time, and remember that the difference between this page and a deploy is the only safety net it does not have.',
       },
     ],
   },

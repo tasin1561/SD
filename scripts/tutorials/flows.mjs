@@ -900,6 +900,45 @@ function dialogFoot(page) {
   return page.locator('.sk-dialog__foot').first();
 }
 
+/*
+  ── SECTION P helpers ───────────────────────────────────────────────
+
+  One field GROUP of the god-mode whitelist, and one ROW inside it.
+
+  Both by their own words rather than by position: the groups are
+  declared in `FIELD_GROUPS` and a field added to one of them would
+  silently move an index, which is the worst kind of change here —
+  every step would still pass and the halo would be around a different
+  control.
+*/
+function wlGroup(page, title) {
+  return page
+    .getByRole('dialog')
+    .locator('.oc-wl')
+    .filter({ has: page.getByText(title, { exact: true }) })
+    .first();
+}
+
+function wlRow(page, label) {
+  return page
+    .getByRole('dialog')
+    .locator('.oc-wl__row')
+    .filter({ has: page.getByText(label, { exact: true }) })
+    .first();
+}
+
+/**
+ * The force-mutation result panel.
+ *
+ * `[data-tone='critical']` is what tells it from the RELEASE result
+ * panel beside it, which carries the same class and is the one a
+ * release writes — so an unscoped `.oc-result` would be whichever
+ * rendered first the day both exist.
+ */
+function godResult(page) {
+  return page.locator(".oc-result[data-tone='critical']").first();
+}
+
 function attnCard(page, area) {
   return page.locator('.db-attn').filter({ hasText: area }).first();
 }
@@ -1197,6 +1236,139 @@ async function selectCourierAccount(dialog, label) {
     throw new Error(`The "${label}" option carries no value — the dropdown lists it differently.`);
   }
   await dialog.locator('#courier-link-account').selectOption(value);
+}
+
+/**
+ * The four `/settings` rows O4 reaches, by their PLAIN-ENGLISH names.
+ *
+ * `O4_THRESHOLD_NAME` is the one it edits and puts back;
+ * `systemSettingsWorldFor` resets the same key and
+ * `test/tutorial-labels.test.mjs` keeps the VALUE in step, because the
+ * flow types it back by hand and the seed asserts it.
+ */
+const O4_THRESHOLD_NAME = 'Public tracking lookups per visitor per minute';
+const O4_THRESHOLD_VALUE = '30';
+const O4_SECRET_REF_NAME = 'Where the Shiprocket update token is kept';
+const O4_READ_ONLY_NAME = 'Reseller terms may pay after phone confirmation';
+const O4_SWITCH_NAME = 'Nightly automatic re-attempts';
+
+/** One `/settings` row, by the words at the top of it. */
+function settingRow(page, name) {
+  return page.locator('li.ac-row').filter({ hasText: name }).first();
+}
+
+/**
+ * Wait for a page's own data, and press Retry if the first fetch lost
+ * the race for an access token.
+ *
+ * FE-1 keeps the access token in BROWSER MEMORY, so `page.goto` after a
+ * sign-in throws it away and the client has to get another through the
+ * `__Host-` cookie. `@skydrop/api-client` retries a 401 once the
+ * refresh lands and that is normally invisible — but under video
+ * recording everything is slower, and O4's first take came back
+ * "API 401 (UNAUTHORIZED): Bearer token required" on a page whose two
+ * `--check` runs had both been clean. A take that dies at scene one
+ * costs the whole run.
+ *
+ * So the prologue asks for the thing the page draws when it HAS data,
+ * and presses the error state's own Retry if it does not arrive. That
+ * is what a person does, it is harmless when the page was fine, and it
+ * is worth copying into any admin prologue whose first scene gates on
+ * a row.
+ */
+async function withRetry(page, probe, { rounds = 4 } = {}) {
+  const retry = page.getByRole('button', { name: 'Retry' }).first();
+  for (let round = 0; round < rounds; round += 1) {
+    const appeared = await probe
+      .waitFor({ state: 'attached', timeout: round === 0 ? 15_000 : 8_000 })
+      .then(() => true)
+      .catch(() => false);
+    if (appeared) return;
+    /*
+      ONE RETRY IS NOT ENOUGH, and the reason is worth knowing: pressing
+      it re-fires the SAME unauthenticated request, so if the refresh
+      has not landed yet the page simply 401s again — which is exactly
+      what O4's fourth take filmed, with the button still carrying its
+      focus ring. A RELOAD is the stronger move: it re-runs the SSR
+      identity resolve and gives the client a fresh chance at a token.
+      So: press Retry, and reload every other round.
+    */
+    if ((await retry.count()) > 0) await retry.click();
+    if (round % 2 === 1) {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForLoadState('networkidle').catch(() => {});
+    }
+    await page.waitForTimeout(1500);
+  }
+  await probe.waitFor({ state: 'attached', timeout: 20_000 });
+}
+
+/**
+ * Sign in, then reach a page THE WAY THE APP DOES — by clicking its nav
+ * link — and be sure you got there.
+ *
+ * ── WHY NOT `page.goto` ──────────────────────────────────────────────
+ * FE-1 keeps the access token in BROWSER MEMORY and nowhere else, so a
+ * full page load throws it away: the app re-boots, resolves identity
+ * from the `__Host-` cookie, and the client has to fetch another token
+ * before anything it renders can ask the API. Normally that race is
+ * invisible. Under video recording it is not — O4's takes came back
+ * "API 401 (UNAUTHORIZED): Bearer token required" on `/settings`
+ * FOUR TIMES, while the same flow passed every `--check` run, because
+ * a check records no video and the page is fast enough to win the race.
+ * Pressing the page's own Retry does not help: it re-fires the same
+ * token-less request.
+ *
+ * Clicking a nav link keeps the SPA alive, so the token is never lost
+ * and there is no race to lose. It is also what a person does.
+ *
+ * `page.goto` stays as the fallback for a page with no nav entry, with
+ * the URL asserted afterwards — `signIn` returns the moment the URL
+ * says `/dashboard` while the dashboard is still fetching, and a
+ * `goto` issued at that instant can be overtaken by the client-side
+ * navigation that is still finishing. O4's third take filmed a
+ * perfectly healthy Overview page under a line about system settings.
+ */
+async function signInAndOpen(ctx, path, probe) {
+  await signIn(ctx);
+  await ctx.page.waitForLoadState('networkidle').catch(() => {});
+
+  const navLink = ctx.page.locator(`a[href="${path}"]`).first();
+  if ((await navLink.count()) > 0) {
+    await navLink.scrollIntoViewIfNeeded();
+    await navLink.click();
+  } else {
+    await ctx.page.goto(`${ctx.baseUrl}${path}`, { waitUntil: 'domcontentloaded' });
+  }
+  await ctx.page.waitForURL((url) => url.pathname === path, { timeout: 20_000 });
+  await ctx.page.waitForLoadState('networkidle').catch(() => {});
+  if (probe !== undefined) await withRetry(ctx.page, probe);
+}
+
+/**
+ * A dialog's buttons when its footer is rendered INSIDE the body.
+ *
+ * `dialogFoot` reaches `.sk-dialog__foot`, which only exists when the
+ * footer is passed to `Dialog` as its `footer` PROP. `/settings`'
+ * edit dialog cannot do that: its Save is a `type="submit"` and has to
+ * live inside the `<form>`, so it renders `<DialogFooter>` among the
+ * children — and `DialogFooter` is `.sk-dialog__actions` with no
+ * `.sk-dialog__foot` around it. The failure is a thirty-second click
+ * timeout on a Cancel button that is plainly on screen.
+ *
+ * `.sk-dialog__actions` exists in BOTH shapes (the prop form wraps it),
+ * so this is the reach that always works.
+ */
+function dialogActions(page) {
+  return page.getByRole('dialog').locator('.sk-dialog__actions').first();
+}
+
+/** One `/settings` group, by its heading. */
+function settingGroup(page, title) {
+  return page
+    .locator('.ac-section')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+    .first();
 }
 
 /** O2's account-status card, which carries both of the status buttons. */
@@ -7082,6 +7254,291 @@ export const FLOWS = {
       },
     },
   },
+  /*
+    ── SECTION P — THE DANGEROUS ONES ──────────────────────────────────
+
+    P1. God mode, on the one order D0 parks in a state the matrix will
+    not move: `RSH-LIFE-REVIEW` sits at AWAITING_SELLER_DECISION, and
+    the four edges out of that status are PENDING_CONFIRMATION,
+    REJECTED_NDR and the two cancels (read off
+    `OrderStateMachineService` rather than assumed). CONFIRMED is NOT
+    among them, which is what makes "nothing legitimate can reach this
+    state" a true sentence rather than a dramatic one.
+
+    It presses the force, because a video about god mode that never
+    forces anything cannot show the result panel — and the result panel
+    is the half that matters: it reports what the SERVER did on the
+    inventory side rather than what the browser predicted. The two
+    COMPANION dialogs are opened and cancelled: pressing release here
+    would be wrong, since a forced CONFIRMED's reservations are ones a
+    real confirmation would also hold.
+
+    What the take leaves behind is handled by `rebuildStaleReviewParcel`
+    in `lib/lifecycle.mjs`: a review parcel found CONFIRMED has a
+    shipment, a waybill and a reservation behind it, so it is RETIRED by
+    name rather than deleted (the delete path's foreign keys would all
+    refuse) and its stock claim is released through the product's own
+    endpoint.
+  */
+  'god-mode': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        /*
+          Reached through the list's own search on the SELLER's
+          reference. These rows carry uuidv7 ids, which differ on every
+          database, and a filter lives in the page's address (B1's
+          lesson), so the URL is enough.
+
+          THE STATUS FILTER IS NOT DECORATION. Every take retires its
+          forced order to `RSH-LIFE-REVIEW-SPENT-<n>` (see
+          `rebuildStaleReviewParcel`), and the search is a SUBSTRING — so
+          by the third take the plain search returns three rows and the
+          newest-first list hands back whichever sorted top. Filtering on
+          the status this video is about leaves exactly one, and the count
+          below is then a real gate rather than a number that grows.
+
+          `waitForURL` because a `goto` that did not take us anywhere has
+          to fail HERE rather than twenty-five seconds later as a missing
+          row: the first take of this video died on the DASHBOARD with a
+          selector timeout, which reads like a moved selector and is not.
+        */
+        await page.goto(
+          `${baseUrl}/orders?search=RSH-LIFE-REVIEW&status=AWAITING_SELLER_DECISION`,
+          { waitUntil: 'domcontentloaded' },
+        );
+        await page.waitForURL(/\/orders\?.*status=AWAITING_SELLER_DECISION/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page
+          .getByText(/^1 orders?$/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        const row = page.getByRole('link', { name: /^SD-\d{4}-\d{2}-\d{6}$/ }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(row, { after: 1400 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        /*
+          GATED ON THE STATUS ITSELF, which is the whole premise. The
+          page renders perfectly for an order in any status, so waiting
+          for the header would pass on a parcel this video has nothing
+          to say about — and the seeding's own guard is a different
+          process.
+        */
+        const chip = page.getByText('Awaiting seller decision', { exact: true }).first();
+        await chip.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async stuck({ page, stage }) {
+        // The sane half of the Actions card: one button, and it is the
+        // wrong one. Scrolled by its own heading so the card above it
+        // does not fill the frame (`sectionToTop`, O3's lesson).
+        const actions = ooSection(page, 'Actions');
+        await sectionToTop(page, actions);
+        await stage.dwellOn(actions.locator('.oc-group').first(), 3600);
+      },
+
+      async panel({ page, stage }) {
+        // The panel's own body copy — "audited CRITICAL", "set once and
+        // never cleared" — which is what the narration is reading.
+        await stage.dwellOn(page.locator('.oc-god-panel__body').first(), 3800);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: 'Force-mutate…', exact: true }).first(),
+          { after: 1600 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('heading', { name: 'God-mode override' })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 3200);
+      },
+
+      async consequences({ page, stage }) {
+        /*
+          THE BANNER, and it is the most important frame in the video.
+          Gated on the sentence rather than on `.oo-god__banner`: the
+          banner would render with any copy in it, and this scene is
+          about these particular words.
+        */
+        const banner = page
+          .getByRole('dialog')
+          .getByText(/same consequences as any other change except stock/i)
+          .first();
+        await banner.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.getByRole('dialog').locator('.oo-god__banner').first(), 4200);
+      },
+
+      async waybill({ page, stage }) {
+        // The same paragraph's last two clauses. Haloed again rather
+        // than moved on, because there is nowhere else on this screen
+        // that says it.
+        await stage.dwellOn(page.getByRole('dialog').locator('.oo-god__banner').first(), 4200);
+      },
+
+      async whitelist({ page, stage }) {
+        /*
+          THE PAYMENT GROUP, not the Recipient one above it. Three rows
+          rather than eleven — so the halo fits the frame — and every
+          one of them carries a real `was:` value, which is what the
+          narration is pointing at. It is also the group where getting
+          this wrong costs money.
+        */
+        await stage.dwellOn(wlGroup(page, 'Payment + value'), 3800);
+      },
+
+      async field({ page, stage }) {
+        const row = wlRow(page, 'Internal notes');
+        await stage.clickIt(row.locator('label.sk-check__row').first(), { after: 900 });
+        /*
+          The new-value control carries `aria-label="New internal
+          notes"` — and `getByLabel` is a case-insensitive SUBSTRING, so
+          a plain 'Internal notes' matches the CHECKBOX as well and dies
+          on strict mode. A regex against the whole accessible name is
+          the only form that means one of them.
+        */
+        await stage.typeIn(
+          page.getByRole('dialog').getByLabel(/^New internal notes$/),
+          'Seller rang: customer answered on their own line and wants it. Forced to confirmed.',
+        );
+      },
+
+      async status({ page, stage }) {
+        const box = page
+          .getByRole('dialog')
+          .locator('.oc-critical-box')
+          .filter({
+            has: page.getByText('Bypasses the state-machine matrix.'),
+          });
+        await stage.clickIt(box.locator('label.sk-check__row').first(), { after: 1000 });
+        const target = page.getByRole('dialog').getByLabel(/^Target status$/);
+        await target.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.point(target, { settle: 500 });
+        await target.selectOption('CONFIRMED');
+        await page.waitForTimeout(900);
+        await stage.dwellOn(box, 2400);
+      },
+
+      async reason({ page, stage }) {
+        await stage.typeIn(
+          page.locator('#god-reason'),
+          'Seller confirmed by phone that the customer wants this order; the pause has no edge to confirmed.',
+        );
+        // The counter, which is the thing the narration is explaining.
+        await stage.dwellOn(page.getByRole('dialog').locator('.oc-counter').first(), 2600);
+      },
+
+      async ack({ page, stage }) {
+        /*
+          THE SECOND `.oc-critical-box` — the status one above is the
+          first, so an unscoped reach is the wrong box. Filtered on its
+          own words rather than by position.
+        */
+        const box = page
+          .getByRole('dialog')
+          .locator('.oc-critical-box')
+          .filter({
+            has: page.getByText(/I acknowledge the data-integrity risk/),
+          });
+        await stage.dwellOn(box, 3000);
+        await stage.clickIt(box.locator('label.sk-check__row').first(), { after: 900 });
+      },
+
+      async typed({ page, stage }) {
+        await stage.clickIt(page.getByRole('dialog').getByRole('button', { name: /Continue/ }), {
+          after: 1400,
+        });
+        const summary = page.getByRole('dialog').locator('.oc-summary').first();
+        await summary.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(summary, 2600);
+        await stage.typeIn(
+          page.getByRole('dialog').getByLabel(/^Type FORCE-MUTATE to confirm$/),
+          'FORCE-MUTATE',
+        );
+      },
+
+      async press({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Force-mutate this order' }),
+          { after: 1600 },
+        );
+        /*
+          GATED ON THE RESULT PANEL, which only exists on success. The
+          dialog closing would be satisfied by a refusal landing on the
+          edit stage just as well.
+        */
+        const result = page.getByText('Force-mutation applied', { exact: true }).first();
+        await result.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(godResult(page), 2600);
+      },
+
+      async result({ page, stage }) {
+        await stage.dwellOn(godResult(page), 4000);
+      },
+
+      async claim({ page, stage }) {
+        // The three buttons as a row: force, release, restore.
+        await stage.dwellOn(page.locator('.oc-god-panel').first().locator('.oo-row').first(), 3400);
+      },
+
+      async release({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: 'Release reservations…', exact: true }).first(),
+          { after: 1400 },
+        );
+        const consequence = page.getByRole('dialog').locator('.sk-confirm__consequence').first();
+        await consequence.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(consequence, 4000);
+      },
+
+      async badge({ page, stage }) {
+        /*
+          THE CANCEL BELONGS TO THIS SCENE, NOT THE LAST ONE. A scene's
+          actions run and then it HOLDS for the rest of its narration, so
+          cancelling at the end of `release` would have shut the dialog
+          while four seconds of narration about it still had to play.
+          A dialog has to survive the sentence that is about it.
+
+          Cancelled rather than pressed, on purpose: a forced CONFIRMED
+          holds exactly the reservations a real confirmation would, so
+          releasing them here would be the wrong act. The narration says
+          what the button is FOR, which is the other direction.
+
+          Through the FOOTER's Cancel: every dialog header carries an X
+          with `aria-label="Close"`, so an unscoped reach by that name
+          matches two.
+        */
+        await stage.clickIt(dialogFoot(page).getByRole('button', { name: 'Cancel' }), {
+          after: 1000,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 20_000 });
+        const badge = page.locator('.oc-override').first();
+        await badge.waitFor({ state: 'visible', timeout: 25_000 });
+        await badge.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
+        await page.waitForTimeout(700);
+        await stage.dwellOn(badge, 3600);
+      },
+
+      async outro({ page, stage }) {
+        // The history, where the forced edge now sits beside every
+        // ordinary one.
+        const history = ooSection(page, 'Full history');
+        await sectionToTop(page, history);
+        await stage.dwellOn(history.locator('.oo-card').first(), 3600);
+      },
+    },
+  },
+
   /*
     P5 — THE FIRST ADMIN FLOW, and a TOUR: it presses nothing that
     changes anything. Ten screens, each one visited so the narration can
@@ -13365,6 +13822,204 @@ export const FLOWS = {
           section.getByText(/Everything is on the system default|keys are overridden/i).first(),
           3400,
         );
+      },
+    },
+  },
+  /*
+    O4 — changing how the platform behaves.
+
+    SIXTEEN THOUSAND PIXELS OF PAGE. `/settings` renders all 169 rows at
+    once, grouped, which makes it three times the longest screen in the
+    console — so every scene reaches a ROW by its plain-English name and
+    uses `sectionToTop` for the group headings. Nothing is haloed by
+    position and nothing is scrolled by a pixel count.
+
+    ONE ROW IS EDITED AND PUT BACK ON CAMERA. It is a THRESHOLD
+    (`tracking.public_lookup_rate_limit_per_min`), chosen because
+    nothing physical happens behind it: no van, no stock, no money. The
+    yes-or-no editor — the best thing on this page — is shown on the
+    NIGHTLY RE-ATTEMPT switch, which dispatches vans at our cost, and
+    that dialog is opened and CANCELLED. `systemSettingsWorldFor` puts
+    the threshold back and clears its last-edited stamp, because the
+    stamp APPEARING is what one of the scenes is about.
+  */
+  'change-a-system-setting': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/settings', settingRow(ctx.page, O4_THRESHOLD_NAME));
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'System settings', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await settingRow(page, O4_THRESHOLD_NAME).waitFor({ state: 'attached', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle, .sk-sh__note').first(), 3400);
+      },
+
+      /*
+        A GROUP HEADING, not the first section: "Charges" is already on
+        screen under the page title, so the line about grouping would be
+        spoken over a frame that has not moved. "Cash on delivery" is
+        the second group and is a scroll away.
+      */
+      async groups({ page, stage }) {
+        const section = settingGroup(page, 'Cash on delivery');
+        await sectionToTop(page, section);
+        await stage.dwellOn(section.locator('.sk-sh').first(), 3200);
+      },
+
+      async row({ page, stage }) {
+        const row = settingRow(page, O4_THRESHOLD_NAME);
+        const n = await row.count();
+        if (n !== 1) throw new Error(`${n} rows match "${O4_THRESHOLD_NAME}", expected 1.`);
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(row, 3400);
+      },
+
+      /*
+        THE TOOLTIP IS A HOVER, so the pointer has to STAY on the (i).
+        `stage.dwellOn` would do that, but it would also hold the halo
+        without ever checking the card opened — and a tooltip that did
+        not open looks exactly like one that did from a passing step.
+        Point, assert, hold, clear.
+      */
+      async tooltip({ page, stage }) {
+        const info = settingRow(page, O4_THRESHOLD_NAME).locator('button.sss-info').first();
+        await stage.point(info, { settle: 400 });
+        const card = page.locator('[role="tooltip"]').first();
+        await card.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(3200);
+        await stage.clearHalo();
+      },
+
+      async secret({ page, stage }) {
+        const row = settingRow(page, O4_SECRET_REF_NAME);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(row.locator('.ac-row__value').first(), 3600);
+      },
+
+      async readonly({ page, stage }) {
+        const row = settingRow(page, O4_READ_ONLY_NAME);
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(row, 3600);
+      },
+
+      async switch({ page, stage }) {
+        await stage.clickIt(
+          settingRow(page, O4_SWITCH_NAME).getByRole('button', { name: 'Edit' }),
+          { after: 1600 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.locator('.scf-now').first(), 3400);
+      },
+
+      /*
+        OPENED AND CANCELLED, and the narration says so. Switching the
+        nightly runner on sends vans at our cost (CUR-10's amendment),
+        and a tutorial that flips it to show a dropdown working would be
+        teaching the exact thing its own copy warns about.
+      */
+      async compare({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.dwellOn(dialog.locator('.scf-list').first(), 3400);
+        await dialogActions(page).getByRole('button', { name: 'Cancel' }).first().click();
+        await dialog.waitFor({ state: 'detached', timeout: 20_000 });
+      },
+
+      async number({ page, stage }) {
+        await stage.clickIt(
+          settingRow(page, O4_THRESHOLD_NAME).getByRole('button', { name: 'Edit' }),
+          { after: 1600 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(dialog.locator('.sss-explain').first(), 3200);
+      },
+
+      async type({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/^Value$/).first(), '60', {
+          clear: true,
+          after: 800,
+        });
+      },
+
+      async saved({ page, stage }) {
+        await stage.clickIt(dialogActions(page).getByRole('button', { name: /^Save|Saving/ }), {
+          after: 2200,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        /*
+          GATED ON THE STAMP, which the seeding deliberately clears — the
+          row's VALUE is the only other thing that moves and a gate on
+          it would pass the instant the cache updated, before the stamp
+          the line is about had rendered.
+        */
+        const row = settingRow(page, O4_THRESHOLD_NAME);
+        await row.getByText(/^Last edit:/).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 3400);
+      },
+
+      async live({ page, stage }) {
+        await stage.dwellOn(
+          settingRow(page, O4_THRESHOLD_NAME).locator('.ac-row__value').first(),
+          3400,
+        );
+      },
+
+      async back({ page, stage }) {
+        await stage.clickIt(
+          settingRow(page, O4_THRESHOLD_NAME).getByRole('button', { name: 'Edit' }),
+          { after: 1400 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await stage.typeIn(dialog.getByLabel(/^Value$/).first(), O4_THRESHOLD_VALUE, {
+          clear: true,
+          after: 600,
+        });
+        /*
+          THE WAIT HERE IS THE PAGE, not the flow. Saving invalidates the
+          whole 169-row list and the refetch takes about ten seconds
+          under video recording, which makes this the longest scene in
+          the video by a distance — `compose.mjs` then runs its picture
+          about 1.7x fast. That is the right thing to compress (most of
+          it is a static page waiting), but it is why the click's own
+          `after` and the closing dwell are kept short rather than
+          generous.
+        */
+        await stage.clickIt(dialogActions(page).getByRole('button', { name: /^Save|Saving/ }), {
+          after: 1200,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        const row = settingRow(page, O4_THRESHOLD_NAME);
+        await row
+          .locator('.ac-row__value')
+          .filter({ hasText: new RegExp(`^${O4_THRESHOLD_VALUE}$`) })
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(400);
+        await stage.dwellOn(row, 2200);
+      },
+
+      async outro({ page, stage }) {
+        const section = settingGroup(page, 'Charges');
+        await sectionToTop(page, section);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
       },
     },
   },

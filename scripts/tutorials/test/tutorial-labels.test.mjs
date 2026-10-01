@@ -101,6 +101,19 @@ describe('a label one file types and another file clears', () => {
     );
   });
 
+  it('O4 types back the value its seeding resets to', async () => {
+    const [flows, seed] = await Promise.all([read('flows.mjs'), read('seed-demo-data.mjs')]);
+    const typed = declared(flows, 'O4_THRESHOLD_VALUE');
+    const reset = /const O4_SETTING_VALUE =\s*(\d+);/.exec(seed);
+    assert.ok(reset !== null, 'O4_SETTING_VALUE is not a plain number literal in the seed.');
+    assert.equal(
+      typed,
+      reset[1],
+      'The value O4 types back on camera is not the one its seeding resets to, so the take ends ' +
+        'on a system setting nobody meant to leave there — and the next run quietly corrects it.',
+    );
+  });
+
   it('O3 links the courier accounts its seeding creates', async () => {
     const [flows, seed] = await Promise.all([read('flows.mjs'), read('seed-demo-data.mjs')]);
     const labels = declaredList(seed, 'O3_ACCOUNT_LABELS');

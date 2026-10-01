@@ -753,6 +753,43 @@ created_at ASC` — a released call goes in front of every unstarted one
   clears only its own stack's, which is also why it is safe to run while
   somebody else is signing in: `SCAN` and `DEL` are per-database, and that
   helper deletes every non-BullMQ key it finds.
+- **AFTER A SIGN-IN, REACH A PAGE BY CLICKING ITS NAV LINK — NOT `page.goto`
+  (O4, 2026-10-01).** FE-1 keeps the access token in BROWSER MEMORY and nowhere
+  else, so a full page load throws it away: the app re-boots, resolves identity
+  from the `__Host-` cookie, and the client has to fetch another token before
+  anything it renders can ask the API. Normally that race is invisible. Under
+  VIDEO RECORDING it is not — O4's prologue came back
+  `API 401 (UNAUTHORIZED): Bearer token required` on `/settings` four times
+  running, while the identical flow passed every `--check` pass, because a check
+  records no video and the page is fast enough to win. **Pressing the page's own
+  Retry does not help**: it re-fires the same token-less request, and the shot
+  shows the button wearing its focus ring over the same error. Clicking a nav
+  link keeps the SPA alive, so there is no race to lose — and it is what a
+  person does. `signInAndOpen(ctx, path, probe)` in `flows.mjs` does it, falls
+  back to `goto` for a page with no nav entry, and asserts the URL afterwards
+  (`signIn` returns the moment the URL says `/dashboard` while the dashboard is
+  still fetching, so a `goto` issued at that instant can be overtaken by the
+  client-side navigation still finishing — O4's third take filmed a perfectly
+  healthy Overview page under a line about system settings).
+- **`.sk-dialog__foot` only exists when the footer is passed to `Dialog` as its
+  `footer` PROP.** A dialog whose submit is a `type="submit"` has to render
+  `<DialogFooter>` INSIDE its `<form>` — `/settings`' edit dialog does — and
+  `DialogFooter` is `.sk-dialog__actions` with no `.sk-dialog__foot` around it.
+  `dialogFoot` then waits thirty seconds for a Cancel button that is plainly on
+  screen. `dialogActions(page)` reaches `.sk-dialog__actions`, which exists in
+  BOTH shapes; prefer it in any new flow.
+- **A `context.close()` flush can take forty-five minutes and still finish.**
+  The note above says a raw file growing past 120 MB is the hang; O4's take
+  printed `wall clock 3039.6s` for a three-minute recording and then composed
+  normally. So size is the tell, not elapsed time: **12 MB and climbing slowly
+  is a slow flush; 120 MB is the hang.** Killing at twenty minutes costs a take
+  that was going to work.
+- **A long wait inside a scene is COMPRESSED by `compose.mjs`, and that is
+  usually right.** O4's `back` scene waits about ten seconds for a 169-row list
+  to refetch, so its picture is 21s against a 12.4s clip and the composer runs
+  it at x0.62. The visible actions sit at the start and the rest is a static
+  page, so the speed-up is invisible — but check the factor rather than assuming
+  it: x0.6 over a scene that is mostly MOVEMENT would look wrong.
 - The recorder writes `out/verify<stack suffix>/<slug>-failure.png` when a flow
   breaks (`out/verify/` on stack `a`, `out/verify-b/` on stack `b`). It is
   usually enough on its own — the failures during this build were all visible

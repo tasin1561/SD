@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 78 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O3 and P5.** The 12 left are all in the admin app: 2 are
+**90 tutorials. 79 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O4 and P5.** The 11 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (78):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (79):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N9** and **O1–O3**.
+**L1–L3**, **M1–M2**, **N1–N9** and **O1–O4**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -46,19 +46,19 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**THE NEXT ENTRY IS O4 — "Changing how the platform behaves"**, and K,
-L1–L3, M1, M2 and O1–O3 are done. O4 is `ready` — no new demo data — and the
-one thing already measured about it is that **`/settings` is SIXTEEN THOUSAND
-PIXELS TALL**: it renders every group at once, three times the next longest
-screen in the console. `sectionToTop` (added for O3, in `flows.mjs`) is the
-tool for that — reach a group by its heading and put it under the toolbar,
-rather than haloing a row and letting `scrollIntoViewIfNeeded` choose. Whatever
-it edits has to be put back by its seeding, and a setting with a PHYSICAL
-consequence (the NDR cap, the auto-pickup switches) is the wrong thing to
-demonstrate on: pick one that decides a display or a threshold. O3 overrode
-`pricing.flat_delivery_fee` for exactly that reason and the same argument
-applies one level up — but note the two videos must not edit the SAME key, or
-O4's take and O3's seeding are arguing about one row.
+**THE NEXT ENTRY IS O5 — "Staff, and telling everyone something"**, and K,
+L1–L3, M1, M2 and O1–O4 are done. O5 FINISHES SECTION O and is the only one of
+the five that needs a world: `/staff` wants somebody to act on who is NOT
+`tutorial-ops` (that is the account the camera is signed in as, and
+deactivating it ends the take), so its seeding has to make a second staff user
+and put them back — invited, role changed, deactivated — on every run. The
+broadcast half is `ready` as it stands: preview, then send, and the count you
+saw is carried into the send so the server refuses if the population moved.
+**Read the TWO navigation traps O4 paid for before writing its prologue**
+(below, in O4's entry): after a sign-in, reach a page by CLICKING ITS NAV LINK,
+never `page.goto`, and reach a dialog's buttons through `.sk-dialog__actions`
+rather than `.sk-dialog__foot`. `signInAndOpen` in `flows.mjs` does the first
+for you.
 
 **M3–M6 ARE SKIPPED FOR NOW, with L4, and the reason for M3 is worth reading
 before anybody picks it up.** M3 is "Run a cycle now" on the tracking poll, and
@@ -4071,17 +4071,62 @@ but it is the thing somebody will get wrong, so the video says it out loud.
 **No bug found.** Fifteen scenes, every one green on the third check, and the
 only defects were in the flow.
 
-### O4. Changing how the platform behaves · `ready` · **dangerous**
+### O4. Changing how the platform behaves · **FILMED** — `change-a-system-setting.mp4` · **dangerous**
 
 **Promise** — you can change a system setting and know what it will do.
-**Length** 4 min. **Needs** nothing.
-**Covers** `/settings`: grouped by what a setting decides rather than by its raw
-category, each row leading with a plain-English name and an example, the raw key
-underneath for searching a log, and the type-aware editor. Sensitive values start
-masked and need an explicit reveal.
+**Length** 2 min 56 s of narration over 14 scenes. **Needs**
+`seed-demo-data.mjs change-a-system-setting` (`systemSettingsWorldFor` — a
+reset, not a world).
+**Covers** `/settings`: grouped by what a setting DECIDES rather than by its raw
+category, each row leading with a plain-English name, the type that decides the
+editor, the value now and the raw key underneath for searching a log; the (i)
+tooltip; the yes-or-no editor that says what each answer DOES, opened on the
+nightly re-attempt switch and CANCELLED; then one threshold edited, saved, read
+back with its new last-edited stamp, and put straight back.
 **Cost of getting it wrong:** these are runtime behaviour switches with no
 deploy between typing and effect — the reason that is the point is also the
 reason it is dangerous.
+
+**THE ENTRY'S LAST LINE WAS WRONG AND THE VIDEO SAYS SOMETHING BETTER.**
+"Sensitive values start masked and need an explicit reveal" describes a control
+that exists in the component and has nothing to show: **none of the 169 settings
+on this box is marked sensitive**, and the reason is the good one. The only rows
+that look like secrets are `tracking.webhook_secret_ref*`, and what they hold is
+the NAME of the environment variable the real value lives in — CUR-1's
+discipline, because a secret in the database is a secret in every backup of it.
+So the scene is about why there is nothing to mask rather than about the mask.
+**If a sensitive setting is ever seeded, that scene is worth revisiting**; until
+then, filming the reveal would need one invented for the camera.
+
+**One row edited, and put back ON CAMERA.**
+`tracking.public_lookup_rate_limit_per_min` — how many times a minute one
+visitor may look up a parcel — chosen because nothing physical sits behind it:
+no van, no stock, no money, which the NDR cap and the auto-pickup switches on
+the same page cannot say. It is also NOT seller-overridable, so it cannot
+collide with the key O3 overrides; two videos editing one row is two seedings
+arguing about what it should be. `systemSettingsWorldFor` puts it back AND
+clears `lastEditedAt`, because the stamp APPEARING is what one scene is about —
+through Prisma rather than the admin endpoint, since the endpoint would write an
+audit row saying a person changed it and nobody did.
+
+**The trap, and it is a general one: `.sk-dialog__foot` only exists when the
+footer is passed to `Dialog` as its `footer` PROP.** The settings edit dialog
+cannot do that — its Save is a `type="submit"` and has to be inside the
+`<form>` — so it renders `<DialogFooter>` among the children, which is
+`.sk-dialog__actions` with no `.sk-dialog__foot` around it. `dialogFoot` then
+waits thirty seconds for a Cancel button that is plainly on screen.
+`dialogActions` reaches `.sk-dialog__actions`, which exists in BOTH shapes;
+prefer it in any new flow.
+
+**The yes-or-no editor is the best thing on the page and it is deliberately not
+pressed.** It is a list rather than a tick box: the selected answer says what it
+DOES with an example, and every answer is listed underneath a line each so they
+are compared before choosing. It is shown on `courier.ndr_runner_enabled`, which
+dispatches vans at our cost (CUR-10's 2026-08-05 amendment) — so the dialog is
+opened, read and cancelled, and the narration says that is what is happening.
+
+**No bug found.** Fourteen scenes, green on the second check; the one defect was
+the footer selector above.
 
 ### O5. Staff, and telling everyone something · `ready` · **dangerous**
 

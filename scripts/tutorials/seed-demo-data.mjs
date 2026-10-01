@@ -5854,6 +5854,62 @@ async function sellerRoutingWorldFor(slug, staffToken) {
 }
 
 /**
+ * The one system setting O4 edits on camera, and what it goes back to.
+ *
+ * Chosen because it decides a THRESHOLD and nothing physical: no van is
+ * dispatched, no stock is held and no money moves differently because
+ * of it. The NDR cap and the auto-pickup switches are on the same page
+ * and are exactly the wrong thing to demonstrate on.
+ *
+ * It is also NOT seller-overridable, so it cannot collide with the key
+ * O3 overrides — two videos editing one row is two seedings arguing
+ * about what it should be.
+ */
+const O4_SETTING_KEY = 'tracking.public_lookup_rate_limit_per_min';
+const O4_SETTING_VALUE = 30;
+
+/**
+ * O4's world \u2014 "Changing how the platform behaves".
+ *
+ * There is no world to build: `/settings` is 169 rows the seed already
+ * provisions. This puts back the ONE row the take edits, and clears the
+ * "Last edit" stamp with it \u2014 the stamp APPEARING is what the saved
+ * scene is about, so a row that arrives already carrying one films a
+ * line about a change that has not happened yet.
+ *
+ * Through Prisma rather than the admin endpoint on purpose: the
+ * endpoint writes an audit row saying a person changed this, and
+ * nobody did. The take's own edits are audited exactly as they should
+ * be; the tidying up afterwards is not an operator's act.
+ */
+async function systemSettingsWorldFor(slug) {
+  if (slug !== 'change-a-system-setting') return;
+
+  const row = await prisma.systemSetting.findUnique({
+    where: { key: O4_SETTING_KEY },
+    select: { valueInt: true, valueType: true, isEditableByAdmin: true },
+  });
+  if (row === null) {
+    throw new Error(`"${O4_SETTING_KEY}" is not in system_settings \u2014 run the db seed.`);
+  }
+  if (row.valueType !== 'INT' || !row.isEditableByAdmin) {
+    throw new Error(
+      `"${O4_SETTING_KEY}" is ${row.valueType} and ${row.isEditableByAdmin ? '' : 'not '}editable ` +
+        'by an admin; O4 types a number into it and presses Save.',
+    );
+  }
+  if (row.valueInt === O4_SETTING_VALUE) {
+    console.log(`  \u00b7 ${O4_SETTING_KEY} is already ${O4_SETTING_VALUE}`);
+  } else {
+    console.log(`  \u00b7 ${O4_SETTING_KEY} put back to ${O4_SETTING_VALUE} (was ${row.valueInt})`);
+  }
+  await prisma.systemSetting.update({
+    where: { key: O4_SETTING_KEY },
+    data: { valueInt: O4_SETTING_VALUE, lastEditedAt: null, lastEditedByStaffId: null },
+  });
+}
+
+/**
  * M2's world — "Is the courier integration healthy".
  *
  * ── IT WRITES NOTHING ────────────────────────────────────────────────
@@ -6973,6 +7029,7 @@ async function main() {
   await leadsWorldFor(slug);
   await sellerAccountWorldFor(slug, staffToken);
   await sellerRoutingWorldFor(slug, staffToken);
+  await systemSettingsWorldFor(slug);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);
