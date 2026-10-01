@@ -188,7 +188,19 @@ export async function record(slug, { check = false } = {}) {
   try {
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
     await stage.marker(MARKER_IDLE);
-    await flow.prologue({ page, stage, baseUrl: BASE_URL, seller: SELLER });
+    /*
+      ONE CONTEXT OBJECT, shared by the prologue and every step.
+
+      They used to be two separate literals, so a prologue could not
+      hand anything forward — and L2 needs to: a cycle count is recorded
+      per (variant, bin, batch) and those ids are minted per box, so the
+      flow reads them from the seed's fixture ONCE at sign-in rather
+      than in each of the three steps that type them. Anything a step
+      assigns is visible to the steps after it, which is the same shape
+      the prologue already had with `page` and `stage`.
+    */
+    const ctx = { page, stage, baseUrl: BASE_URL, seller: SELLER };
+    await flow.prologue(ctx);
     await stage.marker(MARKER_IDLE);
     await page.waitForTimeout(700);
 
@@ -200,7 +212,7 @@ export async function record(slug, { check = false } = {}) {
       await stage.marker(colour);
       const wallStart = Date.now();
 
-      await flow.steps[step.id]({ page, stage, baseUrl: BASE_URL });
+      await flow.steps[step.id](ctx);
 
       // Hold the scene for the clip plus a tail. The clip is the floor,
       // never the ceiling — a long action simply makes a long scene.

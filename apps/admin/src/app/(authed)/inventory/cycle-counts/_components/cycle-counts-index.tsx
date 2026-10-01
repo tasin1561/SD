@@ -446,10 +446,19 @@ function CountDetail({
                     onChange={(e) => setBatchId(e.target.value)}
                   />
                 </FieldGrid>
+                {/*
+                  ITS OWN HINT. This carried the BIN AND BATCH one —
+                  "Required — a count is per bin and batch" — copied
+                  down from the two fields above it, so an optional
+                  free-text box told the counter it was required, and
+                  told them so with a sentence about two other fields.
+                  Found by filming it (L2, 2026-10-01); nothing throws,
+                  and the form submits perfectly well without it.
+                */}
                 <TextArea
                   id="cc-notes"
                   label="Notes"
-                  hint="Required — a count is per bin and batch"
+                  hint="Optional. Kept on the line, and read by whoever has to explain the difference."
                   rows={2}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
