@@ -12005,12 +12005,35 @@ export const FLOWS = {
         );
         await dialog.waitFor({ state: 'detached', timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
+        /*
+          A WITHDRAWN BILL IS NOT IN THE DEFAULT LIST, and that is not a
+          bug: the list shows LIVE bills, and a void is shown only when
+          somebody asks for it by status. So the filter has to be driven
+          — which is also the honest picture, because the row still
+          EXISTS. A void is not a delete; the wallet ledger is
+          append-only and the bill is kept as the record of what was
+          withdrawn.
+
+          And NOT `billableFreightRow`: that one is defined as the row
+          that still has a Void button, which is exactly what this press
+          takes away.
+        */
+        await page
+          .getByLabel(/^Status$/)
+          .first()
+          .selectOption('VOIDED');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const withdrawn = page
+          .getByRole('row')
+          .filter({ hasText: /Withdrawn/i })
+          .first();
+        await withdrawn.waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(900);
-        await stage.dwellOn(billableFreightRow(page), 3200);
+        await stage.dwellOn(withdrawn, 3200);
       },
 
       async outro({ page, stage }) {
-        await stage.dwellOn(moneyKpi(page, 'Waived'), 3400);
+        await stage.dwellOn(moneyKpi(page, 'Outstanding'), 3400);
       },
     },
   },

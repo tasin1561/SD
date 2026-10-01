@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 76 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N7, N9, O1–O2 and P5.** The 14 left are all in the admin app: 2 are
+**90 tutorials. 77 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N7, N9, O1–O2 and P5.** The 13 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,7 +32,7 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (76):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (77):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
 **L1–L3**, **M1–M2**, **N1–N7**, **N9** and **O1–O2**.
 Every one has its own entry below saying what it covers and what its seeding
@@ -111,9 +111,11 @@ to Kolkata, a return that came back to the wrong building. Do NOT film
 Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
 teach the wrong habit.
 
-**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N8 —
-"Freight bills".** N1–N7 and N9 are filmed, which is the whole of the money
-desk. **N8 has no narration or flow yet**, and neither does any of P1–P4 — N5 and N6 landed
+**ON STACK B (the second agent, sections N and P): SECTION N IS DONE —
+N1–N9 are all filmed, and N10 is `impractical locally`. THE NEXT ENTRY IS P1 —
+"God mode".** **None of P1–P4 has narration or a flow yet**, and P4 is now
+`partly filmable` rather than impractical (read its entry: the preview half of
+`/warehouse/collapse` is the product's own first step and moves nothing) — N5 and N6 landed
 in a commit titled "N3 and N4", which is the slug-against-number confusion
 worth expecting rather than a mistake in the code (`record-a-courier-payout`
 is N5, `move-money-by-hand` is N6).
@@ -3821,15 +3823,60 @@ entry: Prettier breaks a `const NAME = '…';` whose line would pass 100
 characters, and the check then reported the constant as declared ZERO times —
 which reads as a rename and is a line length.
 
-### N8. Freight bills · `needs demo data` · **dangerous**
+### N8. Freight bills · **FILMED** — `bill-the-freight.mp4`
 
 **Promise** — you can bill a consignment's freight and correct one you got
 wrong.
-**Length** 3 min. **Prerequisites** C1's consignment.
+**Length** 3 min 11 s of narration over 14 scenes. **Prerequisites** C1's
+consignment. **Needs** D0 plus the CONSIGNMENT world.
 **Covers** `/freight`: recording a bill in the currency it was agreed in, how
 it is split across lines by weight, settling and waiving — and **voiding**,
 because a wrong bill is withdrawn and re-raised, never edited. Editing in place
 would leave the wallet holding a figure the bill no longer claims.
+
+**THE TAKE RECORDS A BILL AND THEN WITHDRAWS IT, and the withdrawal is both the
+last thing it teaches and the whole of its cleanup.** FRT-7 made the
+one-live-bill-per-receipt index PARTIAL (`WHERE voided_at IS NULL`) for exactly
+this, so a withdrawn bill blocks nothing and the next take bills the same
+arrival again. `withdrawTutorialFreightBills` exists only for the run that did
+NOT finish — a check that died after the record leaves a LIVE bill on the only
+billable arrival, and the next take's form draws that option DISABLED with
+nothing to say why. It withdraws through the product's own endpoint rather than
+deleting: a void refunds what the bill charged, and a hand-deleted row would
+leave that debit on the wallet with nothing to explain it.
+
+**WHICH ARRIVAL IS FREE IS NOT OBVIOUS, and it is why this slug is in
+`CONSIGNMENT_SLUGS` and deliberately NOT in `FREIGHT_SLUGS`.** C0 builds two
+consignments; E5's world raises a PAY_LATER bill against the landed one's India
+arrival, which is the only billable stop there is. With it present this video
+has nothing to choose.
+
+**Four things the screen taught that guessing would not have.**
+
+- **`selectOption({ index: 1 })` picked the BANGLADESH INTAKE.** The select
+  offers every counted stop, because a pay-in-advance bill hangs on the Dhaka
+  count (FRT-5) — so the first real option is `RSH-CN-FLYING`'s intake, and
+  choosing it is refused at the press with `FREIGHT_NOT_AN_ARRIVAL`, three
+  scenes after the mistake, while the form had been showing a warning about it
+  the whole time. The arrival is found by its own label now.
+- **PAY_NOW LEAVES NOTHING TO FILM.** On the platform default the bill is
+  debited in full at record time, so the row comes back SETTLED with its
+  Actions column reading "Closed" — no Settle, no Waive, no Void, and four
+  scenes with nothing to press. The flow pins PAY_LATER, which bills the same
+  stop, and the narration says what the choice means rather than "leave it
+  alone".
+- **The void dialog's field is "What was wrong with it", not "Reason".** The
+  WAIVE dialog next door is the one whose field is called Reason; the two are
+  worded apart on purpose, because the acts are different.
+- **A WITHDRAWN BILL IS NOT IN THE DEFAULT LIST.** The closing scene drives the
+  Status filter to Voided — which is also the honest picture, since the row
+  still exists and the narration's last line is that the bill is KEPT. They
+  accumulate one per take, by design and in support of that line; the scene
+  reaches the newest.
+
+**Settle and waive are OPENED, READ AND CANCELLED**, each shut by the scene
+after it so the dialog survives the sentence about it (the N7 lesson). The two
+dialogs state the difference between them better than a narrator can.
 
 ### N9. Is the money picture true · **FILMED** — `is-the-money-picture-true.mp4`
 
