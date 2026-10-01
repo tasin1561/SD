@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 72 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N5, N9 and P5.** The 18 left are all in the admin app: 2 are
+**90 tutorials. 73 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N6, N9 and P5.** The 17 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (72):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (73):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N5** and **N9**.
+**L1–L3**, **M1–M2**, **N1–N6** and **N9**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -63,10 +63,10 @@ to Kolkata, a return that came back to the wrong building. Do NOT film
 Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
 teach the wrong habit.
 
-**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N6 —
-"Moving money in or out of a seller's wallet by hand".** N1–N5 and N9 are
-filmed. `moneyDeskWorldFor` is the shared world N2–N7 draw on, and the narration
-and flow for **N6** are written and not yet checked — N5 and N6 landed
+**ON STACK B (the second agent, sections N and P): THE NEXT ENTRY IS N7 —
+"The bank book".** N1–N6 and N9 are filmed. `moneyDeskWorldFor` is the shared
+world N2–N7 draw on; **N7 and N8 have no narration or flow yet**, and neither
+does any of P1–P4 — N5 and N6 landed
 in a commit titled "N3 and N4", which is the slug-against-number confusion
 worth expecting rather than a mistake in the code (`record-a-courier-payout`
 is N5, `move-money-by-hand` is N6).
@@ -3670,14 +3670,33 @@ neighbours were using.**
 rows (prefix `UTR-TUT-`) and the wallet entries its credit wrote, refusing
 rather than guessing if those are no longer the NEWEST entries on the wallet.
 
-### N6. Moving money in or out of a seller's wallet by hand · `needs demo data` · **dangerous**
+### N6. Moving money in or out of a seller's wallet by hand · **FILMED** — `move-money-by-hand.mp4`
 
 **Promise** — you can correct a wallet with a reason the seller will read.
-**Length** 3 min. **Prerequisites** N1.
+**Length** 2 min 41 s of narration over 13 scenes. **Prerequisites** N1.
+**Needs** D0 plus `moneyDeskWorldFor`.
 **Covers** `/wallet-transfers`: a staff debit or credit, the reason of at least
 twenty characters that **the seller sees in their own ledger**, and the separate
 internal note that only the audit keeps. The distinction to teach: this **moves
 cash**; an adjustment does not.
+
+**THE ONLY ENTRY IN N THAT WAS GREEN ON ITS FIRST CHECK**, and the reason is
+worth naming: this page already says in its own copy every single thing the
+narration says. The subtitle is the intro's line, "Not a correction: this moves
+real money between the seller and us" is the second scene, the direction select
+reads as two sentences rather than two words, the debit hint says what happens
+past what they hold, both text areas carry a hint saying who reads them, and the
+preview answers in a SENTENCE before it answers in figures. A video over a screen
+that explains itself needs no scene that is only the narrator's opinion — which
+is the opposite of what N3 and N4 needed, and it shows in how little had to be
+written.
+
+**The take SPENDS the transfer and the product cannot withdraw one** — a mistake
+is put right with a transfer the OTHER way, which is the lesson of the video, so
+rewinding it on camera would teach the opposite. `unpostStaffTransfers` removes
+the take's own ledger row and the TWO bank entries its attribution pair wrote;
+they are the newest rows on the wallet, so nothing downstream of them has a
+running balance to be made wrong.
 
 ### N7. The bank book · `needs demo data` · **dangerous**
 
