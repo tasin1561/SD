@@ -3962,17 +3962,33 @@ close — where **refund writes a credit to the seller's wallet inside the same
 transaction as the close**. Also settling a reseller-store dispute, which moves
 money between two wallets as one pair and refuses the ordinary refund path.
 
-### P4. Collapsing a warehouse's bins · `impractical locally` · **dangerous**
+### P4. Collapsing a warehouse's bins · `partly filmable` · **dangerous**
 
 **Promise** — you can merge every bin into the floor, and recover if it was
 wrong.
 **Length** 3 min.
-**Why impractical:** it needs a super-admin, a typed warehouse code, a
-thirty-character reason **and a six-digit code emailed to the actor** — and
-local mail is a dev stub, so the confirmation step cannot be filmed honestly.
-Feasible if the seed reads the code from the notification row, but that is
-teaching a path production does not use. **Recommend writing this one**, and
-filming only the read-only "what a collapse would move" half.
+**Why only partly:** completing a collapse needs a super-admin, a typed
+warehouse code, a thirty-character reason **and a six-digit code emailed to the
+actor** — and local mail is a dev stub, so the last step cannot be filmed
+honestly. Feasible if the seed read the code out of the notification row, but
+that is teaching a path production does not use.
+
+**RECLASSIFIED FROM `impractical locally`, 2026-10-01, after reading
+`/warehouse/collapse` rather than the entry.** When this was written there was
+no screen; there is now, and the half it recommends filming is not a workaround
+but the product's OWN FIRST STEP. `CollapseDialog` is deliberately staged: step
+one states the reason, **reports how many bins and units WOULD merge, moves
+nothing**, and emails the code; step two is where the code and the typed
+warehouse code go. So a video can film the warning, the Layout backups list and
+its restore, the whole of step one with its real figures, and why hold, damaged
+and quarantine bins are excluded (they are about not selling stock rather than
+finding it, and sweeping them into FLOOR would put broken goods back in the
+pickable pool) — and then STOP at the code step, saying that it arrives in the
+actor's inbox and that this is the point of it. **Stopping there is the lesson
+rather than a gap in the recording**, which is the same shape as N7's transfer
+and owner-money forms. What stays unfilmed is only the irreversible half, and
+that is the half nobody should be learning from a video anyway. Worth 2–3
+minutes on its own; **the entry's "recommend writing this one" is superseded.**
 
 ### P5. What we cannot undo · **FILMED** — `what-we-cannot-undo.mp4`
 
