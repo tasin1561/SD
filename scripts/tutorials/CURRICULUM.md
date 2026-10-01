@@ -32,8 +32,8 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (57):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J6**.
+**Filmed so far (58):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4** and **J1–J7**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -2866,11 +2866,12 @@ the failure screenshot, which is the most misleading shape a selector miss can
 take. `filter({ has: getByRole('heading', { name, exact: true }) })` is the form
 that means "the card whose TITLE is this".
 
-### J7. Booking the van · `needs demo data` · **dangerous**
+### J7. Booking the van · **FILMED** — `book-the-van.mp4` · **dangerous**
 
 **Promise** — you can raise a pickup, and you know when freeing a day is
 dangerous.
-**Length** 2 min. **Prerequisites** J6.
+**Length** 10 scenes, ~1 min 45 s. **Prerequisites** J6. **Needs**
+`seed-demo-data.mjs book-the-van`.
 **Covers** `/warehouse/pickups` — one request per warehouse per day, normally
 raised for you when the first box closes. Raising one is a live courier call
 that books a van.
@@ -2878,14 +2879,47 @@ that books a van.
 edge — only after confirming in the courier's own panel that no request exists,
 because if one does, freeing the slot books a **second van** against a live one.
 
-### J8. Manifests · `ready`
+**ONE ROW HAD TO BE STAGED, and the reason is worth keeping.** "Free the day"
+renders on exactly one shape — `status === 'FAILED' && courierPickupId === null`,
+an attempt that failed WITHOUT the courier returning an id, which is the only
+case where freeing the slot is arguably safe. Nothing on this box can produce
+one: the local simulator succeeds, and the day's real request is raised for us
+when the first box is packed (CUR-10 amendment #3). So `pickupWorldFor` writes a
+FAILED attempt for TOMORROW — tomorrow because the partial unique covers
+REQUESTED and FAILED together and today's row already exists, and because a box
+packed after `courier.default_pickup_time` genuinely asks for the next day's
+van. The row is inert: no stock, no money, no courier call.
+
+**TWO DIALOGS ARE READ AND NEITHER IS PRESSED**, which is the P5 discipline
+applied inside a how-to. Freeing a day is the one act here that can put a second
+van at a door, and raising one by hand is a live call that books a real vehicle;
+a tutorial that performs either teaches the press rather than the check. What IS
+pressed is "Collected" on the day's open request — the ordinary act, housekeeping
+the courier never sees.
+
+### J8. Manifests · **FILMED** — `what-went-out-together.mp4`
 
 **Promise** — you can answer "what went out on Tuesday's van".
-**Length** 2 min. **Prerequisites** J6.
+**Length** 10 scenes, ~1 min 45 s. **Prerequisites** J6. **Needs** nothing
+beyond J6's world (the DRAFT manifest it leaves behind).
 **Covers** `/warehouse/manifests` as what it now is: a **record, not a step**,
-created for you at pack and finished for you at the last scan. Includes moving
-a packed parcel between draft manifests, which is the only alternative to a
-database edit. Short on purpose — the point is that nobody has to visit it.
+created for you at pack and finished for you at the last scan. Short on purpose
+— the point is that nobody has to visit it.
+
+**THE MOVE PANEL IS FILMED SAYING IT CANNOT HELP**, which is better than the
+scene originally planned. "Move a shipment to another manifest" is the only
+repair this screen offers, and with one courier and one warehouse there is only
+ever ONE draft — so the target picker renders a NOTE instead of an empty select:
+"No other DRAFT manifest for delhivery at this warehouse. A second one appears
+once another manifest is open for the same courier and building." The scene
+points at that, and THROWS if a second draft ever exists on the box, because
+then the frame would be a picker and the narration would be describing something
+else.
+
+**Nothing is pressed that changes anything.** Closing a manifest by hand is
+irreversible and CUR-4 made it a fallback rather than a step (the handover scan
+closes it as the last parcel goes), so the button is the subject and the press
+is not.
 
 ---
 

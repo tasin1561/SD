@@ -9346,7 +9346,7 @@ export const FLOWS = {
       async grain({ page, stage }) {
         // The page's OWN sentence about the grain, which is the thing
         // this video is correcting rather than asserting.
-        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 3200);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
       },
 
       async row({ page, stage }) {
@@ -9419,6 +9419,104 @@ export const FLOWS = {
           page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).first(),
           { after: 1200 },
         );
+        await stage.dwellOn(page.locator('.sk-table').first(), 3400);
+      },
+    },
+  },
+
+  'what-went-out-together': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/manifests`, { waitUntil: 'domcontentloaded' });
+        await draftManifestRow(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3000);
+      },
+
+      async columns({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-thead').first(), 3200);
+      },
+
+      async filter({ page, stage }) {
+        await stage.dwellOn(page.getByLabel('Status', { exact: true }), 3000);
+      },
+
+      async draft({ page, stage }) {
+        await stage.dwellOn(draftManifestRow(page), 3200);
+      },
+
+      async open({ page, stage }) {
+        /*
+          THE ROW'S OWN LINK, which carries the manifest number — minted
+          per month, so it is reached through the row rather than named.
+        */
+        await stage.clickIt(draftManifestRow(page).locator('a.stk-link').first(), { after: 1600 });
+        await page.waitForURL(/\/warehouse\/manifests\/[0-9a-f-]+/, { timeout: 25_000 });
+        await page
+          .getByRole('heading', { level: 1 })
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3000);
+      },
+
+      async shipments({ page, stage }) {
+        await page
+          .locator('.sk-tbody .sk-tr')
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.sk-table').first(), 3400);
+      },
+
+      async move({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: 'Move a shipment to another manifest' }),
+          { after: 1200 },
+        );
+        const dialog = page.getByRole('dialog');
+        /*
+          THE "NOWHERE TO MOVE IT" NOTE, which is the honest frame: with
+          one courier and one warehouse there is only ever one DRAFT, and
+          the panel says so rather than offering an empty picker. If a
+          second draft ever exists on this box the note is gone and this
+          scene has to point at the select instead — named rather than
+          left to time out.
+        */
+        const note = dialog.getByText(/No other DRAFT manifest/);
+        if ((await note.count()) === 0) {
+          throw new Error(
+            'A second DRAFT manifest exists, so the "nowhere to move it" note the narration ' +
+              'reads is not on screen — point at the target picker instead.',
+          );
+        }
+        await stage.dwellOn(note, 3200);
+      },
+
+      async why({ page, stage }) {
+        await stage.dwellOn(page.getByRole('dialog').locator('.sk-dialog__body').first(), 3200);
+      },
+
+      async close({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).first(),
+          { after: 1000 },
+        );
+        // NOT PRESSED: closing is irreversible and CUR-4 made it a
+        // fallback rather than a step. The button is the subject; the
+        // press is not.
+        await stage.dwellOn(page.getByRole('button', { name: 'Close manifest' }), 3200);
+      },
+
+      async outro({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/warehouse/manifests`, { waitUntil: 'domcontentloaded' });
+        await draftManifestRow(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
         await stage.dwellOn(page.locator('.sk-table').first(), 3400);
       },
     },
@@ -9560,6 +9658,18 @@ const FORCE = {
   half: 'Barcode torn',
   rest: ' off the carton in transit; contents counted by hand against the picking sheet',
 };
+
+/**
+ * J8's open manifest, by the one status word that can appear once.
+ *
+ * The list is newest first and the only DRAFT is today's — a second one
+ * exists only when another is open for the same courier AND warehouse,
+ * which one courier and one building cannot produce. The number is
+ * minted per month, so the status is the handle.
+ */
+function draftManifestRow(page) {
+  return page.locator('.sk-tbody .sk-tr', { hasText: 'Draft' }).first();
+}
 
 /** J7's reason, and the two rows its screen turns on. */
 const PICKUP = {

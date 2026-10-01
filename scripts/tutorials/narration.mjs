@@ -3393,6 +3393,53 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'what-went-out-together',
+    title: 'Manifests',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A manifest answers one question: what went out on Tuesday’s van. And the subtitle is the important part — nothing here needs doing unless something has gone wrong.',
+      },
+      {
+        id: 'columns',
+        say: 'One row is one van-load. Which courier, how many parcels, when it was opened, and when it was closed out — which happens on its own as the last box is scanned.',
+      },
+      {
+        id: 'filter',
+        say: 'Filter by status if you are looking for something in particular. Draft is still collecting; dispatched has gone. Most of the time you are looking for one specific day.',
+      },
+      {
+        id: 'draft',
+        say: 'The draft at the top is today. It was created for you when the first box was packed, and it has been filling up ever since without anybody opening this screen.',
+      },
+      {
+        id: 'open',
+        say: 'Inside is the list itself. This is what you would read out to a driver, or send to the courier if they ever asked which parcels we say we handed over.',
+      },
+      {
+        id: 'shipments',
+        say: 'Parcel by parcel, with its waybill and where each one is. A parcel that has already been scanned onto the van reads differently from one still on the bench.',
+      },
+      {
+        id: 'move',
+        say: 'Moving a parcel to another sheet is the one repair this screen offers — and today there is nowhere to move it to, which it says rather than offering an empty list.',
+      },
+      {
+        id: 'why',
+        say: 'Because a second draft only exists when a second one is open for the same courier and the same building. With one courier and one warehouse, that is a situation you have to go and create.',
+      },
+      {
+        id: 'close',
+        say: 'And closing one by hand is a fallback, not a step. The handover scan does it as the last parcel goes, so pressing this means something stopped before that happened.',
+      },
+      {
+        id: 'outro',
+        say: 'So: it keeps itself. Come here to answer a question about a past day, or to repair something; the rest of the time it is paperwork that writes itself.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

@@ -4257,6 +4257,15 @@ const PICK_STAGE = new Map([
   ['pack-a-parcel', 'PICKED'],
   ['pack-without-scanning', 'PICKED'],
   ['hand-over-to-the-courier', 'PACKED'],
+  /*
+    J8 reads the DRAFT manifest, and a manifest with no live parcels on
+    it has no shipment table and no move panel (`MoveShipmentPanel`
+    returns null on an empty sheet) — so two of its scenes would have
+    nothing to point at. Packing three puts them on the day's draft
+    through WMS-7's auto-attach, which is also the only way a parcel
+    gets onto one.
+  */
+  ['what-went-out-together', 'PACKED'],
 ]);
 
 /**
@@ -4843,6 +4852,31 @@ async function pickupWorldFor(slug, staffToken) {
   const wh = warehouses.find((w) => w.fulfilsOrders === true);
   if (wh === undefined) {
     throw new Error('No order-fulfilling warehouse — the pickups screen has nothing to show.');
+  }
+
+  /*
+    TODAY'S ROW BACK TO REQUESTED. The video presses "Collected" on it,
+    which is the ordinary act and the only thing it does press — but
+    that leaves it CLOSED, and the next run would then reach for the
+    oldest still-open day instead and film a week-old row under a line
+    about the van that is here now. The auto-pickup raises exactly this
+    row every day the first box is packed (CUR-10 amendment #3), so
+    putting it back is restoring what the day would have had rather than
+    inventing one.
+  */
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const closedToday = await prisma.courierPickupRequest.updateMany({
+    where: {
+      courierCode: 'delhivery',
+      warehouseId: wh.id,
+      pickupDate: today,
+      status: { in: ['CLOSED', 'CANCELLED'] },
+    },
+    data: { status: 'REQUESTED' },
+  });
+  if (closedToday.count > 0) {
+    console.log("  · today's pickup put back to REQUESTED — a previous take marked it collected");
   }
 
   const tomorrow = new Date();
