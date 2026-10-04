@@ -8422,9 +8422,17 @@ export const FLOWS = {
 
       async queue({ page, stage, baseUrl }) {
         /*
-          `/call-center/queue`. The sidebar says "Call queue" and the
-          route is not `/call-queue` — which arrives as a Next 404 page,
-          not a selector miss, so it reads as the app being broken.
+          `/call-center/queue`, and the first draft of this step typed
+          `/call-queue` — a path NOTHING in the app references, so the
+          404 was correct behaviour and the mistake was entirely ours.
+          The sidebar has always linked the right one.
+
+          It is worth a comment anyway, because of the SHAPE of the
+          failure: a hand-written path that is wrong arrives as a Next
+          404 page rather than as a selector miss, so it reads as the
+          app being broken rather than as the flow being wrong. That is
+          O4's rule restated by accident — reach a page by clicking its
+          nav link, not by typing one.
 
           GATED ON A MINUTES-OLD WAIT, which is the honest claim. The
           screen has no column saying WHY a call is queued — the
@@ -8432,7 +8440,7 @@ export const FLOWS = {
           cell here — so the first draft of this scene said "flagged as
           something the seller asked for" over a table that says nothing
           of the kind. What IS visible and true is that this one was
-          added minutes ago while everything else has waited days.
+          added minutes ago while the rest have been sitting there.
         */
         await page.goto(`${baseUrl}/call-center/queue`, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('networkidle').catch(() => {});
