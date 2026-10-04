@@ -23,6 +23,14 @@ logs
 *.md
 CHANGELOG.md
 
+# PRETTIER READS THE ROOT `.gitignore` AND NO OTHER ONE (measured on 3.8.3:
+# a malformed file under `.claude/` is skipped, the same file under
+# `apps/marketing/scripts/screenshots/lighthouse/` is flagged). So every
+# entry in a NESTED `.gitignore` has to be mirrored here or it makes
+# `format:check` red while CI stays green — git never sees the file, and
+# prettier always does. Both entries below exist for that reason.
+apps/marketing/scripts/screenshots/lighthouse/
+
 # Lighthouse artefacts. The CLI writes its temp output to the Windows path it
 # was handed, which arrives here as a single directory whose NAME contains
 # backslashes ("C:\Users\...\lighthouse.<pid>"). `.gitignore` already has
