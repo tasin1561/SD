@@ -2963,7 +2963,7 @@ model ResellerStoreEvent {
   @@map("reseller_store_events")
 }
 
-/// RS-2 — a person who signs in to reseller.skydrop.online for ONE store.
+/// RS-2 — a person who signs in to reseller.skydrop.global for ONE store.
 ///
 /// A third identity beside staff and seller users, with its own tokens
 /// and its own audience on the access JWT. Never a seller user: a store
