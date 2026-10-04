@@ -90,7 +90,7 @@ export class EnvService {
     return this.env.ADMIN_APP_URL;
   }
 
-  /** RS-2 — the reseller store portal (reseller.skydrop.online). */
+  /** RS-2 — the reseller store portal (reseller.skydrop.global). */
   get resellerAppUrl(): string {
     return this.env.RESELLER_APP_URL;
   }

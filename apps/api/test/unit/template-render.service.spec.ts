@@ -52,13 +52,13 @@ describe('TemplateRenderService', () => {
     const r = await svc.render('staff.password_reset.email', {
       company_name: 'Skydrop',
       name: 'Alex',
-      url: 'https://app.skydrop.online/reset?token=xyz',
+      url: 'https://app.skydrop.global/reset?token=xyz',
     });
 
     expect(r.templateId).toBe('t1');
     expect(r.templateVersion).toBe(1);
     expect(r.subject).toBe('Reset your Skydrop password');
-    expect(r.body).toBe('Hi Alex, click https://app.skydrop.online/reset?token=xyz to reset.');
+    expect(r.body).toBe('Hi Alex, click https://app.skydrop.global/reset?token=xyz to reset.');
     expect(r.htmlBody).toBeNull();
   });
 
@@ -247,9 +247,9 @@ describe('TemplateRenderService', () => {
         },
       ]);
       const r = await svc.render('customer.order_dispatched.email', {
-        tracking_url: 'https://track.skydrop.online/DLV1?a=1&b=2',
+        tracking_url: 'https://track.skydrop.global/DLV1?a=1&b=2',
       });
-      expect(r.body).toBe('Track at https://track.skydrop.online/DLV1?a=1&b=2');
+      expect(r.body).toBe('Track at https://track.skydrop.global/DLV1?a=1&b=2');
     });
   });
 });

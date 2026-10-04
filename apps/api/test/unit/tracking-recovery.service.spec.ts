@@ -36,7 +36,7 @@ function makeSvc(opts: {
         findUnique: jest.fn(async (args: { where: { key: string } }) =>
           args.where.key.includes('auto_recover')
             ? { valueBoolean: opts.autoRecover ?? true }
-            : { valueString: opts.alertEmail ?? 'ops@skydrop.online' },
+            : { valueString: opts.alertEmail ?? 'ops@skydrop.global' },
         ),
       },
     },

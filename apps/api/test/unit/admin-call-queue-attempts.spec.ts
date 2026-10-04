@@ -38,7 +38,7 @@ describe('AdminCallQueueService — attempts vs pulls', () => {
       maxAttempts: 3,
       createdAt: new Date(),
       order: { orderNumber: 'SD-1', sellerId: 's1', status: 'pending_confirmation' },
-      assignedAgent: { id: 'a1', emailDisplay: 'agent@skydrop.online' },
+      assignedAgent: { id: 'a1', emailDisplay: 'agent@skydrop.global' },
     };
     const prisma = {
       client: {
@@ -108,6 +108,6 @@ describe('AdminCallQueueService — attempts vs pulls', () => {
   it('resolves the holding agent to a human identity, never a bare id', async () => {
     const svc = make([], 1);
     const { items } = await svc.listQueue({ page: 1, pageSize: 20 } as never);
-    expect(items[0]?.agent).toEqual({ id: 'a1', name: 'agent@skydrop.online' });
+    expect(items[0]?.agent).toEqual({ id: 'a1', name: 'agent@skydrop.global' });
   });
 });
