@@ -4,7 +4,7 @@
  *
  * The SSR boot flow (FE-4):
  *   - The browser sends the __Host-{staff,seller}Refresh cookie to
- *     admin.skydrop.online (same-origin to the Next.js app).
+ *     admin.skydrop.global (same-origin to the Next.js app).
  *   - The Server Component reads the cookie from the incoming
  *     request (via Next's cookies() helper — passed in by the
  *     caller; we don't import 'next/headers' here to keep this
@@ -42,7 +42,7 @@ const COOKIE_BY_KIND: Record<IdentityKind, string> = {
 
 export interface SsrIdentityRequest {
   /** The full API origin (`http://localhost:3000` in dev,
-   *  `https://api.skydrop.online` in prod). The SSR path goes
+   *  `https://api.skydrop.global` in prod). The SSR path goes
    *  DIRECT to the API server-to-server, not through the Next.js
    *  proxy — the proxy only matters for the browser. */
   readonly apiOrigin: string;

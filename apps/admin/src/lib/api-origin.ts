@@ -2,7 +2,7 @@
  * Resolve the upstream API origin used by the SSR cookie→/me path.
  *
  * Important: this is for SERVER-SIDE fetches only (Server Components,
- * route handlers). The browser ALWAYS talks to admin.skydrop.online
+ * route handlers). The browser ALWAYS talks to admin.skydrop.global
  * and the Next.js rewrites proxy /api/* to here.
  *
  * Defaults: localhost:3000 in dev (where apps/api listens), matches

@@ -48,7 +48,7 @@ export default async function LoginPage(): Promise<ReactElement> {
            */}
           <span className="rd-auth-alt">
             Looking for the seller portal?{' '}
-            <a href="https://app.skydrop.online/login">Sign in there</a>
+            <a href="https://app.skydrop.global/login">Sign in there</a>
           </span>
         </>
       }

@@ -1,1 +1,1 @@
-Admin/staff portal - admin.skydrop.online
+Admin/staff portal - admin.skydrop.global

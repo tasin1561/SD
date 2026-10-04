@@ -2,7 +2,7 @@
   "name": "@skydrop/track",
   "version": "0.0.0",
   "private": true,
-  "description": "Skydrop public AWB tracking — track.skydrop.online — anonymous customer-facing tracking lookup.",
+  "description": "Skydrop public AWB tracking — track.skydrop.global — anonymous customer-facing tracking lookup.",
   "scripts": {
     "dev": "next dev -p 3004",
     "build": "next build",

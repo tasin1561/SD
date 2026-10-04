@@ -27,7 +27,7 @@ import type {
 
 /**
  * Whose session this client carries. RS-2 (2026-09-14) added `store` — a
- * reseller store user on reseller.skydrop.online — as the third identity:
+ * reseller store user on reseller.skydrop.global — as the third identity:
  * a PARAMETER, not a fork (FE-5). It selects `/api/auth/<kind>/*`, and
  * nothing else in the client knows about it.
  */

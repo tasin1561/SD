@@ -57,7 +57,7 @@ export default async function LoginPage(): Promise<ReactElement> {
            * this is safe in either direction and needs no query string.
            */}
           <p>
-            Run a store? <a href="https://reseller.skydrop.online/login">Store sign-in</a>
+            Run a store? <a href="https://reseller.skydrop.global/login">Store sign-in</a>
           </p>
         </>
       }

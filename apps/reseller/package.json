@@ -2,7 +2,7 @@
   "name": "@skydrop/reseller",
   "version": "0.0.0",
   "private": true,
-  "description": "Skydrop reseller portal — reseller.skydrop.online — for reseller stores selling one seller's stock (RS-2).",
+  "description": "Skydrop reseller portal — reseller.skydrop.global — for reseller stores selling one seller's stock (RS-2).",
   "scripts": {
     "dev": "next dev -p 3005",
     "build": "next build",

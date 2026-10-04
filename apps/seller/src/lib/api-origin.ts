@@ -2,7 +2,7 @@
  * Resolve the upstream API origin used by the SSR cookie→/me path.
  *
  * Important: this is for SERVER-SIDE fetches only (Server Components,
- * route handlers). The browser ALWAYS talks to app.skydrop.online
+ * route handlers). The browser ALWAYS talks to app.skydrop.global
  * and the /api/* route handler proxies to the upstream API.
  *
  * Defaults: localhost:3000 in dev (where apps/api listens). Override

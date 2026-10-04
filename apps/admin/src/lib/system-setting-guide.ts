@@ -1617,14 +1617,14 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Alerts',
     what: 'Where some system-detected problems are emailed (failed-delivery re-attempts not happening, tracking stalls). Empty sends no email, but the problem is still recorded.',
     example:
-      'Set to ops@skydrop.online: a stalled tracking poll emails that inbox as well as appearing on the issues board.',
+      'Set to ops@skydrop.global: a stalled tracking poll emails that inbox as well as appearing on the issues board.',
   },
   'marketing.lead_notification_email': {
     name: 'Who hears about new invite requests',
     group: 'Alerts',
     what: 'Where a new request for an invitation from the website is announced. Empty means every active super admin, which stays right as admins come and go.',
     example:
-      'Set to sales@skydrop.online: only that inbox is told when someone asks for an invite.',
+      'Set to sales@skydrop.global: only that inbox is told when someone asks for an invite.',
   },
   'notifications.sms_throttle_per_recipient_per_hour': {
     name: 'Text messages per person per hour (not used yet)',
@@ -1741,7 +1741,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     name: 'ChatWoot address',
     group: 'Live chat',
     what: 'The address of our own ChatWoot live-chat server. Empty means practice mode: nothing is sent to chat.',
-    example: 'Set to https://chat.skydrop.online once the chat server exists.',
+    example: 'Set to https://chat.skydrop.global once the chat server exists.',
   },
   'chat.chatwoot_account_id': {
     name: 'ChatWoot account number',
