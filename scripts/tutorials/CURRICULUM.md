@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 82 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J, K and O, L1–L3, M1–M2, N1–N9, P1, P2 and P5.** The 8 left are all in the admin app: 2 are
+**90 tutorials. 84 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J, K, O and P, L1–L3, M1–M2 and N1–N9.** The 6 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,10 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (82):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N9**, **O1–O5**, **P1** and **P2**.
+**Filmed so far (84):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**the whole seller app** — plus **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
+**L1–L3**, **M1–M2**, **N1–N9**, **O1–O5** and **P1–P5**, which is **the whole of
+the dangerous five**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -155,16 +156,31 @@ to Kolkata, a return that came back to the wrong building. Do NOT film
 Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
 teach the wrong habit.
 
-**ON STACK B (the second agent, sections N and P): SECTION N IS DONE and P1 AND
-P2 ARE FILMED. THE NEXT ENTRY IS P3 — "Refunds and disputes".** N10 is
-`impractical locally`; P3 and P4 have no flow yet, and P4 is now
-`partly filmable` rather than impractical (read its entry: the preview half of
-`/warehouse/collapse` is the product's own first step and moves nothing).
-**Read P2's entry before either**: it records two defects that are about the
-BOX rather than the video — a from-scratch stack has no origin pincode, so no
-lane can be priced anywhere in the console, and the Delhivery simulator answered
-neither read endpoint in the shape the adapter parses. Both are fixed; both were
-invisible until a screen asked the question.
+**ON STACK B: SECTIONS N AND P ARE DONE.** N10 is the only entry left in either
+and it is `impractical locally`. **P4 was reclassified from
+`partly filmable` to filmed** — stopping at the emailed code is the product's
+own shape rather than a gap, and the half that cannot be recorded is the
+irreversible half nobody should learn from a video.
+
+**FOUR THINGS SECTION P LEFT BEHIND THAT ARE ABOUT THE BOX RATHER THAN A
+VIDEO**, each written up in its own entry and each invisible until a screen
+asked the question:
+
+- a from-scratch stack has **no origin pincode**, so no lane can be priced or
+  timed anywhere in the console (P2, and it is `provision-stack.mjs`'s FIFTH
+  hand-made row);
+- the **Delhivery simulator answered neither read endpoint in the shape the
+  adapter parses**, so every local parcel reported "no TAT available for this
+  lane" with a warning blaming the courier (P2);
+- a **reseller store's own words were printed as Skydrop's** in both consoles,
+  including on the screen of the seller being asked to pay (P3);
+- and **a bin collapse would have swept goods still in the air onto the sellable
+  floor** (P4) — the one that would have cost money.
+
+**The last two are the same shape and worth reading together**: a value a server
+takes care to distinguish, folded back into its neighbour by a reader that
+pre-dates it. One was a union member missing from a hand-written client type;
+the other was a list restated instead of derived.
 
 **TWO THINGS P1 SETTLED THAT P2–P4 INHERIT.** First, **the review parcel is now
 RE-TAKEABLE**: a god-mode take leaves `RSH-LIFE-REVIEW` confirmed, with a
@@ -629,7 +645,7 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — FORTY-SIX so
+**Filming these screens is finding real bugs at a steady rate — FORTY-EIGHT so
 far, plus TEN in the seeding itself, TWO in the Delhivery simulator and one
 whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
@@ -4427,42 +4443,132 @@ in the first second and the rest is a still page, so it reads correctly — but
 drop that wait if the scene is ever touched for another reason; the step already
 gates on the status text, which is the real signal.
 
-### P3. Refunds and disputes · `needs demo data` · **dangerous**
+### P3. Refunds and disputes · **FILMED** — `refunds-and-disputes.mp4` · **dangerous**
 
 **Promise** — you can close a ticket with money attached.
-**Length** 3 min. **Needs** D0's damage ticket.
+**Length** 3 min 2 s of narration over 14 scenes. **Needs**
+`seed-demo-data.mjs refunds-and-disputes`.
 **Covers** `/tickets/[id]`: replying to the seller, and the four outcomes at
 close — where **refund writes a credit to the seller's wallet inside the same
 transaction as the close**. Also settling a reseller-store dispute, which moves
 money between two wallets as one pair and refuses the ordinary refund path.
 
-### P4. Collapsing a warehouse's bins · `partly filmable` · **dangerous**
+**TWO TICKETS, AND THEY ARE DIFFERENT KINDS OF ARGUMENT rather than two examples
+of one.** `TK-…0003` is a receipt short at the INDIAN end — the leg where the
+goods were in our hands, which is the one case whose own opening message says we
+may settle it (TKT-3 words the two legs differently on purpose). The other is a
+reseller store's dispute with its seller, which we referee and never pay. The
+settled scrap claim D6 films stays on the list behind them, so the register
+opens on all three kinds.
+
+**ONE WRITE IS PRESSED AND IT IS THE EVERYDAY ONE.** The reply — an append-only
+`ticket_events` row, and what a ticket is FOR. Everything that moves money is
+opened, read and cancelled: `RESOLVED_REFUND` is terminal and credits a wallet
+in the same transaction as the close, and a store settlement moves money between
+two wallets as one pair. Same discipline as P1's companion dialogs and P2's
+three.
+
+**A NATIVE `<select>`'s OPTION LIST IS DRAWN BY THE OPERATING SYSTEM and appears
+in no screenshot and no recording.** Two scenes here are about what the choices
+ARE, and a dwell on a closed box reading "Outcome…" says nothing. Both CYCLE the
+value instead — the closed box reads each label out in turn — which is the only
+form of "here are the four" a video can show. The claim that the refund is
+ABSENT on a dispute is additionally asserted IN CODE, because a frame cannot
+make a negative claim: the flow reads the `<option>` list and throws if it is
+there. **Any future scene about a set of choices behind a native select needs
+both halves.**
+
+**THE ADMIN QUEUE'S ROW IS THE LINK, AND THE SELLER'S IS NOT.** `/tickets`
+renders the ticket number as a plain `<span>` with `onActivate` on the whole
+`<Tr>` ("the row IS the link now: one way in"); the SELLER's queue puts the
+`<Link>` on the subject cell. Reaching for a link by the ticket number therefore
+waits thirty seconds for something that was never a link — on one of the two
+apps.
+
+**ITS SEEDING.** `ensureStoreDispute` raises the dispute through the STORE's own
+endpoint as the store's user, because who opened it is what the page draws the
+opening bubble from — a dispute Skydrop raised against itself reads as a
+different thing entirely. It is NEVER settled here and the video never settles
+it, so the one thing to put back is a take's REPLY: `clearTicketReplies` is
+scoped to the two tickets P3 touches, to STAFF events, and to events that
+changed no status. Every other ticket's history is somebody else's seeded world
+(TK-…0001's refund conversation is D6's whole subject), and a transition deleted
+without its status would leave a state with nothing behind it explaining it.
+
+**AND IT FOUND A BUG THAT SPANNED BOTH CONSOLES** — a reseller store's own words
+printed as Skydrop's, including on the screen of the seller being asked to pay.
+See [Bugs found](#bugs-found-while-establishing-feasibility).
+
+**One trap paid for in a wasted check run, and it is the coordinator's warning
+made concrete:** the reply silently did not send, the draft stayed in the box,
+and every step still passed — because `apps/admin`'s `.next` was being replaced
+by the OTHER stack's build at that moment. `BUILD_ID` missing under a running
+server is the tell. Re-run after `stack.sh restart b admin` before debugging
+anything that looks like a failed write.
+
+### P4. Collapsing a warehouse's bins · **FILMED** — `collapse-the-shelves.mp4` · **dangerous**
 
 **Promise** — you can merge every bin into the floor, and recover if it was
 wrong.
-**Length** 3 min.
-**Why only partly:** completing a collapse needs a super-admin, a typed
-warehouse code, a thirty-character reason **and a six-digit code emailed to the
-actor** — and local mail is a dev stub, so the last step cannot be filmed
-honestly. Feasible if the seed read the code out of the notification row, but
-that is teaching a path production does not use.
+**Length** 3 min 1 s of narration over 14 scenes. **Needs**
+`seed-demo-data.mjs collapse-the-shelves`.
+**Covers** where the control lives and why it is a LINK at the very bottom of
+`/warehouse/bins` rather than a button; the backups list and the restore
+dialog's own "best effort, line by line" sentence; the warning about what stops
+being recorded; the thirty-character reason and its counter; the
+acknowledgement; and step one of the two-step dialog — which **reports how many
+bins and units WOULD merge, moves nothing, and emails a six-digit code**.
 
-**RECLASSIFIED FROM `impractical locally`, 2026-10-01, after reading
-`/warehouse/collapse` rather than the entry.** When this was written there was
-no screen; there is now, and the half it recommends filming is not a workaround
-but the product's OWN FIRST STEP. `CollapseDialog` is deliberately staged: step
-one states the reason, **reports how many bins and units WOULD merge, moves
-nothing**, and emails the code; step two is where the code and the typed
-warehouse code go. So a video can film the warning, the Layout backups list and
-its restore, the whole of step one with its real figures, and why hold, damaged
-and quarantine bins are excluded (they are about not selling stock rather than
-finding it, and sweeping them into FLOOR would put broken goods back in the
-pickable pool) — and then STOP at the code step, saying that it arrives in the
-actor's inbox and that this is the point of it. **Stopping there is the lesson
-rather than a gap in the recording**, which is the same shape as N7's transfer
-and owner-money forms. What stays unfilmed is only the irreversible half, and
-that is the half nobody should be learning from a video anyway. Worth 2–3
-minutes on its own; **the entry's "recommend writing this one" is superseded.**
+**IT STOPS AT THE CODE, AND THE STOPPING IS THE LESSON.** The entry used to say
+this was only `partly filmable` because the last step needs an emailed code and
+local mail is a dev stub. That reads it backwards: step one is not a workaround,
+it is the product's own first step, and the half that cannot be filmed is the
+irreversible half nobody should be learning from a video anyway. Same shape as
+N7's transfer and owner-money forms. The closing scene holds the disabled
+"Collapse 2 bin(s)" button under the sentence saying the next press is the one
+that cannot be taken back.
+
+**ITS SEEDING HAS TO MAKE THREE THINGS TRUE AT ONCE AND TWO OF THEM FIGHT.** The
+preview's figures are only real if the warehouse has shelf bins HOLDING stock;
+the backups list is only anything but an empty state if a collapse has already
+happened; and a collapse is precisely what empties the shelves. So
+`collapseWorldFor` stocks the shelves, collapses ONCE if nothing has ever been
+collapsed there, and stocks them again. That one collapse goes through the
+product's own two steps, code included — only the DELIVERY of the code is faked,
+which is the same bargain `ensureStoreSession` strikes with an invitation token.
+
+**KOLKATA AND NOT THE DHAKA INTAKE**, which was the obvious choice and is wrong:
+J1's seeding prints a warning when BD-DHK-1 holds any bin besides FLOOR, because
+its narration counts them out loud. Two permanent shelves there would quietly
+make a filmed video's words false. **Aisle G** because `ensureStockedVariant`
+puts a goods receipt away into the FIRST pickable bin the endpoint returns, and
+a code sorting before `FLOOR` could start collecting every future receipt in
+that warehouse by accident — harmless if it happened, and a change to other
+videos' worlds made without deciding to.
+
+**The take leaves one `bin_collapse_challenges` row and one email per run**,
+consumed by nobody because the video stops there on purpose. Nothing in the app
+lists them; the seeding sweeps the unconsumed ones so that "what is outstanding
+against this warehouse" has an honest answer after twenty takes.
+
+**AND IT FOUND THE REASON THIS VIDEO IS WORTH HAVING.** The preview reported
+"1 bin holding 42 units" and the only bin it had found was the TRANSIT one — a
+collapse would have swept goods still in the air between Dhaka and India onto
+the sellable floor. See
+[Bugs found](#bugs-found-while-establishing-feasibility).
+
+**One selector note.** The destructive BUTTON and the DIALOG TITLE spell the
+apostrophe differently and always have — the button's children are JSX using
+`&rsquo;`, the title is a plain TS string with an ASCII `'` — so either literal
+finds one and waits thirty seconds for the other. A regex covering the
+character is the form that works, and the failure arrives as "that button is not
+on the page" about a button plainly on the page.
+
+**P5's note that "THE BIN COLLAPSE HAS NO SCREEN AT ALL" is SUPERSEDED.** It was
+true when P5 was filmed; `/warehouse/collapse` landed on 2026-10-01. P5's
+narration says it out loud, so **a re-take of P5 needs that line rewritten** —
+it is now the one act on its list that you CAN reach from the console, and the
+interesting thing about it is that it stops and waits for an inbox.
 
 ### P5. What we cannot undo · **FILMED** — `what-we-cannot-undo.mp4`
 
@@ -5344,3 +5450,60 @@ own docstring, and both are now DERIVED from the query rather than constant: a
 heavier parcel costs more, a prepaid one carries no COD fee. **A fake that
 answers the same number to every question teaches its reader that the question
 does not matter.**
+
+**AND A FORTY-SEVENTH, found by filming P3 (2026-10-04) and spanning BOTH
+consoles: a reseller store's own words were printed as SKYDROP's.** `openedBy`
+carries `'STORE'` and the server goes out of its way to say why — "a reseller
+store raising a dispute WITH its seller: neither the seller's words nor ours, so
+it is named for what it is". Every reader in both apps asked
+`openedBy === 'SELLER'` and put everything else on OUR side. So:
+
+- the ADMIN thread labelled the store's complaint **Skydrop**, three inches
+  below a subtitle that correctly read "Raised … by Silk Studio" — two halves of
+  one page disagreeing about who had spoken;
+- the SELLER's own ticket page said "Raised by Skydrop", drew the store's words
+  as ours, and its queue printed "Skydrop" in the "who raised it" column. **That
+  half is materially worse**: the seller is the party being asked to pay, and
+  they were being told WE were complaining about their goods when it was their
+  own shopkeeper;
+- and `apps/seller`'s hand-written `TicketView` **did not list `'STORE'` at
+  all**, which is how every one of those collapsed in the first place.
+
+Plus two labels that stopped being true the day the store got an inbox: a reply
+on a dispute reaches BOTH parties (the notification plan's own rule since
+RS-7), and the box said "Reply to the seller".
+
+**The shape is the hand-written client type again** — the same one that declared
+an `invitedAt` the API has never sent — but with a twist worth separating out:
+the server had DONE THE WORK. It distinguished the third party, named the
+distinction in a comment, and sent it. A client type that omits a value cannot
+disagree with that; it just quietly folds the case into its neighbour. **When a
+server adds a value to a union, grep for every `=== 'X'` that meant "not X" and
+ask which branch the new value lands in.**
+
+**AND A FORTY-EIGHTH, found by filming P4 the same evening — the one that would
+have cost real money.** `BinCollapseService.collectSourceRows` hand-wrote
+`['RTO_HOLD', 'DAMAGED', 'QUARANTINE']`: the non-pickable list as it stood
+BEFORE CNS-1 added `TRANSIT`. Collapsing a warehouse would therefore have merged
+stock that is **in the air between Dhaka and India** into FLOOR, which is
+pickable (BIN-2) — the goods become sellable before they have landed, and the
+one record saying they have not is gone. The preview said "1 bin holding 42
+units" and the only bin it had found was the transit one.
+
+This is precisely the drift BIN-2 exists to prevent, written down in that
+invariant in those words ("a test asserts they SHARE it rather than matching by
+coincidence") — and it happened anyway, in the one service that had no caller
+outside the e2e suite until a screen was built for it a week ago. The screen's
+own warning copy restated the three types too, so the UI and the code agreed
+with each other and both were wrong.
+
+**Only a real database can see it.** A mocked Prisma has no bin types to filter
+on, and the three facts — the shared list, the service's predicate, the merge —
+each read correctly on their own. `bin-ops-flow.e2e-spec.ts` grows a case that
+puts nine units in a TRANSIT bin and asserts the preview counts one bin and six
+units, the merge moves six, and the nine are still in transit afterwards.
+
+**The general lesson is narrower than "share your constants" and more useful: a
+list that is DERIVED stays right when the enum grows; a list that is RESTATED is
+correct exactly until the day somebody adds a value.** Both of these were
+written when the restated list was complete.
