@@ -224,7 +224,7 @@ export function ParcelFacts({
   /** Where "all parcels" lives, when the host app has such a page. */
   readonly allParcelsHref?: string;
   /**
-   * Origin of the PUBLIC tracking site, e.g. `https://track.skydrop.online`.
+   * Origin of the PUBLIC tracking site, e.g. `https://track.skydrop.global`.
    *
    * Passed in rather than hardcoded here: this component is shared, and
    * the two apps that render it are built separately with their own

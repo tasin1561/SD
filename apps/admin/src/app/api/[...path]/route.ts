@@ -1,7 +1,7 @@
 /**
  * Same-origin /api/* proxy — the linchpin of the SSR-auth model.
  *
- * The browser ONLY talks to admin.skydrop.online (the Next.js app).
+ * The browser ONLY talks to admin.skydrop.global (the Next.js app).
  * Any request to /api/* lands here; we forward it to the upstream
  * API server-to-server. Cookies (the __Host-staffRefresh in
  * particular) flow through in BOTH directions:
@@ -11,7 +11,7 @@
  *   - Response: when the API issues Set-Cookie (login, refresh,
  *     logout), we copy those headers back to the browser response.
  *     The browser then stores/clears the cookie bound to
- *     admin.skydrop.online — exactly as if the API were colocated.
+ *     admin.skydrop.global — exactly as if the API were colocated.
  *
  * This is the FE-3 invariant in code form: the browser sees ONE
  * origin; the cookie is bound to that origin; the proxy moves bytes

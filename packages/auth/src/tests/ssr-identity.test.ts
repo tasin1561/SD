@@ -20,7 +20,7 @@ describe('resolveStaffSsrIdentity', () => {
       // direct API origin (NOT through the proxy — SSR goes
       // server-to-server). The Cookie header MUST carry the exact
       // value under the right name.
-      expect(u).toBe('https://api.skydrop.online/auth/staff/me');
+      expect(u).toBe('https://api.skydrop.global/auth/staff/me');
       expect(init?.method).toBe('GET');
       const headers = new Headers(init?.headers);
       expect(headers.get('cookie')).toBe('__Host-staffRefresh=secret-cookie-value');
@@ -37,7 +37,7 @@ describe('resolveStaffSsrIdentity', () => {
     });
 
     const result = await resolveStaffSsrIdentity({
-      apiOrigin: 'https://api.skydrop.online',
+      apiOrigin: 'https://api.skydrop.global',
       identityKind: 'staff',
       cookieValue: 'secret-cookie-value',
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -55,7 +55,7 @@ describe('resolveStaffSsrIdentity', () => {
   it('empty cookie value → not-authenticated immediately (no network call)', async () => {
     const fetchImpl = vi.fn();
     const result = await resolveStaffSsrIdentity({
-      apiOrigin: 'https://api.skydrop.online',
+      apiOrigin: 'https://api.skydrop.global',
       identityKind: 'staff',
       cookieValue: '',
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -67,7 +67,7 @@ describe('resolveStaffSsrIdentity', () => {
   it('401 → not-authenticated (caller redirects to /login)', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(401, { code: 'UNAUTHORIZED' }));
     const result = await resolveStaffSsrIdentity({
-      apiOrigin: 'https://api.skydrop.online',
+      apiOrigin: 'https://api.skydrop.global',
       identityKind: 'staff',
       cookieValue: 'dead-cookie',
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -79,7 +79,7 @@ describe('resolveStaffSsrIdentity', () => {
     const fetchImpl = vi.fn(async () => jsonResponse(503));
     await expect(
       resolveStaffSsrIdentity({
-        apiOrigin: 'https://api.skydrop.online',
+        apiOrigin: 'https://api.skydrop.global',
         identityKind: 'staff',
         cookieValue: 'fine-cookie',
         fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -91,7 +91,7 @@ describe('resolveStaffSsrIdentity', () => {
 describe('resolveSellerSsrIdentity', () => {
   it('uses the seller cookie name + seller /me path', async () => {
     const fetchImpl = vi.fn(async (url, init) => {
-      expect(String(url)).toBe('https://api.skydrop.online/auth/seller/me');
+      expect(String(url)).toBe('https://api.skydrop.global/auth/seller/me');
       const headers = new Headers((init as RequestInit | undefined)?.headers);
       expect(headers.get('cookie')).toBe('__Host-sellerRefresh=s-cookie');
       return jsonResponse(200, {
@@ -112,7 +112,7 @@ describe('resolveSellerSsrIdentity', () => {
       });
     });
     const result = await resolveSellerSsrIdentity({
-      apiOrigin: 'https://api.skydrop.online',
+      apiOrigin: 'https://api.skydrop.global',
       identityKind: 'seller',
       cookieValue: 's-cookie',
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -127,7 +127,7 @@ describe('resolveSellerSsrIdentity', () => {
   it('403 (e.g., SUSPENDED seller) → forbidden with code', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(403, { code: 'ACCOUNT_NOT_ACTIVE' }));
     const result = await resolveSellerSsrIdentity({
-      apiOrigin: 'https://api.skydrop.online',
+      apiOrigin: 'https://api.skydrop.global',
       identityKind: 'seller',
       cookieValue: 's-cookie',
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -140,7 +140,7 @@ describe('resolveSellerSsrIdentity', () => {
 describe('resolveStoreSsrIdentity (RS-2)', () => {
   it('uses the store cookie name + store /me path, and never /refresh', async () => {
     const fetchImpl = vi.fn(async (url, init) => {
-      expect(String(url)).toBe('https://api.skydrop.online/auth/store/me');
+      expect(String(url)).toBe('https://api.skydrop.global/auth/store/me');
       const headers = new Headers((init as RequestInit | undefined)?.headers);
       expect(headers.get('cookie')).toBe('__Host-storeRefresh=st-cookie');
       return jsonResponse(200, {
@@ -166,7 +166,7 @@ describe('resolveStoreSsrIdentity (RS-2)', () => {
       });
     });
     const result = await resolveStoreSsrIdentity({
-      apiOrigin: 'https://api.skydrop.online',
+      apiOrigin: 'https://api.skydrop.global',
       identityKind: 'store',
       cookieValue: 'st-cookie',
       fetchImpl: fetchImpl as unknown as typeof fetch,
@@ -182,7 +182,7 @@ describe('resolveStoreSsrIdentity (RS-2)', () => {
   it('403 STORE_NOT_ACTIVE (a closed store) → forbidden with code', async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(403, { code: 'STORE_NOT_ACTIVE' }));
     const result = await resolveStoreSsrIdentity({
-      apiOrigin: 'https://api.skydrop.online',
+      apiOrigin: 'https://api.skydrop.global',
       identityKind: 'store',
       cookieValue: 'st-cookie',
       fetchImpl: fetchImpl as unknown as typeof fetch,

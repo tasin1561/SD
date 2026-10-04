@@ -40,7 +40,7 @@ function day(iso: string): string {
 
 /**
  * Reseller stores (RS-1) — separate businesses that sell YOUR stock under
- * their own name, each with its own login on reseller.skydrop.online.
+ * their own name, each with its own login on reseller.skydrop.global.
  * Stores Skydrop opened for you wait here for your approval.
  *
  * ── WHAT THE CONSOLE COMPS SHOW THAT IS NOT HERE ────────────────────

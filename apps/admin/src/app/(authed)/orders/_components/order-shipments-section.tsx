@@ -15,7 +15,7 @@ import { ManualPlacementPanel } from './manual-placement-panel';
 import { OoCard } from './order-ops-parts';
 import './order-shipping.css';
 
-const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.online';
+const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.global';
 
 const KNOWN_SHIPMENT_STATUSES: readonly string[] = Object.values(ShipmentStatus);
 
@@ -31,7 +31,7 @@ function ShipmentChip({ status }: { readonly status: string }): ReactElement {
 /**
  * Shipments associated with the order. For each shipment with an AWB
  * a "View public tracking" deep-link is rendered — points to
- * track.skydrop.online/<awb>. Useful when an operator wants to see
+ * track.skydrop.global/<awb>. Useful when an operator wants to see
  * exactly what the customer sees.
  */
 export function OrderShipmentsSection({

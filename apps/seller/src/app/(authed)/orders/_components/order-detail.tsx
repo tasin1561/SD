@@ -57,7 +57,7 @@ import { UnreachableCustomerPanel } from '../[id]/_components/unreachable-custom
 
 /** The public tracking site. Env-driven so a domain change is a deploy
  *  variable rather than a code edit. */
-const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.online';
+const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.global';
 
 /**
  * Seller order detail. Two fetches: the order body (with items) and

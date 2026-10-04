@@ -2,7 +2,7 @@
   "name": "@skydrop/seller",
   "version": "0.0.0",
   "private": true,
-  "description": "Skydrop seller portal — app.skydrop.online — BD seller-facing dashboard (catalog, orders, tracking, profile).",
+  "description": "Skydrop seller portal — app.skydrop.global — BD seller-facing dashboard (catalog, orders, tracking, profile).",
   "scripts": {
     "dev": "next dev -p 3003",
     "build": "next build",

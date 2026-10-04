@@ -80,7 +80,7 @@ export function ForgotPasswordForm(): ReactElement {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         disabled={submitting}
-        placeholder="you@skydrop.online"
+        placeholder="you@skydrop.global"
       />
 
       {error !== null && (

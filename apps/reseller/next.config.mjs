@@ -1,7 +1,7 @@
 import { staticSecurityHeaders, allRoutes } from '../../packages/config/security-headers.mjs';
 
 /**
- * Next.js 15 config — apps/reseller (RS-2, reseller.skydrop.online).
+ * Next.js 15 config — apps/reseller (RS-2, reseller.skydrop.global).
  *
  * Same architecture as apps/seller and apps/admin: the `/api/*` proxy is
  * a ROUTE HANDLER at src/app/api/[...path]/route.ts (not a rewrite), so

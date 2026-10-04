@@ -30,7 +30,7 @@ const noop = (): void => undefined;
 const CHALLENGE = {
   challengeId: '01a0a457-023b-7a35-9fc9-130a9a2a3547',
   expiresAt: '2026-10-01T12:10:00.000Z',
-  sentToEmail: 'ops@skydrop.online',
+  sentToEmail: 'ops@skydrop.global',
   binsAffected: 47,
   unitsAffected: 1203,
 };

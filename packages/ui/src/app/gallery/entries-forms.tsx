@@ -305,7 +305,7 @@ export const FORM_ENTRIES: GalleryEntry[] = [
       {
         label: 'Filled',
         render: () => (
-          <TextField label="Email" icon={<Mail />} type="email" defaultValue="ops@skydrop.online" />
+          <TextField label="Email" icon={<Mail />} type="email" defaultValue="ops@skydrop.global" />
         ),
       },
       {
