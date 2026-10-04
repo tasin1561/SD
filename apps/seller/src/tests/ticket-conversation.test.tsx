@@ -103,4 +103,28 @@ describe('seller ticket conversation', () => {
     expect(screen.getByText(/This ticket is closed/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Reply on this ticket')).not.toBeInTheDocument();
   });
+
+  /*
+    A DISPUTE A SELLER'S OWN RESELLER STORE RAISED read "Skydrop" until
+    2026-10-04 — the component asked `openedBy === 'SELLER'` and put
+    everything else on our side, so the seller was told WE were
+    complaining about their goods. Worse here than on the admin copy of
+    the same mistake: this is the party being asked to pay.
+  */
+  it("a store's dispute is the STORE's words, named, on their side", () => {
+    state.timeline = [{ note: 'Ticket opened', actorType: 'STORE', at: AT, relayedAt: null }];
+    show(
+      ticket({
+        openedBy: 'STORE',
+        ticketType: 'STORE_DISPUTE',
+        storeName: 'Silk Studio',
+        description: 'The saree arrived with a tear along the border.',
+      } as Partial<TicketView>),
+    );
+    expect(screen.getByText(/^Silk Studio ·/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Skydrop ·/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText('The saree arrived with a tear along the border.').closest('li'),
+    ).toHaveClass('justify-end');
+  });
 });

@@ -4331,6 +4331,69 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'refunds-and-disputes',
+    title: 'Refunds and disputes',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Tickets. Everything anybody is arguing about — goods we damaged, a count that came up short, and a reseller store that has fallen out with the seller whose stock it sells.',
+      },
+      {
+        id: 'kinds',
+        say: 'The type column comes first, and it is the one that changes how you read the rest. Software raised a receipt short; a person raised the dispute. Only some of these are ours to answer at all.',
+      },
+      {
+        id: 'open',
+        say: 'This one is about a COUNT rather than a parcel, so it names a goods receipt where the others name an order. Fifteen left Dhaka, fourteen were counted in India.',
+      },
+      {
+        id: 'thread',
+        say: 'And we opened it, so it opens with our words. It says which leg lost the unit, that the goods were in our hands when it happened, and that nothing is on hold while we look.',
+      },
+      {
+        id: 'reply',
+        say: 'A reply here is not an internal note. The seller reads this on their own ticket, so it is written to them — and it is the only part of this page that is free.',
+      },
+      {
+        id: 'sent',
+        say: 'Sent. It lands in their conversation exactly as you typed it, and from here the ticket is a thread rather than a form: everything said by either side stays in order, with a time on it.',
+      },
+      {
+        id: 'stage',
+        say: 'Then moving it on, which is deliberately TWO questions. What stage is this at — and only if you are closing it does it ask the second one, because that is where the money is.',
+      },
+      {
+        id: 'outcomes',
+        say: 'Four ways to finish. Goods went back, the seller accepted the loss, not upheld — three of them record a decision and move nothing. The first one moves money.',
+      },
+      {
+        id: 'amount',
+        say: 'Refunded the seller, and a figure appears. There is no suggestion in it and there should not be: what a lost unit was worth is a judgement, and the form should not make it for you.',
+      },
+      {
+        id: 'confirm',
+        say: 'And this is what Apply asks before it does anything. Credited in the SAME transaction as the close — so the ticket finishing and the money arriving are one event, and neither can happen without the other.',
+      },
+      {
+        id: 'store',
+        say: 'The dispute is a different animal. A reseller store sells a seller’s goods under its own name, and when the two of them disagree the argument is between them. We only referee it.',
+      },
+      {
+        id: 'settle',
+        say: 'Which is why this one asks who pays whom. The money moves between the store’s wallet and the seller’s, as one pair, never out of ours — and the note you write is read by both of them.',
+      },
+      {
+        id: 'norefund',
+        say: 'And refunding the seller is simply not offered here. Not hidden because it would be awkward: the server refuses it by name on this type, because paying out of our own pocket is not settling an argument.',
+      },
+      {
+        id: 'outro',
+        say: 'So: reply freely, close carefully. Three outcomes are a record of what you decided; one of them is a payment. And a dispute between two of our customers is settled between them, not by us.',
+      },
+    ],
+  },
+  {
     slug: 'bill-the-freight',
     title: 'Billing a consignment’s freight',
     subtitle: 'Skydrop for ops',

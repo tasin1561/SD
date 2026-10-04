@@ -102,4 +102,75 @@ describe('admin ticket conversation', () => {
     show(ticket({ description: null, status: 'REJECTED', resolvedAt: AT }));
     expect(screen.queryByLabelText('Reply to the seller')).not.toBeInTheDocument();
   });
+
+  /*
+    THE STORE IS A THIRD VOICE. Every one of these was labelled "Skydrop"
+    until 2026-10-04, because the component asked `openedBy === 'SELLER'`
+    and put everything else on our side — while the subtitle two inches
+    above it already said "Raised … by Silk Studio".
+  */
+  it("a store's dispute is the STORE's words, named, on their side", () => {
+    state.events = [
+      { id: 'ev-1', note: 'Ticket opened', actorType: 'STORE', createdAt: AT, relayedAt: null },
+    ];
+    show(
+      ticket({
+        openedBy: 'STORE',
+        ticketType: 'STORE_DISPUTE',
+        storeName: 'Silk Studio',
+        description: 'The saree arrived with a tear along the border.',
+      } as Partial<TicketView>),
+    );
+    expect(screen.getByText(/^Silk Studio ·/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Skydrop ·/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText('The saree arrived with a tear along the border.').closest('li'),
+    ).toHaveClass('justify-end');
+    // TKT-2's relay is "I have taken this to the courier". A dispute has
+    // no courier in it, so there is nothing to offer.
+    expect(screen.queryByRole('button', { name: 'Mark delivered' })).not.toBeInTheDocument();
+  });
+
+  it("a store's REPLY is theirs too, not ours", () => {
+    state.events = [
+      { id: 'ev-1', note: 'Ticket opened', actorType: 'STORE', createdAt: AT, relayedAt: null },
+      {
+        id: 'ev-2',
+        note: 'We have the photographs if you want them.',
+        actorType: 'STORE',
+        createdAt: AT,
+        relayedAt: null,
+      },
+    ];
+    show(
+      ticket({
+        openedBy: 'STORE',
+        ticketType: 'STORE_DISPUTE',
+        storeName: 'Silk Studio',
+        description: 'The saree arrived with a tear along the border.',
+      } as Partial<TicketView>),
+    );
+    expect(screen.getByText('We have the photographs if you want them.').closest('li')).toHaveClass(
+      'justify-end',
+    );
+  });
+
+  /*
+    A reply on a dispute reaches BOTH parties — the notification plan's
+    own rule since the store got an inbox — so a box labelled "Reply to
+    the seller" tells an operator the wrong thing about who is listening.
+  */
+  it('on a dispute the reply box says both sides read it', () => {
+    state.events = [];
+    show(
+      ticket({
+        openedBy: 'STORE',
+        ticketType: 'STORE_DISPUTE',
+        storeName: 'Silk Studio',
+        description: null,
+      } as Partial<TicketView>),
+    );
+    expect(screen.getByLabelText('Reply to the seller and Silk Studio')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Reply to the seller')).not.toBeInTheDocument();
+  });
 });

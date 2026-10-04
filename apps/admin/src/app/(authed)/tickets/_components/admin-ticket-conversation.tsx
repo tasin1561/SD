@@ -9,6 +9,7 @@ import { Button } from '@skydrop/ui/app/button';
 import { TextArea } from '@skydrop/ui/app/text-field';
 import { PaperPlaneSendButton } from '@skydrop/ui/app/paper-plane-send';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { TicketType } from '@skydrop/db';
 import {
   useCourierThread,
   useCourierThreadForTicket,
@@ -77,18 +78,57 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     (e) => (e.note ?? '').trim() === 'Ticket opened' && e.actorType === 'SELLER',
   );
 
+  /*
+    A STORE IS A THIRD VOICE, and it used to be drawn as ours.
+
+    `openedBy` carries 'STORE' and the server goes out of its way to say
+    why ("neither the seller's words nor ours, so it is named for what it
+    is"). This file collapsed it to `openedBy === 'SELLER'`, so on every
+    reseller-store dispute the STORE's own complaint was labelled
+    **Skydrop** — in the one panel whose whole job is to say who said
+    what, three inches under a subtitle that correctly read "Raised … by
+    Silk Studio". Same for every reply: `actorType === 'SELLER'` put a
+    store's words on our side of the thread too.
+
+    `side` stays 'SELLER' for a store, and that is right rather than
+    lazy: the sides are US and THEM, the counterparty sits on the right
+    here and on its own portal, and a fourth value would only change
+    where the bubble is drawn. The NAME is what was wrong.
+
+    `storeName` is preferred over a bare "Reseller store" so an operator
+    reading this with the seller on the telephone can say who complained.
+  */
+  const them = ticket.storeName ?? 'Reseller store';
+  const openedByStore = ticket.openedBy === 'STORE';
+  /*
+    On a dispute our reply reaches BOTH parties — the plan's own rule is
+    "our words and the seller's words go to the store" since it got an
+    inbox (RS-7, 2026-09-19) — so a box labelled "Reply to the seller" is
+    telling an operator the wrong thing about who is listening.
+  */
+  const isDispute = ticket.ticketType === TicketType.STORE_DISPUTE;
+
   // The opening message sits with WHOEVER OPENED the ticket: the seller's
-  // words on a seller issue, ours on a ticket we opened (a scrap/damage
-  // claim off an RTO inspection) — which used to be drawn as the seller's.
+  // words on a seller issue, the store's on a dispute it raised, ours on
+  // a ticket we opened (a scrap/damage claim off an RTO inspection) —
+  // which used to be drawn as the seller's.
   if (ticket.description !== null && ticket.description.trim() !== '') {
-    const theirs = ticket.openedBy === 'SELLER';
+    const fromSeller = ticket.openedBy === 'SELLER';
+    const theirs = fromSeller || openedByStore;
     bubbles.push({
       key: 'raised',
       side: theirs ? 'SELLER' : 'US',
-      who: theirs ? 'Seller' : 'Skydrop',
+      who: openedByStore ? them : fromSeller ? 'Seller' : 'Skydrop',
       body: ticket.description,
       at: ticket.createdAt,
-      ...(theirs && openingEvent !== undefined
+      /*
+        The relay marker is "I have taken this to the courier" (TKT-2),
+        so it belongs to the SELLER's words alone — a store dispute has
+        no courier in it, and offering the button there would be an
+        operator asserting something about a conversation that never
+        leaves the three of us.
+      */
+      ...(fromSeller && openingEvent !== undefined
         ? { eventId: openingEvent.id, relayedAt: openingEvent.relayedAt }
         : {}),
     });
@@ -101,10 +141,11 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     const said = (e.note ?? '').trim();
     if (said === '' || said === 'Ticket opened') continue;
     const fromSeller = e.actorType === 'SELLER';
+    const fromStore = e.actorType === 'STORE';
     bubbles.push({
       key: `note-${e.id}`,
-      side: fromSeller ? 'SELLER' : 'US',
-      who: fromSeller ? 'Seller' : 'Skydrop',
+      side: fromSeller || fromStore ? 'SELLER' : 'US',
+      who: fromStore ? them : fromSeller ? 'Seller' : 'Skydrop',
       body: said,
       at: e.createdAt,
       ...(fromSeller ? { eventId: e.id, relayedAt: e.relayedAt } : {}),
@@ -163,7 +204,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     try {
       await reply.mutateAsync({ ticketId: ticket.id, note });
       setDraft('');
-      toast.success('Sent — the seller can see it');
+      toast.success(isDispute ? 'Sent — both sides can see it' : 'Sent — the seller can see it');
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
@@ -244,18 +285,22 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
       {ticket.resolvedAt === null && canReply ? (
         <div className="af-reply">
           <TextArea
-            label="Reply to the seller"
+            label={isDispute ? `Reply to the seller and ${them}` : 'Reply to the seller'}
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Reply to the seller — they read this on their own ticket."
+            placeholder={
+              isDispute
+                ? 'Both sides read this, each on their own ticket.'
+                : 'Reply to the seller — they read this on their own ticket.'
+            }
             // Display only: the server's limit on a note (AddTicketNoteDto,
             // 2000), shown so a long reply is not a surprise — never enforced.
             countMax={2000}
           />
           <div className="af-row af-row--end">
             <PaperPlaneSendButton
-              label="Reply to seller"
+              label={isDispute ? 'Reply to both' : 'Reply to seller'}
               busyLabel="Sending…"
               doneLabel="Sent"
               errorLabel="Not sent"

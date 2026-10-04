@@ -282,8 +282,16 @@ export function SellerTicketsIndex(): ReactElement {
                       <span className="tkt-number sk-ident">{t.ticketNumber}</span>
                     </Td>
                     <Td>
+                      {/* Three answers, not two: a reseller store's
+                          dispute is neither yours nor ours, and
+                          `=== 'SELLER' ? … : 'Skydrop'` said we had
+                          raised it (2026-10-04). */}
                       <span className="tkt-muted">
-                        {t.openedBy === 'SELLER' ? 'You' : 'Skydrop'}
+                        {t.openedBy === 'SELLER'
+                          ? 'You'
+                          : t.openedBy === 'STORE'
+                            ? (t.storeName ?? 'A reseller store')
+                            : 'Skydrop'}
                       </span>
                     </Td>
                     <Td>

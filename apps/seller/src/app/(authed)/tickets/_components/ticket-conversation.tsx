@@ -99,23 +99,39 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
     (e) => (e.note ?? '').trim() === 'Ticket opened' && e.actorType === 'SELLER',
   );
 
+  /*
+    A RESELLER STORE IS A THIRD VOICE, and it was drawn as Skydrop's.
+
+    A store raising a dispute about one of its own orders is neither the
+    seller's words nor ours — the server says exactly that and sends
+    `openedBy: 'STORE'`. Every reader here asked `=== 'SELLER'` and put
+    everything else on our side, so a seller opening a dispute their own
+    shopkeeper had raised was told SKYDROP was complaining about their
+    goods. Worse than the admin copy of this: the seller is the party
+    being asked to pay.
+  */
+  const store = ticket.storeName ?? 'The store';
+  const openedByStore = ticket.openedBy === 'STORE';
+
   // The opening message, on the side of WHOEVER OPENED the ticket. A
-  // seller's issue opens with their words; a ticket we opened (damage
-  // found on a return) opens with ours, and drawing that as "You" put
-  // words in the seller's mouth they had never said.
+  // seller's issue opens with their words; a store's dispute with the
+  // store's; a ticket we opened (damage found on a return) opens with
+  // ours, and drawing that as "You" put words in the seller's mouth they
+  // had never said.
   if (ticket.description !== null && ticket.description.trim() !== '') {
-    const theirs = ticket.openedBy === 'SELLER';
+    const mineAtOpen = ticket.openedBy === 'SELLER';
+    const theirs = mineAtOpen || openedByStore;
     bubbles.push({
       key: 'raised',
       side: theirs ? 'SELLER' : 'US',
-      who: theirs ? 'You' : 'Skydrop',
+      who: openedByStore ? store : mineAtOpen ? 'You' : 'Skydrop',
       body: ticket.description,
       at: ticket.createdAt,
       // Spread rather than `: undefined` — under
       // exactOptionalPropertyTypes an optional property may be absent,
       // not explicitly undefined. Only a seller's own message has a
       // relay state; ours has nowhere further to travel.
-      ...(theirs && openingEvent !== undefined ? { relayedAt: openingEvent.relayedAt } : {}),
+      ...(mineAtOpen && openingEvent !== undefined ? { relayedAt: openingEvent.relayedAt } : {}),
     });
   }
 
@@ -129,10 +145,11 @@ export function TicketConversation({ ticket }: { readonly ticket: TicketView }):
     // WHO wrote it decides which side it sits on. A seller's own reply
     // rendered as ours would read as us answering ourselves.
     const mine = e.actorType === 'SELLER';
+    const fromStore = e.actorType === 'STORE';
     bubbles.push({
       key: `note-${i}`,
-      side: mine ? 'SELLER' : 'US',
-      who: mine ? 'You' : 'Skydrop',
+      side: mine || fromStore ? 'SELLER' : 'US',
+      who: fromStore ? store : mine ? 'You' : 'Skydrop',
       body: said,
       at: e.at,
       ...(mine ? { relayedAt: e.relayedAt } : {}),

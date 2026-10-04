@@ -65,8 +65,19 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
   }
 
   const ticket = query.data;
-  // Who opened it, as the server recorded it — not guessed from the type.
-  const raisedByUs = ticket.openedBy !== 'SELLER';
+  /*
+    Who opened it, as the server recorded it — not guessed from the type,
+    and not reduced to "us or you". A reseller store raising a dispute
+    about one of its own orders is a THIRD party, and `!== 'SELLER'`
+    printed "Raised by Skydrop" over its words (2026-10-04).
+  */
+  const openedByStore = ticket.openedBy === 'STORE';
+  const raisedByUs = ticket.openedBy !== 'SELLER' && !openedByStore;
+  const raisedBy = openedByStore
+    ? `Raised by ${ticket.storeName ?? 'a reseller store'}`
+    : raisedByUs
+      ? 'Raised by Skydrop'
+      : 'Raised by you';
 
   return (
     <div className="tkt-page">
@@ -88,7 +99,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
               {ticket.subject}
             </span>
           }
-          subtitle={`${raisedByUs ? 'Raised by Skydrop' : 'Raised by you'} on ${formatDateTime(ticket.createdAt)}`}
+          subtitle={`${raisedBy} on ${formatDateTime(ticket.createdAt)}`}
           /*
             Standing facts about THIS ticket, under its number.
 

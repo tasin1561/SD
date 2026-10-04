@@ -37,8 +37,17 @@ export interface TicketView {
   /**
    * Who opened it, and so whose words the opening message is. A ticket
    * Skydrop opened (damage found on a return) opens with OUR message.
+   *
+   * 'STORE' was MISSING here until 2026-10-04, and the server has sent
+   * it since RS-7: a reseller store raising a dispute about one of its
+   * own orders is neither the seller's words nor ours. Omitting it from
+   * this hand-written type is why every reader below collapsed to
+   * "not the seller, therefore Skydrop" and told a seller that WE were
+   * complaining about their goods when it was their own shopkeeper.
    */
-  readonly openedBy: 'STAFF' | 'SELLER' | 'SYSTEM';
+  readonly openedBy: 'STAFF' | 'SELLER' | 'SYSTEM' | 'STORE';
+  /** RS-7 — the reseller store on a dispute; null on every other type. */
+  readonly storeName?: string | null;
   readonly ticketType: TicketType;
   readonly status: TicketStatus;
   readonly sellerId: string;

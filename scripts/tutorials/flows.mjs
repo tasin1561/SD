@@ -7866,6 +7866,223 @@ export const FLOWS = {
   },
 
   /*
+    P3 — REFUNDS AND DISPUTES.
+
+    ONE WRITE IS PRESSED AND IT IS THE REVERSIBLE-ISH ONE: a reply, which
+    is an append-only `ticket_events` row and is the everyday act the
+    ticket exists for. Everything that MOVES MONEY is opened, read and
+    cancelled — `RESOLVED_REFUND` is terminal, credits a seller's wallet
+    in the same transaction as the close, and a store settlement moves
+    money between two wallets. Same discipline as P1's companion dialogs
+    and P2's three.
+
+    TWO TICKETS, and they are different KINDS of argument rather than two
+    examples of one. TK-…0003 is a receipt short at the Indian end —
+    OURS to answer, and the only ticket on this box whose own opening
+    message says we may settle it. The dispute is between a reseller
+    store and its seller, which we referee and never pay.
+
+    Both are reached BY TICKET NUMBER through the list's own search,
+    never by a hard-coded id: these rows carry uuidv7 ids and the numbers
+    are what a person quotes.
+  */
+  'refunds-and-disputes': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/tickets', ctx.page.getByRole('heading', { level: 1 }).first());
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        // The LIST, which opens on OPEN — the three tickets the seeding
+        // leaves. Gated on the count rather than on "a row", because an
+        // empty list renders the same table.
+        await page
+          .getByText(/^Showing 1–3 of 3$/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 3200);
+      },
+
+      async kinds({ page, stage }) {
+        // The TYPE cell of the dispute row, which is what the line is
+        // about — the column that changes how the rest reads.
+        const row = page.getByRole('row').filter({ hasText: 'TK-2026-000004' }).first();
+        await row.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(row, 3800);
+      },
+
+      async open({ page, stage }) {
+        /*
+          THE ROW, not the number. The admin queue's ticket number is a
+          plain `<span>` and the whole `<Tr>` carries `onActivate` — "the
+          row IS the link now: one way in" — so reaching for a link by
+          that name waits thirty seconds for something that was never a
+          link. The SELLER's queue is the other way round (its subject
+          cell holds the `<Link>`), which is exactly why this is worth a
+          comment rather than a memory.
+        */
+        await stage.clickIt(page.getByRole('row').filter({ hasText: 'TK-2026-000003' }).first(), {
+          after: 1400,
+        });
+        await page.waitForURL(/\/tickets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        // The GOODS RECEIPT line, which is the narration's whole point:
+        // this one names a receipt where the others name an order.
+        const facts = page.locator('.af-card').first();
+        await page
+          .getByText('receipt shortfall', { exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(facts, 3600);
+      },
+
+      async thread({ page, stage }) {
+        // The sentence the narration quotes, not the panel that holds
+        // it: an empty conversation renders the same card.
+        const said = page.getByText(/so they were in our hands/).first();
+        await said.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(said, 4000);
+      },
+
+      async reply({ page, stage }) {
+        await stage.typeIn(
+          page.getByLabel('Reply to the seller'),
+          'We have been through the forwarder’s manifest and the unit is not on it.',
+        );
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.getByRole('button', { name: 'Reply to seller' }), 2600);
+      },
+
+      async sent({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Reply to seller' }), { after: 1600 });
+        // The bubble, by its own words — the toast fades and the thread
+        // is the durable evidence the reply landed.
+        const mine = page.getByText(/forwarder’s manifest/).first();
+        await mine.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(mine, 3600);
+      },
+
+      /*
+        The method NAME is the step id and must match `narration.mjs`
+        exactly; the `stage` parameter it destructures is a different
+        thing entirely (a property key is not a binding), so the two
+        living side by side is legal and deliberate rather than a typo
+        waiting to be "fixed".
+      */
+      async stage({ page, stage }) {
+        await page.selectOption('#admin-ticket-stage', 'CLOSED');
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('#admin-ticket-stage'), 3200);
+      },
+
+      /*
+        THE OPTIONS ARE CYCLED, because a native `<select>`'s list is
+        drawn by the OPERATING SYSTEM and appears in no screenshot and no
+        recording. A scene that opens one films a closed box reading
+        "Outcome…" under a line naming four choices.
+
+        So the value is set to each in turn and the closed box reads them
+        out one at a time, which is what a viewer can actually see. The
+        LAST one left selected is the refund, because that is what the
+        next scene types a figure into.
+      */
+      async outcomes({ page, stage }) {
+        const select = page.locator('#admin-ticket-to');
+        for (const v of ['RESOLVED_RETURNED', 'RESOLVED_WRITE_OFF_ACCEPTED', 'REJECTED']) {
+          await select.selectOption(v);
+          await page.waitForTimeout(1500);
+        }
+        await stage.dwellOn(select, 2600);
+      },
+
+      async amount({ page, stage }) {
+        // The fourth option, and the only one that opens a figure field.
+        await page.selectOption('#admin-ticket-to', 'RESOLVED_REFUND');
+        await page.waitForTimeout(800);
+        await stage.typeIn(page.locator('#admin-ticket-refund'), '820');
+        await page.waitForTimeout(400);
+        await stage.dwellOn(page.locator('#admin-ticket-refund'), 2800);
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Apply' }), { after: 1200 });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('heading', { name: 'Refund the seller?' })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 4000);
+      },
+
+      async store({ page, stage, baseUrl }) {
+        // CANCEL FIRST, in the previous scene's tail — a scene must open
+        // on the thing it is about, not on a closing modal.
+        await stage.clickIt(
+          dialogActions(page).getByRole('button', { name: 'Cancel', exact: true }),
+          { after: 900 },
+        );
+        await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 20_000 });
+        await stage.clickIt(page.getByRole('link', { name: 'All tickets' }).first(), {
+          after: 1200,
+        });
+        await page.waitForURL(`${baseUrl}/tickets`, { timeout: 30_000 });
+        await stage.clickIt(page.getByRole('row').filter({ hasText: 'TK-2026-000004' }).first(), {
+          after: 1400,
+        });
+        await page.waitForURL(/\/tickets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        // The STORE's own words, named — which is what the attribution
+        // fix of 2026-10-04 is about and what the line claims.
+        const said = page.getByText(/^Silk Studio ·/).first();
+        await said.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(said, 3600);
+      },
+
+      async settle({ page, stage }) {
+        const panel = page
+          .locator('.af-section')
+          .filter({
+            has: page.getByRole('heading', { name: 'Settle between store and seller' }),
+          })
+          .first();
+        await panel.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(panel.locator('.af-muted').first(), 4000);
+      },
+
+      async norefund({ page, stage }) {
+        await page.selectOption('#admin-ticket-stage', 'CLOSED');
+        await page.waitForTimeout(600);
+        const select = page.locator('#admin-ticket-to');
+        /*
+          ASSERTED, not merely shown. "The option is missing" is exactly
+          the kind of claim a dwell cannot make on its own — a frame of a
+          closed select says nothing about what is inside it — so the
+          flow READS the list and throws if the refund is there. The
+          cycle below is for the viewer; this line is the gate.
+        */
+        const texts = await select.locator('option').allTextContents();
+        if (texts.some((t) => /Refunded the seller/.test(t))) {
+          throw new Error(
+            'The refund outcome is offered on a STORE_DISPUTE — the narration says it is not.',
+          );
+        }
+        for (const v of ['RESOLVED_RETURNED', 'RESOLVED_WRITE_OFF_ACCEPTED', 'REJECTED']) {
+          await select.selectOption(v);
+          await page.waitForTimeout(1400);
+        }
+        await stage.dwellOn(select, 2400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 3600);
+      },
+    },
+  },
+
+  /*
     P5 — THE FIRST ADMIN FLOW, and a TOUR: it presses nothing that
     changes anything. Ten screens, each one visited so the narration can
     read that screen's own warning copy out loud beside it.

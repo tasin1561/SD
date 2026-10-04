@@ -460,6 +460,41 @@ const STORE_ORDER_SLUGS = new Set(['answer-what-a-store-asked']);
 const STORE_REPORT_SLUGS = new Set(['how-your-stores-are-doing']);
 
 /**
+ * P3 — the one video that needs a STORE DISPUTE on the register.
+ *
+ * It needs the trading store (for a store that can place an order at
+ * all) and nothing else that world builds: no held requests, no driven
+ * parcels, no scorecards. A dispute is argued on an order whatever
+ * became of it, so the cheapest order this store can have is the right
+ * one — a third list rather than a flag on either of the two above,
+ * for the same reason those two are apart.
+ */
+const STORE_DISPUTE_SLUGS = new Set(['refunds-and-disputes']);
+
+/**
+ * The order the store argues about, and what it says.
+ *
+ * GENERAL rather than FIGURE_CORRECTION deliberately: a figure
+ * correction seeds the settle form from the claim, which is a good
+ * thing on the day and the wrong thing to film — the video is about
+ * somebody DECIDING an amount, and a form that arrives already holding
+ * one reads as a form that has decided for them.
+ */
+export const STORE_DISPUTE_ORDER = {
+  family: 'RSH-STORE-DISPUTE',
+  recipientName: 'Anita Bardhan',
+  phone: '+919845070044',
+  line1: '27, Lavelle Road',
+  line2: 'The blue gate beside the tailor',
+  postalCode: '560001',
+  subject: 'Saree arrived with a tear along the border',
+  body:
+    'The customer sent us photographs within the hour and we have refunded her ourselves. The ' +
+    'tear runs along the border and is not something that happens in a courier bag, so we think ' +
+    'it left the warehouse that way and we are asking the seller to carry it.',
+};
+
+/**
  * What the CATALOGUE IMPORT video uploads. Keep in step with
  * `fixtures/rangpur-catalogue.csv` — the preview's figures are narrated
  * word for word, so the file and the words move together or not at all.
@@ -3106,7 +3141,11 @@ async function cancelWorldFor(slug, sellerId, sellerToken) {
  *     stand from one take to the next.
  */
 async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
-  if (!STORE_ORDER_SLUGS.has(slug ?? '') && !STORE_REPORT_SLUGS.has(slug ?? '')) return;
+  const wantsStore =
+    STORE_ORDER_SLUGS.has(slug ?? '') ||
+    STORE_REPORT_SLUGS.has(slug ?? '') ||
+    STORE_DISPUTE_SLUGS.has(slug ?? '');
+  if (!wantsStore) return;
   const log = (m) => console.log(m);
   const world = await tradingStoreWorld(sellerId, sellerToken, staffToken, log);
 
@@ -3118,6 +3157,75 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
   if (STORE_REPORT_SLUGS.has(slug ?? '')) {
     await ensureSettledStoreOrders(sellerId, world, staffToken, log);
   }
+  if (STORE_DISPUTE_SLUGS.has(slug ?? '')) {
+    await ensureStoreDispute(sellerId, world, log);
+  }
+}
+
+/**
+ * P3 — the reseller store's open dispute with its seller.
+ *
+ * Raised through the STORE's own endpoint as the STORE's user, because
+ * who opened it is what the detail page draws the opening bubble from
+ * (TKT-1's `openedBy`) and a dispute Skydrop raised against itself reads
+ * as a different thing entirely.
+ *
+ * IT IS NEVER SETTLED HERE, and the video never settles it either —
+ * `settleStoreDispute` is terminal and moves money between two wallets,
+ * so a take that pressed it would need this to rebuild an order and a
+ * dispute every run and would spend real wallet entries doing it. The
+ * video opens the settle form, reads what it says, and leaves. So the
+ * one thing this has to put back is a previous take's REPLY, below.
+ *
+ * Idempotent on the dispute, and on the order it hangs from: the order
+ * is only remade if one is missing, because nothing in the video
+ * changes its status.
+ */
+async function ensureStoreDispute(sellerId, world, log) {
+  const spec = STORE_DISPUTE_ORDER;
+  let order = await newestStoreOrder(sellerId, spec.family);
+  if (order === null) {
+    order = await placeStoreOrder(sellerId, world.storeToken, world.variantId, spec, log);
+  }
+
+  const existing = await prisma.ticket.findFirst({
+    where: { orderId: order.id, ticketType: 'STORE_DISPUTE' },
+    select: { id: true, ticketNumber: true, status: true },
+  });
+  if (existing === null) {
+    const raised = await call('/store/tickets', {
+      method: 'POST',
+      token: world.storeToken,
+      body: { orderId: order.id, subject: spec.subject, description: spec.body },
+    });
+    log(
+      `  · ${REQUEST_STORE.displayName} has disputed ${order.orderNumber} (${raised.ticketNumber})`,
+    );
+    return;
+  }
+
+  /*
+    A SETTLED dispute cannot be reopened (the matrix has no outbound
+    edge from a resolution, and reopening one would mean re-arguing
+    money that has already moved between two wallets). So if a take ever
+    does settle it, the honest repair is a NEW dispute on a NEW order
+    rather than a status written round the back — which is the same
+    `retireSpentParcel` shape the lifecycle uses.
+  */
+  if (existing.status !== 'OPEN' && existing.status !== 'NEGOTIATING') {
+    log(`  · ${existing.ticketNumber} is ${existing.status} — a fresh order and dispute follow`);
+    const fresh = await placeStoreOrder(sellerId, world.storeToken, world.variantId, spec, log);
+    const raised = await call('/store/tickets', {
+      method: 'POST',
+      token: world.storeToken,
+      body: { orderId: fresh.id, subject: spec.subject, description: spec.body },
+    });
+    log(
+      `  · ${REQUEST_STORE.displayName} has disputed ${fresh.orderNumber} (${raised.ticketNumber})`,
+    );
+    return;
+  }
+  log(`  · ${existing.ticketNumber} is still open on ${order.orderNumber}`);
 }
 
 /**
@@ -4047,6 +4155,56 @@ async function clearDeliveryTakeArtefacts(sellerId) {
       );
     }
   }
+
+  await clearTicketReplies(sellerId);
+}
+
+/**
+ * P3 REPLIES ON A TICKET, and a reply is a `ticket_events` row.
+ *
+ * The History panel is on screen in that video, and the conversation is
+ * the whole first half of it — so a take's reply left behind would give
+ * the next one a thread that already contains the sentence it is about
+ * to type, said by us, a take ago. Four takes in, the ticket reads like
+ * a chatbot.
+ *
+ * `ticket_events` is APPEND-ONLY BY CONSTRUCTION (TKT-1): there is no
+ * service path that removes one, which is right for the product and is
+ * why this goes through Prisma, exactly as the seller-raised tickets a
+ * few lines up do.
+ *
+ * SCOPED THREE WAYS, and each one matters. Only the tickets P3 touches
+ * — the India-leg shortfall it replies on and the store dispute it
+ * reads — because every OTHER ticket's history is somebody's seeded
+ * world (TK-…0001's refund conversation is D6's whole subject). Only
+ * STAFF events, because a shortfall is opened by SYSTEM and a dispute by
+ * the STORE, so nothing we seed on either is ours and anything that is
+ * came from a take. And only events that CHANGED NO STATUS, which is
+ * what a reply is — a transition is the ticket's life and deleting one
+ * would leave a status with nothing behind it explaining it.
+ *
+ * The status comparison is done HERE rather than in the query: Prisma
+ * cannot compare two columns in a `where`, and these are a handful of
+ * rows on two tickets.
+ */
+async function clearTicketReplies(sellerId) {
+  const tickets = await prisma.ticket.findMany({
+    where: { sellerId, ticketType: { in: ['RECEIPT_SHORTFALL', 'STORE_DISPUTE'] } },
+    select: { id: true },
+  });
+  if (tickets.length === 0) return;
+  const events = await prisma.ticketEvent.findMany({
+    where: {
+      ticketId: { in: tickets.map((t) => t.id) },
+      actorType: 'STAFF',
+      note: { not: null },
+    },
+    select: { id: true, fromStatus: true, toStatus: true },
+  });
+  const replies = events.filter((e) => e.fromStatus === e.toStatus).map((e) => e.id);
+  if (replies.length === 0) return;
+  await prisma.ticketEvent.deleteMany({ where: { id: { in: replies } } });
+  console.log(`  · removed a previous take's ${replies.length} ticket repl(ies)`);
 }
 
 async function clearPreviousImports(sellerId) {
