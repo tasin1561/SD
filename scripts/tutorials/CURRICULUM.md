@@ -6,9 +6,9 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 86 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J, K, O and P, L1–L3, M1–M2, M4, M6 and N1–N9.** The 4 left are all in the admin app: 3 are
-`impractical locally` and the fourth is L4. Sections A–G are the seller app, H–P the admin app; the
+**90 tutorials. 87 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J, K, L, O and P, M1–M2, M4, M6 and N1–N9.** The 3 left are all in the admin app and all
+`impractical locally`. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
 **Ninety is a large number and it is meant to be read as one.** It is what
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (86):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (87):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **M4**, **M6**, **N1–N9**, **O1–O5** and **P1–P5**, which is
+**L1–L4**, **M1–M2**, **M4**, **M6**, **N1–N9**, **O1–O5** and **P1–P5**, which is
 **the whole of the dangerous five**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
@@ -47,56 +47,44 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**SECTION O IS FINISHED — O5 is filmed.** Stack A's whole remaining list is
-therefore **M4, M5, M6 and L4** (M3 is the one that cannot honestly be filmed as
-a state change; see below). All four are `needs demo data` and three are
-`dangerous`.
+**STACK A IS FINISHED. L4 and M4 were its last two, and both are filmed.**
+Section L and section O are complete; M5 and M6 went to stack B part-way
+through, and M6 is filmed. What is left is **M3, M5 and N10**, and all three are
+`impractical locally` rather than merely unstarted — nobody should spend credits
+making any of them look like a state change:
 
-**M4, M5 AND M6 WERE READ END TO END BEFORE ANY OF THEM WAS STARTED, and two of
-the three have a blocker that is not a seeding chore.** Whoever picks them up
-should read this before writing a line:
-
-- **M4 is the tractable one, and it wants TWO parcels rather than one.** A pick
-  shortfall (WMS-4) is cheap and needs no new code — but a shortfall-born parcel
-  carries `reasonCode: null`, so the "Why it is here" column reads **"Reason not
-  recorded"** with no courier sentence, and the column the video is ABOUT is the
-  one that stays empty. It also lands "Needs picking", so placing the waybill
-  sends the order to `PENDING_PICK` and the toast says so — not `DISPATCHED`.
-  The courier-refusal arrival is the one that fills the column (`reasonCode`
-  comes off the RETIRED shipment's `supersedeReason`; the sentence comes from an
-  `order.awb_at_confirmation_non_serviceable` audit row's `metadata.error`), and
-  reaching it means teaching the simulator to refuse a nominated VALID pin
-  permanently — `000000` can never reach an order (`^[1-9][0-9]{5}$` at create)
-  and `999999` is classified TRANSIENT, which by CUR-2b deliberately does not
-  route here. **Stage both and the page's own contrast is on camera.**
-- **M5 CANNOT BE REACHED ON A FILMING STACK AS IT STANDS.**
-  `CourierChoiceService.decide` returns `BOOK` immediately unless
-  `courierCode === 'shiprocket'`, and the options list comes from a LIVE
-  Shiprocket serviceability call which short-circuits to `[]` in stub mode —
+- **M3** — the tracking poll cannot be SEEN to work here. The simulator pushes a
+  signed webhook on every `advance`, so by the time the poll runs there is
+  nothing left for it to apply. The poll exists because the REAL Delhivery
+  pushes nothing; the simulator is more helpful than the thing it stands in for,
+  and that is the whole difficulty. Film it as narration over a page reporting
+  "last cycle, N minutes ago" and never claim a visible change, or teach the
+  simulator a per-advance no-webhook switch first. **Do NOT fake it by deleting
+  the applied webhook row** — the order has already moved by then, and rewinding
+  a lifecycle is the one thing this seeding never does.
+- **M5** — measured, not assumed: `CourierChoiceService.decide` returns BOOK
+  immediately unless `courierCode === 'shiprocket'`, and the options come from a
+  LIVE Shiprocket serviceability call that short-circuits to `[]` in stub mode.
   `apps/delhivery-sim` speaks only the Delhivery wire API and has no Shiprocket
-  surface at all. So no Delhivery parcel can ever appear on `/courier-decisions`.
-  Writing `courierOptions` into the shipment by hand puts a row on the page, but
-  the click then books through DELHIVERY (the choice short-circuits the policy),
-  so the carrier names on screen would be fiction and the narration "and this
-  books it with them" would be false. **Either add a Shiprocket serviceability
-  route to the simulator, or film it as a read of a staged page and never claim
-  the click books what it names.** Also worth knowing before writing: the page
-  has **NO confirmation dialog** — one click on a carrier name books real
-  carriage.
-- **M6's Approve/Decline cannot be reached by any product path any more.** A
-  plain seller's ask is created **already APPROVED** and executed
-  (`sellerDecides` in `DeliveryActionService`), so it never appears under the
-  default PENDING filter and its Decide cell is `—`. The only PENDING rows the
-  product still makes are a reseller store's held ask, which renders **"Waiting
-  on seller staff"** and which admin is refused with
-  `DELIVERY_ACTION_HELD_FOR_SELLER`. To film the dialog at all you must stage a
-  row with `status = PENDING` **and** `needs_seller_approval = false` directly in
-  `order_delivery_action_requests`, against an order in `OUT_FOR_DELIVERY` or
-  `DELIVERY_FAILED` with a live shipment. **And the dialog's own warning is
-  wrong**: it says a re-attempt "reaches Delhivery", and it does not —
-  `executeAsTicket` opens a `COURIER_NDR_ESCALATION` ticket plus a manual outbox
-  draft, and only RTO calls the courier API. Say so rather than reading it out.
-  Beware `clearDeliveryTakeArtefacts`, which deletes exactly this kind of row.
+  surface at all, so **no Delhivery parcel can ever reach `/courier-decisions`**.
+  Writing `courierOptions` by hand puts a row on the page, but the click then
+  books through DELHIVERY (the choice short-circuits the policy), so the carrier
+  names on screen would be fiction. Either give the simulator a Shiprocket
+  serviceability route or film it as a read and never claim the click books what
+  it names. Worth knowing either way: **the page has NO confirmation dialog** —
+  one click on a carrier name books real carriage.
+- **N10** — month-close, impractical locally for the reason already in its own
+  entry.
+
+**M4 LEFT A CAPABILITY THE REST OF THE LIBRARY CAN USE.** The simulator will now
+refuse a NOMINATED pin permanently (`POST /_sim/refuse-pin` with
+`{pin, errCode, remarks}`, `DELETE /_sim/refuse-pin/:pin`, cleared by
+`/_sim/reset`), which is what makes the whole courier-refusal shape reachable —
+both built-in refusal pins are unusable, one because an order cannot carry it
+and one because CUR-2b classifies it transient. It refuses the CONSIGNEE on a
+serviceable address, because a pre-flight serviceability check runs first and
+would otherwise block the create before the courier formed the opinion. See M4's
+entry.
 
 **Read the TWO navigation traps O4 paid for before writing any admin prologue**
 (below, in O4's entry): after a sign-in, reach a page by CLICKING ITS NAV LINK,
@@ -3524,16 +3512,77 @@ variant to answer "what happened to this SKU", by bin to answer "what happened
 here". The natural end of every stock investigation, which is why it is taught
 after the two screens that write to it.
 
-### L4. Moving stock between warehouses · `needs demo data` · **dangerous**
+### L4. Moving stock between warehouses · **FILMED** — `moving-stock-between-warehouses.mp4` · **dangerous**
 
 **Promise** — you can transfer stock without losing what the batch knows.
-**Length** 2 min. **Prerequisites** L3.
-**Covers** `/inventory/transfers`, and the one field that makes it a tutorial:
-the destination batch is **required and never auto-created**, because an
-invented batch drops expiry, unit cost and the goods-receipt link — breaking
-picking order and margin at once.
+**Length** 2 min 6 s of narration over 10 scenes. **Needs**
+`seed-demo-data.mjs moving-stock-between-warehouses` (`transferWorldFor`).
+**Covers** `/inventory/transfers`: the nine identifiers, the one field that
+makes it a tutorial — the destination batch is **required and never
+auto-created**, because an invented batch drops expiry, unit cost and the
+goods-receipt link — the same-warehouse refusal, the confirmation that restates
+the move, and the pair of movements it writes.
 **Cost of getting it wrong:** six-month-old stock that looks as fresh as
 today's, and a margin figure with nothing behind it.
+
+**THE NOTE THAT STOOD HERE HAD THE DIRECTION BACKWARDS, and it is worth saying
+why rather than just correcting it.** It recommended filming Dhaka intake →
+Kolkata and warned "do NOT film Kolkata → Dhaka; that is a consignment's job
+(CNS-4)". Consignments run **Dhaka → India**, so the direction it recommended is
+the one that collides: a raw transfer on that lane skips the TRANSIT bin that
+exists precisely so goods in the air are counted in neither building (CNS-1),
+and filming it would teach the habit the consignment machinery was written to
+replace. Neither cross-border direction is the right demo.
+
+**SO THE SEEDING MAKES A SECOND INDIAN WAREHOUSE, and `fulfilsOrders: false` is
+the whole safety argument.** `DEL-01 "Delhi Spoke"` is a spoke, not a hub.
+`WarehouseResolverService` is the ONE reader of that flag (CNS-2) and picks only
+fulfilling ones, so nothing changes about where orders are picked, where
+receipts land by default, or which warehouse any other seeding resolves — the
+seeding asserts it does not resolve as the fulfilling one, by name. **A second
+FULFILLING warehouse would quietly become a coin toss in all three.** It is also
+the service's own named use ("we may receive the RTO products at any warehouse …
+then we will send this to the designated warehouse") with no border in it: four
+units came back to the spoke, and they are sent to the hub.
+
+**THE SEED RECEIVES THE SAME GOODS AT BOTH ENDS, and that is the lesson rather
+than convenience.** The point of the required destination batch is that naming
+the WRONG batch is as lossy as inventing one — the units would take on somebody
+else's cost, expiry and receipt. So the demo is only honest if the batch being
+named is genuinely theirs: the seed receives one consignment at both buildings
+at the same unit cost, most of it at the hub and four units at the spoke, and
+the video sends the strays to join the rest. **The SKU is
+`RSH-JAMDANI-IVORY` because it is the only one carrying a `costInr`** — the
+other three are deliberately uncosted so the reseller reports can show what
+partial coverage looks like, and giving one of them a cost would move a figure
+two already-filmed videos narrate.
+
+**It is FORWARD-ONLY and re-takeable by construction.** A transfer is a pair of
+movements and `stock_movements` is append-only (INV-1), so nothing is rewound: a
+second take receives a fresh four at the spoke and moves those, and the units an
+earlier take moved stay where they went, which is what actually happened. The
+transfer ADDS to the hub rather than taking from it, so no take can starve
+another video's picking.
+
+**The nine identifiers come off the sheet (`lib/fixture.mjs`), which is L2's
+precedent and the same justification.** Seven of the nine are UUIDs typed into
+text fields, and no page in this console prints a variant, a bin and a batch
+together — the movement ledger carries a variant and a bin CODE and no batch at
+all. The narration says out loud that they are printed nowhere here.
+
+**THE GUARD IS PUT BACK AT THE START OF THE NEXT SCENE, not the end of its
+own.** Choosing the source warehouse at both ends renders "Source and
+destination are the same warehouse — that is a bin move, not a transfer" and
+disables the button; reverting inside the same step left it on screen for three
+seconds of a twelve-second line and gone for the rest, which reads as a
+flicker. P1's rule — a thing has to survive the sentence that is about it — and
+the end-of-scene check frame is what showed it.
+
+**No bug found in the screen.** Two defects were in the seeding and both were
+mine: `goodsReceiptId` is `receiptId` on `GoodsReceiptLine`, and a sign-in flake
+cleared the email field mid-hydration (retried, nothing spent). Two clips land
+0.1 s and 0.7 s past the 15 s ceiling — flagged by the generator, left as they
+are rather than re-bought and re-filmed for seven hundred milliseconds.
 
 ---
 

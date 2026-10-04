@@ -113,6 +113,28 @@ describe('a label one file types and another file clears', () => {
     than against another constant, because those two are what the
     machinery actually dispatches on.
   */
+  it('L4 seeds the world for the slug it is filmed under', async () => {
+    const [flows, seed, narration] = await Promise.all([
+      read('flows.mjs'),
+      read('seed-demo-data.mjs'),
+      read('narration.mjs'),
+    ]);
+    const slug = declared(seed, 'L4_SLUG');
+    assert.equal(
+      declared(flows, 'L4_SLUG'),
+      slug,
+      'L4_SLUG differs between the flow and the seed.',
+    );
+    assert.ok(
+      flows.includes(`'${slug}': {`),
+      `There is no flow keyed '${slug}', so the seeding builds a world no take ever opens.`,
+    );
+    assert.ok(
+      narration.includes(`slug: '${slug}',`),
+      `There is no narration for '${slug}', so record.mjs will refuse to open the browser.`,
+    );
+  });
+
   it('M4 seeds the world for the slug it is filmed under', async () => {
     const [flows, seed, narration] = await Promise.all([
       read('flows.mjs'),

@@ -5165,6 +5165,53 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'moving-stock-between-warehouses',
+    title: 'Moving stock between warehouses',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Four of these came back to the wrong building. This is the form that sends them where they belong \u2014 and it is the raw movement underneath everything else, which is why it asks for so much.',
+      },
+      {
+        id: 'ids',
+        say: 'The seller, the product and how many. These are identifiers, not names, and they are printed on no screen in this console \u2014 you arrive holding them, off the sheet somebody walked the shelves with.',
+      },
+      {
+        id: 'from',
+        say: 'Where they are leaving: the building, the exact bin, and the exact batch. Not the product and a number \u2014 stock lives in a place and belongs to a consignment, and both of those have to be named.',
+      },
+      {
+        id: 'to',
+        say: 'And where they are going. Read the line under this heading, because it is the whole reason the form looks like this: the destination batch is required and is never created for you.',
+      },
+      {
+        id: 'why',
+        say: 'A batch carries the expiry, what the unit cost, and which goods receipt brought it in. Invent one and all three are gone \u2014 so oldest-first picking orders wrongly, and the margin is worked out against nothing.',
+      },
+      {
+        id: 'same',
+        say: 'It also will not let you pretend. Name the same building at both ends and it stops you \u2014 moving stock from one shelf to another inside one warehouse is a different act, and this is not the form for it.',
+      },
+      {
+        id: 'note',
+        say: 'Back to the hub, where the rest of that consignment is waiting, and a line saying why this happened. Optional, and the only part of this form a person will read later.',
+      },
+      {
+        id: 'confirm',
+        say: 'And it asks once more, restating it: this product, this seller, this many units, out of that building and into this one. Read the last sentence \u2014 a movement is not something this form can take back.',
+      },
+      {
+        id: 'done',
+        say: 'Done, and it tells you exactly what it wrote: one movement out and one movement in, as a matched pair. There is no transfer list anywhere, because that pair in the ledger IS the record.',
+      },
+      {
+        id: 'outro',
+        say: 'So: arrive with the identifiers, name the batch that actually holds these goods rather than any batch that will be accepted, and remember the ledger is where to look for it afterwards.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

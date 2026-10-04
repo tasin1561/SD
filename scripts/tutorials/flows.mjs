@@ -1404,6 +1404,16 @@ const O5_NEW_ROLE_NAME = 'Seller approval admin';
 const O5_BROADCAST_ROLE_KEY = 'call_agent';
 
 /**
+ * The slug L4 is filmed under — same reason as M4's below.
+ *
+ * `transferWorldFor` returns at its first line for any other slug, and
+ * a rename that misses one side builds no world: the form opens, every
+ * field is reachable, and the take fills it in with whatever the stale
+ * sheet last held.
+ */
+const L4_SLUG = 'moving-stock-between-warehouses';
+
+/**
  * The slug M4 is filmed under — declared here too, see the seed's copy.
  *
  * `record.mjs` already refuses a flow whose step ids do not match the
@@ -14982,6 +14992,130 @@ export const FLOWS = {
     the page's own subtitle leads with the count and why this video
     does too.
   */
+  'moving-stock-between-warehouses': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      /*
+        NINE IDENTIFIERS AND SEVEN OF THEM ARE UUIDs. No page in this
+        console prints a variant, a bin and a batch together — the
+        movement ledger carries a variant and a bin CODE and no batch at
+        all — so the sheet is where they come from, exactly as for L2's
+        cycle count. `transferWorldFor` writes it, and the narration
+        says out loud that they are printed nowhere here.
+      */
+      ctx.sheet = await readFixture(L4_SLUG);
+      await signInAndOpen(ctx, '/inventory/transfers', ctx.page.locator('#tr-seller'));
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Inter-warehouse transfer', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+
+      async ids({ page, stage, sheet }) {
+        await stage.typeIn(page.locator('#tr-seller'), sheet.sellerId, { delay: 4, after: 300 });
+        await stage.typeIn(page.locator('#tr-variant'), sheet.variantId, { delay: 4, after: 300 });
+        await stage.typeIn(page.locator('#tr-qty'), sheet.qty, { after: 700 });
+      },
+
+      async from({ page, stage, sheet }) {
+        await page.locator('#tr-src-wh').selectOption({ label: sheet.sourceWarehouse });
+        await page.waitForTimeout(400);
+        await stage.typeIn(page.locator('#tr-src-bin'), sheet.sourceBinId, {
+          delay: 4,
+          after: 300,
+        });
+        await stage.typeIn(page.locator('#tr-src-batch'), sheet.sourceBatchId, {
+          delay: 4,
+          after: 600,
+        });
+      },
+
+      /*
+        THE SECTION NOTE IS THE LESSON, so it is haloed rather than the
+        fields. `AreaSection` renders it beside its own heading; reached
+        by the words because nothing here carries an id.
+      */
+      async to({ page, stage, sheet }) {
+        await page.locator('#tr-dst-wh').selectOption({ label: sheet.destWarehouse });
+        await page.waitForTimeout(400);
+        await stage.dwellOn(page.getByText(/destination batch is required, not created/i), 3400);
+      },
+
+      async why({ page, stage, sheet }) {
+        await stage.typeIn(page.locator('#tr-dst-bin'), sheet.destBinId, { delay: 4, after: 300 });
+        await stage.typeIn(page.locator('#tr-dst-batch'), sheet.destBatchId, {
+          delay: 4,
+          after: 700,
+        });
+      },
+
+      /*
+        THE GUARD, AND IT IS PUT BACK AT THE START OF THE NEXT SCENE
+        RATHER THAN THE END OF THIS ONE. P1's rule: a thing has to
+        survive the sentence that is about it. Reverted here, the
+        refusal would be on screen for the three seconds this step
+        spends and gone for the other nine, which reads as a flicker.
+        Nothing is submitted either way — the button is disabled while
+        it shows.
+      */
+      async same({ page, stage, sheet }) {
+        await page.locator('#tr-dst-wh').selectOption({ label: sheet.sourceWarehouse });
+        const refusal = page.getByText(/that is a bin move, not a transfer/i).first();
+        await refusal.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(400);
+        await stage.dwellOn(refusal, 3400);
+      },
+
+      async note({ page, stage, sheet }) {
+        await page.locator('#tr-dst-wh').selectOption({ label: sheet.destWarehouse });
+        await page
+          .getByText(/that is a bin move, not a transfer/i)
+          .first()
+          .waitFor({ state: 'hidden', timeout: 15_000 });
+        await page.waitForTimeout(400);
+        await stage.typeIn(
+          page.locator('#tr-desc'),
+          'Returned to the Delhi spoke by mistake; sending them to the hub to join the rest of ' +
+            'the consignment.',
+          { delay: 12, after: 700 },
+        );
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Transfer stock$/ }).first(), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3400);
+      },
+
+      async done({ page, stage }) {
+        await stage.clickIt(
+          dialogActions(page).getByRole('button', { name: 'Transfer stock', exact: true }),
+          { after: 1800 },
+        );
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 30_000 });
+        const said = page.getByText(/TRANSFER_OUT and a TRANSFER_IN/i).first();
+        await said.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(said, 3400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
+      },
+    },
+  },
+
   'when-nobody-will-carry-it': {
     app: 'admin',
 

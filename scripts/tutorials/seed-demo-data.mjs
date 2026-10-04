@@ -6511,6 +6511,237 @@ async function staffWorldFor(slug) {
 }
 
 /**
+ * L4's second warehouse, and why it is a SPOKE rather than a hub.
+ *
+ * ── THE FORM NEEDS TWO BUILDINGS AND THIS BOX HAD ONE USABLE ONE ─────
+ * `/inventory/transfers` refuses a move whose source and destination are
+ * the same warehouse ("that is a bin move, not a transfer"), and every
+ * unit on this box sits at CCU-01. The only other warehouse is the
+ * Dhaka INTAKE, and a raw transfer across the border is precisely what
+ * a two-leg consignment exists to do — it books stock through a TRANSIT
+ * bin so goods in the air are counted in neither building (CNS-1,
+ * CNS-4). Filming the raw form on that lane would teach the habit the
+ * consignment machinery was written to replace.
+ *
+ * (The curriculum's note had this the wrong way round: it warned off
+ * Kolkata → Dhaka as "a consignment's job". Consignments run Dhaka →
+ * India, so the direction it recommended is the one that collides.)
+ *
+ * So: a second INDIAN warehouse, and `fulfilsOrders: false`, which is
+ * the whole of the safety argument. `WarehouseResolverService` is the
+ * ONE reader of that flag (CNS-2) and picks only fulfilling ones, so a
+ * spoke changes nothing about where orders are picked, where receipts
+ * land or which warehouse any other video's seeding resolves. A second
+ * FULFILLING warehouse would quietly become a coin toss in all three.
+ *
+ * It is also the service's own named use — "we may receive the RTO
+ * products at any warehouse … then we will send this to the designated
+ * warehouse" — with no border in it.
+ */
+const L4_SLUG = 'moving-stock-between-warehouses';
+const L4_SPOKE = Object.freeze({
+  code: 'DEL-01',
+  name: 'Delhi Spoke',
+  countryCode: 'IN',
+});
+
+/**
+ * What moves, and the cost both ends must agree on.
+ *
+ * THE SKU IS THE ONE THAT ALREADY CARRIES A COST. Only
+ * `RSH-JAMDANI-IVORY` has `costInr` in the CATALOGUE, deliberately — the
+ * reseller reports show a coverage figure beside every margin and a
+ * world where everything is priced cannot demonstrate a partial. Giving
+ * a cost to one of the other three would move a number two already
+ * filmed videos narrate; using this one adds another costed batch to a
+ * variant that has several, which moves nothing.
+ *
+ * The transfer ADDS to CCU-01 rather than taking from it, so no take can
+ * starve another video's picking.
+ */
+const L4_SKU = 'RSH-JAMDANI-IVORY';
+const L4_UNIT_COST_INR = 1150;
+const L4_SPOKE_QTY = 4;
+const L4_HUB_QTY = 6;
+
+/**
+ * L4's world — "Moving stock between warehouses".
+ *
+ * ── NINE IDENTIFIERS, AND NONE OF THEM IS ON A SCREEN ────────────────
+ * The form asks for a seller, a variant, a quantity and then a
+ * warehouse, bin and batch at EACH end. The two warehouses are selects;
+ * the other seven are typed UUIDs, and no page in this console prints a
+ * variant, a bin and a batch together. So the sheet (`lib/fixture.mjs`)
+ * carries them, exactly as it does for L2's cycle count, and the
+ * narration says out loud that they are not printed anywhere here.
+ *
+ * ── WHY THE SEED MAKES BOTH BATCHES ──────────────────────────────────
+ * The lesson is that the destination batch is REQUIRED and never
+ * invented, because a batch carries expiry, unit cost and the
+ * goods-receipt link — so naming the wrong one is as lossy as inventing
+ * one. That is only demonstrable if the batch being named is honestly
+ * the right one, which means both ends have to be the same goods. The
+ * seed therefore receives the SAME consignment at both buildings at the
+ * same unit cost: most of it at the hub, a few units at the spoke. The
+ * video sends the strays to join the rest, which is a true sentence.
+ *
+ * ── IT IS FORWARD-ONLY ───────────────────────────────────────────────
+ * A transfer is a pair of movements and `stock_movements` is append-only
+ * (INV-1), so nothing here is rewound. A second take receives a fresh
+ * few units at the spoke and moves those; the units an earlier take
+ * moved stay where they went, which is what actually happened.
+ */
+async function transferWorldFor(slug, sellerId, sellerToken, staffToken) {
+  if (slug !== L4_SLUG) return;
+
+  const variant = await prisma.productVariant.findFirst({
+    where: { product: { sellerId }, skuCode: L4_SKU, deletedAt: null },
+    select: { id: true },
+  });
+  if (variant === null) {
+    throw new Error(`No ${L4_SKU} for this seller — the catalogue seeding runs first.`);
+  }
+
+  const spoke = await ensureSpokeWarehouse(staffToken);
+  const hub = await prisma.warehouse.findFirst({
+    where: { fulfilsOrders: true, deletedAt: null },
+    select: { id: true, code: true, name: true },
+  });
+  if (hub === null) {
+    throw new Error('No warehouse fulfils orders, so there is nowhere to send the strays.');
+  }
+  if (hub.id === spoke.id) {
+    throw new Error(
+      `${L4_SPOKE.code} resolves as the fulfilling warehouse. The spoke must NOT fulfil orders — ` +
+        'the form refuses a same-warehouse move and every other seeding would start resolving ' +
+        'to it.',
+    );
+  }
+
+  const hubBin = await pickableBinAt(hub.id);
+  const spokeBin = await pickableBinAt(spoke.id);
+
+  /*
+    THE DESTINATION BATCH FIRST, so it already exists when the spoke's
+    units arrive — which is the situation the video describes: the rest
+    of this consignment is already at the hub.
+  */
+  const hubBatchId = await receiveInto({
+    sellerToken,
+    staffToken,
+    warehouseId: hub.id,
+    binId: hubBin.id,
+    variantId: variant.id,
+    qty: L4_HUB_QTY,
+  });
+  const spokeBatchId = await receiveInto({
+    sellerToken,
+    staffToken,
+    warehouseId: spoke.id,
+    binId: spokeBin.id,
+    variantId: variant.id,
+    qty: L4_SPOKE_QTY,
+  });
+
+  await writeFixture(L4_SLUG, {
+    sellerId,
+    variantId: variant.id,
+    sku: L4_SKU,
+    qty: String(L4_SPOKE_QTY),
+    sourceWarehouse: spoke.name,
+    sourceBinId: spokeBin.id,
+    sourceBinCode: spokeBin.code,
+    sourceBatchId: spokeBatchId,
+    destWarehouse: hub.name,
+    destBinId: hubBin.id,
+    destBinCode: hubBin.code,
+    destBatchId: hubBatchId,
+  });
+  console.log(
+    `  · ${L4_SPOKE_QTY} × ${L4_SKU} at ${spoke.name} ${spokeBin.code}, ` +
+      `${L4_HUB_QTY} waiting at ${hub.name} ${hubBin.code}`,
+  );
+}
+
+/** The spoke, created once and reused. BIN-1 gives it a MAIN zone and a FLOOR bin. */
+async function ensureSpokeWarehouse(staffToken) {
+  const found = await prisma.warehouse.findFirst({
+    where: { code: L4_SPOKE.code, deletedAt: null },
+    select: { id: true, name: true, fulfilsOrders: true },
+  });
+  if (found !== null) {
+    if (found.fulfilsOrders) {
+      throw new Error(
+        `${L4_SPOKE.code} fulfils orders. It must not — see transferWorldFor for why.`,
+      );
+    }
+    return { id: found.id, name: found.name };
+  }
+  const made = await call('/admin/warehouses', {
+    method: 'POST',
+    token: staffToken,
+    body: { ...L4_SPOKE, fulfilsOrders: false },
+  });
+  console.log(`  · created ${L4_SPOKE.code} "${L4_SPOKE.name}" — a spoke, it fulfils nothing`);
+  return { id: made.id, name: made.name };
+}
+
+/** A bin a transfer may legitimately move stock out of or into. */
+async function pickableBinAt(warehouseId) {
+  const bin = await prisma.warehouseBin.findFirst({
+    where: { warehouseId, deletedAt: null, type: 'STORAGE' },
+    select: { id: true, code: true },
+    orderBy: { code: 'asc' },
+  });
+  if (bin === null) {
+    throw new Error(`Warehouse ${warehouseId} has no STORAGE bin to move stock through.`);
+  }
+  return bin;
+}
+
+/**
+ * One receipt, at a named warehouse, carrying a unit cost.
+ *
+ * The cost is what makes the lesson visible: a batch holds it, and the
+ * form exists so that moving units never silently loses it.
+ */
+async function receiveInto({ sellerToken, staffToken, warehouseId, binId, variantId, qty }) {
+  const gr = await call('/seller/goods-receipts', {
+    method: 'POST',
+    token: await sellerToken(),
+    body: { warehouseId, lines: [{ variantId, expectedQty: qty }] },
+  });
+  await call(`/admin/goods-receipts/${gr.id}/start-receiving`, {
+    method: 'POST',
+    token: staffToken,
+  });
+  await call(`/admin/goods-receipts/${gr.id}/lines`, {
+    method: 'POST',
+    token: staffToken,
+    body: {
+      lines: [
+        {
+          lineId: gr.lines[0].id,
+          receivedQty: qty,
+          putawayBinId: binId,
+          unitCostInr: L4_UNIT_COST_INR,
+        },
+      ],
+    },
+  });
+  await call(`/admin/goods-receipts/${gr.id}/complete`, { method: 'POST', token: staffToken });
+
+  const line = await prisma.goodsReceiptLine.findFirst({
+    where: { receiptId: gr.id },
+    select: { batchId: true },
+  });
+  if (line?.batchId == null) {
+    throw new Error(`Goods receipt ${gr.id} produced no batch, so there is nothing to name.`);
+  }
+  return line.batchId;
+}
+
+/**
  * The slug M4 is filmed under.
  *
  * Declared rather than inlined because it is written down in THREE
@@ -7950,6 +8181,7 @@ async function main() {
   await systemSettingsWorldFor(slug);
   await staffWorldFor(slug);
   await manualPlacementWorldFor(slug, sellerId, sellerToken, staffToken);
+  await transferWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);
