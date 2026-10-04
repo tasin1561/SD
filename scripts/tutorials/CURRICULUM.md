@@ -3765,9 +3765,18 @@ argument for `TUT_CHECK_SHOTS=1`:
   that had been on screen since scene three. True of a seller's own send-back,
   plainly false of the store's.
 
-**And `/call-queue` is a Next 404.** The sidebar says "Call queue"; the route is
-`/call-center/queue`. It fails as a broken-looking app rather than as a selector
-miss, which is the most misleading shape a wrong path can take.
+**RETRACTED (verified 2026-10-05): `/call-queue` is not a product bug.** This
+entry claimed the sidebar pointed at a 404. It does not — `authed-shell.tsx`
+links "Call queue" to `/call-center/queue`, which is the route that exists and
+is the one `page-access.ts` gates. `/call-queue` is a path nothing in the app
+references, so a 404 there is correct behaviour and was a URL typed by the take
+rather than offered by the console.
+
+The observation worth keeping is the one O4 already paid for and this restates
+by accident: **reach a page by CLICKING ITS NAV LINK, never by `page.goto`.** A
+hand-written path that is wrong fails as a broken-looking app rather than as a
+selector miss, which is the most misleading shape a mistake can take — and it is
+misleading about OUR path, not about the product's.
 
 ---
 
