@@ -7794,9 +7794,21 @@ export const FLOWS = {
       },
 
       async scan({ page, stage }) {
-        await stage.clickIt(dialogActions(page).getByRole('button', { name: 'Cancel' }), {
-          after: 900,
-        });
+        /*
+          `exact: true`, and ONLY on this dismissal.
+
+          A name match is a case-insensitive SUBSTRING, so "Cancel" also
+          matches this dialog's own confirm button — "Cancel parcel" —
+          and the pair dies on strict mode. The two dismissals above are
+          unaffected because the dialogs they close confirm with "Request
+          the attempt" and "Send to the courier". It is the one dialog in
+          the panel whose two buttons share a word, which is exactly the
+          shape that is invisible until it is run.
+        */
+        await stage.clickIt(
+          dialogActions(page).getByRole('button', { name: 'Cancel', exact: true }),
+          { after: 900 },
+        );
         await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 20_000 });
         await stage.clickIt(page.getByRole('button', { name: 'Record a scan manually' }).first(), {
           after: 1200,
@@ -7823,7 +7835,16 @@ export const FLOWS = {
 
       async record({ page, stage }) {
         await stage.typeIn(page.locator('#ms-city'), 'Bengaluru');
-        await stage.typeIn(page.locator('#ms-fail'), 'Customer unreachable');
+        /*
+          A SELECT since 2026-10-04, and it used to be a text box that
+          could not be satisfied: `failureReason` is validated with
+          `@IsEnum`, so the sentence the label asked for came back as a
+          400 naming eleven enum values. Typing "Customer unreachable" —
+          which was the field's own placeholder — is what found it.
+        */
+        await page.selectOption('#ms-fail', 'CUSTOMER_PHONE_UNREACHABLE');
+        await page.waitForTimeout(500);
+        await stage.dwellOn(page.locator('#ms-fail'), 1600);
         await stage.clickIt(page.getByRole('dialog').getByRole('button', { name: 'Record scan' }), {
           after: 1400,
         });

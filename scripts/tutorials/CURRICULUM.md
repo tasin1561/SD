@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 80 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O4, P1 and P5.** The 10 left are all in the admin app: 2 are
+**90 tutorials. 81 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O4, P1, P2 and P5.** The 9 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (80):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (81):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N9**, **O1–O4** and **P1**.
+**L1–L3**, **M1–M2**, **N1–N9**, **O1–O4**, **P1** and **P2**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -112,11 +112,16 @@ to Kolkata, a return that came back to the wrong building. Do NOT film
 Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
 teach the wrong habit.
 
-**ON STACK B (the second agent, sections N and P): SECTION N IS DONE and P1 IS
-FILMED. THE NEXT ENTRY IS P2 — "Live courier writes".** N10 is `impractical
-locally`; P2, P3 and P4 have no narration or flow yet, and P4 is now
+**ON STACK B (the second agent, sections N and P): SECTION N IS DONE and P1 AND
+P2 ARE FILMED. THE NEXT ENTRY IS P3 — "Refunds and disputes".** N10 is
+`impractical locally`; P3 and P4 have no flow yet, and P4 is now
 `partly filmable` rather than impractical (read its entry: the preview half of
 `/warehouse/collapse` is the product's own first step and moves nothing).
+**Read P2's entry before either**: it records two defects that are about the
+BOX rather than the video — a from-scratch stack has no origin pincode, so no
+lane can be priced anywhere in the console, and the Delhivery simulator answered
+neither read endpoint in the shape the adapter parses. Both are fixed; both were
+invisible until a screen asked the question.
 
 **TWO THINGS P1 SETTLED THAT P2–P4 INHERIT.** First, **the review parcel is now
 RE-TAKEABLE**: a god-mode take leaves `RSH-LIFE-REVIEW` confirmed, with a
@@ -581,8 +586,9 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 **When an entry is named in the pick-up order, check it has a heading of its
 own.**
 
-**Filming these screens is finding real bugs at a steady rate — FORTY so
-far, plus TEN in the seeding itself and one whole capability with no screen.** Every one is on a path nothing else
+**Filming these screens is finding real bugs at a steady rate — FORTY-SIX so
+far, plus TEN in the seeding itself, TWO in the Delhivery simulator and one
+whole capability with no screen.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
 column mappings that drove nothing, a tracking filter that 500'd, a stuck
@@ -4231,18 +4237,81 @@ retimes a scene's picture to its clip by design. Sync is unaffected — every
 scene verified at +0.00 to +0.18 s. Shorten the typed strings if a re-take is
 ever made for another reason.
 
-### P2. Live courier writes · `needs demo data` · **dangerous**
+### P2. Live courier writes · **FILMED** — `live-courier-writes.mp4` · **dangerous**
 
 **Promise** — you can cancel a waybill, re-attempt a delivery or record a scan
 by hand.
-**Length** 4 min. **Needs** D0's dispatched and failed parcels, against the
-simulator.
+**Length** 3 min 4 s of narration over 15 scenes. **Needs**
+`seed-demo-data.mjs live-courier-writes`, which is D0 — it drives
+`RSH-LIFE-FAILED`, the parcel the driver could not deliver.
 **Covers** the courier-ops panel — collapsed by default because opening it
 costs live calls — and the four acts: cancelling a waybill, the NDR action,
 editing a shipment, and recording a scan by hand with a backdatable time.
 **Cost of getting it wrong:** there is no sandbox. A cancel turns a moving
 parcel into a return; an NDR re-attempt sends a van; a hand-recorded scan tells
 a customer something that may not be true.
+
+**ONE WRITE IS PRESSED AND IT IS THE HARMLESS ONE.** Three of the four acts are
+OPENED AND CANCELLED — the NDR confirm, the recipient correction, and the cancel
+dialog with seven characters typed into a reason whose floor is ten, so the
+confirm button is dead under the line that says it is. The narration says so out
+loud (`nosandbox`: "nothing in this video presses one — which is the lesson
+rather than a gap in the recording"), which is the same shape as P1's two
+companion dialogs. The fourth, the hand-recorded scan, IS pressed: it reaches no
+courier at all, and its whole point is the reply — TRK-4 skips the transition on
+a parcel already at DELIVERY_FAILED and the panel says why, which is the scene.
+
+**WHAT IT LEAVES, AND HOW IT GOES BACK.** One `tracking_events` row
+(`source = MANUAL_ENTRY`) and one `delivery_attempts` row, neither undone by
+anything, both removed by `clearDeliveryTakeArtefacts` — **scoped to that one
+parcel**, because `RSH-LIFE-OVERDUE` is BUILT from back-dated MANUAL_ENTRY scans
+and a sweep of every hand-entered event on this seller would delete the world
+instead of a take's leftovers. `webhookId: null` is what tells a hand-recorded
+attempt from the simulator's. Proved by running the check twice with a seed
+between: the second opened on one failed attempt, not two.
+
+**THREE THINGS IT FOUND, and the first two are not about this video at all.**
+
+- **A FROM-SCRATCH STACK CANNOT PRICE A LANE.**
+  `courier.delhivery_origin_pincode` is seeded empty, nothing writes it, and a
+  `warehouses` row has no address column — so there is no origin for any lane
+  and the whole insight panel read `—`. It is the FIFTH hand-made row
+  `provision-stack.mjs` exists to fill, and it is not the tutorial's alone:
+  `CourierMarginReportService` refuses every lane without it and
+  `CourierChoiceService` cannot fetch carrier options. **It failed honestly**,
+  in the panel's own words, which is why it cost forty seconds rather than an
+  afternoon — unlike the pickup location, which announces itself as a timeout
+  somewhere else entirely.
+- **THE DELHIVERY SIMULATOR DID NOT SPEAK THE CONTRACT ON EITHER READ
+  ENDPOINT**, and had not since it was written. `expected_tat` answered
+  `{data:[{tat:3}]}` — `data` an ARRAY, no `success` key — and
+  `DelhiveryTatService` reads `success !== true` FIRST, so every local parcel
+  came back "No TAT available for this lane" with a warn line blaming the
+  courier. **A 200 the adapter reads as a refusal is the worst shape a fake can
+  have**: the request log says it worked. `invoice/charges` answered three of
+  the ten fields production returns, so zone, charged weight, the divisor, the
+  delivery leg and the tax split were all missing. Both now match the capture in
+  `DelhiveryCostService`'s own docstring and are DERIVED from the query, so a
+  heavier parcel costs more — a fake that answers the same number to every
+  question teaches the reader that the weight does not matter.
+- **A FREE-TEXT BOX FOR AN ENUM.** "Why delivery failed" was a `TextField`
+  placeholdered "Customer unreachable"; the DTO validates it with `@IsEnum`, so
+  typing the field's own suggestion came back as eleven shouting values. Now a
+  `Select`. The status field two rows up had mirrored the server's closed list
+  since the day it was written, with a comment saying so; this one never did.
+  See [Bugs found](#bugs-found-while-establishing-feasibility).
+
+**Two selector notes for a re-take.** `getByRole('button', { name: 'Cancel' })`
+inside the cancel dialog matches TWO — the footer's Cancel and the confirm's
+"Cancel parcel", because a name match is a case-insensitive substring — so that
+one dismissal needs `exact: true` and the other two do not (their dialogs
+confirm with "Request the attempt" and "Send to the courier"). And **the intro
+scene composes at x0.234**: it spends thirty seconds in a swallowed
+`waitForLoadState('networkidle')` that the order detail page never reaches, so
+its 42 s of picture is squeezed into a 9.9 s clip. The visible actions are all
+in the first second and the rest is a still page, so it reads correctly — but
+drop that wait if the scene is ever touched for another reason; the step already
+gates on the status text, which is the real signal.
 
 ### P3. Refunds and disputes · `needs demo data` · **dangerous**
 
@@ -5104,3 +5173,60 @@ string.
 nobody checks it.** Both halves of this one were wrong in opposite directions —
 a field that does not exist, and a field that exists somewhere else — and both
 typechecked perfectly for as long as they stood.
+
+**AND A FORTY-FIFTH, found by filming P2 (2026-10-04): a FREE-TEXT BOX for a
+field the server validates as an ENUM.** The manual-scan dialog's "Why delivery
+failed" was a `TextField`, hinted "Recorded as the NDR reason", placeholdered
+"Customer unreachable". `RecordManualScanDto` validates `failureReason` with
+`@IsEnum(DeliveryFailureReason)`. So an operator typing the sentence the field
+asked for — or the exact words it suggested — got
+
+```
+[BAD_REQUEST] failureReason must be one of the following values:
+CUSTOMER_UNAVAILABLE, CUSTOMER_PHONE_UNREACHABLE, ADDRESS_NOT_FOUND, …
+```
+
+under a prompt for prose. The only way past it was to read the refusal and
+retype one of eleven shouting values by hand.
+
+**The status field two rows up had always mirrored the server's closed list**,
+with a comment saying so (`/** … Mirrors MANUAL_SCAN_STATUS_VALUES. */`). This
+one simply never did — the same file, the same dialog, the same author. A
+`Select` now, with an empty "Not stated" option, because the DTO marks it
+optional and forcing a pick makes somebody invent a reason.
+
+**Nothing was positioned to catch it, and FE-2 is the reason it was findable
+at all.** The DTO is right. The server's refusal was surfaced verbatim, which is
+exactly what made the shape obvious the moment somebody filled the form in. No
+test drives this dialog; a test that did would have had to pass a valid enum
+value and would therefore have agreed with the server about something the
+screen did not.
+
+**The shape: two fields, one form, one of them an enum on both sides and the
+other an enum on one side only.** Worth asking of any form, once: which of these
+boxes has a closed list behind it, and does the control say so?
+
+**AND A FORTY-SIXTH, in the test rig rather than the product, found the same
+afternoon: the Delhivery simulator did not speak the wire contract on EITHER
+read endpoint, and had not since it was written.** `/api/dc/expected_tat`
+returned `{data:[{tat:3}]}` — `data` an ARRAY and no `success` key —
+where production (captured 2026-07-27) returns
+`{"success":true,"msg":"","data":{"tat":5}}`. `DelhiveryTatService` reads
+`res.success !== true` FIRST and treats anything else as Delhivery declining to
+quote the lane, so **every local parcel came back `tatDays: null` with "No TAT
+available for this lane"**, a warn line blaming the courier, and a dash on the
+screen. `/api/kinko/v1/invoice/charges` returned three of the ten fields the
+real one carries, so `zone`, `charged_weight`, `divisor`, the delivery leg and
+the whole tax split read as "not supplied" rather than as a hole in the fake.
+
+**A 200 that the adapter reads as a REFUSAL is the worst shape a fake can
+have.** Nothing fails. The request log says the call succeeded. The warning
+names the vendor. And the only way to find out is for a screen to put the answer
+in front of somebody — which is what the courier panel on an order does, and
+nothing had ever filmed it.
+
+Both are modelled on the production capture recorded in `DelhiveryCostService`'s
+own docstring, and both are now DERIVED from the query rather than constant: a
+heavier parcel costs more, a prepaid one carries no COD fee. **A fake that
+answers the same number to every question teaches its reader that the question
+does not matter.**
