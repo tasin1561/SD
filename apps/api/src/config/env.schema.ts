@@ -55,17 +55,17 @@ export const envSchema = z.object({
   // rather than required so an environment that has not configured it
   // yet (CI, a dev machine, the droplet before the owner sets it) still
   // boots; production should set it explicitly.
-  RESELLER_APP_URL: z.string().url().default('https://reseller.skydrop.online'),
+  RESELLER_APP_URL: z.string().url().default('https://reseller.skydrop.global'),
   // Module 11: base URL of the customer-facing tracking page (the
   // future apps/track SSR; the M10 GET /public/tracking/:awb endpoint
   // is the API side). M11 customer notifications template
   // {{ tracking_url }} as `${PUBLIC_TRACKING_URL}/${awb}` — the
   // priority template customer.order_dispatched.email is the most
-  // visible consumer. Default to track.skydrop.online for Phase-1A
+  // visible consumer. Default to track.skydrop.global for Phase-1A
   // dev; prod sets this explicitly.
-  PUBLIC_TRACKING_URL: z.string().url().default('https://track.skydrop.online'),
+  PUBLIC_TRACKING_URL: z.string().url().default('https://track.skydrop.global'),
 
-  SUPPORT_EMAIL: z.string().email().default('support@skydrop.online'),
+  SUPPORT_EMAIL: z.string().email().default('support@skydrop.global'),
 
   COOKIE_DOMAIN: z.string().optional(),
 

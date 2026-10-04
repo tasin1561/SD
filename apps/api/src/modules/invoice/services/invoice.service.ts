@@ -302,7 +302,7 @@ export class InvoiceService {
         gstin: skydropSettings.gstin,
         address: skydropSettings.address,
         state: skydropSettings.state,
-        email: 'support@skydrop.online',
+        email: 'support@skydrop.global',
       },
       buyer: {
         // Without the seller's code: the buyer on a tax document is a

@@ -184,7 +184,7 @@ export class TrackingRecoveryService {
           minutes: minutes === null ? 'an unknown number of' : String(minutes),
           threshold: String(TRACKING_STALE_AFTER_MINUTES),
           recovery: DESCRIBE_RECOVERY[recovery],
-          health_url: 'https://api.skydrop.online/health/tracking',
+          health_url: 'https://api.skydrop.global/health/tracking',
         },
       });
       return true;

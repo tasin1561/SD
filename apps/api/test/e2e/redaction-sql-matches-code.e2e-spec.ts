@@ -79,10 +79,10 @@ const CORPUS = [
   'no token here at all',
   '',
   // Production shapes, 2026-09-30.
-  '<p style="margin:0 0 16px">https://admin.skydrop.online/auth/reset-password?token=Aa0Bb1Cc2Dd3Ee4Ff5Gg6Hh7Ii8Jj9Kk0Ll1Mm2Nn3O.</p>',
-  '<a href="https://app.skydrop.online/auth/accept-invitation?token=Pp4Qq5Rr6Ss7Tt8Uu9Vv0Ww1Xx2Yy3Zz4Aa5Bb6Cc7D" style="display:inline-block">Accept</a>',
-  'Open https://app.skydrop.online/auth/verify-email?token=Ee8Ff9Gg0Hh1Ii2Jj3Kk4Ll5Mm6Nn7Oo8Pp9Qq0Rr-S. This link expires in 30 minutes.',
-  'https://app.skydrop.online/auth/accept-team-invitation?token=Tt1Uu2Vv3Ww4Xx5Yy6Zz7Aa8Bb9Cc0Dd1Ee2Ff3Gg4H\n\nThis invitation expires on 5 August.',
+  '<p style="margin:0 0 16px">https://admin.skydrop.global/auth/reset-password?token=Aa0Bb1Cc2Dd3Ee4Ff5Gg6Hh7Ii8Jj9Kk0Ll1Mm2Nn3O.</p>',
+  '<a href="https://app.skydrop.global/auth/accept-invitation?token=Pp4Qq5Rr6Ss7Tt8Uu9Vv0Ww1Xx2Yy3Zz4Aa5Bb6Cc7D" style="display:inline-block">Accept</a>',
+  'Open https://app.skydrop.global/auth/verify-email?token=Ee8Ff9Gg0Hh1Ii2Jj3Kk4Ll5Mm6Nn7Oo8Pp9Qq0Rr-S. This link expires in 30 minutes.',
+  'https://app.skydrop.global/auth/accept-team-invitation?token=Tt1Uu2Vv3Ww4Xx5Yy6Zz7Aa8Bb9Cc0Dd1Ee2Ff3Gg4H\n\nThis invitation expires on 5 August.',
 ];
 
 describe('Stored-credential redaction: the migration and the code agree (e2e)', () => {

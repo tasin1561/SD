@@ -2,7 +2,7 @@
   "name": "@skydrop/api",
   "version": "0.0.0",
   "private": true,
-  "description": "Skydrop NestJS API — api.skydrop.online",
+  "description": "Skydrop NestJS API — api.skydrop.global",
   "main": "dist/main.js",
   "scripts": {
     "build": "nest build",

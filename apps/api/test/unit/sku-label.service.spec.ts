@@ -224,7 +224,7 @@ describe('SkuLabelService.history — what was printed', () => {
       [
         {
           createdAt: at,
-          staffUser: { emailDisplay: 'packer@skydrop.online' },
+          staffUser: { emailDisplay: 'packer@skydrop.global' },
           metadata: {
             source: 'FIND_A_PRODUCT',
             receiptNumber: null,
@@ -244,7 +244,7 @@ describe('SkuLabelService.history — what was printed', () => {
     expect(prints).toEqual([
       {
         at: at.toISOString(),
-        by: 'packer@skydrop.online',
+        by: 'packer@skydrop.global',
         source: 'FIND_A_PRODUCT',
         receiptNumber: null,
         totalStickers: 102,

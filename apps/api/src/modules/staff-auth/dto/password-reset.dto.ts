@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class StaffPasswordResetRequestDto {
-  @ApiProperty({ example: 'admin@skydrop.online' })
+  @ApiProperty({ example: 'admin@skydrop.global' })
   @IsEmail({}, { message: 'email must be a valid address' })
   @MaxLength(254)
   email!: string;

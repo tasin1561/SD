@@ -13,7 +13,7 @@ import { EnvService } from '../../../config/env.service';
  * (https://www.chatwoot.com/developers/api/). Configuration:
  *
  *   - system_settings:
- *       chat.chatwoot_base_url      e.g. "https://chat.skydrop.online"
+ *       chat.chatwoot_base_url      e.g. "https://chat.skydrop.global"
  *       chat.chatwoot_account_id    integer (ChatWoot account)
  *       chat.chatwoot_inbox_id      integer (the "API" inbox we send to)
  *   - env:

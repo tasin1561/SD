@@ -36,7 +36,7 @@ function row(over: AnyArgs = {}): AnyArgs {
     printedAt: null,
     createdAt: new Date('2026-09-15T08:00:00Z'),
     consignment: { consignmentNumber: 'CN-1' },
-    requestedBy: { id: ASKER, emailDisplay: 'asker@skydrop.online' },
+    requestedBy: { id: ASKER, emailDisplay: 'asker@skydrop.global' },
     decidedBy: null,
     ...over,
   };
@@ -47,7 +47,7 @@ function approved(hoursAgo: number, over: AnyArgs = {}): AnyArgs {
     status: LabelReprintRequestStatus.APPROVED,
     decidedByStaffId: APPROVER,
     decidedAt: new Date(Date.now() - hoursAgo * HOUR),
-    decidedBy: { id: APPROVER, emailDisplay: 'approver@skydrop.online' },
+    decidedBy: { id: APPROVER, emailDisplay: 'approver@skydrop.global' },
     ...over,
   });
 }

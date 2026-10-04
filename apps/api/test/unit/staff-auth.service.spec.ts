@@ -322,7 +322,7 @@ async function seedStaff(
   const hash = await password.hash('CorrectHorseBattery!12');
   const row: StaffRow = {
     id: STAFF_UUID,
-    email: 'admin@skydrop.online',
+    email: 'admin@skydrop.global',
     emailDisplay: 'Admin@Skydrop.Online',
     passwordHash: hash,
     role: 'SUPER_ADMIN',
@@ -414,7 +414,7 @@ describe('StaffAuthService — login', () => {
 
   it('email is normalized (lowercased, trimmed) for the lookup', async () => {
     const sut = makeSut();
-    await seedStaff(sut, { email: 'admin@skydrop.online' });
+    await seedStaff(sut, { email: 'admin@skydrop.global' });
     const result = await sut.svc.login(
       { email: '  ADMIN@Skydrop.online  ', password: 'CorrectHorseBattery!12' },
       ctx,
@@ -636,13 +636,13 @@ describe('StaffAuthService — email verification', () => {
 
   it('confirm: token whose stored email no longer matches the staff (email changed since issuance) → 400', async () => {
     const sut = makeSut();
-    const staff = await seedStaff(sut, { email: 'new@skydrop.online' });
+    const staff = await seedStaff(sut, { email: 'new@skydrop.global' });
     const plaintext = sut.hashes.generateEmailVerificationToken();
     sut.client.staffEmailVerificationToken.rows.push({
       id: 'evt-1',
       staffUserId: staff.id,
       tokenHash: sut.hashes.sha256Hex(plaintext),
-      email: 'old@skydrop.online', // mismatch
+      email: 'old@skydrop.global', // mismatch
       expiresAt: new Date(Date.now() + 86400000),
       usedAt: null,
       createdAt: new Date(),

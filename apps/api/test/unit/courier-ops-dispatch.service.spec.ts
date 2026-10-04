@@ -168,7 +168,7 @@ describe('CourierOpsDispatchService', () => {
       city: 'Bengaluru',
       state: 'Karnataka',
       country: 'India',
-      email: 'wh@skydrop.online',
+      email: 'wh@skydrop.global',
       returnAddress: '12 MG Road',
     };
 

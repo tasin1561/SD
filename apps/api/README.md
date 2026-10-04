@@ -1,6 +1,6 @@
 # @skydrop/api
 
-NestJS REST API for Skydrop — `api.skydrop.online`.
+NestJS REST API for Skydrop — `api.skydrop.global`.
 
 ---
 
@@ -48,7 +48,7 @@ argon2-hashed password:
 ```bash
 pnpm --filter @skydrop/db exec tsx \
   ../../apps/api/scripts/create-staff-user.ts \
-  admin@skydrop.online 'YourPassword!1234' SUPER_ADMIN
+  admin@skydrop.global 'YourPassword!1234' SUPER_ADMIN
 ```
 
 Allowed roles: `SUPER_ADMIN`, `SELLER_APPROVAL_ADMIN`, `CALL_AGENT`,
@@ -103,7 +103,7 @@ refuses to boot if any required value is missing or malformed.
 | `JWT_SIGNING_KEY`  | **yes**  | —                                         | min 32 chars; `openssl rand -base64 64` |
 | `SELLER_APP_URL`   | **yes**  | —                                         | used in email links + CORS |
 | `ADMIN_APP_URL`    | **yes**  | —                                         | used in email links + CORS |
-| `SUPPORT_EMAIL`    | no       | `support@skydrop.online`                  | surfaces in transactional email bodies |
+| `SUPPORT_EMAIL`    | no       | `support@skydrop.global`                  | surfaces in transactional email bodies |
 | `RESEND_API_KEY`   | no       | (empty)                                   | empty → dev-mode log emails to stdout |
 | `COOKIE_DOMAIN`    | no       | (unset)                                   | leave unset for `__Host-` cookies |
 
