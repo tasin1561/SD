@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 81 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J and K, L1–L3, M1–M2, N1–N9, O1–O4, P1, P2 and P5.** The 9 left are all in the admin app: 2 are
+**90 tutorials. 82 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J, K and O, L1–L3, M1–M2, N1–N9, P1, P2 and P5.** The 8 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,9 +32,9 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (81):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (82):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **P5**, **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N9**, **O1–O4**, **P1** and **P2**.
+**L1–L3**, **M1–M2**, **N1–N9**, **O1–O5**, **P1** and **P2**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -46,15 +46,58 @@ rather than an enforced rule. This agent's remaining list is **L, M and O**;
 N and P are not to be touched. Every command takes `TUT_STACK=a`, which is
 required and has no default — see [Re-running](README.md#re-running).
 
-**THE NEXT ENTRY IS O5 — "Staff, and telling everyone something"**, and K,
-L1–L3, M1, M2 and O1–O4 are done. O5 FINISHES SECTION O and is the only one of
-the five that needs a world: `/staff` wants somebody to act on who is NOT
-`tutorial-ops` (that is the account the camera is signed in as, and
-deactivating it ends the take), so its seeding has to make a second staff user
-and put them back — invited, role changed, deactivated — on every run. The
-broadcast half is `ready` as it stands: preview, then send, and the count you
-saw is carried into the send so the server refuses if the population moved.
-**Read the TWO navigation traps O4 paid for before writing its prologue**
+**SECTION O IS FINISHED — O5 is filmed.** Stack A's whole remaining list is
+therefore **M4, M5, M6 and L4** (M3 is the one that cannot honestly be filmed as
+a state change; see below). All four are `needs demo data` and three are
+`dangerous`.
+
+**M4, M5 AND M6 WERE READ END TO END BEFORE ANY OF THEM WAS STARTED, and two of
+the three have a blocker that is not a seeding chore.** Whoever picks them up
+should read this before writing a line:
+
+- **M4 is the tractable one, and it wants TWO parcels rather than one.** A pick
+  shortfall (WMS-4) is cheap and needs no new code — but a shortfall-born parcel
+  carries `reasonCode: null`, so the "Why it is here" column reads **"Reason not
+  recorded"** with no courier sentence, and the column the video is ABOUT is the
+  one that stays empty. It also lands "Needs picking", so placing the waybill
+  sends the order to `PENDING_PICK` and the toast says so — not `DISPATCHED`.
+  The courier-refusal arrival is the one that fills the column (`reasonCode`
+  comes off the RETIRED shipment's `supersedeReason`; the sentence comes from an
+  `order.awb_at_confirmation_non_serviceable` audit row's `metadata.error`), and
+  reaching it means teaching the simulator to refuse a nominated VALID pin
+  permanently — `000000` can never reach an order (`^[1-9][0-9]{5}$` at create)
+  and `999999` is classified TRANSIENT, which by CUR-2b deliberately does not
+  route here. **Stage both and the page's own contrast is on camera.**
+- **M5 CANNOT BE REACHED ON A FILMING STACK AS IT STANDS.**
+  `CourierChoiceService.decide` returns `BOOK` immediately unless
+  `courierCode === 'shiprocket'`, and the options list comes from a LIVE
+  Shiprocket serviceability call which short-circuits to `[]` in stub mode —
+  `apps/delhivery-sim` speaks only the Delhivery wire API and has no Shiprocket
+  surface at all. So no Delhivery parcel can ever appear on `/courier-decisions`.
+  Writing `courierOptions` into the shipment by hand puts a row on the page, but
+  the click then books through DELHIVERY (the choice short-circuits the policy),
+  so the carrier names on screen would be fiction and the narration "and this
+  books it with them" would be false. **Either add a Shiprocket serviceability
+  route to the simulator, or film it as a read of a staged page and never claim
+  the click books what it names.** Also worth knowing before writing: the page
+  has **NO confirmation dialog** — one click on a carrier name books real
+  carriage.
+- **M6's Approve/Decline cannot be reached by any product path any more.** A
+  plain seller's ask is created **already APPROVED** and executed
+  (`sellerDecides` in `DeliveryActionService`), so it never appears under the
+  default PENDING filter and its Decide cell is `—`. The only PENDING rows the
+  product still makes are a reseller store's held ask, which renders **"Waiting
+  on seller staff"** and which admin is refused with
+  `DELIVERY_ACTION_HELD_FOR_SELLER`. To film the dialog at all you must stage a
+  row with `status = PENDING` **and** `needs_seller_approval = false` directly in
+  `order_delivery_action_requests`, against an order in `OUT_FOR_DELIVERY` or
+  `DELIVERY_FAILED` with a live shipment. **And the dialog's own warning is
+  wrong**: it says a re-attempt "reaches Delhivery", and it does not —
+  `executeAsTicket` opens a `COURIER_NDR_ESCALATION` ticket plus a manual outbox
+  draft, and only RTO calls the courier API. Say so rather than reading it out.
+  Beware `clearDeliveryTakeArtefacts`, which deletes exactly this kind of row.
+
+**Read the TWO navigation traps O4 paid for before writing any admin prologue**
 (below, in O4's entry): after a sign-in, reach a page by CLICKING ITS NAV LINK,
 never `page.goto`, and reach a dialog's buttons through `.sk-dialog__actions`
 rather than `.sk-dialog__foot`. `signInAndOpen` in `flows.mjs` does the first
@@ -4146,15 +4189,86 @@ opened, read and cancelled, and the narration says that is what is happening.
 **No bug found.** Fourteen scenes, green on the second check; the one defect was
 the footer selector above.
 
-### O5. Staff, and telling everyone something · `ready` · **dangerous**
+### O5. Staff, and telling everyone something · **FILMED** — `staff-and-broadcasts.mp4` · **dangerous**
 
 **Promise** — you can add a colleague and send a message to an audience.
-**Length** 3 min. **Prerequisites** H4.
+**Length** 2 min 59 s of narration over 15 scenes. **Needs**
+`seed-demo-data.mjs staff-and-broadcasts` (`staffWorldFor`).
 **Covers** `/staff` (invite with its one-shot token reveal, change a role,
 deactivate) and then `/notifications/broadcasts`, whose **shape is the lesson**:
 you cannot reach Send without first asking how many people it reaches, and the
 count you saw is carried into the send so the server refuses if the population
 moved in between.
+
+**THE NARRATION SAID THE OPPOSITE OF THE TRUTH ABOUT THE ONE THING THE SCENE IS
+ABOUT, and it reads perfectly.** The written-not-filmed line claimed the invite
+dialog's roles "are the ROWS somebody built under Roles, not a fixed list — so
+anything your team invented is here". **They are a hardcoded seven**
+(`invite-staff-modal.tsx`, `const ROLES = [...] as const`), and the API agrees:
+`CreateStaffInvitationDto.role` is `@IsEnum(StaffRole)`, the legacy enum. What
+IS server-driven is the TABLE's dropdown — nine rows on this box, two of them
+invented (`No money access (test)`, `Treasury viewer (test)`). So inviting picks
+from the seven built-ins and a role your team made can only be given AFTERWARDS,
+from the table, which is exactly what the next scene does. The line now says
+that, and it is a better lesson than the false one. **The comment that misled it
+is still in the tree**: `staff-management-index.tsx` says "The hardcoded seven
+are gone: roles are rows now" — true of the file it is in, false of the modal
+beside it. A `--check` run cannot catch this class of defect at all; only
+reading the component can.
+
+**TWO MORE LINES DESCRIBED THINGS THAT ARE NOT ON THE SCREEN**, both caught by
+`TUT_CHECK_SHOTS=1` and neither by the check itself. "Read what it says: the
+account stops working, and everything they ever did stays exactly where it is" —
+the dialog says only `Their account is deactivated and they can no longer sign
+in to the console`; the second half is true and is not a quote, so it now says
+so. And the sent-broadcast line talked about the stored audience while the frame
+shows `Reached 2 · Delivered 2 · Failed 0`; it now reads the row first and the
+stored audience second. **When a line begins "read what it says", check that
+the screen says all of it.**
+
+**What the take spends, and that it all comes back.** An invitation, somebody's
+role, somebody's login and one broadcast — each is the subject, so none is faked.
+`staffWorldFor` puts `priya.menon@skydrop.local` back on Finance with `deletedAt`
+cleared, deletes the unused invitation (a USED one throws by name rather than
+being deleted — that row is how a real person got in), and removes the broadcast
+and its `notification_logs` rows BY TITLE, so a broadcast somebody else sent is
+left alone. A take sends a real in-app message to the two call agents.
+
+**The `confirmrole` claim was checked against the guard rather than assumed.**
+`StaffJwtGuard.canActivate` does a fresh `staffUser.findFirst` including
+`staffRole.permissions` on EVERY request, so a role change really does take
+effect on the next request rather than the next sign-in — and a deactivated
+colleague's session dies the same way, because the lookup carries
+`deletedAt: null`.
+
+**A MID-REBUILD NEXT SERVER HAS A SECOND SYMPTOM, AND IT IS WORSE THAN THE
+DOCUMENTED ONE.** The known failure is "nothing hydrates, the sign-in submits
+nothing". This one: the page renders, hydrates, every selector resolves, the
+sidebar, buttons, selects and toasts are all perfectly styled — and ONE CSS
+chunk is missing, here the data-table's, so every table on the page has no
+header band, no borders and its visually-hidden `<caption>` printed above it.
+`stack.sh status a` reported FRESH throughout, the HTML's stylesheet links all
+200'd, and `/staff` reached by `peek.mjs` (a hard `goto`) looked right. The tell
+was in the frames and nowhere else; the proof was
+`apps/admin/.next/server/app-paths-manifest.json` being absent from under a
+running server. **Take the shots, and if a frame looks subtly wrong, check for
+a `next build` before debugging the flow.** The fix is `stack.sh restart a
+admin` once the build has finished — after which the same check ran green and
+the frames were correct.
+
+**Observed and NOT fixed** (both product, neither small):
+
+- **You cannot invite anybody onto a role your team invented.** The invitation
+  carries the legacy `StaffRole` enum end to end (`CreateStaffInvitationDto`,
+  and acceptance resolves it with `staffRole: { connect: { key:
+  staffRoleKeyForEnum(inv.role) } }`), so the only way onto a custom role is to
+  invite somebody onto one of the seven and change it afterwards. Fixing it
+  means a `roleId` on the DTO, on acceptance and in the modal, and it touches
+  the auth path — bigger than a video's commit, and the video now teaches the
+  real behaviour.
+- **The stale comment above it.** `staff-management-index.tsx`'s "The hardcoded
+  seven are gone" is true of the table and false of the modal it renders. It is
+  what made the wrong narration line plausible to write.
 
 ---
 

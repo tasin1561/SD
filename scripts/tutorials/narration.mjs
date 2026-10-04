@@ -4865,7 +4865,7 @@ export const VIDEOS = [
       },
       {
         id: 'invite',
-        say: 'An invitation is an email address and a role. The roles offered are the ROWS somebody built under Roles, not a fixed list \u2014 so anything your team invented is here.',
+        say: 'An invitation is an email address and a role \u2014 and these are the seven built-in ones, not the rows your team invented under Roles. One of those is given afterwards, from the table itself.',
       },
       {
         id: 'link',
@@ -4885,7 +4885,7 @@ export const VIDEOS = [
       },
       {
         id: 'deactivate',
-        say: 'And taking the login away. Read what it says: the account stops working, and everything they ever did stays exactly where it is, with their name on it.',
+        say: 'And taking the login away. Read what it says, because it is the whole of it: the account is deactivated and they can no longer sign in to the console. Nothing they have ever done is touched.',
       },
       {
         id: 'deactivated',
@@ -4913,7 +4913,7 @@ export const VIDEOS = [
       },
       {
         id: 'sent',
-        say: 'And it is recorded as what you CHOSE, not as the people it happened to reach \u2014 because a month later the question is who you meant to tell, and the population has moved on since.',
+        say: 'Sent, and recorded: reached, delivered, failed. What is stored underneath is the audience you CHOSE rather than the names it landed on \u2014 because a month later the question is who you meant to tell.',
       },
       {
         id: 'outro',
