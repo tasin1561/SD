@@ -1,7 +1,7 @@
 # Motion coverage — where every reference pattern lives
 
 The 46 reference patterns (35 UI upgrades u01–u35 and 11 storytelling controls) and where
-each is used on skydrop.online, or why it is not. Ideas only: our tokens, icons and copy;
+each is used on skydrop.global, or why it is not. Ideas only: our tokens, icons and copy;
 transform/opacity only; no new libraries. Updated per phase; Phase 9 checks it for gaps.
 
 Status: **used** (shipped) · **planned** (Phase named) · **n/a** (reason).

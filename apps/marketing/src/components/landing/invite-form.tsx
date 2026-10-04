@@ -170,7 +170,7 @@ export function InviteForm({
         });
       } catch {
         const msg =
-          'Could not reach us just now. Please try again, or write to hello@skydrop.online.';
+          'Could not reach us just now. Please try again, or write to hello@skydrop.global.';
         setError(msg);
         throw new Error(msg);
       }
@@ -220,8 +220,8 @@ export function InviteForm({
           <p className="mx-auto mt-3 max-w-[46ch] text-[15px] leading-relaxed text-fg-body">
             Someone will read this properly and get back to you within one working day. If it is
             urgent, write to{' '}
-            <a href="mailto:hello@skydrop.online" className="text-sky hover:underline">
-              hello@skydrop.online
+            <a href="mailto:hello@skydrop.global" className="text-sky hover:underline">
+              hello@skydrop.global
             </a>
             .
           </p>

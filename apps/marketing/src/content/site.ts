@@ -17,14 +17,14 @@ import { dummy } from './dummy';
 export const platform = {
   brand: {
     name: 'Skydrop',
-    domain: 'skydrop.online',
+    domain: 'skydrop.global',
     tagline: 'Sell in India. We carry the rest.',
     corridor: 'Bangladesh ⇄ India',
-    email: 'hello@skydrop.online',
+    email: 'hello@skydrop.global',
     apps: {
-      seller: 'https://app.skydrop.online',
-      store: 'https://reseller.skydrop.online',
-      track: 'https://track.skydrop.online',
+      seller: 'https://app.skydrop.global',
+      store: 'https://reseller.skydrop.global',
+      track: 'https://track.skydrop.global',
     },
   },
   nav: {
@@ -36,11 +36,11 @@ export const platform = {
       { href: '/#faq', label: 'FAQ' },
     ],
     signIn: [
-      { href: 'https://app.skydrop.online/login', label: 'Seller sign-in' },
-      { href: 'https://reseller.skydrop.online/login', label: 'Store sign-in' },
+      { href: 'https://app.skydrop.global/login', label: 'Seller sign-in' },
+      { href: 'https://reseller.skydrop.global/login', label: 'Store sign-in' },
     ],
     cta: { href: '/request-invite', label: 'Request an invite' },
-    track: { href: 'https://track.skydrop.online', label: 'Track a parcel' },
+    track: { href: 'https://track.skydrop.global', label: 'Track a parcel' },
     /** Mega-menu rows (u21) under two of the primary items; the rest are plain links. */
     mega: {
       Services: [
@@ -572,15 +572,15 @@ export const platform = {
         title: 'Access',
         links: [
           { href: '/request-invite', label: 'Request an invite' },
-          { href: 'https://app.skydrop.online/login', label: 'Seller sign-in', external: true },
-          { href: 'https://reseller.skydrop.online/login', label: 'Store sign-in', external: true },
-          { href: 'https://track.skydrop.online', label: 'Track a parcel', external: true },
+          { href: 'https://app.skydrop.global/login', label: 'Seller sign-in', external: true },
+          { href: 'https://reseller.skydrop.global/login', label: 'Store sign-in', external: true },
+          { href: 'https://track.skydrop.global', label: 'Track a parcel', external: true },
         ],
       },
       {
         title: 'Company',
         links: [
-          { href: 'mailto:hello@skydrop.online', label: 'hello@skydrop.online' },
+          { href: 'mailto:hello@skydrop.global', label: 'hello@skydrop.global' },
           { href: '/#contact', label: 'Contact' },
           { href: '/privacy', label: 'Privacy' },
         ],

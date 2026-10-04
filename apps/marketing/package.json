@@ -2,7 +2,7 @@
   "name": "@skydrop/marketing",
   "version": "0.0.0",
   "private": true,
-  "description": "Skydrop public marketing site — skydrop.online — Bangladeshi sellers shipping into India.",
+  "description": "Skydrop public marketing site — skydrop.global — Bangladeshi sellers shipping into India.",
   "scripts": {
     "dev": "MARKETING_DEV_ROUTES=1 next dev -p 3006",
     "build": "next build",
