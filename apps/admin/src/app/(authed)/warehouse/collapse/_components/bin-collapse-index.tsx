@@ -328,9 +328,10 @@ function DangerZone({
         <PanelPad>
           <Callout tone="bad">
             <strong>This merges every shelf in the warehouse into FLOOR.</strong> Where each thing
-            was is then only in the backup above. Hold, damaged and quarantine bins are left alone —
-            those are about not selling stock rather than finding it, and sweeping them into FLOOR
-            would put broken goods back in the pickable pool.
+            was is then only in the backup above. Bins a picker can never reach are left alone —
+            hold, damaged, quarantine, and goods still in transit between two of our warehouses.
+            Those are about not selling stock rather than finding it, and sweeping them into FLOOR
+            would put broken or not-yet-arrived goods into the pickable pool.
           </Callout>
           <Note>
             Two steps, and the first moves nothing: it reports how many bins and units WOULD merge

@@ -351,4 +351,97 @@ describe('Bin ops flow (e2e)', () => {
     expect(backInA.qtyOnHand).toBe(4);
     expect(backInB.qtyOnHand).toBe(2);
   });
+
+  /*
+    A COLLAPSE MUST NOT SWEEP UP GOODS THAT ARE NOT IN THE BUILDING.
+
+    `collectSourceRows` hand-wrote `['RTO_HOLD', 'DAMAGED', 'QUARANTINE']`
+    — the non-pickable list as it stood BEFORE CNS-1 added TRANSIT — so
+    a collapse would have merged stock that is in the air between Dhaka
+    and India into FLOOR, which is pickable (BIN-2): the goods become
+    sellable and the one record saying they have not landed is gone.
+
+    Only a REAL DATABASE can say so. A mocked Prisma has no bin types to
+    filter on, and the three unit-level facts (the list, the predicate,
+    the merge) each look right on their own.
+
+    The TRANSIT bin and its level are written through Prisma on purpose.
+    `TRANSIT` is deliberately absent from the bin CREATOR's type list
+    (CNS-1: it is the absence of a building rather than a place inside
+    one) and is provisioned by the consignment dispatch, so there is no
+    endpoint to make one with — and the transfer endpoints refuse a
+    non-pickable destination, which is the behaviour under test one
+    level along.
+  */
+  it('collapse: leaves goods still in transit alone', async () => {
+    await receiveInto(binA, 6);
+    const batch = await h.prisma.stockBatch.findFirstOrThrow({ where: { variantId } });
+    const level = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId } });
+
+    const transit = await h.prisma.warehouseBin.create({
+      data: {
+        warehouseId,
+        zoneId,
+        code: 'TRANSIT',
+        type: 'TRANSIT',
+      },
+      select: { id: true },
+    });
+    await h.prisma.stockLevel.create({
+      data: {
+        sellerId: level.sellerId,
+        variantId,
+        warehouseId,
+        binId: transit.id,
+        batchId: batch.id,
+        qtyOnHand: 9,
+      },
+    });
+
+    const req = await request(h.baseUrl)
+      .post(`/admin/warehouses/${warehouseId}/bin-ops/collapse/request`)
+      .set(staffAuth)
+      .send({ reason: 'Shelving is being rebuilt; the locations will all be wrong afterwards.' })
+      .expect(200);
+    // ONE bin and SIX units — binA. The nine in transit are not ours to
+    // move and are not counted.
+    expect(req.body).toMatchObject({ binsAffected: 1, unitsAffected: 6 });
+
+    const stored = await h.prisma.binCollapseChallenge.findUniqueOrThrow({
+      where: { id: req.body.challengeId as string },
+    });
+    const { createHash } = await import('node:crypto');
+    let realCode: string | null = null;
+    for (let i = 0; i < 1_000_000; i++) {
+      const candidate = String(i).padStart(6, '0');
+      if (createHash('sha256').update(candidate, 'utf8').digest('hex') === stored.codeHash) {
+        realCode = candidate;
+        break;
+      }
+    }
+    const done = await request(h.baseUrl)
+      .post(`/admin/warehouses/${warehouseId}/bin-ops/collapse/confirm`)
+      .set(staffAuth)
+      .send({
+        challengeId: req.body.challengeId,
+        code: realCode,
+        typedWarehouseCode: warehouseCode,
+      })
+      .expect(200);
+    expect(done.body).toMatchObject({ binsCollapsed: 1, unitsMoved: 6 });
+
+    // STILL IN TRANSIT, untouched — the assertion the fix exists for.
+    const stillInTransit = await h.prisma.stockLevel.findFirstOrThrow({
+      where: { variantId, binId: transit.id },
+    });
+    expect(stillInTransit.qtyOnHand).toBe(9);
+
+    const floor = await h.prisma.warehouseBin.findFirstOrThrow({
+      where: { warehouseId, code: 'FLOOR' },
+    });
+    const floorLevel = await h.prisma.stockLevel.findFirstOrThrow({
+      where: { variantId, binId: floor.id },
+    });
+    expect(floorLevel.qtyOnHand).toBe(6);
+  });
 });

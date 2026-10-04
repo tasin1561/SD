@@ -11,7 +11,10 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { EmailQueue } from '../../email/queue/email.queue';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
-import { BinPolicyService } from '../../inventory-shared/bin-policy.service';
+import {
+  BinPolicyService,
+  NON_PICKABLE_BIN_TYPES,
+} from '../../inventory-shared/bin-policy.service';
 import { FLOOR_BIN_CODE } from '../../inventory-warehouse/bin-code';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
@@ -514,10 +517,25 @@ export class BinCollapseService {
         warehouseId,
         qtyOnHand: { gt: 0 },
         binId: { not: floorBinId },
-        // Hold, damaged and quarantine bins are about not SELLING stock,
-        // not about finding it. Sweeping them into FLOOR would put
-        // broken and untriaged goods back into the pickable pool.
-        bin: { type: { notIn: ['RTO_HOLD', 'DAMAGED', 'QUARANTINE'] }, deletedAt: null },
+        /*
+          Bins a picker can never reach are about not SELLING stock
+          rather than about finding it, so a collapse leaves them alone:
+          sweeping them into FLOOR would put broken and untriaged goods
+          back into the pickable pool.
+
+          DERIVED from `NON_PICKABLE_BIN_TYPES`, not restated. This was
+          a hand-written `['RTO_HOLD', 'DAMAGED', 'QUARANTINE']` — the
+          list as it stood BEFORE CNS-1 added TRANSIT — so a collapse
+          would have merged goods that are in the air between Dhaka and
+          India into FLOOR and made them sellable, destroying the one
+          record saying they have not landed. Exactly the drift BIN-2
+          exists to prevent ("a test asserts they SHARE it rather than
+          matching by coincidence"), in the one service that had no
+          caller outside the e2e suite until a screen was built for it.
+          Found 2026-10-04 by filming P4 against a warehouse holding 42
+          units in TRANSIT.
+        */
+        bin: { type: { notIn: [...NON_PICKABLE_BIN_TYPES] }, deletedAt: null },
       },
       select: {
         sellerId: true,

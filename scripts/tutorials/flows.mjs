@@ -8083,6 +8083,195 @@ export const FLOWS = {
   },
 
   /*
+    P4 — COLLAPSING A WAREHOUSE'S SHELVING.
+
+    IT PRESSES ONE WRITE AND STOPS. "Show me what this would move" is
+    step ONE of the product's own two-step dialog: it reports how many
+    bins and units WOULD merge, MOVES NOTHING, and emails a six-digit
+    code. Stopping at the code is the lesson rather than a gap in the
+    recording — the same shape as N7's transfer forms — and the thing it
+    stops short of is the one act in this console that destroys
+    information rather than moving goods.
+
+    What that press leaves is a `bin_collapse_challenges` row and an
+    email, one per take, consumed by nobody. `collapseWorldFor` sweeps
+    the unconsumed ones.
+
+    IT STARTS ON /warehouse/bins, not on the collapse page, because
+    where this lives is half of what there is to learn: a sentence at
+    the very bottom, a LINK rather than a button, and not in the sidebar
+    at all.
+  */
+  'collapse-the-shelves': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signInAndOpen(
+        ctx,
+        '/warehouse/bins',
+        ctx.page.getByRole('heading', { level: 1 }).first(),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 3200);
+      },
+
+      async link({ page, stage }) {
+        // The sentence the narration quotes, which is also the way in.
+        const note = page.getByText(/Abandoning this warehouse/).first();
+        await note.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(note, 3800);
+      },
+
+      async page({ page, stage, baseUrl }) {
+        await stage.clickIt(page.getByRole('link', { name: 'Collapse its bins into FLOOR' }), {
+          after: 1400,
+        });
+        await page.waitForURL(`${baseUrl}/warehouse/collapse`, { timeout: 30_000 });
+        // The SUBTITLE, which is the sentence about a head start.
+        const sub = page.getByText(/a head start, not a rewind/).first();
+        await sub.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(sub, 3800);
+      },
+
+      async choose({ page, stage }) {
+        /*
+          BY LABEL, because the option text is "Kolkata Main · CCU-01"
+          and a value is a uuid. `selectOption({ label })` matches the
+          whole label, so the separator and the code have to be exact —
+          which is also what makes it a real gate on the warehouse
+          existing rather than on any warehouse existing.
+        */
+        const select = page.locator('#collapse-warehouse');
+        await select.selectOption({ label: 'Kolkata Main · CCU-01' });
+        await page.waitForTimeout(900);
+        await stage.dwellOn(select, 3000);
+      },
+
+      async backups({ page, stage }) {
+        // THE ROW, not the table: an empty list renders the same table
+        // with a "nothing here has been collapsed" line in it, and that
+        // is exactly what this scene must not film.
+        const row = page.getByRole('row').filter({ hasText: 'day(s) left' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(row, 3600);
+      },
+
+      async restore({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Put the layout back' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('heading', { name: 'Put this layout back?' })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 4000);
+      },
+
+      async danger({ page, stage }) {
+        // Cancelled in THIS scene's opening, so the frame opens on the
+        // panel the line is about rather than on a closing modal.
+        await stage.clickIt(
+          dialogActions(page).getByRole('button', { name: 'Cancel', exact: true }),
+          { after: 900 },
+        );
+        await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 20_000 });
+        const warn = page.getByText(/This merges every shelf in the warehouse into FLOOR/).first();
+        await warn.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(warn, 3400);
+      },
+
+      async transit({ page, stage }) {
+        // The half of that callout the narration is actually about, and
+        // the half that was WRONG until 2026-10-04 — it named three bin
+        // types and the code excluded three while the shared list had
+        // four, so a collapse would have swept goods still in the air
+        // onto the floor.
+        const which = page
+          .getByText(/goods still in transit between two of our warehouses/)
+          .first();
+        await which.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(which, 3600);
+      },
+
+      async open({ page, stage }) {
+        /*
+          A REGEX, because the BUTTON and the DIALOG TITLE spell the
+          apostrophe differently and always have: the button's children
+          are JSX and use `&rsquo;` (a right single quotation mark), the
+          title is a plain TS string with an ASCII `'`. Either literal
+          therefore finds one and waits thirty seconds for the other,
+          which arrives as "that button is not on the page" about a
+          button plainly on the page.
+        */
+        const named = /Collapse this warehouse./;
+        await stage.clickIt(page.getByRole('button', { name: named }), { after: 1200 });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('heading', { name: named })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(
+          dialog.getByText(/Pickers will find stock by searching FLOOR/).first(),
+          3600,
+        );
+      },
+
+      async reason({ page, stage }) {
+        await stage.typeIn(
+          page.locator('#collapse-reason'),
+          'The racking is being replaced this weekend and every recorded location will be wrong.',
+        );
+        await page.waitForTimeout(600);
+        // The COUNTER, which is what the line is about — and which says
+        // `data-ok` once the server's floor is met.
+        await stage.dwellOn(page.locator('.sk-field__after .sk-figure, .sk-figure').last(), 2800);
+      },
+
+      async ack({ page, stage }) {
+        const box = page.getByRole('checkbox');
+        await stage.clickIt(box, { after: 900 });
+        await stage.dwellOn(
+          page.getByText(/I understand this destroys the record of where everything is/).first(),
+          3200,
+        );
+      },
+
+      async preview({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Show me what this would move' }), {
+          after: 1400,
+        });
+        // THE FIGURES, which are the whole point of the step. Gated on
+        // the sentence rather than on the dialog: the dialog is already
+        // open and would pass instantly.
+        const counted = page.getByText(/would merge into FLOOR/).first();
+        await counted.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(counted, 3800);
+      },
+
+      async code({ page, stage }) {
+        const note = page.getByText(/A six-digit code has been emailed to/).first();
+        await note.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(note, 3600);
+      },
+
+      async outro({ page, stage }) {
+        // THE BUTTON THIS VIDEO DOES NOT PRESS, held under the sentence
+        // that says so. It is disabled: neither field is filled.
+        await stage.dwellOn(
+          page.getByRole('dialog').getByRole('button', { name: /^Collapse \d+ bin\(s\)$/ }),
+          3600,
+        );
+      },
+    },
+  },
+
+  /*
     P5 — THE FIRST ADMIN FLOW, and a TOUR: it presses nothing that
     changes anything. Ten screens, each one visited so the narration can
     read that screen's own warning copy out loud beside it.

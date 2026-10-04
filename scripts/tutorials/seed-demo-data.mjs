@@ -5253,6 +5253,202 @@ async function pickupWorldFor(slug, staffToken) {
   console.log('  · staged a FAILED pickup attempt for tomorrow — the day the video frees');
 }
 
+/**
+ * P4 — the shelves a collapse would merge, and one backup to restore.
+ *
+ * `/warehouse/collapse` has two halves and the video films both: the
+ * Layout backups list (which needs a snapshot to be anything but an
+ * empty state) and step one of the collapse itself, which REPORTS how
+ * many bins and units would merge, moves nothing, and emails a code.
+ *
+ * So two things have to be true at once, and they fight each other: the
+ * warehouse needs real shelf bins HOLDING stock for the preview's
+ * figures to be real, and it needs a past collapse for the backups list
+ * to have a row — and a collapse is precisely what empties the shelves.
+ * Hence the order below: stock the shelves, collapse ONCE if nothing
+ * has ever been collapsed here, then stock them again.
+ *
+ * KOLKATA rather than the Dhaka intake, which was the obvious choice
+ * and is wrong: J1's seeding warns when BD-DHK-1 holds any bin besides
+ * FLOOR, because its narration counts them out loud. Two permanent
+ * shelves there would quietly make that video's words false.
+ *
+ * AISLE G, because `ensureStockedVariant` puts a goods receipt away
+ * into `bins.find(b => b.type === 'STORAGE' || b.type === 'FLOOR')` —
+ * the FIRST match in whatever order the endpoint returns. A bin whose
+ * code sorts before `FLOOR` could therefore start collecting every
+ * future receipt in this warehouse. Harmless if it happened (both are
+ * pickable) but it would be a change to other videos' worlds made by
+ * accident, and `G` costs nothing.
+ */
+const COLLAPSE_SHELVES = [
+  { aisle: 'G', rack: '01', shelf: '01', qty: 4 },
+  { aisle: 'G', rack: '01', shelf: '02', qty: 3 },
+];
+
+async function collapseWorldFor(slug, staffToken) {
+  if (slug !== 'collapse-the-shelves') return;
+
+  const warehouses = await call('/admin/warehouses', { token: staffToken });
+  const wh = warehouses.find((w) => w.fulfilsOrders === true && w.countryCode === 'IN');
+  if (wh === undefined) {
+    throw new Error('No Indian fulfilling warehouse — the whole video is filmed in one.');
+  }
+
+  const zone = await prisma.warehouseZone.findFirst({
+    where: { warehouseId: wh.id },
+    select: { id: true },
+  });
+  if (zone === null) {
+    throw new Error(
+      `${wh.code} has no zones, so "Add a bin" cannot be used to build the shelves this needs ` +
+        '(every warehouse gets a MAIN zone at creation — BIN-1).',
+    );
+  }
+
+  // The shelves, through the product's own creator. Find-or-create: a
+  // bin is permanent and nothing in the video removes one.
+  const existing = await call(`/admin/warehouses/${wh.id}/bins`, { token: staffToken });
+  const shelves = [];
+  for (const spec of COLLAPSE_SHELVES) {
+    const code = `${spec.aisle}-${spec.rack}-${spec.shelf}`;
+    const found = existing.find((b) => b.code === code);
+    if (found !== undefined) {
+      shelves.push({ id: found.id, code, qty: spec.qty });
+      continue;
+    }
+    const made = await call(`/admin/warehouses/${wh.id}/bins`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        zoneId: zone.id,
+        aisle: spec.aisle,
+        rack: spec.rack,
+        shelf: spec.shelf,
+        type: 'STORAGE',
+      },
+    });
+    console.log(`  · built shelf ${code} in ${wh.code}`);
+    shelves.push({ id: made.id, code, qty: spec.qty });
+  }
+
+  await stockTheShelves(wh, shelves, staffToken);
+
+  const snapshots = await prisma.binLayoutSnapshot.count({ where: { warehouseId: wh.id } });
+  if (snapshots === 0) {
+    await collapseOnceForTheBackup(wh, staffToken);
+    // The collapse swept the shelves into FLOOR, which is the whole
+    // point of it — so they are stocked again for the preview.
+    await stockTheShelves(wh, shelves, staffToken);
+  } else {
+    console.log(`  · ${wh.code} already has ${snapshots} layout backup(s) to restore from`);
+  }
+
+  /*
+    A PREVIOUS TAKE'S CHALLENGE, cleared.
+
+    The video presses "Show me what this would move", which writes a
+    `bin_collapse_challenges` row and sends a code — real product state,
+    one more of it per take, and none of it ever consumed because the
+    video stops there deliberately. Nothing in the app shows them, so
+    this is tidiness rather than a visible fix; it is here so that
+    "what is outstanding against this warehouse" is a question with an
+    honest answer after twenty takes.
+  */
+  const stale = await prisma.binCollapseChallenge.deleteMany({
+    where: { warehouseId: wh.id, consumedAt: null },
+  });
+  if (stale.count > 0) {
+    console.log(`  · removed ${stale.count} unconsumed collapse challenge(s) from previous takes`);
+  }
+}
+
+/** Move a few units out of FLOOR onto each shelf, if it is bare. */
+async function stockTheShelves(wh, shelves, staffToken) {
+  const floor = await prisma.warehouseBin.findFirst({
+    where: { warehouseId: wh.id, code: 'FLOOR' },
+    select: { id: true },
+  });
+  if (floor === null)
+    throw new Error(`${wh.code} has no FLOOR bin (BIN-1 says every warehouse does).`);
+
+  for (const shelf of shelves) {
+    const held = await prisma.stockLevel.aggregate({
+      where: { binId: shelf.id },
+      _sum: { qtyOnHand: true },
+    });
+    if ((held._sum.qtyOnHand ?? 0) >= shelf.qty) continue;
+
+    // The biggest FLOOR line, so one move is enough and the shelf ends
+    // up holding one product rather than a scattering.
+    const source = await prisma.stockLevel.findFirst({
+      where: { binId: floor.id, qtyOnHand: { gte: shelf.qty } },
+      orderBy: { qtyOnHand: 'desc' },
+      select: { sellerId: true, variantId: true, batchId: true },
+    });
+    if (source === null) {
+      console.log(`  · nothing in ${wh.code} FLOOR big enough to stock ${shelf.code} — skipped`);
+      continue;
+    }
+    await call(`/admin/warehouses/${wh.id}/bin-ops/bulk-transfer`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        lines: [
+          {
+            sellerId: source.sellerId,
+            variantId: source.variantId,
+            batchId: source.batchId,
+            qty: shelf.qty,
+            sourceBinId: floor.id,
+            destBinId: shelf.id,
+          },
+        ],
+      },
+    });
+    console.log(`  · put ${shelf.qty} unit(s) on ${shelf.code}`);
+  }
+}
+
+/**
+ * One real collapse, so the backups list has something in it.
+ *
+ * THROUGH THE PRODUCT'S OWN TWO STEPS, including the six-digit code —
+ * only its DELIVERY is faked, which is the same bargain
+ * `ensureStoreSession` strikes with an invitation token. `requestCollapse`
+ * mints a code, hashes it and emails the plaintext; there is no mail
+ * here, so the hash is overwritten with one this knows the preimage of
+ * and `confirmCollapse` is then called normally. Everything the service
+ * does — the snapshot before the merge, the paired transfers, the audit
+ * row — is real.
+ *
+ * It is NOT what the video does. The video stops at the code, and says
+ * that stopping there is the point.
+ */
+async function collapseOnceForTheBackup(wh, staffToken) {
+  const reason =
+    'Shelving replaced across this warehouse; the recorded locations no longer match the racking.';
+  const asked = await call(`/admin/warehouses/${wh.id}/bin-ops/collapse/request`, {
+    method: 'POST',
+    token: staffToken,
+    body: { reason },
+  });
+  const code = '424242';
+  await prisma.binCollapseChallenge.update({
+    where: { id: asked.challengeId },
+    data: { codeHash: createHash('sha256').update(code, 'utf8').digest('hex') },
+  });
+  const done = await call(`/admin/warehouses/${wh.id}/bin-ops/collapse/confirm`, {
+    method: 'POST',
+    token: staffToken,
+    body: { challengeId: asked.challengeId, code, typedWarehouseCode: wh.code },
+  });
+  console.log(
+    `  · collapsed ${wh.code} once for the backup: ${done.binsCollapsed} bin(s), ` +
+      `${done.unitsMoved} unit(s) — the video never does this`,
+  );
+}
+
 async function binsWorldFor(slug, staffToken) {
   if (slug !== 'where-things-live') return;
 
@@ -7321,6 +7517,7 @@ async function main() {
   await superviseWorldFor(slug, sellerId, sellerToken);
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
   await binsWorldFor(slug, staffToken);
+  await collapseWorldFor(slug, staffToken);
   await adjustmentWorldFor(slug, sellerId, staffToken, warehouse);
   await cycleCountWorldFor(slug, sellerId, staffToken, warehouse);
   await courierAccountWorldFor(slug);

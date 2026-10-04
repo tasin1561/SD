@@ -4394,6 +4394,69 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'collapse-the-shelves',
+    title: 'Collapsing a warehouse’s shelving',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A warehouse’s shelving, and the one act on this screen that destroys something. Everything above it moves goods. This one throws away the record of where they are.',
+      },
+      {
+        id: 'link',
+        say: 'Which is why it is a sentence at the very bottom rather than a button — and a link, so nothing lands on it while somebody is re-shelving. It is not in the sidebar at all.',
+      },
+      {
+        id: 'page',
+        say: 'Every shelf merges into the floor. A backup is taken first, and this is the part worth reading twice: the goods carry on selling while it is being put back, so a restore is a head start rather than a rewind.',
+      },
+      {
+        id: 'choose',
+        say: 'Nothing else is on the page until you say which warehouse, and that is deliberate. Every figure below is about one building, and a collapse aimed at the wrong one is not something you can take back.',
+      },
+      {
+        id: 'backups',
+        say: 'The backups. One is taken automatically before every collapse, and before anything moves — so a crash between the two leaves a complete copy and an untouched warehouse. Each says when its own copy is swept.',
+      },
+      {
+        id: 'restore',
+        say: 'And putting one back is best effort, line by line. Anything that has sold, moved or been picked since the collapse stays exactly where it is and is listed as skipped. The dialog says so rather than promising a rewind.',
+      },
+      {
+        id: 'danger',
+        say: 'Then the collapse itself. Where each thing was becomes only the backup — and the bins a picker can never reach are left alone, because those are about not SELLING stock rather than about finding it.',
+      },
+      {
+        id: 'transit',
+        say: 'Hold, damaged, quarantine — and goods still travelling between two of our warehouses. Those are not in this building at all, and sweeping them onto the floor would make them sellable before they have landed.',
+      },
+      {
+        id: 'open',
+        say: 'Two steps, and the first one moves nothing. It opens on what is about to stop being recorded, in the plainest words on the page: pickers will search the floor until the shelving is laid out again.',
+      },
+      {
+        id: 'reason',
+        say: 'Thirty characters at least, and the counter is only telling you where you are — the server is what enforces it. This sentence is stored on the backup and on the audit trail, and it is all anybody gets later.',
+      },
+      {
+        id: 'ack',
+        say: 'Then saying out loud what it costs. Not that you meant to press it — that you understand a restore recovers only the stock that has not moved or sold in between.',
+      },
+      {
+        id: 'preview',
+        say: 'And this is the step that pays for the whole design. It MOVES NOTHING. It counts what would merge and tells you, because two bins holding seven units and forty bins holding nine hundred are different decisions.',
+      },
+      {
+        id: 'code',
+        say: 'Then a six-digit code, sent to the person who asked rather than shown on the screen, and this warehouse’s own code typed out. Somebody who got here by accident has neither.',
+      },
+      {
+        id: 'outro',
+        say: 'So the video stops here, and the stopping is the lesson. Everything up to this point is reversible or free; the next press is the one that cannot be taken back, and it is waiting on an inbox.',
+      },
+    ],
+  },
+  {
     slug: 'bill-the-freight',
     title: 'Billing a consignment’s freight',
     subtitle: 'Skydrop for ops',
