@@ -256,8 +256,31 @@ Environment does not belong to filming stack "b":
 - **The Postgres server and the Redis server.** Only the namespaces inside them
   differ. One container each is plenty.
 - **`apps/*/dist` and `apps/*/.next`.** Read-only at run time, and `API_ORIGIN`
-  is read per request by the Next proxy (FE-3), so one build serves both
-  stacks.
+  is read per request by the Next proxy (FE-3), so one build SERVES both
+  stacks. **But a BUILD is not read-only, and that is the gap this entry
+  used to leave open (2026-10-04).** `next build` rewrites the directory
+  underneath whichever servers are already running on it, so one agent
+  rebuilding admin invalidates the other agent's admin server — the one
+  shared resource that is safe to read and unsafe to replace. An admin
+  rebuild on one stack is therefore a `stack.sh restart <other> admin`,
+  and there is nothing to isolate: a second build directory would mean a
+  second build, which is the cost this sharing exists to avoid.
+
+  **The failure is not only the documented "nothing hydrates" — it can be
+  PARTIAL and silent.** Measured while filming O5: a check run came back
+  fully green, every selector resolving, the page hydrated, sidebar and
+  buttons and toasts all correctly styled — while ONE CSS chunk was
+  missing, so every TABLE on the page had lost its header band, its
+  borders and its visually-hidden caption. `stack.sh status` reported
+  FRESH throughout and every stylesheet link in the HTML returned 200,
+  because the links were right and the chunk behind one of them was not
+  yet written. Only the `TUT_CHECK_SHOTS=1` frames showed it. **The tell
+  is `apps/admin/.next/server/app-paths-manifest.json` missing from under
+  a running server** — check for a build in flight before debugging a
+  flow whose frames look subtly wrong rather than broken. A take recorded
+  in that window is a perfectly plausible video of the console with its
+  tables unstyled, which is the same class of failure as pointing the
+  camera at the other agent's world: it does not look like an error.
 - **The secrets in `apps/api/.env`** — the JWT key, the courier encryption key,
   the webhook secret, `DEV_MOCK_SPACES`. A filming stack is not a second
   deployment.
