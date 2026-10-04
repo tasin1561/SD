@@ -14,11 +14,11 @@ const CONFIGURED = {
 } as const;
 
 const MESSAGE: SendEmailInput = {
-  from: 'Skydrop <hello@skydrop.online>',
+  from: 'Skydrop <hello@skydrop.global>',
   to: 'customer@example.com',
   subject: 'Your order has shipped',
   text: 'Tracking: ABC123',
-  replyTo: 'Skydrop Support <support@skydrop.online>',
+  replyTo: 'Skydrop Support <support@skydrop.global>',
 };
 
 describe('SesService', () => {
@@ -56,9 +56,9 @@ describe('SesService', () => {
     it('carries the sender, recipient, reply-to and both bodies', () => {
       const payload = buildSesPayload({ ...MESSAGE, html: '<p>Tracking</p>' });
       expect(payload).toEqual({
-        FromEmailAddress: 'Skydrop <hello@skydrop.online>',
+        FromEmailAddress: 'Skydrop <hello@skydrop.global>',
         Destination: { ToAddresses: ['customer@example.com'] },
-        ReplyToAddresses: ['Skydrop Support <support@skydrop.online>'],
+        ReplyToAddresses: ['Skydrop Support <support@skydrop.global>'],
         Content: {
           Simple: {
             Subject: { Data: 'Your order has shipped', Charset: 'UTF-8' },

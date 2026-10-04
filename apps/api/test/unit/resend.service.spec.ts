@@ -15,11 +15,11 @@ describe('ResendService', () => {
       const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
 
       const result = await svc.send({
-        from: 'Skydrop Security <security@skydrop.online>',
+        from: 'Skydrop Security <security@skydrop.global>',
         to: 'alex@x.io',
         subject: 'Reset',
         text: 'Body',
-        replyTo: 'Skydrop Support <support@skydrop.online>',
+        replyTo: 'Skydrop Support <support@skydrop.global>',
       });
 
       expect(result).toEqual({ ok: true, providerMessageId: null });
