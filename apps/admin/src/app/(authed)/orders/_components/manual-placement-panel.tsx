@@ -183,10 +183,21 @@ export function ManualPlacementPanel({
         }
       >
         <div className="os-fields">
+          {/*
+            BOTH HALVES OF THIS USED TO BE WRONG, on a dangerous dialog.
+            It said recording the waybill "dispatches the order and takes
+            the stock off hand". It does not always dispatch — CUR-8's
+            2026-09-02 amendment routes a parcel whose stock is still on
+            the shelf to PENDING_PICK instead, which is the ordinary
+            shape for one a courier refused at confirmation — and it
+            never takes stock off hand, because under Model C (CUR-3)
+            the decrement fired at PICKED → PACKED. Where it lands is
+            the server's to report, which the toast already does.
+          */}
           <p className="oo-p">
-            You have booked this parcel with a courier outside Skydrop. Recording the waybill
-            dispatches the order and takes the stock off hand — do it once the parcel is actually
-            with them.
+            You have booked this parcel with a courier outside Skydrop, so record the waybill once
+            it is really with them. A parcel that has already been picked and packed goes out; one
+            that has not goes to the warehouse floor to be picked first. The result says which.
           </p>
 
           {error !== null && (

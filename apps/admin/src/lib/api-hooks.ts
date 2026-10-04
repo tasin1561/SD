@@ -906,6 +906,22 @@ export function useConfirmHandoff(): UseMutationResult<
 }
 
 // Manual placement
+
+/**
+ * Why the courier would not carry it, as the API sends it.
+ *
+ * SCREAMING_SNAKE because that is what Prisma hands back — the enum
+ * MEMBER name, not the `@map`ped column value. Named here rather than
+ * left as `string` so the screen's switch can be exhaustive: it was
+ * written against the `@map`ped spelling, matched nothing, and every row
+ * on that worklist read "Reason not recorded".
+ */
+export type SupersedeReasonCode =
+  | 'AWB_REJECTED'
+  | 'NON_SERVICEABLE'
+  | 'COURIER_FAILURE'
+  | 'MANUAL_REPLACEMENT';
+
 export interface ManualPlacementQueueRow {
   orderId: string;
   orderNumber: string;
@@ -919,7 +935,7 @@ export interface ManualPlacementQueueRow {
   waitingHours: number;
   arrivedAt: string;
   reason: string | null;
-  reasonCode: string | null;
+  reasonCode: SupersedeReasonCode | null;
   needsPicking: boolean;
 }
 

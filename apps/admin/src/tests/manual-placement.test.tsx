@@ -106,9 +106,11 @@ describe('both actions move money-adjacent state, so the cache must follow', () 
   const src = read(HOOKS);
 
   it('placing an AWB invalidates orders AND inventory', () => {
-    // It dispatches the order and takes stock off hand. A page still
-    // showing PENDING_MANUAL_PLACEMENT reads as a failed action and
-    // invites a second attempt.
+    // It moves the order on — to DISPATCHED when the goods are packed
+    // and to PENDING_PICK when they are not (CUR-8) — and it releases
+    // or consumes nothing itself, the decrement having fired at pack
+    // (CUR-3). Either way a page still showing PENDING_MANUAL_PLACEMENT
+    // reads as a failed action and invites a second attempt.
     const hook = src.slice(src.indexOf('export function usePlaceManualAwb('));
     expect(hook.slice(0, 1200)).toContain("['admin-orders']");
     expect(hook.slice(0, 1200)).toContain("['admin-inventory']");

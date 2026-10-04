@@ -10,7 +10,11 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { AgeChip, OoSection, type AgeTone } from '../../orders/_components/order-ops-parts';
-import { useManualPlacementQueue, type ManualPlacementQueueRow } from '@/lib/api-hooks';
+import {
+  useManualPlacementQueue,
+  type ManualPlacementQueueRow,
+  type SupersedeReasonCode,
+} from '@/lib/api-hooks';
 import { ManualPlacementPanel } from '../../orders/_components/manual-placement-panel';
 
 /**
@@ -52,18 +56,37 @@ function waitTone(hours: number): AgeTone {
   return 'fresh';
 }
 
-function reasonLabel(code: string | null): string {
+/**
+ * The coded reason, in a few words a person can scan.
+ *
+ * THE CASES ARE THE PRISMA MEMBER NAMES, not the `@map`ped column
+ * values. They were the latter, so the switch matched nothing and
+ * EVERY row here read "Reason not recorded" — on the one column this
+ * screen exists for, and quietly, because the courier's own sentence
+ * sits underneath and reads like the answer. Found by filming it.
+ *
+ * `code` is now the four-value union, so a fifth `SupersedeReason`
+ * fails to compile rather than silently falling through to the
+ * default. The default is kept for the genuine case: a replacement
+ * shipment with nothing retired behind it, where there is no code at
+ * all.
+ */
+function reasonLabel(code: SupersedeReasonCode | null): string {
   switch (code) {
-    case 'non_serviceable':
+    case 'NON_SERVICEABLE':
       return 'Address not served';
-    case 'awb_rejected':
+    case 'AWB_REJECTED':
       return 'Courier refused it';
-    case 'courier_failure':
+    case 'COURIER_FAILURE':
       return 'Courier unreachable';
-    case 'manual_replacement':
+    case 'MANUAL_REPLACEMENT':
       return 'Replaced by hand';
-    default:
+    case null:
       return 'Reason not recorded';
+    default: {
+      const never: never = code;
+      return never;
+    }
   }
 }
 
