@@ -1271,7 +1271,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: '',
     displayName: 'ChatWoot Base URL',
     description:
-      'Self-hosted ChatWoot URL (e.g. https://chat.skydrop.online). EMPTY = stub mode — ChatWootClientService returns no-op refs, webhook controller accepts payloads without HMAC verify. Set this once the chat droplet is provisioned + CHATWOOT_API_TOKEN env is configured.',
+      'Self-hosted ChatWoot URL (e.g. https://chat.skydrop.global). EMPTY = stub mode — ChatWootClientService returns no-op refs, webhook controller accepts payloads without HMAC verify. Set this once the chat droplet is provisioned + CHATWOOT_API_TOKEN env is configured.',
   },
   {
     key: 'chat.chatwoot_account_id',
@@ -3131,7 +3131,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Update on your Skydrop application',
     bodyTemplate:
-      'Hi {{ contact_name }}, after reviewing your Skydrop application we are unable to approve it at this time. Reason: {{ rejection_reason }}. Reach out to support@skydrop.online if you would like to appeal.',
+      'Hi {{ contact_name }}, after reviewing your Skydrop application we are unable to approve it at this time. Reason: {{ rejection_reason }}. Reach out to support@skydrop.global if you would like to appeal.',
   },
   {
     code: 'marketing.invite_lead_ack.email',
