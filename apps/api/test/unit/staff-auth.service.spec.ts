@@ -323,7 +323,7 @@ async function seedStaff(
   const row: StaffRow = {
     id: STAFF_UUID,
     email: 'admin@skydrop.global',
-    emailDisplay: 'Admin@Skydrop.Online',
+    emailDisplay: 'Admin@Skydrop.Global',
     passwordHash: hash,
     role: 'SUPER_ADMIN',
     emailVerifiedAt: null,
@@ -416,7 +416,7 @@ describe('StaffAuthService — login', () => {
     const sut = makeSut();
     await seedStaff(sut, { email: 'admin@skydrop.global' });
     const result = await sut.svc.login(
-      { email: '  ADMIN@Skydrop.online  ', password: 'CorrectHorseBattery!12' },
+      { email: '  ADMIN@Skydrop.Global  ', password: 'CorrectHorseBattery!12' },
       ctx,
     );
     expect(result.staff.id).toBe(STAFF_UUID);

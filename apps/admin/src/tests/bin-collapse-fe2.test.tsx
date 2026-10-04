@@ -87,7 +87,7 @@ describe('FE-2 boundary — bin collapse', () => {
     });
     // And it names where the code went, so a person who did not get one
     // knows which inbox to look in rather than assuming it failed.
-    expect(screen.getByText(/ops@skydrop\.online/)).toBeInTheDocument();
+    expect(screen.getByText(/ops@skydrop\.global/)).toBeInTheDocument();
   });
 
   it('surfaces the server VERBATIM when it refuses a reason the UI let through', async () => {
