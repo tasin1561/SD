@@ -939,6 +939,20 @@ function godResult(page) {
   return page.locator(".oc-result[data-tone='critical']").first();
 }
 
+/**
+ * Yesterday at 17:00 local, as a `datetime-local` value.
+ *
+ * P2 records a scan by hand and the whole point of the field is that it
+ * is the time of the SCAN rather than of the typing (TRK-3), so the
+ * value has to be in the past and has to be the shape the input reads:
+ * `YYYY-MM-DDTHH:mm`, no seconds and no zone.
+ */
+function yesterdayAtFive() {
+  const d = new Date(Date.now() - 86_400_000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T17:00`;
+}
+
 function attnCard(page, area) {
   return page.locator('.db-attn').filter({ hasText: area }).first();
 }
@@ -1369,6 +1383,58 @@ function settingGroup(page, title) {
     .locator('.ac-section')
     .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
     .first();
+}
+
+/**
+ * O5's people and its announcement.
+ *
+ * `staffWorldFor` makes the colleague, clears the invitation and
+ * removes the broadcast; `test/tutorial-labels.test.mjs` keeps the
+ * three strings in step, because each is a row the seeding finds by
+ * exactly these words.
+ */
+const O5_STAFF_EMAIL = 'priya.menon@skydrop.local';
+const O5_INVITE_EMAIL = 'rafiq.hossain@skydrop.test';
+const O5_BROADCAST_TITLE = 'Call centre closing at six on Friday';
+
+/** What her role is changed TO on camera; the seeding puts it back. */
+const O5_NEW_ROLE_NAME = 'Seller approval admin';
+
+/** The audience it sends to — two people, which is the whole point. */
+const O5_BROADCAST_ROLE_KEY = 'call_agent';
+
+/** One row of the staff table, by the address in it. */
+function staffRow(page, email) {
+  return page.locator('tbody tr').filter({ hasText: email }).first();
+}
+
+/**
+ * Walk to a page THROUGH THE APP, link by link.
+ *
+ * Same reason as `signInAndOpen`: FE-1 keeps the access token in
+ * memory, so `page.goto` drops it and the client has to go and get
+ * another before the page it just loaded can ask the API. Most pages
+ * survive that; `/settings` did not (see the gotchas). Walking the
+ * links the app itself offers never loses the token, and it is how
+ * somebody actually arrives — `/notifications/broadcasts` has no nav
+ * entry at all and is reached from the notifications page's own
+ * "Send a broadcast".
+ *
+ * `goto` remains the fallback for a step with no link to click.
+ */
+async function openInApp(ctx, hrefs, path) {
+  for (const href of hrefs) {
+    const link = ctx.page.locator(`a[href="${href}"]`).first();
+    if ((await link.count()) === 0) {
+      await ctx.page.goto(`${ctx.baseUrl}${path}`, { waitUntil: 'domcontentloaded' });
+      break;
+    }
+    await link.scrollIntoViewIfNeeded();
+    await link.click();
+    await ctx.page.waitForURL((url) => url.pathname === href, { timeout: 20_000 });
+  }
+  await ctx.page.waitForURL((url) => url.pathname === path, { timeout: 20_000 });
+  await ctx.page.waitForLoadState('networkidle').catch(() => {});
 }
 
 /** O2's account-status card, which carries both of the status buttons. */
@@ -7535,6 +7601,245 @@ export const FLOWS = {
         const history = ooSection(page, 'Full history');
         await sectionToTop(page, history);
         await stage.dwellOn(history.locator('.oo-card').first(), 3600);
+      },
+    },
+  },
+
+  /*
+    P2. The courier-ops panel, on D0's failed parcel — the one that is
+    still with Delhivery and has something left to ask them about.
+
+    IT PRESSES ONE THING, and the one it presses is the only act here
+    that does not reach the courier: a hand-recorded scan, which is the
+    recovery path for a webhook that never arrived. The other three — a
+    re-attempt, a recipient correction and a cancellation — are OPENED
+    so their own copy can be read, and cancelled. That is not caution
+    for its own sake: there is no sandbox behind any of them, the local
+    simulator is standing in for a company that would really send a van,
+    and a tutorial that presses them teaches the opposite of what it
+    says.
+
+    The hand-recorded scan lands on a parcel already at DELIVERY_FAILED,
+    so TRK-4's guard skips the transition and says so — which is the
+    scene, and leaves the order exactly where it was. What it DOES leave
+    is one `tracking_events` row and one `delivery_attempts` row per
+    take; `clearDeliveryTakeArtefacts` removes both.
+  */
+  'live-courier-writes': {
+    app: 'admin',
+
+    /*
+      `signInAndOpen`, never a `goto` after sign-in. FE-1 keeps the access
+      token in browser MEMORY, so a full page load throws it away and the
+      client has to fetch another before anything it renders can ask the
+      API — a race that is invisible on a check run and not under video
+      (O4's write-up; P1's first take died on the dashboard for it).
+      Everything after this is a CLIENT-side navigation for the same
+      reason.
+    */
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/orders', ctx.page.getByRole('heading', { level: 1 }).first());
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        /*
+          "Search orders", not "Search": the field carries an aria-label
+          that OVERRIDES its visible one, and the submit magnifier inside
+          it owns the word "Search" — so the plain form types into a
+          `<button>` and passes. The box is a FORM, so nothing happens
+          until Enter.
+        */
+        await stage.typeIn(
+          page.getByLabel('Search orders', { exact: true }).first(),
+          'RSH-LIFE-FAILED',
+        );
+        await page.keyboard.press('Enter');
+        // THE COUNT, not "a row": for a beat after the last keystroke the
+        // UNFILTERED list is still on screen and full of `SD-…` links.
+        await page
+          .getByText(/^1 orders?$/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.clickIt(page.getByRole('link', { name: /^SD-\d{4}-\d{2}-\d{6}$/ }).first(), {
+          after: 1400,
+        });
+        await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // The STATUS, which is the premise: a parcel the driver could
+        // not deliver. The page renders for an order in any state.
+        await page
+          .getByText('Delivery failed', { exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
+      },
+
+      async shut({ page, stage }) {
+        const shipments = ooSection(page, 'Shipments');
+        await sectionToTop(page, shipments);
+        await stage.dwellOn(shipments.locator('.os-item__head').first(), 3600);
+      },
+
+      async insight({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Courier actions & costs' }).first(), {
+          after: 1200,
+        });
+        /*
+          GATED ON THE FIGURES ARRIVING, not on the panel. The panel
+          renders immediately with a skeleton and then with em dashes if
+          the lookups fail, so waiting for `.os-panel` would film three
+          dashes under a line about what the calls bought.
+        */
+        const facts = page.locator('.os-panel .oo-facts').first();
+        await facts.waitFor({ state: 'visible', timeout: 30_000 });
+        await page
+          .getByText(/\d+ days/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(facts, 3600);
+      },
+
+      async documents({ page, stage }) {
+        const block = page.locator('.os-panel__block').first();
+        await stage.dwellOn(block, 3600);
+      },
+
+      async ndr({ page, stage }) {
+        /*
+          The NDR block, found by what is IN it rather than by position:
+          `.os-panel__block` is three siblings and which one holds the
+          re-attempt depends on whether the server said it is eligible.
+        */
+        const block = page
+          .locator('.os-panel__block')
+          .filter({ hasText: 'failed attempt' })
+          .first();
+        await block.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(block, 3800);
+      },
+
+      async ndrconfirm({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: 'Request another delivery attempt' }).first(),
+          { after: 1200 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('heading', { name: 'Request another delivery attempt?' })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3800);
+      },
+
+      async nosandbox({ page, stage }) {
+        // The button this video is NOT pressing, held under the sentence
+        // that says why.
+        await stage.dwellOn(
+          page.getByRole('dialog').getByRole('button', { name: 'Request the attempt' }),
+          3600,
+        );
+      },
+
+      async edit({ page, stage }) {
+        await stage.clickIt(dialogActions(page).getByRole('button', { name: 'Cancel' }), {
+          after: 900,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 20_000 });
+        await stage.clickIt(page.getByRole('button', { name: 'Correct recipient' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('heading', { name: 'Correct the recipient' })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 3400);
+      },
+
+      async cancel({ page, stage }) {
+        await stage.clickIt(dialogActions(page).getByRole('button', { name: 'Cancel' }), {
+          after: 900,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 20_000 });
+        await stage.clickIt(page.getByRole('button', { name: 'Cancel with courier' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('heading', { name: 'Cancel this parcel with the courier?' })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3800);
+      },
+
+      async reason({ page, stage }) {
+        /*
+          SHORT ON PURPOSE. The server's floor is ten characters and the
+          confirm button is disabled below it, so seven is what shows a
+          viewer the gate rather than a form being filled in. Nothing is
+          submitted either way.
+        */
+        await stage.typeIn(page.getByRole('dialog').getByLabel(/^Reason$/), 'Pull it');
+        await page.waitForTimeout(600);
+        await stage.dwellOn(
+          page.getByRole('dialog').getByRole('button', { name: 'Cancel parcel' }),
+          3200,
+        );
+      },
+
+      async order({ page, stage }) {
+        // The dialog's own note, which is CUR-11 in one sentence.
+        await stage.dwellOn(page.getByRole('dialog').locator('.os-note').first(), 3800);
+      },
+
+      async scan({ page, stage }) {
+        await stage.clickIt(dialogActions(page).getByRole('button', { name: 'Cancel' }), {
+          after: 900,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 20_000 });
+        await stage.clickIt(page.getByRole('button', { name: 'Record a scan manually' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog
+          .getByRole('heading', { name: 'Record a courier scan' })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 3400);
+      },
+
+      async when({ page, stage }) {
+        await page.selectOption('#ms-status', 'DELIVERY_ATTEMPTED');
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('#ms-status'), 2000);
+        /*
+          `setDate`, never `typeIn`: a datetime-local is a row of
+          SEGMENTS and typing it a character at a time feeds the digits
+          into whichever one has focus.
+        */
+        await setDate({ page, stage }, page.locator('#ms-when'), yesterdayAtFive());
+        await stage.dwellOn(page.locator('#ms-when'), 2400);
+      },
+
+      async record({ page, stage }) {
+        await stage.typeIn(page.locator('#ms-city'), 'Bengaluru');
+        await stage.typeIn(page.locator('#ms-fail'), 'Customer unreachable');
+        await stage.clickIt(page.getByRole('dialog').getByRole('button', { name: 'Record scan' }), {
+          after: 1400,
+        });
+        // The service's own report, which is what the narration reads.
+        const result = page.locator('.os-result').first();
+        await result.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(result, 3600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.clickIt(dialogActions(page).getByRole('button', { name: 'Done' }), {
+          after: 1000,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'detached', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.os-panel').first(), 3600);
       },
     },
   },
@@ -14019,6 +14324,207 @@ export const FLOWS = {
       async outro({ page, stage }) {
         const section = settingGroup(page, 'Charges');
         await sectionToTop(page, section);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
+      },
+    },
+  },
+  /*
+    O5 — staff, and telling everyone something.
+
+    IT ACTS ON A COLLEAGUE OF ITS OWN. `tutorial-ops` is the account the
+    camera is signed in as, so deactivating it ends the take; I2's call
+    agents belong to another video's world and a `deleted_at` left on
+    one would surface there as a roster quietly a person short.
+    `staffWorldFor` makes "priya.menon@skydrop.local", puts her role
+    back and clears her `deletedAt` on every run, removes the unused
+    invitation, and removes the broadcast the last take sent.
+
+    THE BROADCAST IS REALLY SENT, to the two call agents. That is the
+    narrowest audience on the box and it is the one the lesson works on:
+    the count is checkable, the send names it, and the server refuses if
+    the population moved. A broadcast cannot be recalled, which is why
+    the page's own subtitle leads with the count and why this video
+    does too.
+  */
+  'staff-and-broadcasts': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/staff', staffRow(ctx.page, O5_STAFF_EMAIL));
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page
+          .getByRole('heading', { name: 'Staff', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+
+      async invite({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Invite staff' }), { after: 1600 });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.typeIn(dialog.getByLabel(/^Email/).first(), O5_INVITE_EMAIL, { after: 600 });
+        await stage.dwellOn(dialog.getByLabel(/^Role/).first(), 2600);
+      },
+
+      /*
+        THE LINK IS SHOWN ONCE AND NOWHERE ELSE — only a hash is stored —
+        so the reveal card is the whole scene. It is NOT a dialog: it
+        renders into the page above the tables, which is why this reaches
+        for its own card rather than `getByRole('dialog')`.
+      */
+      async link({ page, stage }) {
+        await stage.clickIt(
+          dialogActions(page).getByRole('button', { name: /Create invitation|Creating/ }),
+          { after: 2200 },
+        );
+        const card = page
+          .locator('.ac-card')
+          .filter({
+            has: page.getByRole('heading', { name: /^Invitation link/ }),
+          })
+          .first();
+        await card.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(card.getByText(/only time we/i).first(), 3600);
+      },
+
+      async pending({ page, stage }) {
+        const row = page.locator('tbody tr').filter({ hasText: O5_INVITE_EMAIL }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(row, 3400);
+      },
+
+      /*
+        THE SELECT DOES NOT FIRE THE PATCH — it arms a confirmation, and
+        that is the line. So this scene only chooses; the press is the
+        next one.
+      */
+      async role({ page, stage }) {
+        const row = staffRow(page, O5_STAFF_EMAIL);
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        const select = row.locator('select').first();
+        await stage.point(select, { settle: 500 });
+        await select.selectOption({ label: O5_NEW_ROLE_NAME });
+        await page.waitForTimeout(700);
+        await stage.clearHalo();
+      },
+
+      async confirmrole({ page, stage }) {
+        const dialog = page.getByRole('dialog', { name: /Change this person/ });
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2800);
+        await stage.clickIt(dialogActions(page).getByRole('button', { name: 'Change role' }), {
+          after: 2000,
+        });
+        await dialog.waitFor({ state: 'detached', timeout: 25_000 });
+      },
+
+      async deactivate({ page, stage }) {
+        await stage.clickIt(
+          staffRow(page, O5_STAFF_EMAIL).getByRole('button', { name: 'Deactivate' }),
+          {
+            after: 1600,
+          },
+        );
+        const dialog = page.getByRole('dialog', { name: /Deactivate this staff member/ });
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 3000);
+      },
+
+      async deactivated({ page, stage }) {
+        await stage.clickIt(
+          dialogActions(page).getByRole('button', { name: 'Deactivate', exact: true }),
+          { after: 2200 },
+        );
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 25_000 });
+        const row = staffRow(page, O5_STAFF_EMAIL);
+        await row
+          .locator('.sk-chip')
+          .filter({ hasText: /^deactivated$/i })
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 3200);
+      },
+
+      async broadcast(ctx) {
+        const { page, stage } = ctx;
+        await openInApp(
+          ctx,
+          ['/notifications', '/notifications/broadcasts'],
+          '/notifications/broadcasts',
+        );
+        await page
+          .getByRole('heading', { name: 'Broadcast', exact: true })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+
+      async audience({ page, stage }) {
+        const select = page.locator('#bc-audience');
+        await stage.point(select, { settle: 500 });
+        await select.selectOption({ label: 'A staff role' });
+        await page.waitForTimeout(700);
+        await stage.clearHalo();
+        await stage.typeIn(page.getByLabel(/^Role key/).first(), O5_BROADCAST_ROLE_KEY, {
+          after: 700,
+        });
+      },
+
+      async message({ page, stage }) {
+        await stage.dwellOn(page.locator('fieldset').filter({ hasText: 'Channels' }).first(), 2200);
+        await stage.typeIn(page.locator('#bc-title'), O5_BROADCAST_TITLE, {
+          delay: 16,
+          after: 500,
+        });
+        await stage.typeIn(
+          page.locator('#bc-body'),
+          'The call centre closes at six this Friday for the team dinner. Anything still waiting ' +
+            'at six goes back in the queue for Saturday morning \u2014 nobody needs to stay.',
+          { delay: 12, after: 600 },
+        );
+      },
+
+      async count({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /How many is that\?|Counting/ }), {
+          after: 1800,
+        });
+        const answer = page.getByText(/\d+ (person|people)/).first();
+        await answer.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(answer, 3400);
+      },
+
+      async send({ page, stage }) {
+        const button = page.getByRole('button', { name: /^Send to / }).first();
+        await button.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(button, 3400);
+      },
+
+      async sent({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: /^Send to |Sending/ }).first(), {
+          after: 2600,
+        });
+        const row = page.locator('tbody tr').filter({ hasText: O5_BROADCAST_TITLE }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 3400);
+      },
+
+      async outro({ page, stage }) {
         await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
       },
     },

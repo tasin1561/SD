@@ -4264,6 +4264,73 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'live-courier-writes',
+    title: 'Live courier writes',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A parcel the driver could not deliver. It is still with the courier, and everything we might ask them to do about it lives in one panel on this order.',
+      },
+      {
+        id: 'shut',
+        say: 'Which is shut. Opening it costs live calls to Delhivery, so somebody checking a status is not made to pay for a lane being priced. Opening it is the consent to spend them.',
+      },
+      {
+        id: 'insight',
+        say: 'And this is what those calls bought. How long they expect the parcel to take, what they will actually charge us for it, and which of their zones they have put it in.',
+      },
+      {
+        id: 'documents',
+        say: 'Two reads. Proof of delivery and the signature, fetched from the courier on the click — and only if they still hold them, because they archive their own documents on their own schedule.',
+      },
+      {
+        id: 'ndr',
+        say: 'Then the first write. Another delivery attempt is offered because the SERVER says Delhivery would accept one here — after one failed attempt, on this code of theirs. Not because a button is easy to draw.',
+      },
+      {
+        id: 'ndrconfirm',
+        say: 'Read what it costs. A van is sent out to that address again, at our expense. They confirm separately, and only their own scans will move this order afterwards.',
+      },
+      {
+        id: 'nosandbox',
+        say: 'And there is no sandbox. Every button in this panel reaches the real Delhivery, so nothing in this video presses one — which is the lesson rather than a gap in the recording.',
+      },
+      {
+        id: 'edit',
+        say: 'Correcting the recipient is the gentlest of the four. Only the fields you fill are sent, and the courier refuses it outright on a parcel already out for delivery or finished with.',
+      },
+      {
+        id: 'cancel',
+        say: 'Then the expensive one, and it is red for a reason. A parcel already moving does not stop and does not vanish — it turns round and comes back, at the cost of a return leg.',
+      },
+      {
+        id: 'reason',
+        say: 'So the button stays dead until you have written down why. Ten characters is the floor the server enforces, and the sentence you type is what the next person has to go on.',
+      },
+      {
+        id: 'order',
+        say: 'And none of it moves the order. The courier accepting a cancellation is their opinion about a parcel; what the order says comes from their scans, which arrive later and may disagree.',
+      },
+      {
+        id: 'scan',
+        say: 'Which is why the last one exists. When a scan never reached us — their panel says delivered and ours does not — somebody has to say so, and this is the only honest way to.',
+      },
+      {
+        id: 'when',
+        say: 'The time of the SCAN, not of the typing. Backdating puts it where it belongs on the customer’s timeline instead of at the end, which is the whole reason it is asked for.',
+      },
+      {
+        id: 'record',
+        say: 'And it runs the same rules a real scan does, so it can move the order exactly as far as the courier could and no further. Here it reports that it moved nothing, and says why.',
+      },
+      {
+        id: 'outro',
+        say: 'So: open it only when you need it, read the server’s verdict before reaching for a button, and remember that a scan you type is something you are asserting happened.',
+      },
+    ],
+  },
+  {
     slug: 'bill-the-freight',
     title: 'Billing a consignment’s freight',
     subtitle: 'Skydrop for ops',
@@ -4784,6 +4851,73 @@ export const VIDEOS = [
       {
         id: 'outro',
         say: 'So: read the i before you touch anything, change one row at a time, and remember that the difference between this page and a deploy is the only safety net it does not have.',
+      },
+    ],
+  },
+  {
+    slug: 'staff-and-broadcasts',
+    title: 'Staff, and telling everyone something',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Everyone with a login to this console, and the three things you do to them: let somebody in, change what they can do, and take the login away again.',
+      },
+      {
+        id: 'invite',
+        say: 'An invitation is an email address and a role. The roles offered are the ROWS somebody built under Roles, not a fixed list \u2014 so anything your team invented is here.',
+      },
+      {
+        id: 'link',
+        say: 'And this is the only time you will ever see that link. We keep a hash of it and nothing else, so there is no screen anywhere that can show it to you again \u2014 copy it now and send it however you talk to each other.',
+      },
+      {
+        id: 'pending',
+        say: 'Until they use it, it sits here. Re-issuing replaces the link, which quietly kills the one you already sent; revoking throws the invitation away entirely.',
+      },
+      {
+        id: 'role',
+        say: 'Changing somebody\u2019s role is a dropdown that does NOT act on its own. Choosing a different one arms a confirmation and nothing else, so a slipped scroll wheel cannot re-rank your colleague.',
+      },
+      {
+        id: 'confirmrole',
+        say: 'Confirmed, and it takes effect on their next request rather than their next sign-in. Permissions are read per request, which is the half people expect to have to wait for.',
+      },
+      {
+        id: 'deactivate',
+        say: 'And taking the login away. Read what it says: the account stops working, and everything they ever did stays exactly where it is, with their name on it.',
+      },
+      {
+        id: 'deactivated',
+        say: 'Done. The row stays, marked, with no actions left on it \u2014 because a person who has left is still the answer to who approved that seller in March.',
+      },
+      {
+        id: 'broadcast',
+        say: 'Then the other half of this job: telling everybody something. The subtitle is the whole design \u2014 a broadcast cannot be recalled, so the count comes first.',
+      },
+      {
+        id: 'audience',
+        say: 'Who it reaches is a list of selectors rather than a mailing list, resolved when you send. And the hint under each one is worth reading: a role can be renamed, a permission is a durable fact about what somebody does.',
+      },
+      {
+        id: 'message',
+        say: 'In-app or email, a title and the message itself. In-app is the default because it arrives where the work is, and nobody has to be at their desk to be reminded of it later.',
+      },
+      {
+        id: 'count',
+        say: 'Now the part that is the point. You cannot get to Send without asking how many people that is \u2014 and it answers with the number and the first few names, so it is checkable rather than merely alarming.',
+      },
+      {
+        id: 'send',
+        say: 'The button names the figure, and the figure you were shown is carried into the send. If the population moved while you were reading it, the server refuses rather than sending to a different room than the one you agreed to.',
+      },
+      {
+        id: 'sent',
+        say: 'And it is recorded as what you CHOSE, not as the people it happened to reach \u2014 because a month later the question is who you meant to tell, and the population has moved on since.',
+      },
+      {
+        id: 'outro',
+        say: 'So: invite by role, copy the link the once, remember a deactivated colleague keeps their history, and never press Send on a number you have not read.',
       },
     ],
   },

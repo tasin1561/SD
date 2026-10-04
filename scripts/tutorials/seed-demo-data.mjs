@@ -4009,6 +4009,44 @@ async function clearDeliveryTakeArtefacts(sellerId) {
     ]);
     console.log(`  · removed a previous take's ${raised.length} seller-raised ticket(s)`);
   }
+
+  /*
+    P2 RECORDS A SCAN BY HAND, on D0's failed parcel.
+
+    `ManualTrackingService` writes a `tracking_events` row with
+    `source = MANUAL_ENTRY` and, for a DELIVERY_ATTEMPTED scan, a
+    `delivery_attempts` row beside it (TRK-4 keeps the attempt even when
+    it skips the transition). Neither is undone by anything, so a second
+    take would open on a parcel with two failed attempts under a line
+    about one — and the NDR readiness strip prints that count.
+
+    SCOPED TO THAT ONE PARCEL. `RSH-LIFE-OVERDUE` is BUILT from
+    back-dated MANUAL_ENTRY scans (it is the one parcel the simulator
+    cannot produce), so a sweep of every hand-entered event on this
+    seller would delete the world instead of a take's leftovers.
+
+    `webhookId: null` is what tells a hand-recorded attempt from the
+    simulator's: every webhook-driven one carries the row it came from.
+  */
+  const failed = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: 'RSH-LIFE-FAILED' },
+    select: { orderShipments: { select: { shipmentId: true } } },
+  });
+  const failedShipments = (failed?.orderShipments ?? []).map((l) => l.shipmentId);
+  if (failedShipments.length > 0) {
+    const events = await prisma.trackingEvent.deleteMany({
+      where: { shipmentId: { in: failedShipments }, source: 'MANUAL_ENTRY' },
+    });
+    const attempts = await prisma.deliveryAttempt.deleteMany({
+      where: { shipmentId: { in: failedShipments }, webhookId: null },
+    });
+    if (events.count > 0 || attempts.count > 0) {
+      console.log(
+        `  · removed a previous take's ${events.count} hand-recorded scan(s) and ` +
+          `${attempts.count} attempt row(s) on RSH-LIFE-FAILED`,
+      );
+    }
+  }
 }
 
 async function clearPreviousImports(sellerId) {
@@ -5910,6 +5948,109 @@ async function systemSettingsWorldFor(slug) {
 }
 
 /**
+ * The colleague O5 changes the role of and then deactivates.
+ *
+ * DELIBERATELY NOT `tutorial-ops`: that is the account the camera is
+ * signed in as, and deactivating it ends the take mid-scene. It is not
+ * one of I2's call agents either — those belong to another video's
+ * world, and a `deleted_at` left on one would surface there as a
+ * roster that is quietly a person short.
+ *
+ * `role` is the legacy enum and `staffRole` the row RBAC-1 actually
+ * enforces; both are set, because a staff user with only the enum holds
+ * no permissions at all and would read as a broken account on screen.
+ */
+const O5_STAFF_EMAIL = 'priya.menon@skydrop.local';
+const O5_STAFF_ROLE_KEY = 'finance';
+
+/** The email O5 invites on camera, and whose invitation it then removes. */
+const O5_INVITE_EMAIL = 'rafiq.hossain@skydrop.test';
+
+/** The announcement O5 sends, and therefore the handle on what to clear. */
+const O5_BROADCAST_TITLE = 'Call centre closing at six on Friday';
+
+/**
+ * O5's world \u2014 "Staff, and telling everyone something".
+ *
+ * ── WHAT THE TAKE SPENDS ─────────────────────────────────────────────
+ * An invitation, somebody's role, somebody's login, and one broadcast.
+ * Each is the subject, so none is faked, and each is put back here:
+ *
+ *   \u00b7 the invitation is deleted, so the drawer offers "Invite staff"
+ *     against a clean Pending list rather than yesterday's row;
+ *   \u00b7 the colleague goes back to their role and has `deletedAt`
+ *     cleared, or the second take opens on a deactivated person with no
+ *     Deactivate button to press;
+ *   \u00b7 the broadcast and its notification rows are removed, because
+ *     "What has been sent" is a list the video reads and a take that
+ *     added a row every run would film a different page each time.
+ *
+ * The broadcast is removed by its TITLE rather than by its type: a
+ * broadcast somebody else sent is history and not ours to tidy away.
+ */
+async function staffWorldFor(slug) {
+  if (slug !== 'staff-and-broadcasts') return;
+
+  const role = await prisma.staffRoleDefinition.findFirst({
+    where: { key: O5_STAFF_ROLE_KEY },
+    select: { id: true, name: true },
+  });
+  if (role === null) {
+    throw new Error(
+      `There is no staff role with key "${O5_STAFF_ROLE_KEY}" \u2014 O5 puts the colleague back on it ` +
+        'after changing it on camera.',
+    );
+  }
+  await prisma.staffUser.upsert({
+    where: { email: O5_STAFF_EMAIL },
+    update: {
+      role: 'FINANCE',
+      staffRole: { connect: { id: role.id } },
+      deletedAt: null,
+    },
+    create: {
+      email: O5_STAFF_EMAIL,
+      emailDisplay: O5_STAFF_EMAIL,
+      passwordHash: await hash('Skydrop-Demo-2026'),
+      role: 'FINANCE',
+      staffRole: { connect: { id: role.id } },
+    },
+  });
+  console.log(`  \u00b7 ${O5_STAFF_EMAIL} is active and back on ${role.name}`);
+
+  const invites = await prisma.staffInvitation.deleteMany({
+    where: { email: O5_INVITE_EMAIL, usedAt: null },
+  });
+  if (invites.count > 0) {
+    console.log(
+      `  \u00b7 removed ${invites.count} unused staff invitation(s) a previous take issued`,
+    );
+  }
+  const used = await prisma.staffInvitation.count({
+    where: { email: O5_INVITE_EMAIL, usedAt: { not: null } },
+  });
+  if (used > 0) {
+    throw new Error(
+      `${O5_INVITE_EMAIL} has accepted an invitation, so inviting them again is refused and the ` +
+        'scene has no button. Pick a new address for O5 rather than deleting a real registration.',
+    );
+  }
+
+  const broadcasts = await prisma.notificationBroadcast.findMany({
+    where: { title: O5_BROADCAST_TITLE },
+    select: { id: true },
+  });
+  if (broadcasts.length > 0) {
+    const ids = broadcasts.map((b) => `broadcast:${b.id}`);
+    await prisma.notificationLog.deleteMany({ where: { eventId: { in: ids } } });
+    await prisma.notificationBroadcast.deleteMany({
+      where: { id: { in: broadcasts.map((b) => b.id) } },
+    });
+    console.log(`  \u00b7 removed ${broadcasts.length} broadcast(s) a previous take sent`);
+  }
+}
+
+/**
  * M2's world — "Is the courier integration healthy".
  *
  * ── IT WRITES NOTHING ────────────────────────────────────────────────
@@ -7030,6 +7171,7 @@ async function main() {
   await sellerAccountWorldFor(slug, staffToken);
   await sellerRoutingWorldFor(slug, staffToken);
   await systemSettingsWorldFor(slug);
+  await staffWorldFor(slug);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);

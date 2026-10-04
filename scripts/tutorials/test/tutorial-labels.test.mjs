@@ -101,6 +101,19 @@ describe('a label one file types and another file clears', () => {
     );
   });
 
+  it('O5 acts on the people and the broadcast its seeding knows about', async () => {
+    const [flows, seed] = await Promise.all([read('flows.mjs'), read('seed-demo-data.mjs')]);
+    for (const name of ['O5_STAFF_EMAIL', 'O5_INVITE_EMAIL', 'O5_BROADCAST_TITLE']) {
+      assert.equal(
+        declared(flows, name),
+        declared(seed, name),
+        `${name} differs between the flow and the seeding. Each of these is a row the seeding ` +
+          'finds by exactly these words, so a rename leaves the take acting on one thing and the ' +
+          'tidying-up looking for another.',
+      );
+    }
+  });
+
   it('O4 types back the value its seeding resets to', async () => {
     const [flows, seed] = await Promise.all([read('flows.mjs'), read('seed-demo-data.mjs')]);
     const typed = declared(flows, 'O4_THRESHOLD_VALUE');
