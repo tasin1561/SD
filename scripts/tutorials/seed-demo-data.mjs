@@ -472,6 +472,25 @@ const STORE_REPORT_SLUGS = new Set(['how-your-stores-are-doing']);
 const STORE_DISPUTE_SLUGS = new Set(['refunds-and-disputes']);
 
 /**
+ * M6 — the THIRD kind of row on the failed-delivery register, and the
+ * only one that still shows a decision anybody could make.
+ *
+ * A seller's own ask is created already approved (the service says so in
+ * as many words: "ALL THREE ACT AT ONCE. None of them waits for an
+ * approval"), so nothing a seller raises ever sits there waiting. A
+ * RESELLER STORE's ask whose seller chose to see it first DOES — and it
+ * is marked "Waiting on seller staff", because Seller staff decide it
+ * and Skydrop admin does not. Without it the video can show two kinds of
+ * ask and not the one the page's own subtitle is about.
+ *
+ * `ensureHeldDeliveryAsk` is G6's and is reused rather than rebuilt: it
+ * drives a store parcel to a failed delivery and raises the held ask,
+ * and G6 films REJECTING it, which changes nothing about the parcel. The
+ * expensive half is re-used for ever and only the ask is raised again.
+ */
+const STORE_DELIVERY_ASK_SLUGS = new Set(['acting-on-a-failed-delivery']);
+
+/**
  * The order the store argues about, and what it says.
  *
  * GENERAL rather than FIGURE_CORRECTION deliberately: a figure
@@ -584,6 +603,11 @@ const LIFECYCLE_SLUGS = new Set([
   'god-mode',
   'live-courier-writes',
   'refunds-and-disputes',
+  // M6 decides what a seller has asked us to do about a parcel the
+  // driver could not hand over, which needs the parcel first:
+  // `RSH-LIFE-FAILED` for the re-attempt and `RSH-LIFE-OVERDUE`, still
+  // out for delivery, for the recall.
+  'acting-on-a-failed-delivery',
 ]);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
@@ -2951,6 +2975,84 @@ const REATTEMPT_ORDERS = [
   },
 ];
 
+/**
+ * M6 — two things a seller has asked us to do about a failed delivery,
+ * and they are deliberately DIFFERENT KINDS of ask.
+ *
+ * A RE-ATTEMPT reaches Delhivery and dispatches a van at our cost. A
+ * RECALL reaches no courier at all — it queues one of our own agents to
+ * phone the customer. The video's whole spine is that those two sit in
+ * one queue, look alike on the row, and cost wildly different things,
+ * so the world needs one of each.
+ *
+ * ONE OPEN REQUEST PER ORDER (not per kind — the service takes an
+ * advisory lock on the order and refuses a second), so they have to be
+ * on two parcels. `RSH-LIFE-FAILED` is the ordinary case, the one the
+ * driver could not hand over; `RSH-LIFE-OVERDUE` is still out for
+ * delivery, which is allowed on purpose — "a seller who has just heard
+ * from their customer that nobody is home should be able to say so
+ * before the driver knocks".
+ *
+ * RAISED THROUGH THE SELLER'S OWN ENDPOINT as the seller, because the
+ * queue prints the seller's words back and an operator reads them before
+ * deciding. A row written round the back would have nothing to read.
+ *
+ * `clearDeliveryTakeArtefacts` DELETES every seller ask on every seed
+ * run of every video, so this runs AFTER it in the per-video tailoring
+ * and leaves nothing behind for anybody else. That is also what puts a
+ * DECLINED request back: the take declines one, the next run removes the
+ * decided row and raises a fresh one.
+ */
+const DELIVERY_ASKS = [
+  {
+    ref: 'RSH-LIFE-FAILED',
+    action: 'REATTEMPT',
+    reason:
+      'The customer has rung us to say she was at work when the driver came and will be home all ' +
+      'day tomorrow. Please ask them to try again.',
+  },
+  {
+    ref: 'RSH-LIFE-OVERDUE',
+    action: 'RECALL',
+    reason:
+      'Tracking says it is out for delivery but the customer is not answering our calls. Could one ' +
+      'of your agents try her before the driver gets there?',
+  },
+];
+
+async function deliveryAsksWorldFor(slug, sellerId, sellerToken) {
+  if (slug !== 'acting-on-a-failed-delivery') return;
+
+  const token = await sellerToken();
+  for (const ask of DELIVERY_ASKS) {
+    const order = await prisma.order.findFirst({
+      where: { sellerId, sellerOrderRef: ask.ref },
+      select: { id: true, orderNumber: true, status: true },
+    });
+    if (order === null) {
+      throw new Error(`No ${ask.ref} — the lifecycle seeding runs before this and builds it.`);
+    }
+    /*
+      A GATE RATHER THAN A HOPE. `DELIVERY_ACTION_STATUSES` is the
+      server's list and it refuses anything outside it, so a parcel that
+      has moved on since would fail inside the POST with a code nobody
+      reads. Saying so here names the parcel instead.
+    */
+    if (order.status !== 'DELIVERY_FAILED' && order.status !== 'OUT_FOR_DELIVERY') {
+      throw new Error(
+        `${ask.ref} is ${order.status}; a delivery action can only be asked for on a parcel that ` +
+          'is out for delivery or has failed one.',
+      );
+    }
+    await call(`/seller/orders/${order.id}/delivery-actions`, {
+      method: 'POST',
+      token,
+      body: { action: ask.action, reason: ask.reason },
+    });
+    console.log(`  · the seller has asked us to ${ask.action.toLowerCase()} ${order.orderNumber}`);
+  }
+}
+
 async function reattemptWorldFor(slug, sellerId, sellerToken, staffToken) {
   if (slug !== 'sellers-asking-to-call-again') return;
 
@@ -3144,7 +3246,8 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
   const wantsStore =
     STORE_ORDER_SLUGS.has(slug ?? '') ||
     STORE_REPORT_SLUGS.has(slug ?? '') ||
-    STORE_DISPUTE_SLUGS.has(slug ?? '');
+    STORE_DISPUTE_SLUGS.has(slug ?? '') ||
+    STORE_DELIVERY_ASK_SLUGS.has(slug ?? '');
   if (!wantsStore) return;
   const log = (m) => console.log(m);
   const world = await tradingStoreWorld(sellerId, sellerToken, staffToken, log);
@@ -3159,6 +3262,9 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
   }
   if (STORE_DISPUTE_SLUGS.has(slug ?? '')) {
     await ensureStoreDispute(sellerId, world, log);
+  }
+  if (STORE_DELIVERY_ASK_SLUGS.has(slug ?? '')) {
+    await ensureHeldDeliveryAsk(sellerId, world.storeToken, staffToken, world.variantId, log);
   }
 }
 
@@ -7831,6 +7937,7 @@ async function main() {
   await callWorldFor(slug, sellerId, sellerToken, staffToken);
   await superviseWorldFor(slug, sellerId, sellerToken);
   await reattemptWorldFor(slug, sellerId, sellerToken, staffToken);
+  await deliveryAsksWorldFor(slug, sellerId, sellerToken);
   await binsWorldFor(slug, staffToken);
   await collapseWorldFor(slug, staffToken);
   await adjustmentWorldFor(slug, sellerId, staffToken, warehouse);

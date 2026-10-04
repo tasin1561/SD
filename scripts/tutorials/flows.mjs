@@ -8308,6 +8308,171 @@ export const FLOWS = {
   },
 
   /*
+    M6 — WHEN A SELLER ASKS ABOUT A FAILED DELIVERY.
+
+    IT PRESSES NOTHING THAT DECIDES ANYTHING, and that is the product's
+    shape rather than this video's caution. A seller's own ask is created
+    ALREADY APPROVED — `DeliveryActionService.request` says so in as many
+    words, "ALL THREE ACT AT ONCE. None of them waits for an approval" —
+    and a reseller store's held ask is SELLER STAFF's to decide, shown
+    here for reference and refused by the server to admin
+    (`DELIVERY_ACTION_HELD_FOR_SELLER`). So no row on this page has an
+    Approve button for the person filming, and none can.
+
+    The only gestures are one checkbox and two navigations. The video is
+    about WHERE each kind of ask actually lands: a re-attempt on a
+    courier-escalation ticket, a recall in the call queue, a send-back
+    straight at the courier on the seller's own click.
+  */
+  'acting-on-a-failed-delivery': {
+    app: 'admin',
+
+    async prologue(ctx) {
+      await signInAndOpen(
+        ctx,
+        '/delivery-actions',
+        ctx.page.getByRole('heading', { level: 1 }).first(),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 3400);
+      },
+
+      async cost({ page, stage }) {
+        // The checkbox's own description, which names all three costs
+        // before anything has been clicked.
+        const said = page.getByText(/Approving a re-attempt sends a van/).first();
+        await said.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(said, 3600);
+      },
+
+      async waiting({ page, stage }) {
+        /*
+          THE ROW, gated on the words that make the claim. "1 shown" is
+          not enough: an empty queue renders the same section heading,
+          and the sentence this scene is about — that it belongs to
+          somebody else — is a cell on the row rather than the row.
+        */
+        const row = page.getByRole('row').filter({ hasText: 'Waiting on seller staff' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(row, 4200);
+      },
+
+      async decided({ page, stage }) {
+        await stage.clickIt(page.getByRole('checkbox', { name: /Show decided requests too/ }), {
+          after: 1400,
+        });
+        await page
+          .getByText(/^All requests$/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.getByText(/^All requests$/).first(), 2400);
+      },
+
+      async already({ page, stage }) {
+        // The re-attempt row, by what it asked for. There are three rows
+        // now and only one of them is this.
+        const row = page.getByRole('row').filter({ hasText: 'Re-attempt delivery' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(row, 3800);
+      },
+
+      async note({ page, stage }) {
+        // The AUTO-APPROVAL NOTE, which is the sentence the narration
+        // reads and the only place the system says where the work went.
+        const said = page
+          .getByText(/we have opened a ticket and will take the re-attempt up/)
+          .first();
+        await said.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(said, 3400);
+      },
+
+      async ticket({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/tickets?search=Try delivering it again`, {
+          waitUntil: 'domcontentloaded',
+        });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = page.getByRole('row').filter({ hasText: 'Try delivering it again' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(row, 3400);
+      },
+
+      async relay({ page, stage }) {
+        // The TYPE cell, which is what makes the point: this is a
+        // courier escalation, not an internal note.
+        const kind = page.getByText('Delivery escalation', { exact: true }).first();
+        await kind.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(kind, 4200);
+      },
+
+      async recall({ page, stage, baseUrl }) {
+        await page.goto(`${baseUrl}/delivery-actions`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(page.getByRole('checkbox', { name: /Show decided requests too/ }), {
+          after: 1200,
+        });
+        const said = page.getByText(/your customer is on our call list/).first();
+        await said.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(said, 3600);
+      },
+
+      async queue({ page, stage, baseUrl }) {
+        /*
+          `/call-center/queue`. The sidebar says "Call queue" and the
+          route is not `/call-queue` — which arrives as a Next 404 page,
+          not a selector miss, so it reads as the app being broken.
+
+          GATED ON A MINUTES-OLD WAIT, which is the honest claim. The
+          screen has no column saying WHY a call is queued — the
+          `SELLER_ASKED` reason is on the row in the database and on no
+          cell here — so the first draft of this scene said "flagged as
+          something the seller asked for" over a table that says nothing
+          of the kind. What IS visible and true is that this one was
+          added minutes ago while everything else has waited days.
+        */
+        await page.goto(`${baseUrl}/call-center/queue`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const fresh = page
+          .getByRole('row')
+          .filter({ has: page.getByText(/^\d+m$/) })
+          .first();
+        await fresh.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(fresh, 3600);
+      },
+
+      async rto({ page, stage, baseUrl }) {
+        /*
+          THE ONE RETURN ON THE PAGE IS THE STORE'S, and the narration
+          says exactly that. The first draft said a send-back "never
+          appears here at all" — true of a SELLER's own, which reaches
+          the courier on their click (CUR-10's seller amendment), and
+          plainly false of the row sitting on screen since scene three.
+        */
+        await page.goto(`${baseUrl}/delivery-actions`, { waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = page.getByRole('row').filter({ hasText: 'Return to us' }).first();
+        await row.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.dwellOn(row, 3400);
+      },
+
+      async watch({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 3400);
+      },
+
+      async outro({ page, stage }) {
+        const said = page.getByText(/shown for reference only/).first();
+        await said.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(said, 3600);
+      },
+    },
+  },
+
+  /*
     P5 — THE FIRST ADMIN FLOW, and a TOUR: it presses nothing that
     changes anything. Ten screens, each one visited so the narration can
     read that screen's own warning copy out loud beside it.

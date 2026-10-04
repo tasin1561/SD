@@ -4457,6 +4457,65 @@ export const VIDEOS = [
     ],
   },
   {
+    slug: 'acting-on-a-failed-delivery',
+    title: 'When a seller asks about a failed delivery',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A parcel the driver could not hand over, and a seller who wants something done about it. Everything they have asked for lands here — and the three things they can ask cost wildly different amounts.',
+      },
+      {
+        id: 'cost',
+        say: 'The page says it before you have clicked anything. A re-attempt sends a van. A return ends the sale. And a recall only queues one of our own agents to pick up the telephone.',
+      },
+      {
+        id: 'waiting',
+        say: 'One thing is waiting, and it is not ours to answer. A reseller store asked for this, and the seller whose stock it is chose to see those first — so it sits here for them to decide, and we can only watch.',
+      },
+      {
+        id: 'decided',
+        say: 'Everything else is behind this box, and the wording is deliberate: decided, not finished. These are the asks a decision has already been taken on.',
+      },
+      {
+        id: 'already',
+        say: 'And both were decided the moment they were made. A seller asking us to act on their own parcel does not queue behind an approval — putting one in front of it only delayed work somebody was going to do anyway.',
+      },
+      {
+        id: 'note',
+        say: 'What it does instead is say where the work went. Not "approved" — a sentence naming the thing that now exists, which the seller reads on their own order.',
+      },
+      {
+        id: 'ticket',
+        say: 'For the re-attempt, that is a ticket. Here it is, in the seller’s own words, raised against the parcel and sitting in the queue a person actually works from.',
+      },
+      {
+        id: 'relay',
+        say: 'Because no courier takes a re-attempt from software. Somebody opens it on Delhivery’s own desk, marks it sent with their reference, and types their answer back here — which is why it is a ticket rather than a button.',
+      },
+      {
+        id: 'recall',
+        say: 'The recall went somewhere else entirely. It reaches no courier at all, so there is nothing to relay and nobody to ask: it is a job for one of our agents.',
+      },
+      {
+        id: 'queue',
+        say: 'Which means the call queue. The order is at the top of it, added minutes ago while the rest have been sitting there — and an agent will ring her, and report back on the ticket.',
+      },
+      {
+        id: 'rto',
+        say: 'And the one return on the page is the store’s, which is the whole distinction. A seller sending their own parcel back reaches the courier on their own click; a store doing it with somebody else’s stock stops for them first.',
+      },
+      {
+        id: 'watch',
+        say: 'What that leaves you is a register rather than an in-tray: who asked, for what, in their words, and where it went. The work itself is on the ticket and in the call queue.',
+      },
+      {
+        id: 'outro',
+        say: 'So: read it to find out what has been asked and what it cost us. Act on the ticket, not here. And the one row that does wait is waiting for the seller, not for you.',
+      },
+    ],
+  },
+  {
     slug: 'bill-the-freight',
     title: 'Billing a consignment’s freight',
     subtitle: 'Skydrop for ops',
