@@ -6,9 +6,9 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 85 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J, K, O and P, L1–L3, M1–M2, M4 and N1–N9.** The 5 left are all in the admin app: 2 are
-`impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
+**90 tutorials. 86 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J, K, O and P, L1–L3, M1–M2, M4, M6 and N1–N9.** The 4 left are all in the admin app: 3 are
+`impractical locally` and the fourth is L4. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
 **Ninety is a large number and it is meant to be read as one.** It is what
@@ -32,10 +32,10 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (85):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (86):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **M4**, **N1–N9**, **O1–O5** and **P1–P5**, which is **the
-whole of the dangerous five**.
+**L1–L3**, **M1–M2**, **M4**, **M6**, **N1–N9**, **O1–O5** and **P1–P5**, which is
+**the whole of the dangerous five**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -156,13 +156,26 @@ to Kolkata, a return that came back to the wrong building. Do NOT film
 Kolkata → Dhaka; that is a consignment's job (CNS-4) and a raw transfer would
 teach the wrong habit.
 
-**ON STACK B: SECTIONS N AND P ARE DONE.** N10 is the only entry left in either
-and it is `impractical locally`. **P4 was reclassified from
-`partly filmable` to filmed** — stopping at the emailed code is the product's
-own shape rather than a gap, and the half that cannot be recorded is the
-irreversible half nobody should learn from a video.
+**ON STACK B: SECTIONS N AND P ARE DONE, AND SO ARE M5 AND M6.** **P4 was
+reclassified from `partly filmable` to filmed** — stopping at the emailed code
+is the product's own shape rather than a gap, and the half that cannot be
+recorded is the irreversible half nobody should learn from a video. **M5 went
+the other way, to `impractical locally`**, and its entry carries the proof chain
+rather than an assertion: the decision queue is `AWAITING_COURIER`, only a
+`PAUSE` from `CourierChoiceService` puts an order there, that needs an
+AGGREGATOR with two or more quoted carriers, and the Shiprocket stub returns
+none. **Teaching the stub to invent some would be dangerous rather than merely
+inauthentic** — production is the mixed configuration CUR-15 is written about,
+and fabricated quotes would end in a waybill nobody issued. What would make it
+filmable is a Shiprocket simulator, which is engineering rather than filming.
 
-**FOUR THINGS SECTION P LEFT BEHIND THAT ARE ABOUT THE BOX RATHER THAN A
+**M6's ENTRY WAS STALE, NOT THE PRODUCT**, which is the other way round from
+every previous correction here and worth noticing. It promised "approve or
+reject with a reason" on a screen where no decidable row can exist: a seller's
+ask is created already approved and a store's held one is seller staff's.
+`L4` is the only entry left that is neither filmed nor impractical.
+
+**FOUR THINGS SECTIONS M AND P LEFT BEHIND THAT ARE ABOUT THE BOX RATHER THAN A
 VIDEO**, each written up in its own entry and each invisible until a screen
 asked the question:
 
@@ -646,8 +659,9 @@ entry and put it in the ready list; section C runs C1 to C6 and always has.
 own.**
 
 **Filming these screens is finding real bugs at a steady rate — FORTY-EIGHT so
-far, plus TEN in the seeding itself, TWO in the Delhivery simulator and one
-whole capability with no screen.** Every one is on a path nothing else
+far, plus TEN in the seeding itself, TWO in the Delhivery simulator, one whole
+capability with no screen, and THREE entries of this document that described a
+screen the code had moved on from.** Every one is on a path nothing else
 exercises: a gallery that rendered every fresh picture broken, a webhook switch
 that was a silent dead end, a catalogue importer whose preview crashed, saved
 column mappings that drove nothing, a tracking filter that 500'd, a stuck
@@ -3640,26 +3654,120 @@ row is what makes that deterministic (J2's lesson). The pin stops being refused
 in a `finally`, so a thrown assertion still leaves the simulator clean for
 whoever films next.
 
-### M5. Choosing a carrier · `needs demo data` · **dangerous**
+### M5. Choosing a carrier · `impractical locally` · **dangerous**
 
 **Promise** — you can pick the carrier for a parcel that is waiting on a
 person.
-**Length** 2 min. **Needs** a seller on the manual selection policy with a
-confirmed parcel.
+**Length** 2 min. **Needs** a parcel in `AWAITING_COURIER` with two or more
+quoted carriers, which this box cannot produce.
 **Covers** `/courier-decisions`: price and days side by side, cheapest and
 fastest marked, and how long it has been waiting. Booking real carriage on a
 confirmed, stock-reserved parcel is the act. Also: past the deadline the system
 books the cheapest itself **and says so loudly**, because auto-picking quietly
 would make the policy indistinguishable from "cheapest" to anyone not watching.
 
-### M6. Acting on a failed delivery · `needs demo data` · **dangerous**
+**RECLASSIFIED FROM `needs demo data` ON 2026-10-05, after following the chain
+rather than the entry.** The queue is `orders.status = AWAITING_COURIER`
+(`CourierDecisionService.listWaiting`), and the ONLY thing that puts an order
+there is `CourierChoiceService.decide` returning `PAUSE`. Four gates stand
+between this box and that, and the third cannot be opened honestly:
 
-**Promise** — you can decide what a seller has asked us to do about a parcel.
-**Length** 3 min. **Needs** D0's failed delivery plus a seller request.
-**Covers** `/delivery-actions`: approve or reject with a reason.
-**Cost of getting it wrong:** approving a re-attempt **dispatches a van** at our
-cost; approving a return turns a moving parcel round. Recall is the exception
-and reaches no courier — it asks our own agents to phone.
+1. **`if (input.courierCode !== 'shiprocket') return BOOK`** — in those words,
+   first line of `decide`. Delhivery IS a carrier, so "asking Delhivery which
+   Delhivery to use is a category error". Every parcel here is Delhivery's.
+2. The seller's `courier.selection_policy` must be `MANUAL`. Easy — SET-1.
+3. **`listCourierOptions` returns `[]` in stub mode**, and
+   `courier.shiprocket_api_base_url` is empty, so Shiprocket is stubbed. With no
+   options `CourierOptionSelectionService.select` answers `DEFER_TO_CARRIER`
+   ("the carrier offered no options"), and **one** option answers `CHOSEN`
+   ("ONE OPTION IS NEVER A QUESTION"). `ASK_A_HUMAN` needs two or more.
+4. `Courier.isActive` is false for shiprocket, so CUR-16 would refuse the
+   booking at the end of it anyway.
+
+**TEACHING THE STUB TO INVENT OPTIONS WOULD BE DANGEROUS, not merely
+inauthentic, and that is the reason this is a skip rather than a seeding
+task.** Production is the MIXED configuration CUR-15 is written about —
+Delhivery live, Shiprocket stubbed. A stub that fabricated carrier quotes would
+hold real confirmed parcels on a decision screen, let somebody choose between
+carriers that do not exist, and then book through the stub: a waybill nobody
+issued, on stock already decremented at pack, with the customer told it shipped.
+That is the exact catastrophe CUR-15 exists to prevent, arrived at from the
+read side.
+
+**What would make it filmable is a SHIPROCKET SIMULATOR** — a second
+`apps/*-sim` speaking their serviceability and assign endpoints, the way
+`apps/delhivery-sim` speaks Delhivery's. That is a real piece of engineering
+with its own value (every Shiprocket path in the estate is currently
+unexercised locally), and it is not a filming task. **Do not stage this by
+writing `courierOptions` and the status straight into the database**: the
+screen's whole subject is a decision the system asked for, and a row no code
+path can produce teaches a queue that cannot happen.
+
+**Worth knowing if somebody does build that simulator:** the origin-pincode gap
+P2 found was on this video's critical path too — `decide` returns
+`BOOK … 'no origin pincode is configured'` before it ever asks for options, so
+M5 would have been unfilmable for a second, quieter reason as well. That is
+fixed (`provision-stack.mjs`).
+
+### M6. When a seller asks about a failed delivery · **FILMED** — `acting-on-a-failed-delivery.mp4`
+
+**Promise** — you can read what a seller has asked us to do about a parcel the
+driver could not hand over, and say where each kind of ask actually lands.
+**Length** 2 min 31 s of narration over 13 scenes. **Needs**
+`seed-demo-data.mjs acting-on-a-failed-delivery` — D0, plus three asks.
+**Covers** `/delivery-actions`: the three things a seller can ask and what each
+costs, the one row that is NOT ours to decide, and then where the work really
+goes — a courier-escalation ticket, the call queue, or straight at the courier.
+
+**THE OLD ENTRY PROMISED "approve or reject with a reason", AND THAT HAS NOT
+BEEN TRUE SINCE 2026-09-17.** `DeliveryActionService.request` says so in its own
+words — "ALL THREE ACT AT ONCE. None of them waits for an approval. A re-attempt
+and a customer call are TICKETS: ops works them from the ticket queue and the
+outbox console, which is the approval step — a second one in front of it only
+delayed the work." So:
+
+- a SELLER's ask is created already `APPROVED` and never sits PENDING;
+- a reseller STORE's held ask IS pending, and is marked `waitingOnSeller` — the
+  page renders "Waiting on seller staff" with no buttons, and the server refuses
+  admin outright with `DELIVERY_ACTION_HELD_FOR_SELLER`;
+- so **no row an admin may decide can exist**.
+
+The approve path survives as a DOCUMENTED DRAIN for rows created between 28 Aug
+and 1 Sep 2026, which its own docstring explains ("no migration closed it, so
+production may still hold some"). Deliberate, vestigial, and not a bug — which
+is why this is written up rather than fixed.
+
+**So the video stops promising a decision.** It is a register: who asked, for
+what, in their words, and where it went. The auto-approval note is the hinge —
+it does not say "approved", it names the thing that now exists, and the seller
+reads it on their own order. A re-attempt opens a courier escalation, because no
+courier takes one from software (CUR-20). A recall opens a seller issue AND
+queues one of our own agents. A send-back reaches the courier on the seller's
+own click (CUR-10's seller amendment) — **and the one return on the page is the
+STORE's**, which is the whole distinction.
+
+**Its world is three asks of three kinds**, raised through the sellers' and the
+store's OWN endpoints, because the queue prints their words back and an operator
+reads them before deciding — a row written round the back would have nothing to
+read. The store's held one reuses G6's `ensureHeldDeliveryAsk` rather than
+rebuilding it. `clearDeliveryTakeArtefacts` already deletes every seller ask on
+every seed run of every video, so this runs after it and leaves nothing behind.
+
+**TWO NARRATION LINES CLAIMED THINGS THE SCREENS DO NOT SHOW**, both caught by
+looking at the check frames before a clip was bought — which is the whole
+argument for `TUT_CHECK_SHOTS=1`:
+
+- *"flagged as something the seller asked for"* — **the call queue has no column
+  saying why a call is queued.** `SELLER_ASKED` is on the row in the database
+  and on no cell. What IS visible is that this one was added minutes ago while
+  the rest have been sitting there, so that is what the line says now.
+- *"the third one never appears here at all"* — said over a Return-to-us row
+  that had been on screen since scene three. True of a seller's own send-back,
+  plainly false of the store's.
+
+**And `/call-queue` is a Next 404.** The sidebar says "Call queue"; the route is
+`/call-center/queue`. It fails as a broken-looking app rather than as a selector
+miss, which is the most misleading shape a wrong path can take.
 
 ---
 
@@ -5571,3 +5679,27 @@ units, the merge moves six, and the nine are still in transit afterwards.
 list that is DERIVED stays right when the enum grows; a list that is RESTATED is
 correct exactly until the day somebody adds a value.** Both of these were
 written when the restated list was complete.
+
+**AND A FORTY-NINTH FINDING, which is not a bug and is the more interesting kind
+(2026-10-05, filming M6): THE DOCUMENT WAS WRONG, NOT THE CODE.** Every other
+entry in this list is a defect the filming found. This one is the reverse —
+M6's entry promised "`/delivery-actions`: approve or reject with a reason", and
+the product had deliberately stopped working that way on 2026-09-17. A seller's
+ask is now created already approved, because "a re-attempt and a customer call
+are TICKETS: ops works them from the ticket queue and the outbox console, which
+is the approval step — a second one in front of it only delayed the work". A
+reseller store's held ask is the SELLER's to decide and is refused to admin by
+name. So no row an admin may decide can exist, and the approve path survives
+only as a documented drain for rows created in a four-day window last August.
+
+**The tell was that the queue was empty after the seeding had plainly worked**,
+and the two requests it had raised came back `EXECUTED` within a second, each
+carrying an auto-approval note naming a ticket. Nothing had failed. The video
+was asking for a state the system had stopped producing on purpose.
+
+**The lesson is about this document rather than the product: a curriculum entry
+is a CLAIM about a screen, written before the screen was read, and it ages.**
+Three entries have now been reclassified by somebody reading the code rather
+than the entry — P4 in the filmable direction, M5 and M6 in the other. **Check
+the entry against the service before building its world**, because the world is
+the expensive half and the entry is the cheap thing to be wrong.
