@@ -6,11 +6,15 @@ import {
   addScan,
   allParcels,
   allPickups,
+  allRefusedPins,
   getParcel,
   issueWaybill,
   putParcel,
+  refusalFor,
+  refusePin,
   registerWarehouse,
   reset,
+  stopRefusingPin,
   type ScanStage,
   type SimParcel,
 } from './state.js';
@@ -154,6 +158,37 @@ function handleCreate(bodyRaw: string, res: ServerResponse): void {
       success: false,
       rmk: `ServiceableArea: ${pin} is not serviceable`,
       packages: [{ status: 'Fail', remarks: ['ServiceableArea'] }],
+    });
+    return;
+  }
+
+  // A REFUSAL THE OPERATOR NOMINATED — see `SimRefusal` in state.ts.
+  //
+  // Shaped exactly as a real refusal is, and that shape is the whole
+  // point: the envelope `rmk` is Delhivery's boilerplate, which is the
+  // same sentence whatever was wrong, and the ANSWER is the per-package
+  // `err_code` + `remarks`. `parseCreateResponse` reads the package
+  // first for that reason, so a simulator that put the real reason in
+  // `rmk` would exercise the fallback rather than the path production
+  // takes.
+  const refusal = refusalFor(pin);
+  if (refusal !== undefined) {
+    log('refusing create for pin', pin, `[${refusal.errCode}]`, refusal.remarks);
+    json(res, 200, {
+      success: false,
+      rmk: 'An internal Error has occurred, Please get in touch with client.support@delhivery.com',
+      packages: [
+        {
+          status: 'Fail',
+          err_code: refusal.errCode,
+          remarks: [refusal.remarks],
+          // NOT a serviceability refusal: the address is fine and the
+          // pre-flight said so. Reporting otherwise here would make
+          // `supersedeReason` NON_SERVICEABLE and the worklist would say
+          // "Address not served" over an opinion about the consignee.
+          serviceable: true,
+        },
+      ],
     });
     return;
   }
@@ -334,6 +369,29 @@ const server = createServer((req, res) => {
     // ── control ──
     if (path === '/_sim/parcels' && method === 'GET') return json(res, 200, allParcels());
     if (path === '/_sim/pickups' && method === 'GET') return json(res, 200, allPickups());
+    if (path === '/_sim/refused-pins' && method === 'GET') return json(res, 200, allRefusedPins());
+    if (path === '/_sim/refuse-pin' && method === 'POST') {
+      const parsed = parseJsonBody(body) as {
+        pin?: string;
+        errCode?: string;
+        remarks?: string;
+      } | null;
+      const pin = String(parsed?.pin ?? '').trim();
+      if (pin === '') return json(res, 400, { error: 'pin is required' });
+      const refusal = {
+        errCode: String(parsed?.errCode ?? 'ER0005').trim(),
+        remarks: String(parsed?.remarks ?? 'suspicious order/consignee').trim(),
+      };
+      refusePin(pin, refusal);
+      log('will refuse creates for pin', pin, `[${refusal.errCode}]`, refusal.remarks);
+      return json(res, 200, { pin, ...refusal });
+    }
+    if (path.startsWith('/_sim/refuse-pin/') && method === 'DELETE') {
+      const pin = path.slice('/_sim/refuse-pin/'.length);
+      const had = stopRefusingPin(pin);
+      log('no longer refusing creates for pin', pin, had ? '' : '(was not refused)');
+      return json(res, 200, { pin, wasRefused: had });
+    }
     if (path === '/_sim/reset' && method === 'POST') {
       reset();
       return json(res, 200, { ok: true });

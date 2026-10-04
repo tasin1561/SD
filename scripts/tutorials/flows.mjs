@@ -1403,6 +1403,42 @@ const O5_NEW_ROLE_NAME = 'Seller approval admin';
 /** The audience it sends to — two people, which is the whole point. */
 const O5_BROADCAST_ROLE_KEY = 'call_agent';
 
+/**
+ * The slug M4 is filmed under — declared here too, see the seed's copy.
+ *
+ * `record.mjs` already refuses a flow whose step ids do not match the
+ * narration, so those two cannot drift. The SEED's slug guard is the
+ * unchecked third: rename it alone and the world is never built, the
+ * worklist is empty, and every step still finds a page.
+ */
+const M4_SLUG = 'when-nobody-will-carry-it';
+
+/**
+ * The carrier M4 says has the parcel.
+ *
+ * THE WAYBILL IS NOT HERE, and that is the point. It is minted per run
+ * by `manualPlacementWorldFor` and read off the fixture, because
+ * `shipments.awb_number` is UNIQUE (CUR-9) and a fixed number can be
+ * typed exactly once in the life of a database — the second check run
+ * met `AWB_ALREADY_IN_USE` and that is correct behaviour. An operator
+ * arrives holding a docket number off a piece of paper too, so the
+ * sheet is the honest place for it (`lib/fixture.mjs`).
+ */
+const M4_CARRIER = 'Bluedart';
+
+/** The ONE parcel waiting on manual placement; the seeding asserts it is one. */
+function m4Row(page) {
+  return page.locator('.sk-tbody .sk-tr').first();
+}
+
+/** The dashboard's attention tile for it, by the area and label its link is named for. */
+function manualPlacementTile(page) {
+  return page
+    .locator('.db-attn')
+    .filter({ has: page.locator('a[href="/manual-placement"]') })
+    .first();
+}
+
 /** One row of the staff table, by the address in it. */
 function staffRow(page, email) {
   return page.locator('tbody tr').filter({ hasText: email }).first();
@@ -14773,6 +14809,178 @@ export const FLOWS = {
     the page's own subtitle leads with the count and why this video
     does too.
   */
+  'when-nobody-will-carry-it': {
+    app: 'admin',
+
+    /*
+      IT STARTS ON THE DASHBOARD, because that is where somebody finds
+      out there is anything to find. `/manual-placement` has a nav entry
+      too, but a person does not go looking at a queue that is empty
+      most days — the attention band is what tells them.
+    */
+    async prologue(ctx) {
+      // The docket number the record scene types, minted per run — see
+      // M4_CARRIER above for why it cannot be a constant.
+      ctx.sheet = await readFixture(M4_SLUG);
+      await signInAndOpen(ctx, '/dashboard', ctx.page.locator('.db-attn').first());
+    },
+
+    steps: {
+      async arrive({ page, stage }) {
+        const tile = manualPlacementTile(page);
+        await tile.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(tile, 3400);
+      },
+
+      async intro(ctx) {
+        const { page, stage } = ctx;
+        await stage.clickIt(manualPlacementTile(page).locator('a[href="/manual-placement"]'), {
+          after: 1200,
+        });
+        await page.waitForURL((url) => url.pathname === '/manual-placement', { timeout: 25_000 });
+        /*
+          NO `networkidle` HERE, and it is worth thirty seconds. On a
+          client-side navigation there is no new document, so
+          `waitForLoadState` asks about the one already loaded and then
+          waits for 500ms of silence that the admin shell's own polling
+          never gives it — the wait times out, `.catch` eats it, and the
+          scene costs 40s instead of 10. Which the composer then packs
+          back into a 12s clip at x0.3, speeding up the one CLICK in it.
+          The row is the honest gate anyway.
+        */
+        await m4Row(page).waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
+      },
+
+      /*
+        THE COLUMN THE SCREEN EXISTS FOR, and the one that was broken
+        until this video was made: `reasonLabel` switched on the `@map`ped
+        enum spelling while the API sends Prisma's member name, so every
+        row read "Reason not recorded" over a perfectly good sentence.
+        Gated on the LABEL rather than on the cell, so a regression is a
+        failed check and not a frame nobody looked at.
+      */
+      async why({ page, stage }) {
+        const cell = m4Row(page).locator('td').nth(3);
+        await cell
+          .getByText('Courier refused it', { exact: true })
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await cell
+          .getByText(/ER0005/)
+          .first()
+          .waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(cell, 3600);
+      },
+
+      async after({ page, stage }) {
+        const chip = m4Row(page)
+          .locator('.sk-chip')
+          .filter({ hasText: /Needs picking/i })
+          .first();
+        await chip.waitFor({ state: 'visible', timeout: 20_000 });
+        await stage.dwellOn(chip, 3400);
+      },
+
+      async waiting({ page, stage }) {
+        await stage.dwellOn(m4Row(page).locator('td').nth(5), 3400);
+      },
+
+      /*
+        OPENED AND CANCELLED. Pressing it would cancel the order, release
+        the stock and void the parcel — the opposite of what the rest of
+        the video does, on the only row the page has.
+      */
+      async unfulfillable({ page, stage }) {
+        await stage.clickIt(m4Row(page).getByRole('button', { name: 'Cannot be fulfilled' }), {
+          after: 1600,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(dialog.getByText(/releases the stock back to inventory/i), 3600);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(dialogActions(page).getByRole('button', { name: 'Keep the order' }), {
+          after: 1200,
+        });
+        await page.getByRole('dialog').waitFor({ state: 'hidden', timeout: 20_000 });
+        await stage.clickIt(
+          m4Row(page).getByRole('button', { name: 'Place with another courier' }),
+          { after: 1600 },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(dialog.locator('.oo-p').first(), 3400);
+      },
+
+      async awb({ page, stage, sheet }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/^AWB number/).first(), sheet.awbNumber, {
+          after: 900,
+        });
+      },
+
+      async courier({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/^Courier/).first(), M4_CARRIER, { after: 700 });
+        await stage.dwellOn(dialog.getByText(/called .manual./i).first(), 2800);
+      },
+
+      async service({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.getByLabel(/^Service type/).first(), 'Surface', { after: 700 });
+        await stage.dwellOn(
+          dialogActions(page).getByRole('button', { name: /Record AWB and dispatch/ }),
+          2800,
+        );
+      },
+
+      /*
+        THE TOAST IS THE SCENE. `placeAwb` reports where the order
+        LANDED rather than where the button's label says it goes — a
+        parcel still on the shelf goes to PENDING_PICK (CUR-8, amended
+        2026-09-02), which is this one. A toast lives 4.5s of unpaused
+        time and the halo on it is what pauses that clock, so this
+        settles before dwelling (J4's lesson).
+      */
+      async record({ page, stage, sheet }) {
+        await stage.clickIt(
+          dialogActions(page).getByRole('button', { name: /Record AWB and dispatch|Recording/ }),
+          { after: 1400 },
+        );
+        /*
+          SIXTY SECONDS, not the default twenty-five. `placeAwb` stamps
+          the shipment, bills the courier fee and then runs the whole
+          transition with its post-commit hooks — and a TAKE is encoding
+          video at the same time, which a `--check` is not. It came back
+          in nine seconds on every check and took longer than
+          twenty-five on the first take, which lost it at the last
+          scene but one, with the button still reading "Recording…" and
+          the placement having actually SUCCEEDED.
+        */
+        const toast = page.locator('.sk-toast', { hasText: sheet.awbNumber }).first();
+        await toast.waitFor({ state: 'visible', timeout: 60_000 });
+        await page.waitForTimeout(700);
+        await stage.dwellOn(toast, 3600);
+      },
+
+      async gone({ page, stage }) {
+        const empty = page.getByText('Nothing waiting on manual placement', { exact: true });
+        await empty.waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(empty, 3400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
+      },
+    },
+  },
+
   'staff-and-broadcasts': {
     app: 'admin',
 

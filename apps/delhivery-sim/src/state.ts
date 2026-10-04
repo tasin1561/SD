@@ -67,6 +67,53 @@ export const NON_SERVICEABLE_PIN = '000000';
 export const TRANSIENT_FAIL_PIN = '999999';
 
 /**
+ * A refusal the operator nominated, for a pin that is otherwise fine.
+ *
+ * ── WHY THE TWO CONSTANTS ABOVE ARE NOT ENOUGH ───────────────────────
+ * Neither of them can reach an order. `000000` fails
+ * `address-validation.service.ts`'s `^[1-9][0-9]{5}$` at create and is
+ * right to; `999999` is classified TRANSIENT, and CUR-2b deliberately
+ * leaves a transient failure in CONFIRMED rather than routing it to
+ * manual placement. So the whole manual-placement shape — the one real
+ * production orders reach — was unreachable here.
+ *
+ * ── AND THE INTERESTING REFUSAL IS NOT ABOUT THE ADDRESS ─────────────
+ * SD-2026-26-000003 was refused with `[ER0005] suspicious
+ * order/consignee`: a serviceable pin, and an opinion about the
+ * CONSIGNEE. That is why this is keyed on a pin but carries the
+ * courier's own code and words rather than a fixed sentence, and why it
+ * deliberately does NOT make the pin non-serviceable — the pre-flight
+ * check (D4) runs first and would block the create before Delhivery
+ * ever formed the opinion the refusal is about.
+ *
+ * Set through `/_sim/refuse-pin`, which is control surface and not
+ * Delhivery. In memory, like everything else here: a restart clears it,
+ * and so does `/_sim/reset`.
+ */
+export interface SimRefusal {
+  readonly errCode: string;
+  readonly remarks: string;
+}
+
+const refusedPins = new Map<string, SimRefusal>();
+
+export function refusePin(pin: string, refusal: SimRefusal): void {
+  refusedPins.set(pin, refusal);
+}
+
+export function stopRefusingPin(pin: string): boolean {
+  return refusedPins.delete(pin);
+}
+
+export function refusalFor(pin: string): SimRefusal | undefined {
+  return refusedPins.get(pin);
+}
+
+export function allRefusedPins(): Record<string, SimRefusal> {
+  return Object.fromEntries(refusedPins);
+}
+
+/**
  * Where this process starts issuing waybills.
  *
  * Seeded from the clock, NOT from 1. The counter is in memory, so a
@@ -136,5 +183,6 @@ export function reset(): void {
   issuedWaybills.clear();
   pickups.length = 0;
   warehouses.clear();
+  refusedPins.clear();
   waybillSeq = 1;
 }

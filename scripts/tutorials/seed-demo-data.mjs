@@ -6405,6 +6405,321 @@ async function staffWorldFor(slug) {
 }
 
 /**
+ * The slug M4 is filmed under.
+ *
+ * Declared rather than inlined because it is written down in THREE
+ * files — here, `flows.mjs` and `narration.mjs` — and only two of those
+ * are checked against each other by `record.mjs`. A rename that misses
+ * this one makes the seeding a silent no-op: the take opens on an empty
+ * worklist and films a page with nothing on it, which is a green run.
+ * `test/tutorial-labels.test.mjs` compares all three.
+ */
+const M4_SLUG = 'when-nobody-will-carry-it';
+
+/** The pin M4's parcel goes to, and the refusal the simulator answers with. */
+const M4_PIN = '560087';
+const M4_REF = 'RSH-MANUAL-REFUSED';
+
+/**
+ * The carrier M4 says has the parcel, and the shape of the docket number.
+ *
+ * ── THE WAYBILL IS MINTED PER RUN, AND IT HAS TO BE ──────────────────
+ * `shipments.awb_number` is UNIQUE (CUR-9: a waybill is issued once and
+ * never reassigned), so a FIXED number in the flow can be typed exactly
+ * once in the life of a database. The second check run met
+ * `[AWB_ALREADY_IN_USE] AWB 77612345678 is already assigned to another
+ * shipment` — correct behaviour, and a take lost to it.
+ *
+ * Minting it here rather than in the flow is also the truer model: the
+ * number is a real docket, the operator arrives already holding it off
+ * a piece of paper, and two takes are two different parcels booked on
+ * two different days. That is exactly what `lib/fixture.mjs` is for.
+ *
+ * Eleven digits is BLUEDART's shape rather than Delhivery's fourteen —
+ * the whole subject of that screen is a parcel somebody booked
+ * elsewhere, so a number that looks like ours would read as the
+ * integration having done it after all.
+ */
+const M4_CARRIER = 'Bluedart';
+const M4_AWB_PREFIX = '776';
+const M4_REFUSAL = Object.freeze({
+  errCode: 'ER0005',
+  remarks: 'suspicious order/consignee',
+});
+
+/**
+ * M4's world — "When nobody will carry it".
+ *
+ * ── THE STATE NOTHING ON THIS BOX REACHED ────────────────────────────
+ * `/manual-placement` lists orders in `PENDING_MANUAL_PLACEMENT`, and
+ * the two obvious ways in are both closed. `000000` is the stub's
+ * non-serviceable pin and CANNOT be put on an order at all —
+ * `address-validation.service.ts` enforces `^[1-9][0-9]{5}$` at create
+ * and is right to. `999999` is refused, but as a TRANSIENT failure,
+ * which by CUR-2b deliberately leaves the order in CONFIRMED rather
+ * than routing it here: asking again is the entire fix for a wobble.
+ *
+ * So the simulator learned to refuse a NOMINATED pin permanently
+ * (`/_sim/refuse-pin`), which is the shape production actually meets.
+ *
+ * ── WHY A CONSIGNEE REFUSAL AND NOT A SERVICEABILITY ONE ─────────────
+ * Two reasons, and the first is mechanical. A pre-flight serviceability
+ * check runs BEFORE the create (D4), so a pin the simulator calls
+ * unserviceable is blocked before Delhivery ever forms an opinion — the
+ * create that carries the refusal never happens. The refusal has to be
+ * about the PARCEL, on an address that is fine.
+ *
+ * The second is that it is the more useful half of the screen. The
+ * worklist prints a mapped label AND the courier's own sentence, and
+ * `/home/.../manual-placement-index.tsx` says why: an unserved pincode
+ * needs a courier who covers it, while a refused consignee needs the
+ * details checking before anybody is paid to carry it. Those look
+ * identical in a bare list. `[ER0005] suspicious order/consignee` is
+ * production's own example (SD-2026-26-000003) and maps to
+ * `AWB_REJECTED` → "Courier refused it", because `supersedeReason` only
+ * says NON_SERVICEABLE for serviceability wording.
+ *
+ * ── WHAT THE TAKE LEAVES, AND WHY IT IS RE-TAKEABLE ──────────────────
+ * Recording the waybill moves the order on, so each take spends its
+ * parcel. A spent one is retired FORWARD by name (the `retireSpentParcel`
+ * idiom — `<ref>-SPENT-<n>`) rather than rewound: it carries a real
+ * manual waybill and a real transition, which is history.
+ *
+ * ── AND THE REFUSAL IS PUT BACK ──────────────────────────────────────
+ * The pin stops being refused as soon as the routing has happened. The
+ * simulator is shared by every video on this stack, and a standing
+ * refusal is a trap for whoever films next — `PENDING_MANUAL_PLACEMENT`
+ * is not in `AWB_EXPECTED_STATUSES`, so the hourly sweep will not
+ * re-book this parcel once it is there and nothing needs the refusal to
+ * persist.
+ */
+async function manualPlacementWorldFor(slug, sellerId, sellerToken, staffToken) {
+  if (slug !== M4_SLUG) return;
+
+  const sim = process.env.SIM_URL ?? resolveStack().sim.url;
+
+  /*
+    THE PREVIOUS TAKE'S PARCEL. It is spent the moment its waybill is
+    recorded — the order leaves PENDING_MANUAL_PLACEMENT — so anything
+    not still waiting is retired by name. One that IS still waiting is
+    reused: a check run that got as far as opening the page costs
+    nothing and should not build a second row.
+  */
+  const existing = await prisma.order.findMany({
+    where: { sellerId, sellerOrderRef: { startsWith: M4_REF }, deletedAt: null },
+    select: { id: true, orderNumber: true, sellerOrderRef: true, status: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const waiting = existing.find(
+    (o) => o.sellerOrderRef === M4_REF && o.status === 'PENDING_MANUAL_PLACEMENT',
+  );
+  for (const o of existing) {
+    if (o.sellerOrderRef !== M4_REF) continue;
+    if (waiting !== undefined && o.id === waiting.id) continue;
+    const spentName = `${M4_REF}-SPENT-${existing.length}`;
+    await prisma.order.update({ where: { id: o.id }, data: { sellerOrderRef: spentName } });
+    console.log(`  · ${o.orderNumber} is ${o.status} — retired to ${spentName}`);
+  }
+
+  if (waiting !== undefined) {
+    console.log(`  · ${waiting.orderNumber} is still waiting on manual placement — reused`);
+    await writeM4Fixture();
+    await assertM4Worklist(waiting.id);
+    return;
+  }
+
+  const variant = await prisma.productVariant.findFirst({
+    where: { product: { sellerId }, skuCode: 'RSH-JAMDANI-IVORY', deletedAt: null },
+    select: { id: true },
+  });
+  if (variant === null) {
+    throw new Error('No RSH-JAMDANI-IVORY for this seller — the catalogue seeding runs first.');
+  }
+
+  await fetch(`${sim}/_sim/refuse-pin`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ pin: M4_PIN, ...M4_REFUSAL }),
+  });
+  console.log(
+    `  · the simulator will refuse ${M4_PIN}: [${M4_REFUSAL.errCode}] ${M4_REFUSAL.remarks}`,
+  );
+
+  try {
+    const token = await sellerToken();
+    const order = await call('/seller/orders', {
+      method: 'POST',
+      token,
+      body: {
+        recipientName: 'Nandini Rao',
+        recipientPhoneE164: '+919845070055',
+        recipientAddressLine1: '44, Sarjapur Road',
+        recipientAddressLine2: 'Above the chemist, opposite the water tank',
+        recipientPostalCode: M4_PIN,
+        paymentMode: 'COD',
+        codAmountInr: '2400',
+        sellerOrderRef: M4_REF,
+        items: [{ variantId: variant.id, quantity: 1 }],
+        acknowledgeDuplicate: true,
+      },
+    });
+    await call(`/seller/orders/${order.id}/submit`, { method: 'POST', token });
+
+    const entry = await waitFor(`${M4_REF} to reach the call queue`, () =>
+      prisma.callQueueEntry.findFirst({
+        where: { orderId: order.id, status: 'PENDING' },
+        select: { id: true },
+      }),
+    );
+    await call(`/admin/call-queue/${entry.id}/force-outcome`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        outcome: 'CONFIRMED',
+        startedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+        endedAt: new Date(Date.now() - 19 * 60_000).toISOString(),
+        outcomeNotes: 'Confirmed on the phone; happy to pay cash at the door.',
+      },
+    });
+
+    /*
+      THE REFUSAL ARRIVES POST-COMMIT OF THE CONFIRMATION. The AWB job
+      is a bus listener (CUR-2b), so the order sits in CONFIRMED for a
+      heartbeat and is then routed. Waiting on the STATUS rather than on
+      a sleep, because the job retries and a fixed wait would sometimes
+      return while the order was still confirmed.
+    */
+    await waitFor(
+      `${M4_REF} to be refused and routed to manual placement`,
+      async () => {
+        const row = await prisma.order.findUnique({
+          where: { id: order.id },
+          select: { status: true },
+        });
+        return row?.status === 'PENDING_MANUAL_PLACEMENT' ? row : null;
+      },
+      { tries: 45 },
+    );
+    console.log(`  · ${order.orderNumber} (${M4_REF}) was refused and is waiting on a person`);
+    await writeM4Fixture();
+    await assertM4Worklist(order.id);
+  } finally {
+    await fetch(`${sim}/_sim/refuse-pin/${M4_PIN}`, { method: 'DELETE' });
+    console.log(`  · the simulator is no longer refusing ${M4_PIN}`);
+  }
+}
+
+/**
+ * A docket number nothing in this database has used.
+ *
+ * Checked rather than assumed: a clock-derived number is unique in
+ * practice and `AWB_ALREADY_IN_USE` is a 409 in the middle of a take,
+ * which is an expensive way to find out it was not. The loop is here
+ * for the case that costs a take, not for the case that is likely.
+ */
+async function writeM4Fixture() {
+  let awbNumber = null;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const candidate = `${M4_AWB_PREFIX}${String(Date.now() + attempt).slice(-8)}`;
+    const taken = await prisma.shipment.findFirst({
+      where: { awbNumber: candidate },
+      select: { id: true },
+    });
+    if (taken === null) {
+      awbNumber = candidate;
+      break;
+    }
+  }
+  if (awbNumber === null) {
+    throw new Error('Could not mint a free waybill for M4 in 20 tries.');
+  }
+  await writeFixture(M4_SLUG, { awbNumber, carrier: M4_CARRIER });
+  console.log(`  · the docket to type: ${awbNumber} (${M4_CARRIER})`);
+}
+
+/**
+ * The two columns M4 is ABOUT, asserted rather than hoped for.
+ *
+ * `reasonCode` is read off the RETIRED shipment's `supersedeReason` and
+ * the sentence off an `order.awb_at_confirmation_non_serviceable` audit
+ * row's `metadata.error` — two different places, either of which can be
+ * absent while the row still renders perfectly with "Reason not
+ * recorded" and a blank beside it. That is exactly the frame the
+ * narration must not be read over, and a `--check` cannot see it.
+ */
+async function assertM4Worklist(orderId) {
+  /*
+    BOTH OF THESE ARRIVE AFTER THE ORDER MOVES, so they are WAITED for
+    rather than read once. `AwbGenerationJobService` routes the order
+    first — the durable fact, visible-vs-silent — and only then
+    supersedes the shipment and writes the audit row. A seeding that
+    returns the moment the status flips therefore reads a half-finished
+    world, and it passed three times by luck before failing on the
+    fourth with `supersedeReason=none, courier sentence=none`. The
+    assertion below is what caught it; without the wait it would have
+    been a take filmed over "Reason not recorded".
+  */
+  const retired = await waitFor(`the refused shipment on ${orderId} to be retired`, () =>
+    prisma.shipment.findFirst({
+      where: {
+        orderShipments: { some: { orderId } },
+        supersededAt: { not: null },
+        supersedeReason: { not: null },
+      },
+      select: { supersedeReason: true },
+      // `shipmentSequence` lives on the JOIN, not here; the retired one
+      // is simply the older row, which is what this is asking for.
+      orderBy: { createdAt: 'asc' },
+    }),
+  );
+  const audit = await waitFor(`the courier's own words on ${orderId}`, () =>
+    prisma.auditLog.findFirst({
+      where: {
+        entityType: 'order',
+        entityId: orderId,
+        action: 'order.awb_at_confirmation_non_serviceable',
+      },
+      select: { metadata: true },
+      orderBy: { createdAt: 'desc' },
+    }),
+  );
+  const code = retired?.supersedeReason ?? null;
+  const sentence = audit === null ? null : (audit.metadata?.error ?? null);
+  /*
+    PRISMA HANDS BACK THE ENUM MEMBER, the API hands back the `@map`ped
+    value. The page switches on `awb_rejected`; this sees `AWB_REJECTED`.
+    Compared against the page's spelling it fails on a row that is
+    perfectly correct, which is a seeding that cries wolf.
+  */
+  if (code !== 'AWB_REJECTED' || typeof sentence !== 'string' || !sentence.includes('ER0005')) {
+    throw new Error(
+      `The worklist row would read wrong: supersedeReason=${code ?? 'none'}, ` +
+        `courier sentence=${sentence ?? 'none'}. M4 is about those two columns, so a row ` +
+        'that says "Reason not recorded" is not worth filming.',
+    );
+  }
+  /*
+    AND THAT IT IS THE ONLY ONE. The flow reaches for `.first()`,
+    because nothing on that page is named after the order's own
+    reference — the columns carry the order NUMBER, which is minted per
+    run. One row is what makes `.first()` deterministic rather than a
+    coin toss, so it is asserted here rather than assumed there. Same
+    shape as J2's "exactly one PENDING goods receipt".
+  */
+  const waitingCount = await prisma.order.count({
+    where: { status: 'PENDING_MANUAL_PLACEMENT', deletedAt: null },
+  });
+  if (waitingCount !== 1) {
+    throw new Error(
+      `${waitingCount} order(s) are waiting on manual placement. M4's flow takes the FIRST row, ` +
+        'so more than one makes which parcel it films a coin toss. Clear the others, or give ' +
+        'the flow a handle that names this one.',
+    );
+  }
+  console.log(`  · the worklist will say "Courier refused it" \u00b7 ${sentence}`);
+}
+
+/**
  * M2's world — "Is the courier integration healthy".
  *
  * ── IT WRITES NOTHING ────────────────────────────────────────────────
@@ -7527,6 +7842,7 @@ async function main() {
   await sellerRoutingWorldFor(slug, staffToken);
   await systemSettingsWorldFor(slug);
   await staffWorldFor(slug);
+  await manualPlacementWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickupWorldFor(slug, staffToken);
   await receiveWorldFor(slug, sellerId, sellerToken, staffToken);
   await pickWorldFor(slug, sellerId, sellerToken, staffToken);

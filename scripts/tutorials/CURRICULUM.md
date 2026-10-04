@@ -6,8 +6,8 @@ order a person meets them. Derived from the code — the 47 seller pages under
 `apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
 components actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 84 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J, K, O and P, L1–L3, M1–M2 and N1–N9.** The 6 left are all in the admin app: 2 are
+**90 tutorials. 85 filmed — sections A to G, which is the WHOLE SELLER APP,
+plus the whole of H, I, J, K, O and P, L1–L3, M1–M2, M4 and N1–N9.** The 5 left are all in the admin app: 2 are
 `impractical locally` and most touch something dangerous. Sections A–G are the seller app, H–P the admin app; the
 pages deliberately left unfilmed are listed at the end, each with a reason.
 
@@ -32,10 +32,10 @@ a third section and roughly another fifteen tutorials.
 
 ## Where to pick up
 
-**Filmed so far (84):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
+**Filmed so far (85):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
 **the whole seller app** — plus **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
-**L1–L3**, **M1–M2**, **N1–N9**, **O1–O5** and **P1–P5**, which is **the whole of
-the dangerous five**.
+**L1–L3**, **M1–M2**, **M4**, **N1–N9**, **O1–O5** and **P1–P5**, which is **the
+whole of the dangerous five**.
 Every one has its own entry below saying what it covers and what its seeding
 does.
 
@@ -3557,24 +3557,88 @@ button. Delhivery pushes us nothing, so this is the only thing that moves
 orders through in-transit, out-for-delivery and delivered. It **acts**: it
 writes tracking events, moves orders and credits money downstream.
 
-### M4. When nobody will carry it · `needs demo data` · **dangerous**
+### M4. When nobody will carry it · **FILMED** — `when-nobody-will-carry-it.mp4` · **dangerous**
 
 **Promise** — you can get a parcel moving that every courier refused.
-**Length** 3 min. **Needs** a parcel in `PENDING_MANUAL_PLACEMENT`, and getting
-one is less obvious than it looks. The simulator refuses `000000` as
-non-serviceable by design — but **an order can never carry that PIN**, because
-`address-validation.service.ts` enforces `^[1-9][0-9]{5}$` at create and is
-right to. `999999` is refused too, but as a TRANSIENT failure, which by CUR-2b
-deliberately does NOT route to manual placement. So the two real routes are a
-**pick shortfall** (confirm an order, then take the stock away — WMS-4 routes it
-here with no side-effects), or **teaching the simulator to refuse a nominated
-valid pin permanently**, which is a few lines and makes the courier-refusal
-shape reachable as well. Take the pick shortfall first; it needs no new code.
-**Covers** `/manual-placement` as the worklist — showing **why** each parcel is
-there, in the courier's own words — and then placing the waybill on the order
-page. The consequence to state: recording a waybill dispatches the order and
-tells a customer their parcel is on its way, so the number has to be one a real
-docket carries.
+**Length** 2 min 44 s of narration over 13 scenes. **Needs**
+`seed-demo-data.mjs when-nobody-will-carry-it` (`manualPlacementWorldFor`).
+**Covers** the dashboard's Blocked tile, then `/manual-placement`: why each
+parcel is there in the courier's own words, whether it still needs picking, the
+age it is ordered by, the cancel-as-unfulfillable dialog (opened and cancelled),
+and then recording the waybill — which does NOT always dispatch.
+
+**THE SIMULATOR LEARNED TO REFUSE A NOMINATED PIN, and the entry above was
+right that this is the only way in.** Both existing refusal pins are
+unreachable: `000000` cannot be put on an order at all
+(`^[1-9][0-9]{5}$` at create), and `999999` is classified TRANSIENT, which
+CUR-2b deliberately leaves in CONFIRMED. `POST /_sim/refuse-pin`
+(`{pin, errCode, remarks}`, `DELETE /_sim/refuse-pin/:pin`, cleared by
+`/_sim/reset`) is control surface in the `/_sim/*` family, not a second
+Delhivery behaviour.
+
+**It refuses the CONSIGNEE, not the address, and that is forced rather than
+chosen.** A pre-flight serviceability check runs BEFORE the create (D4), so a
+pin the simulator calls unserviceable is blocked before Delhivery ever forms the
+opinion the refusal is about — the create that carries it never happens. The
+refusal has to be about the parcel on an address that is fine. It is shaped
+exactly as a real one: the envelope `rmk` is their boilerplate (the same
+sentence whatever was wrong) and the ANSWER is the per-package `err_code` +
+`remarks`, because `parseCreateResponse` reads the package first for that
+reason. `[ER0005] suspicious order/consignee` is production's own example
+(SD-2026-26-000003) and classifies as `DELHIVERY_REFUSED` → `AWB_REJECTED` →
+**"Courier refused it"**.
+
+**AND THAT LABEL HAD NEVER RENDERED.** `reasonLabel` switched on the `@map`ped
+column spellings (`'awb_rejected'`) while the API sends Prisma's enum MEMBER
+name (`AWB_REJECTED`), so every row on that worklist has always read **"Reason
+not recorded"** — on the one column the screen exists for. Invisible because the
+courier's sentence sits underneath and reads like the answer. Fixed in its own
+commit, with `reasonCode` narrowed to the four-value union so a fifth
+`SupersedeReason` fails to compile. **The dialog's own copy was wrong too**: it
+promised that recording a waybill "dispatches the order and takes the stock off
+hand", and it does neither here — CUR-8's 2026-09-02 amendment routes an unpicked
+parcel to `PENDING_PICK`, and under Model C the decrement fired at pack. A third
+copy of the same claim sat in a test comment.
+
+**SO THE VIDEO'S BEST SCENE IS THE ONE THE OLD ENTRY GOT WRONG.** That entry
+said "recording a waybill dispatches the order and tells a customer their parcel
+is on its way". This parcel was refused AT CONFIRMATION, so nothing has been
+picked — the row says **"Needs picking"** and the toast reads `Order is now
+PENDING_PICK`. The narration says that, and it is a better lesson than the
+dispatch would have been: the result is the server's to report, not the button's
+to promise. **A parcel refused at MANIFEST CLOSE would read "Ready to go" and
+dispatch**; reaching that shape needs a pick and a pack first and was not worth
+a second parcel.
+
+**THE WAYBILL IS MINTED PER RUN AND READ OFF THE FIXTURE, and a fixed one cost a
+check.** `shipments.awb_number` is UNIQUE (CUR-9), so a constant in the flow can
+be typed exactly ONCE in the life of a database; the second check met
+`[AWB_ALREADY_IN_USE] AWB 77612345678 is already assigned to another shipment`
+part-way through the dialog, which is correct behaviour. `writeM4Fixture` mints
+one that no shipment holds and writes it to `lib/fixture.mjs`, which is also the
+truer model — a docket number is a real number an operator arrives holding, and
+two takes are two parcels booked on two days. `M4_AWB_PREFIX` keeps it at
+Bluedart's ELEVEN digits rather than the simulator's fourteen, because a number
+shaped like ours reads as the integration having booked it after all.
+`test/tutorial-labels.test.mjs` pins the carrier across both files, the prefix's
+shape, **and that a fixed `M4_AWB` is never reintroduced**.
+
+**`networkidle` AFTER A CLIENT-SIDE NAVIGATION COSTS THIRTY SECONDS HERE.** The
+`intro` scene ran 40.9s against a 6.7s page: there is no new document on a SPA
+navigation, so `waitForLoadState('networkidle')` asks about the one already
+loaded and then waits for 500ms of silence the admin shell's polling never
+gives it. The wait times out, `.catch` eats it, and the composer packs the
+result into a 12s clip at x0.3 — speeding up the one CLICK in the scene. Gate on
+the ROW instead. Worth checking any other admin flow whose scene length looks
+like 30-something seconds.
+
+**The seeding asserts what the frame must show**, because a `--check` cannot:
+`supersedeReason` is `AWB_REJECTED`, the audit row's sentence contains `ER0005`,
+and there is **EXACTLY ONE** order waiting on manual placement — the flow takes
+`.first()` and nothing on that page carries the order's own reference, so one
+row is what makes that deterministic (J2's lesson). The pin stops being refused
+in a `finally`, so a thrown assertion still leaves the simulator clean for
+whoever films next.
 
 ### M5. Choosing a carrier · `needs demo data` · **dangerous**
 

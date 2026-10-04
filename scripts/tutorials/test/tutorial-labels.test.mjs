@@ -101,6 +101,70 @@ describe('a label one file types and another file clears', () => {
     );
   });
 
+  /*
+    THE SLUG, not a label — a different shape of the same failure.
+    `record.mjs` pins a flow's step ids against the narration, so those
+    two cannot drift apart silently. Nothing pins the SEED's slug guard:
+    rename it on its own and `manualPlacementWorldFor` returns at its
+    first line, the worklist is empty, and every step of the take still
+    finds a page. A green run over nothing.
+
+    It is checked against the flow KEY and the narration SLUG rather
+    than against another constant, because those two are what the
+    machinery actually dispatches on.
+  */
+  it('M4 seeds the world for the slug it is filmed under', async () => {
+    const [flows, seed, narration] = await Promise.all([
+      read('flows.mjs'),
+      read('seed-demo-data.mjs'),
+      read('narration.mjs'),
+    ]);
+    const slug = declared(seed, 'M4_SLUG');
+    assert.equal(
+      declared(flows, 'M4_SLUG'),
+      slug,
+      'M4_SLUG differs between the flow and the seeding.',
+    );
+    assert.ok(
+      flows.includes(`'${slug}': {`),
+      `There is no flow keyed '${slug}', so the seeding builds a world no take ever opens.`,
+    );
+    assert.ok(
+      narration.includes(`slug: '${slug}',`),
+      `There is no narration for '${slug}', so record.mjs will refuse to open the browser.`,
+    );
+  });
+
+  it('M4 names the carrier its seeding does, on a docket that is not one of ours', async () => {
+    const [flows, seed] = await Promise.all([read('flows.mjs'), read('seed-demo-data.mjs')]);
+    assert.equal(
+      declared(flows, 'M4_CARRIER'),
+      declared(seed, 'M4_CARRIER'),
+      'The carrier M4 types is not the one its seeding writes to the fixture, so the narration ' +
+        'names one company and the record names another.',
+    );
+    /*
+      THE WAYBILL ITSELF IS DELIBERATELY NOT A CONSTANT — `awb_number` is
+      UNIQUE (CUR-9), so a fixed one can be typed exactly once in the
+      life of a database and the second take meets AWB_ALREADY_IN_USE.
+      What IS pinned is its SHAPE: three digits plus eight is Bluedart's
+      eleven, not the fourteen the simulator issues, because a number
+      that looks like ours reads as the integration having booked it
+      after all.
+    */
+    const prefix = declared(seed, 'M4_AWB_PREFIX');
+    assert.ok(
+      /^[0-9]{3}$/.test(prefix),
+      `M4's waybill prefix is "${prefix}"; with the eight clock digits beside it that has to ` +
+        "come to Bluedart's eleven.",
+    );
+    assert.ok(
+      !flows.includes('M4_AWB ='),
+      'M4 declares a fixed waybill again. It cannot: `shipments.awb_number` is UNIQUE, so the ' +
+        'second take would be refused with AWB_ALREADY_IN_USE part-way through the dialog.',
+    );
+  });
+
   it('O5 acts on the people and the broadcast its seeding knows about', async () => {
     const [flows, seed] = await Promise.all([read('flows.mjs'), read('seed-demo-data.mjs')]);
     for (const name of ['O5_STAFF_EMAIL', 'O5_INVITE_EMAIL', 'O5_BROADCAST_TITLE']) {

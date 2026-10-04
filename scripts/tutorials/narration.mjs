@@ -5047,6 +5047,65 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'when-nobody-will-carry-it',
+    title: 'When nobody will carry it',
+    subtitle: 'Skydrop for ops',
+    steps: [
+      {
+        id: 'arrive',
+        say: 'The front page lights an area when there is work in it, and this one says Blocked. A parcel no courier would carry \u2014 which is not a queue anybody joins on purpose.',
+      },
+      {
+        id: 'intro',
+        say: 'Every parcel here was confirmed, had stock put aside for it and had a customer told it was coming, and then a courier said no. Read the subtitle: nothing on this screen moves on its own.',
+      },
+      {
+        id: 'why',
+        say: 'Why it is here, in two parts. Courier refused it is our summary; underneath is their own sentence, word for word. An address nobody serves and a consignee they distrust need completely different answers.',
+      },
+      {
+        id: 'after',
+        say: 'And this one says what the button is going to do. Needs picking means the goods are still on a shelf: this parcel was refused the moment it was confirmed, so nobody has been near it since.',
+      },
+      {
+        id: 'waiting',
+        say: 'How long it has waited, and the list is ordered by it, oldest at the top. That is deliberate. Nothing here escalates by itself, so age is the only thing on this screen that gets worse on its own.',
+      },
+      {
+        id: 'unfulfillable',
+        say: 'There are exactly two ways out and this is the other one. Read what it costs: the stock goes back, the parcel is voided, and the seller sees a cancelled order \u2014 so it asks for a reason in words they would recognise.',
+      },
+      {
+        id: 'open',
+        say: 'Not today. The one we want is the first button, and the dialog opens by saying when to use it: once the parcel is really with whoever you booked it with, because this is what tells a customer it is on its way.',
+      },
+      {
+        id: 'awb',
+        say: 'Their waybill, exactly as their label prints it. Nothing checks the shape of it, and nothing could \u2014 we have no idea what a docket from Bluedart or DTDC looks like. A typo here is a tracking number that leads nowhere.',
+      },
+      {
+        id: 'courier',
+        say: 'And who has it. This one is required now, and the hint says why it had to become required: left blank, the seller and the customer were both told their parcel was with a courier called manual.',
+      },
+      {
+        id: 'service',
+        say: 'Their service tier is optional and is only there to be read back later. With a waybill and a carrier the button arms \u2014 and there is no second confirmation after it, so this press is the whole of it.',
+      },
+      {
+        id: 'record',
+        say: 'And it reports where the parcel actually went, rather than assuming. Not dispatched: this one was never picked, so it has gone to the warehouse floor to be picked, packed and handed over like any other.',
+      },
+      {
+        id: 'gone',
+        say: 'The row is gone, and the list is empty. Nothing was marked done \u2014 there is no such flag. This screen is a question asked fresh every time, and that order is no longer waiting on anybody.',
+      },
+      {
+        id: 'outro',
+        say: 'So: read their own sentence before choosing who to book with, check whether it still needs picking, and type the waybill only once the parcel is genuinely with them.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
