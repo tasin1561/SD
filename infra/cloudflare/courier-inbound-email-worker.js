@@ -24,7 +24,7 @@
  *   SKYDROP_INBOUND_SECRET — must equal COURIER_INBOUND_EMAIL_SECRET in
  *                            the API's environment.
  * VARS (wrangler.toml)
- *   SKYDROP_API_URL — https://api.skydrop.online/public/courier/inbound-email
+ *   SKYDROP_API_URL — https://api.skydrop.global/public/courier/inbound-email
  */
 
 /** Read a ReadableStream to a string, capped so one huge mail cannot OOM. */

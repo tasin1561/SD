@@ -1,4 +1,4 @@
-# ChatWoot self-host (chat.skydrop.online)
+# ChatWoot self-host (chat.skydrop.global)
 
 ChatWoot is the live-chat surface customers + sellers see (and where ops responds). We self-host so customer conversation data stays on our infrastructure.
 
@@ -6,7 +6,7 @@ ChatWoot is the live-chat surface customers + sellers see (and where ops respond
 
 | Component | Where |
 |---|---|
-| ChatWoot Rails app + Sidekiq worker | A SEPARATE small DigitalOcean droplet (`chat.skydrop.online`) — not the existing skydrop-app-prod box. |
+| ChatWoot Rails app + Sidekiq worker | A SEPARATE small DigitalOcean droplet (`chat.skydrop.global`) — not the existing skydrop-app-prod box. |
 | Postgres for ChatWoot | Same droplet, in the docker-compose. |
 | Redis for ChatWoot | Same droplet, in the docker-compose. |
 | Nginx (TLS termination + proxy) | On the chat droplet, mirrors the pattern of skydrop-app-prod |
@@ -29,7 +29,7 @@ Keeping ChatWoot off the main app droplet is intentional:
 #    Add your SSH key.
 
 # 2. Point a DNS record
-#    Cloudflare → skydrop.online → DNS → Add A record
+#    Cloudflare → skydrop.global → DNS → Add A record
 #       Type: A
 #       Name: chat
 #       Content: <droplet-ipv4>
@@ -56,7 +56,7 @@ cat > .env <<'EOF'
 SECRET_KEY_BASE=$(openssl rand -hex 64)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 # Match the public hostname (under Cloudflare proxy).
-FRONTEND_URL=https://chat.skydrop.online
+FRONTEND_URL=https://chat.skydrop.global
 DEFAULT_LOCALE=en
 RAILS_ENV=production
 NODE_ENV=production
@@ -67,7 +67,7 @@ SMTP_ADDRESS=smtp.resend.com
 SMTP_PORT=587
 SMTP_USERNAME=resend
 SMTP_PASSWORD=<your-resend-api-key>
-MAILER_SENDER_EMAIL=Skydrop Support <support@skydrop.online>
+MAILER_SENDER_EMAIL=Skydrop Support <support@skydrop.global>
 EOF
 chmod 600 .env
 
@@ -78,15 +78,15 @@ docker compose exec rails bundle exec rails db:chatwoot_prepare
 # 7. Nginx + TLS
 # /etc/nginx/sites-enabled/chat-skydrop.conf — see chat-nginx.conf below
 sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d chat.skydrop.online --redirect --non-interactive --agree-tos -m support@skydrop.online
+sudo certbot --nginx -d chat.skydrop.global --redirect --non-interactive --agree-tos -m support@skydrop.global
 
-# 8. Open https://chat.skydrop.online
+# 8. Open https://chat.skydrop.global
 # → create the admin user (one-off; ENABLE_ACCOUNT_SIGNUP=false locks the rest)
 # → Inboxes → Create new → API channel → name it "Skydrop API"
 #    → grab the inbox id from the URL (last segment of /settings/inboxes/<id>)
 # → Profile → Access tokens → Create new → copy the api_access_token
 # → (optional) Webhooks tab on the inbox: set URL
-#       https://api.skydrop.online/public/chat/webhooks/chatwoot
+#       https://api.skydrop.global/public/chat/webhooks/chatwoot
 #   and the HMAC secret (anything strong; we'll mirror it in env).
 ```
 
@@ -102,8 +102,8 @@ cd ~/app
 sed -i "s|^CHATWOOT_API_TOKEN=.*|CHATWOOT_API_TOKEN=<paste api_access_token>|" apps/api/.env
 sed -i "s|^CHATWOOT_HMAC_SECRET=.*|CHATWOOT_HMAC_SECRET=<paste HMAC secret>|" apps/api/.env
 
-# Configure runtime via the system-settings UI (admin.skydrop.online/settings):
-#   chat.chatwoot_base_url    = https://chat.skydrop.online
+# Configure runtime via the system-settings UI (admin.skydrop.global/settings):
+#   chat.chatwoot_base_url    = https://chat.skydrop.global
 #   chat.chatwoot_account_id  = <numeric id>
 #   chat.chatwoot_inbox_id    = <numeric id>
 
@@ -114,13 +114,13 @@ pm2 restart skydrop-api --update-env
 
 ```bash
 # Should now NOT return mode:"STUB" — should hit the real upstream
-curl -s https://api.skydrop.online/public/chat/webhooks/chatwoot \
+curl -s https://api.skydrop.global/public/chat/webhooks/chatwoot \
   -H "X-Chatwoot-Hmac-Token: <invalid>" -d '{}' | head -3
 # → {"code":"CHATWOOT_SIGNATURE_MISMATCH",...}  ← real verification ON
 
 # Drive a notifyOrderUpdate by transitioning any order (the listener
 # fires automatically per NOTIF-1). Then check:
-#   chat.skydrop.online → Conversations → expect an entry against the
+#   chat.skydrop.global → Conversations → expect an entry against the
 #   customer phone.
 ```
 

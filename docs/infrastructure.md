@@ -74,35 +74,45 @@ All infrastructure runs on **DigitalOcean** with **Cloudflare** at the edge. Del
 
 ## 3. Subdomain Map
 
+**Domain cutover (2026-10-04): the estate moved from `skydrop.online` to
+`skydrop.global`, and this section describes the DESTINATION, not yet the
+live state.** On the day of the rename only the `skydrop.global` apex and
+`www` resolved; none of the five app subdomains below existed, and every
+"put live" / "verified" sentence in this document was true of
+`skydrop.online`. `skydrop.online` is retired once `.global` serves, so
+treat the DNS, Caddy and Cloudflare steps here as a checklist to re-run on
+the new zone rather than a record of work already done on it. The one place
+to reason from is the zone and the droplet, never this file.
+
 | Subdomain | Purpose | App in monorepo |
 |---|---|---|
-| `skydrop.online` | Public marketing site | `apps/marketing` |
-| `app.skydrop.online` | Seller portal (BD merchants) | `apps/seller` |
-| `admin.skydrop.online` | Staff portal (admin, call center, warehouse) | `apps/admin` |
-| `track.skydrop.online` | Branded public tracking (Indian customers) | `apps/track` |
-| `api.skydrop.online` | Backend API (consumed by all front-ends + B2B clients) | `apps/api` |
-| `reseller.skydrop.online` | Reseller store portal (RS-2) — pm2 `skydrop-reseller`, 127.0.0.1:3005 | `apps/reseller` |
+| `skydrop.global` | Public marketing site | `apps/marketing` |
+| `app.skydrop.global` | Seller portal (BD merchants) | `apps/seller` |
+| `admin.skydrop.global` | Staff portal (admin, call center, warehouse) | `apps/admin` |
+| `track.skydrop.global` | Branded public tracking (Indian customers) | `apps/track` |
+| `api.skydrop.global` | Backend API (consumed by all front-ends + B2B clients) | `apps/api` |
+| `reseller.skydrop.global` | Reseller store portal (RS-2) — pm2 `skydrop-reseller`, 127.0.0.1:3005 | `apps/reseller` |
 
 All six subdomains terminate at Cloudflare → forwarded to Caddy on the droplet → routed to the appropriate Node process on internal port.
 
-### `reseller.skydrop.online` (RS-12, added 2026-09-14)
+### `reseller.skydrop.global` (RS-12, added 2026-09-14)
 
 The repo side ships with the code (`apps/reseller`, the `skydrop-reseller`
 entry in `ecosystem.config.cjs`, the build/restart/health lines in
 `scripts/deploy.sh`). **DNS and Caddy were put live by the owner on
-2026-09-14** (`reseller.skydrop.online` → `127.0.0.1:3005`); what remains
+2026-09-14** (`reseller.skydrop.global` → `127.0.0.1:3005`); what remains
 is the pm2 start below, once a deploy has built the app. For the record,
 the three owner steps were:
 
 1. **DNS** — a Cloudflare A record `reseller` → the droplet, **proxied**
    like the others, behind the firewall + `CF-Connecting-IP` arrangement in
    `docs/cloudflare-proxy.md`.
-2. **Caddy** — a block beside `app.skydrop.online`'s, identical except for
+2. **Caddy** — a block beside `app.skydrop.global`'s, identical except for
    the host and port. It proxies to loopback; the app sets its own security
    headers and nonce CSP (`packages/config`), so Caddy adds none:
 
    ```caddy
-   reseller.skydrop.online {
+   reseller.skydrop.global {
      encode zstd gzip
      reverse_proxy 127.0.0.1:3005 {
        header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
@@ -111,7 +121,7 @@ the three owner steps were:
    ```
 
    (Copy the `header_up` / `trusted_proxies` lines exactly as the live
-   `app.skydrop.online` block has them rather than this sketch — the live
+   `app.skydrop.global` block has them rather than this sketch — the live
    block is the one that has been verified against the login throttle.)
    Then `sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
 3. **pm2** — after a deploy has built `apps/reseller`:
@@ -119,7 +129,7 @@ the three owner steps were:
    `deploy.sh` health-checks `127.0.0.1:3005/login` only once pm2 knows the
    process, so deploys before this step do not fail on it.
 
-**Env:** set `RESELLER_APP_URL=https://reseller.skydrop.online` in
+**Env:** set `RESELLER_APP_URL=https://reseller.skydrop.global` in
 `~/app/.env` (the API's links in store invitation / password-reset /
 verification emails). It defaults to that value when unset, so this is
 belt-and-braces rather than a blocker. The reseller app itself needs only

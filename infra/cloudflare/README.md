@@ -24,12 +24,12 @@ Worker.
 
 ## 1. The mailbox
 
-Cloudflare dashboard → the `skydrop.online` zone → **Email** → **Email
+Cloudflare dashboard → the `skydrop.global` zone → **Email** → **Email
 Routing**.
 
 - Enable Email Routing if it is not already on. It will add MX and TXT
   records; let it.
-- Create the destination address. Suggested: **`courier@skydrop.online`**.
+- Create the destination address. Suggested: **`courier@skydrop.global`**.
 
 Use a dedicated address, not a shared ops inbox. Everything arriving here
 is parsed and stored automatically, and pointing it at an address humans
@@ -65,7 +65,7 @@ npx wrangler secret put SKYDROP_INBOUND_SECRET \
 
 npx wrangler deploy courier-inbound-email-worker.js \
   --name skydrop-courier-inbound-email \
-  --var SKYDROP_API_URL:https://api.skydrop.online/public/courier/inbound-email
+  --var SKYDROP_API_URL:https://api.skydrop.global/public/courier/inbound-email
 ```
 
 The script is versioned in this repo on purpose. Edit it here, deploy
@@ -76,13 +76,13 @@ no review.
 
 Email Routing → **Routes** → add a rule:
 
-- **Custom address**: `courier@skydrop.online`
+- **Custom address**: `courier@skydrop.global`
 - **Action**: *Send to a Worker*
 - **Worker**: `skydrop-courier-inbound-email`
 
 ## 5. Tell Delhivery to CC it
 
-Ask the SPOC to add `courier@skydrop.online` as a CC on ticket
+Ask the SPOC to add `courier@skydrop.global` as a CC on ticket
 notifications. Until they do, the pipeline is complete and receives
 nothing.
 
@@ -90,7 +90,7 @@ nothing.
 
 ## Verifying it works
 
-Send a plain email to `courier@skydrop.online` with a subject like
+Send a plain email to `courier@skydrop.global` with a subject like
 `Ticket ID: 1234567 test`, then:
 
 ```bash

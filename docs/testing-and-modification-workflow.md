@@ -19,22 +19,22 @@ section.
 
 | Subdomain | Process | Port | Purpose |
 |---|---|---|---|
-| `skydrop.online` | — (static export, Caddy serves `/var/www/skydrop-marketing`; local dev on 3006) | 3006 | Public marketing landing |
-| `reseller.skydrop.online` | skydrop-reseller | 3005 | Reseller store portal (RS-2) |
-| `app.skydrop.online` | skydrop-seller | 3003 | Seller dashboard |
-| `admin.skydrop.online` | skydrop-admin | 3002 | Internal staff |
-| `track.skydrop.online` | skydrop-track | 3004 | Public AWB tracking (EN+HI) |
-| `api.skydrop.online` | skydrop-api | 4000 | NestJS REST API |
+| `skydrop.global` | — (static export, Caddy serves `/var/www/skydrop-marketing`; local dev on 3006) | 3006 | Public marketing landing |
+| `reseller.skydrop.global` | skydrop-reseller | 3005 | Reseller store portal (RS-2) |
+| `app.skydrop.global` | skydrop-seller | 3003 | Seller dashboard |
+| `admin.skydrop.global` | skydrop-admin | 3002 | Internal staff |
+| `track.skydrop.global` | skydrop-track | 3004 | Public AWB tracking (EN+HI) |
+| `api.skydrop.global` | skydrop-api | 4000 | NestJS REST API |
 | (no domain) | skydrop-workers | — | BullMQ consumer process |
 
 ### Identities
 
-- **Admin/staff** logs in via `admin.skydrop.online/login` with a staff
-  email + password. The seeded super-admin is `admin@skydrop.online`.
-- **Seller** logs in via `app.skydrop.online/login`. Sellers are
+- **Admin/staff** logs in via `admin.skydrop.global/login` with a staff
+  email + password. The seeded super-admin is `admin@skydrop.global`.
+- **Seller** logs in via `app.skydrop.global/login`. Sellers are
   **invite-only** — no public signup. Admins create invitations.
 - **Customer** never authenticates. They receive parcels and look up
-  tracking on `track.skydrop.online/<AWB>`.
+  tracking on `track.skydrop.global/<AWB>`.
 
 ### Local dev (when you want to modify code)
 
@@ -73,7 +73,7 @@ non-trivial. Takes ~15 minutes.
 
 ### 1.1. Admin: invite the seller
 
-1. `admin.skydrop.online/login` → sign in as `admin@skydrop.online`.
+1. `admin.skydrop.global/login` → sign in as `admin@skydrop.global`.
 2. **Sellers** → **Invitations** → **New invitation**.
 3. Email: `<your-test-email>`, Company: `Test Co`.
 4. Copy the invitation link from the success toast (also goes to the
@@ -84,7 +84,7 @@ non-trivial. Takes ~15 minutes.
 1. Open the invitation link in an incognito window.
 2. Fill: full name, password (≥ 12 chars), phone (`+8801XXXXXXXXX`),
    country `BD`. Submit.
-3. You're auto-logged-in on `app.skydrop.online/dashboard`.
+3. You're auto-logged-in on `app.skydrop.global/dashboard`.
 
 ### 1.3. (no manual approval step — the invite IS the approval)
 
@@ -122,11 +122,11 @@ There is no category to file it under; that feature was removed on
    }
    ```
    You can get the warehouse id from
-   `https://api.skydrop.online/admin/warehouses` (admin token).
+   `https://api.skydrop.global/admin/warehouses` (admin token).
 
 #### Admin side: receive it
 
-1. `admin.skydrop.online/warehouse` → **Receive**.
+1. `admin.skydrop.global/warehouse` → **Receive**.
 2. Click the new pending goods-receipt → **Start receiving**.
 3. For the line: received qty `10`, damaged `0`, putaway bin pick.
 4. **Record all lines** → **Complete**.
@@ -145,7 +145,7 @@ There is no category to file it under; that feature was removed on
 
 ### 1.7. Admin: confirm via call centre
 
-1. `admin.skydrop.online/call-center` → **Pull next**.
+1. `admin.skydrop.global/call-center` → **Pull next**.
 2. The order's recipient + script appears. Click **Customer confirmed
    the order** → status → `CONFIRMED`, M5 reserves stock
    (`qtyReserved=1`, `qtyOnHand=10`).
@@ -166,7 +166,7 @@ There is no category to file it under; that feature was removed on
 
 ### 1.9. Customer: track on the public site
 
-1. Open `track.skydrop.online` in any browser.
+1. Open `track.skydrop.global` in any browser.
 2. Paste the AWB → see the timeline (just one entry: "Dispatched").
 3. Switch to **हिन्दी** in the top-right corner — page text + status
    labels translate. Cookie persists across the apex + AWB pages.
@@ -393,8 +393,8 @@ path passes.
 
 ### 2.10. Public anti-enumeration
 
-1. `track.skydrop.online/UNKNOWN-AWB-123` → generic "not found".
-2. `track.skydrop.online/DLVSTUB-deleted-shipment` → SAME generic
+1. `track.skydrop.global/UNKNOWN-AWB-123` → generic "not found".
+2. `track.skydrop.global/DLVSTUB-deleted-shipment` → SAME generic
    404 body (no signal leakage).
 
 ---
@@ -616,7 +616,7 @@ Each runs ~independently. CI runs all of them.
 | Set up CI/CD from scratch | `docs/cicd.md` |
 | Install ChatWoot | `docs/chatwoot-selfhost.md` |
 | Find a feature's code | `grep -rn '<feature>' apps/ packages/` |
-| Find an HTTP endpoint | Swagger at `https://api.skydrop.online/api/docs` (dev mode only — disable for prod by setting `NODE_ENV=production`) |
+| Find an HTTP endpoint | Swagger at `https://api.skydrop.global/api/docs` (dev mode only — disable for prod by setting `NODE_ENV=production`) |
 
 When stuck: search `CLAUDE.md` for the invariant tag (e.g. `WMS-7`,
 `TRK-5`) — every locked decision has one. The tag tells you what the

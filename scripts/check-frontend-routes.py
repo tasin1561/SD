@@ -104,7 +104,7 @@ SOURCES = [
     ('admin', REPO / 'apps/admin/src'),
     ('seller', REPO / 'apps/seller/src'),
     ('track', REPO / 'apps/track/src'),
-    # RS-2: the reseller store portal (reseller.skydrop.online).
+    # RS-2: the reseller store portal (reseller.skydrop.global).
     ('reseller', REPO / 'apps/reseller/src'),
     ('api-client', REPO / 'packages/api-client/src'),
     ('auth', REPO / 'packages/auth/src'),

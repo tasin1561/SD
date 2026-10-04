@@ -87,12 +87,12 @@ Phase 1A covers **everything except billing/wallet/remittance**. Specifically:
 ```
 SD/
 ├── apps/
-│   ├── marketing/         # ✅ skydrop.online — public marketing site (static export)
-│   ├── seller/            # ✅ app.skydrop.online — seller dashboard
-│   ├── admin/             # ✅ admin.skydrop.online — internal staff
-│   ├── track/             # ✅ track.skydrop.online — public tracking page
-│   ├── reseller/          # ✅ reseller.skydrop.online — reseller store portal (RS-2, port 3005)
-│   ├── api/               # ✅ api.skydrop.online — NestJS REST API
+│   ├── marketing/         # ✅ skydrop.global — public marketing site (static export)
+│   ├── seller/            # ✅ app.skydrop.global — seller dashboard
+│   ├── admin/             # ✅ admin.skydrop.global — internal staff
+│   ├── track/             # ✅ track.skydrop.global — public tracking page
+│   ├── reseller/          # ✅ reseller.skydrop.global — reseller store portal (RS-2, port 3005)
+│   ├── api/               # ✅ api.skydrop.global — NestJS REST API
 │   └── workers/           # ⚠️ BUILT BUT NOT DEPLOYED — see the note below
 ├── packages/
 │   ├── db/                # ✅ Prisma + types (@skydrop/db)

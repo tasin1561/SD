@@ -103,8 +103,8 @@ that only breaks at an intermediate point shows up here, not in production.
 processes. Each stage takes about 15 min of CI plus about 10 min of deploy.
 
 **2a. Record the money screen on production, BEFORE.** Use the old UI and an
-account whose balance does not move: the QA accounts `qa-seller@skydrop.online`
-and `qa-bot@skydrop.online` (both throttle sign-in at 5 per 15 min). Write down
+account whose balance does not move: the QA accounts `qa-seller@skydrop.global`
+and `qa-bot@skydrop.global` (both throttle sign-in at 5 per 15 min). Write down
 the exact strings (e.g. `₹1,234.50`) or take a screenshot. §4 names the screen
 per app.
 
@@ -217,7 +217,7 @@ Cancel. Never submit an order, top-up, withdrawal, approval or scan. Do each
 list at 1440 px, then repeat clicks 1–3 at 390 px (phone width). Check both
 themes on at least one page.
 
-### Stage 1 — track (`track.skydrop.online`)
+### Stage 1 — track (`track.skydrop.global`)
 
 1. `/` loads on the brand skin; the map is visible; no sideways scroll at 390 px.
 2. Theme switch changes light ↔ dark and survives a reload.
@@ -236,7 +236,7 @@ refused scan on the pack or handover bench is acknowledged, the scan field
 has focus again (don't trigger a refusal on production to test it; the
 specs pin it).
 
-### Stage 2 — seller (`app.skydrop.online`, as `qa-seller`)
+### Stage 2 — seller (`app.skydrop.global`, as `qa-seller`)
 
 1. `/login`: the new frame with "seller portal", the theme switch works signed out, and a wrong password shows "Invalid email or password." word for word.
 2. Sign in → dashboard: KPI tiles, sidebar, and the notification bell.
@@ -251,7 +251,7 @@ specs pin it).
 
 Check the untouched apps: reseller and admin look as before.
 
-### Stage 3 — reseller (`reseller.skydrop.online`, with a store login you hold)
+### Stage 3 — reseller (`reseller.skydrop.global`, with a store login you hold)
 
 1. `/login`: "store portal", the theme switch, and the wrong-password verdict word for word.
 2. Dashboard: KPI money tiles and the shortcut cards.
@@ -266,7 +266,7 @@ Check the untouched apps: reseller and admin look as before.
 
 Check the untouched app: admin looks as before.
 
-### Stage 4 — admin (`admin.skydrop.online`, as `qa-bot`)
+### Stage 4 — admin (`admin.skydrop.global`, as `qa-bot`)
 
 1. `/login`: "operations console", the theme switch, and the wrong-password verdict word for word.
 2. Dashboard: attention queue, KPI tiles, the money tiles.

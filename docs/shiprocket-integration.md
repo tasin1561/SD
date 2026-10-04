@@ -256,6 +256,19 @@ is for a human driving the panel in a browser — not for our traffic.
 
 ## RESOLVED 2026-09-09 — provisioned, verified, and a real parcel booked
 
+> **The API user's email did NOT move in the 2026-10-04 `.global` cutover,
+> and `api@skydrop.online` below is deliberate.** It is not a brand
+> surface — it is the LOGIN of the Shiprocket API user, stored encrypted in
+> `courier_credentials` (CUR-1), and it is where Shiprocket mails that
+> user's password. Renaming it in this file would change nothing in their
+> panel and would leave the one address a password reset arrives at
+> undocumented. Two consequences for the cutover: **`api@skydrop.online`
+> must keep receiving mail** (keep the Cloudflare Email Routing rule on the
+> retired zone, or move the API user in their panel FIRST), and changing it
+> is a deliberate panel operation plus a credential rotation — not a
+> find-and-replace. The same account also handles COD remittance, so a
+> failed sign-in is not a cheap thing to discover.
+
 An API user was created in the panel as `api@skydrop.online` (reachable
 since Cloudflare Email Routing went in the same day —
 `docs/email-dns.md`), with `68.183.190.55` in **Allowed IPs for PII

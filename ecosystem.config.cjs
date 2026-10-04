@@ -114,7 +114,7 @@ module.exports = {
     nextApp('skydrop-admin', 3002),
     nextApp('skydrop-seller', 3003),
     nextApp('skydrop-track', 3004),
-    // RS-12 (2026-09-14) — the reseller store portal, reseller.skydrop.online.
+    // RS-12 (2026-09-14) — the reseller store portal, reseller.skydrop.global.
     // Caddy reverse-proxies that host to 127.0.0.1:3005 (see
     // docs/infrastructure.md). Loopback like the others.
     nextApp('skydrop-reseller', 3005),

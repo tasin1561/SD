@@ -4,12 +4,12 @@ The landing page's invite form POSTs to `/api/public/invite-leads` on
 its **own origin**. It has to: `apps/marketing` is a static export with
 no Node process, so it has no route handler to proxy through, and its
 CSP is `connect-src 'self'`, which blocks a cross-origin call to
-`api.skydrop.online` outright.
+`api.skydrop.global` outright.
 
 So Caddy forwards exactly that one path — not `/api/*`, which would put
 the entire authenticated API surface on the marketing hostname.
 
-Add inside the existing `skydrop.online, www.skydrop.online { … }`
+Add inside the existing `skydrop.global, www.skydrop.global { … }`
 block, **before** the `root`/`file_server` directives:
 
 ```caddy
@@ -31,7 +31,7 @@ sudo systemctl reload caddy
 
 ## Why not CORS instead
 
-Allowing `https://skydrop.online` as an origin on the API would work,
+Allowing `https://skydrop.global` as an origin on the API would work,
 but it means the marketing site's CSP has to name the API host in
 `connect-src`, and the API grows a cross-origin allowance that exists
 for one form. Same-origin through Caddy keeps FE-3 intact — the browser

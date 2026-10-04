@@ -129,8 +129,8 @@ Logs are in `~/.skydrop-prodcopy/*.log`.
   the copy only, and production is never touched:
 
   ```bash
-  scripts/local-prod-copy.sh set-password staff  qa-bot@skydrop.online
-  scripts/local-prod-copy.sh set-password seller qa-seller@skydrop.online
+  scripts/local-prod-copy.sh set-password staff  qa-bot@skydrop.global
+  scripts/local-prod-copy.sh set-password seller qa-seller@skydrop.global
   scripts/local-prod-copy.sh set-password store  <a store login>
   ```
 

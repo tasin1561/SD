@@ -1,5 +1,11 @@
 # Security headers for the static marketing site
 
+**Hostnames here are `skydrop.global` as of the 2026-10-04 cutover; the
+"verified" lines were measured on `skydrop.online`.** The blocks below are
+what to paste into the live Caddyfile for the new domain — pasting them is
+not the same as having measured them, so re-run the `curl -sI` proofs
+against `.global` after the reload.
+
 ## Who needs this, and who does not
 
 `apps/admin`, `apps/seller` and `apps/track` set their own headers in Next
@@ -18,7 +24,7 @@ file is for.
 
 ## The block
 
-Goes inside the existing `skydrop.online, www.skydrop.online { … }` site
+Goes inside the existing `skydrop.global, www.skydrop.global { … }` site
 block in `/etc/caddy/Caddyfile`, alongside the `@immutable` / `@html`
 cache-control matchers already there.
 
@@ -49,7 +55,7 @@ above; all four frontends now carry the same `font-src 'self' data:`.
 
 **The deployed Caddyfile is edited by hand** — this file is the block to
 paste, not the block that is running. After changing it, `curl -sI
-https://skydrop.online | grep -i content-security-policy` is the proof.
+https://skydrop.global | grep -i content-security-policy` is the proof.
 
 ## Why `'unsafe-inline'` here when the other apps refuse it
 
@@ -79,7 +85,7 @@ sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak.$(date +%F)
 sudo nano /etc/caddy/Caddyfile          # paste the block above
 sudo caddy validate --config /etc/caddy/Caddyfile   # MUST pass first
 sudo systemctl reload caddy             # reload, not restart — no dropped conns
-curl -sI https://skydrop.online/ | grep -i -E 'content-security|strict-transport|x-frame'
+curl -sI https://skydrop.global/ | grep -i -E 'content-security|strict-transport|x-frame'
 ```
 
 `caddy validate` before reload is the whole safety story: Caddy refuses to
@@ -143,8 +149,8 @@ Same reasoning as the `/api/public/invite-leads` block above it.
 for u in /favicon.ico /og.png /brand/skydrop-icon.svg /nope.png / /request-invite; do
   printf '%-28s %s\n' "$u" \
     "$(curl -s -o /dev/null -w '%{http_code} %{content_type}' \
-       -H 'Host: skydrop.online' --resolve skydrop.online:443:127.0.0.1 \
-       https://skydrop.online$u)"
+       -H 'Host: skydrop.global' --resolve skydrop.global:443:127.0.0.1 \
+       https://skydrop.global$u)"
 done
 # assets: 200 + their real type · /nope.png: 404 · pages: 200 text/html
 ```
@@ -162,8 +168,8 @@ rendered the HOME page with a 200 (the `try_files … /index.html` catch-all; th
 site against an apex canonical. The marketing block now carries, in this order:
 
 ```caddyfile
-	@www host www.skydrop.online
-	redir @www https://skydrop.online{uri} 308
+	@www host www.skydrop.global
+	redir @www https://skydrop.global{uri} 308
 	…
 	handle {
 		root * /var/www/skydrop-marketing
@@ -188,6 +194,6 @@ site against an apex canonical. The marketing block now carries, in this order:
 	}
 ```
 
-Verified after reload: `/privacy/` → 308 `/privacy`; `www.skydrop.online/privacy` → 308 apex;
+Verified after reload: `/privacy/` → 308 `/privacy`; `www.skydrop.global/privacy` → 308 apex;
 `/definitely-not-here` → **404** with the export's 404 page; `/api/public/invite-leads` still
 proxied; the other hosts untouched. Backup: `/etc/caddy/Caddyfile.bak-<timestamp>`.

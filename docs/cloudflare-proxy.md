@@ -1,13 +1,23 @@
 # Putting Cloudflare in front of the origin
 
-**Status: DONE for production (2026-08-07).** Kept as the record of what was
-changed, why the order mattered, and the one item still open.
+**Status: DONE for `skydrop.online` (2026-08-07). NOT yet done for
+`skydrop.global`.** The hostnames below were moved to `.global` on
+2026-10-04 with the rest of the estate, so this reads as a checklist for
+the new zone — but every ✅ in the table records work performed on the
+retired `.online` zone. Re-run the three steps in order on `.global`; the
+ORDER is the whole safety story and does not carry over just because the
+record does. In particular the firewall must be restricted BEFORE Caddy is
+told to trust `CF-Connecting-IP`, or that header is attacker-supplied on an
+open origin.
+
+Kept as the record of what was changed, why the order mattered, and the one
+item still open.
 
 | | |
 |---|---|
 | SSL/TLS mode | ✅ Full (strict) |
 | CAA | ✅ already authorises Cloudflare's CAs — see the note below |
-| Proxy (orange cloud) | ✅ `skydrop.online`, `www`, `api`, `app`, `admin`, `track` |
+| Proxy (orange cloud) | ✅ `skydrop.global`, `www`, `api`, `app`, `admin`, `track` |
 | ufw | ✅ 80/443 restricted to Cloudflare ranges; direct-to-IP now times out |
 | Caddy real client IP | ✅ `header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}` on all five `reverse_proxy` blocks |
 | `stg-*` records | ✅ deleted — they served nothing and published the origin |
@@ -144,7 +154,7 @@ sudo ufw status numbered
 Keep the OpenSSH rule. Do **not** run the two `delete` lines until the proxy is
 on and serving, or you lock the site out of the internet.
 
-Then in the dashboard, switch the A records for `skydrop.online`, `www`, `api`,
+Then in the dashboard, switch the A records for `skydrop.global`, `www`, `api`,
 `app`, `admin`, `track` from grey cloud to **orange cloud**.
 
 ### Step 3 — Only now: make Caddy pass the real client IP
@@ -175,7 +185,7 @@ worse than the two-hop problem it fixes.
 sudo journalctl -u caddy -f          # watch a request come through
 
 # the origin is no longer directly reachable
-curl -sS --max-time 10 https://<origin-ip>/ -H 'Host: api.skydrop.online' -k   # expect a timeout
+curl -sS --max-time 10 https://<origin-ip>/ -H 'Host: api.skydrop.global' -k   # expect a timeout
 
 # the throttle still keys per client: six bad logins from one machine
 # should 429 on the sixth, and NOT affect a different machine

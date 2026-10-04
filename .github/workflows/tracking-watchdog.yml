@@ -40,7 +40,7 @@ jobs:
       - name: Ask the API whether a poll cycle completed recently
         run: |
           set -uo pipefail
-          URL="https://api.skydrop.online/health/tracking"
+          URL="https://api.skydrop.global/health/tracking"
 
           # Two attempts, because a single failed request is a network
           # blip and paging a human for one is how alerts get ignored.
@@ -64,7 +64,7 @@ jobs:
           echo "so COD is not being credited and payouts have stopped with it."
           echo
           echo "Check, in order:"
-          echo "  1. Is the API up at all?  curl -s https://api.skydrop.online/health/live"
+          echo "  1. Is the API up at all?  curl -s https://api.skydrop.global/health/live"
           echo "  2. Is the worker running? pm2 list on the droplet; WORKERS_ENABLED must not be false."
           echo "  3. Did Redis lose the repeatable job? Restarting the API re-adds it on boot."
           echo "  4. Is courier.delhivery_api_base_url still set? Empty means stub mode — the"

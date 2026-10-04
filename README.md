@@ -14,12 +14,12 @@ Turborepo + pnpm workspaces.
 
 | Path | What it is |
 |---|---|
-| `apps/marketing` | Public site — `skydrop.online` (static export) |
-| `apps/seller` | Seller portal — `app.skydrop.online` |
-| `apps/admin` | Staff portal — `admin.skydrop.online` |
-| `apps/track` | Public tracking page, EN + HI — `track.skydrop.online` |
-| `apps/reseller` | Reseller store portal — `reseller.skydrop.online` |
-| `apps/api` | NestJS API — `api.skydrop.online` |
+| `apps/marketing` | Public site — `skydrop.global` (static export) |
+| `apps/seller` | Seller portal — `app.skydrop.global` |
+| `apps/admin` | Staff portal — `admin.skydrop.global` |
+| `apps/track` | Public tracking page, EN + HI — `track.skydrop.global` |
+| `apps/reseller` | Reseller store portal — `reseller.skydrop.global` |
+| `apps/api` | NestJS API — `api.skydrop.global` |
 | `apps/workers` | Built, **not deployed** — every BullMQ worker runs in-process inside the API |
 | `packages/db` | Prisma schema, migrations, generated client (`@skydrop/db`) |
 | `packages/ui` | Design tokens, shared components, status→colour mappers |

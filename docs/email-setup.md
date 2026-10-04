@@ -40,14 +40,14 @@ The sender addresses are fixed in `apps/api/src/modules/email/sender-resolver.ts
 
 | Address | Used for |
 |---|---|
-| `security@skydrop.online` | password reset, email verification, login + security alerts |
-| `hello@skydrop.online` | everything else — invitations, order and shipment mail |
-| `support@skydrop.online` | the `reply-to` on every message |
+| `security@skydrop.global` | password reset, email verification, login + security alerts |
+| `hello@skydrop.global` | everything else — invitations, order and shipment mail |
+| `support@skydrop.global` | the `reply-to` on every message |
 
-All three are on `skydrop.online`, so that is the domain to verify — one
+All three are on `skydrop.global`, so that is the domain to verify — one
 verification covers all of them.
 
-In the Resend dashboard: **Domains → Add Domain → `skydrop.online`**, then
+In the Resend dashboard: **Domains → Add Domain → `skydrop.global`**, then
 publish the DNS records it gives you at Cloudflare. There will be an SPF
 `TXT`, DKIM `CNAME`s, and optionally a DMARC `TXT`.
 

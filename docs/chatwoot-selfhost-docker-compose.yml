@@ -1,4 +1,4 @@
-# ChatWoot self-host stack — copy to the chat.skydrop.online droplet at
+# ChatWoot self-host stack — copy to the chat.skydrop.global droplet at
 # /home/chat/chatwoot/docker-compose.yml. Pair with the .env file from
 # docs/chatwoot-selfhost.md step 5.
 #
