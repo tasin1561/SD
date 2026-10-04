@@ -4,14 +4,29 @@ Tracking explicit deferrals from the original module specs. Each entry names
 the gap, why we deferred it, and where (which later module) we expect to
 pick it up.
 
-**Coverage, read this first (reviewed 2026-09-15).** The module sections below
-were written against Phase 1A and the R-phases and were last revised on
-2026-08-21. Everything after that date — the two-leg consignments, the treasury
+**Coverage, read this first (reviewed 2026-09-15; stale entries pruned
+2026-10-04).** The module sections below were written against Phase 1A and the
+R-phases. Everything after 2026-08-21 — the two-leg consignments, the treasury
 and P&L audits, the courier cost and invoice work, labelling and scanning, the
 carry-forward P&L, and reseller stores (RS-1..RS-12) — is recorded in
 `CLAUDE.md`, not here, and `CLAUDE.md` is the authority where the two disagree.
 The "Open as of 2026-09-15" section directly below is this doc's current list;
 an older entry marked RESOLVED stays for the reasoning that produced it.
+
+**A stale deferral is worse than a missing one, which is why this file gets
+pruned and not only appended to.** An entry claiming something is absent when
+it shipped sends the next reader one of two ways: re-implementing a guard that
+already exists, or — the expensive direction — treating a secured surface as
+open. On 2026-10-04, **twenty-seven entries were found describing code that no
+longer exists**, every verdict checked against the code rather than against
+another document (`docs/bug-audit-2026-10.md` §4 is the audit; two entries it
+examined were accurate and were left alone). Two were stale in their PREMISE
+rather than a detail: the `qtyOnHand` resolution still read as Model A months
+after the decrement moved to PACK, because the `DISPATCH_STOCK` side-effect
+deliberately kept its name. **The failure shape is RBAC-1's** — several
+mutually consistent documents, all agreeing, all describing a mechanism that
+had been replaced. Nothing in the gate can see it, so **when a deferral
+closes, delete or rewrite its entry in the same change as the code**.
 
 ---
 
@@ -56,29 +71,22 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
 - **`packages/types`, `packages/i18n` and `packages/utils` are README-only
   placeholders.** Nothing imports them. They are not a plan.
 
-- **Dependency advisories: 13 on the PRODUCTION path (2 critical), 35 in
-  total** — measured 2026-09-15, not inherited. The "eight, all build/test
-  tooling" line that stood here and in CLAUDE.md was true on 2026-07-28 and is
-  now stale; advisories accrue with time, so a dated count is a claim with a
-  shelf life. What matters today:
-    - **`next` 15.5.22 → 15.5.24** closes two CRITICAL advisories (an
-      unauthenticated RCE on Windows, which does not apply to a Linux droplet,
-      and one in Image Optimization, which may). `apps/marketing` is exempt —
-      it is `output: 'export'` with `images.unoptimized`, so no optimizer runs;
-      admin, seller, track and reseller all have the optimizer enabled by
-      default.
-    - **`sharp` 0.35.3 → 0.35.4** closes a HIGH (libheif). This one processes
-      SELLER-UPLOADED images inside the API, which is untrusted input by
-      definition, so it is the most directly reachable of the set.
-    - **`multer` 2.2.0 → 2.3.0** closes three DoS advisories; it is transitive
-      via `@nestjs/platform-express` and needs an override or a Nest bump.
-    - `qs`, `js-yaml`, `nanoid` and `deepmerge-ts` are transitive and lower
-      severity.
-  **`next` and `sharp` are already inside their declared ranges** (`^15.5.22`,
-  `^0.35.0`) — the lockfile is simply stale, so a `pnpm update` closes both
-  criticals and the sharp HIGH with no package.json change. **Pick up:** needs
-  the owner's go-ahead (MUST NOT #5) and a full CI run behind it.
-  Re-measure with `pnpm audit --prod` rather than trusting this paragraph.
+- **Dependency advisories — the three named upgrades LANDED; the count here
+  has a shelf life and this paragraph no longer carries one.** As of
+  2026-10-04 the lockfile holds `next` 15.5.25, `sharp` 0.35.4 and `multer`
+  2.3.0, so the two CRITICAL `next` advisories (the Windows RCE and the Image
+  Optimization one), the `sharp` HIGH in libheif, and the three `multer` DoS
+  advisories are all closed. The `multer` half is worth noting because the
+  entry expected it to need an override or a Nest bump and it arrived through
+  the dependency tree instead.
+  **What stays is the lesson, not the number.** This entry was written as
+  "13 on the PRODUCTION path (2 critical), 35 in total — measured 2026-09-15",
+  which replaced an "eight, all build/test tooling" line that was true on
+  2026-07-28. Advisories accrue with time, so a dated count in a document is a
+  claim that goes stale on its own, with nothing to announce it. **Do not
+  record a new count here.** Run `pnpm audit --prod` when the question comes
+  up; that is the only answer with a date on it. An upgrade still needs the
+  owner's go-ahead (MUST NOT #5) and a full CI run behind it.
 
 - **The e2e suite and the Playwright projects cannot run on the dev machine** —
   this WSL distro has no Docker — so CI is the first place they execute. A
@@ -89,15 +97,22 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
 
 ## Auth module (Module 1)
 
-- **RBAC enforcement on staff endpoints**. Currently any authenticated
-  staff member can access `/admin/seller-invitations` and its variants.
-  Per the original spec these should be scoped to
-  `SUPER_ADMIN` + `SELLER_APPROVAL_ADMIN` via a `@StaffAuth(...)` decorator
-  (or equivalent). Deferred because designing the full role/action matrix
-  across all 18 modules is non-trivial and the staff base currently
-  consists of one super-admin in dev.
-  **Pick up:** Module 12 (Admin Dashboard) or earlier if multi-role staff
-  is added before that.
+- **RBAC enforcement on staff endpoints — ✅ SHIPPED, as PERMISSIONS rather
+  than the roles this entry anticipated.** `SellerInvitationAdminController`
+  carries `@RequirePermissions('sellers.view')` at the class with
+  `'sellers.invite'` on create / resend / delete
+  (`seller-invitation.controller.ts:40,46,64,77`). The design question this
+  entry was waiting on — "the full role/action matrix across all 18 modules" —
+  was answered by not building a matrix at all: an endpoint declares the
+  PERMISSION it needs, a role is a bag of permissions an admin composes, and
+  **an endpoint that declares nothing is REFUSED** rather than open
+  (`require-permissions.decorator.ts:30-35`). That inversion is what made the
+  sweep finishable; the matrix never would have been.
+  **The scaffolding outlived the mechanism, which is the RBAC-1 shape.** The
+  controller's own docblock still reads "any authenticated staff member may
+  invite/list/resend/delete. Role-based scoping … lands with the RBAC module",
+  directly above the decorators that do it. Nothing in the gate can see a
+  comment describing the opposite of its own file.
 
 - **Notification template variable schema validation**. The
   `notification_templates.variables` JSON column is present and persisted
@@ -141,13 +156,17 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   **Pick up:** at the next touch of seller-auth, or whenever the auth
   module is otherwise refactored.
 
-- **RBAC enforcement on `/admin/sellers/*`.** Currently any
-  authenticated staff member can list sellers, suspend/reapprove,
-  manage notes, and override onboarding steps. Per the original Module
-  2 spec, status changes and note edits should be scoped (likely
-  `SUPER_ADMIN` + `SELLER_APPROVAL_ADMIN`; CSR roles read-only). Same
-  underlying gap as the seller-invitations RBAC debt above.
-  **Pick up:** Module 12 (Admin Dashboard) with the wider RBAC roll-out.
+- **RBAC enforcement on `/admin/sellers/*` — ✅ SHIPPED.** Every handler on
+  `AdminSellerController` is behind a named permission: `sellers.view` at the
+  class, then `sellers.approve` / `sellers.suspend` on the status writes,
+  `sellers.notes.manage` on the three note handlers, and
+  `sellers.bank_account.reveal` on its own key
+  (`admin-seller.controller.ts:50,70,85,100,123,148,161,175,196`). The read /
+  write split this entry asked for came out finer than "CSR roles read-only":
+  revealing a bank account is its own permission rather than part of reading a
+  seller, because it is a different act with a different consequence.
+  **The note-authorship gap below is NOT closed by this** — a permission says
+  who may edit a note, not whose note it is.
 
 - **Note authorship not enforced on edit/delete.** `PATCH` and `DELETE`
   on `/admin/sellers/:id/notes/:noteId` accept any staff member, not
@@ -486,28 +505,45 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
 
 ## Warehouse Operations (Module 8)
 
-### HIGH-priority latent bug — qtyOnHand never decrements on the normal lifecycle — ✅ RESOLVED (Module 9, Model A)
+### HIGH-priority latent bug — qtyOnHand never decrements on the normal lifecycle — ✅ RESOLVED (Model C)
 
-- **RESOLVED (M9 commit 12, `6d1b71a`) — Model A chosen.** The bug was:
-  `stock_levels.qtyOnHand` was never decremented in the normal order
-  lifecycle (no `PICK`/`PACK_CONFIRM`/`DISPATCH` movement issued
-  anywhere), so every delivered order left `qtyOnHand` inflated by
-  `quantity`. M9 resolved it by **Model A — qtyOnHand decrements at
-  DISPATCH**: the `PENDING_DISPATCH → DISPATCHED` matrix edge (and, M9
-  commit 14, `PENDING_MANUAL_PLACEMENT → DISPATCHED`) gained the
-  `DISPATCH_STOCK` side-effect — per phase-2 reservation,
-  `StockMutationService` issues a `DISPATCH` movement (`−qtyReserved`)
-  and `StockReservationService.fulfill()` consumes the reservation.
-  This is the ONE normal-lifecycle qtyOnHand decrement; DELIVERED is
-  stock-neutral. **The coupled WMS-8 finalize() was reverted to Model A
-  in the SAME atomic commit**: RESTOCK → `RETURN_RESTOCK +qty` re-add;
-  WRITE_OFF → no movement (the dispatch decrement stands). The
-  `stock-conservation-rto.e2e-spec` break-on-regression assertion was
-  flipped to assert the fix (DISPATCH movement fires, qtyOnHand 10→8 at
-  dispatch) and the full-lifecycle conservation trace is green. The
-  conservation e2e remains a permanent regression guard. **Nothing
-  below this line about Model A vs B / "first agenda item" applies any
-  more — kept for provenance only.**
+- **RESOLVED — and the answer MOVED after this entry was written. The live
+  model is C: qtyOnHand decrements at PACK (2026-09-03).** `PICKED → PACKED`
+  is the edge that carries `DISPATCH_STOCK`
+  (`order-state-machine.service.ts:313`), and both
+  `PENDING_DISPATCH → DISPATCHED` and `PENDING_MANUAL_PLACEMENT → DISPATCHED`
+  are STOCK-NEUTRAL (`sideEffects: []`). Per phase-2 reservation,
+  `StockMutationService` issues a **`PACK_CONFIRM`** movement
+  (`−qtyReserved`) and `StockReservationService.fulfill()` consumes the
+  reservation, at the moment the box is sealed. The give-back is
+  `UNPACK_STOCK` (a `PACK_REVERSED` +qty movement, per-movement idempotent on
+  `metadata.reversesMovementId`) for a parcel cancelled after packing but
+  before it left the building. CUR-3 in `CLAUDE.md` is the authoritative
+  account; read it rather than this paragraph.
+
+  **This entry went on reading as Model A for a month after the edge moved,
+  because the side-effect kept its name.** `DISPATCH_STOCK` is deliberately
+  still called that — a pointer to where it used to live, so grep history
+  over the old commits stays legible
+  (`order-state-machine.service.ts:36-42` says so). The cost is that every
+  document naming the side-effect went on describing a dispatch-time
+  decrement, with nothing to announce the move: the name is the evidence a
+  reader checks, and it was engineered to stay still. If a future change
+  moves it again, **rename the side-effect, or accept that the prose will not
+  follow it.**
+
+  The original resolution, for provenance: **M9 commit 12 (`6d1b71a`) chose
+  Model A** — decrement at DISPATCH, with the coupled WMS-8 `finalize()`
+  reverted to `RETURN_RESTOCK +qty` on RESTOCK and no movement on WRITE_OFF
+  in the same atomic commit. Model C moved WHICH edge fires the decrement and
+  needed **no change to `finalize()` at all**, which is the part worth
+  keeping: finalize is decoupled from when the decrement happened, so the
+  coupling this entry warned about turned out to be a property of Model A
+  rather than of the system. The `stock-conservation-rto.e2e-spec`
+  full-lifecycle trace is now CONFIRMED 10/0 → pick 10/2 → PACKED 8/0 →
+  DISPATCHED 8/0 → finalize RESTOCK 10/0 / WRITE_OFF 8/0, and remains a
+  permanent regression guard. **Nothing below this line about Model A vs B /
+  "first agenda item" applies any more — kept for provenance only.**
 
   ---
   *Original entry (for provenance):*
@@ -591,15 +627,15 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
 
 ### M8 endpoint / feature deferrals
 
-- **Supervisor empty-manifest create endpoint deferred.** In Phase 1A
-  manifests are born ONLY from `PackService.complete`'s find-or-create
-  logic (one DRAFT per `(courierCode, originWarehouseId)`). There is no
-  HTTP endpoint for a supervisor to manually create an empty DRAFT
-  manifest. The e2e for `moveShipment` therefore had to insert a target
-  DRAFT directly via `prisma.manifest.create`. **Pick up:** if/when
-  multi-courier (M9 or Phase 2) introduces use cases where supervisors
-  need to pre-create manifests for incoming volume planning, add
-  `POST /admin/warehouse/manifests` to `AdminManifestController`.
+- **Supervisor empty-manifest create endpoint — ✅ SHIPPED.**
+  `POST manifests` → `ManifestService.createEmptyDraft` exists on
+  `AdminManifestController` (`admin-manifest.controller.ts:79`), behind
+  `warehouse.manifest.close` — the same permission as closing one, on the
+  reasoning that opening a manifest commits nothing and moves nothing, so it
+  is the same supervisor act minus the consequence. It is idempotent per
+  `(courier, warehouse)`, so two supervisors preparing the same van get one
+  manifest rather than a duplicate. `PackService.complete`'s find-or-create
+  is unchanged and is still how manifests are born in the ordinary case.
 
 - **`ManifestService.moveShipment` is dormant in Phase 1A.** With a
   single hardcoded courier (`ops.default_courier_code='delhivery'`) and
@@ -610,23 +646,29 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   introduces multi-courier serviceability routing or M5/Phase-2
   introduces multi-warehouse.
 
-- **Admin RTO list endpoint deferred (CP3).** `WarehouseRtoController`
-  exposes the operator workflow (receive / inspect / finalize) but no
-  `GET /admin/warehouse/rto/shipments` for a supervisor list view.
-  M12 (Admin Dashboard) will likely surface this alongside other
-  operational lists. **Pick up:** add when M12 lands.
+- **Admin RTO list endpoint — ✅ SHIPPED, as TWO lists rather than one.**
+  `WarehouseRtoController` now serves `GET shipments` (returns waiting on a
+  supervisor — received but not finalised, plus anything marked for later
+  inspection) and `GET awaiting-receipt`
+  (`warehouse-rto.controller.ts:59,69`), with `/warehouse/rto` in apps/admin
+  reading both. The split is the useful part: "a carton is on the bench and
+  nobody has decided" and "the courier says one is coming and nobody has
+  received it" are different problems with different next actions, and TRK-6
+  means the second is invisible to everything else until a person confirms it
+  at the bench.
 
 ### M8 design deferrals (from the original module design)
 
-- **`audit_logs.severity` lives in `metadata.severity`, not a top-level
-  column.** Every audit call's `severity` field (`LOW`/`MEDIUM`/`HIGH`/
-  `CRITICAL`) is written into `metadata.severity`. Severity-based
-  queries currently filter via `metadata.severity` (e.g., the
-  conservation e2e asserts `awbAudit.metadata.severity==='HIGH'`).
-  **Pick up:** if M13 (Reports) needs efficient severity filtering or
-  M12 needs severity-faceted admin dashboards, promote to a top-level
-  column with a partial index. Additive migration; backfill from
-  `metadata.severity`.
+- **`audit_logs.severity` — ✅ PROMOTED to a real column.**
+  `severity AuditSeverity @default(LOW)` (`schema.prisma:547`), exactly the
+  additive migration this entry proposed. Two details it did not anticipate,
+  both deliberate: the value is **still written into `metadata.severity` as
+  well**, so every pre-existing reader and e2e assertion keeps working rather
+  than being migrated in the same change; and the index is a **migration-only
+  PARTIAL index** (`audit_logs_severity_created_at_idx`, `WHERE severity <>
+  'low'`) because Prisma cannot express the predicate and an unconditional
+  index would be worse than none — the question is always "what is worth
+  somebody's attention", and LOW is almost every row.
 
 - **Pick batching deferred.** `PickQueueService.pullNext` returns ONE
   shipment per pull. Multi-shipment pick-batch generation (grouping
@@ -634,41 +676,82 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   volume warrants the operational complexity. The current FIFO is a
   reasonable baseline.
 
-- **Voice/scanner integrations deferred.** Picker recordItem is a JSON
-  POST with bin/batch IDs the operator types/selects. Barcode scanner
-  integration, voice-pick, or RF-gun integration are all Phase 2.
+- **Voice-pick and RF-gun deferred; BARCODE SCANNING shipped.** The scanner
+  half of this entry is closed: `RecordPickItemDto.scannedSerials`
+  (`record-pick-item.dto.ts:26`) takes the serials read off the shelf and is
+  REQUIRED for a strict-mode SKU (UNIT-2), `SerialScanner`
+  (`apps/admin/src/components/ui/serial-scanner.tsx`) is the shared input,
+  and five benches read a code — pick, pack, receive, handover and RTO. A
+  scan gun is just a keyboard, which is why this needed a component and a DTO
+  field rather than an integration. **Voice-pick and RF-gun are still Phase
+  2** and are a genuinely different shape: both need hardware we do not have
+  and a hands-free interaction model, not a field on a request.
 
 - **Multi-warehouse pick routing deferred.** Phase 1A has a single
   warehouse (BLR-01, hardcoded `ops.default_warehouse_id`). Pick
   allocation uses `WarehouseResolverService` (M5) which has no
   multi-warehouse routing logic. Out-of-scope per CLAUDE.md.
 
-- **Pack-time measurement deferred.** No `packStartedAt` /
-  `packCompletedAt` delta tracking surfaced for ops metrics. The schema
-  has `packCompletedAt` only; no claim/start column. **Pick up:** add
-  `packStartedAt` if M13 wants pack-throughput metrics; M12 supervisor
-  dashboard may benefit.
+- **`packStartedAt` EXISTS; the ops METRIC built on it does not.** The
+  column landed with PACK-1's pack box (`schema.prisma:3973`) and arrived for
+  a different reason than this entry imagined — not as a measurement, but
+  denormalised from `pack_boxes.opened_at` so the queue and the floor reports
+  can answer "is anyone on this?" without joining every box. `PackBoxService`
+  is its only writer, in the same transaction as the box row, and it is
+  cleared when the last box is cancelled; `pack_boxes` stays the fact,
+  because it is per box and per packer and the column can never be.
+  **What is still deferred is the delta**: nothing computes or surfaces a
+  pack-throughput figure. **Pick up:** a report, not a schema change — the
+  data is there.
 
-- **Auto-close-manifest-on-threshold deferred.** Manifests close only
-  on explicit supervisor action (`AdminManifestController.close`).
-  Auto-close at N shipments or T hours is a Phase 2 operational
-  convenience. **Pick up:** when manifest volume justifies it (M9
-  multi-courier likely triggers).
+- **A manifest CLOSES ITSELF now — not on a threshold, on its last parcel
+  leaving.** CUR-4 (amended 2026-09-03) made the handover SCAN the dispatch,
+  and `DispatchHandoffService.flipManifestIfComplete`
+  (`dispatch-handoff.service.ts:450,479,707`) flips the manifest to
+  DISPATCHED once every LIVE parcel on it is `HANDED_TO_COURIER`, by a
+  guarded `updateMany` that accepts any non-DISPATCHED state **including
+  DRAFT** — a manifest nobody ever closed is the ordinary case now, not an
+  anomaly. So "manifests close only on explicit supervisor action" is no
+  longer true, and the threshold convenience this entry proposed is moot:
+  the completion condition is better than a count or a clock, because a
+  parcel still sitting on a manifest is the visible signal that something did
+  not go. `ManifestService.close` survives as the supervisor fallback for a
+  driver who took a stack before anybody scanned it.
 
-- **RTO `INSPECT_LATER` / `RETURN_TO_SELLER` dispositions deferred.**
-  `RtoDisposition` enum is `RESTOCK` / `WRITE_OFF` only. Phase 2 may
-  add `INSPECT_LATER` (defer disposition decision, hold in RTO_HOLD
-  bin) and `RETURN_TO_SELLER` (ship back to BD seller). Schema is
-  forward-compatible (enum extension; condition column already
-  supports DAMAGED/MISSING/GOOD for inspection-later staging).
+- **`RtoDisposition` has FOUR values — `INSPECT_LATER` shipped as proposed;
+  `RETURN_TO_SELLER` shipped as something else entirely.**
+  `schema.prisma:6104-6128`: `RESTOCK`, `WRITE_OFF`, `INSPECT_LATER` (exactly
+  the deferred design — the goods stay in RTO_HOLD, which BIN-2 keeps out of
+  every availability sum, and finalize REFUSES until somebody decides, because
+  guessing at the bench sells a broken item or destroys a good one) and
+  `HOLD_DAMAGED` (WMS-8d — a RETURN_RESTOCK into the receiving warehouse's
+  DAMAGED bin: on hand, never sellable, the seller's property sitting in our
+  building rather than a loss, so no inbound-freight share is charged).
+  **`RETURN_TO_SELLER` was deliberately NOT made a disposition.** Sending a
+  unit back is an admin stock-adjustment DECREASE out of the DAMAGED bin with
+  the `RETURNED_TO_SELLER` reason code (INV-7, `schema.prisma:5560`), which
+  CNS-6 already uses for the same act on a cancelled consignment — nothing was
+  destroyed, somebody has the goods, and "what did we send back" is a
+  different question from "what did we lose". A disposition would have put a
+  second mechanism behind one answer. **A stale comment survives this**:
+  `schema.prisma:6095`, immediately above `RtoItemCondition`, still reads
+  "disposition is RESTOCK/WRITE_OFF only".
 
-- **Courier hardcoded to `delhivery`.** `ops.default_courier_code` is
-  the single value `ShipmentProvisionService` uses for every parcel.
-  Multi-courier serviceability + carrier selection is M9. The
-  `ManifestService.attachShipment` find-or-create + `moveShipment`
-  same-courier guard are already shaped for multi-courier (the
-  per-`(courierCode, originWarehouseId)` advisory lock + courier-match
-  validation are forward-compatible).
+- **Courier hardcoded to `delhivery` — ✅ GONE.** Shiprocket joined
+  Delhivery (`courier-shiprocket`), a courier is reached through a DISPATCHER
+  rather than a branch at the call site (CUR-12), failover between them is
+  symmetric by construction (CUR-14,
+  `courier-shared/services/courier-distribution.service.ts`), and which
+  carrier an aggregator uses is decided by
+  `courier-awb/services/courier-choice.service.ts` (CUR-17).
+  `ops.default_courier_code` survives but is **per seller** now (CUR-19) and
+  is resolved by `OrderPostCommitHooksService` and passed into
+  `ProvisionShipmentInput` — `ShipmentProvisionService` deliberately never
+  reads the key itself, because a global fallback there would silently undo a
+  seller pinned to `manual`. The forward-compatibility bet this entry
+  recorded paid off: `attachShipment`'s per-`(courierCode,
+  originWarehouseId)` lock and `moveShipment`'s courier-match guard needed no
+  changes.
 
 - **Status-change emails for warehouse transitions — ✅ RESOLVED (M11).**
   The R3 lifecycle event bus is fed by `OrderWriteService.transitionStatus`,
@@ -741,38 +824,64 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
 
 ### M9 design deferrals (from the original module design)
 
-- **Delhivery wire contract is NOT validated — 6 `TODO(delhivery-api)`
-  seams.** M9 was built against a clean `DelhiveryClient` adapter
-  interface in STUB MODE; the real Delhivery endpoints/auth/payloads/
-  error-codes were not reliably known and were NOT hallucinated. Every
-  real-mode call site is flagged `TODO(delhivery-api)` and throws until
-  validated. The seams: (1) `DelhiveryAwbService.generateAwb` —
-  create-shipment endpoint + envelope + response parse + non-serviceable
-  vs transient error mapping; (2) `DelhiveryLabelService.fetchLabel` —
-  label endpoint + response (bytes vs URL); (3)
-  `DelhiveryServiceabilityService` — serviceability/pincode endpoint;
-  (4) `DelhiveryHttpService.authHeaders` — the real auth scheme
-  (token/API-key header); (5) `DelhiveryHttpService.request` — base URL,
-  error envelope, status-code mapping; (6) the rate-limit handling
-  (currently retry-only). **Pick up:** a separate sandbox-validation
-  task — validate each seam against Delhivery's real sandbox, then flip
-  `courier.delhivery_api_base_url` to enable real mode.
+- **Delhivery wire contract — ✅ VALIDATED 2026-07-27; all six seams
+  closed.** The endpoints, auth, rate limits and response shapes were
+  captured against the live production API and are recorded in
+  `docs/delhivery-integration.md` (distilled) and
+  `docs/vendor/delhivery-b2c-api-raw.md` (raw). **None of the four services
+  this entry named carries a `TODO(delhivery-api)` any more** — not
+  `DelhiveryAwbService`, `DelhiveryLabelService`,
+  `DelhiveryServiceabilityService` or `DelhiveryHttpService` — and no
+  real-mode call site throws for being unvalidated. The one `throw` left in
+  the AWB service is a configuration guard (no pickup location registered),
+  which is a different thing and names what to do about it.
+  **There was never a sandbox**, which is what this entry's "Pick up" line
+  assumed. The account has none, so the only way to validate a WRITE was to
+  make one on purpose and watch — see `docs/delhivery-go-live-test.md` and
+  the entry further down this file. **Production has been in REAL MODE since
+  that work**: reason about write safety from
+  `courier.<code>_live_writes_enabled` and `courier.<code>_api_base_url` in
+  the DATABASE, never from stub mode and never from a document.
 
-- **Proactive serviceability check deferred (CUR-5).**
-  `DelhiveryServiceabilityService` exists but nothing calls it on the
-  critical path — serviceability is REACTIVE (an AWB rejection routes
-  the order to manual placement). A proactive pre-dispatch / pre-confirm
-  serviceability check (warn the seller a pincode is non-serviceable
-  before the order is taken) is deferred. **Pick up:** Phase 2, or when
-  ops asks for it.
+- **Proactive serviceability — ✅ SHIPPED as ADVICE at the two cheapest
+  moments; CUR-5 is untouched.** `OrderServiceabilityService.check`
+  (`courier-serviceability/services/order-serviceability.service.ts:24-36`)
+  is read at order CREATE from the seller's own form
+  (`apps/seller/.../orders/new/_components/new-order-form.tsx`) and at
+  call-centre CONFIRMATION
+  (`apps/admin/.../call-center/_components/call-center-station.tsx:714`),
+  through a seller endpoint and an admin one.
+  **It warns; it never gates.** At create, refusing would be wrong —
+  serviceability changes, our answer may be a day stale, and a seller who
+  knows their customer's area better than a lookup should not be blocked by
+  it. At confirmation it is worth acting on, because that is the last cheap
+  moment: no stock reserved, no AWB bought, and an agent on the phone who can
+  ask for a different address. **Every path FAILS OPEN** — a courier that
+  will not answer, an unreadable cache or a stub environment all return
+  `known: false`, and unknown is not unserviceable. So CUR-5's reactive
+  design stands: the AWB rejection is still the thing that routes an order to
+  manual placement.
 
-- **Multi-courier routing deferred.** Phase 1A has a single integrated
-  courier (`delhivery`) + the generic `manual` courier. Carrier
-  SELECTION (cheapest/fastest/serviceable courier per shipment), the
-  `Courier.priorityForRouting` column, and `ManifestService.moveShipment`
-  (DRAFT↔DRAFT, dormant with one courier) all stay unwired.
-  `attachShipment`'s per-`(courierCode, originWarehouseId)` find-or-create
-  is already shaped for it. **Pick up:** Phase 2 multi-courier work.
+- **Multi-courier routing — ✅ SHIPPED, all three halves.** Carrier
+  SELECTION is `CourierChoiceService.decide`
+  (`courier-awb/services/courier-choice.service.ts:91`) over the pure
+  `CourierOptionSelectionService`
+  (`courier-shared/services/courier-option-selection.service.ts`) (CUR-17:
+  five policies —
+  `SHIPROCKET_DEFAULT`, `CHEAPEST`, `FASTEST`, `CHEAPEST_WITHIN_DAYS`,
+  `MANUAL` — all seller-overridable, with `AWAITING_COURIER` as the visible
+  place a parcel waits for a MANUAL decision and a TTL sweep that books the
+  cheapest itself and says LOUDLY that it did). `Courier.priorityForRouting`
+  is read by `courier-selection.service.ts:82,97,117` and
+  `courier-distribution.service.ts:267,330`. `ManifestService.moveShipment`
+  has an admin caller (`apps/admin/src/lib/api-hooks.ts:879` →
+  `POST /admin/warehouse/shipments/:id/move-manifest`).
+  **The thing this entry did not foresee is how much of multi-courier is
+  NOT routing**: CUR-12 through CUR-16 are mostly about what keeps two
+  couriers from becoming two half-systems — one dispatcher per capability, a
+  refusal that fails over immediately where a timeout does not, failover
+  symmetric by construction, and a STUB that may never answer for a LIVE
+  courier.
 
 - **Delhivery rate-limit handling is retry-only.** The BullMQ AWB job
   retries with backoff (`courier.awb_job_retry_*`); there is no
@@ -780,10 +889,21 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   Adequate at Phase-1A volume. **Pick up:** when AWB volume warrants a
   real client-side limiter.
 
-- **Pickup scheduling is manual.** M9 generates AWBs + hands parcels to
-  the courier (`confirmHandoff`) but does NOT call a Delhivery
-  pickup-request API — pickup is arranged out of band by ops. **Pick
-  up:** Phase 2 if pickup-API integration is wanted.
+- **Pickup scheduling — ✅ SHIPPED, and the AUTOMATIC path is the ordinary
+  one.** `DelhiveryPickupService.requestPickup`
+  (`delhivery-pickup.service.ts:58`) is the real call, behind the live-write
+  guard because it summons a real van driven by a real person to a real
+  building. `CourierPickupService.raiseIfDue` (`courier-pickup.service.ts`)
+  is called post-commit from `PackService.complete`, so the first box closed
+  that day asks for the van — CUR-10 amendment #3, standing ON since
+  2026-09-03.
+  **The GRAIN is what made automating this safe at all**: a pickup is
+  requested per `(courier, warehouse, day)`, never per parcel, so every later
+  box the same day is a no-op because one van already covers the building.
+  A FAILED day is deliberately NOT auto-retried — one bad response must not
+  become a call fired on every subsequent parcel — which is why
+  `/warehouse/pickups` keeps its route for releasing a day and re-raising by
+  hand, even though it is delisted from the nav.
 
 - **Manual-courier tracking is hand-entered.** A manual-courier shipment
   (`isManualCourier`, CUR-8) has no courier webhook — there is no
@@ -792,23 +912,34 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   surfaced the read side (`PublicTrackingReadService` reads
   `tracking_events` uniformly) AND the WRITE side
   (`POST /admin/tracking/shipments/:shipmentId/manual-scan` —
-  `ManualTrackingService`, TRK-9). The admin UI for the manual-scan
-  entry remains deferred. **Pick up:** API-side complete in M10; admin
-  UI in M12.
+  `ManualTrackingService`, TRK-9). **The admin UI shipped** —
+  `manual-scan-panel.tsx:73` on the order detail page, which invalidates both
+  the order and shipment caches on success because a scan can move the order.
+  **The hand-entry itself is not debt and will not be closed**: a
+  non-integrated carrier has no event feed to subscribe to, so somebody
+  typing what the docket says IS the mechanism. TRK-9 is deliberately the
+  same mapping and the same monotonic-forward guard as a webhook, with the
+  operator supplying `eventAt` explicitly so a backfill lands in the right
+  place on the timeline.
 
-- **Post-dispatch ADMIN cancel does NOT auto-restock.** A god-mode /
-  admin `→ CANCELLED_BY_ADMIN` from a post-DISPATCHED state carries
-  `RELEASE_STOCK`, but under Model A the reservation was already
-  `FULFILLED` at dispatch and `qtyOnHand` already decremented — so
-  `release()` is a no-op on a fulfilled reservation and **nothing is
-  added back to `qtyOnHand`**. This is correct by the Model-A semantics
-  (the goods physically left at dispatch; a post-dispatch cancel does
-  not teleport them back). If the parcel is genuinely recovered, ops
-  re-adds stock via an explicit `ADJUSTMENT_INCREASE` (INV-7) — NOT via
-  the cancel path. Recorded so a future reader does not "fix" the
-  cancel path to auto-restock. **Pick up:** never (documented design);
-  an admin restock-on-recovery UX could wrap the `ADJUSTMENT_INCREASE`
-  later.
+- **Post-dispatch ADMIN cancel does NOT auto-restock.** A god-mode / admin
+  `→ CANCELLED_BY_ADMIN` from `DISPATCHED` carries plain `RELEASE_STOCK`
+  (`order-state-machine.service.ts`, the DISPATCHED edge list), and by then
+  the reservation is already `FULFILLED` and `qtyOnHand` already decremented —
+  so `release()` is a no-op and **nothing is added back to `qtyOnHand`**.
+  **Under Model C that happened at PACK, not at dispatch** (CUR-3,
+  2026-09-03; this entry was written against Model A and said "at dispatch").
+  The conclusion is unaffected, and in fact holds more widely: PACK is
+  strictly earlier than DISPATCH, so a cancel from any post-dispatch state
+  finds the same fulfilled reservation. What Model C added is the EARLIER
+  cancels — `PACKED` and `PENDING_DISPATCH → CANCELLED_BY_ADMIN` now carry
+  `UNPACK_STOCK`, which reverses the `PACK_CONFIRM` movement, because that
+  parcel is still in the building and the goods really can be given back.
+  Past dispatch they cannot. If the parcel is genuinely recovered, ops re-adds
+  stock via an explicit `ADJUSTMENT_INCREASE` (INV-7) — NOT via the cancel
+  path. Recorded so a future reader does not "fix" the cancel path to
+  auto-restock. **Pick up:** never (documented design); an admin
+  restock-on-recovery UX could wrap the `ADJUSTMENT_INCREASE` later.
 
 ## Public Tracking (Module 10)
 
@@ -832,39 +963,41 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   M9 wire seams — flip together when Delhivery sandbox credentials are
   wired.
 
-- **Customer-facing tracking page (`apps/track`) deferred to the
-  frontend cycle.** M10 ships the API layer end-to-end —
-  `PublicTrackingReadService.findByAwb` returns the customer-safe
-  projection; the controller is open + rate-limited. The SSR Next.js
-  page (EN + HI per the original M10 plan) that reads
-  `GET /public/tracking/:awbNumber` and renders the timeline is a
-  frontend-cycle deliverable; `apps/track` is a placeholder. The API
-  contract is i18n-neutral (enum-style display statuses, no localized
-  copy in the response) — the frontend owns the translation tables.
-  **Pick up:** the frontend cycle (alongside the seller / admin /
-  marketing apps).
+- **Customer-facing tracking page (`apps/track`) — ✅ BUILT AND DEPLOYED.**
+  `apps/track/src/app/[awb]/page.tsx` is the SSR timeline page; the app has
+  its own layout, locale switcher, sitemap and robots, and it is a CI
+  Playwright project (so the nonce-CSP and responsive specs run against it).
+  The API contract stayed i18n-neutral as designed — enum-style display
+  statuses, no localized copy in the response — and `apps/track` owns the
+  translation tables, which is the next entry.
+  **One thing to know about it that is not in this entry**: apps/track is its
+  own design world and does NOT inherit `@skydrop/ui`'s tokens the way the
+  consoles do (FE-6). A rule added for the estate reaches it only if somebody
+  adds it there too, which is exactly how a scrollbar rule shipped to three
+  sites and not this one on 2026-08-04.
 
-- **NDR → call-center re-queue loop deferred to Phase 2.** A
-  DELIVERY_FAILED order currently sits in its terminal-ish state with
-  a recorded `delivery_attempts` row until the next courier scan
-  (redelivery → OUT_FOR_DELIVERY, or RTO_INITIATED). In Phase 2 the
-  workflow should auto-enqueue the order back into the call-center
-  queue (CC-6 shape) so an agent can confirm the customer's
-  availability before redelivery. The plumbing is mostly there — CC-6
-  is the enqueue mechanism, the matrix supports DELIVERY_FAILED →
-  OUT_FOR_DELIVERY for the retry — but the NDR → call-center bridge
-  service does NOT exist yet. **Pick up:** Phase 2 when the call-center
-  capacity model is sized for NDR retries.
+- **NDR → call-center re-queue loop — ✅ SHIPPED, and the bridge is a BUS
+  LISTENER rather than a call.** `DeliveryFailedListenerService`
+  (`delivery-action/services/delivery-failed-listener.service.ts:81-93`)
+  subscribes to the R3 `OrderLifecycleEventBus`, and on
+  `to === DELIVERY_FAILED` enqueues the order with
+  `CallQueueReason.DELIVERY_FAILED` — a reason of its own, deliberately not
+  the confirmation reason, because the agent needs to know before dialling
+  that the courier could not deliver rather than that nobody has confirmed the
+  order. The plumbing this entry said was "mostly there" was exactly right;
+  what it did not anticipate is that the listener had to carry M11's teardown
+  discipline (in-flight promises tracked, `drainInFlight()` exposed, awaited
+  in `onModuleDestroy`), because a fire-and-forget DB write that outlives its
+  trigger deadlocks the e2e reset (NOTIF-19).
 
-- **Public tracking rate-limit value is hard-coded in the controller.**
-  The seed `tracking.public_lookup_rate_limit_per_min = 30` documents
-  the intent + is the future hook, but `@Throttle({ default: { limit:
-  30, ttl: minutes(1) } })` on `PublicTrackingController` takes a
-  static literal — the seed value is duplicated in code. Tuning the
-  limit requires a redeploy. A dynamic-limit guard that reads the seed
-  at startup (or on each request, cached) is straightforward but
-  unnecessary at Phase-1A volume. **Pick up:** when ops asks to tune
-  without a deploy.
+- **Public tracking rate limit — ✅ READS THE SETTING.**
+  `@ThrottleSetting('tracking.public_lookup_rate_limit_per_min')` sits beside
+  the `@Throttle` on `PublicTrackingController`
+  (`public-tracking.controller.ts:50`), so the literal is now the fallback
+  default rather than the value, and tuning the limit no longer needs a
+  deploy. The duplication this entry worried about is the right way round: a
+  static default that applies when the setting cannot be read is a
+  fail-closed backstop, not a second source of truth.
 
 - **Manual-tracking endpoint has no per-request idempotency key.** A
   double-submit by an operator produces two `tracking_events` rows
@@ -875,13 +1008,19 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   ops workflow is supervised + the audit path exists. **Pick up:** if
   duplicate-submit incidents become an ops complaint.
 
-- **Public tracking page i18n is API-neutral.** The API returns
-  enum-style display statuses (`PublicShipmentDisplayStatus`); the EN
-  + HI localized copy lives in the deferred frontend
-  (`packages/i18n`). The original M10 plan called for EN + HI; this
-  remains as a frontend deliverable. Recorded so the frontend cycle
-  knows the translation table to author. **Pick up:** with the
-  customer-facing frontend page above.
+- **Public tracking EN + HI — ✅ SHIPPED, and NOT in `packages/i18n`.** The
+  translation tables live in `apps/track/src/lib/i18n.ts` with
+  `apps/track/src/lib/locale.ts` and a `locale-switcher.tsx` in the top bar;
+  the timeline resolves a BCP-47 tag per locale and formats each scan with
+  `toLocaleString('hi-IN' | 'en-IN')`
+  (`apps/track/src/app/[awb]/_components/journey.tsx:69,81`), and the layout
+  loads a Devanagari face only when Hindi is active. The API stayed
+  i18n-neutral exactly as designed.
+  **`packages/i18n` is still a README-only placeholder and nothing imports
+  it** — it is listed in the open section at the top of this file for that
+  reason. One app's translation table does not need a package, and putting it
+  in one would have been the shared abstraction with a single consumer that
+  M12's component-extraction entry argued against.
 
 ## Notifications (Module 11)
 
@@ -938,15 +1077,24 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   the forensic trail; an alert on the `'NotificationListener: ...
   swallowed'` log level pages ops).
 
-- **The bus is in-process — single-instance API only.** The R3
-  `OrderLifecycleEventBus` is an in-process rxjs Subject; a multi-
-  instance API deployment would need a Redis pub/sub (BullMQ events
-  or rxjs over Redis) — emit on instance A would not reach a listener
-  on instance B. Phase 1A runs a single API instance per droplet so
-  this is a non-issue, but the seam is documented (the bus
-  module-comment flags it). **Pick up:** Phase-2 multi-instance API
-  (likely with the marketing/seller/admin frontends scaling
-  separately).
+- **The bus crosses PROCESSES now — ✅ Redis pub/sub landed at the exact
+  seam NOTIF-5 named.** `OrderLifecycleEventBus`
+  (`order-lifecycle-event-bus.service.ts:111,143-170`) publishes every event
+  to a Redis channel and the LISTENING instance subscribes, so an emit on
+  instance A reaches a listener on instance B. The publisher/subscriber API
+  is unchanged, which is what the R3 split was for.
+  **Which instance runs the listeners is the decision this entry did not
+  know it was making.** The same instance that owns the BullMQ queues owns
+  the listeners (`handlesEvents` reads `WorkerRoleService.enabled`, SCALE-1),
+  for the same reason: firing them everywhere would fan every event out N
+  times. The downstream dedup gates — NOTIF-2's composite key, CUR-9's AWB
+  gate — would absorb most of that, and "mostly" is not a design: a listener
+  added later would inherit a hazard nobody wrote down. The publish is
+  fire-and-forget like every other post-commit hook (NOTIF-1), so a broker
+  that will not take the message can never undo the transition. On a
+  single-instance deployment nothing is ever published and the subscriber
+  connection sits idle — the price of a second instance being a config change
+  rather than a rewrite.
 
 - **Locale is hard-coded 'en' even for customer templates.** The Q6
   decision was bilingual-in-one-email — the seeded customer EN-tagged
@@ -1011,28 +1159,35 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   domain when admin dashboard timeline + M11 NDR copy are
   prioritised; one PR closes both.
 
-- **Component extraction to `packages/ui` is intentionally
-  deferred until apps/seller forces the shape.** Every admin
-  component lives in `apps/admin/src/components/ui/` and is
-  TOKEN-DRIVEN — no `@/...` imports inside that folder. When
-  apps/seller lands (M13 frontend cycle direction), the entire
-  folder lifts to `packages/ui/src/components/` and the shared API
-  is shaped against the dual-app demand. Premature abstraction
-  with only one app would shape the API around admin's quirks; the
-  delay is a deliberate quality bet. The token system + status
-  mapping ARE shared from M12 onward (FE-6).
-  **Pick up:** with apps/seller scaffolding (M13+ frontend cycle).
+- **Component extraction to `packages/ui` — ✅ DONE with M13 CP1, and the
+  quality bet paid.** `packages/ui/src/components/` holds 23 modules behind a
+  `./components` subpath, consumed by admin, seller and reseller. The delay
+  worked as intended: the API was shaped against real dual-app demand rather
+  than around admin's quirks, and the first extraction was seven primitives
+  — not the whole folder this entry imagined — because that was what a second
+  consumer actually needed.
+  **The shape has moved on twice since.** `AppShell` is now the one app
+  chrome (FE-7), and the 2026-09-24 restyle deleted `tokens.css`,
+  `corridor.css` and `seller-theme.css` in favour of the brand sheets plus a
+  `brand/legacy.css` alias layer that maps the old `--color-*` names onto the
+  brand for whatever legacy components are still on screen. Read FE-6 / FE-7
+  in `CLAUDE.md` for where that stands; this entry is only about the
+  extraction.
 
-- **Warehouse-ops and queue-management feature areas in
-  apps/admin are M12 fast-follow modules.** The CP2 scope was
-  Seller management + Order ops; the M12 spec explicitly excluded
-  Warehouse + Queue management. Both fit cleanly into the
-  existing patterns (list → detail → action → audit template
-  from CP2.7; same shared component primitives; same RBAC
-  cosmetic gates; the M8/M9 endpoints are already exposed). No
-  architectural blockers — just feature scope.
-  **Pick up:** as standalone fast-follow modules once apps/seller
-  shapes the shared-component API more firmly.
+- **Warehouse-ops and queue-management in apps/admin — ✅ BUILT.** Sixteen
+  warehouse routes (the hub, plus pick, pack, printing, handover, receive,
+  bins, collapse, manifests, consignments, rto, pickups and four detail
+  pages) and three call-center routes (the station, queue and agents). The
+  prediction in this entry was accurate and is worth keeping as evidence: no
+  architectural blockers appeared, and they did fit the list → detail →
+  action → audit template with the shared primitives and cosmetic RBAC gates.
+  **The screens arrived faster than the sweep that proves they exist**, which
+  is the more useful lesson. A capability with an endpoint and no screen is
+  invisible to every roadmap document, so the check is
+  `scripts/check-frontend-routes.py` — it runs both directions, gates on
+  `call → route`, and only PRINTS the reverse, because a path composed from a
+  builder or a prop cannot be seen by a static string scan and a gate that
+  fails on a call it could not see is a gate people learn to skip.
 
 - **`moduleResolution: bundler` source-vs-dist consumption
   discipline** — packages use extension-less relative imports
@@ -1050,29 +1205,37 @@ list. Everything here is deferred on purpose; none of it blocks the pilot.
   **Pick up:** if/when apps/seller's build surfaces a
   resolution issue.
 
-- **Frontend e2e harness (Playwright) deferred to apps/seller.**
-  The cost-benefit calc at M12 strongly favored
-  integration-tests + a documented manual smoke
-  (`apps/admin/CP2_FEATURE_SMOKE.md`) over a Playwright
-  installation (~150MB browsers + harness time). When apps/seller
-  doubles the surface, Playwright amortizes across two apps and
-  becomes the right investment — the manual smoke then becomes
-  documentation, not the test gate.
-  **Pick up:** with apps/seller, OR earlier if a UI regression
-  occurs that the boundary + manual-smoke layers don't catch.
+- **Frontend e2e harness (Playwright) — ✅ INSTALLED with apps/seller, and
+  it amortized further than this entry expected.** The root
+  `playwright.config.ts` has FIVE projects (admin, seller, track, marketing,
+  reseller) and the `browser` job in `.github/workflows/ci.yml` is a real
+  gate, not the manual smoke it replaced.
+  **The investment paid off in the specs that are SHARED across projects**,
+  which is the shape the per-app calculation could not see. `e2e-shared/`
+  holds the nonce-CSP check and the responsive quartet, and each runs against
+  every project — so a new frontend inherits both by construction. That is
+  what caught apps/track shipping a CSP-blocked inline theme script, and
+  apps/marketing pushing its landing page 14px past a 320px viewport. Both
+  were found by a spec nobody wrote for those apps. `browser` is also the
+  ONLY job that builds the Next apps, so that build IS the build check:
+  removing an app from its list stops the app's build being checked
+  anywhere.
 
-- **Cosmetic RBAC awaits server gates landing.** The M12 UI gates
-  Suspend/Reapprove behind `SUPER_ADMIN` / `SELLER_APPROVAL_ADMIN`
-  and god-mode behind `SUPER_ADMIN` only — but the underlying
-  endpoints have NO `requireStaffRoles` on them today (every admin
-  endpoint is `StaffJwtGuard`-only in Phase 1A). When the server
-  RBAC sweep lands, the cosmetic gates become accurate by
-  construction (UI mirrors the server). Until then, the FE-2
-  discipline holds: even with the UI's cosmetic gates open, the
-  server rejects with `[INSUFFICIENT_ROLE]` and the UI displays it
-  verbatim (pinned by `seller-status-fe2.test.tsx`).
-  **Pick up:** with the server RBAC sweep across all admin
-  endpoints.
+- **The server RBAC sweep — ✅ LANDED, as permissions rather than roles.**
+  `@RequirePermissions` is used in 90 files, and the rule that made the
+  sweep finishable is the inversion: **an endpoint behind `StaffJwtGuard`
+  that declares nothing is REFUSED, not allowed**
+  (`require-permissions.decorator.ts:30-35`). Before it, **92 of 156 admin
+  handlers carried authentication and no authorisation at all** — a call
+  agent could set the exchange rate that converts every seller's money. A new
+  controller is now invisible until somebody decides who it is for.
+  **The cosmetic half did NOT become accurate by construction**, which this
+  entry assumed it would. A role is a bag of permissions an admin composes at
+  runtime, so the UI cannot derive from a role name what the server will
+  accept — it reads a permission table (`apps/admin/src/lib/page-access.ts`
+  and friends) and the server remains the boundary. FE-2 holds unchanged:
+  the UI shows the server's `[CODE] message` verbatim and never pre-empts
+  it.
 
 - **Login-form one-shot ApiClient** — the /login page is not
   wrapped in `<AuthProvider>` (the provider mounts under (authed)
@@ -1140,23 +1303,44 @@ and be a decoration.
 
 Also open from the same pass:
 
-- **The write path has never touched the real Delhivery server.** Every
-  production call verified so far was read-only. Nine capabilities now
-  have callers, all gated by the default-OFF write guard. The controlled
-  first-parcel test — enable the guard, create exactly one shipment to
-  an address you control, verify, disable — is what turns 7 remaining
-  `TODO(delhivery-api)` seams from assumed to known.
-  **Pick up:** before any real seller traffic. The procedure is written up
-  at `docs/delhivery-go-live-test.md` — it creates one real consignment to an
-  address you control and CANCELS it before anything moves, so the write path
-  is proven without a parcel actually shipping.
+- **The write path HAS touched the real Delhivery server — ✅ the
+  first-parcel test was PERFORMED 2026-08-21.** One real consignment was
+  manifested end-to-end through our own system and cancelled with the
+  courier; the attempt log is at the bottom of
+  `docs/delhivery-go-live-test.md`. Since then
+  `courier.delhivery_live_writes_enabled` has been TRUE against
+  `https://track.delhivery.com`, with real AWBs issued and
+  `courier.delhivery.live_write_to_production` audit rows behind them.
+  **The lesson is about the DOCUMENTS, not the test.** This paragraph said
+  "has never" for weeks after it had, and `docs/delhivery-go-live-test.md`
+  read "not yet performed" for just as long. **Reason about the write posture
+  from the DATABASE** — `courier.<code>_live_writes_enabled` and
+  `courier.<code>_api_base_url`, both one query away — never from this file.
+  A session concluded twice in one conversation that production was safe
+  while it was manifesting real parcels, on the strength of prose exactly
+  like this.
 
-- **NDR actions are operator-triggered only.** Delhivery advises firing
-  them after 21:00 IST, once the day's failed parcels are physically
-  back at the facility, which makes a nightly sweep the better long-term
-  shape than a button. Deliberately not built yet: automating an
-  unproven wire call is worse than not automating it.
-  **Pick up:** after the first-parcel test proves the contract.
+- **The nightly NDR sweep — ✅ BUILT, and CUR-10 was WIDENED to admit it
+  rather than quietly broken.** `courier-ndr-runner` registers repeatable
+  BullMQ jobs for the run, the UPL poll and the reconcile
+  (`courier-ndr-runner/queue/ndr.queue.ts:43`), each keyed on its own cron
+  setting — and each repeatable is REMOVED before being re-added, because
+  they are keyed on `(name, pattern, tz)` and editing the cron would
+  otherwise add a second nightly run rather than moving the first.
+  **The invariant change is the part worth reading.** CUR-10 said outright
+  that a courier write is "never fired from a lifecycle transition, a cron,
+  or a customer-facing handler". A sweep that must run after 21:00 IST cannot
+  be operator-triggered at the moment it has to happen, so rather than let a
+  cron silently violate a written rule, the rule was widened DELIBERATELY and
+  narrowly: a runner may fire courier writes only where an operator has
+  enabled that write channel, behind the live-write guard, an explicit
+  per-category auto list (default EMPTY) and a one-click kill switch. **A
+  lifecycle transition and a customer-facing handler remain forbidden
+  triggers.** Since 2026-09-29 both gates are also per seller, combined by
+  `narrowNdrGate` so a seller override can only ever NARROW — ANDed on
+  enabled, INTERSECTED against the global ceiling — because one seller row
+  saying `true` would otherwise send vans on a night an operator had switched
+  the runner off.
 
 
 ## Concurrency audit (2026-07-27)
