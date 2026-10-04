@@ -5,7 +5,7 @@
  * notification templates and FX; `seed-demo-data.mjs` writes the demo
  * seller, its catalogue, its stock and its orders. Between them they
  * build almost the whole world — and on a genuinely empty database they
- * still leave FOUR gaps, every one of which was filled BY HAND in the
+ * still leave FIVE gaps, every one of which was filled BY HAND in the
  * original dev database through the admin UI and therefore exists
  * nowhere in the repository:
  *
@@ -40,6 +40,12 @@
  *      simulator port, which is also what keeps two stacks from firing
  *      webhooks at each other's API.
  *
+ *   5. THE ORIGIN PINCODE. Delhivery prices and times a LANE, between
+ *      two pincodes, so without it no expected-transit, real-cost or
+ *      carrier-option lookup can be asked at all — and a warehouse row
+ *      carries no address, so nothing else in the database could supply
+ *      it. See ORIGIN_PINCODE below.
+ *
  * IT IS NOT A DATA COPY. Every row here is constructed, not lifted from
  * the original database — the credential is a throwaway token the
  * simulator never checks, and the bank details are obvious fakes. The
@@ -67,6 +73,30 @@ const SIM_API_TOKEN = 'simulator-token-not-a-secret';
  * — and why the real one is immutable once registered (courier-ops).
  */
 const PICKUP_LOCATION = 'Skydrop';
+
+/**
+ * The pincode goods dispatch FROM — the origin half of every lane
+ * Delhivery is asked to price or time.
+ *
+ * THE FIFTH HAND-MADE ROW, found on 2026-10-04 by P2's first check. It
+ * is seeded EMPTY, nothing writes it, and a warehouse row has no address
+ * column at all — so on a from-scratch stack nothing ties an origin to a
+ * warehouse and every lane lookup refuses. Unlike the pickup location
+ * this one FAILS HONESTLY, in the panel's own words ("Origin pincode is
+ * not configured … so this lane cannot be priced or timed"), which is
+ * the only reason it took forty seconds rather than an afternoon.
+ *
+ * It is not only P2's: `CourierMarginReportService` refuses every lane
+ * without it, `CourierChoiceService` cannot fetch carrier options, and
+ * `DelhiveryHttpService` sends it as the origin on serviceability.
+ *
+ * 560001 because that is what the original dev database carries and what
+ * `scripts/sim-e2e.ts` drives, so the two stacks put the same bytes on
+ * the wire. It is Bengaluru and the stack's warehouse is called Kolkata
+ * Main; nothing in the schema relates the two, and the simulator prices
+ * any pair, so the mismatch is cosmetic rather than a thing to fix here.
+ */
+const ORIGIN_PINCODE = '560001';
 
 const COURIER_ACCOUNTS = [
   { label: 'Simulator account', environment: 'PRODUCTION', isDefault: true },
@@ -114,6 +144,9 @@ function stackSettings(stack) {
     // using the same one keeps the two stacks' courier payloads
     // identical.
     { key: 'courier.delhivery_pickup_location', valueType: 'STRING', value: PICKUP_LOCATION },
+    // Its sibling, and the fifth gap — see ORIGIN_PINCODE above. That
+    // one is the registered warehouse NAME; this is the PIN.
+    { key: 'courier.delhivery_origin_pincode', valueType: 'STRING', value: ORIGIN_PINCODE },
   ];
 }
 

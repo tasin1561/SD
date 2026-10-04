@@ -69,6 +69,11 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(payload);
 }
 
+/** Money, to the paisa. Delhivery's own figures are two-decimal. */
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 async function readBody(req: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const c of req) chunks.push(c as Buffer);
@@ -434,11 +439,72 @@ const server = createServer((req, res) => {
       });
     }
 
-    if (path === '/api/dc/expected_tat')
-      return json(res, 200, { data: [{ tat: 3, expected_delivery_date: null }] });
+    /*
+      TAT and CHARGES — the two READ endpoints, and the two this
+      simulator got WRONG for as long as it has existed.
 
-    if (path.startsWith('/api/kinko/v1/invoice/charges'))
-      return json(res, 200, [{ total_amount: 78.5, charge_COD: 35, gross_amount: 66.5 }]);
+      Nothing consumed them until the courier panel on an order put both
+      on screen, which is how it was found (2026-10-04, filming P2). Both
+      failures were silent and neither could have been caught by a test
+      that only asks "did the call succeed":
+
+        · `expected_tat` answered `{data:[{tat:3}]}` — `data` an ARRAY
+          and no `success` key at all. The adapter reads
+          `res.success !== true` first and treats anything else as
+          Delhivery DECLINING to quote the lane, so every local parcel
+          came back `tatDays: null` with "No TAT available for this
+          lane". A 200 that the adapter reads as a refusal is the worst
+          shape a fake can have: the request log says it worked.
+          Production, captured 2026-07-27, answers
+          `{"success":true,"msg":"","data":{"tat":5}}` — an OBJECT.
+
+        · `invoice/charges` answered three of the ten fields the real
+          one carries, so `zone`, `charged_weight`, `divisor`, the
+          delivery leg and the tax breakdown were all absent and read as
+          "not supplied" rather than as a hole in the fake.
+
+      Both are modelled on the production capture recorded in
+      `DelhiveryCostService`'s own docstring (Delhi → Bangalore, 1500 g,
+      surface: charge_DL 119, charge_COD 25, gross 149.39, total 176.29,
+      zone C2, charged_weight 1500, divisor 5000, tax split SGST/CGST).
+      The figures here are DERIVED from the query rather than copied, so
+      a heavier parcel costs more and a prepaid one carries no COD fee —
+      a fake that answers the same number to every question teaches the
+      reader that the weight does not matter.
+    */
+    if (path === '/api/dc/expected_tat') {
+      // Express is quicker than surface, which is the only thing about
+      // `mot` worth reproducing.
+      const tat = url.searchParams.get('mot') === 'E' ? 2 : 3;
+      return json(res, 200, { success: true, msg: '', data: { tat } });
+    }
+
+    if (path.startsWith('/api/kinko/v1/invoice/charges')) {
+      const grams = Math.max(1, Number(url.searchParams.get('cgm') ?? '500'));
+      const isCod = (url.searchParams.get('pt') ?? '').toUpperCase() === 'COD';
+      // Their slab shape: a base for the first half kilo, then per 500 g.
+      const slabs = Math.ceil(grams / 500);
+      const delivery = round2(45 + (slabs - 1) * 33.5);
+      const codFee = isCod ? 35 : 0;
+      const gross = round2(delivery + codFee);
+      // 18% GST, split the way an intra-state consignment splits it.
+      const half = round2((gross * 0.18) / 2);
+      return json(res, 200, [
+        {
+          status: 'Success',
+          zone: 'C2',
+          charge_DL: delivery,
+          charge_COD: codFee,
+          charge_RTO: 0,
+          charge_DTO: 0,
+          gross_amount: gross,
+          total_amount: round2(gross + half * 2),
+          charged_weight: grams,
+          divisor: 5000,
+          tax_data: { SGST: half, CGST: half, IGST: 0, service_tax: 0 },
+        },
+      ]);
+    }
 
     if (path === '/api/p/update' && method === 'POST')
       return json(res, 200, { status: true, request_id: `NDR-${Date.now()}` });
