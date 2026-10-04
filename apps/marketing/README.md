@@ -1,10 +1,10 @@
 # @skydrop/marketing
 
-Public marketing site for Skydrop — `skydrop.online`.
+Public marketing site for Skydrop — `skydrop.global`.
 
 - Static landing page (no auth, no API calls).
 - Pitched at Bangladeshi e-commerce sellers exploring the BD → IN lane.
-- Invite-only positioning — primary CTA is a `mailto:hello@skydrop.online`.
+- Invite-only positioning — primary CTA is a `mailto:hello@skydrop.global`.
 - Inherits the dark theme + design tokens from `@skydrop/ui`; styled with Tailwind v4.
 
 ## Scripts
@@ -21,6 +21,6 @@ Public marketing site for Skydrop — `skydrop.online`.
 
 A static export (`output: 'export'`). `scripts/deploy.sh` builds it and
 rsyncs `out/` to `/var/www/skydrop-marketing`, which Caddy file-serves for
-`skydrop.online` — there is no pm2 process and no port in production.
+`skydrop.global` — there is no pm2 process and no port in production.
 Locally it serves on port 3006 (3005 belongs to the reseller portal,
 RS-12).

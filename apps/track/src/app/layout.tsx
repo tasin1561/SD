@@ -63,7 +63,7 @@ const devanagari = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://track.skydrop.online'),
+  metadataBase: new URL('https://track.skydrop.global'),
   title: 'Skydrop tracking',
   description: 'Track your Skydrop parcel by AWB number.',
   robots: { index: true, follow: true },

@@ -602,7 +602,7 @@ function RollDemo(): ReactElement {
 function LipDemo(): ReactElement {
   return (
     <LabelIntoParcel
-      href="mailto:hello@skydrop.online"
+      href="mailto:hello@skydrop.global"
       label="Send message"
       packedLabel="Opening your mail app…"
     />
@@ -615,7 +615,7 @@ function EtfDemo(): ReactElement {
       <ExpandingTrackField onSubmit={setLast} />
       <span className="text-xs text-fg-muted">
         {last
-          ? `would navigate to track.skydrop.online?awb=${last}`
+          ? `would navigate to track.skydrop.global?awb=${last}`
           : 'submits by navigation — nothing is faked'}
       </span>
     </div>
@@ -706,7 +706,7 @@ function FanDemo(): ReactElement {
             icon: <Mail size={15} />,
             hue: 'violet',
             label: 'Email',
-            detail: 'hello@skydrop.online',
+            detail: 'hello@skydrop.global',
             href: '#',
           },
           {

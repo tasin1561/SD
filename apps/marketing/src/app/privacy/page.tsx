@@ -135,10 +135,10 @@ export default function PrivacyPage(): ReactElement {
             <p>
               To see, correct or delete information we hold about you, write to{' '}
               <a
-                href="mailto:hello@skydrop.online"
+                href="mailto:hello@skydrop.global"
                 className="text-fg-strong underline underline-offset-4"
               >
-                hello@skydrop.online
+                hello@skydrop.global
               </a>
               . If you are a customer of one of our sellers, you can also ask the seller. We may
               have to keep some records the law requires.

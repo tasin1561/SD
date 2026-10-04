@@ -8,6 +8,6 @@ import type { MetadataRoute } from 'next';
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: { userAgent: '*', allow: '/' },
-    sitemap: 'https://track.skydrop.online/sitemap.xml',
+    sitemap: 'https://track.skydrop.global/sitemap.xml',
   };
 }

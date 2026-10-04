@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://skydrop.online/sitemap.xml
+Sitemap: https://skydrop.global/sitemap.xml
