@@ -33,6 +33,38 @@ import './order-shipping.css';
  * by mis-clicking.
  */
 
+/**
+ * Why a delivery failed. Mirrors the `DeliveryFailureReason` enum, which
+ * `RecordManualScanDto` validates with `@IsEnum`.
+ *
+ * IT WAS A FREE-TEXT BOX, and it could not work (found 2026-10-04 while
+ * filming P2). The label asks "Why delivery failed" and the placeholder
+ * suggested "Customer unreachable" — so an operator typing the sentence
+ * the form invited, or the exact words it suggested, got a 400 listing
+ * eleven SHOUTING enum values back. Nobody is going to guess
+ * CUSTOMER_PHONE_UNREACHABLE from a prompt for prose, and the only way
+ * past it was to read the refusal and retype one of them. The status
+ * field two rows up had always mirrored the server's closed list; this
+ * one simply did not.
+ *
+ * Optional, so the empty option is real: the DTO's `@IsOptional` means
+ * an attempt with no reason stated is a legitimate thing to record, and
+ * forcing a pick would make an operator invent one.
+ */
+const FAILURE_REASONS = [
+  'CUSTOMER_UNAVAILABLE',
+  'CUSTOMER_PHONE_UNREACHABLE',
+  'ADDRESS_NOT_FOUND',
+  'ADDRESS_INCOMPLETE',
+  'ADDRESS_OUT_OF_DELIVERY_AREA',
+  'CUSTOMER_REFUSED',
+  'PAYMENT_REFUSED',
+  'BAD_WEATHER',
+  'CUSTOMER_NOT_AVAILABLE_AT_TIME',
+  'DAMAGED_PACKAGE',
+  'OTHER',
+] as const;
+
 /** What an operator is allowed to assert. Mirrors MANUAL_SCAN_STATUS_VALUES. */
 const SCAN_STATUSES = [
   'IN_TRANSIT',
@@ -190,14 +222,20 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
               onChange={(e) => setLocationCity(e.target.value)}
             />
             {isNdr && (
-              <TextField
+              <Select
                 id="ms-fail"
                 label="Why delivery failed"
-                hint="Recorded as the NDR reason."
+                hint="Recorded as the NDR reason. The courier's own categories."
                 value={failureReason}
                 onChange={(e) => setFailureReason(e.target.value)}
-                placeholder="Customer unreachable"
-              />
+              >
+                <option value="">Not stated</option>
+                {FAILURE_REASONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r.replace(/_/g, ' ').toLowerCase()}
+                  </option>
+                ))}
+              </Select>
             )}
           </div>
 
