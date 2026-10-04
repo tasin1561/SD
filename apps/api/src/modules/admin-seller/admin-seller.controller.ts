@@ -38,10 +38,12 @@ import { RequirePermissions } from '../../common/auth/require-permissions.decora
 /**
  * Admin endpoints — every method requires a valid staff JWT.
  *
- * Phase 1A note: any authenticated staff member may list/manage sellers.
- * Role-based scoping (SUPER_ADMIN + SELLER_APPROVAL_ADMIN only for the
- * destructive operations) lands with the RBAC module — see
- * docs/phase-1a-debt.md.
+ * Every handler is permission-gated: the class requires `sellers.view`
+ * and each write names its own key — `sellers.approve`,
+ * `sellers.suspend`, `sellers.bank_account.reveal`,
+ * `sellers.notes.manage`. Fixed roles are NOT how this is decided; a
+ * role is a set of permissions an admin shapes (RBAC-1), so reading
+ * the decorator is the only way to know who may call a handler.
  */
 @ApiTags('admin-sellers')
 @ApiBearerAuth('staff-jwt')

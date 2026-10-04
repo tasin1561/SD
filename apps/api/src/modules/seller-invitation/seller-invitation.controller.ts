@@ -29,9 +29,10 @@ import { RequirePermissions } from '../../common/auth/require-permissions.decora
 /**
  * Admin endpoints — every method requires a valid staff JWT.
  *
- * Phase 1A note: any authenticated staff member may invite/list/resend/
- * delete. Role-based scoping (SUPER_ADMIN + SELLER_APPROVAL_ADMIN only)
- * lands with the RBAC module.
+ * Permission-gated throughout: the class requires `sellers.view` and
+ * every write — invite, resend, revoke — requires `sellers.invite`.
+ * Not role-scoped: a role is a set of permissions an admin shapes
+ * (RBAC-1), so the decorator is the authority on who may call this.
  */
 @ApiTags('admin-seller-invitations')
 @ApiBearerAuth('staff-jwt')

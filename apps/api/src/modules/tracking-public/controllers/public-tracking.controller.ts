@@ -41,8 +41,10 @@ import type { PublicTrackingResponse } from '../dto/public-tracking.response.dto
  * been issued yet — anti-enumeration discipline.
  *
  * Internationalization — the response carries enum-style status
- * strings (PublicShipmentDisplayStatus). The deferred apps/track
- * frontend owns EN/HI localized copy; the API is i18n-neutral.
+ * strings (PublicShipmentDisplayStatus). apps/track owns the EN/HI
+ * copy — it is built, deployed and a CI Playwright project, and its
+ * words live in `apps/track/src/lib/i18n.ts`; the API stays
+ * i18n-neutral so the wording can change without a deploy here.
  */
 @ApiTags('public-tracking')
 @ThrottleKey('ip')

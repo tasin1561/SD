@@ -22,3 +22,11 @@ logs
 # Docs — keep author's formatting
 *.md
 CHANGELOG.md
+
+# Lighthouse artefacts. The CLI writes its temp output to the Windows path it
+# was handed, which arrives here as a single directory whose NAME contains
+# backslashes ("C:\Users\...\lighthouse.<pid>"). `.gitignore` already has
+# `C:*`, so git never sees them — but prettier reads THIS file and not that
+# one, so without the pattern here `format:check` is red before anybody has
+# touched the repo, and a gate that starts red is a gate people learn to skip.
+C:*
