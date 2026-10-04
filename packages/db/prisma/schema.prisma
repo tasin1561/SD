@@ -6091,8 +6091,11 @@ enum SupersedeReason {
   @@map("supersede_reason")
 }
 
-// Module 8 — RTO per-item inspection (locked decision #8: condition is
-// GOOD/DAMAGED/MISSING; disposition is RESTOCK/WRITE_OFF only).
+// Module 8 — RTO per-item inspection. Condition is GOOD/DAMAGED/MISSING.
+// Disposition has FOUR values, not the two the locked decision named:
+// INSPECT_LATER arrived with M8 and HOLD_DAMAGED with WMS-8d (2026-09-13),
+// when the owner asked what happens if one of two returned units is good
+// and the other is not. See `RtoDisposition` below, which documents each.
 enum RtoItemCondition {
   GOOD    @map("good")
   DAMAGED @map("damaged")
