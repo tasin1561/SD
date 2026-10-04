@@ -65,7 +65,7 @@ export class EmailDispatchService {
     }
 
     const sender = input.fromOverride
-      ? { from: input.fromOverride, replyTo: 'Skydrop Support <support@skydrop.online>' }
+      ? { from: input.fromOverride, replyTo: 'Skydrop Support <support@skydrop.global>' }
       : resolveSender(input.templateCode);
 
     const subject = rendered.subject ?? '(no subject)';

@@ -69,18 +69,18 @@ function makeSut(redirectTo: string) {
 }
 
 const MESSAGE: SendEmailInput = {
-  from: 'Skydrop <hello@skydrop.online>',
+  from: 'Skydrop <hello@skydrop.global>',
   to: 'real.customer@gmail.com',
   subject: 'Your order has shipped',
   text: 'Tracking: ABC123',
-  replyTo: 'support@skydrop.online',
+  replyTo: 'support@skydrop.global',
 };
 
 const CATEGORY = NotificationCategory.OPERATIONAL;
 
 describe('MAIL_REDIRECT_TO', () => {
   it('sends to the redirect address, never the real recipient', async () => {
-    const { router, sent } = makeSut('founder@skydrop.online');
+    const { router, sent } = makeSut('founder@skydrop.global');
 
     await router.send(MESSAGE, CATEGORY);
 
@@ -90,28 +90,28 @@ describe('MAIL_REDIRECT_TO', () => {
     // survives in the subject and a header — that is how you know who
     // the message was for — so asserting it is absent from the whole
     // payload would be asserting the opposite of the design.
-    expect(sent[0]?.to).toBe('founder@skydrop.online');
+    expect(sent[0]?.to).toBe('founder@skydrop.global');
   });
 
   it('says in the subject who it was meant for', async () => {
     // What you read in a list of forty test emails.
-    const { router, sent } = makeSut('founder@skydrop.online');
+    const { router, sent } = makeSut('founder@skydrop.global');
     await router.send(MESSAGE, CATEGORY);
     expect(sent[0]?.subject).toBe('[→ real.customer@gmail.com] Your order has shipped');
   });
 
   it('keeps the real recipient in a header, which survives forwarding', async () => {
-    const { router, sent } = makeSut('founder@skydrop.online');
+    const { router, sent } = makeSut('founder@skydrop.global');
     await router.send(MESSAGE, CATEGORY);
     expect(sent[0]?.headers?.['X-Skydrop-Original-To']).toBe('real.customer@gmail.com');
   });
 
   it('leaves the body and sender untouched — it is the same email', async () => {
-    const { router, sent } = makeSut('founder@skydrop.online');
+    const { router, sent } = makeSut('founder@skydrop.global');
     await router.send(MESSAGE, CATEGORY);
     expect(sent[0]?.text).toBe('Tracking: ABC123');
-    expect(sent[0]?.from).toBe('Skydrop <hello@skydrop.online>');
-    expect(sent[0]?.replyTo).toBe('support@skydrop.online');
+    expect(sent[0]?.from).toBe('Skydrop <hello@skydrop.global>');
+    expect(sent[0]?.replyTo).toBe('support@skydrop.global');
   });
 
   it('delivers normally when unset — production must not be diverted', async () => {
@@ -124,16 +124,16 @@ describe('MAIL_REDIRECT_TO', () => {
   it('does not rewrite a message already addressed to the redirect', async () => {
     // Otherwise the founder's own notifications arrive with a pointless
     // "[→ founder@…]" stapled to every subject line.
-    const { router, sent } = makeSut('founder@skydrop.online');
-    await router.send({ ...MESSAGE, to: 'founder@skydrop.online' }, CATEGORY);
+    const { router, sent } = makeSut('founder@skydrop.global');
+    await router.send({ ...MESSAGE, to: 'founder@skydrop.global' }, CATEGORY);
     expect(sent[0]?.subject).toBe('Your order has shipped');
   });
 
   it('diverts CREDENTIAL mail too — it is the provider that differs, not the rule', async () => {
     // A password reset from staging reaching a real inbox is the worst
     // version of this failure, not an exception to it.
-    const { router, sent } = makeSut('founder@skydrop.online');
+    const { router, sent } = makeSut('founder@skydrop.global');
     await router.send(MESSAGE, NotificationCategory.CREDENTIAL);
-    expect(sent[0]?.to).toBe('founder@skydrop.online');
+    expect(sent[0]?.to).toBe('founder@skydrop.global');
   });
 });

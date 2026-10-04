@@ -124,8 +124,8 @@ describe('EmailDispatchService', () => {
     // The provider was handed the security@ sender and the rendered body+html.
     expect(providerSendMock).toHaveBeenCalledTimes(1);
     const send = providerSendMock.mock.calls[0]![0] as unknown as Record<string, string>;
-    expect(send['from']).toContain('security@skydrop.online');
-    expect(send['replyTo']).toContain('support@skydrop.online');
+    expect(send['from']).toContain('security@skydrop.global');
+    expect(send['replyTo']).toContain('support@skydrop.global');
     expect(send['to']).toBe('alex@x.io');
     expect(send['subject']).toBe('Reset your password');
     expect(send['text']).toContain('Hi Alex');
@@ -157,7 +157,7 @@ describe('EmailDispatchService', () => {
       recipient: { type: NotificationRecipientType.SELLER, email: 'newseller@x.io' },
     });
     const send = providerSendMock.mock.calls[0]![0] as unknown as Record<string, string>;
-    expect(send['from']).toContain('hello@skydrop.online');
+    expect(send['from']).toContain('hello@skydrop.global');
   });
 
   it('failure path: returns FAILED + records failure code/message in log', async () => {
@@ -431,7 +431,7 @@ describe('EmailDispatchService', () => {
     // columns today, so this is backup and blast radius; it becomes live
     // the day somebody builds a notification-log viewer.
     const TOKEN = 'zS3cr3t-plaintext-value';
-    const LINK = `https://admin.skydrop.online/auth/reset-password?token=${TOKEN}`;
+    const LINK = `https://admin.skydrop.global/auth/reset-password?token=${TOKEN}`;
 
     function resetEmailSut(ledger: 'create' | 'update') {
       const sut = makeSut({

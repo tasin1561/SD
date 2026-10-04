@@ -50,11 +50,11 @@ function makeRouter(resend: FakeProvider, ses: FakeProvider): EmailProviderRoute
 }
 
 const MESSAGE: SendEmailInput = {
-  from: 'Skydrop <hello@skydrop.online>',
+  from: 'Skydrop <hello@skydrop.global>',
   to: 'customer@example.com',
   subject: 'Your order has shipped',
   text: 'Tracking: ABC123',
-  replyTo: 'support@skydrop.online',
+  replyTo: 'support@skydrop.global',
 };
 
 const TRANSPORT: SendEmailOutcome = {
