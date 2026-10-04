@@ -583,7 +583,7 @@ Three specific holes:
 
 ### What closes it, cheapest first
 
-- **An external uptime probe** on `https://api.skydrop.online/health/ready`
+- **An external uptime probe** on `https://api.skydrop.global/health/ready`
   and `/health/tracking`, alerting to a phone. Free tiers are adequate at
   this size. This is the single highest-value item in the whole document —
   it is the difference between finding out at 03:05 and finding out at

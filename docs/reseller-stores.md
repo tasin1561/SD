@@ -11,7 +11,7 @@ store** is a separate business that sells that seller's stock to Indian
 customers under its OWN name. The seller sets the store's buying price, the
 retail range, which products it may sell, how stock is shared, who pays
 which Skydrop fee, and when each side is paid. The store has its own
-portal (`reseller.skydrop.online`), team, wallet, P&L, expenses and
+portal (`reseller.skydrop.global`), team, wallet, P&L, expenses and
 withdrawals.
 
 Today's `SellerStore` (a sales channel inside one seller account) stays
@@ -20,7 +20,7 @@ exactly as it is. A store now has a **kind**:
 | Kind | What it is | Wallet | Login |
 |---|---|---|---|
 | `CHANNEL` | the seller's own sales channel (every existing store) | none — the seller's | seller users (optionally store-scoped, as today) |
-| `RESELLER` | a separate business reselling ONE seller's stock | its own | store users on reseller.skydrop.online |
+| `RESELLER` | a separate business reselling ONE seller's stock | its own | store users on reseller.skydrop.global |
 
 ## Decisions (owner)
 
@@ -33,7 +33,7 @@ exactly as it is. A store now has a **kind**:
    row that looks open and can do nothing. The seller's own store is
    invited as it is created; an admin-created one is invited by the
    seller at APPROVAL, which is what opens it.
-3. Portal: `reseller.skydrop.online` — a third frontend (`apps/reseller`).
+3. Portal: `reseller.skydrop.global` — a third frontend (`apps/reseller`).
 4. The customer sees the STORE's name.
 5. Stock per store per product: SHARED pool or SET-ASIDE quantity, plus a
    hidden percentage.
@@ -206,7 +206,7 @@ customer emails carry the store's name and logo. No tax invoices.
 ## RS-12 Infrastructure
 
 `apps/reseller` on port 3005, pm2 `skydrop-reseller`, Caddy
-`reseller.skydrop.online` (Cloudflare-proxied like the others), security
+`reseller.skydrop.global` (Cloudflare-proxied like the others), security
 headers + nonce CSP + responsive + CSP Playwright projects, deploy.sh
 build/restart lines. The DNS record is an owner action. apps/marketing's
 LOCAL dev/start port moved 3005 → 3006 so 3005 is the reseller portal's

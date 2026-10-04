@@ -364,7 +364,7 @@ Cross-app tests:
   - EmptyState with `bare` has no `.border`.
 - **`apps/admin/src/tests/ops-status-kinds.test.tsx`** checks that `StatusBadge` renders `[data-status-kind]`.
 
-# B. `apps/track` (track.skydrop.online, port 3004)
+# B. `apps/track` (track.skydrop.global, port 3004)
 
 - **Package** `apps/track/package.json` depends on `@skydrop/ui`, but the **only** use is `@import '@skydrop/ui/corridor.css'`. No `@skydrop/ui/components` or `/status` imports (0 files).
 - **README:** "MISSION CONTROL skin with a bright/dark theme toggle (localStorage `sd-theme`, prefers-color-scheme fallback)".

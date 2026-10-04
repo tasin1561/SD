@@ -118,7 +118,7 @@ a deliberate refusal failover (decision D2).**
 ## 2. Preconditions checklist (complete by Sunday 13 Sep evening)
 
 Tick each item only when its evidence is in hand. "Page" means the admin
-app at `admin.skydrop.online`.
+app at `admin.skydrop.global`.
 
 | # | Check | Expected | How to verify |
 |---|---|---|---|
@@ -194,7 +194,7 @@ stage.
 
 | # | Stage | Who / where | Action | Check (expected) |
 |---|---|---|---|---|
-| S1 | **Create** | Seller app `app.skydrop.online/orders/new` (A or B) | Choose a pilot SKU, quantity 1. Set `paymentMode` COD with `codAmountInr`, or PREPAID. Fill line 2 with the landmark. Submit. | Q-ORDER: `pending_confirmation`, **no shipment yet**, no reservation (ORD-10). Q-WALLET: no entry. Q-CHARGES: order charges exist (delivery ₹200, GST ₹0; status ESTIMATED). The order is in `/call-center/queue`. |
+| S1 | **Create** | Seller app `app.skydrop.global/orders/new` (A or B) | Choose a pilot SKU, quantity 1. Set `paymentMode` COD with `codAmountInr`, or PREPAID. Fill line 2 with the landmark. Submit. | Q-ORDER: `pending_confirmation`, **no shipment yet**, no reservation (ORD-10). Q-WALLET: no entry. Q-CHARGES: order charges exist (delivery ₹200, GST ₹0; status ESTIMATED). The order is in `/call-center/queue`. |
 | S2 | **Call confirm** | Agent at `/call-center` | Next call → call the recipient → outcome CONFIRMED | Q-ORDER: `confirmed`, one shipment `created` on the expected courier (A: delhivery; B: shiprocket). A phase-1 reservation exists (Q-STOCK: active reservations +1). |
 | S3 | **Waybill at confirmation** (CUR-2b) | automatic, within seconds | — | Q-ORDER: `awb_number` set, `awb_generated_at` set, shipment status **still `created`** (it must not become `awb_generated`). `courier_account_id` set. B: `courier_order_id` set. Q-LABEL: one `awb_labels` row, `is_current = true`, a non-empty `mime_type`, `file_size_bytes > 0` (Delhivery: PDF; Shiprocket: fetched from their URL). Q-AUDIT: `awb.generated` (or similar) plus `courier.delhivery.live_write_to_production` for Delhivery. `/system-issues`: no new `awb-label-missing:*` after 60 minutes. **Stop** if two shipments carry waybills (CUR-9). |
 | S4 | **Label print** | `/warehouse/printing` → Labels | Select the pilot parcels → print → **confirm printed** | Q-ORDER: `label_printed_at` set. The courier label on paper shows the same AWB, the recipient, and the COD amount (COD parcels) or "prepaid". |
@@ -203,7 +203,7 @@ stage.
 | S7 | **Pack box** (PACK-1, LBL-4) | `/warehouse/pack` | Scan the courier label (opens the box) → scan the SKU sticker → scan the label again (closes the box) | Q-ORDER: `packed`, `pack_completed_at` set. Q-PACKBOX: one `closed` box. Q-STOCK: **on-hand −1, reserved −1** (the `PACK_CONFIRM` movement, CUR-3 — the one and only decrement). **Never use force-complete for a pilot parcel**; needing it is a finding. |
 | S8 | **Auto pickup** (CUR-10 #3) | automatic, when the box closes | — | Q-PICKUP: **exactly one** row for (courier, CCU-01, today) — or tomorrow if packed after 18:00 IST — `status = requested`, a non-empty `courier_pickup_id`, and `pickup_location_name = MSEXPORT` (Delhivery) or `warehouse` (Shiprocket). The second box that day adds no new row. `/system-issues`: no `auto-pickup:*`. Owner confirms in the courier panel that a pickup is scheduled. |
 | S9 | **Van arrives: handover scan** (CUR-4, SCAN-1) | `/warehouse/handover` | Scan each pilot label as the box goes into the van | Q-ORDER: order `dispatched`, shipment `handed_to_courier`, `handover_scanned_at` set. The manifest closes itself when its last live parcel has gone (`/warehouse/manifests`). Stock is unchanged (dispatch moves no stock). **A repeat scan stops the operator until the issue is resolved — that is the design, not a bug.** |
-| S10 | **Courier tracking** | automatic poll every 20 min (+ Shiprocket webhook) | — | Within about 1 h of the courier's first scan, Q-TRACK shows the scans in `event_at` order and the order moves to `in_transit`. Public page `https://track.skydrop.online/<AWB>` shows the timeline in English and Hindi, and no PII. B: `courier_webhooks` rows for the AWB are `processed`. `/system-issues`: no `TRACKING_STALLED` for the parcel. |
+| S10 | **Courier tracking** | automatic poll every 20 min (+ Shiprocket webhook) | — | Within about 1 h of the courier's first scan, Q-TRACK shows the scans in `event_at` order and the order moves to `in_transit`. Public page `https://track.skydrop.global/<AWB>` shows the timeline in English and Hindi, and no PII. B: `courier_webhooks` rows for the AWB are `processed`. `/system-issues`: no `TRACKING_STALLED` for the parcel. |
 | S11a | **Delivered** | automatic | — | Q-ORDER: `out_for_delivery` → `delivered`. Stock unchanged (TRK-7). **A (T+N):** Q-ACCRUAL: a `pending_accruals` row with `eligible_at = delivered + 7 days` and `processed_at` NULL; **no** wallet entry yet. **B (Instant Pay, tier INSTANT):** Q-WALLET right away, per ₹1,000 COD: `cod_collection` +1,000.00, GST withholding −152.54, Instant Pay fee −21.19 (2.5% of 847.46), `order_charges` −200.00, net **+626.27**. Q-BANK: a capital → seller front pair in B's courier payout account (`reference` = order id). Page `/liabilities/instant-pay` lists the order. |
 | S11b | **NDR** (P4) | see §4.2 | | |
 | S11c | **RTO** (P5) | see §4.3 | | |

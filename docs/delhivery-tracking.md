@@ -294,7 +294,7 @@ the timezone fix fails a test rather than a customer's timeline.
 ## Still open
 
 - **The escalation matrix** in all four documents carries `<FILL: name>`
-  and `<FILL: phone>` markers. The email (`support@skydrop.online`) is
+  and `<FILL: phone>` markers. The email (`support@skydrop.global`) is
   real; the names and numbers are not ours to invent.
 - **No admin screen shows a stored document yet.** We keep EPODs and QC
   images and there is nowhere to look at one. Worth a link on the order

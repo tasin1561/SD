@@ -190,7 +190,7 @@ fi
 # the health smoke passes, because the server really is serving its HTML
 # perfectly well. Measured on 2026-09-27: skydrop-reseller was last
 # started 10:09 UTC, every app was rebuilt 14:48–14:52 UTC, and
-# reseller.skydrop.online served HTML referencing
+# reseller.skydrop.global served HTML referencing
 # webpack-9a474f8fde7c98c0.js while the disk held
 # webpack-ad10e0c6e958d305.js. The store portal had been unusable for
 # about five hours; a manual restart fixed it, which is what confirmed
