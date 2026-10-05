@@ -83,6 +83,16 @@ export class AdminAgentService {
    * selectors include them: they hold every permission implicitly and
    * therefore carry no permission ROWS, so matching on rows alone leaves
    * out the people who hold the most.
+   *
+   * VISIBLE CONSEQUENCE, so nobody "fixes" it later: a super admin now
+   * appears on this roster, with zero metrics until they take a call.
+   * That is the faithful translation of what the enum predicate meant —
+   * "people whose role lets them work the queue" — and excluding them
+   * would be a NEW rule ("superusers are not agents") that the
+   * permission catalogue cannot express. The alternative, narrowing to
+   * people who hold `callcenter.work` through a permission ROW, would
+   * hide a super admin who really does take calls, which is the same
+   * silent-omission failure in the other direction.
    */
   async listAgents(): Promise<AgentListRow[]> {
     const agents = await this.prisma.client.staffUser.findMany({
