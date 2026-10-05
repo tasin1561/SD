@@ -18,6 +18,11 @@ import {
 import { EmailQueue } from '../../email/queue/email.queue';
 import { CourierChannelSettingsService } from '../../courier-escalation/services/courier-channel-settings.service';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
+import {
+  looksLikeCompanyName,
+  makeCredentialRedactor,
+  redactCredentialsInError,
+} from '../../../common/crypto/credential-redaction';
 import { gotoPortal } from '../pages/navigate';
 
 const JOB = 'courier-portal';
@@ -83,6 +88,36 @@ export class PortalBrowserMissingError extends Error {
         `on the host running the portal worker. (Original: ${cause})`,
     );
     this.name = 'PortalBrowserMissingError';
+  }
+}
+
+/**
+ * The company dropdown had no entry matching `portalCompany`.
+ *
+ * Says the FIELD and what the page offered, NEVER the configured value
+ * — see `chooseCompany`. The shape hint is the half that would have
+ * caught the 29 September 2026 leak on night one: a password typed into
+ * `portalCompany` does not look like a company name, and nothing was
+ * asking.
+ */
+export class PortalCompanyNotOfferedError extends Error {
+  constructor(
+    public readonly offered: readonly string[],
+    looksLikeAName: boolean,
+  ) {
+    super(
+      'No company matching the configured `portalCompany` was offered on the Delhivery login. ' +
+        (offered.length === 0
+          ? 'The dropdown showed nothing this could read — their login page may have changed.'
+          : `The dropdown showed: ${offered.join(', ')}.`) +
+        (looksLikeAName
+          ? ''
+          : ' The configured value does not read like a company name at all, which is what a ' +
+            'password typed into the portalCompany field looks like.') +
+        " Check the portalCompany field on this account's credential and set it to one of the " +
+        'names above. The configured value is deliberately not printed here.',
+    );
+    this.name = 'PortalCompanyNotOfferedError';
   }
 }
 
@@ -314,6 +349,45 @@ export class PortalSessionService {
     }
 
     const company = creds['portalCompany'] ?? '';
+
+    /*
+      ── NOTHING PAST HERE MAY CARRY A CREDENTIAL VALUE OUT ────────
+
+      Every failure below travels: the wallet sync, the invoice check,
+      the billing probe, the canary and the dispatcher all turn it into
+      `err.message` and put that into a `system_issues` row, an
+      `audit_logs` row and the /cost-sync page. `audit_logs` is
+      append-only (MUST NOT #3), so a value that reaches it cannot be
+      erased — the credential has to be rotated instead, which is what
+      the `portalCompany` leak of 29 September 2026 cost.
+
+      Scrubbed HERE, at the one place that holds the plaintext, rather
+      than at the forty-odd places that read `err.message`. Those cannot
+      each be remembered, and the forty-first would reopen the hole. The
+      error OBJECT is handed back, so `instanceof PortalChallengeError`
+      still decides whether the queue freezes.
+    */
+    const redact = makeCredentialRedactor(creds);
+    try {
+      await this.signIn(page, { username, password, company });
+    } catch (err) {
+      throw redactCredentialsInError(err, redact);
+    }
+  }
+
+  /**
+   * The sign-in itself, with the decrypted values in hand.
+   *
+   * Its own method so `login` can be nothing but the credential
+   * boundary: a `return` or a `throw` added anywhere in here is inside
+   * the redaction by construction, which is not true of a flow that
+   * scrubs at each of its own exits.
+   */
+  private async signIn(
+    page: Page,
+    creds: { readonly username: string; readonly password: string; readonly company: string },
+  ): Promise<void> {
+    const { username, password, company } = creds;
 
     // ── THE REAL FLOW, VERIFIED AGAINST THE LIVE PAGE ────────────────
     // Every step below was checked on production on 2026-09-01; none of
@@ -585,6 +659,21 @@ export class PortalSessionService {
    *
    * Returns false when there is no company step, which is a normal
    * single-company login and not an error.
+   *
+   * ── THE CONFIGURED VALUE IS NEVER PUT IN A MESSAGE ───────────────────
+   * It used to be, by accident. `getByText(company)` is a locator built
+   * out of a credential field, and Playwright's locator-timeout message
+   * QUOTES the text it waited for — so on 29 September 2026, when the
+   * owner typed their new portal password into `portalCompany` instead
+   * of `portalPassword`, six nights of timeouts wrote that password into
+   * `audit_logs` (append-only), into `system_issues.detail` and onto the
+   * /cost-sync page, and the credential had to be rotated.
+   *
+   * The click still has to be built from the value — there is no other
+   * way to pick an option — so the failure is CAUGHT and replaced. What
+   * comes out names the FIELD and lists what the dropdown actually
+   * offered, which is the fact a person can act on; the bare timeout
+   * pointed at our automation instead of at the data and cost six days.
    */
   private async chooseCompany(page: Page, company: string): Promise<boolean> {
     // Marked from the page: the first pointer-cursor DIV under the
@@ -620,16 +709,93 @@ export class PortalSessionService {
 
     await control.click({ force: true });
     await page.waitForTimeout(1_500);
-    // Exact first: "MS EXPORTS" and "M S ENTERPRISE" both contain "MS".
-    await page
-      .getByText(company, { exact: true })
-      .first()
-      .click({ timeout: 8_000 })
-      .catch(async () => {
-        await page.getByText(company, { exact: false }).first().click({ timeout: 8_000 });
-      });
-    await page.waitForTimeout(1_000);
-    return true;
+    if (await this.clickCompanyOption(page, company)) {
+      await page.waitForTimeout(1_000);
+      return true;
+    }
+    throw new PortalCompanyNotOfferedError(
+      await this.companiesOffered(page),
+      looksLikeCompanyName(company),
+    );
+  }
+
+  /**
+   * Click the open dropdown's entry for `company`, or report that there
+   * was not one.
+   *
+   * Exact first: "MS EXPORTS" and "M S ENTERPRISE" both contain "MS".
+   *
+   * Every Playwright failure in here is swallowed into `false`, and that
+   * is the point — its message quotes the locator, and the locator is
+   * built from a credential field. The caller turns `false` into a
+   * sentence that carries the field's NAME and the page's own options.
+   */
+  private async clickCompanyOption(page: Page, company: string): Promise<boolean> {
+    for (const exact of [true, false]) {
+      try {
+        await page.getByText(company, { exact }).first().click({ timeout: 8_000 });
+        return true;
+      } catch {
+        // Not offered under this matching, or not clickable. Nothing
+        // from the thrown error is kept: see the method doc.
+      }
+    }
+    return false;
+  }
+
+  /**
+   * What the dropdown actually showed.
+   *
+   * The whole diagnosis, and it was missing: a bare selector timeout
+   * says a locator did not resolve, which reads as our automation being
+   * broken. "The dropdown showed: M S ENTERPRISE, MS EXPORTS" says, in
+   * one line, that the page is fine and the credential is wrong.
+   *
+   * Their list is a stack of pointer-cursor DIVs with no role, no
+   * `<option>` and hashed classes (the same reason `chooseCompany`
+   * hunts for the control by its label), so the options are collected
+   * by SHAPE: visible leaf nodes with short text that sit inside
+   * something clickable. Over-collecting is fine — a person reading the
+   * issue can tell a company name from a stray "Continue" — while
+   * returning nothing would put us back where this started.
+   *
+   * These are the courier's own company names off their page, not
+   * anything we hold, so they are safe to print.
+   */
+  private async companiesOffered(page: Page): Promise<readonly string[]> {
+    const raw: unknown = await page
+      .evaluate(
+        `(() => {
+      var out = [];
+      var all = Array.prototype.slice.call(document.querySelectorAll('*'));
+      for (var i = 0; i < all.length && out.length < 25; i++) {
+        var n = all[i];
+        if (n.children.length !== 0) continue;
+        var t = (n.textContent || '').replace(/\\s+/g, ' ').trim();
+        if (t === '' || t.length > 80) continue;
+        var r = n.getBoundingClientRect();
+        if (r.width < 40 || r.height < 8) continue;
+        var clickable = false;
+        var p = n;
+        for (var d = 0; d < 4 && p; d++) {
+          if (getComputedStyle(p).cursor === 'pointer') { clickable = true; break; }
+          p = p.parentElement;
+        }
+        if (!clickable) continue;
+        if (out.indexOf(t) === -1) out.push(t);
+      }
+      return out;
+    })()`,
+      )
+      .catch(() => [] as unknown);
+
+    if (!Array.isArray(raw)) return [];
+    // The control's own label and the button next to it are not options.
+    const noise = /^(company|continue|log ?in|sign ?in|select)$/i;
+    return raw
+      .filter((v): v is string => typeof v === 'string')
+      .filter((v) => !noise.test(v))
+      .slice(0, 10);
   }
 
   /**

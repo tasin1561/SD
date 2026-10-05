@@ -3,6 +3,10 @@ import { access, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Page } from 'playwright';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import {
+  makeCredentialRedactor,
+  redactCredentialsInError,
+} from '../../../common/crypto/credential-redaction';
 import { gotoPortal } from '../pages/navigate';
 import {
   CourierCredentialService,
@@ -439,6 +443,39 @@ export class ShiprocketPortalSessionService {
       throw new ShiprocketPortalCredentialsMissingError();
     }
 
+    /*
+      ── THE SAME CREDENTIAL BOUNDARY AS DELHIVERY'S ──────────────
+
+      Nothing below deliberately carries a value out: this flow `fill()`s
+      the fields rather than building a locator from them, and the
+      network summary keeps status, host and path only. But Delhivery's
+      did not deliberately carry one out either, and six nights of
+      `audit_logs` rows later the credential had to be rotated.
+
+      So the backstop is here too, scrubbing whatever leaves. The error
+      OBJECT is handed back unchanged in class, because
+      `raiseShiprocketOpenFailure` switches on `instanceof` to decide
+      which issue to raise — a wrapper would file every challenge under
+      "could not sign in".
+    */
+    const redact = makeCredentialRedactor({ portalUsername: user, portalPassword: pass });
+    try {
+      await this.submitCredentials(page, user, pass, net);
+    } catch (err) {
+      throw redactCredentialsInError(err, redact);
+    }
+  }
+
+  /**
+   * Their two-step sign-in, with the decrypted values in hand. Its own
+   * method so every exit from it is inside `login`'s redaction.
+   */
+  private async submitCredentials(
+    page: Page,
+    user: string,
+    pass: string,
+    net: PortalNetworkWatch,
+  ): Promise<void> {
     if (!isShiprocketLoginUrl(page.url())) {
       await gotoPortal(page, `${SR_PORTAL_ORIGIN}/newlogin`);
     }
