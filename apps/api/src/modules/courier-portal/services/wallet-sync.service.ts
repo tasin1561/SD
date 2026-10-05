@@ -15,6 +15,11 @@ import {
 } from './courier-wallet-reconcile.service';
 import type { WalletWindow } from '../pages/wallet-date-range';
 import { raiseLedgerFindings } from './ledger-findings';
+import {
+  describePortalFailureArtifact,
+  portalFailureArtifactOf,
+  type PortalFailureArtifact,
+} from './portal-failure-artifact';
 
 const SETTING_ENABLED = 'courier.wallet_sync_enabled';
 const SETTING_WRITE = 'courier.wallet_sync_writes_enabled';
@@ -91,6 +96,12 @@ export interface WalletSyncAccountResult {
   readonly exportWindow: WalletWindow | null;
   /** How many days the file we got back actually spans. */
   readonly coveredDays: number | null;
+  /**
+   * The screenshot and page text taken at the moment it failed, on a
+   * FAILED run only. Null everywhere else — nothing is captured on a
+   * successful night.
+   */
+  readonly artifact?: PortalFailureArtifact | null;
 }
 
 export interface WalletSyncSummary {
@@ -196,6 +207,15 @@ export class WalletSyncService {
     */
     const challenges = await this.openChallengeKeys(accounts.map((a) => a.id));
 
+    /*
+      One folder per RUN, sortable, no uuid to carry around. Every
+      account that fails tonight files its screenshot under it, so "what
+      did the 5 October run see" is one prefix rather than a hunt.
+      Contains only the run's own timestamp — nothing from a credential
+      may ever reach an artefact key (see `PortalFailureArtifactService`).
+    */
+    const runId = now.toISOString().replace(/[:.]/g, '-');
+
     for (const account of accounts) {
       const blockedBy = challenges.get(account.id);
       if (blockedBy !== undefined) {
@@ -221,7 +241,7 @@ export class WalletSyncService {
           bytes: file,
           rangeApplied,
           window: exportWindow,
-        } = await this.fetcher.fetch(account.id, from, now);
+        } = await this.fetcher.fetch(account.id, from, now, runId);
         // dryRun is the inverse of the write switch: in SHADOW it parses
         // the real file and reports exactly what it WOULD change.
         const result = await this.importer.importDelhiveryWallet(file, null, {
@@ -280,6 +300,11 @@ export class WalletSyncService {
           rangeApplied: null,
           exportWindow: null,
           coveredDays: null,
+          // Into the audit row as well as the issue: the issue clears
+          // itself on the next good night, and the audit row is what
+          // somebody reads a week later asking what the 5 October run
+          // actually saw.
+          artifact: portalFailureArtifactOf(err),
         });
 
         /*
@@ -308,6 +333,11 @@ export class WalletSyncService {
             metadata: { courierAccountId: account.id, label: account.label, error: message },
           });
         } else {
+          // What was on screen, if the fetcher managed to save it. The
+          // message alone cannot distinguish a slow export from a
+          // redesigned button, and that distinction is the fix.
+          const artifact = portalFailureArtifactOf(err);
+          const seen = artifact === null ? '' : describePortalFailureArtifact(artifact);
           await this.issues.raise({
             kind: SystemIssueKind.COURIER_COST_SYNC,
             // A one-off overnight failure is not urgent — the window is
@@ -316,6 +346,7 @@ export class WalletSyncService {
             title: `Could not read what Delhivery charged ${account.label}`,
             detail:
               `The nightly wallet sync failed: ${message}\n\n` +
+              (seen === '' ? '' : `${seen}\n\n`) +
               'Costs for this account are not updating. It retries tonight; if this keeps ' +
               'recurring the portal has probably changed and the login needs looking at. ' +
               'Meanwhile the ledger can be uploaded by hand on the Delhivery page.',
@@ -323,7 +354,12 @@ export class WalletSyncService {
             // The ACCOUNT, not the moment — a key carrying a timestamp
             // would open a fresh row every night.
             dedupeKey: failureKeyFor(account.id),
-            metadata: { courierAccountId: account.id, label: account.label, error: message },
+            metadata: {
+              courierAccountId: account.id,
+              label: account.label,
+              error: message,
+              artifact: artifact === null ? null : { ...artifact },
+            },
           });
         }
       }
