@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ActorType, InboundFreightMode, Prisma, SettingValueType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { WITHHELD_VALUE } from '../../../common/crypto/credential-redaction';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 
 /**
@@ -385,7 +386,15 @@ export class SettingsResolverService {
           action: bySeller ? 'seller.setting_override.set' : 'staff.seller_setting_override.set',
           entityType: 'seller_setting_override',
           entityId: updated.id,
-          changes: { key, sellerId, value: this.jsonSafe(parsed) },
+          // The SAME rule as the global write (see
+          // `SystemSettingsService.updateValue`): `is_sensitive` is a
+          // fact about the KEY, so it holds for a per-seller override of
+          // that key too. No setting is both sensitive and
+          // seller-overridable today; the guard is here so the day one
+          // is, the value does not quietly start persisting.
+          changes: system.isSensitive
+            ? { key, sellerId, value: WITHHELD_VALUE, valueWithheld: true }
+            : { key, sellerId, value: this.jsonSafe(parsed) },
           severity: PHYSICAL_CONSEQUENCE_OVERRIDE_KEYS.has(key) ? 'HIGH' : 'MEDIUM',
         },
         tx,
@@ -585,9 +594,26 @@ export class SettingsResolverService {
       }
       const value = parsed.trim().toUpperCase();
       if (!allowed.includes(value)) {
+        /*
+          ── SAY WHAT IS ACCEPTABLE, NEVER WHAT WAS TYPED ─────────
+
+          This quoted the rejected value back. A validation message
+          exists to tell somebody what IS allowed, which needs no
+          quotation of their mistake — and the mistake is sometimes a
+          credential: the `portalCompany` leak of 29 September 2026 was
+          precisely a password typed into a field that was not for one,
+          and it reached three durable places because something echoed
+          it. This one reaches an HTTP 400 and the request log.
+
+          `SystemSettingsService.parseValue` already words its refusals
+          this way ("expected an integer"), so this is the house style
+          rather than a new rule.
+        */
         throw new BadRequestException({
           code: 'INVALID_SETTING_VALUE',
-          message: `Setting '${key}': '${parsed.trim()}' is not valid. Allowed: ${allowed.join(', ')}`,
+          message:
+            `Setting '${key}' expects one of: ${allowed.join(', ')}. ` +
+            'The value sent is not one of them and is deliberately not quoted back.',
         });
       }
       return value;
@@ -606,14 +632,24 @@ export class SettingsResolverService {
         });
       }
       const items = parsed.map((v) => (typeof v === 'string' ? v.trim() : v));
-      const bad = items.filter((v) => typeof v !== 'string' || !allowedItems.includes(v));
-      if (bad.length > 0) {
+      // POSITIONS, not contents. A list is the one case where naming
+      // the bad entries is genuinely useful — and it is also user input,
+      // which must not be echoed (see the string case above). An index
+      // is exactly as actionable for fixing a ten-item list and carries
+      // nothing of what was typed; it is the `elevenlabs-keys.mjs` move
+      // of referring to a value by its place in the ring.
+      const badPositions = items.flatMap((v, i) =>
+        typeof v !== 'string' || !allowedItems.includes(v) ? [i + 1] : [],
+      );
+      if (badPositions.length > 0) {
+        const one = badPositions.length === 1;
         throw new BadRequestException({
           code: 'INVALID_SETTING_VALUE',
           message:
-            `Setting '${key}': ${bad.map((v) => JSON.stringify(v)).join(', ')} ` +
-            `${bad.length === 1 ? 'is not a' : 'are not'} valid entr${bad.length === 1 ? 'y' : 'ies'}. ` +
-            `Allowed: ${allowedItems.join(', ')}`,
+            `Setting '${key}' expects a JSON array of: ${allowedItems.join(', ')}. ` +
+            `Entr${one ? 'y' : 'ies'} ${badPositions.join(', ')} ` +
+            `${one ? 'is not one of them' : 'are not among them'} ` +
+            '(the values sent are deliberately not quoted back).',
         });
       }
       // Deduped and stored in the code-owned order, so two lists holding
@@ -629,11 +665,14 @@ export class SettingsResolverService {
       orderBy: { code: 'asc' },
     });
     if (!known.some((c) => c.code === code)) {
+      // Same rule as the two above: the known codes are OURS and are the
+      // useful half; what was typed is the operator's and is not echoed.
       throw new BadRequestException({
         code: 'UNKNOWN_COURIER_CODE',
-        message: `Setting '${key}': '${code}' is not a courier. Known couriers: ${known
-          .map((c) => c.code)
-          .join(', ')}`,
+        message:
+          `Setting '${key}' must name a courier. Known couriers: ${known
+            .map((c) => c.code)
+            .join(', ')}. ` + 'The value sent matches none of them and is not quoted back.',
       });
     }
     return code;

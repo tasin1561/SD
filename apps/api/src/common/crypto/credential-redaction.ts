@@ -44,6 +44,24 @@
  */
 
 /**
+ * What a withheld value looks like, everywhere in the estate.
+ *
+ * ONE marker, because a reader who meets `***` in an `audit_logs` row
+ * and `***` on the settings list has to be able to tell that they mean
+ * the same thing — "there is a value here and we are deliberately not
+ * showing it" — rather than wondering whether one of them is the value.
+ * `'***'` is the string the settings list has always shown for an
+ * `is_sensitive` row, so this names what was already there rather than
+ * inventing a second convention.
+ *
+ * Distinct from the redactor's `«<field> redacted»`, and the difference
+ * carries information: that form appears where a value had to be
+ * REMOVED from prose somebody wrote, and names the field it came out
+ * of. This one appears where a value was never recorded at all.
+ */
+export const WITHHELD_VALUE = '***';
+
+/**
  * Below this, a value is noise rather than a secret: a two-character
  * string appears in every message and redacting it would destroy the
  * diagnosis without protecting anything.

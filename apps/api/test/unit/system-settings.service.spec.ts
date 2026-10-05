@@ -107,6 +107,67 @@ describe('SystemSettingsService.updateValue', () => {
     expect(auditCall.severity).toBe('MEDIUM');
   });
 
+  /**
+   * ── A SENSITIVE SETTING'S VALUE IS NEVER RECORDED ────────────────────
+   *
+   * `is_sensitive` masked the list and gated the reveal, and then the
+   * update audit wrote the before and after VERBATIM into `audit_logs` —
+   * the one place in the estate ignoring the flag, and the one place a
+   * value cannot be taken back out of (append-only, MUST NOT #3). We
+   * have just paid for that: six nights of a `portalCompany` holding a
+   * password put it in nine un-erasable rows and forced a rotation.
+   *
+   * Masking costs the readback of a past sensitive value and buys the
+   * guarantee that a credential typed into the wrong setting cannot
+   * persist. What the audit is FOR survives: who, which key, when, and
+   * that it changed.
+   */
+  it('records THAT a sensitive setting changed, never what it changed to', async () => {
+    const { svc, update, auditLog } = makeService({
+      row: makeRow({
+        key: 'tracking.webhook_secret_ref',
+        valueType: SettingValueType.STRING,
+        valueInt: null,
+        valueString: 'OLD_SECRET_REF',
+        isSensitive: true,
+      }),
+    });
+    await svc.updateValue(
+      'tracking.webhook_secret_ref',
+      { valueType: SettingValueType.STRING, value: 'Tr0ub4dor&3-horse' },
+      'staff-1',
+    );
+    // The write itself still happens, with the real value.
+    expect((update.mock.calls[0]![0]!.data as AnyArgs).valueString).toBe('Tr0ub4dor&3-horse');
+
+    const changes = auditLog.mock.calls[0]![0]!.changes as AnyArgs;
+    expect(JSON.stringify(changes)).not.toContain('Tr0ub4dor');
+    expect(JSON.stringify(changes)).not.toContain('OLD_SECRET_REF');
+    expect(changes.before).toBe('***');
+    expect(changes.after).toBe('***');
+    // Said out loud, so a reader does not take `***` for the value.
+    expect(changes.valueWithheld).toBe(true);
+    // Accountability is untouched.
+    expect(changes.key).toBe('tracking.webhook_secret_ref');
+    expect(auditLog.mock.calls[0]![0]!.staffUserId).toBe('staff-1');
+    expect(auditLog.mock.calls[0]![0]!.action).toBe('staff.system_setting.updated');
+  });
+
+  it('still records before and after for an ordinary setting', async () => {
+    // The masking is scoped to the flag; an ops number is exactly the
+    // case the audit trail exists to answer ("what was it before?").
+    const { svc, auditLog } = makeService();
+    await svc.updateValue(
+      'ops.call_max_attempts_before_ndr',
+      { valueType: SettingValueType.INT, value: 4 },
+      'staff-1',
+    );
+    const changes = auditLog.mock.calls[0]![0]!.changes as AnyArgs;
+    expect(changes.before).toBe(3);
+    expect(changes.after).toBe(4);
+    expect(changes.valueWithheld).toBeUndefined();
+  });
+
   it('rejects NOT_EDITABLE with 409 + LOW audit + no update', async () => {
     const { svc, update, auditLog } = makeService({
       row: makeRow({ isEditableByAdmin: false }),
