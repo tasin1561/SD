@@ -314,6 +314,35 @@ export const SELLER_PERMISSIONS = [
     sensitive: true,
   },
   {
+    // ── WHY ITS OWN KEY, AND WHY NOT UNDER `Orders` ─────────────────
+    // `GET /seller/orders/:id/reseller-money` was declared
+    // `orders.view` — the ONE key `viewer` holds, whose own description
+    // is "Read-only, and only the orders. The narrowest login there
+    // is." So the narrowest seller login could read a store's transfer
+    // price and the fee split, and the only thing hiding it was a
+    // client-side role check that had ALREADY stopped working for
+    // anybody on a custom role (the legacy enum is null for them).
+    //
+    // Not folded into `charges.view` either, which is what Skydrop
+    // charges this company — a different disclosure. One checkbox
+    // meaning two would let an owner granting "see what orders cost
+    // us" hand over "see what we earn from each store" without being
+    // told.
+    //
+    // Filed under `Reseller stores` rather than `Orders` on purpose:
+    // adjacency to `orders.view` is what let the two be conflated, and
+    // an owner asking "what may this person do with our reseller
+    // stores" looks here.
+    key: 'stores.order_money.view',
+    label: 'See what a reseller order earns you',
+    description:
+      'On an order one of your reseller stores placed: the transfer price the store pays you, ' +
+      'your share of each Skydrop fee, and when each side is credited. It is your margin on ' +
+      'that sale, so it is separate from simply reading the order.',
+    group: 'Reseller stores',
+    sensitive: true,
+  },
+  {
     // RS-8 / RS-9 — what each store is worth to you: its scorecard and
     // balance, the transfer revenue it brought in, stores ranked by the
     // profit they made you, and the stock forecast. Never a store's own
@@ -430,6 +459,11 @@ export const DEFAULT_SELLER_ROLES: ReadonlyArray<{
       'wallet.topup',
       'wallet.withdraw',
       'freight.view',
+      // What a reseller order earns the company. Finance and Admin
+      // only; `ops` and `viewer` are deliberately left off, and an
+      // OWNER holds it implicitly through `is_owner` — which is why a
+      // key added later needs no backfill for them.
+      'stores.order_money.view',
       'tickets.view',
       'profile.view',
       'profile.manage',

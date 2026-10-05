@@ -131,14 +131,20 @@ const ORDERS_VIEW_GETS: Readonly<Record<string, Readonly<Record<string, string>>
   // filters by. Every WRITE here declares profile.manage at the handler.
   'seller-store.controller.ts': { '': 'orders.view' },
   // All per-order and scoped by the order's own seller: what the call
-  // centre did, what has been asked about a live parcel, and the money on
-  // a reseller order. Each is part of the order this key already opens.
+  // centre did, and what has been asked about a live parcel. Each is part
+  // of the order this key already opens.
   'seller-delivery-action.controller.ts': {
     ':orderId/call-history': 'orders.view',
     ':orderId/delivery-actions': 'orders.view',
   },
   'seller-reattempt.controller.ts': { ':orderId/reattempt-requests': 'orders.view' },
-  'seller-reseller-order-money.controller.ts': { ':id/reseller-money': 'orders.view' },
+  // `seller-reseller-order-money.controller.ts` is DELIBERATELY ABSENT.
+  // It was in this table on `orders.view`, under a sentence calling the
+  // money on a reseller order "part of the order this key already
+  // opens". It is not: it is the transfer price the store pays and the
+  // fee split — the company's margin — and `orders.view` is the ONE key
+  // `viewer` holds. It is `stores.order_money.view` now, so it leaves
+  // this table entirely; the assertion below stops it coming back.
   'seller-shipment-address.controller.ts': {
     ':orderId/consignee': 'orders.view',
     ':orderId/consignee/history': 'orders.view',
@@ -186,6 +192,21 @@ describe('the seller GET surface', () => {
       ),
     ].sort();
     expect(found).toEqual(Object.keys(ORDERS_VIEW_GETS).sort());
+  });
+
+  /**
+   * The disclosure that was behind `orders.view` and should never have
+   * been. Asserted as its own test rather than left to the table above,
+   * because leaving the table is what "fixed" looks like here — and an
+   * absence proves nothing on its own.
+   */
+  it('a reseller order’s money is NOT behind orders.view', () => {
+    const money = gets.filter((g) => g.file === 'seller-reseller-order-money.controller.ts');
+    // A parser that stopped finding the file would make this vacuous.
+    expect(money.length).toBeGreaterThan(0);
+    for (const g of money) {
+      expect(g.permissions).toEqual(['stores.order_money.view']);
+    }
   });
 
   it('each of those controllers opens exactly the GETs listed, behind the key named', () => {
