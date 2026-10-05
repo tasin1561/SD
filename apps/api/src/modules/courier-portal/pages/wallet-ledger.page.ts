@@ -5,6 +5,29 @@ import { applyLast90DaysPreset, type WalletWindow } from './wallet-date-range';
 const FINANCES_PATH = '/finances/unified/transactions';
 
 /**
+ * How long Delhivery gets to produce the export after the click.
+ *
+ * NAMED, not raised. It was a bare `120_000` literal, and a bare
+ * literal is how a figure chosen when the export was small fails years
+ * later for a reason nobody connects to growth: the file is ~26,000
+ * transactions now and climbing, Delhivery build it server-side, and
+ * the whole window is one click with no progress to read.
+ *
+ * On 5 October 2026 this timeout fired in production. The value is
+ * DELIBERATELY unchanged — raising a timeout to quiet a symptom nobody
+ * has identified is how a real change (their button becoming a format
+ * menu, say) gets masked for months. The failure now saves a screenshot
+ * and the page text instead (`PortalFailureArtifactService`), so the
+ * next occurrence can be diagnosed rather than guessed at. Move this
+ * number only once a capture shows a download that was genuinely still
+ * coming.
+ */
+const DOWNLOAD_WAIT_MS = 120_000;
+
+/** The export's own button. Named because two places now look at it. */
+const DOWNLOAD_BUTTON = /download ledger/i;
+
+/**
  * The Finances → Transactions screen, and the file behind its Download
  * Ledger button.
  *
@@ -46,11 +69,8 @@ export class WalletLedgerPage {
     // Playwright must be waiting BEFORE the click — a download that
     // starts while nothing is listening is simply lost.
     const [download] = await Promise.all([
-      this.page.waitForEvent('download', { timeout: 120_000 }),
-      this.page
-        .getByRole('button', { name: /download ledger/i })
-        .first()
-        .click(),
+      this.page.waitForEvent('download', { timeout: DOWNLOAD_WAIT_MS }),
+      this.page.getByRole('button', { name: DOWNLOAD_BUTTON }).first().click(),
     ]);
 
     const stream = await download.createReadStream();
@@ -59,6 +79,53 @@ export class WalletLedgerPage {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as ArrayBuffer));
     }
     return { bytes: Buffer.concat(chunks), rangeApplied, window };
+  }
+
+  /**
+   * What the export control looks like RIGHT NOW.
+   *
+   * For the failure artefact, and it answers the question the timeout
+   * cannot: "waiting for event download" says what we wanted, this says
+   * what was there. A control that has become a menu reports
+   * `aria-expanded`; one that is disabled or missing says so; and a
+   * count above one means their page now has two of them and `.first()`
+   * is clicking the wrong one.
+   *
+   * Reads only its own attributes and label, so nothing we hold can
+   * reach the issue detail it is printed in.
+   */
+  async describeDownloadControl(): Promise<string> {
+    const button = this.page.getByRole('button', { name: DOWNLOAD_BUTTON });
+    const count = await button.count();
+    if (count === 0) {
+      // Their own label is gone. Say what buttons ARE there instead —
+      // that is the whole diagnosis when a page has been redesigned.
+      const names = await this.page
+        .getByRole('button')
+        .allInnerTexts()
+        .catch(() => [] as string[]);
+      const offered = names
+        .map((n) => n.replace(/\s+/g, ' ').trim())
+        .filter((n) => n !== '')
+        .slice(0, 12);
+      return `no "Download Ledger" button on the page; buttons present: ${
+        offered.length === 0 ? 'none readable' : offered.join(' | ')
+      }`;
+    }
+    const first = button.first();
+    const [label, expanded, disabled, visible] = await Promise.all([
+      first.innerText().catch(() => ''),
+      first.getAttribute('aria-expanded').catch(() => null),
+      first.isDisabled().catch(() => null),
+      first.isVisible().catch(() => null),
+    ]);
+    return [
+      `${count} match(es)`,
+      `label "${label.replace(/\s+/g, ' ').trim()}"`,
+      `aria-expanded=${expanded ?? '—'}`,
+      `disabled=${disabled ?? '?'}`,
+      `visible=${visible ?? '?'}`,
+    ].join(', ');
   }
 
   /**

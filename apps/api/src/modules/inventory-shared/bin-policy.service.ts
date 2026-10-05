@@ -54,6 +54,53 @@ export const PICKABLE_BIN_TYPES: readonly BinType[] = Object.values(BinType).fil
   (t) => !NON_PICKABLE_BIN_TYPES.includes(t),
 );
 
+/**
+ * Would moving goods from `sourceType` to `destType` make unsellable
+ * stock sellable?
+ *
+ * BIN-2 says a bin a picker cannot reach is about NOT SELLING stock, not
+ * about where it happens to be standing. So the direction that matters is
+ * exactly one: out of a bin nothing can be picked from, into one it can.
+ * A move the other way (a shelf's goods discovered broken and carried to
+ * DAMAGED) is conservative, and a move within the non-pickable set
+ * (re-organising the quarantine corner) changes nothing about what is
+ * sellable. Only this direction silently reverses a decision somebody
+ * made — a return nobody triaged, a unit written off as damaged, or
+ * goods still in the air between Dhaka and India (CNS-1) — and the
+ * goods become pickable with no record that the decision was revisited.
+ *
+ * DERIVED from `NON_PICKABLE_BIN_TYPES` on BOTH sides, so adding a bin
+ * type to that list tightens the source test and the destination test
+ * together. `BinCollapseService` restated the list as
+ * `['RTO_HOLD', 'DAMAGED', 'QUARANTINE']` and therefore missed TRANSIT
+ * for as long as TRANSIT existed; a second hand-written copy here would
+ * be the same bug in a new place.
+ *
+ * The sanctioned way OUT of a hold bin is the path that already carries
+ * the judgement: `RtoPutawayService`, which offers only the units a
+ * finalize restocked, subtracts the ones nobody has decided about, and
+ * refuses a non-pickable destination of its own. A write-off leaves by
+ * an adjustment with a reason code (INV-7). Neither is a re-shelving.
+ */
+export function moveWouldMakeStockSellable(sourceType: BinType, destType: BinType): boolean {
+  return NON_PICKABLE_BIN_TYPES.includes(sourceType) && !NON_PICKABLE_BIN_TYPES.includes(destType);
+}
+
+/** The one refusal, so both movers say the same thing. */
+export const MOVE_MAKES_STOCK_SELLABLE_CODE = 'TRANSFER_WOULD_MAKE_STOCK_SELLABLE';
+
+export function moveMakesStockSellableMessage(
+  source: { readonly code: string; readonly type: BinType },
+  dest: { readonly code: string; readonly type: BinType },
+): string {
+  return (
+    `${source.code} is a ${source.type} bin — nothing in it can be picked. ` +
+    `Moving it to ${dest.code} would put those goods back into sellable stock ` +
+    'without anybody deciding they should be. Use the return put-away for a ' +
+    'return, or an adjustment with a reason for a write-off.'
+  );
+}
+
 @Injectable()
 export class BinPolicyService {
   constructor(private readonly prisma: PrismaService) {}

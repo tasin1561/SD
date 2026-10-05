@@ -66,7 +66,7 @@ export class AdminBinOpsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Move everything currently in one bin to another. The common physical act — you pick the box up and carry it.',
+      'Move everything currently in one bin to another. The common physical act — you pick the box up and carry it. Refuses TRANSFER_WOULD_MAKE_STOCK_SELLABLE out of a hold, damaged, quarantine or in-transit bin into a pickable one.',
   })
   moveWholeBin(
     @Param('warehouseId', uuid()) warehouseId: string,
@@ -83,7 +83,7 @@ export class AdminBinOpsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Apply a list of bin-to-bin moves as ONE transaction — a half-applied re-shelving is worse than none',
+      'Apply a list of bin-to-bin moves as ONE transaction — a half-applied re-shelving is worse than none. One line that would make unsellable stock sellable refuses the whole submission.',
   })
   bulkTransfer(
     @Param('warehouseId', uuid()) warehouseId: string,

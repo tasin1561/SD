@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ActorType, Prisma, SettingValueType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { WITHHELD_VALUE } from '../../../common/crypto/credential-redaction';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
   assertCodFeesWithinLimit,
@@ -35,7 +36,11 @@ import {
  *      tx as the value write.
  *   5. Sensitive settings (`isSensitive=true`) — list response masks
  *      `valueDisplay` as `'***'`; getByKey returns the raw value
- *      (the UI is responsible for the reveal-on-intent gate).
+ *      (the UI is responsible for the reveal-on-intent gate); and the
+ *      UPDATE AUDIT records that the value changed WITHOUT recording
+ *      it. See the long note at the audit call: a durable plaintext
+ *      copy in an append-only table is the one thing masking buys, and
+ *      it is worth the readback it costs.
  *
  * NOT IN SCOPE (Phase 1A deferral):
  *   - JSON-schema validation via `validationSchema` — the column is
@@ -197,7 +202,36 @@ export class SystemSettingsService {
           action: 'staff.system_setting.updated',
           entityType: 'system_setting',
           entityId: existing.id,
-          changes: { key, before: this.jsonSafe(oldValue), after: this.jsonSafe(parsed) },
+          /*
+            ── A SENSITIVE SETTING'S VALUE IS NOT RECORDED ───────────
+
+            `is_sensitive` masked the LIST (`valueDisplay`) and getByKey
+            gated the reveal, and then this wrote the before and after
+            VERBATIM into `audit_logs` — the one place in the estate
+            that was ignoring the flag, and the one place a value can
+            never be taken back out of (append-only, MUST NOT #3).
+
+            Masked DELIBERATELY, and here is the trade. What is given up
+            is the ability to read a past sensitive value out of the
+            audit trail, and with it "what was it before I changed it?"
+            for exactly those keys — a real loss, and the reason the
+            column was not masked in the first place.
+
+            What is bought is that a credential typed into the wrong
+            setting cannot persist. We have just proved what that costs
+            when it happens: six nights of a `portalCompany` holding a
+            password put it in nine audit rows that cannot be erased,
+            and the credential had to be rotated. `is_sensitive`
+            existing at all means somebody anticipated a value worth
+            hiding, and CUR-1 already says plaintext never persists.
+
+            The AUDIT'S OWN JOB SURVIVES INTACT: who changed which key,
+            when, under which transaction, and that it changed at all.
+            Accountability never needed the plaintext.
+          */
+          changes: existing.isSensitive
+            ? { key, before: WITHHELD_VALUE, after: WITHHELD_VALUE, valueWithheld: true }
+            : { key, before: this.jsonSafe(oldValue), after: this.jsonSafe(parsed) },
           metadata: existing.requiresRestart ? { requiresRestart: true } : null,
           severity: 'MEDIUM',
         },
@@ -212,7 +246,7 @@ export class SystemSettingsService {
 
   private toView(row: Prisma.SystemSettingGetPayload<object>): SystemSettingView {
     const rawValue = this.extractValue(row);
-    const valueDisplay = row.isSensitive ? '***' : this.formatValueForDisplay(rawValue);
+    const valueDisplay = row.isSensitive ? WITHHELD_VALUE : this.formatValueForDisplay(rawValue);
     return {
       id: row.id,
       key: row.key,

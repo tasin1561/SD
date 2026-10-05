@@ -99,7 +99,9 @@ export class SellerTopupController {
     @Param('topupId', new ParseUUIDPipe({ version: '7' })) topupId: string,
   ): Promise<{ url: string }> {
     // Scoped to this seller — the service filters on it, so one seller
-    // cannot mint a read link for another's bank screenshot.
-    return { url: await this.svc.proofUrl(topupId, seller.id) };
+    // cannot mint a read link for another's bank screenshot. Not
+    // audited: it is their own document, and a row per self-read would
+    // bury the staff reads that the audit exists for.
+    return { url: await this.svc.proofUrl(topupId, { kind: 'SELLER', sellerId: seller.id }) };
   }
 }

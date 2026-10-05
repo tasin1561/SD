@@ -304,6 +304,13 @@ export class RtoPutawayService {
           // lineage the batch carries.
           destBatchId: p.batchId,
           reason: `Return putaway — parcel ${parcel}`,
+          // The ONE sanctioned hold-bin → shelf move. `listPending`
+          // above is the judgement the transfer gate otherwise insists
+          // on: only units a finalize RESTOCKED, out of an RTO_HOLD bin
+          // only, with the undecided ones subtracted, and a
+          // non-pickable destination already refused. Making these
+          // sellable is the purpose of the step.
+          allowFromNonPickableBin: true,
         },
         staffId,
       );

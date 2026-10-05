@@ -3,6 +3,11 @@ import { ActorType, StockMovementType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
+import {
+  MOVE_MAKES_STOCK_SELLABLE_CODE,
+  moveMakesStockSellableMessage,
+  moveWouldMakeStockSellable,
+} from '../../inventory-shared/bin-policy.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
 /**
@@ -121,7 +126,7 @@ export class BinBulkTransferService {
     const binIds = [...new Set(lines.flatMap((l) => [l.sourceBinId, l.destBinId]))];
     const bins = await this.prisma.client.warehouseBin.findMany({
       where: { id: { in: binIds }, deletedAt: null },
-      select: { id: true, warehouseId: true, code: true },
+      select: { id: true, warehouseId: true, code: true, type: true },
     });
     const byId = new Map(bins.map((b) => [b.id, b]));
     for (const id of binIds) {
@@ -136,6 +141,31 @@ export class BinBulkTransferService {
         throw new BadRequestException({
           code: 'BIN_WRONG_WAREHOUSE',
           message: `Bin ${bin.code} is in a different warehouse`,
+        });
+      }
+    }
+
+    // A re-shelving may not make unsellable stock sellable (BIN-2).
+    // Checked per LINE rather than per bin, because a submitted list can
+    // mix directions, and the only thing that is wrong is the one line
+    // that comes OUT of a bin a picker cannot reach and lands in one
+    // they can. Everything else — a shelf's goods carried to DAMAGED, a
+    // quarantine corner re-organised — is left alone.
+    //
+    // There is no acknowledgement flag for this direction and
+    // deliberately so: the operator doing a re-shelve cannot evaluate
+    // whether a return was triaged or whether a consignment has landed,
+    // so a tick-box would only move the decision to the person least
+    // placed to make it. The way out of a hold bin is the path that
+    // carries the judgement (see `moveWouldMakeStockSellable`).
+    for (const l of lines) {
+      const source = byId.get(l.sourceBinId);
+      const dest = byId.get(l.destBinId);
+      if (source === undefined || dest === undefined) continue; // refused above
+      if (moveWouldMakeStockSellable(source.type, dest.type)) {
+        throw new BadRequestException({
+          code: MOVE_MAKES_STOCK_SELLABLE_CODE,
+          message: moveMakesStockSellableMessage(source, dest),
         });
       }
     }
