@@ -17,6 +17,8 @@ import { EnvService } from '../../config/env.service';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../infrastructure/spaces/spaces.service';
 import { ALL_STORE_PERMISSION_KEYS } from '../../common/auth/store-permissions';
+import { resolveRoles } from '../../common/auth/role-union';
+import { rolesOnCreate } from '../../common/auth/role-assignment';
 import { storeMayBeUsed } from '../../common/guards/store-jwt.guard';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { JwtService, type SignedAccessToken } from '../auth-common/services/jwt.service';
@@ -51,9 +53,16 @@ export interface StoreMe {
   readonly emailDisplay: string;
   readonly fullName: string;
   readonly emailVerifiedAt: Date | null;
+  /** The FIRST role held — a label, never what the portal gates on. */
   readonly roleKey: string;
   readonly roleName: string;
-  /** What the portal hides things by. FE-2: rendering, never permission. */
+  /** Every `store_roles.key` held. */
+  readonly roleKeys: readonly string[];
+  readonly roleNames: readonly string[];
+  /**
+   * What the portal hides things by — the UNION of every role held.
+   * FE-2: rendering, never permission.
+   */
   readonly permissions: readonly string[];
   readonly store: {
     readonly id: string;
@@ -551,7 +560,9 @@ export class StoreAuthService {
       email: inv.email,
       fullName: inv.fullName,
       storeName: inv.store.displayName ?? inv.store.name,
-      roleName: inv.role.name,
+      // Every role it offers, not just the first — somebody deciding
+      // whether to accept should see what they are being given.
+      roleName: inv.offered.map((r) => r.name).join(', '),
       expiresAt: inv.expiresAt.toISOString(),
     };
   }
@@ -589,13 +600,15 @@ export class StoreAuthService {
         const user = await tx.storeUser.create({
           data: {
             storeId: inv.store.id,
-            roleId: inv.role.id,
             email: emailLower,
             emailDisplay: inv.email,
             passwordHash,
             fullName: input.fullName.trim(),
             // Reaching this code needed a token mailed to this address.
             emailVerifiedAt: now,
+            // Both the join rows and the transitional `role_id`, in one
+            // write: a user row without its join rows cannot sign in.
+            ...rolesOnCreate(inv.offered.map((r) => r.id)),
           },
           select: { id: true },
         });
@@ -677,13 +690,18 @@ export class StoreAuthService {
         emailDisplay: true,
         fullName: true,
         emailVerifiedAt: true,
-        role: {
+        roles: {
+          orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
           select: {
-            key: true,
-            name: true,
-            isOwner: true,
-            deletedAt: true,
-            permissions: { select: { permission: true } },
+            role: {
+              select: {
+                key: true,
+                name: true,
+                isOwner: true,
+                deletedAt: true,
+                permissions: { select: { permission: true } },
+              },
+            },
           },
         },
         store: {
@@ -701,7 +719,11 @@ export class StoreAuthService {
         },
       },
     });
-    if (!user || user.role.deletedAt !== null) {
+    // Every role gone is nobody to be — the guard's own answer, given
+    // here too so the portal and the API cannot disagree about whether
+    // somebody is signed in.
+    const resolved = user === null ? null : resolveRoles(user.roles, ALL_STORE_PERMISSION_KEYS);
+    if (!user || resolved === null || resolved.roles.length === 0) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Store session no longer valid',
@@ -713,11 +735,11 @@ export class StoreAuthService {
       emailDisplay: user.emailDisplay,
       fullName: user.fullName,
       emailVerifiedAt: user.emailVerifiedAt,
-      roleKey: user.role.key,
-      roleName: user.role.name,
-      permissions: user.role.isOwner
-        ? ALL_STORE_PERMISSION_KEYS
-        : user.role.permissions.map((p) => p.permission),
+      roleKey: resolved.primary?.key ?? '',
+      roleName: resolved.primary?.name ?? '',
+      roleKeys: resolved.roles.map((r) => r.key),
+      roleNames: resolved.roles.map((r) => r.name),
+      permissions: resolved.permissions,
       store: {
         id: user.store.id,
         name: user.store.name,
@@ -755,6 +777,10 @@ export class StoreAuthService {
         usedAt: true,
         deletedAt: true,
         role: { select: { id: true, key: true, name: true, deletedAt: true } },
+        roles: {
+          orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+          select: { role: { select: { id: true, name: true, deletedAt: true } } },
+        },
         store: { select: { ...STORE_GATE_SELECT, displayName: true } },
       },
     });
@@ -762,7 +788,6 @@ export class StoreAuthService {
       !inv ||
       inv.usedAt !== null ||
       inv.deletedAt !== null ||
-      inv.role.deletedAt !== null ||
       inv.expiresAt.getTime() <= Date.now()
     ) {
       throw new NotFoundException({
@@ -770,7 +795,18 @@ export class StoreAuthService {
         message: 'This invitation is not valid. Ask for a new one.',
       });
     }
-    return inv;
+    // The roles it actually offers, live ones only. ALL of them gone is
+    // the same miss as a revoked token — accepting would make an account
+    // the guard refuses, so it answers the same generic 404 rather than
+    // telling a guessed token which roles a store has deleted.
+    const offered = inv.roles.map((r) => r.role).filter((r) => r.deletedAt === null);
+    if (offered.length === 0) {
+      throw new NotFoundException({
+        code: 'INVALID_INVITATION',
+        message: 'This invitation is not valid. Ask for a new one.',
+      });
+    }
+    return { ...inv, offered };
   }
 
   private usable(store: {

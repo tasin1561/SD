@@ -35,7 +35,12 @@ describe('NotificationAudienceService — who should hear about this', () => {
     });
     expect(sellerFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ sellerId: 'sel-1', sellerRole: { key: 'FINANCE' } }),
+        where: expect.objectContaining({
+          sellerId: 'sel-1',
+          // Through the join table: somebody whose SECOND role is
+          // Finance is still a Finance person.
+          roles: { some: { role: { key: 'FINANCE', deletedAt: null } } },
+        }),
       }),
     );
   });
@@ -56,8 +61,18 @@ describe('NotificationAudienceService — who should hear about this', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           sellerId: 'sel-1',
-          sellerRole: {
-            OR: [{ isOwner: true }, { permissions: { some: { permission: 'orders.view' } } }],
+          // Through the JOIN TABLE, because a person may hold several
+          // roles: matching on the transitional `role_id` relation
+          // would silently miss everybody whose SECOND role is the one
+          // granting it — which is how a stock alert comes to reach
+          // nobody with nothing failing.
+          roles: {
+            some: {
+              role: {
+                deletedAt: null,
+                OR: [{ isOwner: true }, { permissions: { some: { permission: 'orders.view' } } }],
+              },
+            },
           },
         }),
       }),
@@ -73,16 +88,26 @@ describe('NotificationAudienceService — who should hear about this', () => {
     expect(staffFindMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          staffRole: {
-            // A super-admin holds every permission implicitly and
-            // therefore carries no permission ROWS. Matching on rows
-            // alone left the people who hold the most out of every
-            // audience addressed by what somebody may do — caught by
-            // the e2e, which asked a real database and got nobody.
-            OR: [
-              { isSuperAdmin: true },
-              { permissions: { some: { permission: 'warehouse.pack' } } },
-            ],
+          // ANY of the person's roles granting it is enough — the guard
+          // resolves the union, and an audience that asked a narrower
+          // question would address fewer people than the permission
+          // actually reaches.
+          roles: {
+            some: {
+              role: {
+                deletedAt: null,
+                // A super-admin holds every permission implicitly and
+                // therefore carries no permission ROWS. Matching on
+                // rows alone left the people who hold the most out of
+                // every audience addressed by what somebody may do —
+                // caught by the e2e, which asked a real database and
+                // got nobody.
+                OR: [
+                  { isSuperAdmin: true },
+                  { permissions: { some: { permission: 'warehouse.pack' } } },
+                ],
+              },
+            },
           },
         }),
       }),

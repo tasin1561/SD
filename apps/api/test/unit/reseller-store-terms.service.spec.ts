@@ -185,6 +185,8 @@ function storeUser(storeId = STORE_ID): AuthenticatedStoreUser {
     jti: null,
     roleKey: 'owner',
     roleName: 'Owner',
+    roleKeys: ['owner'],
+    roleNames: ['Owner'],
     permissions: ['terms.view', 'terms.accept'],
   };
 }

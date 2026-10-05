@@ -38,6 +38,13 @@ function makeGuard(opts: {
   permissions?: readonly string[];
   isOwner?: boolean;
   roleDeleted?: boolean;
+  /** A SECOND role, for the multi-role cases. */
+  second?: {
+    key: string;
+    permissions?: readonly string[];
+    isOwner?: boolean;
+    deleted?: boolean;
+  };
   method?: string;
   handlerRequires?: readonly string[];
   classRequires?: readonly string[];
@@ -55,13 +62,33 @@ function makeGuard(opts: {
     fullName: 'U',
     role: SellerUserRole.OPS,
     emailVerifiedAt: new Date(),
-    sellerRole: {
-      key: opts.isOwner === true ? 'owner' : 'custom',
-      name: opts.isOwner === true ? 'Owner' : 'Custom role',
-      isOwner: opts.isOwner ?? false,
-      deletedAt: opts.roleDeleted === true ? new Date() : null,
-      permissions: (opts.permissions ?? []).map((permission) => ({ permission })),
-    },
+    // A LIST, because the guard reads `seller_user_roles` — the
+    // authority — rather than the transitional `role_id` relation it
+    // used to select.
+    roles: [
+      {
+        role: {
+          key: opts.isOwner === true ? 'owner' : 'custom',
+          name: opts.isOwner === true ? 'Owner' : 'Custom role',
+          isOwner: opts.isOwner ?? false,
+          deletedAt: opts.roleDeleted === true ? new Date() : null,
+          permissions: (opts.permissions ?? []).map((permission) => ({ permission })),
+        },
+      },
+      ...(opts.second === undefined
+        ? []
+        : [
+            {
+              role: {
+                key: opts.second.key,
+                name: opts.second.key,
+                isOwner: opts.second.isOwner ?? false,
+                deletedAt: opts.second.deleted === true ? new Date() : null,
+                permissions: (opts.second.permissions ?? []).map((permission) => ({ permission })),
+              },
+            },
+          ]),
+    ],
     seller: {
       id: 'seller-1',
       email: 's@example.com',
@@ -203,7 +230,9 @@ describe('SellerJwtGuard — permission gate', () => {
         action: 'seller.access_denied_permission',
         severity: 'LOW',
         metadata: expect.objectContaining({
-          role: 'custom',
+          // EVERY role they hold, not one: a refusal has to say who was
+          // refused, and a person may hold several.
+          roles: ['custom'],
           required: ['wallet.view'],
           path: '/seller/wallet',
           method: 'GET',
@@ -237,5 +266,49 @@ describe('SellerJwtGuard — permission gate', () => {
     const { guard, ctx, findFirst } = makeGuard({ isPublic: true });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
     expect(findFirst).not.toHaveBeenCalled();
+  });
+
+  // ── Multi-role ───────────────────────────────────────────────────
+  describe('several roles', () => {
+    it('admits on a permission the SECOND role grants', async () => {
+      const { guard, ctx, req } = makeGuard({
+        permissions: ['orders.view'],
+        second: { key: 'finance', permissions: ['wallet.view'] },
+        handlerRequires: ['wallet.view'],
+      });
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+       
+      const seller = (req as any).seller;
+      expect([...seller.permissions].sort()).toEqual(['orders.view', 'wallet.view']);
+      expect(seller.roleKeys).toEqual(['custom', 'finance']);
+    });
+
+    it('an OWNER role among several grants the whole catalogue', async () => {
+      const { guard, ctx } = makeGuard({
+        permissions: ['orders.view'],
+        second: { key: 'owner', isOwner: true },
+        handlerRequires: ['team.manage'],
+      });
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it('a soft-deleted role among several grants nothing of its own', async () => {
+      const { guard, ctx } = makeGuard({
+        permissions: ['orders.view'],
+        second: { key: 'finance', permissions: ['wallet.view'], deleted: true },
+        handlerRequires: ['wallet.view'],
+      });
+      await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    /**
+     * Every role gone is nobody to be — UNAUTHORIZED, the same answer
+     * the single-role guard gave, rather than a live session with an
+     * empty grant set that still reaches every self-service endpoint.
+     */
+    it('EVERY role soft-deleted is UNAUTHORIZED, even on a self-service route', async () => {
+      const { guard, ctx } = makeGuard({ roleDeleted: true, selfService: true });
+      await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(UnauthorizedException);
+    });
   });
 });

@@ -87,7 +87,9 @@ export class SellerRbacService {
       orderBy: [{ isOwner: 'desc' }, { isSystem: 'desc' }, { name: 'asc' }],
       include: {
         permissions: { select: { permission: true } },
-        _count: { select: { users: { where: { deletedAt: null } } } },
+        // Through the JOIN TABLE, not the transitional
+        // `seller_users.role_id`: a person may hold several roles.
+        _count: { select: { userRoles: { where: { user: { deletedAt: null } } } } },
       },
     });
     return rows.map((r) => ({
@@ -98,7 +100,7 @@ export class SellerRbacService {
       isSystem: r.isSystem,
       isOwner: r.isOwner,
       permissions: r.isOwner ? ALL_SELLER_PERMISSION_KEYS : r.permissions.map((p) => p.permission),
-      memberCount: r._count.users,
+      memberCount: r._count.userRoles,
     }));
   }
 
@@ -251,7 +253,9 @@ export class SellerRbacService {
       // Counted INSIDE the deleting transaction: somebody assigned
       // between a check and a write would be left holding a role that no
       // longer exists.
-      const holders = await tx.sellerUser.count({ where: { roleId: id, deletedAt: null } });
+      const holders = await tx.sellerUserRoleAssignment.count({
+        where: { roleId: id, user: { deletedAt: null } },
+      });
       if (holders > 0) {
         throw new ConflictException({
           code: 'ROLE_IN_USE',
@@ -332,7 +336,7 @@ export class SellerRbacService {
         sellerId,
         deletedAt: null,
         id: { not: roleId },
-        users: { some: { deletedAt: null } },
+        userRoles: { some: { user: { deletedAt: null } } },
         OR: [{ isOwner: true }, { permissions: { some: { permission: 'roles.manage' } } }],
       },
     });

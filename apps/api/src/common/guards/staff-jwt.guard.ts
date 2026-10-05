@@ -15,6 +15,30 @@ import {
   REQUIRE_PERMISSIONS_KEY,
   STAFF_SELF_SERVICE_KEY,
 } from '../auth/require-permissions.decorator';
+import { resolveRoles, roleNamesFor } from '../auth/role-union';
+
+/**
+ * Every role this person holds, oldest grant first.
+ *
+ * ORDERED so `roleKey`/`roleName` — the label on a refusal and in an
+ * audit row — do not move about between requests. The order says
+ * nothing about authority: the permission set is the UNION, and a
+ * superuser role anywhere in it grants everything.
+ */
+const ROLE_ASSIGNMENTS = {
+  orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+  select: {
+    role: {
+      select: {
+        key: true,
+        name: true,
+        isSuperAdmin: true,
+        deletedAt: true,
+        permissions: { select: { permission: true } },
+      },
+    },
+  },
+};
 
 @Injectable()
 export class StaffJwtGuard implements CanActivate {
@@ -45,15 +69,7 @@ export class StaffJwtGuard implements CanActivate {
         email: true,
         role: true,
         emailVerifiedAt: true,
-        staffRole: {
-          select: {
-            key: true,
-            name: true,
-            isSuperAdmin: true,
-            deletedAt: true,
-            permissions: { select: { permission: true } },
-          },
-        },
+        roles: ROLE_ASSIGNMENTS,
       },
     });
     if (!staff) {
@@ -63,12 +79,15 @@ export class StaffJwtGuard implements CanActivate {
       });
     }
 
-    // A soft-deleted role is not a role. Someone whose role was removed
-    // out from under them is unauthenticated rather than unauthorised:
-    // there is nothing to reason about permission-wise, and leaving them
-    // holding a valid session with an empty grant set is a worse state
-    // than asking them to sign in again.
-    if (staff.staffRole.deletedAt !== null) {
+    // A soft-deleted role is not a role. Someone whose EVERY role was
+    // removed out from under them is unauthenticated rather than
+    // unauthorised: there is nothing to reason about permission-wise,
+    // and leaving them holding a valid session with an empty grant set
+    // is a worse state than asking them to sign in again. This is the
+    // same answer the single-role guard gave; it now asks it of the
+    // union, and `role_id` is no longer consulted at all.
+    const resolved = resolveRoles(staff.roles, ALL_PERMISSION_KEYS);
+    if (resolved.roles.length === 0) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Staff session no longer valid',
@@ -79,14 +98,16 @@ export class StaffJwtGuard implements CanActivate {
       id: staff.id,
       email: staff.email,
       role: staff.role,
-      roleKey: staff.staffRole.key,
-      roleName: staff.staffRole.name,
-      permissions: permissionsFor(staff.staffRole),
+      roleKey: resolved.primary?.key ?? '',
+      roleName: resolved.primary?.name ?? '',
+      roleKeys: resolved.roles.map((r) => r.key),
+      roleNames: resolved.roles.map((r) => r.name),
+      permissions: resolved.permissions,
       emailVerifiedAt: staff.emailVerifiedAt,
       jti: claims.jti,
     };
 
-    this.authorize(ctx, req.staff.permissions, req.staff.roleName);
+    this.authorize(ctx, resolved.permissions, roleNamesFor(resolved.roles));
     return true;
   }
 
@@ -99,7 +120,7 @@ export class StaffJwtGuard implements CanActivate {
    * authenticate as staff without also being authorised, because it is
    * the same `canActivate`.
    */
-  private authorize(ctx: ExecutionContext, held: readonly string[], roleName: string): void {
+  private authorize(ctx: ExecutionContext, held: readonly string[], roleNames: string): void {
     const targets = [ctx.getHandler(), ctx.getClass()];
 
     if (this.reflector.getAllAndOverride<boolean>(STAFF_SELF_SERVICE_KEY, targets) === true) return;
@@ -126,22 +147,9 @@ export class StaffJwtGuard implements CanActivate {
 
     throw new ForbiddenException({
       code: 'INSUFFICIENT_PERMISSION',
-      message: `${roleName} does not hold: ${required.join(' or ')}`,
+      message: `${roleNames} does not hold: ${required.join(' or ')}`,
     });
   }
-}
-
-/**
- * A super-admin role holds the whole catalogue implicitly rather than
- * through rows, so a permission added in a later release reaches it
- * without a data migration anybody has to remember to write.
- */
-function permissionsFor(role: {
-  readonly isSuperAdmin: boolean;
-  readonly permissions: readonly { readonly permission: string }[];
-}): readonly string[] {
-  if (role.isSuperAdmin) return ALL_PERMISSION_KEYS;
-  return role.permissions.map((p) => p.permission);
 }
 
 function extractBearer(header: string | undefined): string | null {

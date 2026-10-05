@@ -18,6 +18,7 @@ import {
 import { AuditLogService } from '../auth-common/services/audit-log.service';
 import { EmailQueue } from '../email/queue/email.queue';
 import { ALL_PERMISSION_KEYS } from '../../common/auth/permissions';
+import { resolveRoles } from '../../common/auth/role-union';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000; // 30 min
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -34,7 +35,7 @@ export interface ClientContext {
 export interface StaffLoginResult {
   accessToken: SignedAccessToken;
   refresh: IssuedRefresh;
-  staff: { id: string; email: string; role: string };
+  staff: { id: string; email: string; role: string | null };
 }
 
 export interface StaffRefreshResult {
@@ -139,7 +140,7 @@ export class StaffAuthService {
         ipAddress: ctx.ipAddress ?? null,
         tx,
       });
-      const accessToken = this.jwt.signStaffAccess({ subject: staff.id, role: staff.role });
+      const accessToken = this.jwt.signStaffAccess({ subject: staff.id, role: staff.role ?? '' });
 
       await this.audit.log(
         {
@@ -192,7 +193,7 @@ export class StaffAuthService {
       throw this.invalidRefresh();
     }
 
-    const accessToken = this.jwt.signStaffAccess({ subject: staff.id, role: staff.role });
+    const accessToken = this.jwt.signStaffAccess({ subject: staff.id, role: staff.role ?? '' });
     return { accessToken, refresh: issued };
   }
 
@@ -552,9 +553,11 @@ export class StaffAuthService {
     id: string;
     email: string;
     emailDisplay: string;
-    role: string;
+    role: string | null;
     roleKey: string;
     roleName: string;
+    roleKeys: readonly string[];
+    roleNames: readonly string[];
     permissions: readonly string[];
     emailVerifiedAt: Date | null;
     lastLoginAt: Date | null;
@@ -570,34 +573,43 @@ export class StaffAuthService {
         emailVerifiedAt: true,
         lastLoginAt: true,
         createdAt: true,
-        staffRole: {
+        roles: {
+          orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
           select: {
-            key: true,
-            name: true,
-            isSuperAdmin: true,
-            deletedAt: true,
-            permissions: { select: { permission: true } },
+            role: {
+              select: {
+                key: true,
+                name: true,
+                isSuperAdmin: true,
+                deletedAt: true,
+                permissions: { select: { permission: true } },
+              },
+            },
           },
         },
       },
     });
-    if (!staff || staff.staffRole.deletedAt !== null) {
+    // Every role gone is nobody to be — the guard's own answer, and
+    // this path has to give the same one or the app and the API
+    // disagree about whether somebody is signed in.
+    const resolved = staff === null ? null : resolveRoles(staff.roles, ALL_PERMISSION_KEYS);
+    if (!staff || resolved === null || resolved.roles.length === 0) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Staff session no longer valid',
       });
     }
-    const { staffRole, ...rest } = staff;
+    const { roles: _roles, ...rest } = staff;
     return {
       ...rest,
-      roleKey: staffRole.key,
-      roleName: staffRole.name,
-      // A super-admin role holds the catalogue implicitly, exactly as the
-      // guard resolves it — the two must agree or the UI hides a control
-      // the server would have allowed.
-      permissions: staffRole.isSuperAdmin
-        ? ALL_PERMISSION_KEYS
-        : staffRole.permissions.map((p) => p.permission),
+      roleKey: resolved.primary?.key ?? '',
+      roleName: resolved.primary?.name ?? '',
+      roleKeys: resolved.roles.map((r) => r.key),
+      roleNames: resolved.roles.map((r) => r.name),
+      // The UNION of every role held, resolved exactly as the guard
+      // resolves it — the two must agree or the UI hides a control the
+      // server would have allowed.
+      permissions: resolved.permissions,
     };
   }
 

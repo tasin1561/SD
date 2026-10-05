@@ -17,6 +17,23 @@ import {
   REQUIRE_STORE_PERMISSIONS_KEY,
   STORE_SELF_SERVICE_KEY,
 } from '../auth/require-store-permissions.decorator';
+import { resolveRoles, roleNamesFor } from '../auth/role-union';
+
+/** Every role this person holds, oldest grant first — see the staff guard. */
+const STORE_ROLE_ASSIGNMENTS = {
+  orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+  select: {
+    role: {
+      select: {
+        key: true,
+        name: true,
+        isOwner: true,
+        deletedAt: true,
+        permissions: { select: { permission: true } },
+      },
+    },
+  },
+};
 
 /**
  * Whether a reseller store may be used by its own team right now.
@@ -100,15 +117,7 @@ export class StoreJwtGuard implements CanActivate {
         email: true,
         fullName: true,
         emailVerifiedAt: true,
-        role: {
-          select: {
-            key: true,
-            name: true,
-            isOwner: true,
-            deletedAt: true,
-            permissions: { select: { permission: true } },
-          },
-        },
+        roles: STORE_ROLE_ASSIGNMENTS,
         store: {
           select: {
             id: true,
@@ -121,7 +130,16 @@ export class StoreJwtGuard implements CanActivate {
         },
       },
     });
-    if (!user || user.role.deletedAt !== null) {
+    if (!user) {
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Store session no longer valid',
+      });
+    }
+    // Every role gone is nobody to be — the staff guard's answer, asked
+    // of the union.
+    const resolved = resolveRoles(user.roles, ALL_STORE_PERMISSION_KEYS);
+    if (resolved.roles.length === 0) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Store session no longer valid',
@@ -160,9 +178,9 @@ export class StoreJwtGuard implements CanActivate {
       });
     }
 
-    const held: readonly string[] = user.role.isOwner
-      ? ALL_STORE_PERMISSION_KEYS
-      : user.role.permissions.map((p) => p.permission);
+    // The UNION of every role held; an OWNER role among them grants the
+    // whole catalogue (see `role-union.ts`).
+    const held: readonly string[] = resolved.permissions;
 
     const selfService =
       this.reflector.getAllAndOverride<boolean>(STORE_SELF_SERVICE_KEY, [
@@ -193,7 +211,7 @@ export class StoreJwtGuard implements CanActivate {
           entityId: user.id,
           metadata: {
             storeId: store.id,
-            role: user.role.key,
+            roles: resolved.roles.map((r) => r.key),
             required: [...required],
             path: req.url,
             method: req.method,
@@ -202,7 +220,7 @@ export class StoreJwtGuard implements CanActivate {
         });
         throw new ForbiddenException({
           code: 'INSUFFICIENT_PERMISSION',
-          message: `${user.role.name} does not hold: ${required.join(' or ')}`,
+          message: `${roleNamesFor(resolved.roles)} does not hold: ${required.join(' or ')}`,
         });
       }
     }
@@ -215,8 +233,10 @@ export class StoreJwtGuard implements CanActivate {
       fullName: user.fullName,
       emailVerifiedAt: user.emailVerifiedAt,
       jti: claims.jti,
-      roleKey: user.role.key,
-      roleName: user.role.name,
+      roleKey: resolved.primary?.key ?? '',
+      roleName: resolved.primary?.name ?? '',
+      roleKeys: resolved.roles.map((r) => r.key),
+      roleNames: resolved.roles.map((r) => r.name),
       permissions: held,
     };
     return true;
