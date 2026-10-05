@@ -20,6 +20,33 @@ const SETTING_ENABLED = 'courier.wallet_sync_enabled';
 const SETTING_WRITE = 'courier.wallet_sync_writes_enabled';
 const SETTING_WINDOW_DAYS = 'courier.wallet_sync_window_days';
 
+/**
+ * `PortalSessionService.freezeOnChallenge` raises this when the portal
+ * asks for an OTP or a captcha. Estate-wide rather than per account,
+ * because the pause it sets is.
+ */
+const SESSION_CHALLENGE_KEY = 'portal:challenge';
+
+/**
+ * ── ONE DIAGNOSIS, ONE KEY ────────────────────────────────
+ *
+ * These two were ONE key, and the two branches that raise them disagree
+ * about everything: kind, title and severity. So whichever failed first
+ * owned the row's identity and every later night overwrote its detail
+ * and its severity underneath it — which on 29 September 2026 left a
+ * HIGH "Delhivery is asking … to prove it is human" sitting over a
+ * MEDIUM selector timeout for six days, telling nobody after night one
+ * (NOTIF-16 notifies on HIGH, and only when the issue is new) and
+ * sending whoever read it to clear a challenge that did not exist.
+ *
+ * Shiprocket's side already worked this way — a key per diagnosis,
+ * `shiprocket-portal-{challenge,rejected,egress,login}` — for exactly
+ * this reason.
+ */
+const challengeKeyFor = (courierAccountId: string): string =>
+  `wallet-sync-challenge:${courierAccountId}`;
+const failureKeyFor = (courierAccountId: string): string => `wallet-sync:${courierAccountId}`;
+
 /** Days of slack before a short export counts as short. */
 const COVERAGE_SLACK_DAYS = 3;
 /** Below this, a short span means a quiet week rather than a short window. */
@@ -40,10 +67,21 @@ function spanDays(fromIso: string | null, toIso: string | null): number | null {
   return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 
-/** One account's fetch. Several Delhivery accounts means several. */
+/**
+ * What happened to one account. Several Delhivery accounts means several.
+ *
+ * `outcome` speaks `PnlNightlyGateService`'s vocabulary on purpose: it
+ * reads this very metadata off the `courier.wallet_ledger.synced` audit
+ * row to decide whether a month may close FINAL, and only READ /
+ * CHECKED / SKIPPED count as "the account was read". So CHALLENGE keeps
+ * the month PROVISIONAL, which is right — nothing was imported.
+ */
+export type WalletSyncOutcome = 'READ' | 'CHALLENGE' | 'FAILED';
+
 export interface WalletSyncAccountResult {
   readonly courierAccountId: string;
   readonly label: string;
+  readonly outcome: WalletSyncOutcome;
   readonly fileBytes: number | null;
   readonly result: WalletImportResult | null;
   readonly error: string | null;
@@ -135,7 +173,49 @@ export class WalletSyncService {
     const from = new Date(now.getTime() - windowDays * 86_400_000);
     const results: WalletSyncAccountResult[] = [];
 
+    /*
+      ── DO NOT KNOCK ON A DOOR THAT IS ALREADY ANSWERING A CHALLENGE ──
+
+      An open OTP or captcha cannot be solved by a browser, so a sign-in
+      attempted against it fails by construction — and CLAUDE.md is
+      explicit that hammering a courier portal is how an account gets
+      locked. This had no pre-check at all: it only classified the error
+      AFTERWARDS, with `/otp|captcha|challenge/i` over the message, so a
+      standing challenge meant a fresh browser session against an
+      impossible login every single night.
+
+      `ShiprocketWalletSyncService` already does this and the shape is
+      copied from it rather than invented again: read the open issue,
+      skip the account, say why. Both keys are consulted — the session's
+      own estate-wide one, and this job's per-account one — because
+      either means a person has to sign in by hand before anything here
+      can work.
+
+      Read ONCE for the whole run: it is the same two-row question for
+      every account, and the loop below can run for several minutes.
+    */
+    const challenges = await this.openChallengeKeys(accounts.map((a) => a.id));
+
     for (const account of accounts) {
+      const blockedBy = challenges.get(account.id);
+      if (blockedBy !== undefined) {
+        this.logger.warn(
+          { courierAccountId: account.id, label: account.label, dedupeKey: blockedBy },
+          'Skipping the Delhivery wallet sync: a sign-in challenge is still open',
+        );
+        results.push({
+          courierAccountId: account.id,
+          label: account.label,
+          outcome: 'CHALLENGE',
+          fileBytes: null,
+          result: null,
+          error: null,
+          rangeApplied: null,
+          exportWindow: null,
+          coveredDays: null,
+        });
+        continue;
+      }
       try {
         const {
           bytes: file,
@@ -154,6 +234,7 @@ export class WalletSyncService {
         results.push({
           courierAccountId: account.id,
           label: account.label,
+          outcome: 'READ',
           fileBytes: file.length,
           result,
           error: null,
@@ -171,12 +252,14 @@ export class WalletSyncService {
           account,
           result,
         });
-        // It worked, so clear its own alarm. A job that starts working
-        // again should not leave a stale row for a person to tidy.
-        await this.issues.resolveByKey(
-          `wallet-sync:${account.id}`,
-          'The sync completed on its own.',
-        );
+        // It worked, so clear its own alarms — BOTH of them. An issue
+        // raised under one key and cleared under another is how a HIGH
+        // row saying "sign in by hand" survives the night the sign-in
+        // started working again (the lesson
+        // `clearShiprocketOpenFailures` was extracted for).
+        for (const key of [failureKeyFor(account.id), challengeKeyFor(account.id)]) {
+          await this.issues.resolveByKey(key, 'The sync completed on its own.');
+        }
       } catch (err) {
         // One account's portal being down must not stop the others —
         // the same per-item failure isolation as the AWB and manifest
@@ -186,9 +269,11 @@ export class WalletSyncService {
           { err: message, courierAccountId: account.id, label: account.label },
           'Wallet ledger sync failed for one account; continuing with the rest',
         );
+        const challenge = /otp|captcha|challenge/i.test(message);
         results.push({
           courierAccountId: account.id,
           label: account.label,
+          outcome: challenge ? 'CHALLENGE' : 'FAILED',
           fileBytes: null,
           result: null,
           error: message,
@@ -197,36 +282,50 @@ export class WalletSyncService {
           coveredDays: null,
         });
 
-        // Say so where somebody will see it. A cost sync that stops
-        // working is invisible otherwise: the figures simply stop
-        // moving, and nobody notices until a margin looks wrong weeks
-        // later.
-        const challenge = /otp|captcha|challenge/i.test(message);
-        await this.issues.raise({
-          kind: challenge
-            ? SystemIssueKind.COURIER_PORTAL_CHALLENGE
-            : SystemIssueKind.COURIER_COST_SYNC,
-          // A one-off overnight failure is not urgent — the window is
-          // rolling and tomorrow re-reads it. A CHALLENGE is, because
-          // nothing will run again until a person answers it.
-          severity: challenge ? SystemIssueSeverity.HIGH : SystemIssueSeverity.MEDIUM,
-          title: challenge
-            ? `Delhivery is asking ${account.label} to prove it is human`
-            : `Could not read what Delhivery charged ${account.label}`,
-          detail: challenge
-            ? 'The portal presented an OTP or captcha, so the nightly cost sync cannot log in. ' +
-              'Sign in by hand once to clear it. Until then no courier costs are being recorded ' +
-              'for this account and the P&L will report its margin as uncovered.'
-            : `The nightly wallet sync failed: ${message}\n\n` +
+        /*
+          Say so where somebody will see it. A cost sync that stops
+          working is invisible otherwise: the figures simply stop moving,
+          and nobody notices until a margin looks wrong weeks later.
+
+          TWO KEYS, one per diagnosis — see `challengeKeyFor`. "A person
+          must go and sign in" and "the page or the login has changed"
+          need different actions and different urgencies, and a shared
+          key made each night's row contradict its own title.
+        */
+        if (challenge) {
+          await this.issues.raise({
+            kind: SystemIssueKind.COURIER_PORTAL_CHALLENGE,
+            // Nothing will run again until a person answers it.
+            severity: SystemIssueSeverity.HIGH,
+            title: `Delhivery is asking ${account.label} to prove it is human`,
+            detail:
+              'The portal presented an OTP or captcha, so the nightly cost sync cannot log in. ' +
+              'Sign in by hand once to clear it, then resolve this issue — until it is open, ' +
+              'this sync will not try again for this account. Meanwhile no courier costs are ' +
+              'being recorded for it and the P&L will report its margin as uncovered.',
+            source: 'WalletSyncService',
+            dedupeKey: challengeKeyFor(account.id),
+            metadata: { courierAccountId: account.id, label: account.label, error: message },
+          });
+        } else {
+          await this.issues.raise({
+            kind: SystemIssueKind.COURIER_COST_SYNC,
+            // A one-off overnight failure is not urgent — the window is
+            // rolling and tomorrow re-reads it.
+            severity: SystemIssueSeverity.MEDIUM,
+            title: `Could not read what Delhivery charged ${account.label}`,
+            detail:
+              `The nightly wallet sync failed: ${message}\n\n` +
               'Costs for this account are not updating. It retries tonight; if this keeps ' +
               'recurring the portal has probably changed and the login needs looking at. ' +
               'Meanwhile the ledger can be uploaded by hand on the Delhivery page.',
-          source: 'WalletSyncService',
-          // The ACCOUNT, not the moment — a key carrying a timestamp
-          // would open a fresh row every night.
-          dedupeKey: `wallet-sync:${account.id}`,
-          metadata: { courierAccountId: account.id, label: account.label, error: message },
-        });
+            source: 'WalletSyncService',
+            // The ACCOUNT, not the moment — a key carrying a timestamp
+            // would open a fresh row every night.
+            dedupeKey: failureKeyFor(account.id),
+            metadata: { courierAccountId: account.id, label: account.label, error: message },
+          });
+        }
       }
     }
 
@@ -315,6 +414,58 @@ export class WalletSyncService {
    * window, and an alarm that fires on quiet is one people learn to
    * ignore.
    */
+  /**
+   * Which accounts are behind an unanswered sign-in challenge, and under
+   * which key.
+   *
+   * ONE query for the whole run, and it asks for the two keys by name
+   * rather than by prefix: a prefix would also match
+   * `wallet-sync:<id>` — the ordinary "the page changed" failure — and
+   * skipping the account for THAT would mean a transient portal error
+   * silenced the sync permanently, with nothing to clear it because the
+   * only thing that clears it is a successful run.
+   *
+   * Returns a map so the caller can say which key it is waiting on; an
+   * operator reading the log needs to know whether to clear the
+   * estate-wide row or this account's.
+   *
+   * FAILS OPEN. If this read throws, the sync proceeds and the session
+   * reports whatever is really wrong — the alternative is a database
+   * blip costing a night's costs for every account.
+   */
+  private async openChallengeKeys(
+    courierAccountIds: readonly string[],
+  ): Promise<ReadonlyMap<string, string>> {
+    const perAccount = new Map(courierAccountIds.map((id) => [challengeKeyFor(id), id]));
+    try {
+      const open = await this.prisma.client.systemIssue.findMany({
+        where: {
+          resolvedAt: null,
+          dedupeKey: { in: [SESSION_CHALLENGE_KEY, ...perAccount.keys()] },
+        },
+        select: { dedupeKey: true },
+      });
+      const blocked = new Map<string, string>();
+      for (const row of open) {
+        if (row.dedupeKey === SESSION_CHALLENGE_KEY) {
+          // The session's pause is estate-wide, so this stops every
+          // account rather than the one that met it.
+          for (const id of courierAccountIds) blocked.set(id, row.dedupeKey);
+          continue;
+        }
+        const id = perAccount.get(row.dedupeKey);
+        if (id !== undefined) blocked.set(id, row.dedupeKey);
+      }
+      return blocked;
+    } catch (err) {
+      this.logger.error(
+        { err: err instanceof Error ? err.message : String(err) },
+        'Could not read open portal challenges; running the sync anyway',
+      );
+      return new Map();
+    }
+  }
+
   private async reportCoverage(
     account: { id: string; label: string },
     windowDays: number,

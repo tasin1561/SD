@@ -34,6 +34,10 @@ function make(
       ourAmountInr: string;
       theirAmountInr: string;
     }>;
+    /** Dedupe keys of issues that are open when the run starts. */
+    openIssues?: string[];
+    /** Make the open-issue lookup throw, to prove it fails OPEN. */
+    issueLookupThrows?: boolean;
   } = {},
 ) {
   const settings: Record<string, AnyArgs> = {
@@ -46,8 +50,20 @@ function make(
   });
   const accounts = opts.accounts ?? [{ id: 'acct-1', label: 'Delhivery — MS EXPORTS' }];
   const findMany = jest.fn(async () => accounts);
+  // The challenge pre-check's own query. Answering it honestly matters:
+  // the service FAILS OPEN on an error, so a fake that threw would make
+  // every case below pass for the wrong reason.
+  const issueFindMany = jest.fn(async ({ where }: { where: { dedupeKey: { in: string[] } } }) => {
+    if (opts.issueLookupThrows === true) throw new Error('db down');
+    const open = opts.openIssues ?? [];
+    return where.dedupeKey.in.filter((k) => open.includes(k)).map((dedupeKey) => ({ dedupeKey }));
+  });
   const prisma = {
-    client: { systemSetting: { findUnique }, courierAccount: { findMany } },
+    client: {
+      systemSetting: { findUnique },
+      courierAccount: { findMany },
+      systemIssue: { findMany: issueFindMany },
+    },
   } as unknown as PrismaService;
 
   const fetch = jest.fn(async () => {
@@ -82,11 +98,15 @@ function make(
   }));
   const importer = { importDelhiveryWallet } as unknown as WalletImportService;
 
-  const auditLog = jest.fn(async () => undefined);
+  // Parameters declared so `mock.calls[n][0]` is typed rather than `never`.
+  const auditLog = jest.fn(async (_input: Record<string, unknown>) => undefined);
   const audit = { log: auditLog } as unknown as AuditLogService;
 
-  const raise = jest.fn(async () => ({ id: 'issue-1', isNew: true }));
-  const resolveByKey = jest.fn(async () => 1);
+  const raise = jest.fn(async (_input: Record<string, unknown>) => ({
+    id: 'issue-1',
+    isNew: true,
+  }));
+  const resolveByKey = jest.fn(async (_key: string, _note: string) => 1);
   const issues = { raise, resolveByKey } as unknown as SystemIssueService;
 
   /**
@@ -120,7 +140,29 @@ function make(
     raise,
     resolveByKey,
     reconcile,
+    issueFindMany,
   };
+}
+
+/** The shape of a `raise()` call, narrowed to what these cases read. */
+interface RaisedIssue {
+  readonly dedupeKey: string;
+  readonly severity: string;
+  readonly title: string;
+}
+
+/** Every dedupeKey the run raised, in order. */
+function raisedKeys(raise: jest.Mock): string[] {
+  return raise.mock.calls.map((c) => (c[0] as RaisedIssue).dedupeKey);
+}
+
+/** The issue raised under one key, or a failure naming the key. */
+function raisedUnder(raise: jest.Mock, dedupeKey: string): RaisedIssue {
+  const found = raise.mock.calls
+    .map((c) => c[0] as RaisedIssue)
+    .find((i) => i.dedupeKey === dedupeKey);
+  if (found === undefined) throw new Error(`nothing was raised under ${dedupeKey}`);
+  return found;
 }
 
 describe('WalletSyncService', () => {
@@ -429,5 +471,114 @@ describe('WalletSyncService — their ledger changed its history', () => {
     await svc.sync();
     expect(issueFor(raise, 'wallet-txn-missing:acct-1')).toBeUndefined();
     expect(issueFor(raise, 'wallet-txn-mutated:acct-1')).toBeUndefined();
+  });
+});
+
+/**
+ * ── A STANDING CHALLENGE STOPS THE SYNC BEFORE THE BROWSER OPENS ──────
+ *
+ * An OTP or captcha cannot be answered by a browser, so a sign-in
+ * attempted against one fails by construction — and CLAUDE.md is
+ * explicit that hammering a courier portal is how an account gets
+ * locked. `ShiprocketWalletSyncService` has checked for an open
+ * challenge before signing in since September; this service had no such
+ * check at all and only classified the error AFTERWARDS, so a standing
+ * challenge meant a fresh browser session against an impossible login
+ * every single night.
+ */
+describe('an open sign-in challenge', () => {
+  it('skips the account rather than opening a browser against it', async () => {
+    const { svc, fetch } = make({ openIssues: ['wallet-sync-challenge:acct-1'] });
+    const out = await svc.sync();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(out.accounts[0]?.outcome).toBe('CHALLENGE');
+  });
+
+  it('honours the SESSION’s own estate-wide key too', async () => {
+    // `PortalSessionService.freezeOnChallenge` raises `portal:challenge`
+    // and pauses the channel for 24 hours. Either key means a person
+    // must sign in by hand before anything here can work.
+    const { svc, fetch } = make({ openIssues: ['portal:challenge'] });
+    await svc.sync();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the month PROVISIONAL — nothing was imported', async () => {
+    // PnlNightlyGateService reads this metadata off the audit row and
+    // counts only READ / CHECKED / SKIPPED as "the account was read".
+    // CHALLENGE must not be in that set, or a month closes FINAL over
+    // costs that never arrived.
+    const { svc, auditLog } = make({ openIssues: ['portal:challenge'] });
+    await svc.sync();
+    const meta = auditLog.mock.calls[0]?.[0] as {
+      metadata: { accounts: Array<{ outcome: string }> };
+    };
+    expect(meta.metadata.accounts[0]?.outcome).toBe('CHALLENGE');
+    expect(['READ', 'CHECKED', 'SKIPPED']).not.toContain(meta.metadata.accounts[0]?.outcome);
+  });
+
+  it('does NOT skip on the ordinary failure key', async () => {
+    // `wallet-sync:<id>` is "the page or the login changed" — a
+    // transient that only a successful run clears. Skipping on it would
+    // silence the sync for ever with nothing able to un-silence it.
+    const { svc, fetch } = make({ openIssues: ['wallet-sync:acct-1'] });
+    await svc.sync();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('FAILS OPEN — a database blip must not cost a night of costs', async () => {
+    const { svc, fetch } = make({ issueLookupThrows: true });
+    await svc.sync();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the other accounts alone', async () => {
+    const { svc, fetch } = make({
+      accounts: [
+        { id: 'acct-1', label: 'A' },
+        { id: 'acct-2', label: 'B' },
+      ],
+      openIssues: ['wallet-sync-challenge:acct-1'],
+    });
+    const out = await svc.sync();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(out.accounts.map((a) => a.outcome)).toEqual(['CHALLENGE', 'READ']);
+  });
+});
+
+/**
+ * ── ONE DIAGNOSIS, ONE KEY ────────────────────────────────────────────
+ *
+ * Both branches raised `wallet-sync:<account>` while disagreeing about
+ * kind, title and severity, so whichever failed first owned the row's
+ * identity and every later night rewrote the rest underneath it. On
+ * production that left a HIGH "asking … to prove it is human" sitting
+ * over a MEDIUM selector timeout for six days, telling nobody after the
+ * first night.
+ */
+describe('the two failure diagnoses have a key each', () => {
+  it('a challenge gets the challenge key, HIGH', async () => {
+    const { svc, raise } = make({ pageThrows: new Error('Portal presented a CAPTCHA challenge') });
+    await svc.sync();
+    expect(raisedUnder(raise, 'wallet-sync-challenge:acct-1').severity).toBe('HIGH');
+    expect(raisedKeys(raise)).not.toContain('wallet-sync:acct-1');
+  });
+
+  it('anything else gets the plain failure key, MEDIUM', async () => {
+    const { svc, raise } = make({ pageThrows: new Error('the Download Ledger button is gone') });
+    await svc.sync();
+    expect(raisedUnder(raise, 'wallet-sync:acct-1').severity).toBe('MEDIUM');
+    expect(raisedKeys(raise)).not.toContain('wallet-sync-challenge:acct-1');
+  });
+
+  it('a good night clears BOTH of its own keys', async () => {
+    // An issue raised under one key and cleared under another is how a
+    // HIGH "sign in by hand" survives the night the sign-in started
+    // working again.
+    const { svc, resolveByKey } = make({ enabled: true, writes: true });
+    await svc.sync();
+    const cleared = resolveByKey.mock.calls.map((c) => String(c[0]));
+    expect(cleared).toContain('wallet-sync:acct-1');
+    expect(cleared).toContain('wallet-sync-challenge:acct-1');
   });
 });
