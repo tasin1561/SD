@@ -16,6 +16,22 @@ import type { ResellerStoreStatusValue } from '@skydrop/api-client';
  * no store id in any URL here, by construction.
  */
 
+/**
+ * The five roles every store is created with.
+ *
+ * It is the WHOLE vocabulary today, and not by luck: `store_roles` is a
+ * per-store table, but `provisionDefaultStoreRoles` is its only writer
+ * — there is no store role editor — so every store has exactly these
+ * five and the server's own DTO binds to the same list.
+ *
+ * Kept as a union for the one place a role is named in code (the invite
+ * form opens on `ops`), but deliberately NOT what the pickers are typed
+ * on: they are built from the `roles` list `GET /store/team` returns and
+ * send those keys back unchanged. Narrowing a server-supplied key to
+ * this union would need a cast that starts lying the day a sixth role
+ * can be made, and the screen would refuse a role the store really has
+ * — which is a worse failure than letting the server answer.
+ */
 export type StoreRoleKey = 'owner' | 'admin' | 'ops' | 'finance' | 'viewer';
 
 export interface StoreProfileView {
@@ -32,8 +48,13 @@ export interface StoreMemberView {
   readonly id: string;
   readonly email: string;
   readonly fullName: string;
+  /** The FIRST role held — a label. `roleKeys` is all of them. */
   readonly roleKey: string;
   readonly roleName: string;
+  /** Every role held; a person may hold several. */
+  readonly roleKeys: readonly string[];
+  readonly roleNames: readonly string[];
+  /** True when ANY role held is the owner role. */
   readonly isOwner: boolean;
   readonly lastLoginAt: string | null;
   readonly createdAt: string;
@@ -43,8 +64,11 @@ export interface StoreInvitationView {
   readonly id: string;
   readonly email: string;
   readonly fullName: string;
+  /** The FIRST role offered — a label. `roleKeys` is all of them. */
   readonly roleKey: string;
   readonly roleName: string;
+  readonly roleKeys: readonly string[];
+  readonly roleNames: readonly string[];
   readonly expiresAt: string;
   readonly createdAt: string;
 }
@@ -141,10 +165,24 @@ export function useStoreTeam(enabled = true): UseQueryResult<StoreTeamView> {
   });
 }
 
+/**
+ * Invite a colleague onto one or more roles.
+ *
+ * `roleKeys` is sent as the screen had it — EMPTY INCLUDED, and the
+ * server's refusal is shown verbatim (FE-2).
+ *
+ * Deliberately NOT mirrored here, and the reason is sharper than
+ * "the server is the boundary": an empty set is refused in more than
+ * one place and the screen cannot know which one answers. The DTO's
+ * `ArrayMinSize(1)` catches it first and the filter calls that
+ * `BAD_REQUEST`; `NO_ROLES` is the service's own words for the same
+ * thing. A client-side copy would have to predict which, and would be
+ * wrong about the wording either way.
+ */
 export function useInviteStoreMember(): UseMutationResult<
   StoreInvitationView,
   Error,
-  { email: string; fullName: string; roleKey: StoreRoleKey }
+  { email: string; fullName: string; roleKeys: readonly string[] }
 > {
   const client = useApiClient();
   const qc = useQueryClient();
@@ -171,20 +209,30 @@ export function useRevokeStoreInvitation(): UseMutationResult<
   });
 }
 
-export function useChangeStoreMemberRole(): UseMutationResult<
+/**
+ * REPLACE the roles a member holds.
+ *
+ * The whole set goes over the wire, so a save states what the screen
+ * showed and there is no question of what an absent role meant. The
+ * team is refetched on FAILURE too: `MEMBER_CHANGED` means somebody
+ * else moved them while this screen was open, and the next attempt has
+ * to be made against what is true now rather than against the stale
+ * list the ticks were drawn from.
+ */
+export function useSetStoreMemberRoles(): UseMutationResult<
   StoreMemberView,
   Error,
-  { memberId: string; roleKey: StoreRoleKey }
+  { memberId: string; roleKeys: readonly string[] }
 > {
   const client = useApiClient();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ memberId, roleKey }) =>
-      client.request<StoreMemberView>(`/api/store/team/members/${memberId}/role`, {
+    mutationFn: ({ memberId, roleKeys }) =>
+      client.request<StoreMemberView>(`/api/store/team/members/${memberId}/roles`, {
         method: 'PATCH',
-        body: { roleKey },
+        body: { roleKeys },
       }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: TEAM }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: TEAM }),
   });
 }
 
