@@ -86,7 +86,6 @@ function makeGuard(opts: Opts) {
     switchToHttp: () => ({ getRequest: () => req }),
   } as unknown as ExecutionContext;
 
-   
   const guard = new StaffJwtGuard(jwt as any, prisma as any, reflector);
   return { guard, ctx, req };
 }
@@ -129,7 +128,7 @@ describe('StaffJwtGuard', () => {
   it('admits a holder and attaches the resolved permissions', async () => {
     const { guard, ctx, req } = makeGuard({ handlerRequires: ['callcenter.work'] });
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
-     
+
     expect((req as any).staff.permissions).toEqual(['callcenter.work']);
   });
 
@@ -148,7 +147,7 @@ describe('StaffJwtGuard', () => {
         handlerRequires: ['tickets.resolve'],
       });
       await expect(guard.canActivate(ctx)).resolves.toBe(true);
-       
+
       const staff = (req as any).staff;
       expect([...staff.permissions].sort()).toEqual([
         'callcenter.work',

@@ -277,7 +277,7 @@ describe('SellerJwtGuard — permission gate', () => {
         handlerRequires: ['wallet.view'],
       });
       await expect(guard.canActivate(ctx)).resolves.toBe(true);
-       
+
       const seller = (req as any).seller;
       expect([...seller.permissions].sort()).toEqual(['orders.view', 'wallet.view']);
       expect(seller.roleKeys).toEqual(['custom', 'finance']);
