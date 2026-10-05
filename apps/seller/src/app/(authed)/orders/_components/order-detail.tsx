@@ -728,14 +728,26 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               )}
 
               {/* RS-6 phase 3c — a reseller store's order: your transfer
-                  price, your fee shares, and when. Hidden from a VIEWER,
-                  whom the endpoint refuses (cosmetic — FE-2). */}
+                  price, your fee shares, and when.
+
+                  ── THE `role !== 'VIEWER'` CHECK IS GONE ─────────────
+                  It read the LEGACY `SellerUserRole` enum, which is null
+                  for anybody holding only roles the company invented, so
+                  `null !== 'VIEWER'` is true and it had stopped closing
+                  anything for exactly those people. Worse, it was a
+                  client-side mirror of a policy the server does not
+                  have: `SellerResellerOrderMoneyController` is gated on
+                  `orders.view`, which the `viewer` role holds, so this
+                  was the ONLY thing standing between a viewer and the
+                  figures — and the UI is not a boundary (FE-2, RBAC-1).
+                  The gate is now exactly what the server enforces. If
+                  money is meant to be closed to viewers, the fix is that
+                  controller's permission, not a check here. */}
               <ResellerMoneyPanel
                 orderId={orderId}
                 enabled={
                   detail.data.storeKind === 'RESELLER' &&
                   identity !== null &&
-                  identity.role !== 'VIEWER' &&
                   can(identity, 'orders.view')
                 }
               />
