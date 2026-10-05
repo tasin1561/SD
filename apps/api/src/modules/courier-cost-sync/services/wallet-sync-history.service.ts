@@ -1,11 +1,28 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
+import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 
 const ACTION_OK = 'courier.wallet_ledger.synced';
 const ACTION_FAILED = 'courier.wallet_ledger.sync_failed';
 const SETTING_ENABLED = 'courier.wallet_sync_enabled';
 const SETTING_WRITE = 'courier.wallet_sync_writes_enabled';
 const SETTING_WINDOW_DAYS = 'courier.wallet_sync_window_days';
+
+/**
+ * Only keys under this prefix are ever presigned here.
+ *
+ * Restated from `courier-portal`'s `PORTAL_FAILURE_PREFIX` — the API
+ * cannot import that module (the portal worker is a separate root, and
+ * `portal-worker-isolation.spec.ts` enforces it) — exactly as
+ * `DELHIVERY_BILLING_PROBE_PREFIX` is restated beside it. The guard is
+ * the load-bearing half: the key comes out of an audit row's JSON, and
+ * presigning whatever a row happens to say would mint a link to any
+ * object in the bucket.
+ */
+export const PORTAL_FAILURE_PREFIX = 'courier-probes/portal-failures/';
+
+/** Enough to walk back through a bad week; bounded so a page cannot mint hundreds of links. */
+const MAX_PRESIGNED_ARTIFACTS = 24;
 
 export interface WalletSyncRunAccount {
   readonly label: string;
@@ -46,6 +63,31 @@ export interface WalletSyncRunAccount {
   readonly writesTruncated: number;
   /** Transactions we held that this run's export no longer contained. */
   readonly txnsMissing: number;
+  /**
+   * What was on screen when this account failed, presigned.
+   *
+   * Null on a success (nothing is captured on a good night) and on every
+   * run from before the capture existed. A screenshot nobody can reach
+   * is a screenshot nobody looks at, which is the whole point of taking
+   * one.
+   */
+  readonly failureArtifact: WalletSyncFailureArtifact | null;
+}
+
+export interface WalletSyncFailureArtifact {
+  /** Where the page was, query string already stripped by the capture. */
+  readonly url: string | null;
+  /** What the control the job was waiting on actually looked like. */
+  readonly control: string | null;
+  /** Presigned, short-lived, NEVER stored (the ORD/Spaces discipline). */
+  readonly screenshotUrl: string | null;
+  readonly pageTextUrl: string | null;
+  /**
+   * Set when the capture itself went wrong, or when a link could not be
+   * minted. Shown rather than swallowed: "there should be a screenshot
+   * and there is not" is a different fact from "nothing was captured".
+   */
+  readonly problem: string | null;
 }
 
 export interface WalletSyncWrite {
@@ -116,7 +158,12 @@ export interface CostCoverage {
  */
 @Injectable()
 export class WalletSyncHistoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(WalletSyncHistoryService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly spaces: SpacesService,
+  ) {}
 
   async panel(limit = 20): Promise<WalletSyncPanel> {
     const [settings, rows, cost] = await Promise.all([
@@ -133,7 +180,9 @@ export class WalletSyncHistoryService {
     ]);
 
     const byKey = new Map(settings.map((s) => [s.key, s]));
-    const history = rows.map((r) => toRun(r.action, r.createdAt, r.metadata));
+    const history = await this.withArtifactLinks(
+      rows.map((r) => toRun(r.action, r.createdAt, r.metadata)),
+    );
 
     return {
       enabled: byKey.get(SETTING_ENABLED)?.valueBoolean ?? false,
@@ -164,6 +213,81 @@ export class WalletSyncHistoryService {
    * parcel legitimately has no forward cost and counting it as missing
    * would make coverage look permanently broken.
    */
+  /**
+   * Turn each failure's stored KEYS into short-lived links.
+   *
+   * Presigned on read and NEVER stored — the discipline product images
+   * and the billing probe already follow: a URL in a column stops
+   * resolving the day the bucket's policy is right, and these are
+   * private objects on purpose.
+   *
+   * Bounded at `MAX_PRESIGNED_ARTIFACTS` across the whole panel, newest
+   * run first. The history is twenty runs and signing is local, so this
+   * is not about cost — it is about a page that cannot be made to mint
+   * an unbounded number of links by a run that failed on fifty accounts.
+   * Past the cap the artifact is still SHOWN, with its problem saying
+   * why it has no link, because silently dropping it would read as "no
+   * screenshot was taken".
+   *
+   * A signing failure costs one link, never the page: this method exists
+   * so that whether things are working can be SEEN, and it would be a
+   * poor sort of irony for it to 500.
+   */
+  private async withArtifactLinks(
+    runs: readonly WalletSyncRun[],
+  ): Promise<readonly WalletSyncRun[]> {
+    let budget = MAX_PRESIGNED_ARTIFACTS;
+    const out: WalletSyncRun[] = [];
+    for (const run of runs) {
+      const accounts: WalletSyncRunAccount[] = [];
+      for (const account of run.accounts) {
+        const a = account.failureArtifact;
+        if (a === null || (a.screenshotUrl === null && a.pageTextUrl === null)) {
+          accounts.push(account);
+          continue;
+        }
+        if (budget <= 0) {
+          accounts.push({
+            ...account,
+            failureArtifact: {
+              ...a,
+              screenshotUrl: null,
+              pageTextUrl: null,
+              problem:
+                a.problem ??
+                'The capture is stored, but this page links only the most recent failures.',
+            },
+          });
+          continue;
+        }
+        budget -= 1;
+        accounts.push({
+          ...account,
+          failureArtifact: {
+            ...a,
+            screenshotUrl: await this.link(a.screenshotUrl),
+            pageTextUrl: await this.link(a.pageTextUrl),
+          },
+        });
+      }
+      out.push({ ...run, accounts });
+    }
+    return out;
+  }
+
+  private async link(key: string | null): Promise<string | null> {
+    if (key === null) return null;
+    try {
+      return await this.spaces.presignGetUrl(key);
+    } catch (err) {
+      this.logger.warn(
+        { key, err: err instanceof Error ? err.message : String(err) },
+        'Could not presign a portal failure artefact',
+      );
+      return null;
+    }
+  }
+
   private async costCoverage(): Promise<CostCoverage> {
     const dispatched = { awbNumber: { not: null }, deletedAt: null } as const;
     const [d, fc, r, rc, fSum, rSum] = await Promise.all([
@@ -250,6 +374,50 @@ function toAccount(raw: unknown): WalletSyncRunAccount {
     writes: toWrites(res['writes']),
     writesTruncated: num(res, 'writesTruncated') ?? 0,
     txnsMissing: num(res, 'txnsMissing') ?? 0,
+    // Keys only at this stage; `panel()` mints the links. Kept apart so
+    // the JSON parsing stays pure and testable without a bucket.
+    failureArtifact: toArtifactKeys(a['artifact']),
+  };
+}
+
+/**
+ * The capture's own record, read back off the audit row.
+ *
+ * The KEYS come out here and the URLs are minted later, because
+ * presigning is async and this whole parsing layer is deliberately
+ * synchronous — one malformed audit row must not be able to throw on the
+ * page that exists to show whether things are working.
+ *
+ * A key outside the portal-failure prefix is DROPPED and said so, not
+ * presigned: the value came out of JSON, and a link to anything in the
+ * bucket is not a link this page may mint.
+ */
+function toArtifactKeys(raw: unknown): WalletSyncFailureArtifact | null {
+  if (raw === null || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const key = (k: string): string | null => {
+    const v = o[k];
+    if (typeof v !== 'string' || v === '') return null;
+    return v.startsWith(PORTAL_FAILURE_PREFIX) ? v : null;
+  };
+  const stored = { screenshot: key('screenshotKey'), text: key('textKey') };
+  const captureProblem = typeof o['error'] === 'string' ? o['error'] : null;
+  // A row that carried an artifact object but nothing readable is worth
+  // reporting as an artifact with a problem, not as "no artifact": the
+  // capture ran and produced nothing, which is itself a finding.
+  const outOfPrefix =
+    (typeof o['screenshotKey'] === 'string' && stored.screenshot === null) ||
+    (typeof o['textKey'] === 'string' && stored.text === null);
+  return {
+    url: typeof o['url'] === 'string' ? o['url'] : null,
+    control: typeof o['control'] === 'string' ? o['control'] : null,
+    // Replaced with links in `panel()`; the keys ride here in the
+    // meantime so the pure layer has somewhere to put them.
+    screenshotUrl: stored.screenshot,
+    pageTextUrl: stored.text,
+    problem: outOfPrefix
+      ? 'A stored file is not under the portal-failure prefix and was not linked.'
+      : captureProblem,
   };
 }
 

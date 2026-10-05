@@ -4511,6 +4511,23 @@ export interface WalletSyncRunAccount {
   readonly writes: readonly WalletSyncWrite[];
   readonly writesTruncated: number;
   readonly txnsMissing: number;
+  /** What was on screen when it failed. Null on a success. */
+  readonly failureArtifact: WalletSyncFailureArtifact | null;
+}
+
+/**
+ * The capture taken when a portal job failed.
+ *
+ * The urls are PRESIGNED and short-lived — minted per request, never
+ * stored — so they must not be cached or passed around; re-read the
+ * panel instead.
+ */
+export interface WalletSyncFailureArtifact {
+  readonly url: string | null;
+  readonly control: string | null;
+  readonly screenshotUrl: string | null;
+  readonly pageTextUrl: string | null;
+  readonly problem: string | null;
 }
 
 export interface WalletSyncWrite {

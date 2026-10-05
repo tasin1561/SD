@@ -36,3 +36,16 @@
 .cs-block {
   display: block;
 }
+/* The failure capture: the page it died on, the control that was there,
+   and links to the screenshot and page text. Stacked with a hair of
+   space because each line is a separate fact somebody reads in order,
+   and `overflow-wrap` because a Spaces key is one long unbreakable
+   token that would otherwise push the card wider than the phone (FE-7:
+   no horizontal document scroll at 320px). */
+.cs-artifact {
+  display: grid;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
