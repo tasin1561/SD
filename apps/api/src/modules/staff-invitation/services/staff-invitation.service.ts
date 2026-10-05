@@ -656,7 +656,20 @@ export class StaffInvitationService {
     newRoleIds: readonly string[],
     actor: { staffId: string },
     ctx: ClientContext,
-  ): Promise<{ id: string; roleIds: readonly string[]; roleNames: readonly string[] }> {
+  ): Promise<{
+    id: string;
+    roleIds: readonly string[];
+    roleNames: readonly string[];
+    /**
+     * The FIRST role, so the response keeps the shape the single-role
+     * `/role` route's callers already read. They are still live across
+     * the deploy that introduces `/roles`, and a field that silently
+     * became `undefined` would show up as a blank in a toast rather
+     * than as an error anybody notices.
+     */
+    roleId: string;
+    roleName: string;
+  }> {
     if (targetStaffId === actor.staffId) {
       throw new BadRequestException({
         code: 'CANNOT_CHANGE_OWN_ROLE',
@@ -690,6 +703,8 @@ export class StaffInvitationService {
         id: before.id,
         roleIds: targets.map((t) => t.id),
         roleNames: targets.map((t) => t.name),
+        roleId: targets[0]?.id ?? '',
+        roleName: targets[0]?.name ?? '',
       };
     }
 
@@ -750,6 +765,8 @@ export class StaffInvitationService {
       id: targetStaffId,
       roleIds: targets.map((t) => t.id),
       roleNames: targets.map((t) => t.name),
+      roleId: targets[0]?.id ?? '',
+      roleName: targets[0]?.name ?? '',
     };
   }
 

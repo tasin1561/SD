@@ -615,7 +615,14 @@ export class SellerTeamService {
     newRoleIds: readonly string[],
     actor: { sellerUserId: string },
     ctx: ClientContext,
-  ): Promise<{ id: string; roleIds: readonly string[]; roleNames: readonly string[] }> {
+  ): Promise<{
+    id: string;
+    roleIds: readonly string[];
+    roleNames: readonly string[];
+    /** The FIRST role — keeps the single-role route's response shape. */
+    roleId: string;
+    roleName: string;
+  }> {
     if (targetUserId === actor.sellerUserId) {
       throw new BadRequestException({
         code: 'CANNOT_CHANGE_OWN_ROLE',
@@ -651,6 +658,8 @@ export class SellerTeamService {
         id: target.id,
         roleIds: targets.map((t) => t.id),
         roleNames: targets.map((t) => t.name),
+        roleId: targets[0]?.id ?? '',
+        roleName: targets[0]?.name ?? '',
       };
     }
 
@@ -710,6 +719,8 @@ export class SellerTeamService {
       id: targetUserId,
       roleIds: targets.map((t) => t.id),
       roleNames: targets.map((t) => t.name),
+      roleId: targets[0]?.id ?? '',
+      roleName: targets[0]?.name ?? '',
     };
   }
 
