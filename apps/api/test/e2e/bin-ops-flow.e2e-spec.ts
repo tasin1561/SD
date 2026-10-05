@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { StockMovementType } from '@skydrop/db';
+import { StockTransferService } from '../../src/modules/inventory-transfer/services/stock-transfer.service';
 import {
   bootTestApp,
   createTestStaff,
@@ -679,8 +680,6 @@ describe('Bin ops flow (e2e)', () => {
       // through HTTP because the only route to it is a pre-WMS-8e
       // shipment, which is a fixture that no longer occurs; the waiver
       // itself is what this proves.
-      const { StockTransferService } =
-        await import('../../src/modules/inventory-transfer/services/stock-transfer.service');
       const transfers = h.app.get(StockTransferService);
 
       const hold = await makeBin('R', 'RTO_HOLD');
