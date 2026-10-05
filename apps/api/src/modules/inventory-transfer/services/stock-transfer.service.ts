@@ -4,6 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockMutationService } from '../../inventory-shared/stock-mutation.service';
+import {
+  MOVE_MAKES_STOCK_SELLABLE_CODE,
+  moveMakesStockSellableMessage,
+  moveWouldMakeStockSellable,
+} from '../../inventory-shared/bin-policy.service';
 
 export interface StockTransferInput {
   readonly sellerId: string;
@@ -16,6 +21,25 @@ export interface StockTransferInput {
   readonly destBinId: string;
   readonly destBatchId: string;
   readonly reason?: string | null;
+  /**
+   * The caller has ALREADY established which units may leave a bin a
+   * picker cannot reach, and that they should become sellable.
+   *
+   * Ordinarily this move is refused (BIN-2 — see
+   * `moveWouldMakeStockSellable`), because it silently reverses a
+   * decision somebody made about those goods. `RtoPutawayService` is the
+   * one path for which it is the whole point: it offers only the units a
+   * finalize restocked, subtracts the ones nobody has decided about yet,
+   * and refuses a non-pickable destination of its own — so by the time
+   * it calls here the judgement has been made and recorded.
+   *
+   * It is NOT reachable from any HTTP body: `CreateStockTransferDto` does
+   * not declare it, and the admin controller builds this input field by
+   * field rather than passing the DTO through.
+   * `stock-transfer-non-pickable.spec.ts` pins that `RtoPutawayService`
+   * is the only source file that passes it.
+   */
+  readonly allowFromNonPickableBin?: true;
 }
 
 export interface StockTransferResult {
@@ -79,16 +103,26 @@ export class StockTransferService {
     // Destination bin + batch must actually belong to the destination
     // warehouse, else the movement would write a stock_level whose
     // warehouse/bin/batch disagree with each other.
-    const [destBin, destBatch] = await Promise.all([
+    const [sourceBin, destBin, destBatch] = await Promise.all([
+      this.prisma.client.warehouseBin.findFirst({
+        where: { id: input.sourceBinId, deletedAt: null },
+        select: { id: true, code: true, type: true },
+      }),
       this.prisma.client.warehouseBin.findFirst({
         where: { id: input.destBinId, deletedAt: null },
-        select: { id: true, warehouseId: true },
+        select: { id: true, warehouseId: true, code: true, type: true },
       }),
       this.prisma.client.stockBatch.findFirst({
         where: { id: input.destBatchId, deletedAt: null },
         select: { id: true, warehouseId: true, variantId: true, sellerId: true },
       }),
     ]);
+    if (!sourceBin) {
+      throw new NotFoundException({
+        code: 'SOURCE_BIN_NOT_FOUND',
+        message: `Source bin ${input.sourceBinId} not found`,
+      });
+    }
     if (!destBin) {
       throw new NotFoundException({
         code: 'DEST_BIN_NOT_FOUND',
@@ -119,6 +153,23 @@ export class StockTransferService {
       throw new BadRequestException({
         code: 'DEST_BATCH_OWNER_MISMATCH',
         message: `Destination batch ${input.destBatchId} does not belong to this seller/variant`,
+      });
+    }
+
+    // A transfer may not make unsellable stock sellable (BIN-2). The
+    // warehouse/batch checks above stop a move writing an INCOHERENT
+    // stock_level; this one stops a coherent move that quietly reverses
+    // a decision — a return nobody triaged, a unit written off as
+    // damaged, or goods still in the air between Dhaka and India
+    // (CNS-1). The only sanctioned exception states itself; see
+    // `allowFromNonPickableBin`.
+    if (
+      input.allowFromNonPickableBin !== true &&
+      moveWouldMakeStockSellable(sourceBin.type, destBin.type)
+    ) {
+      throw new BadRequestException({
+        code: MOVE_MAKES_STOCK_SELLABLE_CODE,
+        message: moveMakesStockSellableMessage(sourceBin, destBin),
       });
     }
 

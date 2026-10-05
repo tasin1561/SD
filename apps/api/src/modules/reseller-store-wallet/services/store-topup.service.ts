@@ -33,6 +33,18 @@ const PROOF_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'appl
 const PROOF_PUT_TTL_SECONDS = 15 * 60;
 const PROOF_READ_TTL_SECONDS = 15 * 60;
 
+/**
+ * Who is asking for a store's proof image.
+ *
+ * The seller-wallet twin of `TopupProofReader` — same argument, same
+ * shape: a store may only read its own, staff may read any and that read
+ * is audited. Stated rather than inferred from a nullable id, so the
+ * service can always name who it handed bank detail to.
+ */
+export type StoreTopupProofReader =
+  | { readonly kind: 'STORE'; readonly storeId: string }
+  | { readonly kind: 'STAFF'; readonly staffId: string };
+
 export interface StoreBankAccountView {
   readonly id: string;
   readonly label: string;
@@ -327,11 +339,23 @@ export class StoreTopupService {
     return rows.map(toView);
   }
 
-  /** A short-lived link to the proof. `storeId` scopes the store's own read; null is staff. */
-  async proofUrl(topupId: string, storeId: string | null): Promise<{ url: string }> {
+  /**
+   * A short-lived link to the proof.
+   *
+   * A bank-transfer screenshot: the store's account name and number, and
+   * what they moved. A STAFF read is audited HIGH before the URL is
+   * minted — see `WalletTopupService.proofUrl` for the full argument;
+   * this is the same information behind the same kind of door, and the
+   * two must not disagree about whether looking at it is recorded. The
+   * store reading its own is not audited.
+   */
+  async proofUrl(topupId: string, reader: StoreTopupProofReader): Promise<{ url: string }> {
     const row = await this.prisma.client.storeTopupRequest.findFirst({
-      where: { id: topupId, ...(storeId === null ? {} : { storeId }) },
-      select: { proofSpacesKey: true },
+      where: {
+        id: topupId,
+        ...(reader.kind === 'STORE' ? { storeId: reader.storeId } : {}),
+      },
+      select: { proofSpacesKey: true, storeId: true, sellerId: true },
     });
     if (row?.proofSpacesKey == null) {
       throw new NotFoundException({
@@ -339,6 +363,22 @@ export class StoreTopupService {
         message: 'This request has no uploaded proof',
       });
     }
+
+    if (reader.kind === 'STAFF') {
+      await this.audit.log({
+        actorType: ActorType.STAFF,
+        staffUserId: reader.staffId,
+        // The seller as well as the store: our bank book knows only the
+        // seller (TRE-8c), and "whose money was this" is asked of them.
+        sellerId: row.sellerId,
+        action: 'staff.store_topup.proof_revealed',
+        entityType: 'store_topup_request',
+        entityId: topupId,
+        severity: 'HIGH',
+        metadata: { storeId: row.storeId },
+      });
+    }
+
     return { url: await this.spaces.presignGetUrl(row.proofSpacesKey, PROOF_READ_TTL_SECONDS) };
   }
 

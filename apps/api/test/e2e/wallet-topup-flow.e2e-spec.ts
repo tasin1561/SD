@@ -208,4 +208,72 @@ describe('Wallet top-up flow (e2e)', () => {
     expect(sub.body.proofSpacesKey).toBeUndefined();
     expect(sub.body.hasProof).toBe(true);
   });
+
+  it('a staff read of the proof leaves a HIGH audit row that Postgres actually accepted', async () => {
+    /*
+      The proof is a bank-transfer screenshot — the seller's account name
+      and number. It was readable under the class-level `money.view`, a
+      plain read key spanning 22 handlers, with no row anywhere saying
+      anybody had looked; the same facts in structured form are behind
+      `sellers.bank_account.reveal`, which is dangerous and audited.
+
+      The ORDERING (audit before the link is minted) is a code fact and
+      is pinned in `topup-proof-is-bank-detail.spec.ts`. What only a real
+      database can say is that the row SURVIVES the insert.
+      `AuditLogService` swallows its own failures by design — an audit
+      write must never fail the operation it describes — and
+      `audit_logs.entity_id` is a UUID column, so a non-UUID is a P2023
+      that loses the WHOLE row while the request returns 200. A sensitive
+      read that looks recorded and is not is worse than one that was
+      never claimed to be, which is why this is asserted here and not
+      against a mock.
+    */
+    const sub = await request(h.baseUrl)
+      .post('/seller/wallet/topups')
+      .set(sellerAuth)
+      .send({
+        bankAccountId,
+        amount: 400,
+        proofSpacesKey: `topups/${sellerId}/statement.png`,
+        proofMimeType: 'image/png',
+      })
+      .expect(201);
+
+    const res = await request(h.baseUrl)
+      .get(`/admin/wallet/topups/${sub.body.id}/proof-url`)
+      .set(staffAuth)
+      .expect(200);
+    expect(typeof res.body.url).toBe('string');
+
+    const rows = await h.prisma.auditLog.findMany({
+      where: { action: 'staff.wallet_topup.proof_revealed' },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      severity: 'HIGH',
+      entityType: 'wallet_topup_request',
+      entityId: sub.body.id as string,
+      sellerId,
+    });
+    // Not diverted into `metadata.entityRef`, which is where the service
+    // puts an id that was not a uuid.
+    expect((rows[0]?.metadata as Record<string, unknown> | null)?.['entityRef']).toBeUndefined();
+  });
+
+  it('a claim with no proof is a 404 that says so, and records nothing', async () => {
+    const sub = await request(h.baseUrl)
+      .post('/seller/wallet/topups')
+      .set(sellerAuth)
+      .send({ bankAccountId, amount: 150, transactionRef: 'REF-NO-PROOF' })
+      .expect(201);
+    const miss = await request(h.baseUrl)
+      .get(`/admin/wallet/topups/${sub.body.id}/proof-url`)
+      .set(staffAuth)
+      .expect(404);
+    expect(miss.body.code).toBe('PROOF_NOT_FOUND');
+    // Nothing was revealed, so nothing is recorded as revealed.
+    expect(
+      await h.prisma.auditLog.count({ where: { action: 'staff.wallet_topup.proof_revealed' } }),
+    ).toBe(0);
+  });
 });

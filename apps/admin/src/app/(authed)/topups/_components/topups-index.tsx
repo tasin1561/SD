@@ -197,7 +197,16 @@ export function TopupsIndex(): ReactElement {
                       {t.transactionRef !== null && (
                         <span className="mk-body sk-ident">{t.transactionRef}</span>
                       )}
-                      {t.hasProof && (
+                      {/*
+                        The receipt is a bank-transfer screenshot, so the
+                        server now asks for `money.topups.review` and
+                        audits the read. Cosmetic as ever (FE-2) — the
+                        verdict would be surfaced verbatim if this were
+                        wrong — but a button that can only ever 403 is a
+                        worse surface than no button, and `mayReview` is
+                        the same gate the Accept and Reject controls use.
+                      */}
+                      {t.hasProof && mayReview && (
                         <button
                           type="button"
                           className="mk-inline-link"
@@ -205,6 +214,9 @@ export function TopupsIndex(): ReactElement {
                         >
                           <ReceiptText size={13} aria-hidden /> View receipt
                         </button>
+                      )}
+                      {t.hasProof && !mayReview && (
+                        <span className="mk-faint">Receipt attached</span>
                       )}
                       {t.transactionRef === null && !t.hasProof && (
                         <span className="mk-faint">—</span>

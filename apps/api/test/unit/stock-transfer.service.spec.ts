@@ -1,4 +1,4 @@
-import { StockMovementType } from '@skydrop/db';
+import { BinType, StockMovementType } from '@skydrop/db';
 import { StockTransferService } from '../../src/modules/inventory-transfer/services/stock-transfer.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
@@ -33,14 +33,41 @@ function baseInput(over: Partial<AnyArgs> = {}) {
 
 function makeService(
   opts: {
+    sourceBin?: AnyArgs | null;
     destBin?: AnyArgs | null;
     destBatch?: AnyArgs | null;
     applyThrows?: Error;
   } = {},
 ) {
-  const binFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
-    opts.destBin === undefined ? { id: DST_BIN, warehouseId: DST_WH } : opts.destBin,
-  );
+  /**
+   * Answers BY `where.id`, the way the database does.
+   *
+   * It used to return the same row for every `warehouseBin.findFirst`,
+   * which was invisible while the service looked up one bin and became
+   * wrong the moment it looked up two: with `destBin: null` the source
+   * lookup answered null as well, so the DEST_BIN_NOT_FOUND case stopped
+   * reaching the assertion it was written for. Same lesson as
+   * `pnl-fake-db.ts` — a fake that answers every query alike cannot show
+   * two queries disagreeing.
+   */
+  const bins = new Map<string, AnyArgs | null>([
+    [
+      SRC_BIN,
+      opts.sourceBin === undefined
+        ? { id: SRC_BIN, code: 'A-01-01', type: BinType.STORAGE }
+        : opts.sourceBin,
+    ],
+    [
+      DST_BIN,
+      opts.destBin === undefined
+        ? { id: DST_BIN, warehouseId: DST_WH, code: 'B-02-05', type: BinType.STORAGE }
+        : opts.destBin,
+    ],
+  ]);
+  const binFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async (args) => {
+    const id = (args['where'] as AnyArgs | undefined)?.['id'];
+    return bins.get(String(id)) ?? null;
+  });
   const batchFindFirst = jest.fn<Promise<AnyArgs | null>, [AnyArgs]>(async () =>
     opts.destBatch === undefined
       ? { id: DST_BATCH, warehouseId: DST_WH, variantId: VARIANT, sellerId: SELLER }
@@ -123,7 +150,7 @@ describe('StockTransferService.transfer', () => {
 
   it('supports a bin-to-bin move inside ONE warehouse (crossWarehouse=false)', async () => {
     const { svc, auditLog, apply } = makeService({
-      destBin: { id: DST_BIN, warehouseId: SRC_WH },
+      destBin: { id: DST_BIN, warehouseId: SRC_WH, code: 'B-02-05', type: BinType.STORAGE },
       destBatch: { id: DST_BATCH, warehouseId: SRC_WH, variantId: VARIANT, sellerId: SELLER },
     });
     await svc.transfer(baseInput({ destWarehouseId: SRC_WH }), STAFF);
@@ -162,9 +189,72 @@ describe('StockTransferService.transfer', () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
+  it('404 SOURCE_BIN_NOT_FOUND', async () => {
+    // The source bin is read so its TYPE can be judged (BIN-2); a
+    // missing one has to say so rather than fall through to an
+    // INSUFFICIENT_ON_HAND from the movement layer.
+    const { svc, apply } = makeService({ sourceBin: null });
+    await expect(svc.transfer(baseInput(), STAFF)).rejects.toMatchObject({
+      response: { code: 'SOURCE_BIN_NOT_FOUND' },
+    });
+    expect(apply).not.toHaveBeenCalled();
+  });
+
+  describe('BIN-2 — a transfer may not make unsellable stock sellable', () => {
+    const damaged = { id: SRC_BIN, code: 'D-01-01', type: BinType.DAMAGED };
+
+    it('refuses a non-pickable source moving to a pickable destination', async () => {
+      const { svc, apply } = makeService({ sourceBin: damaged });
+      await expect(svc.transfer(baseInput(), STAFF)).rejects.toMatchObject({
+        response: { code: 'TRANSFER_WOULD_MAKE_STOCK_SELLABLE' },
+      });
+      // Refused BEFORE the transaction — not rolled back out of it.
+      expect(apply).not.toHaveBeenCalled();
+    });
+
+    it('allows it within the non-pickable set: nothing becomes sellable', async () => {
+      const { svc, apply } = makeService({
+        sourceBin: damaged,
+        destBin: {
+          id: DST_BIN,
+          warehouseId: DST_WH,
+          code: 'Q-01-01',
+          type: BinType.QUARANTINE,
+        },
+      });
+      await svc.transfer(baseInput(), STAFF);
+      expect(apply).toHaveBeenCalledTimes(2);
+    });
+
+    it('allows the conservative direction: a shelf to a damaged bin', async () => {
+      const { svc, apply } = makeService({
+        destBin: { id: DST_BIN, warehouseId: DST_WH, code: 'D-01-01', type: BinType.DAMAGED },
+      });
+      await svc.transfer(baseInput(), STAFF);
+      expect(apply).toHaveBeenCalledTimes(2);
+    });
+
+    it('honours the waiver for the one caller that carries the judgement', async () => {
+      // `RtoPutawayService` moves a return out of RTO_HOLD and onto a
+      // shelf, which is this exact direction and is the point of the
+      // step. `stock-transfer-non-pickable.spec.ts` pins that it is the
+      // only source file passing the flag, and that no request body can.
+      const { svc, apply } = makeService({
+        sourceBin: { id: SRC_BIN, code: 'R-01-01', type: BinType.RTO_HOLD },
+      });
+      await svc.transfer(baseInput({ allowFromNonPickableBin: true }), STAFF);
+      expect(apply).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it('rejects DEST_BIN_WAREHOUSE_MISMATCH when the bin belongs elsewhere', async () => {
     const { svc, apply } = makeService({
-      destBin: { id: DST_BIN, warehouseId: 'wh-somewhere-else' },
+      destBin: {
+        id: DST_BIN,
+        warehouseId: 'wh-somewhere-else',
+        code: 'B-02-05',
+        type: BinType.STORAGE,
+      },
     });
     await expect(svc.transfer(baseInput(), STAFF)).rejects.toMatchObject({
       response: { code: 'DEST_BIN_WAREHOUSE_MISMATCH' },
