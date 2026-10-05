@@ -4,13 +4,22 @@ import { vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import type { StoreMe } from '@skydrop/api-client';
 import { AuthProvider } from '@skydrop/auth/client';
+import { ToastProvider } from '@skydrop/ui/app/toast';
 import { Toaster } from '@skydrop/ui/components';
 
 /**
  * The providers a store screen renders under: the query client, the store
- * identity (RS-2's third `IdentityKind`) and the toaster the app layout
- * mounts. A component that toasts throws without the last one, so it
- * belongs here rather than in each test.
+ * identity (RS-2's third `IdentityKind`) and the toasters the app layout
+ * mounts. A component that toasts throws without them, so they belong
+ * here rather than in each test.
+ *
+ * BOTH toast providers, because `AuthedShell` mounts both: the legacy
+ * `Toaster` from `@skydrop/ui/components` and the brand `ToastProvider`
+ * from `@skydrop/ui/app/toast`, which have separate contexts while the
+ * restyle is half done. Only the legacy one was here, so any screen
+ * calling the brand `useToast` threw inside render with a message
+ * blaming the layout — which is how the team screen (brand toasts since
+ * the restyle) had no test at all.
  */
 
 export function makeStoreUser(over: Partial<StoreMe> = {}): StoreMe {
@@ -22,6 +31,8 @@ export function makeStoreUser(over: Partial<StoreMe> = {}): StoreMe {
     emailVerifiedAt: '2026-09-01T00:00:00.000Z',
     roleKey: 'owner',
     roleName: 'Owner',
+    roleKeys: ['owner'],
+    roleNames: ['Owner'],
     permissions: ['wallet.view', 'wallet.withdrawals.manage', 'wallet.topups.manage'],
     store: {
       id: '019fad84-0000-7000-8000-000000000002',
@@ -60,7 +71,9 @@ export function renderStoreScreen(
     return (
       <QueryClientProvider client={queryClient}>
         <AuthProvider<StoreMe> identityKind="store" initialIdentity={identity}>
-          <Toaster>{children}</Toaster>
+          <Toaster>
+            <ToastProvider>{children}</ToastProvider>
+          </Toaster>
         </AuthProvider>
       </QueryClientProvider>
     );
