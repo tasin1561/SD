@@ -24,12 +24,14 @@ import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { Select } from '@skydrop/ui/app/select';
+import { MultiSelect } from '@skydrop/ui/app/multi-select';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { resellerStoreStatusKind, resellerStoreStatusLabel } from '@skydrop/ui/status';
 import type { ResellerStoreStatusValue } from '@skydrop/api-client';
 import { serverVerdict } from '@/lib/server-verdict';
+import { roleLine } from '@/lib/role-words';
 import { StoreActionsSection } from './_components/store-actions-section';
 import { StoreCatalogue } from './_components/store-catalogue';
 import { StoreWalletSection } from './_components/store-wallet-section';
@@ -424,7 +426,7 @@ function DecisionCard({ store }: { store: ResellerStoreDetail }): ReactElement {
     const invite: InviteInput = {
       email: inviteEmail.trim(),
       fullName: inviteName.trim(),
-      roleKey: 'owner',
+      roleKeys: ['owner'],
     };
     try {
       await approve.mutateAsync({ storeId: store.id, body: { invite } });
@@ -793,7 +795,12 @@ function TeamSection({
   const [inviting, setInviting] = useState(false);
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [roleKey, setRoleKey] = useState<StoreRoleKey>('owner');
+  // SEVERAL. A store user's permissions are the union of every role they
+  // hold, so somebody can do the daily work and the money without a
+  // bespoke sixth role being invented for them. Starts empty rather than
+  // on 'owner': a pre-ticked owner is how a colleague who should handle
+  // returns is given the whole store by somebody who did not look.
+  const [roleKeys, setRoleKeys] = useState<readonly StoreRoleKey[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function doInvite(e: FormEvent<HTMLFormElement>): Promise<void> {
@@ -802,12 +809,13 @@ function TeamSection({
     try {
       await invite.mutateAsync({
         storeId: store.id,
-        body: { email: email.trim(), fullName: fullName.trim(), roleKey },
+        body: { email: email.trim(), fullName: fullName.trim(), roleKeys },
       });
       toast.success(`Invitation sent to ${email.trim()}.`);
       setInviting(false);
       setEmail('');
       setFullName('');
+      setRoleKeys([]);
     } catch (err) {
       setError(serverVerdict(err));
     }
@@ -845,7 +853,7 @@ function TeamSection({
             <Tr>
               <Th>Name</Th>
               <Th>Email</Th>
-              <Th>Role</Th>
+              <Th>Roles</Th>
               <Th>State</Th>
               {/* Only an invitation can be acted on here: there is no seller
                   endpoint to change a store member's role or remove them —
@@ -858,7 +866,11 @@ function TeamSection({
               <Tr key={m.id}>
                 <Td className="rs-strong">{m.fullName}</Td>
                 <Td className="rs-small">{m.email}</Td>
-                <Td className="rs-small">{m.roleName}</Td>
+                {/* Every role held. `roleName` is the FIRST one — a
+                    label — so a member who is Ops AND Finance read as
+                    Ops, on the screen a seller uses to check who at a
+                    store can reach its money. */}
+                <Td className="rs-small">{roleLine(m)}</Td>
                 <Td className="rs-small">Last signed in {when(m.lastLoginAt)}</Td>
                 {store.team.invitations.length > 0 ? <Td /> : null}
               </Tr>
@@ -867,7 +879,7 @@ function TeamSection({
               <Tr key={i.id}>
                 <Td className="rs-strong">{i.fullName}</Td>
                 <Td className="rs-small">{i.email}</Td>
-                <Td className="rs-small">{i.roleName}</Td>
+                <Td className="rs-small">{roleLine(i)}</Td>
                 <Td className="rs-small">
                   <span className="rs-row">
                     <Mail size={13} aria-hidden />
@@ -949,18 +961,28 @@ function TeamSection({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <Select
+          {/* Not disabled on an empty selection: the server refuses that
+              and its words are what `error` shows (FE-2). Nothing here
+              names the code — which refusal it is depends on whether the
+              DTO, the service or the guard answers first. */}
+          <MultiSelect
             id="ti-role"
-            label="Role"
-            value={roleKey}
-            onChange={(e) => setRoleKey(e.target.value as StoreRoleKey)}
-          >
-            {store.team.roles.map((r) => (
-              <option key={r.key} value={r.key}>
-                {r.name}
-              </option>
-            ))}
-          </Select>
+            label="Roles"
+            required
+            options={store.team.roles.map((r) => ({
+              value: r.key,
+              label: r.name,
+              ...(r.description === null ? {} : { description: r.description }),
+            }))}
+            value={roleKeys}
+            onChange={(next) => {
+              setError(null);
+              setRoleKeys(next as readonly StoreRoleKey[]);
+            }}
+            placeholder={roleKeys.length === 0 ? 'Choose one or more roles' : 'Add another role'}
+            hint="They can do everything their roles cover between them."
+            emptyText="No matching role"
+          />
           {error !== null ? <RsError>{error}</RsError> : null}
         </form>
       </Dialog>
