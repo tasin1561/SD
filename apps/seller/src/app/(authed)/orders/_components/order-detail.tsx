@@ -740,15 +740,18 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   `orders.view`, which the `viewer` role holds, so this
                   was the ONLY thing standing between a viewer and the
                   figures — and the UI is not a boundary (FE-2, RBAC-1).
-                  The gate is now exactly what the server enforces. If
-                  money is meant to be closed to viewers, the fix is that
-                  controller's permission, not a check here. */}
+                  That was fixed where it belonged: the controller now
+                  requires `stores.order_money.view` (Admin, Finance, and
+                  the owner implicitly). This gate tracks that key so the
+                  panel is not offered to somebody the server will refuse
+                  — cosmetic, which FE-2 permits; what it forbids is the
+                  UI being the only check, which is what it used to be. */}
               <ResellerMoneyPanel
                 orderId={orderId}
                 enabled={
                   detail.data.storeKind === 'RESELLER' &&
                   identity !== null &&
-                  can(identity, 'orders.view')
+                  can(identity, 'stores.order_money.view')
                 }
               />
 
