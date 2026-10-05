@@ -370,8 +370,11 @@ describe('Bin ops flow (e2e)', () => {
     (CNS-1: it is the absence of a building rather than a place inside
     one) and is provisioned by the consignment dispatch, so there is no
     endpoint to make one with — and the transfer endpoints refuse a
-    non-pickable destination, which is the behaviour under test one
-    level along.
+    non-pickable SOURCE moving to a pickable destination, which is the
+    behaviour under test one level along. (Until 2026-10-05 they refused
+    nothing about bin types at all, and this comment said they refused a
+    non-pickable DESTINATION — which was never true of either of them.
+    Only `RtoPutawayService` has ever done that.)
   */
   it('collapse: leaves goods still in transit alone', async () => {
     await receiveInto(binA, 6);
@@ -443,5 +446,273 @@ describe('Bin ops flow (e2e)', () => {
       where: { variantId, binId: floor.id },
     });
     expect(floorLevel.qtyOnHand).toBe(6);
+  });
+  /*
+    ── A re-shelving may not make unsellable stock sellable (BIN-2) ────
+
+    Both bin movers wrote an identical pair of TRANSFER_OUT/TRANSFER_IN
+    rows whatever the bin TYPES were, so `warehouse.manage` could carry a
+    DAMAGED, QUARANTINE, RTO_HOLD or TRANSIT bin's whole contents onto the
+    pickable floor, and `inventory.transfers.manage` could do it one
+    variant at a time through `POST /admin/stock-transfers`. That is the
+    outcome BIN-4 excludes those types from a collapse to prevent, reached
+    by two other doors.
+
+    This needs a real database for the same reason the collapse test does:
+    a mocked Prisma has no bin types to filter on, so every unit-level
+    fact looks right on its own. The direction matters and only one of the
+    four is wrong, so each is driven here rather than asserted about.
+  */
+  describe('bin type gates a move (BIN-2)', () => {
+    /** A bin of any type, through the ordinary endpoint. */
+    async function makeBin(aisle: string, type: string): Promise<string> {
+      const res = await request(h.baseUrl)
+        .post(`/admin/warehouses/${warehouseId}/bins`)
+        .set(staffAuth)
+        .send({ zoneId, aisle, rack: '1', shelf: '1', type })
+        .expect(201);
+      return res.body.id as string;
+    }
+
+    async function onHandIn(binId: string): Promise<number> {
+      const rows = await h.prisma.stockLevel.findMany({ where: { variantId, binId } });
+      return rows.reduce((sum, r) => sum + r.qtyOnHand, 0);
+    }
+
+    it('refuses DAMAGED → a shelf, allows a shelf → DAMAGED, allows DAMAGED → QUARANTINE', async () => {
+      const damaged = await makeBin('D', 'DAMAGED');
+      const quarantine = await makeBin('Q', 'QUARANTINE');
+      await receiveInto(binA, 10);
+
+      // CONSERVATIVE, and allowed: goods on a shelf found broken and
+      // carried to DAMAGED. This also seeds the fixture for the refusal
+      // below, which is the point — the only way stock gets into a
+      // damaged bin is somebody deciding it belongs there.
+      await request(h.baseUrl)
+        .post(`/admin/warehouses/${warehouseId}/bin-ops/move-bin/${binA}`)
+        .set(staffAuth)
+        .send({ destBinId: damaged })
+        .expect(200);
+      expect(await onHandIn(damaged)).toBe(10);
+
+      // THE DEFECT: carrying it back out onto a shelf makes written-off
+      // goods sellable again with nobody deciding they should be.
+      const refused = await request(h.baseUrl)
+        .post(`/admin/warehouses/${warehouseId}/bin-ops/move-bin/${damaged}`)
+        .set(staffAuth)
+        .send({ destBinId: binB })
+        .expect(400);
+      expect(refused.body.code).toBe('TRANSFER_WOULD_MAKE_STOCK_SELLABLE');
+      // Refused, not partly applied.
+      expect(await onHandIn(damaged)).toBe(10);
+      expect(await onHandIn(binB)).toBe(0);
+
+      // NEUTRAL, and allowed: re-organising the corner the unsellable
+      // goods live in changes nothing about what is sellable. A blanket
+      // "never touch a hold bin" would have refused this, which is why
+      // the rule is about the direction.
+      await request(h.baseUrl)
+        .post(`/admin/warehouses/${warehouseId}/bin-ops/move-bin/${damaged}`)
+        .set(staffAuth)
+        .send({ destBinId: quarantine })
+        .expect(200);
+      expect(await onHandIn(quarantine)).toBe(10);
+      expect(await onHandIn(damaged)).toBe(0);
+    });
+
+    it('refuses TRANSIT → a shelf: goods in the air are not ours to shelve (CNS-1)', async () => {
+      await receiveInto(binA, 6);
+      const batch = await h.prisma.stockBatch.findFirstOrThrow({ where: { variantId } });
+      const level = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId } });
+
+      // Written through Prisma for the same reason the collapse test
+      // does it: TRANSIT is absent from the bin creator's own list
+      // (CNS-1) and is provisioned by a consignment dispatch.
+      const transit = await h.prisma.warehouseBin.create({
+        data: { warehouseId, zoneId, code: 'TRANSIT', type: 'TRANSIT' },
+        select: { id: true },
+      });
+      await h.prisma.stockLevel.create({
+        data: {
+          sellerId: level.sellerId,
+          variantId,
+          warehouseId,
+          binId: transit.id,
+          batchId: batch.id,
+          qtyOnHand: 9,
+        },
+      });
+
+      const refused = await request(h.baseUrl)
+        .post(`/admin/warehouses/${warehouseId}/bin-ops/bulk-transfer`)
+        .set(staffAuth)
+        .send({
+          lines: [
+            {
+              sellerId: level.sellerId,
+              variantId,
+              batchId: batch.id,
+              qty: 9,
+              sourceBinId: transit.id,
+              destBinId: binB,
+            },
+          ],
+        })
+        .expect(400);
+      expect(refused.body.code).toBe('TRANSFER_WOULD_MAKE_STOCK_SELLABLE');
+      // Still in the air, and still the only record saying so.
+      expect(await onHandIn(transit.id)).toBe(9);
+    });
+
+    it('one bad line refuses the WHOLE submission — nothing moves', async () => {
+      const damaged = await makeBin('D', 'DAMAGED');
+      await receiveInto(binA, 10);
+      const batch = await h.prisma.stockBatch.findFirstOrThrow({ where: { variantId } });
+      const level = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId } });
+
+      await request(h.baseUrl)
+        .post(`/admin/warehouses/${warehouseId}/bin-ops/bulk-transfer`)
+        .set(staffAuth)
+        .send({
+          lines: [
+            {
+              sellerId: level.sellerId,
+              variantId,
+              batchId: batch.id,
+              qty: 4,
+              sourceBinId: binA,
+              destBinId: damaged,
+            },
+          ],
+        })
+        .expect(200);
+
+      // A list that mixes a legitimate move with one that would make
+      // damaged goods sellable. The refusal has to come BEFORE the
+      // transaction, or the good line commits and the operator has no
+      // way to tell which half went through.
+      const refused = await request(h.baseUrl)
+        .post(`/admin/warehouses/${warehouseId}/bin-ops/bulk-transfer`)
+        .set(staffAuth)
+        .send({
+          lines: [
+            {
+              sellerId: level.sellerId,
+              variantId,
+              batchId: batch.id,
+              qty: 1,
+              sourceBinId: binA,
+              destBinId: binB,
+            },
+            {
+              sellerId: level.sellerId,
+              variantId,
+              batchId: batch.id,
+              qty: 1,
+              sourceBinId: damaged,
+              destBinId: binB,
+            },
+          ],
+        })
+        .expect(400);
+      expect(refused.body.code).toBe('TRANSFER_WOULD_MAKE_STOCK_SELLABLE');
+      expect(await onHandIn(binA)).toBe(6);
+      expect(await onHandIn(damaged)).toBe(4);
+      expect(await onHandIn(binB)).toBe(0);
+    });
+
+    it('the single-variant transfer endpoint is gated too — it was the second door', async () => {
+      const damaged = await makeBin('D', 'DAMAGED');
+      await receiveInto(binA, 10);
+      const batch = await h.prisma.stockBatch.findFirstOrThrow({ where: { variantId } });
+      const level = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId } });
+
+      await request(h.baseUrl)
+        .post(`/admin/warehouses/${warehouseId}/bin-ops/move-bin/${binA}`)
+        .set(staffAuth)
+        .send({ destBinId: damaged })
+        .expect(200);
+
+      const body = {
+        sellerId: level.sellerId,
+        variantId,
+        qty: 3,
+        sourceWarehouseId: warehouseId,
+        sourceBinId: damaged,
+        sourceBatchId: batch.id,
+        destWarehouseId: warehouseId,
+        destBinId: binB,
+        destBatchId: batch.id,
+      };
+      const refused = await request(h.baseUrl)
+        .post('/admin/stock-transfers')
+        .set(staffAuth)
+        .send(body)
+        .expect(400);
+      expect(refused.body.code).toBe('TRANSFER_WOULD_MAKE_STOCK_SELLABLE');
+      expect(await onHandIn(damaged)).toBe(10);
+
+      // The waiver is not reachable from the request body: the DTO does
+      // not declare the field and the controller builds the input field
+      // by field, so `forbidNonWhitelisted` refuses it outright rather
+      // than it being quietly honoured.
+      const smuggled = await request(h.baseUrl)
+        .post('/admin/stock-transfers')
+        .set(staffAuth)
+        .send({ ...body, allowFromNonPickableBin: true })
+        .expect(400);
+      expect(smuggled.body.code).not.toBe('TRANSFER_WOULD_MAKE_STOCK_SELLABLE');
+      expect(await onHandIn(damaged)).toBe(10);
+      expect(await onHandIn(binB)).toBe(0);
+    });
+
+    it('the sanctioned hold → shelf move still works: the waiver is honoured', async () => {
+      // The half that would break SILENTLY. `RtoPutawayService` moves a
+      // return out of RTO_HOLD and onto a shelf — exactly the direction
+      // the gate refuses — and nothing in the suite drove it: since
+      // WMS-8e a return finalized today never lands in a hold bin, so
+      // `listPending` is empty and every RTO e2e asserts `[]`. If the
+      // gate had broken the one legitimate caller, the first sign would
+      // have been a put-away failing on the warehouse floor.
+      //
+      // The service is resolved from the container rather than driven
+      // through HTTP because the only route to it is a pre-WMS-8e
+      // shipment, which is a fixture that no longer occurs; the waiver
+      // itself is what this proves.
+      const { StockTransferService } =
+        await import('../../src/modules/inventory-transfer/services/stock-transfer.service');
+      const transfers = h.app.get(StockTransferService);
+
+      const hold = await makeBin('R', 'RTO_HOLD');
+      await receiveInto(binA, 10);
+      const batch = await h.prisma.stockBatch.findFirstOrThrow({ where: { variantId } });
+      const level = await h.prisma.stockLevel.findFirstOrThrow({ where: { variantId } });
+      await request(h.baseUrl)
+        .post(`/admin/warehouses/${warehouseId}/bin-ops/move-bin/${binA}`)
+        .set(staffAuth)
+        .send({ destBinId: hold })
+        .expect(200);
+
+      const staff = await h.prisma.staffUser.findFirstOrThrow({ where: { deletedAt: null } });
+      const result = await transfers.transfer(
+        {
+          sellerId: level.sellerId,
+          variantId,
+          qty: 10,
+          sourceWarehouseId: warehouseId,
+          sourceBinId: hold,
+          sourceBatchId: batch.id,
+          destWarehouseId: warehouseId,
+          destBinId: binB,
+          destBatchId: batch.id,
+          reason: 'Return putaway — e2e',
+          allowFromNonPickableBin: true,
+        },
+        staff.id,
+      );
+      expect(result.qty).toBe(10);
+      expect(await onHandIn(binB)).toBe(10);
+      expect(await onHandIn(hold)).toBe(0);
+    });
   });
 });

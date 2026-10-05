@@ -27,12 +27,33 @@ export class AdminStockTransferController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary:
-      'Move stock between warehouses/bins as a paired TRANSFER_OUT + TRANSFER_IN in one transaction. Rejects INVALID_TRANSFER_QTY / TRANSFER_SOURCE_EQUALS_DEST / DEST_BIN_* / DEST_BATCH_* / INSUFFICIENT_ON_HAND',
+      'Move stock between warehouses/bins as a paired TRANSFER_OUT + TRANSFER_IN in one transaction. Rejects INVALID_TRANSFER_QTY / TRANSFER_SOURCE_EQUALS_DEST / SOURCE_BIN_NOT_FOUND / DEST_BIN_* / DEST_BATCH_* / INSUFFICIENT_ON_HAND, and TRANSFER_WOULD_MAKE_STOCK_SELLABLE when the source is a bin a picker cannot reach (hold, damaged, quarantine, in transit) and the destination is one they can — use the return put-away, or an adjustment with a reason.',
   })
   create(
     @Body() body: CreateStockTransferDto,
     @CurrentStaff() staff: AuthenticatedStaff,
   ): Promise<StockTransferResult> {
-    return this.transfers.transfer(body, staff.id);
+    // Built field by field, NOT `transfer(body, …)`. The input carries
+    // `allowFromNonPickableBin`, which waives the BIN-2 gate, and
+    // handing the request body straight to the service would make that
+    // waiver one JSON key away from any caller. The global
+    // ValidationPipe's `forbidNonWhitelisted` would reject it today —
+    // but that is a setting somewhere else, and an invariant that rests
+    // on a setting somewhere else is one deploy from being untrue.
+    return this.transfers.transfer(
+      {
+        sellerId: body.sellerId,
+        variantId: body.variantId,
+        qty: body.qty,
+        sourceWarehouseId: body.sourceWarehouseId,
+        sourceBinId: body.sourceBinId,
+        sourceBatchId: body.sourceBatchId,
+        destWarehouseId: body.destWarehouseId,
+        destBinId: body.destBinId,
+        destBatchId: body.destBatchId,
+        ...(body.reason === undefined ? {} : { reason: body.reason }),
+      },
+      staff.id,
+    );
   }
 }
