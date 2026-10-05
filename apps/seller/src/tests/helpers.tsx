@@ -40,6 +40,8 @@ export function makeSeller(overrides: Partial<SellerMe> = {}): SellerMe {
   return {
     id: 'seller-1',
     roleKey: 'owner',
+    roleKeys: ['owner'],
+    roleNames: ['Owner'],
     roleName: 'Owner',
     // Defaults to an owner's whole catalogue, so a test about something
     // else is not silently gated by a permission it never meant to

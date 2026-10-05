@@ -53,6 +53,8 @@ export function makeStaff(
     role,
     roleKey: role.toLowerCase(),
     roleName: role,
+    roleKeys: [role.toLowerCase()],
+    roleNames: [role],
     // Defaults to a super admin's whole catalogue, so a test about
     // something else is not silently gated by a permission it never
     // meant to exercise. Pass a list to test the gating itself.

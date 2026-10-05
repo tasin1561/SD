@@ -64,6 +64,13 @@ const INVITATION_SELECT = {
   },
 };
 
+/** The live roles out of a loaded assignment list. */
+function liveStaffRoles<T extends { deletedAt: Date | null }>(
+  assignments: readonly { role: T }[],
+): readonly T[] {
+  return assignments.map((a) => a.role).filter((r) => r.deletedAt === null);
+}
+
 /** The enum spelling of the first role that has one, else null. */
 function legacyEnumFor(roleKeys: readonly string[]): StaffRole | null {
   const match = roleKeys.find((k) => LEGACY_ROLE_KEYS.has(k));
@@ -582,8 +589,11 @@ export class StaffInvitationService {
       emailDisplay: string;
       /** Legacy enum, display only — null for a custom-role-only person. */
       role: StaffRole | null;
+      /** The FIRST role held — a label. `roleIds` is all of them. */
       roleId: string;
       roleName: string;
+      roleIds: readonly string[];
+      roleNames: readonly string[];
       emailVerifiedAt: string | null;
       lastLoginAt: string | null;
       createdAt: string;
@@ -598,8 +608,14 @@ export class StaffInvitationService {
         email: true,
         emailDisplay: true,
         role: true,
-        roleId: true,
-        staffRole: { select: { name: true } },
+        // Through the JOIN TABLE, not the transitional `role_id`: the
+        // staff list is what somebody reads to see who can do what, and
+        // showing ONE role for a person holding three is a wrong answer
+        // that looks like a right one.
+        roles: {
+          orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+          select: { role: { select: { id: true, name: true, deletedAt: true } } },
+        },
         emailVerifiedAt: true,
         lastLoginAt: true,
         createdAt: true,
@@ -611,8 +627,10 @@ export class StaffInvitationService {
       email: r.email,
       emailDisplay: r.emailDisplay,
       role: r.role,
-      roleId: r.roleId,
-      roleName: r.staffRole.name,
+      roleId: liveStaffRoles(r.roles)[0]?.id ?? '',
+      roleName: liveStaffRoles(r.roles)[0]?.name ?? '',
+      roleIds: liveStaffRoles(r.roles).map((x) => x.id),
+      roleNames: liveStaffRoles(r.roles).map((x) => x.name),
       emailVerifiedAt: r.emailVerifiedAt?.toISOString() ?? null,
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),

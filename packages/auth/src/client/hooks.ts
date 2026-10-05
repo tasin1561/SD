@@ -52,7 +52,12 @@ export function useHasAccessToken(): boolean {
  */
 export function hasStaffRole(identity: StaffMe | null, allowed: readonly StaffRole[]): boolean {
   if (identity === null) return false;
-  return allowed.includes(identity.role);
+  // `role` is the LEGACY enum and is NULL for anybody holding only
+  // roles with no enum spelling — every access tier, and every role an
+  // operator invented. A null answers FALSE rather than being coerced,
+  // which is the right answer for a cosmetic gate and one more reason
+  // to use `hasPermission`.
+  return identity.role !== null && allowed.includes(identity.role);
 }
 
 /**
