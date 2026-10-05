@@ -67,7 +67,7 @@ describe('reseller store orders (e2e)', () => {
         displayName: `${label} Display`,
         contactEmail: email,
         contactPhone: '+919800000004',
-        invite: { email, fullName: `${label} Owner`, roleKey: 'owner' },
+        invite: { email, fullName: `${label} Owner`, roleKeys: ['owner'] },
       })
       .expect(201);
     const storeId = (created.body as { id: string }).id;

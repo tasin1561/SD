@@ -42,6 +42,8 @@ function user(storeId = 'store-1'): AuthenticatedStoreUser {
     jti: null,
     roleKey: 'finance',
     roleName: 'Finance',
+    roleKeys: ['finance'],
+    roleNames: ['Finance'],
     permissions: ['expenses.manage'],
   };
 }

@@ -11,6 +11,7 @@ import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { serverVerdict } from '@/lib/server-verdict';
+import { roleLine, roleNamesOf } from '@/lib/role-words';
 import { useLogoutEverywhere, useRequestEmailVerification } from '@/lib/session-hooks';
 import { SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
 
@@ -92,7 +93,11 @@ export function SecurityIndex(): ReactElement {
               <SetFact tone={identity.emailVerifiedAt === null ? 'warn' : 'good'} dot>
                 {identity.emailVerifiedAt === null ? 'Email not verified' : 'Email verified'}
               </SetFact>
-              <SetFact>{identity.roleName}</SetFact>
+              {/* EVERY role, not the first one. `roleName` is a label
+                  the server keeps truthful; somebody who is Finance AND
+                  Ops read as Finance on the page that tells them what
+                  they are. */}
+              <SetFact>{roleLine(identity)}</SetFact>
             </span>
           )
         }
@@ -143,8 +148,8 @@ export function SecurityIndex(): ReactElement {
                     <span className="set-faint"> — not verified</span>
                   )}
                 </dd>
-                <dt>Role</dt>
-                <dd>{identity.roleName}</dd>
+                <dt>{roleNamesOf(identity).length === 1 ? 'Role' : 'Roles'}</dt>
+                <dd>{roleLine(identity)}</dd>
                 <dt>Company</dt>
                 <dd>{identity.companyName}</dd>
               </dl>

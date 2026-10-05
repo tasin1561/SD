@@ -90,7 +90,10 @@ export class StaffRbacService {
       orderBy: [{ isSuperAdmin: 'desc' }, { isSystem: 'desc' }, { name: 'asc' }],
       include: {
         permissions: { select: { permission: true } },
-        _count: { select: { staff: true } },
+        // Counted through the JOIN TABLE — the authority — not through
+        // the transitional `staff_users.role_id`, which would miss
+        // everybody holding this role as their second one.
+        _count: { select: { userRoles: { where: { user: { deletedAt: null } } } } },
       },
     });
     return rows.map((r) => ({
@@ -101,7 +104,7 @@ export class StaffRbacService {
       isSystem: r.isSystem,
       isSuperAdmin: r.isSuperAdmin,
       permissions: r.isSuperAdmin ? ALL_PERMISSION_KEYS : r.permissions.map((p) => p.permission),
-      staffCount: r._count.staff,
+      staffCount: r._count.userRoles,
     }));
   }
 
@@ -247,7 +250,9 @@ export class StaffRbacService {
     // assignment landing between the check and the write cannot leave
     // somebody holding a deleted role.
     return this.prisma.client.$transaction(async (tx) => {
-      const holders = await tx.staffUser.count({ where: { roleId: id, deletedAt: null } });
+      const holders = await tx.staffUserRoleAssignment.count({
+        where: { roleId: id, user: { deletedAt: null } },
+      });
       if (holders > 0) {
         throw new ConflictException({
           code: 'ROLE_IN_USE',
@@ -321,7 +326,7 @@ export class StaffRbacService {
       where: {
         deletedAt: null,
         id: { not: roleId },
-        staff: { some: { deletedAt: null } },
+        userRoles: { some: { user: { deletedAt: null } } },
         OR: [{ isSuperAdmin: true }, { permissions: { some: { permission: 'rbac.manage' } } }],
       },
     });

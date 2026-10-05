@@ -25,6 +25,23 @@ import {
   ENDPOINT_NOT_AUTHORIZED_MESSAGE,
   sellerAuthorizationVerdict,
 } from '../auth/seller-authorization';
+import { resolveRoles, roleNamesFor } from '../auth/role-union';
+
+/** Every role this person holds, oldest grant first — see the staff guard. */
+const SELLER_ROLE_ASSIGNMENTS = {
+  orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+  select: {
+    role: {
+      select: {
+        key: true,
+        name: true,
+        isOwner: true,
+        deletedAt: true,
+        permissions: { select: { permission: true } },
+      },
+    },
+  },
+};
 
 /**
  * Bearer-token auth for seller routes. Crucially, this guard re-checks
@@ -136,25 +153,24 @@ export class SellerJwtGuard implements CanActivate {
         fullName: true,
         role: true,
         emailVerifiedAt: true,
-        sellerRole: {
-          select: {
-            key: true,
-            name: true,
-            isOwner: true,
-            deletedAt: true,
-            permissions: { select: { permission: true } },
-          },
-        },
+        roles: SELLER_ROLE_ASSIGNMENTS,
         seller: {
           select: { id: true, email: true, status: true, deletedAt: true },
         },
       },
     });
-    // A soft-deleted role is not a role: somebody whose role was removed
-    // under them has nothing to reason about permission-wise, and
-    // leaving them with a live session and an empty grant set is a worse
-    // state than asking them to sign in again.
-    if (!user || user.seller.deletedAt !== null || user.sellerRole.deletedAt !== null) {
+    // A soft-deleted role is not a role: somebody whose EVERY role was
+    // removed under them has nothing to reason about permission-wise,
+    // and leaving them with a live session and an empty grant set is a
+    // worse state than asking them to sign in again.
+    if (!user || user.seller.deletedAt !== null) {
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'Seller session no longer valid',
+      });
+    }
+    const resolved = resolveRoles(user.roles, ALL_SELLER_PERMISSION_KEYS);
+    if (resolved.roles.length === 0) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Seller session no longer valid',
@@ -205,9 +221,10 @@ export class SellerJwtGuard implements CanActivate {
     // the wallet" and "may not see the wallet" could not be told apart.
     // Both are closed by default now, and an endpoint that declares
     // nothing is refused rather than allowed.
-    const held: readonly string[] = user.sellerRole.isOwner
-      ? ALL_SELLER_PERMISSION_KEYS
-      : user.sellerRole.permissions.map((p) => p.permission);
+    //
+    // `held` is the UNION of every role held; an OWNER role among them
+    // grants the whole catalogue (see `role-union.ts`).
+    const held: readonly string[] = resolved.permissions;
 
     const selfService =
       this.reflector.getAllAndOverride<boolean>(SELLER_SELF_SERVICE_KEY, [
@@ -240,7 +257,7 @@ export class SellerJwtGuard implements CanActivate {
         entityType: 'seller_user',
         entityId: user.id,
         metadata: {
-          role: user.sellerRole.key,
+          roles: resolved.roles.map((r) => r.key),
           required: [...verdict.required],
           path: req.url,
           method: req.method,
@@ -251,7 +268,7 @@ export class SellerJwtGuard implements CanActivate {
       });
       throw new ForbiddenException({
         code: 'INSUFFICIENT_PERMISSION',
-        message: `${user.sellerRole.name} does not hold: ${verdict.required.join(' or ')}`,
+        message: `${roleNamesFor(resolved.roles)} does not hold: ${verdict.required.join(' or ')}`,
       });
     }
 
@@ -263,8 +280,10 @@ export class SellerJwtGuard implements CanActivate {
       jti: claims.jti,
       userId: user.id,
       role: user.role,
-      roleKey: user.sellerRole.key,
-      roleName: user.sellerRole.name,
+      roleKey: resolved.primary?.key ?? '',
+      roleName: resolved.primary?.name ?? '',
+      roleKeys: resolved.roles.map((r) => r.key),
+      roleNames: resolved.roles.map((r) => r.name),
       permissions: held,
       fullName: user.fullName,
     };

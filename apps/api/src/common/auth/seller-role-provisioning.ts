@@ -48,19 +48,3 @@ export async function provisionDefaultSellerRoles(
   }
   return { ownerRoleId, byKey };
 }
-
-/** The role a legacy `SellerUserRole` enum value maps to, within one seller. */
-export async function sellerRoleIdForEnum(
-  tx: Prisma.TransactionClient,
-  sellerId: string,
-  role: string,
-): Promise<string> {
-  const found = await tx.sellerRoleDefinition.findFirst({
-    where: { sellerId, key: role.toLowerCase(), deletedAt: null },
-    select: { id: true },
-  });
-  if (found === null) {
-    throw new Error(`Seller ${sellerId} has no '${role.toLowerCase()}' role`);
-  }
-  return found.id;
-}

@@ -13,6 +13,7 @@
 import argon2 from 'argon2';
 import { prisma, StaffRole } from '@skydrop/db';
 import { staffRoleKeyForEnum } from '../src/common/auth/staff-role-key';
+import { rolesOnCreate, setStaffRoles } from '../src/common/auth/role-assignment';
 
 async function main(): Promise<void> {
   const [, , emailArg, passwordArg, roleArg] = process.argv;
@@ -34,6 +35,11 @@ async function main(): Promise<void> {
     parallelism: 1,
   });
 
+  const roleRow = await prisma.staffRoleDefinition.findFirstOrThrow({
+    where: { key: staffRoleKeyForEnum(role), deletedAt: null },
+    select: { id: true },
+  });
+
   const staff = await prisma.staffUser.upsert({
     where: { email },
     create: {
@@ -41,16 +47,16 @@ async function main(): Promise<void> {
       emailDisplay: emailArg,
       passwordHash,
       role,
-      staffRole: { connect: { key: staffRoleKeyForEnum(role) } },
+      // The JOIN ROW, not just `role_id` — a staff row without one
+      // cannot sign in at all, because the guard reads zero live roles.
+      ...rolesOnCreate([roleRow.id]),
     },
-    update: {
-      emailDisplay: emailArg,
-      passwordHash,
-      role,
-      staffRole: { connect: { key: staffRoleKeyForEnum(role) } },
-    },
+    update: { emailDisplay: emailArg, passwordHash, role },
     select: { id: true, email: true, role: true },
   });
+  // The upsert's UPDATE branch cannot write the join row (it has no id
+  // to key on until the row exists), so the roles are set after.
+  await setStaffRoles(prisma, staff.id, [roleRow.id]);
 
   console.info(`staff user ready: ${staff.email} (id=${staff.id}, role=${staff.role})`);
   await prisma.$disconnect();

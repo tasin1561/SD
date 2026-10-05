@@ -554,7 +554,7 @@ describe('cross-tenant isolation (e2e)', () => {
         name: storeName,
         contactEmail: email,
         contactPhone: '+919800000003',
-        invite: { email, fullName: `${label} Owner`, roleKey: 'owner' },
+        invite: { email, fullName: `${label} Owner`, roleKeys: ['owner'] },
       })
       .expect(201);
     const storeId = (created.body as { id: string }).id;
@@ -606,7 +606,7 @@ describe('cross-tenant isolation (e2e)', () => {
       .send({
         email: `b-colleague-${Date.now()}@store.test`,
         fullName: 'B Colleague',
-        roleKey: 'viewer',
+        roleKeys: ['viewer'],
       })
       .expect(201);
     const bInvitationId = await h.prisma.storeUserInvitation.findFirstOrThrow({
@@ -616,7 +616,7 @@ describe('cross-tenant isolation (e2e)', () => {
     expect(bInvite.status).toBe(201);
 
     for (const [method, path, body] of [
-      ['patch', `/store/team/members/${storeB.storeUserId}/role`, { roleKey: 'viewer' }],
+      ['patch', `/store/team/members/${storeB.storeUserId}/roles`, { roleKeys: ['viewer'] }],
       ['delete', `/store/team/members/${storeB.storeUserId}`, {}],
       ['post', `/store/team/invitations/${bInvitationId.id}/revoke`, {}],
     ] as Array<['patch' | 'delete' | 'post', string, object]>) {

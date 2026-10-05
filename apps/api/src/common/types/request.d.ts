@@ -35,12 +35,25 @@ export interface AuthenticatedStaff {
    * guard is. Kept only because `staff_users.role` and
    * `staff_invitations.role` still carry it; both go when a staff member
    * is invited against a role ROW rather than an enum value.
+   *
+   * NULL since multi-role: a person holding only roles with no enum
+   * spelling — every access tier, and every role an operator invented —
+   * has nothing honest to put here. Nothing reads it.
    */
-  role: StaffRole;
-  /** `staff_roles.key` — the role the person actually holds. */
+  role: StaffRole | null;
+  /**
+   * The FIRST of the roles this person holds — a label for display and
+   * audit prose, NEVER an authorisation input. Somebody may hold
+   * several (a job function and an access tier, say); `roleKeys` is all
+   * of them and `permissions` is what they grant between them.
+   */
   roleKey: string;
-  /** `staff_roles.name` — for display and audit prose. */
+  /** `staff_roles.name` of the same first role. */
   roleName: string;
+  /** Every `staff_roles.key` this person holds, live ones only. */
+  roleKeys: readonly string[];
+  /** Every `staff_roles.name`, same order as `roleKeys`. */
+  roleNames: readonly string[];
   /**
    * Effective permission keys, resolved per request from the role's
    * grants. A super-admin role carries the whole catalogue, so a
@@ -75,12 +88,24 @@ export interface AuthenticatedSeller {
   jti: string | null;
   /** SellerUser.id — the person who authenticated. */
   userId: string;
-  /** LEGACY enum. No longer consulted for authorisation. */
-  role: SellerUserRole;
-  /** `seller_roles.key` — the role actually held, including custom ones. */
+  /**
+   * LEGACY enum. No longer consulted for authorisation, and NULL for
+   * somebody holding only roles the company invented.
+   */
+  role: SellerUserRole | null;
+  /**
+   * The FIRST role held — a label, never an authorisation input. See
+   * `roleKeys` for all of them.
+   */
   roleKey: string;
   roleName: string;
-  /** Effective permission keys, resolved per request from the role. */
+  /** Every `seller_roles.key` held, live ones only. */
+  roleKeys: readonly string[];
+  roleNames: readonly string[];
+  /**
+   * Effective permission keys — the UNION of every role held. An OWNER
+   * role among them grants the whole catalogue.
+   */
   permissions: readonly string[];
   /** SellerUser.fullName — for audit + UI display. */
   fullName: string;
@@ -102,8 +127,13 @@ export interface AuthenticatedStoreUser {
   fullName: string;
   emailVerifiedAt: Date | null;
   jti: string | null;
+  /** The FIRST role held — a label, never an authorisation input. */
   roleKey: string;
   roleName: string;
+  /** Every `store_roles.key` held, live ones only. */
+  roleKeys: readonly string[];
+  roleNames: readonly string[];
+  /** The UNION of every role held. */
   permissions: readonly string[];
 }
 

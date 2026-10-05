@@ -17,7 +17,11 @@ import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/clie
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedSeller } from '../../common/types/request';
-import { CreateTeamInvitationDto } from './dto/create-team-invitation.dto';
+import {
+  CreateTeamInvitationDto,
+  SetTeamMemberRoleDto,
+  SetTeamMemberRolesDto,
+} from './dto/create-team-invitation.dto';
 import { SellerTeamService } from './services/seller-team.service';
 import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
 
@@ -86,17 +90,40 @@ export class SellerTeamController {
     return this.svc.listMembers(seller.id, seller.userId);
   }
 
-  @Patch('members/:id/role')
+  /**
+   * REPLACES the roles a member holds. The body was an inline
+   * `{ roleId: string }` with no DTO and therefore no validation; it is
+   * a DTO now, and it takes several roles.
+   */
+  @Patch('members/:id/roles')
   @RequireSellerPermissions('team.manage')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Change a team member’s role' })
-  updateRole(
+  @ApiOperation({ summary: 'Set which roles a team member holds' })
+  setRoles(
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
-    @Body() body: { roleId: string },
+    @Body() body: SetTeamMemberRolesDto,
     @CurrentSeller() seller: AuthenticatedSeller,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    return this.svc.updateRole(seller.id, id, body.roleId, { sellerUserId: seller.userId }, ctx);
+    return this.svc.setRoles(seller.id, id, body.roleIds, { sellerUserId: seller.userId }, ctx);
+  }
+
+  /**
+   * TRANSITIONAL single-role form, kept so the seller app keeps working
+   * across the deploy that introduces `/roles`. Delete it once the UI
+   * sends `roleIds`.
+   */
+  @Patch('members/:id/role')
+  @RequireSellerPermissions('team.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'DEPRECATED — use PATCH members/:id/roles' })
+  setOneRole(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @Body() body: SetTeamMemberRoleDto,
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ) {
+    return this.svc.setRoles(seller.id, id, [body.roleId], { sellerUserId: seller.userId }, ctx);
   }
 
   @Delete('members/:id')

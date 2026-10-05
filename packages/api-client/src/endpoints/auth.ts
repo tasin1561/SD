@@ -21,14 +21,18 @@ export interface StaffMe {
   readonly emailDisplay: string;
   /**
    * LEGACY enum. No longer what authorisation is decided on — read
-   * `permissions`. Kept because the staff list and the invite form still
-   * display it.
+   * `permissions`. NULL since a person may hold several roles: an access
+   * tier, or any role an operator invented, has no spelling here. Show
+   * `roleNames` instead.
    */
-  readonly role: StaffRole;
-  /** `staff_roles.key` — the role actually held, including custom ones. */
+  readonly role: StaffRole | null;
+  /** The FIRST role held — a label. `roleKeys` is all of them. */
   readonly roleKey: string;
-  /** Display name of that role. */
   readonly roleName: string;
+  /** Every `staff_roles.key` held. A person may hold several. */
+  readonly roleKeys: readonly string[];
+  /** Their display names, same order — what a screen should show. */
+  readonly roleNames: readonly string[];
   /**
    * What this person may do. The UI hides what is not in here — a
    * courtesy, not a control: FE-2 still holds and the server refuses
@@ -43,9 +47,12 @@ export interface StaffMe {
 /** GET /auth/seller/me — seller identity (matches SellerAuthService.SellerMe). */
 export interface SellerMe {
   readonly id: string;
-  /** `seller_roles.key` — the role held, including ones the company made. */
+  /** The FIRST role held — a label. `roleKeys` is all of them. */
   readonly roleKey: string;
   readonly roleName: string;
+  /** Every `seller_roles.key` held, including ones the company made. */
+  readonly roleKeys: readonly string[];
+  readonly roleNames: readonly string[];
   /**
    * What this person may do. The seller app hides what is not in here —
    * a courtesy, not a control: the API refuses regardless of what was
@@ -90,7 +97,8 @@ export interface SellerMe {
   readonly createdAt: string;
   // Phase 1B — the signed-in team member identity.
   readonly sellerUserId: string;
-  readonly role: 'OWNER' | 'ADMIN' | 'OPS' | 'INVENTORY' | 'FINANCE' | 'VIEWER';
+  /** LEGACY enum, display only — NULL for a custom-role-only person. */
+  readonly role: 'OWNER' | 'ADMIN' | 'OPS' | 'INVENTORY' | 'FINANCE' | 'VIEWER' | null;
   readonly fullName: string;
 }
 
@@ -114,9 +122,12 @@ export interface StoreMe {
   readonly emailDisplay: string;
   readonly fullName: string;
   readonly emailVerifiedAt: string | null;
-  /** `store_roles.key`. */
+  /** The FIRST role held — a label. `roleKeys` is all of them. */
   readonly roleKey: string;
   readonly roleName: string;
+  /** Every `store_roles.key` held. */
+  readonly roleKeys: readonly string[];
+  readonly roleNames: readonly string[];
   /**
    * What this person may do. The reseller app hides what is not in here
    * — a courtesy, not a control (FE-2): the API refuses regardless.

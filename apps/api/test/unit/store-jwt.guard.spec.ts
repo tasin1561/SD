@@ -19,6 +19,32 @@ interface Row {
   status?: ResellerStoreStatus | null;
   kind?: SellerStoreKind;
   sellerStatus?: SellerStatus;
+  /**
+   * A SECOND role, for the multi-role cases. The fixture carries a
+   * `roles` LIST because that is what the guard reads now — the
+   * single-role `role` relation it used to select is the transitional
+   * `role_id` and is no longer consulted.
+   */
+  second?: { key: string; perms?: string[]; isOwner?: boolean; deleted?: boolean };
+  /** Every role soft-deleted — a person with nothing to reason about. */
+  roleDeleted?: boolean;
+}
+
+function assignment(
+  key: string,
+  name: string,
+  perms: readonly string[],
+  opts: { isOwner?: boolean; deleted?: boolean } = {},
+) {
+  return {
+    role: {
+      key,
+      name,
+      isOwner: opts.isOwner ?? false,
+      deletedAt: opts.deleted === true ? new Date() : null,
+      permissions: perms.map((permission) => ({ permission })),
+    },
+  };
 }
 
 function userRow(r: Row) {
@@ -27,13 +53,20 @@ function userRow(r: Row) {
     email: 'a@b.in',
     fullName: 'A',
     emailVerifiedAt: null,
-    role: {
-      key: r.roleKey ?? 'viewer',
-      name: 'Viewer',
-      isOwner: r.isOwner ?? false,
-      deletedAt: null,
-      permissions: (r.perms ?? []).map((permission) => ({ permission })),
-    },
+    roles: [
+      assignment(r.roleKey ?? 'viewer', 'Viewer', r.perms ?? [], {
+        isOwner: r.isOwner ?? false,
+        deleted: r.roleDeleted === true,
+      }),
+      ...(r.second === undefined
+        ? []
+        : [
+            assignment(r.second.key, r.second.key.toUpperCase(), r.second.perms ?? [], {
+              isOwner: r.second.isOwner ?? false,
+              deleted: r.second.deleted === true,
+            }),
+          ]),
+    ],
     store: {
       id: 's1',
       kind: r.kind ?? SellerStoreKind.RESELLER,
@@ -164,5 +197,61 @@ describe('storeMayBeUsed', () => {
     expect(storeMayBeUsed({ ...base, kind: SellerStoreKind.CHANNEL, status: null })).toBe(false);
     expect(storeMayBeUsed({ ...base, deletedAt: new Date() as never })).toBe(false);
     expect(storeMayBeUsed({ ...base, sellerStatus: SellerStatus.SUSPENDED })).toBe(false);
+  });
+
+  // ── Multi-role ───────────────────────────────────────────────────
+  describe('several roles', () => {
+    it('admits on a permission the SECOND role grants', async () => {
+      const { guard } = guardWith(
+        userRow({
+          roleKey: 'viewer',
+          perms: ['orders.view'],
+          second: { key: 'finance', perms: ['wallet.view'] },
+        }),
+      );
+      const { ctx, req } = ctxFor({ [REQUIRE_STORE_PERMISSIONS_KEY]: ['wallet.view'] }, BEARER);
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+      expect([...(req as any).storeUser.permissions].sort()).toEqual([
+        'orders.view',
+        'wallet.view',
+      ]);
+      expect((req as any).storeUser.roleKeys).toEqual(['viewer', 'finance']);
+    });
+
+    it('an OWNER role among several grants the whole catalogue', async () => {
+      const { guard } = guardWith(
+        userRow({
+          roleKey: 'viewer',
+          perms: ['orders.view'],
+          second: { key: 'owner', isOwner: true },
+        }),
+      );
+      const { ctx } = ctxFor({ [REQUIRE_STORE_PERMISSIONS_KEY]: ['team.manage'] }, BEARER);
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    });
+
+    it('a soft-deleted role among several grants nothing of its own', async () => {
+      const { guard } = guardWith(
+        userRow({
+          roleKey: 'viewer',
+          perms: ['orders.view'],
+          second: { key: 'finance', perms: ['wallet.view'], deleted: true },
+        }),
+      );
+      const { ctx } = ctxFor({ [REQUIRE_STORE_PERMISSIONS_KEY]: ['wallet.view'] }, BEARER);
+      await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    /**
+     * Every role gone is nobody to be. The guard answers UNAUTHORIZED —
+     * the same answer the single-role version gave — rather than
+     * carrying on with an empty grant set, which would reach every
+     * self-service endpoint while reading as a working login.
+     */
+    it('EVERY role soft-deleted is UNAUTHORIZED, even on a self-service route', async () => {
+      const { guard } = guardWith(userRow({ roleDeleted: true }));
+      const { ctx } = ctxFor({ [STORE_SELF_SERVICE_KEY]: true }, BEARER);
+      await expect(guard.canActivate(ctx)).rejects.toBeInstanceOf(UnauthorizedException);
+    });
   });
 });

@@ -183,6 +183,8 @@ export class ApiKeyGuard implements CanActivate {
       // comes from the key's scopes.
       roleKey: 'api_key',
       roleName: 'API key',
+      roleKeys: ['api_key'],
+      roleNames: ['API key'],
       permissions: held,
       userId: row.id,
       role: 'ADMIN',

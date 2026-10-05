@@ -16,6 +16,31 @@ import {
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import type { StoreRoleKey } from '../../../common/auth/store-permissions';
+import { setStoreUserRoles } from '../../../common/auth/role-assignment';
+
+/** Every role this person holds, oldest grant first. */
+const STORE_ROLE_ASSIGNMENTS = {
+  orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+  select: { role: { select: { id: true, key: true, name: true, isOwner: true, deletedAt: true } } },
+};
+
+/** The live roles out of a loaded assignment list. */
+function liveRolesOf<T extends { deletedAt: Date | null }>(
+  assignments: readonly { role: T }[],
+): readonly T[] {
+  return assignments.map((a) => a.role).filter((r) => r.deletedAt === null);
+}
+
+/**
+ * Is the CALLER an owner?
+ *
+ * Asked of every role they hold, not of `roleKey` alone — that is the
+ * first role, a label, and somebody who is Finance AND Owner would be
+ * refused an owner-only act by a check that read only the first.
+ */
+function callerIsOwner(user: AuthenticatedStoreUser): boolean {
+  return user.roleKeys.includes('owner');
+}
 import type { AuthenticatedStoreUser } from '../../../common/types/request';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { TokenHashService } from '../../auth-common/services/token-hash.service';
@@ -39,6 +64,8 @@ export interface StoreMemberView {
   readonly email: string;
   readonly fullName: string;
   readonly roleKey: string;
+  readonly roleKeys: readonly string[];
+  readonly roleNames: readonly string[];
   readonly roleName: string;
   readonly isOwner: boolean;
   readonly lastLoginAt: string | null;
@@ -50,6 +77,8 @@ export interface StoreInvitationView {
   readonly email: string;
   readonly fullName: string;
   readonly roleKey: string;
+  readonly roleKeys: readonly string[];
+  readonly roleNames: readonly string[];
   readonly roleName: string;
   readonly expiresAt: string;
   readonly createdAt: string;
@@ -125,29 +154,46 @@ export class StoreTeamService {
       readonly storeName: string;
       readonly email: string;
       readonly fullName: string;
-      readonly roleKey: StoreRoleKey;
+      readonly roleKeys: readonly StoreRoleKey[];
       readonly actor: InvitingActor;
     },
   ): Promise<PendingInvitationEmail> {
     const emailLower = input.email.trim().toLowerCase();
+    const wanted = [...new Set(input.roleKeys)];
+    if (wanted.length === 0) {
+      throw new BadRequestException({
+        code: 'NO_ROLES',
+        message: 'An invitation must offer at least one role.',
+      });
+    }
 
-    if (input.roleKey === 'owner' && input.actor.kind === 'STORE' && !input.actor.isOwner) {
+    if (wanted.includes('owner') && input.actor.kind === 'STORE' && !input.actor.isOwner) {
       throw new ForbiddenException({
         code: 'OWNER_GRANT_REQUIRES_OWNER',
         message: 'Only an owner of this store can invite another owner.',
       });
     }
 
-    const role = await tx.storeRoleDefinition.findFirst({
-      where: { storeId: input.storeId, key: input.roleKey, deletedAt: null },
-      select: { id: true, name: true },
+    const found = await tx.storeRoleDefinition.findMany({
+      where: { storeId: input.storeId, key: { in: wanted }, deletedAt: null },
+      select: { id: true, key: true, name: true },
     });
-    if (role === null) {
+    if (found.length !== wanted.length) {
       throw new NotFoundException({
         code: 'ROLE_NOT_FOUND',
         message: 'No such role in this store',
       });
     }
+    // In the ORDER ASKED FOR: the first role becomes the legacy label.
+    const byKey = new Map(found.map((r) => [r.key, r]));
+    const roles = wanted.map((k) => {
+      const r = byKey.get(k);
+      // Unreachable — the length check above covers it.
+      if (r === undefined) {
+        throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+      }
+      return r;
+    });
 
     const existingUser = await tx.storeUser.findUnique({
       where: { email: emailLower },
@@ -187,7 +233,10 @@ export class StoreTeamService {
           email: input.email.trim(),
           fullName: input.fullName.trim(),
           token: this.hashes.sha256Hex(plaintext),
-          roleId: role.id,
+          // The join rows are what accepting reads; `role_id` is the
+          // transitional label.
+          roleId: roles[0]?.id ?? '',
+          roles: { create: roles.map((r) => ({ roleId: r.id })) },
           invitedByActorType: input.actor.kind === 'SELLER' ? ActorType.SELLER : ActorType.STORE,
           invitedById:
             input.actor.kind === 'SELLER' ? input.actor.sellerUserId : input.actor.storeUserId,
@@ -211,7 +260,7 @@ export class StoreTeamService {
       plaintext,
       email: input.email.trim(),
       fullName: input.fullName.trim(),
-      roleName: role.name,
+      roleName: roles.map((r) => r.name).join(', '),
       storeName: input.storeName,
       inviterName: input.actor.name,
       expiresAt,
@@ -249,7 +298,7 @@ export class StoreTeamService {
   async inviteAsSeller(
     sellerId: string,
     storeId: string,
-    input: { email: string; fullName: string; roleKey: StoreRoleKey },
+    input: { email: string; fullName: string; roleKeys: readonly StoreRoleKey[] },
     actor: { sellerUserId: string; name: string },
   ): Promise<StoreInvitationView> {
     const store = await this.sellerStore(sellerId, storeId);
@@ -259,14 +308,14 @@ export class StoreTeamService {
   /** A store's own team invites a colleague. */
   async inviteAsStore(
     user: AuthenticatedStoreUser,
-    input: { email: string; fullName: string; roleKey: StoreRoleKey },
+    input: { email: string; fullName: string; roleKeys: readonly StoreRoleKey[] },
   ): Promise<StoreInvitationView> {
     const store = await this.storeById(user.storeId);
     return this.invite(store, input, {
       kind: 'STORE',
       storeUserId: user.id,
       name: user.fullName,
-      isOwner: user.roleKey === 'owner',
+      isOwner: callerIsOwner(user),
     });
   }
 
@@ -312,7 +361,7 @@ export class StoreTeamService {
           fullName: true,
           lastLoginAt: true,
           createdAt: true,
-          role: { select: { key: true, name: true, isOwner: true } },
+          roles: STORE_ROLE_ASSIGNMENTS,
         },
       }),
       this.prisma.client.storeUserInvitation.findMany({
@@ -325,7 +374,7 @@ export class StoreTeamService {
           fullName: true,
           expiresAt: true,
           createdAt: true,
-          role: { select: { key: true, name: true } },
+          roles: STORE_ROLE_ASSIGNMENTS,
         },
       }),
       this.prisma.client.storeRoleDefinition.findMany({
@@ -339,9 +388,11 @@ export class StoreTeamService {
         id: m.id,
         email: m.emailDisplay,
         fullName: m.fullName,
-        roleKey: m.role.key,
-        roleName: m.role.name,
-        isOwner: m.role.isOwner,
+        roleKey: liveRolesOf(m.roles)[0]?.key ?? '',
+        roleName: liveRolesOf(m.roles)[0]?.name ?? '',
+        roleKeys: liveRolesOf(m.roles).map((r) => r.key),
+        roleNames: liveRolesOf(m.roles).map((r) => r.name),
+        isOwner: liveRolesOf(m.roles).some((r) => r.isOwner),
         lastLoginAt: m.lastLoginAt?.toISOString() ?? null,
         createdAt: m.createdAt.toISOString(),
       })),
@@ -349,8 +400,10 @@ export class StoreTeamService {
         id: i.id,
         email: i.email,
         fullName: i.fullName,
-        roleKey: i.role.key,
-        roleName: i.role.name,
+        roleKey: liveRolesOf(i.roles)[0]?.key ?? '',
+        roleName: liveRolesOf(i.roles)[0]?.name ?? '',
+        roleKeys: liveRolesOf(i.roles).map((r) => r.key),
+        roleNames: liveRolesOf(i.roles).map((r) => r.name),
         expiresAt: i.expiresAt.toISOString(),
         createdAt: i.createdAt.toISOString(),
       })),
@@ -360,65 +413,105 @@ export class StoreTeamService {
 
   // ── Members ────────────────────────────────────────────────────────
 
-  async changeRole(
+  /**
+   * REPLACE the roles a member holds — several, because somebody can do
+   * the daily work AND the money without a bespoke sixth role being
+   * invented for them.
+   */
+  async setRoles(
     user: AuthenticatedStoreUser,
     memberId: string,
-    roleKey: StoreRoleKey,
+    roleKeys: readonly StoreRoleKey[],
   ): Promise<StoreMemberView> {
     if (memberId === user.id) {
       throw new BadRequestException({
         code: 'CANNOT_CHANGE_OWN_ROLE',
         message:
-          'You cannot change your own role. Ask another owner — this is what stops somebody removing their own way back in.',
+          'You cannot change your own roles. Ask another owner — this is what stops somebody removing their own way back in.',
       });
     }
-    if (roleKey === 'owner' && user.roleKey !== 'owner') {
+    const wanted = [...new Set(roleKeys)];
+    if (wanted.length === 0) {
+      throw new BadRequestException({
+        code: 'NO_ROLES',
+        message: 'Somebody must hold at least one role. With none they cannot sign in.',
+      });
+    }
+    if (wanted.includes('owner') && !callerIsOwner(user)) {
       throw new ForbiddenException({
         code: 'OWNER_GRANT_REQUIRES_OWNER',
         message: 'Only an owner of this store can make somebody an owner.',
       });
     }
-    const [target, role] = await Promise.all([
+    const [target, found] = await Promise.all([
       this.prisma.client.storeUser.findFirst({
         where: { id: memberId, storeId: user.storeId, deletedAt: null },
-        select: { id: true, roleId: true, role: { select: { name: true, isOwner: true } } },
+        select: { id: true, roles: STORE_ROLE_ASSIGNMENTS },
       }),
-      this.prisma.client.storeRoleDefinition.findFirst({
-        where: { storeId: user.storeId, key: roleKey, deletedAt: null },
-        select: { id: true, name: true, isOwner: true },
+      this.prisma.client.storeRoleDefinition.findMany({
+        where: { storeId: user.storeId, key: { in: wanted }, deletedAt: null },
+        select: { id: true, key: true, name: true, isOwner: true },
       }),
     ]);
     if (target === null) {
       throw new NotFoundException({ code: 'MEMBER_NOT_FOUND', message: 'No such team member' });
     }
-    if (role === null) {
+    if (found.length !== wanted.length) {
       throw new NotFoundException({
         code: 'ROLE_NOT_FOUND',
         message: 'No such role in this store',
       });
     }
-    if (target.role.isOwner && user.roleKey !== 'owner') {
+    const byKey = new Map(found.map((r) => [r.key, r]));
+    const roles = wanted.map((k) => {
+      const r = byKey.get(k);
+      // Unreachable — the length check above covers it.
+      if (r === undefined) {
+        throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+      }
+      return r;
+    });
+
+    const held = liveRolesOf(target.roles);
+    // Asked of EVERY role they hold: somebody who is Owner AND Finance
+    // is still an owner, and a check on the first role alone would let
+    // a non-owner edit them.
+    const targetIsOwner = held.some((r) => r.isOwner);
+    if (targetIsOwner && !callerIsOwner(user)) {
       throw new ForbiddenException({
         code: 'OWNER_CHANGE_REQUIRES_OWNER',
         message: 'Only an owner of this store can change what an owner may do.',
       });
     }
 
-    if (target.roleId !== role.id) {
+    const sameSet =
+      held.length === roles.length && held.every((h) => roles.some((r) => r.id === h.id));
+    if (!sameSet) {
+      const heldIds = held.map((h) => h.id);
       await this.prisma.client.$transaction(async (tx) => {
-        if (target.role.isOwner && !role.isOwner)
+        if (targetIsOwner && !roles.some((r) => r.isOwner)) {
           await this.assertAnotherOwner(tx, user.storeId, memberId);
-        // Guarded on the role READ, so a concurrent change is not overwritten.
-        const changed = await tx.storeUser.updateMany({
-          where: { id: memberId, storeId: user.storeId, roleId: target.roleId, deletedAt: null },
-          data: { roleId: role.id },
+        }
+        // Guarded on the roles READ, so a concurrent change is not
+        // overwritten: the count of rows still matching what we read has
+        // to be exactly what we read.
+        const stillHeld = await tx.storeUserRoleAssignment.count({
+          where: { storeUserId: memberId, roleId: { in: heldIds } },
         });
-        if (changed.count === 0) {
+        const total = await tx.storeUserRoleAssignment.count({
+          where: { storeUserId: memberId },
+        });
+        if (stillHeld !== heldIds.length || total !== heldIds.length) {
           throw new ConflictException({
             code: 'MEMBER_CHANGED',
             message: 'This person changed while you were looking. Try again.',
           });
         }
+        await setStoreUserRoles(
+          tx,
+          memberId,
+          roles.map((r) => r.id),
+        );
       });
       await this.audit.log({
         actorType: ActorType.STORE,
@@ -428,7 +521,7 @@ export class StoreTeamService {
         entityType: 'store_user',
         entityId: memberId,
         severity: 'MEDIUM',
-        changes: { before: target.role.name, after: role.name },
+        changes: { before: held.map((h) => h.name), after: roles.map((r) => r.name) },
         metadata: { storeId: user.storeId },
       });
     }
@@ -448,19 +541,21 @@ export class StoreTeamService {
     }
     const target = await this.prisma.client.storeUser.findFirst({
       where: { id: memberId, storeId: user.storeId, deletedAt: null },
-      select: { id: true, role: { select: { isOwner: true } } },
+      select: { id: true, roles: STORE_ROLE_ASSIGNMENTS },
     });
     if (target === null) {
       throw new NotFoundException({ code: 'MEMBER_NOT_FOUND', message: 'No such team member' });
     }
-    if (target.role.isOwner && user.roleKey !== 'owner') {
+    if (liveRolesOf(target.roles).some((r) => r.isOwner) && !callerIsOwner(user)) {
       throw new ForbiddenException({
         code: 'OWNER_CHANGE_REQUIRES_OWNER',
         message: 'Only an owner of this store can remove an owner.',
       });
     }
     await this.prisma.client.$transaction(async (tx) => {
-      if (target.role.isOwner) await this.assertAnotherOwner(tx, user.storeId, memberId);
+      if (liveRolesOf(target.roles).some((r) => r.isOwner)) {
+        await this.assertAnotherOwner(tx, user.storeId, memberId);
+      }
       const changed = await tx.storeUser.updateMany({
         where: { id: memberId, storeId: user.storeId, deletedAt: null },
         data: { deletedAt: new Date() },
@@ -488,7 +583,7 @@ export class StoreTeamService {
 
   private async invite(
     store: StoreRef,
-    input: { email: string; fullName: string; roleKey: StoreRoleKey },
+    input: { email: string; fullName: string; roleKeys: readonly StoreRoleKey[] },
     actor: InvitingActor,
   ): Promise<StoreInvitationView> {
     if (store.status === null || !acceptsInvitations(store.status)) {
@@ -503,7 +598,7 @@ export class StoreTeamService {
         storeName: store.displayName ?? store.name,
         email: input.email,
         fullName: input.fullName,
-        roleKey: input.roleKey,
+        roleKeys: input.roleKeys,
         actor,
       }),
     );
@@ -515,7 +610,7 @@ export class StoreTeamService {
       entityType: 'store_user_invitation',
       entityId: pending.invitationId,
       severity: 'MEDIUM',
-      metadata: { storeId: store.id, email: pending.email, role: input.roleKey },
+      metadata: { storeId: store.id, email: pending.email, roles: [...input.roleKeys] },
     });
     await this.sendInvitationEmail(pending);
     const view = (await this.team(store.id)).invitations.find((i) => i.id === pending.invitationId);
@@ -530,8 +625,12 @@ export class StoreTeamService {
     storeId: string,
     exceptUserId: string,
   ): Promise<void> {
-    const others = await tx.storeUser.count({
-      where: { storeId, deletedAt: null, id: { not: exceptUserId }, role: { isOwner: true } },
+    const others = await tx.storeUserRoleAssignment.count({
+      where: {
+        storeUserId: { not: exceptUserId },
+        user: { storeId, deletedAt: null },
+        role: { isOwner: true, deletedAt: null },
+      },
     });
     if (others === 0) {
       throw new BadRequestException({

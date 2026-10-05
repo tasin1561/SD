@@ -18,7 +18,7 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Button } from '@skydrop/ui/app/button';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
-import { Select } from '@skydrop/ui/app/select';
+import { MultiSelect } from '@skydrop/ui/app/multi-select';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
@@ -29,7 +29,7 @@ import {
   useRevokeTeamInvitation,
   useTeamInvitationsList,
   useTeamMembersList,
-  useUpdateTeamMemberRole,
+  useUpdateTeamMemberRoles,
 } from '@/lib/api-hooks';
 import { InviteMemberModal } from './invite-member-modal';
 import { InviteLinkRevealCard } from './invite-link-reveal-card';
@@ -37,11 +37,25 @@ import { useRoles } from '@/lib/rbac-hooks';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { serverVerdict } from '@/lib/server-verdict';
+import { roleChangeConsequence, roleLine, roleNamesOf } from '@/lib/role-words';
 import { SetCallout, SetFact, SetPageHeader } from '../../settings/_components/settings-parts';
 import './team.css';
 
 // The hardcoded six are gone: roles are rows now, so the options come
 // from the server and include anything created under Team → Roles.
+//
+// ── A PERSON HOLDS SEVERAL ──────────────────────────────────────
+// Permissions are the UNION of every live role held, so the roles a
+// member holds are CHIPS IN THE ROW — not a label in a detail view
+// nobody opens, and not the single-role `<select>` this page used to
+// carry, which could only ever express the last role chosen and
+// silently dropped the rest.
+//
+// The LEGACY `role` enum is not read anywhere on this page. It is null
+// for anybody holding only roles this company invented, and a null
+// prints as nothing without anything failing — so the one surface that
+// most needs to be right about custom roles would have been blank for
+// exactly the people who have them.
 
 const CRUMBS = [{ label: 'Seller console' }, { label: 'Account' }, { label: 'Team' }];
 
@@ -76,7 +90,7 @@ export function TeamManagementIndex(): ReactElement {
   const roles = useRoles();
   const members = useTeamMembersList();
   const invitations = useTeamInvitationsList();
-  const updateRole = useUpdateTeamMemberRole();
+  const updateRoles = useUpdateTeamMemberRoles();
   const deactivate = useDeactivateTeamMember();
   const resend = useResendTeamInvitation();
   const revoke = useRevokeTeamInvitation();
@@ -88,27 +102,57 @@ export function TeamManagementIndex(): ReactElement {
   const [pendingRevoke, setPendingRevoke] = useState<{
     readonly id: string;
     readonly email: string;
-    readonly role: string;
+    readonly roles: string;
   } | null>(null);
-  // A role change waits here until it is confirmed; the select keeps
-  // showing the member's current role until then.
-  const [pendingRole, setPendingRole] = useState<{
+  // A role change is CHOSEN inside the confirm dialog rather than in the
+  // row: picking several roles needs a field with room to breathe, and
+  // the row keeps showing what the person holds until the change is
+  // actually made. `roleIds` starts as what they hold, so opening the
+  // dialog and confirming it unchanged is a no-op the server agrees is
+  // one.
+  const [editingRoles, setEditingRoles] = useState<{
     readonly member: TeamMemberRow;
-    readonly roleId: string;
+    readonly roleIds: readonly string[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The server's refusal of a role change, shown inside the dialog that
+  // caused it (FE-2). Whatever it says: this holds a string, not a
+  // vocabulary of codes it knows how to react to.
+  const [roleError, setRoleError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
     return serverVerdict(e, 'Action failed');
   }
 
-  async function onRoleChange(id: string, roleId: string): Promise<void> {
+  /**
+   * Rethrows on failure so `ConfirmDialog` stays OPEN with the server's
+   * verdict on it — which is the whole point for the two refusals this
+   * can draw: the last owner being moved off that role (nobody would be
+   * left able to manage the account) and an empty set (somebody holding
+   * no role cannot sign in at all).
+   *
+   * Neither is mirrored here. In particular the owner role is NOT made
+   * un-removable in the field: a control that greys itself out is a
+   * client-side copy of a server policy, and only the server can know
+   * whether this is the last owner — it counts them through the join
+   * table, INSIDE the transaction that does the write, and a person
+   * holding Owner as one of several roles still counts as one. Nothing
+   * here could compute that, and the version that tried would be wrong
+   * quietly.
+   */
+  async function onRolesChange(id: string, roleIds: readonly string[]): Promise<void> {
     setError(null);
+    setRoleError(null);
     try {
-      const result = await updateRole.mutateAsync({ id, roleId });
-      toast.success(`Role updated to ${result.roleName}.`);
+      const result = await updateRoles.mutateAsync({ id, roleIds });
+      toast.success(
+        result.roleNames.length === 1
+          ? `Now holds ${result.roleNames[0]}.`
+          : `Now holds ${result.roleNames.join(', ')}.`,
+      );
     } catch (e) {
-      setError(fmtError(e));
+      setRoleError(fmtError(e));
+      throw e;
     }
   }
 
@@ -152,10 +196,21 @@ export function TeamManagementIndex(): ReactElement {
   const inviteRows = invitations.data?.items ?? [];
   const openInvites = inviteRows.filter((inv) => inviteState(inv) === 'PENDING');
 
-  const pendingRoleName =
-    pendingRole === null
-      ? ''
-      : ((roles.data ?? []).find((r) => r.id === pendingRole.roleId)?.name ?? '');
+  const roleOptions = (roles.data ?? []).map((r) => ({
+    value: r.id,
+    label: r.name,
+    description: r.isOwner
+      ? 'Everything, including permissions added later'
+      : (r.description ??
+        `${r.permissions.length} permission${r.permissions.length === 1 ? '' : 's'}`),
+  }));
+
+  /** The chosen ids as NAMES, for the sentence above the confirm button. */
+  function namesFor(ids: readonly string[]): readonly string[] {
+    return ids
+      .map((id) => (roles.data ?? []).find((r) => r.id === id)?.name)
+      .filter((n): n is string => n !== undefined);
+  }
 
   return (
     <div className="set-page">
@@ -293,7 +348,15 @@ export function TeamManagementIndex(): ReactElement {
           ) : (
             <ul className="team-members" aria-label="Team members">
               {memberRows.map((m) => {
-                const locked = m.deletedAt !== null || m.isYou;
+                // Nobody may change their own roles, and a deactivated
+                // member has none to change. `canWrite` joins them
+                // because the page opens on `team.view` while every
+                // write needs `team.manage`: without it a reader saw
+                // controls that could only ever 403. Cosmetic, as the
+                // Invite button above already is — the server refuses
+                // regardless of what renders (FE-2).
+                const locked = m.deletedAt !== null || m.isYou || !canWrite;
+                const held = roleNamesOf(m);
                 return (
                   <li
                     key={m.id}
@@ -330,42 +393,51 @@ export function TeamManagementIndex(): ReactElement {
                       </span>
                     </div>
                     <div className="team-member__side">
-                      {locked ? (
-                        // Nobody may change their own role, and a
-                        // deactivated member has none to change: a chip
-                        // says what it is without a control that refuses.
-                        <span title={m.isYou ? 'You cannot change your own role.' : undefined}>
-                          <StatusChip kind="neutral" label={m.roleName} />
-                        </span>
-                      ) : (
-                        <Select
-                          className="team-member__role"
-                          icon={<ShieldCheck size={15} />}
-                          value={m.roleId}
-                          aria-label={`Role for ${m.fullName}`}
-                          disabled={roles.data === undefined}
-                          onChange={(e) => {
-                            setError(null);
-                            if (e.target.value !== m.roleId)
-                              setPendingRole({ member: m, roleId: e.target.value });
-                          }}
-                        >
-                          {(roles.data ?? []).map((r) => (
-                            <option key={r.id} value={r.id}>
-                              {r.name}
-                            </option>
-                          ))}
-                        </Select>
-                      )}
+                      {/* EVERY role held, in the row. A person's access is
+                          the union of these, so one of them is not a
+                          summary of it — and somebody auditing who can
+                          reach the wallet reads this list, not a detail
+                          page. */}
+                      <span
+                        className="team-member__roles"
+                        title={m.isYou ? 'You cannot change your own roles.' : undefined}
+                      >
+                        {held.length === 0 ? (
+                          // A role can be deleted from under its holders.
+                          // Saying so beats an empty cell that reads as a
+                          // rendering fault.
+                          <StatusChip kind="failed" label="No role" size="sm" />
+                        ) : (
+                          held.map((name) => (
+                            <StatusChip key={name} kind="neutral" label={name} size="sm" />
+                          ))
+                        )}
+                      </span>
                       {locked ? null : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          icon={<UserMinus size={14} />}
-                          onClick={() => setPendingDelete(m)}
-                        >
-                          Deactivate
-                        </Button>
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<ShieldCheck size={14} />}
+                            disabled={roles.data === undefined}
+                            aria-label={`Change roles for ${m.fullName}`}
+                            onClick={() => {
+                              setError(null);
+                              setRoleError(null);
+                              setEditingRoles({ member: m, roleIds: m.roleIds });
+                            }}
+                          >
+                            Change roles
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={<UserMinus size={14} />}
+                            onClick={() => setPendingDelete(m)}
+                          >
+                            Deactivate
+                          </Button>
+                        </>
                       )}
                     </div>
                   </li>
@@ -398,7 +470,7 @@ export function TeamManagementIndex(): ReactElement {
               <THead>
                 <Tr>
                   <Th>Email</Th>
-                  <Th>Role</Th>
+                  <Th>Roles</Th>
                   <Th>State</Th>
                   <Th>Expires</Th>
                   <Th align="right">Actions</Th>
@@ -410,13 +482,27 @@ export function TeamManagementIndex(): ReactElement {
                 ) : (
                   inviteRows.map((inv) => {
                     const state = inviteState(inv);
+                    const offered = roleNamesOf({ roleNames: inv.roleNames });
                     return (
                       <Tr key={inv.id}>
                         <Td>
                           <span className="sk-ident">{inv.email}</span>
                         </Td>
                         <Td>
-                          <StatusChip kind="neutral" label={inv.role} size="sm" />
+                          {/* An invitation offers a SET of roles, and
+                              `inv.role` — the legacy enum — is null
+                              whenever none of them has an enum spelling,
+                              i.e. whenever the company invited somebody
+                              onto a role it built itself. */}
+                          <span className="team-member__roles">
+                            {offered.length === 0 ? (
+                              <StatusChip kind="failed" label="No role" size="sm" />
+                            ) : (
+                              offered.map((name) => (
+                                <StatusChip key={name} kind="neutral" label={name} size="sm" />
+                              ))
+                            )}
+                          </span>
                         </Td>
                         <Td>
                           <StatusChip
@@ -448,7 +534,11 @@ export function TeamManagementIndex(): ReactElement {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() =>
-                                  setPendingRevoke({ id: inv.id, email: inv.email, role: inv.role })
+                                  setPendingRevoke({
+                                    id: inv.id,
+                                    email: inv.email,
+                                    roles: roleLine({ roleNames: inv.roleNames }),
+                                  })
                                 }
                               >
                                 Revoke
@@ -477,28 +567,60 @@ export function TeamManagementIndex(): ReactElement {
         />
       )}
 
+      {/* The roles are chosen HERE, so the sentence above the button is
+          about the set that is actually going to be saved. The confirm
+          button is never disabled on an empty selection: the server
+          refuses that and its words are what appears in `error` — see
+          `onRolesChange`. */}
       <ConfirmDialog
-        open={pendingRole !== null}
+        open={editingRoles !== null}
         onOpenChange={(next) => {
-          if (!next) setPendingRole(null);
+          if (!next) {
+            setEditingRoles(null);
+            setRoleError(null);
+          }
         }}
-        title="Change this person's role?"
+        title="Which roles should this person hold?"
         entity={
-          pendingRole === null
+          editingRoles === null
             ? ''
-            : `${pendingRole.member.fullName} · ${pendingRole.member.emailDisplay}`
+            : `${editingRoles.member.fullName} · ${editingRoles.member.emailDisplay}`
         }
         consequence={
-          pendingRole === null
+          editingRoles === null
             ? ''
-            : `${pendingRole.member.fullName} moves from ${pendingRole.member.roleName} to ${pendingRoleName}. What they can see and change follows the new role.`
+            : roleChangeConsequence(
+                editingRoles.member.fullName,
+                roleNamesOf(editingRoles.member),
+                namesFor(editingRoles.roleIds),
+              )
         }
-        confirmLabel="Change role"
+        confirmLabel="Save roles"
+        error={roleError}
         onConfirm={async () => {
-          if (pendingRole === null) return;
-          await onRoleChange(pendingRole.member.id, pendingRole.roleId);
+          if (editingRoles === null) return;
+          await onRolesChange(editingRoles.member.id, editingRoles.roleIds);
         }}
-      />
+      >
+        <MultiSelect
+          label="Roles"
+          icon={<ShieldCheck size={15} />}
+          required
+          options={roleOptions}
+          value={editingRoles?.roleIds ?? []}
+          onChange={(next) => {
+            setRoleError(null);
+            setEditingRoles((cur) => (cur === null ? cur : { ...cur, roleIds: next }));
+          }}
+          placeholder={
+            (editingRoles?.roleIds.length ?? 0) === 0
+              ? 'Choose one or more roles'
+              : 'Add another role'
+          }
+          hint="They can do everything their roles cover between them."
+          emptyText="No matching role"
+        />
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={pendingDelete !== null}
@@ -521,7 +643,7 @@ export function TeamManagementIndex(): ReactElement {
           if (!next) setPendingRevoke(null);
         }}
         title="Revoke this invitation?"
-        entity={pendingRevoke === null ? '' : `${pendingRevoke.email} · ${pendingRevoke.role}`}
+        entity={pendingRevoke === null ? '' : `${pendingRevoke.email} · ${pendingRevoke.roles}`}
         consequence="The invitation link stops working."
         confirmLabel="Revoke invitation"
         destructive

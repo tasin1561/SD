@@ -164,6 +164,7 @@ export type {
   CreatedStaffInvitation,
   CreateStaffInvitationRequest,
   StaffUserRow,
+  SetStaffRolesResult,
   AcceptStaffInvitationRequest,
 } from './endpoints/admin-staff';
 export type {
@@ -171,6 +172,8 @@ export type {
   CreatedTeamInvitation,
   CreateTeamInvitationRequest,
   TeamMemberRow,
+  SetTeamMemberRolesRequest,
+  SetTeamMemberRolesResult,
   AcceptTeamInvitationRequest,
 } from './endpoints/seller-team';
 export type {

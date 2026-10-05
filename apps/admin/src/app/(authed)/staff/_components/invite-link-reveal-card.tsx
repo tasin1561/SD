@@ -25,7 +25,11 @@ export function InviteLinkRevealCard({
         <div className="ac-card__titles">
           <h2 className="ac-card__title">Invitation link — copy + share</h2>
           <div className="ac-text">
-            {invitation.email} <span className="ac-faint">· {invitation.role}</span>
+            {invitation.email}{' '}
+            {/* `invitation.role` is the LEGACY enum and is null for an
+                access tier and for any role invented here — it printed
+                "null" for exactly the people this screen now invites. */}
+            <span className="ac-faint">· {invitation.roleNames.join(', ')}</span>
           </div>
         </div>
         <Button variant="ghost" size="sm" onClick={onDismiss}>

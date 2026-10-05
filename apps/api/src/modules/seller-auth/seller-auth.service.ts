@@ -32,6 +32,8 @@ import { SellerNotificationPreferenceService } from '../seller-notification-pref
 import type { SellerRegisterViaInvitationDto } from './dto/register-via-invitation.dto';
 import { provisionDefaultSellerRoles } from '../../common/auth/seller-role-provisioning';
 import { ALL_SELLER_PERMISSION_KEYS } from '../../common/auth/seller-permissions';
+import { resolveRoles } from '../../common/auth/role-union';
+import { rolesOnCreate } from '../../common/auth/role-assignment';
 import { generateSellerInitials } from './util/seller-initials';
 import { defaultStoreName } from '../seller-store/services/seller-store.service';
 
@@ -66,9 +68,15 @@ export interface SellerRegistrationResult {
 }
 
 export interface SellerMe {
-  /** `seller_roles.key` — the role held, including ones the company made. */
+  /**
+   * The FIRST role held — a label, never what the UI should gate on.
+   * `permissions` is the union of every role.
+   */
   roleKey: string;
   roleName: string;
+  /** Every `seller_roles.key` held, including ones the company made. */
+  roleKeys: readonly string[];
+  roleNames: readonly string[];
   /** What the seller app hides things by. FE-2: rendering, not permission. */
   permissions: readonly string[];
   // id is the COMPANY id (back-compat with all existing consumers).
@@ -93,7 +101,8 @@ export interface SellerMe {
   createdAt: Date;
   // Phase 1B — the signed-in user identity.
   sellerUserId: string;
-  role: SellerUserRole;
+  /** LEGACY enum, display only — null for a custom-role-only person. */
+  role: SellerUserRole | null;
   fullName: string;
   /** The company's short code — shown as a fixed prefix on recipient
    *  names. Read-only to the seller; staff-editable only. */
@@ -295,13 +304,16 @@ export class SellerAuthService {
       const createdOwner = await tx.sellerUser.create({
         data: {
           sellerId: createdSeller.id,
-          roleId: ownerRoleId,
           email: normalizedEmail,
           emailDisplay: invitation.email,
           passwordHash,
           fullName: input.contactPersonName,
           role: 'OWNER',
           emailVerifiedAt: now,
+          // Both the join row and the transitional `role_id`, in one
+          // write: a user row without its join row cannot sign in at
+          // all, because the guard reads zero live roles.
+          ...rolesOnCreate([ownerRoleId]),
         },
         select: { id: true, role: true },
       });
@@ -322,7 +334,7 @@ export class SellerAuthService {
         subject: createdOwner.id,
         status: createdSeller.status,
         sellerId: createdSeller.id,
-        role: createdOwner.role,
+        role: createdOwner.role ?? '',
       });
 
       await this.audit.log(
@@ -513,7 +525,7 @@ export class SellerAuthService {
         subject: user.id,
         status: seller.status,
         sellerId: seller.id,
-        role: user.role,
+        role: user.role ?? '',
       });
 
       await tx.sellerUser.update({
@@ -588,7 +600,7 @@ export class SellerAuthService {
       subject: user.id,
       status: user.seller.status,
       sellerId: user.seller.id,
-      role: user.role,
+      role: user.role ?? '',
     });
     return { accessToken, refresh: issued };
   }
@@ -982,13 +994,18 @@ export class SellerAuthService {
         fullName: true,
         role: true,
         emailVerifiedAt: true,
-        sellerRole: {
+        roles: {
+          orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
           select: {
-            key: true,
-            name: true,
-            isOwner: true,
-            deletedAt: true,
-            permissions: { select: { permission: true } },
+            role: {
+              select: {
+                key: true,
+                name: true,
+                isOwner: true,
+                deletedAt: true,
+                permissions: { select: { permission: true } },
+              },
+            },
           },
         },
         seller: {
@@ -1015,7 +1032,11 @@ export class SellerAuthService {
         },
       },
     });
-    if (!user || user.sellerRole.deletedAt !== null) {
+    // Every role gone is nobody to be — the guard's own answer, given
+    // here too so the app and the API cannot disagree about whether
+    // somebody is signed in.
+    const resolved = user === null ? null : resolveRoles(user.roles, ALL_SELLER_PERMISSION_KEYS);
+    if (!user || resolved === null || resolved.roles.length === 0) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
         message: 'Seller session no longer valid',
@@ -1052,16 +1073,17 @@ export class SellerAuthService {
       createdAt: user.seller.createdAt,
       sellerUserId: user.id,
       role: user.role,
-      roleKey: user.sellerRole.key,
-      roleName: user.sellerRole.name,
-      // What the UI hides things by. Resolved from the role rather than
-      // read off the token, so an owner editing a role takes effect on
-      // the next page load instead of whenever the access token expires.
-      // FE-2 still holds: this decides what is RENDERED, never what is
-      // permitted — the API refuses regardless.
-      permissions: user.sellerRole.isOwner
-        ? ALL_SELLER_PERMISSION_KEYS
-        : user.sellerRole.permissions.map((p) => p.permission),
+      roleKey: resolved.primary?.key ?? '',
+      roleName: resolved.primary?.name ?? '',
+      roleKeys: resolved.roles.map((r) => r.key),
+      roleNames: resolved.roles.map((r) => r.name),
+      // What the UI hides things by: the UNION of every role held,
+      // resolved from the roles rather than read off the token, so an
+      // owner editing one takes effect on the next page load instead of
+      // whenever the access token expires. FE-2 still holds: this
+      // decides what is RENDERED, never what is permitted — the API
+      // refuses regardless.
+      permissions: resolved.permissions,
       fullName: user.fullName,
     };
   }

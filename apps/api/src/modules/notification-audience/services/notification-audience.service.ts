@@ -105,15 +105,28 @@ export class NotificationAudienceService {
       case 'SELLER_ORG':
         return this.sellerUsers({ sellerId: selector.sellerId });
       case 'SELLER_ROLE':
+        // Through the JOIN TABLE, not the to-one relation: a person may
+        // hold several roles, and matching on the transitional
+        // `role_id` column would miss everybody whose SECOND role is
+        // the one named — silently, which is how a stock alert comes to
+        // reach nobody.
         return this.sellerUsers({
           sellerId: selector.sellerId,
-          sellerRole: { key: selector.roleKey },
+          roles: { some: { role: { key: selector.roleKey, deletedAt: null } } },
         });
       case 'SELLER_PERMISSION':
         return this.sellerUsers({
           sellerId: selector.sellerId,
-          sellerRole: {
-            OR: [{ isOwner: true }, { permissions: { some: { permission: selector.permission } } }],
+          roles: {
+            some: {
+              role: {
+                deletedAt: null,
+                OR: [
+                  { isOwner: true },
+                  { permissions: { some: { permission: selector.permission } } },
+                ],
+              },
+            },
           },
         });
       case 'SELLER_USER':
@@ -121,20 +134,31 @@ export class NotificationAudienceService {
       case 'ALL_STAFF':
         return this.staffUsers({});
       case 'STAFF_ROLE':
-        return this.staffUsers({ staffRole: { key: selector.roleKey } });
+        return this.staffUsers({
+          roles: { some: { role: { key: selector.roleKey, deletedAt: null } } },
+        });
       case 'STAFF_PERMISSION':
         return this.staffUsers({
-          staffRole: {
-            // A super-admin holds every permission implicitly,
-            // including ones a later migration adds, so they carry no
-            // permission ROWS — matching on rows alone would leave the
-            // people who hold the most out of every audience addressed
-            // by what somebody is allowed to do. The seller side has
-            // the same shape via `isOwner`.
-            OR: [
-              { isSuperAdmin: true },
-              { permissions: { some: { permission: selector.permission } } },
-            ],
+          // ANY of the person's roles granting it is enough — the guard
+          // resolves the union, and an audience that asked a narrower
+          // question would address fewer people than the permission
+          // actually reaches.
+          roles: {
+            some: {
+              role: {
+                deletedAt: null,
+                // A super-admin holds every permission implicitly,
+                // including ones a later migration adds, so they carry
+                // no permission ROWS — matching on rows alone would
+                // leave the people who hold the most out of every
+                // audience addressed by what somebody is allowed to do.
+                // The seller side has the same shape via `isOwner`.
+                OR: [
+                  { isSuperAdmin: true },
+                  { permissions: { some: { permission: selector.permission } } },
+                ],
+              },
+            },
           },
         });
       case 'STAFF_USER':
@@ -144,9 +168,16 @@ export class NotificationAudienceService {
       case 'STORE_PERMISSION':
         return this.storeUsers({
           storeId: selector.storeId,
-          role: {
-            deletedAt: null,
-            OR: [{ isOwner: true }, { permissions: { some: { permission: selector.permission } } }],
+          roles: {
+            some: {
+              role: {
+                deletedAt: null,
+                OR: [
+                  { isOwner: true },
+                  { permissions: { some: { permission: selector.permission } } },
+                ],
+              },
+            },
           },
         });
       case 'STORE_USER':
@@ -217,17 +248,20 @@ export class NotificationAudienceService {
    * normalised address rather than the one somebody typed is a small
    * disrespect that occasionally bounces.
    *
-   * A deleted person, and a person whose ROLE has been deleted, are both
-   * excluded — the role is how the guard decides what they may do, and a
-   * login the guard refuses is not an audience.
+   * A deleted person, and a person whose EVERY role has been deleted,
+   * are both excluded — the roles are how the guard decides what they
+   * may do, and a login the guard refuses is not an audience. Asked of
+   * the join table, not the transitional `role_id`: somebody holding a
+   * deleted role AND a live one is still a live login.
    */
   private async storeUsers(where: Record<string, unknown>): Promise<ResolvedRecipient[]> {
     const rows = await this.prisma.client.storeUser.findMany({
       // The defaults come FIRST and the selector's own clauses override
-      // them: `STORE_PERMISSION` supplies its own `role` filter (carrying
-      // the same `deletedAt: null`), and spreading it after a default
-      // `role` is what keeps the permission from being silently dropped.
-      where: { deletedAt: null, role: { deletedAt: null }, ...where },
+      // them: `STORE_PERMISSION` supplies its own `roles` filter
+      // (carrying the same `deletedAt: null`), and spreading it after a
+      // default `roles` is what keeps the permission from being
+      // silently dropped.
+      where: { deletedAt: null, roles: { some: { role: { deletedAt: null } } }, ...where },
       select: { id: true, emailDisplay: true, fullName: true, storeId: true },
     });
     return rows.map((r) => ({

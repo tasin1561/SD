@@ -1,0 +1,59 @@
+/*
+ * The role picker and the role list on the team screen.
+ *
+ * Tokens only (FE-6): every colour, space and radius is a brand
+ * variable from `@skydrop/ui/brand/*`, which apps/reseller imports in
+ * globals.css. No hex here.
+ */
+
+.rd-roles {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4) var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface-3);
+}
+.rd-roles legend {
+  padding: 0 var(--sp-1);
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.rd-roles__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.rd-roles__note {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+
+/* The roles somebody holds, in a table cell. Wraps rather than widening
+   the column — a narrow viewport must not gain a horizontal scroll
+   (FE-7, e2e-shared/responsive.spec.ts). */
+.rd-roles__held {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.rd-roles__chip {
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--fg-strong);
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+}
+.rd-roles__none {
+  color: var(--red-text);
+  font-size: var(--fs-xs);
+}

@@ -20,6 +20,8 @@ const STAFF: StaffMe = {
   role: 'SUPER_ADMIN' as StaffMe['role'],
   roleKey: 'super_admin',
   roleName: 'Super admin',
+  roleKeys: ['super_admin'],
+  roleNames: ['Super admin'],
   permissions: ['staff.view', 'rbac.manage'],
   emailVerifiedAt: null,
   lastLoginAt: null,
@@ -36,10 +38,10 @@ function Probe(): React.ReactElement {
       <span data-testid="client">{client ? 'ok' : 'missing'}</span>
       <span data-testid="hasToken">{hasToken ? 'yes' : 'no'}</span>
       <span data-testid="hasRoleSuperAdmin">
-        {hasStaffRole(identity, ['SUPER_ADMIN' as StaffMe['role']]) ? 'yes' : 'no'}
+        {hasStaffRole(identity, ['SUPER_ADMIN' as NonNullable<StaffMe['role']>]) ? 'yes' : 'no'}
       </span>
       <span data-testid="hasRoleFinance">
-        {hasStaffRole(identity, ['FINANCE' as StaffMe['role']]) ? 'yes' : 'no'}
+        {hasStaffRole(identity, ['FINANCE' as NonNullable<StaffMe['role']>]) ? 'yes' : 'no'}
       </span>
     </div>
   );

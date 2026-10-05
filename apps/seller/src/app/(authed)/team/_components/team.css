@@ -75,7 +75,15 @@
   align-items: center;
   gap: var(--sp-2);
 }
-.team-member__role {
-  width: 12rem;
-  max-width: 100%;
+
+/* Every role a member holds, as chips. A set and not a label, so it
+   wraps rather than truncating: at 320px a person holding three roles
+   still reads as holding three. */
+.team-member__roles {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }

@@ -98,7 +98,7 @@ export interface CreateResellerStoreInput {
   readonly contactPhone?: string;
   readonly walletManagedBy?: ResellerWalletManager;
   readonly note?: string;
-  readonly invite?: { email: string; fullName: string; roleKey: StoreRoleKey };
+  readonly invite?: { email: string; fullName: string; roleKeys: readonly StoreRoleKey[] };
 }
 
 const VIEW_SELECT = {
@@ -250,7 +250,7 @@ export class ResellerStoreService {
                 storeName: blankToNull(input.displayName) ?? name,
                 email: input.invite.email,
                 fullName: input.invite.fullName,
-                roleKey: input.invite.roleKey,
+                roleKeys: input.invite.roleKeys,
                 actor: { kind: 'SELLER', sellerUserId: actor.sellerUserId, name: actor.name },
               });
         return { id: store.id, pending };
@@ -291,7 +291,7 @@ export class ResellerStoreService {
     sellerId: string,
     storeId: string,
     actor: ResellerActor & { kind: 'SELLER' },
-    invite?: { email: string; fullName: string; roleKey: StoreRoleKey },
+    invite?: { email: string; fullName: string; roleKeys: readonly StoreRoleKey[] },
   ): Promise<ResellerStoreDetail> {
     return this.transition(sellerId, storeId, 'APPROVE', actor, { invite });
   }
@@ -339,7 +339,7 @@ export class ResellerStoreService {
     actor: TransitionActor,
     opts: {
       reason?: string | undefined;
-      invite?: { email: string; fullName: string; roleKey: StoreRoleKey } | undefined;
+      invite?: { email: string; fullName: string; roleKeys: readonly StoreRoleKey[] } | undefined;
     },
   ): Promise<ResellerStoreDetail> {
     const rule = ruleFor(action);
@@ -478,7 +478,7 @@ export class ResellerStoreService {
           storeName: store.displayName ?? store.name,
           email: opts.invite.email,
           fullName: opts.invite.fullName,
-          roleKey: opts.invite.roleKey,
+          roleKeys: opts.invite.roleKeys,
           actor: { kind: 'SELLER', sellerUserId: actor.sellerUserId, name: actor.name },
         });
       }

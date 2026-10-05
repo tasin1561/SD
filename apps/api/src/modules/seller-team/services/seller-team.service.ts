@@ -23,19 +23,61 @@ const LEGACY_SELLER_ROLE_KEYS = new Set([
   'viewer',
 ]);
 
-import { sellerRoleIdForEnum } from '../../../common/auth/seller-role-provisioning';
 import {
   assertMayGrantRole,
   type GrantableRole,
   type GrantingActor,
 } from '../../../common/auth/assert-may-grant-role';
+import { resolveRoles, roleNamesFor } from '../../../common/auth/role-union';
+import { ALL_SELLER_PERMISSION_KEYS } from '../../../common/auth/seller-permissions';
+import {
+  NO_ROLES,
+  NO_ROLES_MESSAGE,
+  normaliseRoleIds,
+  rolesOnCreate,
+  setSellerUserRoles,
+} from '../../../common/auth/role-assignment';
+
+/** The enum spelling of the first role that has one, else null. */
+function legacySellerEnumFor(roleKeys: readonly string[]): SellerUserRole | null {
+  const match = roleKeys.find((k) => LEGACY_SELLER_ROLE_KEYS.has(k));
+  return match === undefined ? null : (match.toUpperCase() as SellerUserRole);
+}
+
+/** The live roles out of a loaded assignment list. */
+function liveRolesOf<T extends { deletedAt: Date | null }>(
+  assignments: readonly { role: T }[],
+): readonly T[] {
+  return assignments.map((a) => a.role).filter((r) => r.deletedAt === null);
+}
+
+/** Every role a person holds, oldest grant first. */
+const SELLER_ROLE_ASSIGNMENTS = {
+  orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+  select: {
+    role: {
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        isOwner: true,
+        deletedAt: true,
+        permissions: { select: { permission: true } },
+      },
+    },
+  },
+};
 
 const DEFAULT_EXPIRES_IN_DAYS = 7;
 
 export interface TeamInvitationView {
   readonly id: string;
   readonly email: string;
-  readonly role: SellerUserRole;
+  /** LEGACY enum — null when no offered role has a spelling. */
+  readonly role: SellerUserRole | null;
+  /** `seller_roles.id`s the invitation offers, in the order chosen. */
+  readonly roleIds: readonly string[];
+  readonly roleNames: readonly string[];
   readonly invitedById: string;
   readonly acceptedById: string | null;
   readonly expiresAt: string;
@@ -54,10 +96,13 @@ export interface TeamMemberView {
   readonly email: string;
   readonly emailDisplay: string;
   readonly fullName: string;
-  /** Legacy enum, kept for display continuity. */
-  readonly role: SellerUserRole;
+  /** Legacy enum, display only — null for a custom-role-only person. */
+  readonly role: SellerUserRole | null;
+  /** The FIRST role held — a label. `roleIds` is all of them. */
   readonly roleId: string;
   readonly roleName: string;
+  readonly roleIds: readonly string[];
+  readonly roleNames: readonly string[];
   readonly emailVerifiedAt: string | null;
   readonly lastLoginAt: string | null;
   readonly createdAt: string;
@@ -99,33 +144,70 @@ export class SellerTeamService {
   private async grantingActor(sellerId: string, sellerUserId: string): Promise<GrantingActor> {
     const me = await this.prisma.client.sellerUser.findFirst({
       where: { id: sellerUserId, sellerId, deletedAt: null },
-      select: {
-        sellerRole: { select: { isOwner: true, permissions: { select: { permission: true } } } },
-      },
+      select: { roles: SELLER_ROLE_ASSIGNMENTS },
     });
     if (me === null) {
       throw new NotFoundException({ code: 'MEMBER_NOT_FOUND', message: 'Team member not found' });
     }
+    // Read from every role they hold: an actor who is Finance AND Ops
+    // may delegate either, and asking only the first would refuse a
+    // grant they are plainly entitled to make.
+    const live = me.roles.map((r) => r.role).filter((r) => r.deletedAt === null);
     return {
-      isSuperuser: me.sellerRole.isOwner,
-      permissions: me.sellerRole.permissions.map((p) => p.permission),
+      isSuperuser: live.some((r) => r.isOwner),
+      permissions: resolveRoles(me.roles, ALL_SELLER_PERMISSION_KEYS).permissions,
     };
   }
 
-  /** The default role an invitation's enum value names, within this company. */
-  private async invitedRole(sellerId: string, role: SellerUserRole): Promise<GrantableRole> {
-    const found = await this.prisma.client.sellerRoleDefinition.findFirst({
-      where: { sellerId, key: String(role).toLowerCase(), deletedAt: null },
-      select: { name: true, isOwner: true, permissions: { select: { permission: true } } },
-    });
-    if (found === null) {
-      throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+  /**
+   * The roles an id list names, as grant targets, SCOPED to this
+   * company — a role id from another seller must not be assignable, and
+   * the scoping is in the WHERE clause so a miss is indistinguishable
+   * from a role that does not exist.
+   *
+   * Resolved BEFORE anything is written, so an invitation is never
+   * half-created, and returned in the order ASKED FOR because the first
+   * role becomes the legacy label.
+   */
+  private async rolesToGrant(
+    sellerId: string,
+    roleIds: readonly string[],
+  ): Promise<readonly (GrantableRole & { id: string; key: string })[]> {
+    const ids = normaliseRoleIds(roleIds);
+    if (ids.length === 0) {
+      throw new BadRequestException({ code: NO_ROLES, message: NO_ROLES_MESSAGE });
     }
-    return {
-      name: found.name,
-      isSuperuser: found.isOwner,
-      permissions: found.permissions.map((p) => p.permission),
-    };
+    const found = await this.prisma.client.sellerRoleDefinition.findMany({
+      where: { id: { in: [...ids] }, sellerId, deletedAt: null },
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        isOwner: true,
+        permissions: { select: { permission: true } },
+      },
+    });
+    if (found.length !== ids.length) {
+      throw new NotFoundException({
+        code: 'ROLE_NOT_FOUND',
+        message: 'One of those roles does not exist',
+      });
+    }
+    const byId = new Map(found.map((r) => [r.id, r]));
+    return ids.map((id) => {
+      const r = byId.get(id);
+      // Unreachable — the length check above covers it.
+      if (r === undefined) {
+        throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+      }
+      return {
+        id: r.id,
+        key: r.key,
+        name: r.name,
+        isSuperuser: r.isOwner,
+        permissions: r.permissions.map((p) => p.permission),
+      };
+    });
   }
 
   async invite(
@@ -138,10 +220,12 @@ export class SellerTeamService {
     // role and accepting it connects that role for real, so a
     // `team.manage` holder inviting an address they control as OWNER is
     // refused here rather than at the moment the privilege lands.
-    assertMayGrantRole(
-      await this.grantingActor(sellerId, actor.sellerUserId),
-      await this.invitedRole(sellerId, input.role),
-    );
+    // EVERY role is checked — a list is only as safe as its most
+    // powerful entry, and checking the first would let the second
+    // through.
+    const roles = await this.rolesToGrant(sellerId, input.roleIds);
+    const granter = await this.grantingActor(sellerId, actor.sellerUserId);
+    for (const role of roles) assertMayGrantRole(granter, role);
 
     const emailLower = input.email.trim().toLowerCase();
 
@@ -202,9 +286,12 @@ export class SellerTeamService {
         sellerId,
         email: input.email,
         token: tokenHash,
-        role: input.role,
+        // Display and history; null when no invited role has an enum
+        // spelling, which is every role the company invented.
+        role: legacySellerEnumFor(roles.map((r) => r.key)),
         invitedById: actor.sellerUserId,
         expiresAt,
+        roles: { create: roles.map((r) => ({ roleId: r.id })) },
       },
       select: this.invitationSelect,
     });
@@ -216,12 +303,18 @@ export class SellerTeamService {
       entityType: 'seller_user_invitation',
       entityId: row.id,
       severity: 'MEDIUM',
-      changes: { email: input.email, role: input.role, fullName: input.fullName },
+      changes: { email: input.email, roles: roles.map((r) => r.name), fullName: input.fullName },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
 
     const url = this.inviteUrlFor(plaintext);
-    await this.sendInvitationEmail(input.email, input.fullName, input.role, url, expiresAt);
+    await this.sendInvitationEmail(
+      input.email,
+      input.fullName,
+      roleNamesFor(roles),
+      url,
+      expiresAt,
+    );
     return { ...this.toInvView(row), token: plaintext, inviteUrl: url };
   }
 
@@ -248,7 +341,7 @@ export class SellerTeamService {
   ): Promise<CreatedTeamInvitation> {
     const existing = await this.prisma.client.sellerUserInvitation.findFirst({
       where: { id: invitationId, sellerId },
-      select: { id: true, email: true, role: true, usedAt: true, deletedAt: true },
+      select: { id: true, email: true, usedAt: true, deletedAt: true },
     });
     if (!existing || existing.deletedAt !== null) {
       throw new NotFoundException({
@@ -283,9 +376,16 @@ export class SellerTeamService {
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
 
+    const view = this.toInvView(updated);
     const url = this.inviteUrlFor(plaintext);
-    await this.sendInvitationEmail(updated.email, updated.email, updated.role, url, expiresAt);
-    return { ...this.toInvView(updated), token: plaintext, inviteUrl: url };
+    await this.sendInvitationEmail(
+      updated.email,
+      updated.email,
+      roleNamesFor(view.roleNames.map((name) => ({ name }))),
+      url,
+      expiresAt,
+    );
+    return { ...view, token: plaintext, inviteUrl: url };
   }
 
   async revokeInvitation(
@@ -335,7 +435,12 @@ export class SellerTeamService {
     plaintextPassword: string,
     fullName: string,
     ctx: ClientContext,
-  ): Promise<{ sellerUserId: string; email: string; role: SellerUserRole; sellerId: string }> {
+  ): Promise<{
+    sellerUserId: string;
+    email: string;
+    role: SellerUserRole | null;
+    sellerId: string;
+  }> {
     const tokenHash = this.hashes.sha256Hex(plaintextToken);
     const inv = await this.prisma.client.sellerUserInvitation.findUnique({
       where: { token: tokenHash },
@@ -344,6 +449,10 @@ export class SellerTeamService {
         sellerId: true,
         email: true,
         role: true,
+        roles: {
+          orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+          select: { role: { select: { id: true, key: true, deletedAt: true } } },
+        },
         expiresAt: true,
         usedAt: true,
         deletedAt: true,
@@ -382,6 +491,20 @@ export class SellerTeamService {
     const passwordHash = await this.password.hash(plaintextPassword);
     const now = new Date();
 
+    // The roles the invitation actually offers, live ones only. One
+    // deleted between sending and accepting is dropped — granting it
+    // would leave somebody holding permissions nobody can see or edit.
+    const offered = inv.roles.map((r) => r.role).filter((r) => r.deletedAt === null);
+    if (offered.length === 0) {
+      // Nothing to grant, and accepting would create an account that
+      // cannot sign in at all (the guard reads zero live roles).
+      throw new BadRequestException({
+        code: 'INVITATION_ROLES_GONE',
+        message:
+          'The role this invitation was sent for no longer exists. Ask the account owner to send a new one.',
+      });
+    }
+
     const created = await this.prisma.client.$transaction(async (tx) => {
       const re = await tx.sellerUserInvitation.findUnique({
         where: { id: inv.id },
@@ -396,13 +519,13 @@ export class SellerTeamService {
       const user = await tx.sellerUser.create({
         data: {
           sellerId: inv.sellerId,
-          roleId: await sellerRoleIdForEnum(tx, inv.sellerId, inv.role),
           email: emailLower,
           emailDisplay: inv.email,
           passwordHash,
           fullName,
-          role: inv.role,
+          role: legacySellerEnumFor(offered.map((r) => r.key)),
           emailVerifiedAt: now,
+          ...rolesOnCreate(offered.map((r) => r.id)),
         },
         select: { id: true, email: true, role: true, sellerId: true },
       });
@@ -420,7 +543,7 @@ export class SellerTeamService {
       entityType: 'seller_user',
       entityId: created.id,
       severity: 'MEDIUM',
-      changes: { invitationId: inv.id, role: inv.role, email: inv.email },
+      changes: { invitationId: inv.id, roleIds: offered.map((r) => r.id), email: inv.email },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
 
@@ -445,8 +568,10 @@ export class SellerTeamService {
         emailDisplay: true,
         fullName: true,
         role: true,
-        roleId: true,
-        sellerRole: { select: { name: true } },
+        roles: {
+          orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+          select: { role: { select: { id: true, name: true, deletedAt: true } } },
+        },
         emailVerifiedAt: true,
         lastLoginAt: true,
         createdAt: true,
@@ -459,8 +584,12 @@ export class SellerTeamService {
       emailDisplay: r.emailDisplay,
       fullName: r.fullName,
       role: r.role,
-      roleId: r.roleId,
-      roleName: r.sellerRole.name,
+      // The FIRST live role is the label; `roleIds` is what the screen
+      // should actually show, because a person may hold several.
+      roleId: liveRolesOf(r.roles)[0]?.id ?? '',
+      roleName: liveRolesOf(r.roles)[0]?.name ?? '',
+      roleIds: liveRolesOf(r.roles).map((x) => x.id),
+      roleNames: liveRolesOf(r.roles).map((x) => x.name),
       emailVerifiedAt: r.emailVerifiedAt?.toISOString() ?? null,
       lastLoginAt: r.lastLoginAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
@@ -470,84 +599,91 @@ export class SellerTeamService {
   }
 
   /**
-   * Move a team member to a different role.
+   * REPLACE the roles a team member holds.
    *
-   * Takes a role ROW id, not an enum — that is what lets somebody be
-   * given a role the company invented this morning. The legacy `role`
+   * Takes role ROW ids, not enum values — that is what lets somebody be
+   * given a role the company invented this morning — and SEVERAL,
+   * because "handles inbound stock and the wallet" is two roles rather
+   * than a seventh one invented for one person. The legacy `role`
    * column is kept in step only for the six defaults; a custom role has
    * no enum spelling and the column is no longer consulted for
-   * authorisation, so it is left alone rather than filled with a lie.
+   * authorisation, so it is left NULL rather than filled with a lie.
    */
-  async updateRole(
+  async setRoles(
     sellerId: string,
     targetUserId: string,
-    newRoleId: string,
+    newRoleIds: readonly string[],
     actor: { sellerUserId: string },
     ctx: ClientContext,
-  ): Promise<{ id: string; roleId: string; roleName: string }> {
+  ): Promise<{
+    id: string;
+    roleIds: readonly string[];
+    roleNames: readonly string[];
+    /** The FIRST role — keeps the single-role route's response shape. */
+    roleId: string;
+    roleName: string;
+  }> {
     if (targetUserId === actor.sellerUserId) {
       throw new BadRequestException({
         code: 'CANNOT_CHANGE_OWN_ROLE',
         message:
-          'You cannot change your own role. Ask another owner — this is what stops somebody removing their own way back in.',
+          'You cannot change your own roles. Ask another owner — this is what stops somebody removing their own way back in.',
       });
     }
-    const [target, role] = await Promise.all([
+    const [target, targets] = await Promise.all([
       this.prisma.client.sellerUser.findFirst({
         where: { id: targetUserId, sellerId },
         select: {
           id: true,
-          role: true,
-          roleId: true,
           deletedAt: true,
-          sellerRole: { select: { name: true, isOwner: true } },
+          roles: {
+            orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+            select: { role: { select: { id: true, name: true, isOwner: true, deletedAt: true } } },
+          },
         },
       }),
-      // Scoped by sellerId: a role id from another company must not be
-      // assignable, and the id is not a secret.
-      this.prisma.client.sellerRoleDefinition.findFirst({
-        where: { id: newRoleId, sellerId, deletedAt: null },
-        select: {
-          id: true,
-          key: true,
-          name: true,
-          isOwner: true,
-          isSystem: true,
-          permissions: { select: { permission: true } },
-        },
-      }),
+      // Scoped by sellerId inside `rolesToGrant`: a role id from another
+      // company must not be assignable, and the id is not a secret.
+      this.rolesToGrant(sellerId, newRoleIds),
     ]);
     if (!target || target.deletedAt !== null) {
       throw new NotFoundException({ code: 'MEMBER_NOT_FOUND', message: 'Team member not found' });
     }
-    if (!role) {
-      throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
-    }
-    if (target.roleId === role.id) {
-      return { id: target.id, roleId: role.id, roleName: role.name };
+
+    const held = liveRolesOf(target.roles);
+    const sameSet =
+      held.length === targets.length && held.every((r) => targets.some((t) => t.id === r.id));
+    if (sameSet) {
+      return {
+        id: target.id,
+        roleIds: targets.map((t) => t.id),
+        roleNames: targets.map((t) => t.name),
+        roleId: targets[0]?.id ?? '',
+        roleName: targets[0]?.name ?? '',
+      };
     }
 
     // The LAST_OWNER guard below is about not losing access. This one is
     // about not gaining it: `team.manage` covered assigning ANY role,
     // OWNER included, so somebody could promote a colleague past
-    // themselves and then borrow that login.
-    assertMayGrantRole(await this.grantingActor(sellerId, actor.sellerUserId), {
-      name: role.name,
-      isSuperuser: role.isOwner,
-      permissions: role.permissions.map((p) => p.permission),
-    });
+    // themselves and then borrow that login. Checked for EVERY role in
+    // the set.
+    const granter = await this.grantingActor(sellerId, actor.sellerUserId);
+    for (const t of targets) assertMayGrantRole(granter, t);
+
+    const wasOwner = held.some((r) => r.isOwner);
+    const staysOwner = targets.some((t) => t.isSuperuser);
 
     await this.prisma.client.$transaction(async (tx) => {
       // Somebody must be left who can get back in. Counted INSIDE the
-      // update's transaction, so two concurrent demotions cannot each
-      // see the owner the other is removing.
-      if (target.sellerRole.isOwner && !role.isOwner) {
-        const otherOwners = await tx.sellerUser.count({
+      // write's transaction, so two concurrent demotions cannot each see
+      // the owner the other is removing.
+      if (wasOwner && !staysOwner) {
+        const otherOwners = await tx.sellerUserRoleAssignment.count({
           where: {
-            sellerId,
-            deletedAt: null,
-            id: { not: targetUserId },
-            sellerRole: { isOwner: true, deletedAt: null },
+            sellerUserId: { not: targetUserId },
+            user: { sellerId, deletedAt: null },
+            role: { isOwner: true, deletedAt: null },
           },
         });
         if (otherOwners === 0) {
@@ -558,16 +694,14 @@ export class SellerTeamService {
           });
         }
       }
+      await setSellerUserRoles(
+        tx,
+        targetUserId,
+        targets.map((t) => t.id),
+      );
       await tx.sellerUser.update({
         where: { id: targetUserId },
-        data: {
-          roleId: role.id,
-          // Legacy column, best-effort — only the six defaults have an
-          // enum spelling to mirror.
-          ...(role.isSystem && LEGACY_SELLER_ROLE_KEYS.has(role.key)
-            ? { role: role.key.toUpperCase() as SellerUserRole }
-            : {}),
-        },
+        data: { role: legacySellerEnumFor(targets.map((t) => t.key)) },
       });
     });
 
@@ -578,10 +712,16 @@ export class SellerTeamService {
       entityType: 'seller_user',
       entityId: targetUserId,
       severity: 'MEDIUM',
-      changes: { before: target.sellerRole.name, after: role.name },
+      changes: { before: held.map((r) => r.name), after: targets.map((t) => t.name) },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
-    return { id: targetUserId, roleId: role.id, roleName: role.name };
+    return {
+      id: targetUserId,
+      roleIds: targets.map((t) => t.id),
+      roleNames: targets.map((t) => t.name),
+      roleId: targets[0]?.id ?? '',
+      roleName: targets[0]?.name ?? '',
+    };
   }
 
   async deactivate(
@@ -664,7 +804,11 @@ export class SellerTeamService {
     usedAt: true,
     createdAt: true,
     deletedAt: true,
-  } as const;
+    roles: {
+      orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+      select: { role: { select: { id: true, key: true, name: true, deletedAt: true } } },
+    },
+  };
 
   private async findLive(sellerId: string, emailLower: string): Promise<{ id: string } | null> {
     return this.prisma.client.sellerUserInvitation.findFirst({
@@ -686,18 +830,25 @@ export class SellerTeamService {
   private toInvView(row: {
     id: string;
     email: string;
-    role: SellerUserRole;
+    role: SellerUserRole | null;
     invitedById: string;
     acceptedById: string | null;
     expiresAt: Date;
     usedAt: Date | null;
     createdAt: Date;
     deletedAt: Date | null;
+    roles: readonly { role: { id: string; name: string; deletedAt: Date | null } }[];
   }): TeamInvitationView {
+    // A role deleted since the invitation was sent is dropped: accepting
+    // will not grant it, so listing it would promise something the
+    // accept cannot deliver.
+    const live = row.roles.map((r) => r.role).filter((r) => r.deletedAt === null);
     return {
       id: row.id,
       email: row.email,
       role: row.role,
+      roleIds: live.map((r) => r.id),
+      roleNames: live.map((r) => r.name),
       invitedById: row.invitedById,
       acceptedById: row.acceptedById,
       expiresAt: row.expiresAt.toISOString(),
@@ -710,7 +861,8 @@ export class SellerTeamService {
   private async sendInvitationEmail(
     to: string,
     fullName: string,
-    role: SellerUserRole,
+    /** "Operations and Finance" — what the person reads, not an enum. */
+    role: string,
     inviteUrl: string,
     expiresAt: Date,
   ): Promise<void> {

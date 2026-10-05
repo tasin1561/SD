@@ -22,6 +22,7 @@ import { NotificationListener } from '../../src/modules/notifications/services/n
 import { SystemIssueNotifier } from '../../src/modules/system-issues/services/system-issue-notifier.service';
 import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
 import { staffRoleKeyForEnum } from '../../src/common/auth/staff-role-key';
+import { rolesOnCreate } from '../../src/common/auth/role-assignment';
 import { SellerIssueEscalationService } from '../../src/modules/courier-escalation/services/seller-issue-escalation.service';
 import { OutboundWebhookListener } from '../../src/modules/seller-webhook-delivery/services/outbound-webhook-listener.service';
 import { OrderDeliveredInvoiceListener } from '../../src/modules/invoice/services/order-delivered-invoice-listener.service';
@@ -541,6 +542,13 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'store_refresh_tokens',
         'store_password_reset_tokens',
         'store_email_verification_tokens',
+        // Multi-role (20261005000000): the join tables RESTRICT their
+        // ROLE side, so they are named BEFORE `store_roles` rather than
+        // left to TRUNCATE … CASCADE (MUST #12) — relying on the cascade
+        // is how the next author truncating a role table alone gets a
+        // 23503 that names nothing they wrote.
+        'store_user_invitation_roles',
+        'store_user_roles',
         'store_user_invitations',
         'store_users',
         'store_role_permissions',
@@ -563,7 +571,11 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'store_pnl_snapshot_rows',
         'store_pnl_periods',
         'reseller_store_auto_pause',
-        // Seller-team RBAC
+        // Seller-team RBAC. The multi-role join tables go first — they
+        // RESTRICT `seller_roles`, which `seller.deleteMany` cascades
+        // into further down (MUST #12).
+        'seller_user_invitation_roles',
+        'seller_user_roles',
         'seller_user_invitations',
         'seller_users',
         // Pricing + integrations
@@ -785,13 +797,19 @@ export async function createTestStaff(
     timeCost: 2,
     parallelism: 1,
   });
+  const roleRow = await prisma.staffRoleDefinition.findFirstOrThrow({
+    where: { key: staffRoleKeyForEnum(role), deletedAt: null },
+    select: { id: true },
+  });
   const staff = await prisma.staffUser.create({
     data: {
       email: email.toLowerCase(),
       emailDisplay: email,
       passwordHash,
       role,
-      staffRole: { connect: { key: staffRoleKeyForEnum(role) } },
+      // The JOIN ROW matters: `staff_user_roles` is what the guard
+      // reads, and a staff row with only `role_id` cannot sign in.
+      ...rolesOnCreate([roleRow.id]),
     },
   });
   return { id: staff.id, email: staff.email, role, password };

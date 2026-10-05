@@ -79,7 +79,7 @@ describe('reseller order money (e2e)', () => {
         displayName: 'Money Store',
         contactEmail: email,
         contactPhone: '+919800000001',
-        invite: { email, fullName: 'Money Owner', roleKey: 'owner' },
+        invite: { email, fullName: 'Money Owner', roleKeys: ['owner'] },
       })
       .expect(201);
     const storeId = (created.body as { id: string }).id;

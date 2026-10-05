@@ -307,7 +307,10 @@ function CreateModal({
         invite: {
           email: inviteEmail.trim(),
           fullName: inviteName.trim(),
-          roleKey: 'owner' as const,
+          // The store's own owner. A list because a store user holds
+          // several roles; the owner role alone covers everything, so
+          // there is nothing to add to it here.
+          roleKeys: ['owner' as const],
         },
       });
       toast.success(`“${name.trim()}” is open.`);
