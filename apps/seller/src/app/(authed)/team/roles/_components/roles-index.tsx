@@ -56,7 +56,16 @@ export function RolesIndex(): ReactElement {
   }
 
   const rows = roles.data ?? [];
-  const assigned = rows.reduce((sum, r) => sum + r.memberCount, 0);
+  // ── ASSIGNMENTS, NOT PEOPLE ───────────────────────────────────
+  // `memberCount` is how many people hold THAT role, counted through the
+  // join table. Summing it across roles counts a person once per role
+  // they hold, so this said "12 people covered" for a team of eight the
+  // moment anybody held two roles. The number is still worth showing —
+  // it is the size of the grant surface — but it is assignments, and it
+  // says so. A distinct head count cannot be derived from these rows at
+  // all, and the members list that could answer it needs `team.view`,
+  // which somebody on this page is not guaranteed to hold.
+  const assignments = rows.reduce((sum, r) => sum + r.memberCount, 0);
   const unused = rows.filter((r) => !r.isOwner && r.memberCount === 0);
 
   return (
@@ -64,7 +73,7 @@ export function RolesIndex(): ReactElement {
       <SetPageHeader
         crumbs={CRUMBS}
         title="Roles"
-        subtitle="A role is a set of permissions. Create as many as your team needs — the permissions themselves are fixed by the system."
+        subtitle="A role is a set of permissions. Create as many as your team needs — the permissions themselves are fixed by the system. One person can hold several roles, and what they can do is everything those roles cover between them."
         meta={
           roles.data === undefined ? undefined : (
             <span className="set-meta">
@@ -72,7 +81,7 @@ export function RolesIndex(): ReactElement {
                 {rows.length} {rows.length === 1 ? 'role' : 'roles'}
               </SetFact>
               <SetFact dot>
-                {assigned} {assigned === 1 ? 'person' : 'people'} covered
+                {assignments} role {assignments === 1 ? 'assignment' : 'assignments'}
               </SetFact>
               {unused.length > 0 && <SetFact>{unused.length} held by nobody</SetFact>}
             </span>
@@ -120,7 +129,7 @@ export function RolesIndex(): ReactElement {
                 <Tr>
                   <Th>Role</Th>
                   <Th>Covers</Th>
-                  <Th align="right">People</Th>
+                  <Th align="right">Held by</Th>
                   <Th align="right">Actions</Th>
                 </Tr>
               </THead>

@@ -288,14 +288,26 @@ export function RoleEditor({
         </div>
       </Dialog>
 
+      {/* ── TAKING A PERMISSION OFF A ROLE IS NOT TAKING IT AWAY ──────
+          This said everyone holding the role "loses this permission",
+          which was true when a person held exactly one. Permissions are
+          the UNION of every role held, so somebody who is Finance AND
+          Admin keeps whatever Admin covers — and a confirmation that
+          overstates what it is about to take away is the kind somebody
+          clicks through and then cannot explain. The count is still
+          worth stating; the certainty is not. Which of those people
+          actually end up without it cannot be worked out from this
+          dialog's data at all. */}
       <ConfirmDialog
         open={confirmRemoval}
         onOpenChange={setConfirmRemoval}
         title="Remove permissions from this role?"
         entity={role?.name ?? name}
-        consequence={`Everyone holding ${role?.name ?? 'this role'} (${role?.memberCount ?? 0} ${
-          (role?.memberCount ?? 0) === 1 ? 'person' : 'people'
-        }) loses ${removed.length === 1 ? 'this permission' : `these ${removed.length} permissions`} as soon as it saves.`}
+        consequence={`${role?.memberCount ?? 0} ${
+          (role?.memberCount ?? 0) === 1 ? 'person holds' : 'people hold'
+        } ${role?.name ?? 'this role'}, and ${
+          removed.length === 1 ? 'this permission' : `these ${removed.length} permissions`
+        } stop coming from it as soon as it saves. Anyone who also holds another role covering ${removed.length === 1 ? 'it' : 'them'} keeps ${removed.length === 1 ? 'it' : 'them'}.`}
         confirmLabel="Remove and save"
         destructive
         onConfirm={save}
