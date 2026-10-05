@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CallHoldOutcome, CallQueueStatus, StaffRole } from '@skydrop/db';
+import { CallHoldOutcome, CallQueueStatus } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AgentSettingsService, type AgentSettingsView } from './agent-settings.service';
 
@@ -60,12 +60,46 @@ export class AdminAgentService {
     private readonly settings: AgentSettingsService,
   ) {}
 
-  /** All call agents with their effective settings + live ASSIGNED
-   *  count. Phase-1A agent population is small; per-agent settings
-   *  resolution reuses the single default-synthesis path. */
+  /**
+   * All call agents with their effective settings + live ASSIGNED count.
+   * Phase-1A agent population is small; per-agent settings resolution
+   * reuses the single default-synthesis path.
+   *
+   * ── WHO IS A CALL AGENT ──────────────────────────────────────────
+   * Whoever may WORK THE QUEUE — `callcenter.work`, asked of every role
+   * they hold. This read was `where: { role: StaffRole.CALL_AGENT }`,
+   * which is the failure NOTIF-10 already argued against on the
+   * notification side: a role name cannot see a role somebody invented,
+   * so a custom "Night shift lead" holding `callcenter.work` was absent
+   * from the supervisor's agent list while taking calls all evening.
+   *
+   * Multi-role turned that from stale into actively wrong:
+   * `staff_users.role` is NULLABLE now and the access tiers have no enum
+   * spelling at all, so an enum predicate matches fewer and fewer of the
+   * people it is about — silently, because an empty list reads exactly
+   * like a quiet night.
+   *
+   * A super-admin is included for the same reason the audience
+   * selectors include them: they hold every permission implicitly and
+   * therefore carry no permission ROWS, so matching on rows alone leaves
+   * out the people who hold the most.
+   */
   async listAgents(): Promise<AgentListRow[]> {
     const agents = await this.prisma.client.staffUser.findMany({
-      where: { role: StaffRole.CALL_AGENT, deletedAt: null },
+      where: {
+        deletedAt: null,
+        roles: {
+          some: {
+            role: {
+              deletedAt: null,
+              OR: [
+                { isSuperAdmin: true },
+                { permissions: { some: { permission: 'callcenter.work' } } },
+              ],
+            },
+          },
+        },
+      },
       orderBy: { email: 'asc' },
       select: { id: true, email: true },
     });

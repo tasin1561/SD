@@ -80,12 +80,11 @@ describe('staff access tiers (Admin / Support / Read-only)', () => {
     );
 
     /**
-     * Who-has-access and the company's financial identity. An Admin runs
+     * CHANGING who has access, and the financial identity. An Admin runs
      * the platform; it does not decide who else may, and it does not
      * touch where money goes.
      */
     it.each([
-      'staff.view',
       'staff.manage',
       'rbac.manage',
       'money.bank_accounts.manage',
@@ -93,6 +92,21 @@ describe('staff access tiers (Admin / Support / Read-only)', () => {
       'sellers.bank_change.approve',
     ])('withholds %s', (key) => {
       expect(held.has(key)).toBe(false);
+    });
+
+    /**
+     * SEEING who has access is held, and the asymmetry is deliberate —
+     * it reads like an oversight a future reader would tidy up. Owner's
+     * call, 2026-10-05: withholding the read left Read-only (every
+     * `.view` key) able to see the staff list while the platform
+     * administrator could not, and it bought almost nothing, because an
+     * Admin holds `notifications.broadcast` whose preview returns five
+     * staff addresses for any role or permission selector.
+     */
+    it('SEES the staff list, while being unable to change it', () => {
+      expect(held.has('staff.view')).toBe(true);
+      expect(held.has('staff.manage')).toBe(false);
+      expect(held.has('rbac.manage')).toBe(false);
     });
 
     /** The five documented as SUPER_ADMIN-by-construction. */
@@ -144,6 +158,33 @@ describe('staff access tiers (Admin / Support / Read-only)', () => {
      */
     it('does NOT hold sellers.bank_account.reveal', () => {
       expect(held.has('sellers.bank_account.reveal')).toBe(false);
+    });
+
+    /**
+     * ── THE PRICE OF DERIVING A ROLE FROM A NAME ────────────────────
+     * Read-only is `ALL_PERMISSION_KEYS.filter(isViewKey)`, so it holds
+     * whatever `.view` keys exist — INCLUDING any that guard a WRITE.
+     * `staff-permission-surface.spec.ts` already forbids that
+     * ("a write may not rest on a `.view` key alone") and names its
+     * exceptions with their reasons; this reads that list, because the
+     * exceptions ARE the writes a Read-only login can perform and the
+     * person maintaining this preset is the one who needs to know.
+     *
+     * Read rather than restated: a second copy of the rule is how the
+     * two come to disagree, and a second copy of the parser would be a
+     * second thing to keep right.
+     *
+     * If this fails, somebody added a `.view`-gated write. Either it
+     * belongs on a `.manage` key, or "read-only" has stopped being
+     * true and the name has to change.
+     */
+    it('can perform exactly the ONE documented .view-gated write, and no more', () => {
+      const surfaceSpec = readFileSync(join(__dirname, 'staff-permission-surface.spec.ts'), 'utf8');
+      const literal = /const VIEW_GATED_WRITES = new Set\(\[([^\]]*)\]\)/.exec(surfaceSpec)?.[1];
+      // A regex that stopped matching would make this pass vacuously.
+      expect(literal).toBeDefined();
+      const exceptions = [...(literal ?? '').matchAll(/'([^']+)'/g)].map((m) => m[1] ?? '');
+      expect(exceptions).toEqual(['admin-system-issue.controller.ts acknowledge']);
     });
   });
 

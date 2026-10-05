@@ -23,7 +23,7 @@
 -- Existing staff members are untouched.
 
 INSERT INTO "staff_roles" ("key", "name", "description", "is_system", "is_super_admin", "updated_at") VALUES
-  ('admin',    'Admin',     'Runs the platform: orders, the warehouse, couriers, sellers and the money that moves through it. Not who has access, not our bank accounts or a seller''s, and none of the five overrides that bypass an invariant.', true, false, CURRENT_TIMESTAMP),
+  ('admin',    'Admin',     'Runs the platform: orders, the warehouse, couriers, sellers and the money that moves through it. Can see who has access but not change it, and cannot touch our bank accounts or a seller''s, or any of the five overrides that bypass an invariant.', true, false, CURRENT_TIMESTAMP),
   ('support',  'Support',   'Answers for what went wrong: reads orders, parcels, sellers and stores, works the ticket queue, and can open the system-issues page a problem notification points at. Changes nothing operational.',                    true, false, CURRENT_TIMESTAMP),
   ('readonly', 'Read-only', 'Sees everything and changes nothing — every read in the catalogue and no write at all. For an auditor, an analyst, or somebody being shown round.',                                                                     true, false, CURRENT_TIMESTAMP)
 ON CONFLICT ("key") DO NOTHING;
@@ -105,6 +105,7 @@ JOIN (VALUES
   ('admin', 'system.settings.view'),
   ('admin', 'system.settings.manage'),
   ('admin', 'system.capacity.view'),
+  ('admin', 'staff.view'),
   ('support', 'orders.view'),
   ('support', 'tickets.view'),
   ('support', 'tickets.resolve'),

@@ -639,7 +639,9 @@ export class StoreAuthService {
       metadata: {
         storeId: inv.store.id,
         invitationId: inv.id,
-        role: inv.role.key,
+        // EVERY role they were granted, not the first — this is the row
+        // somebody reads later to see what access this person was given.
+        roles: inv.offered.map((r) => r.name),
         ipAddress: ctx.ipAddress,
       },
     });
@@ -776,7 +778,9 @@ export class StoreAuthService {
         expiresAt: true,
         usedAt: true,
         deletedAt: true,
-        role: { select: { id: true, key: true, name: true, deletedAt: true } },
+        // The transitional `role_id` relation is deliberately NOT
+        // selected: `roles` below is the authority, and a field nothing
+        // reads is a field somebody reaches for later by mistake.
         roles: {
           orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
           select: { role: { select: { id: true, name: true, deletedAt: true } } },

@@ -6,7 +6,6 @@ import {
   NotificationRecipientType,
   Prisma,
   ShippingDirection,
-  StaffRole,
 } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -236,12 +235,52 @@ export class InviteLeadService {
       });
       const override = setting?.valueString?.trim() ?? '';
 
+      // ── WHO IS TOLD ───────────────────────────────────────────────
+      // `leads.view` — the SAME constant the in-app leg below is
+      // addressed by, so the two halves of one alert cannot come to
+      // disagree about who this is for. The permission that OPENS the
+      // leads page is the durable fact about who works them (NOTIF-10),
+      // and a notification pointing at a page the reader cannot open is
+      // a dead end (NOTIF-16).
+      //
+      // This was `where: { role: StaffRole.SUPER_ADMIN }`, and it is the
+      // dangerous shape: it does not fail, it quietly tells nobody. A
+      // role name cannot see a role somebody invented, and multi-role
+      // makes it worse — `staff_users.role` is NULLABLE now and the
+      // access tiers have no enum spelling at all, so an enum predicate
+      // matches fewer of the people it is about every time somebody is
+      // given one of the new roles.
+      //
+      // A super-admin role is included for the reason the audience
+      // selectors include them: they hold every permission implicitly
+      // and therefore carry no permission ROWS, so matching on rows
+      // alone leaves out the people who hold the most.
+      //
+      // Changing WHO is emailed would ordinarily be a product decision,
+      // not a correctness fix — it is not one here. The email leg of
+      // this alert is in `RETIRED_EMAIL_TEMPLATES` (NOTIF-23), so
+      // `EmailQueue` withholds it from every staff recipient who has an
+      // inbox; this list exists to carry the ad-hoc override address.
+      // What it must not do is silently resolve to nobody.
       const recipients: Array<{ id: string | null; email: string }> =
         override !== ''
           ? [{ id: null, email: override }]
           : (
               await this.prisma.client.staffUser.findMany({
-                where: { role: StaffRole.SUPER_ADMIN, deletedAt: null },
+                where: {
+                  deletedAt: null,
+                  roles: {
+                    some: {
+                      role: {
+                        deletedAt: null,
+                        OR: [
+                          { isSuperAdmin: true },
+                          { permissions: { some: { permission: LEADS_VIEW_PERMISSION } } },
+                        ],
+                      },
+                    },
+                  },
+                },
                 select: { id: true, email: true },
               })
             ).map((s) => ({ id: s.id, email: s.email }));
@@ -250,7 +289,7 @@ export class InviteLeadService {
         // Worth a warning: a lead arrived and nobody was told.
         this.logger.warn(
           { leadId },
-          'No SUPER_ADMIN to notify of a new invite lead, and no override address set',
+          'Nobody holds leads.view to be told of a new invite lead, and no override address set',
         );
         return;
       }

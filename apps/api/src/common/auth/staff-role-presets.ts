@@ -29,17 +29,29 @@ import { ALL_PERMISSION_KEYS, PERMISSIONS, type PermissionKey } from './permissi
  */
 
 /**
- * Who-has-access, and the company's financial identity. An Admin runs
- * the platform; it does not decide who else may, and it does not touch
- * where money goes.
+ * CHANGING who has access, and the financial identity. An Admin runs the
+ * platform; it does not decide who else may, and it does not touch where
+ * money goes.
  *
  * Mirrors the posture a courier's own panel takes ("Admin cannot
  * configure company and bank details, or view and create users"): the
  * accounts we pay sellers into, the accounts sellers pay us into, and
- * the staff list are a different kind of trust from running operations.
+ * the power to hand out access are a different kind of trust from
+ * running operations.
+ *
+ * ── `staff.view` IS HELD, AND THAT ASYMMETRY IS DELIBERATE ──────────
+ * Admin may SEE who has access and may NOT change it — `staff.manage`
+ * and `rbac.manage` stay denied, which is the half that matters. It
+ * reads like an oversight and is not, so: withholding the READ put
+ * Read-only (derived from every `.view` key) able to see the staff list
+ * while the platform administrator could not, which is the wrong way
+ * round. And it bought almost nothing — an Admin holds
+ * `notifications.broadcast`, whose preview returns five staff addresses
+ * and a count for every role and permission selector, so the staff list
+ * was reachable sideways anyway. A guard that reads like protection and
+ * is not is worse than no guard. Owner's call, 2026-10-05.
  */
 const ADMIN_EXCLUDES_ACCESS_AND_BANKING: readonly PermissionKey[] = [
-  'staff.view',
   'staff.manage',
   'rbac.manage',
   'money.bank_accounts.manage',
@@ -89,8 +101,8 @@ export const STAFF_ROLE_PRESETS: readonly StaffRolePreset[] = [
     name: 'Admin',
     description:
       'Runs the platform: orders, the warehouse, couriers, sellers and the money that moves ' +
-      'through it. Not who has access, not our bank accounts or a seller’s, and none of the ' +
-      'five overrides that bypass an invariant.',
+      'through it. Can see who has access but not change it, and cannot touch our bank ' +
+      'accounts or a seller’s, or any of the five overrides that bypass an invariant.',
     permissions: ALL_PERMISSION_KEYS.filter((key) => !ADMIN_EXCLUDED.has(key)),
   },
   {

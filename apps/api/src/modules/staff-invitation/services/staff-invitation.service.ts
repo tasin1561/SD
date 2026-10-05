@@ -19,7 +19,8 @@ import {
   type GrantableRole,
   type GrantingActor,
 } from '../../../common/auth/assert-may-grant-role';
-import { roleNamesFor } from '../../../common/auth/role-union';
+import { resolveRoles, roleNamesFor } from '../../../common/auth/role-union';
+import { ALL_PERMISSION_KEYS } from '../../../common/auth/permissions';
 import {
   NO_ROLES,
   NO_ROLES_MESSAGE,
@@ -166,8 +167,19 @@ export class StaffInvitationService {
     const me = await this.prisma.client.staffUser.findFirst({
       where: { id: staffId, deletedAt: null },
       select: {
-        staffRole: {
-          select: { isSuperAdmin: true, permissions: { select: { permission: true } } },
+        roles: {
+          orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+          select: {
+            role: {
+              select: {
+                key: true,
+                name: true,
+                isSuperAdmin: true,
+                deletedAt: true,
+                permissions: { select: { permission: true } },
+              },
+            },
+          },
         },
       },
     });
@@ -176,9 +188,16 @@ export class StaffInvitationService {
       // safe answer: an unknown actor holds nothing we can check against.
       throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff user not found' });
     }
+    // Every role they hold, not the first: this read was through the
+    // single-role relation, which under multi-role is the TRANSITIONAL
+    // `role_id`. It fails CLOSED — the actor is judged on a narrower set
+    // than they really hold — so it is not a hole, but a super admin
+    // whose super-admin role happened to be their SECOND would have been
+    // refused a grant they are plainly entitled to make.
+    const live = me.roles.map((r) => r.role).filter((r) => r.deletedAt === null);
     return {
-      isSuperuser: me.staffRole.isSuperAdmin,
-      permissions: me.staffRole.permissions.map((p) => p.permission),
+      isSuperuser: live.some((r) => r.isSuperAdmin),
+      permissions: resolveRoles(me.roles, ALL_PERMISSION_KEYS).permissions,
     };
   }
 
