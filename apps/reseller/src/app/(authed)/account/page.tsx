@@ -37,7 +37,11 @@ export default function AccountPage(): ReactElement {
           items={[
             { label: 'Name', value: <span className="rd-strong">{me.fullName}</span> },
             { label: 'Email', value: me.emailDisplay },
-            { label: 'Role', value: me.roleName },
+            // Every role held, not `roleName` — that is the first grant,
+            // a label, so somebody who is Finance AND Owner would read
+            // as one of the two and be told something untrue about their
+            // own access.
+            { label: 'Roles', value: me.roleNames.join(' and ') || '—' },
             {
               label: 'Email confirmed',
               value:

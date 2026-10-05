@@ -1,30 +1,29 @@
 'use client';
 
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { CircleAlert, Mail, ShieldCheck, Trash2, User, UserPlus, Undo2 } from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Button } from '@skydrop/ui/app/button';
 import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
-import { ConfirmDialog, Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
+import { Dialog, DialogFooter, ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { PageHeader } from '@skydrop/ui/app/page-header';
-import { Select } from '@skydrop/ui/app/select';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
-import { can } from '@/lib/page-access';
+import { can, isStoreOwner } from '@/lib/page-access';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
-  useChangeStoreMemberRole,
   useInviteStoreMember,
   useRemoveStoreMember,
   useRevokeStoreInvitation,
+  useSetStoreMemberRoles,
   useStoreTeam,
   type StoreMemberView,
-  type StoreRoleKey,
 } from '@/lib/store-hooks';
 import { RdCallout, RdSection, phaseOf } from '../settings/_components/rd-parts';
+import { RoleList, RolePicker, type StoreRoleOption } from './_components/role-picker';
 
 function when(iso: string | null): string {
   return iso === null
@@ -32,15 +31,22 @@ function when(iso: string | null): string {
     : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/** The roles only an owner may grant, take away, or touch somebody who holds. */
+const OWNER_ONLY = ['owner'] as const;
+
 /**
  * The store's team (RS-2): who has a login, what they may do, and who is
  * invited. Everyone with `team.view` sees it; the controls need
  * `team.manage` — hidden otherwise (cosmetic, FE-2: the API refuses).
+ *
+ * A person holds SEVERAL roles and their permissions are the union, so
+ * every role they hold is shown and a change states the whole set.
  */
 export default function TeamPage(): ReactElement {
   const me = useStoreIdentity();
   const team = useStoreTeam();
   const manage = can(me, 'team.manage');
+  const owner = isStoreOwner(me);
   const [inviting, setInviting] = useState(false);
 
   if (team.isPending || team.isError) {
@@ -76,7 +82,10 @@ export default function TeamPage(): ReactElement {
         }
       />
 
-      <RdSection title="Members">
+      <RdSection
+        title="Members"
+        note="Somebody can hold more than one role; what they may do is everything their roles allow put together."
+      >
         {members.length === 0 ? (
           <EmptyState title="No members yet" description="Invite a colleague to get started." />
         ) : (
@@ -85,7 +94,7 @@ export default function TeamPage(): ReactElement {
               <Tr>
                 <Th>Name</Th>
                 <Th>Email</Th>
-                <Th>Role</Th>
+                <Th>Roles</Th>
                 <Th>Last signed in</Th>
                 {manage ? <Th align="right">Actions</Th> : null}
               </Tr>
@@ -97,7 +106,7 @@ export default function TeamPage(): ReactElement {
                   member={m}
                   roles={roles}
                   manage={manage && m.id !== me?.id}
-                  mayTouchOwners={me?.roleKey === 'owner'}
+                  mayTouchOwners={owner}
                   isYou={m.id === me?.id}
                 />
               ))}
@@ -120,7 +129,7 @@ export default function TeamPage(): ReactElement {
               <Tr>
                 <Th>Name</Th>
                 <Th>Email</Th>
-                <Th>Role</Th>
+                <Th>Roles</Th>
                 <Th>Expires</Th>
                 {manage ? <Th align="right">Actions</Th> : null}
               </Tr>
@@ -139,7 +148,7 @@ export default function TeamPage(): ReactElement {
           open={inviting}
           onOpenChange={setInviting}
           roles={roles}
-          mayGrantOwner={me?.roleKey === 'owner'}
+          mayGrantOwner={owner}
         />
       ) : null}
     </div>
@@ -154,23 +163,16 @@ function MemberRow({
   isYou,
 }: {
   member: StoreMemberView;
-  roles: ReadonlyArray<{ key: string; name: string }>;
+  roles: readonly StoreRoleOption[];
   manage: boolean;
   mayTouchOwners: boolean;
   isYou: boolean;
 }): ReactElement {
   const toast = useToast();
-  const change = useChangeStoreMemberRole();
   const remove = useRemoveStoreMember();
   const [confirming, setConfirming] = useState(false);
-  // The role picked in the select, waiting for its confirmation. The
-  // select keeps showing the member's CURRENT role until the change lands.
-  // Kept after the dialog closes so its words do not blank mid-exit.
-  const [pendingRole, setPendingRole] = useState<StoreRoleKey | null>(null);
-  const [roleOpen, setRoleOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const locked = member.isOwner && !mayTouchOwners;
-  const pendingRoleName =
-    pendingRole === null ? '' : (roles.find((r) => r.key === pendingRole)?.name ?? 'updated');
 
   return (
     <Tr>
@@ -180,58 +182,21 @@ function MemberRow({
       </Td>
       <Td>{member.email}</Td>
       <Td>
-        {manage && !locked ? (
-          <>
-            <Select
-              aria-label={`Role for ${member.fullName}`}
-              className="rd-role-select"
-              value={member.roleKey}
-              disabled={change.isPending}
-              onChange={(e) => {
-                const next = e.target.value as StoreRoleKey;
-                if (next === member.roleKey) return;
-                setPendingRole(next);
-                setRoleOpen(true);
-              }}
-            >
-              {roles
-                .filter((r) => r.key !== 'owner' || mayTouchOwners)
-                .map((r) => (
-                  <option key={r.key} value={r.key}>
-                    {r.name}
-                  </option>
-                ))}
-            </Select>
-            <ConfirmDialog
-              open={roleOpen}
-              onOpenChange={setRoleOpen}
-              title={`Make ${member.fullName} ${pendingRoleName}?`}
-              entity={`${member.fullName} · ${member.email}`}
-              consequence={`Their role changes from ${member.roleName} to ${pendingRoleName} at once — what they can see and do in this store changes with it.`}
-              confirmLabel="Change role"
-              onConfirm={async () => {
-                if (pendingRole === null) return;
-                const roleKey = pendingRole;
-                const name = pendingRoleName;
-                try {
-                  await change.mutateAsync({ memberId: member.id, roleKey });
-                  toast.success(`${member.fullName} is now ${name}.`);
-                } catch (err) {
-                  toast.error(serverVerdict(err));
-                }
-                setRoleOpen(false);
-              }}
-            />
-          </>
-        ) : (
-          member.roleName
-        )}
+        <RoleList names={member.roleNames} />
       </Td>
       <Td className="rd-cell-muted">{when(member.lastLoginAt)}</Td>
-      {manage || isYou ? (
+      {manage ? (
         <Td align="right">
-          {manage && !locked ? (
-            <>
+          {locked ? null : (
+            <span className="rd-row-actions">
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<ShieldCheck size={14} />}
+                onClick={() => setEditing(true)}
+              >
+                Change roles
+              </Button>
               <Button
                 variant="destructive"
                 size="sm"
@@ -240,6 +205,13 @@ function MemberRow({
               >
                 Remove
               </Button>
+              <RolesDialog
+                open={editing}
+                onOpenChange={setEditing}
+                member={member}
+                roles={roles}
+                mayTouchOwners={mayTouchOwners}
+              />
               <ConfirmDialog
                 open={confirming}
                 onOpenChange={setConfirming}
@@ -260,11 +232,112 @@ function MemberRow({
                   }
                 }}
               />
-            </>
-          ) : null}
+            </span>
+          )}
         </Td>
       ) : null}
     </Tr>
+  );
+}
+
+/**
+ * Change which roles somebody holds.
+ *
+ * It sends the WHOLE set, so a save states what the screen showed — and
+ * it sends it whatever the ticks are, empty included.
+ *
+ * Five different refusals can come back: an empty set (caught by the
+ * DTO's `ArrayMinSize`, or by the service as `NO_ROLES`), an owner
+ * granted by a non-owner (`OWNER_GRANT_REQUIRES_OWNER`), an owner
+ * edited by a non-owner (`OWNER_CHANGE_REQUIRES_OWNER`), the last owner
+ * being moved off (`LAST_OWNER`), and a set built from a stale read
+ * (`MEMBER_CHANGED`). Every one reaches the person in the server's own
+ * words (FE-2); none is predicted here, because a second copy of five
+ * rules is five chances to disagree with the one that counts.
+ */
+function RolesDialog({
+  open,
+  onOpenChange,
+  member,
+  roles,
+  mayTouchOwners,
+}: {
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly member: StoreMemberView;
+  readonly roles: readonly StoreRoleOption[];
+  readonly mayTouchOwners: boolean;
+}): ReactElement {
+  const toast = useToast();
+  const save = useSetStoreMemberRoles();
+  const [chosen, setChosen] = useState<readonly string[]>(member.roleKeys);
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-open on what is true NOW: a refetch (ours after a failed save, or
+  // somebody else's change) must not leave the ticks drawn from the list
+  // this dialog first mounted with.
+  useEffect(() => {
+    if (open) {
+      setChosen(member.roleKeys);
+      setError(null);
+    }
+  }, [open, member.roleKeys]);
+
+  async function submit(e: FormEvent<HTMLFormElement>): Promise<void> {
+    e.preventDefault();
+    setError(null);
+    try {
+      const saved = await save.mutateAsync({ memberId: member.id, roleKeys: chosen });
+      toast.success(
+        saved.roleNames.length === 0
+          ? `${member.fullName} holds no role.`
+          : `${member.fullName} is now ${saved.roleNames.join(' and ')}.`,
+      );
+      onOpenChange(false);
+    } catch (err) {
+      setError(serverVerdict(err));
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      icon={<ShieldCheck size={18} />}
+      title={`What ${member.fullName} may do`}
+      description="Tick every role they hold. What they may do is all of them put together, and it changes as soon as you save."
+    >
+      <form onSubmit={submit} className="rd-form">
+        <RolePicker
+          legend="Roles"
+          options={roles}
+          value={chosen}
+          onChange={setChosen}
+          disabled={save.isPending}
+          lockedKeys={mayTouchOwners ? [] : OWNER_ONLY}
+          lockedNote="Only an owner of this store can make somebody an owner."
+        />
+        {error !== null ? (
+          <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
+            <p>{error}</p>
+          </RdCallout>
+        ) : null}
+        <DialogFooter>
+          <Button type="button" variant="secondary" size="md" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <AsyncButton
+            type="submit"
+            variant="primary"
+            size="md"
+            icon={<ShieldCheck size={15} />}
+            labels={{ idle: 'Save roles', busy: 'Saving…', error: 'Not saved' }}
+            state={phaseOf(save.isPending, error)}
+            disabled={save.isPending}
+          />
+        </DialogFooter>
+      </form>
+    </Dialog>
   );
 }
 
@@ -272,7 +345,13 @@ function InvitationRow({
   invitation,
   manage,
 }: {
-  invitation: { id: string; fullName: string; email: string; roleName: string; expiresAt: string };
+  invitation: {
+    id: string;
+    fullName: string;
+    email: string;
+    roleNames: readonly string[];
+    expiresAt: string;
+  };
   manage: boolean;
 }): ReactElement {
   const toast = useToast();
@@ -284,7 +363,9 @@ function InvitationRow({
         <span className="rd-cell-strong">{invitation.fullName}</span>
       </Td>
       <Td>{invitation.email}</Td>
-      <Td>{invitation.roleName}</Td>
+      <Td>
+        <RoleList names={invitation.roleNames} />
+      </Td>
       <Td className="rd-cell-muted">{when(invitation.expiresAt)}</Td>
       {manage ? (
         <Td align="right">
@@ -329,27 +410,31 @@ function InviteModal({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  roles: ReadonlyArray<{ key: string; name: string; description: string | null }>;
+  roles: readonly StoreRoleOption[];
   mayGrantOwner: boolean;
 }): ReactElement {
   const toast = useToast();
   const invite = useInviteStoreMember();
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [roleKey, setRoleKey] = useState<StoreRoleKey>('ops');
+  // Operations is the daily-work role and the commonest invitation; it is
+  // a starting point to change, not a decision made for anybody.
+  const [roleKeys, setRoleKeys] = useState<readonly string[]>(['ops']);
   const [error, setError] = useState<string | null>(null);
 
   async function submit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     setError(null);
     try {
-      await invite.mutateAsync({ email: email.trim(), fullName: fullName.trim(), roleKey });
+      await invite.mutateAsync({ email: email.trim(), fullName: fullName.trim(), roleKeys });
       toast.success(`Invitation sent to ${email.trim()}.`);
       setEmail('');
       setFullName('');
+      setRoleKeys(['ops']);
       onOpenChange(false);
     } catch (err) {
-      // Verbatim (FE-2): EMAIL_ALREADY_REGISTERED, INVITATION_ALREADY_PENDING…
+      // Verbatim (FE-2): NO_ROLES, EMAIL_ALREADY_REGISTERED,
+      // INVITATION_ALREADY_PENDING, OWNER_GRANT_REQUIRES_OWNER…
       setError(serverVerdict(err));
     }
   }
@@ -380,22 +465,15 @@ function InviteModal({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
-        <Select
-          id="invite-role"
-          label="Role"
-          icon={<ShieldCheck size={15} />}
-          value={roleKey}
-          onChange={(e) => setRoleKey(e.target.value as StoreRoleKey)}
-        >
-          {roles
-            .filter((r) => r.key !== 'owner' || mayGrantOwner)
-            .map((r) => (
-              <option key={r.key} value={r.key}>
-                {r.name}
-                {r.description !== null ? ` — ${r.description}` : ''}
-              </option>
-            ))}
-        </Select>
+        <RolePicker
+          legend="Roles"
+          options={roles}
+          value={roleKeys}
+          onChange={setRoleKeys}
+          disabled={invite.isPending}
+          lockedKeys={mayGrantOwner ? [] : OWNER_ONLY}
+          lockedNote="Only an owner of this store can invite another owner."
+        />
         {error !== null ? (
           <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
             <p>{error}</p>

@@ -83,4 +83,23 @@ export function can(
   return anyOf.some((p) => identity.permissions.includes(p));
 }
 
+/**
+ * Is the signed-in person an OWNER of this store?
+ *
+ * Asked of EVERY role they hold, never of `roleKey` — that is the first
+ * grant, a label, so somebody who is Finance AND Owner reads as
+ * `finance` there and a check on it would hide the owner-only controls
+ * from a real owner. This is the same question `callerIsOwner` asks on
+ * the server (`roleKeys.includes('owner')`), and the server is the one
+ * that counts: this only decides what is drawn (FE-2).
+ *
+ * Owner-ness is a ROLE, not a permission, which is why it is not a
+ * `can(...)` call: `team.manage` says who may change the team at all,
+ * and this says who may touch an owner while doing it.
+ */
+export function isStoreOwner(identity: Pick<StoreMe, 'roleKeys'> | null): boolean {
+  if (identity === null) return false;
+  return identity.roleKeys.includes('owner');
+}
+
 export const FALLBACK_PATH = '/dashboard';
