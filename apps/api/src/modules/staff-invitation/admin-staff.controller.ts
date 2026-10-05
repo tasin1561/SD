@@ -17,7 +17,11 @@ import { ClientInfo, type ClientInfoPayload } from '../../common/decorators/clie
 import { StaffJwtGuard } from '../../common/guards/staff-jwt.guard';
 import { ThrottleKey } from '../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStaff } from '../../common/types/request';
-import { CreateStaffInvitationDto } from './dto/create-staff-invitation.dto';
+import {
+  CreateStaffInvitationDto,
+  SetStaffRoleDto,
+  SetStaffRolesDto,
+} from './dto/create-staff-invitation.dto';
 import { StaffInvitationService } from './services/staff-invitation.service';
 import { RequirePermissions } from '../../common/auth/require-permissions.decorator';
 
@@ -88,17 +92,42 @@ export class AdminStaffController {
     return this.svc.listStaff();
   }
 
-  @Patch('users/:id/role')
+  /**
+   * REPLACES the set of roles somebody holds — several, because the job
+   * functions and the access tiers are two axes and a person can sit on
+   * both. The body was an inline `{ roleId: string }` with no DTO and
+   * therefore no validation at all; it is a DTO now.
+   */
+  @Patch('users/:id/roles')
   @RequirePermissions('staff.manage')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Move a staff member to a role (by role id, including custom roles)' })
-  updateRole(
+  @ApiOperation({ summary: 'Set which roles a staff member holds (ids, custom roles included)' })
+  setRoles(
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
-    @Body() body: { roleId: string },
+    @Body() body: SetStaffRolesDto,
     @CurrentStaff() staff: AuthenticatedStaff,
     @ClientInfo() ctx: ClientInfoPayload,
   ) {
-    return this.svc.updateRole(id, body.roleId, { staffId: staff.id }, ctx);
+    return this.svc.setRoles(id, body.roleIds, { staffId: staff.id }, ctx);
+  }
+
+  /**
+   * TRANSITIONAL single-role form, kept so the admin app keeps working
+   * across the deploy that introduces `/roles`. One role is a valid
+   * special case of "set the roles", so it delegates rather than
+   * duplicating the guards. Delete it once the UI sends `roleIds`.
+   */
+  @Patch('users/:id/role')
+  @RequirePermissions('staff.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'DEPRECATED — use PATCH users/:id/roles' })
+  setOneRole(
+    @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
+    @Body() body: SetStaffRoleDto,
+    @CurrentStaff() staff: AuthenticatedStaff,
+    @ClientInfo() ctx: ClientInfoPayload,
+  ) {
+    return this.svc.setRoles(id, [body.roleId], { staffId: staff.id }, ctx);
   }
 
   @Delete('users/:id')

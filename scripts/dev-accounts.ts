@@ -33,6 +33,12 @@ async function call(
 async function main(): Promise<void> {
   const existing = await prisma.staffUser.findUnique({ where: { email: STAFF.email } });
   if (!existing) {
+    // The JOIN ROW is what the guard reads: a staff row carrying only
+    // the legacy enum (or only `role_id`) cannot sign in at all.
+    const superAdminRole = await prisma.staffRoleDefinition.findFirstOrThrow({
+      where: { key: 'super_admin', deletedAt: null },
+      select: { id: true },
+    });
     await prisma.staffUser.create({
       data: {
         email: STAFF.email,
@@ -44,6 +50,8 @@ async function main(): Promise<void> {
           parallelism: 1,
         }),
         role: StaffRole.SUPER_ADMIN,
+        roleId: superAdminRole.id,
+        roles: { create: [{ roleId: superAdminRole.id }] },
       },
     });
   }

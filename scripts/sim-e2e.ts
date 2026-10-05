@@ -167,7 +167,10 @@ async function setupOrder(): Promise<SetupResult> {
         parallelism: 1,
       }),
       role: StaffRole.SUPER_ADMIN,
-      staffRole: { connect: { id: superAdminRole.id } },
+      // The JOIN ROW too (`staff_user_roles`), which is what the guard
+      // reads — `role_id` alone leaves a login the guard refuses.
+      roleId: superAdminRole.id,
+      roles: { create: [{ roleId: superAdminRole.id }] },
     },
   });
   const staffLogin = await call('/auth/staff/login', {

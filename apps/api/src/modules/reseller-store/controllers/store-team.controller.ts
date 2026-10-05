@@ -18,7 +18,11 @@ import { RequireStorePermissions } from '../../../common/auth/require-store-perm
 import { CurrentStoreUser } from '../../../common/decorators/current-store-user.decorator';
 import { ThrottleKey } from '../../../common/throttler/throttle-key.decorator';
 import type { AuthenticatedStoreUser } from '../../../common/types/request';
-import { ChangeStoreMemberRoleDto, InviteStoreUserDto } from '../dto/reseller-store.dto';
+import {
+  SetStoreMemberRoleDto,
+  SetStoreMemberRolesDto,
+  InviteStoreUserDto,
+} from '../dto/reseller-store.dto';
 import {
   StoreTeamService,
   type StoreInvitationView,
@@ -73,16 +77,33 @@ export class StoreTeamController {
     });
   }
 
+  @Patch('members/:memberId/roles')
+  @RequireStorePermissions('team.manage')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Set which roles a colleague holds' })
+  setRoles(
+    @CurrentStoreUser() user: AuthenticatedStoreUser,
+    @Param('memberId', new ParseUUIDPipe({ version: '7' })) memberId: string,
+    @Body() body: SetStoreMemberRolesDto,
+  ): Promise<StoreMemberView> {
+    return this.team.setRoles(user, memberId, body.roleKeys);
+  }
+
+  /**
+   * TRANSITIONAL single-role form, kept so the reseller portal keeps
+   * working across the deploy that introduces `/roles`. Delete it once
+   * the UI sends `roleKeys`.
+   */
   @Patch('members/:memberId/role')
   @RequireStorePermissions('team.manage')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Change what a colleague may do' })
-  changeRole(
+  @ApiOperation({ summary: 'DEPRECATED — use PATCH members/:memberId/roles' })
+  setOneRole(
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('memberId', new ParseUUIDPipe({ version: '7' })) memberId: string,
-    @Body() body: ChangeStoreMemberRoleDto,
+    @Body() body: SetStoreMemberRoleDto,
   ): Promise<StoreMemberView> {
-    return this.team.changeRole(user, memberId, body.roleKey);
+    return this.team.setRoles(user, memberId, [body.roleKey]);
   }
 
   @Delete('members/:memberId')

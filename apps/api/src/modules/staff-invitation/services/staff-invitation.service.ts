@@ -14,14 +14,29 @@ import { TokenHashService } from '../../auth-common/services/token-hash.service'
 import { EmailQueue } from '../../email/queue/email.queue';
 import type { ClientContext } from '../../staff-auth/staff-auth.service';
 import type { CreateStaffInvitationDto } from '../dto/create-staff-invitation.dto';
-import { staffRoleKeyForEnum } from '../../../common/auth/staff-role-key';
 import {
   assertMayGrantRole,
   type GrantableRole,
   type GrantingActor,
 } from '../../../common/auth/assert-may-grant-role';
+import { roleNamesFor } from '../../../common/auth/role-union';
+import {
+  NO_ROLES,
+  NO_ROLES_MESSAGE,
+  normaliseRoleIds,
+  rolesOnCreate,
+  setStaffRoles,
+} from '../../../common/auth/role-assignment';
 
-/** The seven seeded roles, whose keys mirror the legacy enum's spelling. */
+/**
+ * The seven seeded roles, whose keys mirror the legacy enum's spelling.
+ *
+ * Nothing else has one — not a role an operator invented, and not the
+ * three access tiers (`admin`, `support`, `readonly`). So the legacy
+ * `role` column is NULL for somebody holding only those, which is why
+ * it is nullable: writing an enum that names a different role is a lie
+ * a stale reader could act on.
+ */
 const LEGACY_ROLE_KEYS = new Set([
   'super_admin',
   'seller_approval_admin',
@@ -31,6 +46,29 @@ const LEGACY_ROLE_KEYS = new Set([
   'manual_placement_admin',
   'finance',
 ]);
+
+/** Everything a view of an invitation needs, in one place. */
+const INVITATION_SELECT = {
+  id: true,
+  email: true,
+  role: true,
+  invitedById: true,
+  acceptedById: true,
+  expiresAt: true,
+  usedAt: true,
+  createdAt: true,
+  deletedAt: true,
+  roles: {
+    orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+    select: { role: { select: { id: true, key: true, name: true, deletedAt: true } } },
+  },
+};
+
+/** The enum spelling of the first role that has one, else null. */
+function legacyEnumFor(roleKeys: readonly string[]): StaffRole | null {
+  const match = roleKeys.find((k) => LEGACY_ROLE_KEYS.has(k));
+  return match === undefined ? null : (match.toUpperCase() as StaffRole);
+}
 
 /**
  * Phase 1B — admin staff invitations.
@@ -48,7 +86,12 @@ const DEFAULT_EXPIRES_IN_DAYS = 7;
 export interface InvitationListItem {
   readonly id: string;
   readonly email: string;
-  readonly role: StaffRole;
+  /** LEGACY enum — null when no offered role has a spelling. */
+  readonly role: StaffRole | null;
+  /** `staff_roles.id`s the invitation offers, in the order chosen. */
+  readonly roleIds: readonly string[];
+  /** Their names, same order — what a screen should show. */
+  readonly roleNames: readonly string[];
   readonly invitedById: string;
   readonly acceptedById: string | null;
   readonly expiresAt: string;
@@ -77,7 +120,8 @@ export class StaffInvitationService {
 
   private async sendInvitationEmail(
     to: string,
-    role: StaffRole,
+    /** "Call agent and Support" — what the person reads, not an enum. */
+    role: string,
     inviteUrl: string,
     expiresAt: Date,
   ): Promise<void> {
@@ -131,21 +175,56 @@ export class StaffInvitationService {
     };
   }
 
-  /** The seeded role an invitation's enum value names, as a grant target. */
-  private async invitedRole(role: StaffRole): Promise<GrantableRole> {
-    const key = staffRoleKeyForEnum(role);
-    const found = await this.prisma.client.staffRoleDefinition.findFirst({
-      where: { key, deletedAt: null },
-      select: { name: true, isSuperAdmin: true, permissions: { select: { permission: true } } },
-    });
-    if (found === null) {
-      throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+  /**
+   * The roles an id list names, as grant targets.
+   *
+   * A missing id is a 404 naming NOTHING about which one — role ids are
+   * not secrets, but answering "that one exists and that one does not"
+   * for a list is a worse message than "one of these is not a role".
+   * Every id is resolved BEFORE anything is written, so an invitation is
+   * never half-created.
+   */
+  private async rolesToGrant(
+    roleIds: readonly string[],
+  ): Promise<readonly (GrantableRole & { id: string; key: string })[]> {
+    const ids = normaliseRoleIds(roleIds);
+    if (ids.length === 0) {
+      throw new BadRequestException({ code: NO_ROLES, message: NO_ROLES_MESSAGE });
     }
-    return {
-      name: found.name,
-      isSuperuser: found.isSuperAdmin,
-      permissions: found.permissions.map((p) => p.permission),
-    };
+    const found = await this.prisma.client.staffRoleDefinition.findMany({
+      where: { id: { in: [...ids] }, deletedAt: null },
+      select: {
+        id: true,
+        key: true,
+        name: true,
+        isSuperAdmin: true,
+        permissions: { select: { permission: true } },
+      },
+    });
+    if (found.length !== ids.length) {
+      throw new NotFoundException({
+        code: 'ROLE_NOT_FOUND',
+        message: 'One of those roles does not exist',
+      });
+    }
+    // Returned in the ORDER ASKED FOR, not the order the database
+    // happened to return: the first role becomes the legacy label and
+    // the primary name in an audit row, and that must be the operator's
+    // choice rather than an id sort.
+    const byId = new Map(found.map((r) => [r.id, r]));
+    return ids.map((id) => {
+      const r = byId.get(id);
+      // Unreachable — the length check above covers it.
+      if (r === undefined)
+        throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
+      return {
+        id: r.id,
+        key: r.key,
+        name: r.name,
+        isSuperuser: r.isSuperAdmin,
+        permissions: r.permissions.map((p) => p.permission),
+      };
+    });
   }
 
   async create(
@@ -154,9 +233,13 @@ export class StaffInvitationService {
     ctx: ClientContext,
   ): Promise<CreatedInvitation> {
     // BEFORE anything is written or emailed: an invitation carries the
-    // role, and accepting it connects that role for real, so the
-    // escalation happens here even though the privilege lands later.
-    assertMayGrantRole(await this.grantingActor(actor.staffId), await this.invitedRole(input.role));
+    // roles, and accepting it connects them for real, so the escalation
+    // check happens here even though the privilege lands later. EVERY
+    // role is checked — a list is only as safe as its most powerful
+    // entry, and checking the first would let the second through.
+    const roles = await this.rolesToGrant(input.roleIds);
+    const granter = await this.grantingActor(actor.staffId);
+    for (const role of roles) assertMayGrantRole(granter, role);
 
     const emailLower = input.email.trim().toLowerCase();
 
@@ -191,21 +274,14 @@ export class StaffInvitationService {
       data: {
         email: input.email,
         token: tokenHash,
-        role: input.role,
+        // Display and history; null when no invited role has an enum
+        // spelling, which is the ordinary case for the access tiers.
+        role: legacyEnumFor(roles.map((r) => r.key)),
         invitedById: actor.staffId,
         expiresAt,
+        roles: { create: roles.map((r) => ({ roleId: r.id })) },
       },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        invitedById: true,
-        acceptedById: true,
-        expiresAt: true,
-        usedAt: true,
-        createdAt: true,
-        deletedAt: true,
-      },
+      select: INVITATION_SELECT,
     });
 
     await this.audit.log({
@@ -215,12 +291,12 @@ export class StaffInvitationService {
       entityType: 'staff_invitation',
       entityId: row.id,
       severity: 'MEDIUM',
-      changes: { email: input.email, role: input.role },
+      changes: { email: input.email, roles: roles.map((r) => r.name) },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
 
     const url = this.inviteUrlFor(plaintext);
-    await this.sendInvitationEmail(input.email, input.role, url, expiresAt);
+    await this.sendInvitationEmail(input.email, roleNamesFor(roles), url, expiresAt);
     return {
       ...this.toView(row),
       token: plaintext,
@@ -247,17 +323,7 @@ export class StaffInvitationService {
       where: { deletedAt: null, usedAt: null },
       orderBy: { createdAt: 'desc' },
       take: 200,
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        invitedById: true,
-        acceptedById: true,
-        expiresAt: true,
-        usedAt: true,
-        createdAt: true,
-        deletedAt: true,
-      },
+      select: INVITATION_SELECT,
     });
     return { items: rows.map((r) => this.toView(r)), total: rows.length };
   }
@@ -269,13 +335,7 @@ export class StaffInvitationService {
   ): Promise<CreatedInvitation> {
     const existing = await this.prisma.client.staffInvitation.findUnique({
       where: { id: invitationId },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        usedAt: true,
-        deletedAt: true,
-      },
+      select: { id: true, email: true, usedAt: true, deletedAt: true },
     });
     if (!existing || existing.deletedAt !== null) {
       throw new NotFoundException({
@@ -297,17 +357,7 @@ export class StaffInvitationService {
     const updated = await this.prisma.client.staffInvitation.update({
       where: { id: invitationId },
       data: { token: tokenHash, expiresAt },
-      select: {
-        id: true,
-        email: true,
-        role: true,
-        invitedById: true,
-        acceptedById: true,
-        expiresAt: true,
-        usedAt: true,
-        createdAt: true,
-        deletedAt: true,
-      },
+      select: INVITATION_SELECT,
     });
 
     await this.audit.log({
@@ -320,9 +370,15 @@ export class StaffInvitationService {
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
 
+    const view = this.toView(updated);
     const url = this.inviteUrlFor(plaintext);
-    await this.sendInvitationEmail(updated.email, updated.role, url, expiresAt);
-    return { ...this.toView(updated), token: plaintext, inviteUrl: url };
+    await this.sendInvitationEmail(
+      updated.email,
+      roleNamesFor(view.roleNames.map((name) => ({ name }))),
+      url,
+      expiresAt,
+    );
+    return { ...view, token: plaintext, inviteUrl: url };
   }
 
   async softDelete(
@@ -370,7 +426,7 @@ export class StaffInvitationService {
     plaintextToken: string,
     plaintextPassword: string,
     ctx: ClientContext,
-  ): Promise<{ staffId: string; email: string; role: StaffRole }> {
+  ): Promise<{ staffId: string; email: string; role: StaffRole | null }> {
     const tokenHash = this.hashes.sha256Hex(plaintextToken);
     const inv = await this.prisma.client.staffInvitation.findUnique({
       where: { token: tokenHash },
@@ -381,6 +437,10 @@ export class StaffInvitationService {
         expiresAt: true,
         usedAt: true,
         deletedAt: true,
+        roles: {
+          orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+          select: { role: { select: { id: true, key: true, deletedAt: true } } },
+        },
       },
     });
     if (!inv || inv.deletedAt !== null) {
@@ -413,6 +473,24 @@ export class StaffInvitationService {
       });
     }
 
+    // The roles the invitation actually offers, live ones only. A role
+    // deleted between sending and accepting is dropped — granting a
+    // deleted role would leave somebody holding permissions nobody can
+    // see or edit on the roles screen.
+    const offered = inv.roles.map((r) => r.role).filter((r) => r.deletedAt === null);
+    if (offered.length === 0) {
+      // Every offered role is gone, OR this invitation predates the
+      // join table and its enum names a role that has since been
+      // deleted. Either way there is nothing to grant and accepting
+      // would create an account that cannot sign in (the guard reads
+      // zero live roles and answers UNAUTHORIZED).
+      throw new BadRequestException({
+        code: 'INVITATION_ROLES_GONE',
+        message:
+          'The role this invitation was sent for no longer exists. Ask an admin to send a new one.',
+      });
+    }
+
     const passwordHash = await this.password.hash(plaintextPassword);
     const now = new Date();
 
@@ -432,9 +510,11 @@ export class StaffInvitationService {
           email: emailLower,
           emailDisplay: inv.email,
           passwordHash,
-          role: inv.role,
-          staffRole: { connect: { key: staffRoleKeyForEnum(inv.role) } },
+          // Display and history; null when no offered role has an enum
+          // spelling (every access tier, and every custom role).
+          role: legacyEnumFor(offered.map((r) => r.key)),
           emailVerifiedAt: now,
+          ...rolesOnCreate(offered.map((r) => r.id)),
         },
         select: { id: true, email: true, role: true },
       });
@@ -452,7 +532,7 @@ export class StaffInvitationService {
       entityType: 'staff_user',
       entityId: created.id,
       severity: 'MEDIUM',
-      changes: { invitationId: inv.id, role: inv.role, email: inv.email },
+      changes: { invitationId: inv.id, roleIds: offered.map((r) => r.id), email: inv.email },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
 
@@ -500,8 +580,8 @@ export class StaffInvitationService {
       id: string;
       email: string;
       emailDisplay: string;
-      /** Legacy enum, for display continuity only. */
-      role: StaffRole;
+      /** Legacy enum, display only — null for a custom-role-only person. */
+      role: StaffRole | null;
       roleId: string;
       roleName: string;
       emailVerifiedAt: string | null;
@@ -541,93 +621,97 @@ export class StaffInvitationService {
   }
 
   /**
-   * Move somebody to a different role.
+   * REPLACE the set of roles somebody holds.
    *
-   * Takes a role ROW id, not an enum value — that is what lets a person
-   * be given a role somebody invented this morning. The legacy
-   * `staff_users.role` column is kept in step ONLY where the target role
-   * is one of the seven seeded ones; a custom role has no enum to write,
-   * and the column is no longer consulted for authorisation, so it is
-   * left alone rather than filled with a lie. It goes when the
-   * invitation flow stops carrying an enum too (phase-1a-debt).
+   * Takes role ROW ids, not enum values — that is what lets a person be
+   * given a role somebody invented this morning — and SEVERAL of them,
+   * because the job functions and the access tiers are two axes: "call
+   * agent who also handles tickets" is two roles, not a bespoke eighth.
+   *
+   * The legacy `staff_users.role` column is written with the enum
+   * spelling of the first role that HAS one, and left NULL when none
+   * does. It is no longer consulted for authorisation anywhere, so a
+   * null is honest where a borrowed enum would be a lie.
    */
-  async updateRole(
+  async setRoles(
     targetStaffId: string,
-    newRoleId: string,
+    newRoleIds: readonly string[],
     actor: { staffId: string },
     ctx: ClientContext,
-  ): Promise<{ id: string; roleId: string; roleName: string }> {
+  ): Promise<{ id: string; roleIds: readonly string[]; roleNames: readonly string[] }> {
     if (targetStaffId === actor.staffId) {
       throw new BadRequestException({
         code: 'CANNOT_CHANGE_OWN_ROLE',
         message:
-          'You cannot change your own role. Ask another super admin — this is what stops somebody removing their own way back in.',
+          'You cannot change your own roles. Ask another super admin — this is what stops somebody removing their own way back in.',
       });
     }
-    const [before, target] = await Promise.all([
+    const [before, targets] = await Promise.all([
       this.prisma.client.staffUser.findUnique({
         where: { id: targetStaffId },
-        select: { id: true, roleId: true, deletedAt: true, staffRole: { select: { name: true } } },
-      }),
-      this.prisma.client.staffRoleDefinition.findFirst({
-        where: { id: newRoleId, deletedAt: null },
         select: {
           id: true,
-          key: true,
-          name: true,
-          isSuperAdmin: true,
-          permissions: { select: { permission: true } },
+          deletedAt: true,
+          roles: {
+            orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
+            select: { role: { select: { id: true, name: true, deletedAt: true } } },
+          },
         },
       }),
+      this.rolesToGrant(newRoleIds),
     ]);
     if (!before || before.deletedAt !== null) {
       throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff user not found' });
     }
-    if (!target) {
-      throw new NotFoundException({ code: 'ROLE_NOT_FOUND', message: 'No such role' });
-    }
-    if (before.roleId === target.id) {
-      return { id: before.id, roleId: target.id, roleName: target.name };
+
+    const held = before.roles.map((r) => r.role).filter((r) => r.deletedAt === null);
+    const sameSet =
+      held.length === targets.length && held.every((r) => targets.some((t) => t.id === r.id));
+    if (sameSet) {
+      return {
+        id: before.id,
+        roleIds: targets.map((t) => t.id),
+        roleNames: targets.map((t) => t.name),
+      };
     }
 
-    // The guards above are both about not LOSING access — your own role,
-    // and the last super admin. This one is about not GAINING it: a
-    // `staff.manage` holder must not be able to promote a colleague past
-    // themselves and then use that account.
-    assertMayGrantRole(await this.grantingActor(actor.staffId), {
-      name: target.name,
-      isSuperuser: target.isSuperAdmin,
-      permissions: target.permissions.map((p) => p.permission),
-    });
+    // The guards above are both about not LOSING access — your own
+    // roles, and the last super admin. This one is about not GAINING
+    // it: a `staff.manage` holder must not be able to promote a
+    // colleague past themselves and then use that account. Checked for
+    // EVERY role in the set, because a list is only as safe as its most
+    // powerful entry.
+    const granter = await this.grantingActor(actor.staffId);
+    for (const target of targets) assertMayGrantRole(granter, target);
+
+    const keepsSuperAdmin = targets.some((t) => t.isSuperuser);
 
     // Somebody must be left who can put things back. Counting inside the
-    // update's transaction so two concurrent demotions cannot both see a
+    // write's transaction so two concurrent demotions cannot both see a
     // survivor that the other is removing.
     await this.prisma.client.$transaction(async (tx) => {
-      const superAdminsLeft = await tx.staffUser.count({
+      const superAdminsLeft = await tx.staffUserRoleAssignment.count({
         where: {
-          deletedAt: null,
-          id: { not: targetStaffId },
-          staffRole: { isSuperAdmin: true, deletedAt: null },
+          staffUserId: { not: targetStaffId },
+          user: { deletedAt: null },
+          role: { isSuperAdmin: true, deletedAt: null },
         },
       });
-      if (!target.isSuperAdmin && superAdminsLeft === 0) {
+      if (!keepsSuperAdmin && superAdminsLeft === 0) {
         throw new BadRequestException({
           code: 'LAST_SUPER_ADMIN',
           message:
             'This is the last super admin. Moving them off that role would leave nobody able to manage roles or staff.',
         });
       }
+      await setStaffRoles(
+        tx,
+        targetStaffId,
+        targets.map((t) => t.id),
+      );
       await tx.staffUser.update({
         where: { id: targetStaffId },
-        data: {
-          roleId: target.id,
-          // Legacy column, best-effort: only the seeded roles have an
-          // enum spelling to mirror.
-          ...(LEGACY_ROLE_KEYS.has(target.key)
-            ? { role: target.key.toUpperCase() as StaffRole }
-            : {}),
-        },
+        data: { role: legacyEnumFor(targets.map((t) => t.key)) },
       });
     });
 
@@ -638,10 +722,17 @@ export class StaffInvitationService {
       entityType: 'staff_user',
       entityId: targetStaffId,
       severity: 'HIGH',
-      changes: { before: before.staffRole.name, after: target.name },
+      changes: {
+        before: held.map((r) => r.name),
+        after: targets.map((t) => t.name),
+      },
       metadata: { ipAddress: ctx.ipAddress, userAgent: ctx.userAgent },
     });
-    return { id: targetStaffId, roleId: target.id, roleName: target.name };
+    return {
+      id: targetStaffId,
+      roleIds: targets.map((t) => t.id),
+      roleNames: targets.map((t) => t.name),
+    };
   }
 
   async deactivate(
@@ -714,18 +805,25 @@ export class StaffInvitationService {
   private toView(row: {
     id: string;
     email: string;
-    role: StaffRole;
+    role: StaffRole | null;
     invitedById: string;
     acceptedById: string | null;
     expiresAt: Date;
     usedAt: Date | null;
     createdAt: Date;
     deletedAt: Date | null;
+    roles: readonly { role: { id: string; name: string; deletedAt: Date | null } }[];
   }): InvitationListItem {
+    // A role deleted since the invitation was sent is dropped rather
+    // than shown: accepting will not grant it, so listing it would
+    // promise something the accept cannot deliver.
+    const live = row.roles.map((r) => r.role).filter((r) => r.deletedAt === null);
     return {
       id: row.id,
       email: row.email,
       role: row.role,
+      roleIds: live.map((r) => r.id),
+      roleNames: live.map((r) => r.name),
       invitedById: row.invitedById,
       acceptedById: row.acceptedById,
       expiresAt: row.expiresAt.toISOString(),

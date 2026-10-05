@@ -1,6 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsEmail,
   IsEnum,
   IsIn,
@@ -30,9 +33,16 @@ export class InviteStoreUserDto {
   @MaxLength(120)
   fullName!: string;
 
-  @ApiProperty({ enum: STORE_ROLE_KEYS, example: 'owner' })
-  @IsIn(STORE_ROLE_KEYS)
-  roleKey!: StoreRoleKey;
+  /**
+   * PLURAL: somebody can do the daily work AND the money without a
+   * bespoke sixth role being invented for them.
+   */
+  @ApiProperty({ isArray: true, enum: STORE_ROLE_KEYS, example: ['ops'] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(STORE_ROLE_KEYS.length)
+  @IsIn(STORE_ROLE_KEYS, { each: true })
+  roleKeys!: StoreRoleKey[];
 }
 
 class ResellerStoreFieldsDto {
@@ -206,8 +216,22 @@ export class RegisterStoreLogoDto {
   mimeType!: (typeof LOGO_MIME)[number];
 }
 
-export class ChangeStoreMemberRoleDto {
+/**
+ * TRANSITIONAL single-role body, for the deploy window in which the
+ * portal still sends one role. Goes with the `/role` route.
+ */
+export class SetStoreMemberRoleDto {
   @ApiProperty({ enum: STORE_ROLE_KEYS })
   @IsIn(STORE_ROLE_KEYS)
   roleKey!: StoreRoleKey;
+}
+
+/** REPLACES the roles a member holds. */
+export class SetStoreMemberRolesDto {
+  @ApiProperty({ isArray: true, enum: STORE_ROLE_KEYS })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(STORE_ROLE_KEYS.length)
+  @IsIn(STORE_ROLE_KEYS, { each: true })
+  roleKeys!: StoreRoleKey[];
 }

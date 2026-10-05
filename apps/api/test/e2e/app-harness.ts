@@ -22,6 +22,7 @@ import { NotificationListener } from '../../src/modules/notifications/services/n
 import { SystemIssueNotifier } from '../../src/modules/system-issues/services/system-issue-notifier.service';
 import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
 import { staffRoleKeyForEnum } from '../../src/common/auth/staff-role-key';
+import { rolesOnCreate } from '../../src/common/auth/role-assignment';
 import { SellerIssueEscalationService } from '../../src/modules/courier-escalation/services/seller-issue-escalation.service';
 import { OutboundWebhookListener } from '../../src/modules/seller-webhook-delivery/services/outbound-webhook-listener.service';
 import { OrderDeliveredInvoiceListener } from '../../src/modules/invoice/services/order-delivered-invoice-listener.service';
@@ -785,13 +786,19 @@ export async function createTestStaff(
     timeCost: 2,
     parallelism: 1,
   });
+  const roleRow = await prisma.staffRoleDefinition.findFirstOrThrow({
+    where: { key: staffRoleKeyForEnum(role), deletedAt: null },
+    select: { id: true },
+  });
   const staff = await prisma.staffUser.create({
     data: {
       email: email.toLowerCase(),
       emailDisplay: email,
       passwordHash,
       role,
-      staffRole: { connect: { key: staffRoleKeyForEnum(role) } },
+      // The JOIN ROW matters: `staff_user_roles` is what the guard
+      // reads, and a staff row with only `role_id` cannot sign in.
+      ...rolesOnCreate([roleRow.id]),
     },
   });
   return { id: staff.id, email: staff.email, role, password };

@@ -315,6 +315,8 @@ async function main(): Promise<void> {
         emailDisplay: STORE_USER.email,
         fullName: 'Store Owner',
         roleId: invitation.roleId,
+        // The join row is the authority; `role_id` is the label.
+        roles: { create: [{ roleId: invitation.roleId }] },
         emailVerifiedAt: new Date(),
         passwordHash: await argon2.hash(STORE_USER.password, {
           type: argon2.argon2id,
