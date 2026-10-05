@@ -28,21 +28,26 @@ datasource db {
 // ============================================================
 
 model StaffUser {
-  id              String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  email           String    @unique
-  emailDisplay    String    @map("email_display")
-  passwordHash    String    @map("password_hash")
-  role            StaffRole
+  id              String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email           String     @unique
+  emailDisplay    String     @map("email_display")
+  passwordHash    String     @map("password_hash")
+  /// LEGACY enum, and NULLABLE since multi-role: the access tiers and
+  /// any role an operator invents have no spelling here. Display and
+  /// history only — `staff_user_roles` is the authority.
+  role            StaffRole?
   /// The dynamic role. `role` above is the LEGACY enum, authoritative
   /// only until the permission guard lands; see staff_roles.
-  roleId          String    @map("role_id") @db.Uuid
-  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
-  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
+  roleId          String     @map("role_id") @db.Uuid
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz
+  lastLoginAt     DateTime?  @map("last_login_at") @db.Timestamptz
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime?  @map("deleted_at") @db.Timestamptz
 
   staffRole                  StaffRoleDefinition           @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  /// Every role this person holds — the AUTHORITY for authorisation.
+  roles                      StaffUserRoleAssignment[]
   sellersApproved            Seller[]                      @relation("SellerApprovedBy")
   invitesAuthored            SellerInvitation[]            @relation("SellerInvitedBy")
   staffInvitesAuthored       StaffInvitation[]             @relation("StaffInvitedBy")
@@ -153,8 +158,12 @@ model StaffRoleDefinition {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  permissions StaffRolePermission[]
-  staff       StaffUser[]
+  permissions     StaffRolePermission[]
+  /// Everyone holding this role through `staff_users.role_id` — the
+  /// TRANSITIONAL column. Ask `userRoles` who holds it.
+  staff           StaffUser[]
+  userRoles       StaffUserRoleAssignment[]
+  invitationRoles StaffInvitationRole[]
 
   @@map("staff_roles")
 }
@@ -182,6 +191,55 @@ model StaffRolePermission {
   @@unique([roleId, permission, scope], map: "staff_role_permissions_role_permission_scope_key")
   @@index([roleId], map: "staff_role_permissions_role_id_idx")
   @@map("staff_role_permissions")
+}
+
+/// One role a staff member holds.
+///
+/// ── WHY A JOIN TABLE AND NOT A SECOND COLUMN ─────────────────────────
+/// Skydrop's staff roles are JOB FUNCTIONS (Call agent, Warehouse staff,
+/// Finance) and they stay that way, because they encode distinctions a
+/// tier ladder cannot: picking versus supervising, who may collapse a
+/// warehouse's bins. The access TIERS (Admin, Support, Read-only) are a
+/// second axis. Somebody who takes calls and also handles tickets holds
+/// both rather than needing a bespoke role invented for them, so the
+/// relationship is many-to-many and a column cannot say it.
+///
+/// This table is the AUTHORITY for authorisation. `staff_users.role_id`
+/// survives only so the code running between `migrate deploy` and the
+/// new build keeps working, and is dropped by a follow-up migration; a
+/// column two things disagree about is exactly the drift CNS-2 and
+/// BIN-1 exist to prevent, so while both exist it is this table that
+/// decides and the column is transitional.
+model StaffUserRoleAssignment {
+  staffUserId String   @map("staff_user_id") @db.Uuid
+  roleId      String   @map("role_id") @db.Uuid
+  grantedAt   DateTime @default(now()) @map("granted_at") @db.Timestamptz
+
+  /// Cascade: removing a person removes what they held.
+  user StaffUser           @relation(fields: [staffUserId], references: [id], onDelete: Cascade)
+  /// Restrict: a role somebody holds must not vanish under them.
+  role StaffRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([staffUserId, roleId])
+  @@index([roleId], map: "staff_user_roles_role_id_idx")
+  @@map("staff_user_roles")
+}
+
+/// One role an invitation offers. Plural for the same reason as
+/// `staff_user_roles`: the role is chosen when the invitation is sent
+/// and connected for real when it is accepted, so the two have to be
+/// able to say the same thing.
+model StaffInvitationRole {
+  invitationId String   @map("invitation_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz
+
+  invitation StaffInvitation     @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  role       StaffRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([invitationId, roleId])
+  @@index([roleId], map: "staff_invitation_roles_role_id_idx")
+  @@map("staff_invitation_roles")
 }
 
 model Seller {
@@ -341,20 +399,23 @@ model SellerInvitation {
 // admin can change the role later with audit MEDIUM). Only SUPER_ADMIN
 // can invite.
 model StaffInvitation {
-  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  id           String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
   email        String
-  token        String    @unique
-  role         StaffRole
-  invitedById  String    @map("invited_by_id") @db.Uuid
-  acceptedById String?   @map("accepted_by_id") @db.Uuid
-  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
-  usedAt       DateTime? @map("used_at") @db.Timestamptz
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
+  token        String     @unique
+  /// LEGACY enum, NULLABLE — see `staff_users.role`. The roles an
+  /// invitation offers are `staff_invitation_roles`.
+  role         StaffRole?
+  invitedById  String     @map("invited_by_id") @db.Uuid
+  acceptedById String?    @map("accepted_by_id") @db.Uuid
+  expiresAt    DateTime   @map("expires_at") @db.Timestamptz
+  usedAt       DateTime?  @map("used_at") @db.Timestamptz
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime?  @map("deleted_at") @db.Timestamptz
 
-  invitedBy  StaffUser  @relation("StaffInvitedBy", fields: [invitedById], references: [id])
-  acceptedBy StaffUser? @relation("StaffInvitationAccepted", fields: [acceptedById], references: [id])
+  invitedBy  StaffUser             @relation("StaffInvitedBy", fields: [invitedById], references: [id])
+  acceptedBy StaffUser?            @relation("StaffInvitationAccepted", fields: [acceptedById], references: [id])
+  roles      StaffInvitationRole[]
 
   @@index([email])
   @@index([expiresAt])
@@ -2987,6 +3048,8 @@ model StoreUser {
 
   store                   SellerStore                    @relation(fields: [storeId], references: [id], onDelete: Restrict)
   role                    StoreRoleDefinition            @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  /// Every role this person holds — the AUTHORITY for authorisation.
+  roles                   StoreUserRoleAssignment[]
   refreshTokens           StoreRefreshToken[]
   passwordResetTokens     StorePasswordResetToken[]
   emailVerificationTokens StoreEmailVerificationToken[]
@@ -3018,10 +3081,14 @@ model StoreRoleDefinition {
   updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
 
-  store       SellerStore           @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  permissions StoreRolePermission[]
-  users       StoreUser[]
-  invitations StoreUserInvitation[]
+  store           SellerStore               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  permissions     StoreRolePermission[]
+  /// Holders through the TRANSITIONAL `store_users.role_id`. Ask
+  /// `userRoles` who holds it.
+  users           StoreUser[]
+  invitations     StoreUserInvitation[]
+  userRoles       StoreUserRoleAssignment[]
+  invitationRoles StoreUserInvitationRole[]
 
   @@unique([storeId, key])
   @@index([storeId])
@@ -3040,6 +3107,23 @@ model StoreRolePermission {
   @@unique([roleId, permission])
   @@index([roleId])
   @@map("store_role_permissions")
+}
+
+/// One role a reseller store's team member holds. The staff shape
+/// (`staff_user_roles`), scoped to one store by the role it points at.
+/// AUTHORITATIVE for authorisation; `store_users.role_id` is
+/// transitional and goes in a follow-up migration.
+model StoreUserRoleAssignment {
+  storeUserId String   @map("store_user_id") @db.Uuid
+  roleId      String   @map("role_id") @db.Uuid
+  grantedAt   DateTime @default(now()) @map("granted_at") @db.Timestamptz
+
+  user StoreUser           @relation(fields: [storeUserId], references: [id], onDelete: Cascade)
+  role StoreRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([storeUserId, roleId])
+  @@index([roleId], map: "store_user_roles_role_id_idx")
+  @@map("store_user_roles")
 }
 
 /// An invitation to join a reseller store's team. The token is stored
@@ -3063,14 +3147,29 @@ model StoreUserInvitation {
   updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt          DateTime? @map("deleted_at") @db.Timestamptz
 
-  store      SellerStore         @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  role       StoreRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  acceptedBy StoreUser?          @relation("StoreInvitationAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  store      SellerStore               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  role       StoreRoleDefinition       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  acceptedBy StoreUser?                @relation("StoreInvitationAcceptedBy", fields: [acceptedById], references: [id], onDelete: SetNull)
+  roles      StoreUserInvitationRole[]
 
   @@index([storeId])
   @@index([email])
   @@index([expiresAt])
   @@map("store_user_invitations")
+}
+
+/// One role a store invitation offers.
+model StoreUserInvitationRole {
+  invitationId String   @map("invitation_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz
+
+  invitation StoreUserInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  role       StoreRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([invitationId, roleId])
+  @@index([roleId], map: "store_user_invitation_roles_role_id_idx")
+  @@map("store_user_invitation_roles")
 }
 
 model StoreRefreshToken {
@@ -7848,22 +7947,25 @@ model SellerBankChangeRequest {
 }
 
 model SellerUser {
-  id              String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId        String         @map("seller_id") @db.Uuid
-  email           String         @unique
-  emailDisplay    String         @map("email_display")
-  passwordHash    String         @map("password_hash")
-  fullName        String         @map("full_name")
-  role            SellerUserRole
+  id              String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId        String          @map("seller_id") @db.Uuid
+  email           String          @unique
+  emailDisplay    String          @map("email_display")
+  passwordHash    String          @map("password_hash")
+  fullName        String          @map("full_name")
+  /// LEGACY enum, NULLABLE since multi-role — a role a company invents
+  /// has no spelling here. Display and history only;
+  /// `seller_user_roles` is the authority.
+  role            SellerUserRole?
   /// The dynamic role, scoped to this seller. `role` above is the
   /// LEGACY enum, no longer consulted for authorisation.
-  roleId          String         @map("role_id") @db.Uuid
-  invitedById     String?        @map("invited_by_id") @db.Uuid
-  emailVerifiedAt DateTime?      @map("email_verified_at") @db.Timestamptz
-  lastLoginAt     DateTime?      @map("last_login_at") @db.Timestamptz
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz
+  roleId          String          @map("role_id") @db.Uuid
+  invitedById     String?         @map("invited_by_id") @db.Uuid
+  emailVerifiedAt DateTime?       @map("email_verified_at") @db.Timestamptz
+  lastLoginAt     DateTime?       @map("last_login_at") @db.Timestamptz
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime?       @map("deleted_at") @db.Timestamptz
 
   /// Scope this member to ONE store, or null for the whole company.
   ///
@@ -7876,6 +7978,8 @@ model SellerUser {
 
   store                           SellerStore?                   @relation(fields: [storeId], references: [id])
   sellerRole                      SellerRoleDefinition           @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  /// Every role this person holds — the AUTHORITY for authorisation.
+  roles                           SellerUserRoleAssignment[]
   seller                          Seller                         @relation(fields: [sellerId], references: [id])
   invitedBy                       SellerUser?                    @relation("SellerUserInvitedBy", fields: [invitedById], references: [id])
   invitedUsers                    SellerUser[]                   @relation("SellerUserInvitedBy")
@@ -7934,9 +8038,13 @@ model SellerRoleDefinition {
   updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt DateTime? @map("deleted_at") @db.Timestamptz
 
-  seller      Seller                 @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  permissions SellerRolePermission[]
-  users       SellerUser[]
+  seller          Seller                     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  permissions     SellerRolePermission[]
+  /// Holders through the TRANSITIONAL `seller_users.role_id`. Ask
+  /// `userRoles` who holds it.
+  users           SellerUser[]
+  userRoles       SellerUserRoleAssignment[]
+  invitationRoles SellerUserInvitationRole[]
 
   @@unique([sellerId, key], map: "seller_roles_seller_id_key_key")
   @@index([sellerId], map: "seller_roles_seller_id_idx")
@@ -7962,29 +8070,63 @@ model SellerRolePermission {
   @@map("seller_role_permissions")
 }
 
-model SellerUserInvitation {
-  id           String         @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId     String         @map("seller_id") @db.Uuid
-  email        String
-  token        String         @unique
-  role         SellerUserRole
-  invitedById  String         @map("invited_by_id") @db.Uuid
-  acceptedById String?        @map("accepted_by_id") @db.Uuid
-  expiresAt    DateTime       @map("expires_at") @db.Timestamptz
-  usedAt       DateTime?      @map("used_at") @db.Timestamptz
-  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt    DateTime?      @map("deleted_at") @db.Timestamptz
+/// One role a member of a seller's team holds. The staff shape
+/// (`staff_user_roles`), scoped to one company by the role it points at.
+/// AUTHORITATIVE for authorisation; `seller_users.role_id` is
+/// transitional and goes in a follow-up migration.
+model SellerUserRoleAssignment {
+  sellerUserId String   @map("seller_user_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz
 
-  seller     Seller      @relation(fields: [sellerId], references: [id])
-  invitedBy  SellerUser  @relation("SellerUserInvitedByUser", fields: [invitedById], references: [id])
-  acceptedBy SellerUser? @relation("SellerUserInvitationAccepted", fields: [acceptedById], references: [id])
+  user SellerUser           @relation(fields: [sellerUserId], references: [id], onDelete: Cascade)
+  role SellerRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([sellerUserId, roleId])
+  @@index([roleId], map: "seller_user_roles_role_id_idx")
+  @@map("seller_user_roles")
+}
+
+model SellerUserInvitation {
+  id           String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId     String          @map("seller_id") @db.Uuid
+  email        String
+  token        String          @unique
+  /// LEGACY enum, NULLABLE — see `seller_users.role`. The roles an
+  /// invitation offers are `seller_user_invitation_roles`.
+  role         SellerUserRole?
+  invitedById  String          @map("invited_by_id") @db.Uuid
+  acceptedById String?         @map("accepted_by_id") @db.Uuid
+  expiresAt    DateTime        @map("expires_at") @db.Timestamptz
+  usedAt       DateTime?       @map("used_at") @db.Timestamptz
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime?       @map("deleted_at") @db.Timestamptz
+
+  seller     Seller                     @relation(fields: [sellerId], references: [id])
+  invitedBy  SellerUser                 @relation("SellerUserInvitedByUser", fields: [invitedById], references: [id])
+  acceptedBy SellerUser?                @relation("SellerUserInvitationAccepted", fields: [acceptedById], references: [id])
+  roles      SellerUserInvitationRole[]
 
   @@index([sellerId])
   @@index([email])
   @@index([expiresAt])
   @@index([invitedById])
   @@map("seller_user_invitations")
+}
+
+/// One role a seller-team invitation offers.
+model SellerUserInvitationRole {
+  invitationId String   @map("invitation_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz
+
+  invitation SellerUserInvitation @relation(fields: [invitationId], references: [id], onDelete: Cascade)
+  role       SellerRoleDefinition @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@id([invitationId, roleId])
+  @@index([roleId], map: "seller_user_invitation_roles_role_id_idx")
+  @@map("seller_user_invitation_roles")
 }
 
 /// One box being packed at the bench.
