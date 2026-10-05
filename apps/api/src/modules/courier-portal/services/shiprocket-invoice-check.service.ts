@@ -344,6 +344,9 @@ export class ShiprocketInvoiceCheckService {
           kind: SystemIssueKind.MONEY,
           // Loud while it can still be disputed; recorded once it cannot.
           severity: row.disputeOpen ? SystemIssueSeverity.HIGH : SystemIssueSeverity.MEDIUM,
+          // The dispute window closes with time, so a later run on the
+          // same invoice is legitimately quieter.
+          severityMayFall: true,
           title:
             `Shiprocket invoice ${row.invoiceId} (${row.serviceType}, ${row.invoiceDate}) ` +
             'does not match what their wallet charged',

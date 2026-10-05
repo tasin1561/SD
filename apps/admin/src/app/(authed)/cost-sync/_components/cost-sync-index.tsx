@@ -16,6 +16,7 @@ import { useToast } from '@skydrop/ui/app/toast';
 import {
   useRunWalletSync,
   useWalletSyncPanel,
+  type WalletSyncFailureArtifact,
   type WalletSyncRun,
   type WalletSyncRunAccount,
   type WalletSyncWrite,
@@ -117,6 +118,59 @@ function LastRun({ run }: { readonly run: WalletSyncRun }): ReactElement {
   );
 }
 
+/**
+ * What was on screen when it failed.
+ *
+ * ── WHY THIS IS HERE AT ALL ──────────────────────────────────────────
+ * The message above says what we were WAITING for. On 5 October 2026
+ * that was "Timeout 120000ms exceeded while waiting for event download"
+ * — equally true of a slower export, of a button that has become a
+ * format menu, and of a page that was still drawing, and those need
+ * three different fixes. The portal worker now screenshots the page, and
+ * a screenshot nobody can reach is a screenshot nobody looks at.
+ *
+ * The links are PRESIGNED per request and short-lived, so they open in a
+ * new tab and are never stored or shared — re-open the page for fresh
+ * ones. Absent on every run from before the capture existed, which is
+ * why nothing renders rather than an empty slot promising a file.
+ */
+function FailureArtifact({
+  artifact: a,
+}: {
+  readonly artifact: WalletSyncFailureArtifact | null;
+}): ReactElement | null {
+  if (a === null) return null;
+  const hasLink = a.screenshotUrl !== null || a.pageTextUrl !== null;
+  if (!hasLink && a.url === null && a.control === null && a.problem === null) return null;
+  return (
+    <div className="af-small cs-artifact">
+      {a.url !== null && <div>Page: {a.url}</div>}
+      {/* The half the timeout cannot say: what was actually on the
+          control we waited for. */}
+      {a.control !== null && <div>Control: {a.control}</div>}
+      {hasLink && (
+        <div>
+          {a.screenshotUrl !== null && (
+            <a href={a.screenshotUrl} target="_blank" rel="noreferrer">
+              Screenshot
+            </a>
+          )}
+          {a.screenshotUrl !== null && a.pageTextUrl !== null && ' · '}
+          {a.pageTextUrl !== null && (
+            <a href={a.pageTextUrl} target="_blank" rel="noreferrer">
+              Page text
+            </a>
+          )}
+        </div>
+      )}
+      {/* "There should be a capture and there is not" is a different
+          fact from "nothing was captured", so it is said rather than
+          swallowed. */}
+      {a.problem !== null && <div>{a.problem}</div>}
+    </div>
+  );
+}
+
 function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount }): ReactElement {
   if (a.error !== null) {
     return (
@@ -128,6 +182,7 @@ function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount 
         {/* The courier's own words, verbatim — a paraphrase loses the
             only part that says what to check. */}
         <p className="af-small">{a.error}</p>
+        <FailureArtifact artifact={a.failureArtifact} />
       </div>
     );
   }

@@ -7,6 +7,7 @@ import { PortalQueue } from './queue/portal.queue';
 import { PortalCanaryService } from './services/portal-canary.service';
 import { PortalDispatcherService } from './services/portal-dispatcher.service';
 import { PortalPacingService } from './services/portal-pacing.service';
+import { PortalFailureArtifactService } from './services/portal-failure-artifact';
 import { PortalSessionService } from './services/portal-session.service';
 import { WalletLedgerFetcherService } from './services/wallet-ledger-fetcher.service';
 import { WalletSyncService } from './services/wallet-sync.service';
@@ -78,6 +79,9 @@ import { DelhiveryInvoiceCheckService } from './services/delhivery-invoice-check
     CourierWalletReconcileService,
     PortalCanaryService,
     PortalQueue,
+    // Saves what was on screen when a portal job failed — on FAILURE
+    // only, never on a good night.
+    PortalFailureArtifactService,
     WalletLedgerFetcherService,
     WalletSyncService,
     WalletSyncWorker,

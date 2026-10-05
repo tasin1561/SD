@@ -398,6 +398,12 @@ export class DelhiveryInvoiceCheckService {
         await this.issues.raise({
           kind: SystemIssueKind.MONEY,
           severity: row.disputeOpen ? SystemIssueSeverity.HIGH : SystemIssueSeverity.MEDIUM,
+          // COST-3: loud while it can still be disputed, recorded once
+          // it cannot. The window closes with TIME, so this row really
+          // does get quieter on a later run — the one shape where a
+          // de-escalation is the answer rather than two diagnoses
+          // sharing a key.
+          severityMayFall: true,
           title:
             `Delhivery invoice ${row.invoiceId} (${row.serviceType}, ${row.invoiceDate}, ` +
             `₹${row.totalInr}) does not match what their wallet charged`,

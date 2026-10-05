@@ -18,6 +18,7 @@ function makeSystemRow(overrides: Partial<AnyArgs> = {}): AnyArgs {
     valueJson: null,
     valueDate: null,
     sellerOverridable: true,
+    isSensitive: false,
     overrideMinInt: 1,
     overrideMaxInt: 10,
     overrideMinDecimal: null,
@@ -111,6 +112,29 @@ function makeService(
     overrideDelete,
     auditLog,
   };
+}
+
+/**
+ * The message a refused `setOverride` came back with.
+ *
+ * `setOverride` RESOLVES to a view and REJECTS with an exception, so
+ * `.catch(e => e as X)` leaves a union every assertion would have to
+ * narrow. These cases are about the refusal, so this returns the
+ * message and fails loudly if the call was accepted.
+ */
+async function refusalMessage(
+  svc: SettingsResolverService,
+  key: string,
+  value: unknown,
+  valueType: SettingValueType = SettingValueType.STRING,
+): Promise<string> {
+  try {
+    await svc.setOverride('seller-qa', key, { valueType, value }, 'staff-1');
+  } catch (err) {
+    const body = (err as { response?: { message?: unknown } }).response;
+    return typeof body?.message === 'string' ? body.message : String(err);
+  }
+  throw new Error(`setOverride('${key}') was expected to refuse and did not`);
 }
 
 describe('SettingsResolverService.resolve', () => {
@@ -247,6 +271,60 @@ describe('SettingsResolverService.setOverride', () => {
       expect(overrideUpsert).not.toHaveBeenCalled();
     });
 
+    /**
+     * ── A REFUSAL SAYS WHAT IS ALLOWED, NOT WHAT WAS TYPED ─────────────
+     *
+     * These messages quoted the rejected value straight back into an
+     * HTTP 400 and the request log. A validation message exists to say
+     * what IS acceptable, which needs no quotation of the mistake — and
+     * the mistake is sometimes a credential: the leak this branch fixes
+     * was a password typed into `portalCompany`, published because
+     * something echoed it.
+     */
+    it('refuses a bad mode without quoting it back', async () => {
+      const { svc } = makeService({ systemRow: freightModeRow });
+      const message = await refusalMessage(svc, 'wallet.inbound_freight_mode', 'Tr0ub4dor&3-horse');
+      expect(message).not.toContain('Tr0ub4dor');
+      // The useful half — the allowed set — is OURS and stays.
+      expect(message).toContain('PAY_ADVANCE');
+      expect(message).toContain('wallet.inbound_freight_mode');
+    });
+
+    it('refuses an unknown courier without quoting it back', async () => {
+      const { svc } = makeService({ systemRow: courierRow });
+      const message = await refusalMessage(svc, 'ops.default_courier_code', 'p@ssw0rd#2026');
+      expect(message).not.toContain('p@ssw0rd');
+      expect(message).toContain('delhivery');
+    });
+
+    it('withholds a sensitive key\u2019s value from the override audit too', async () => {
+      // `is_sensitive` is a fact about the KEY, so it holds for a
+      // per-seller override of that key. No setting is both sensitive
+      // and seller-overridable today; the guard is for the day one is.
+      const { svc, auditLog } = makeService({
+        systemRow: makeSystemRow({
+          key: 'a.sensitive.string',
+          valueType: SettingValueType.STRING,
+          valueString: 'before',
+          valueInt: null,
+          overrideMinInt: null,
+          overrideMaxInt: null,
+          isSensitive: true,
+        }),
+      });
+      await svc.setOverride(
+        'seller-qa',
+        'a.sensitive.string',
+        { valueType: SettingValueType.STRING, value: 'Tr0ub4dor&3-horse' },
+        'staff-1',
+      );
+      const changes = auditLog.mock.calls[0]![0]!.changes as AnyArgs;
+      expect(JSON.stringify(changes)).not.toContain('Tr0ub4dor');
+      expect(changes.value).toBe('***');
+      expect(changes.valueWithheld).toBe(true);
+      expect(changes.key).toBe('a.sensitive.string');
+    });
+
     it('resolve: the seller override beats the global default', async () => {
       const { svc } = makeService({
         systemRow: courierRow,
@@ -292,6 +370,23 @@ describe('SettingsResolverService.setOverride', () => {
         { valueType: SettingValueType.JSON, value },
         'staff-1',
       );
+
+    it('names a bad list entry by POSITION, never by its contents', async () => {
+      // An index is as actionable for fixing a ten-item list and carries
+      // nothing of what was typed.
+      const { svc } = makeService({ systemRow: ndrRow });
+      const message = await refusalMessage(
+        svc,
+        'courier.ndr_auto_categories',
+        ['RE-ATTEMPT', 'hunter2'],
+        SettingValueType.JSON,
+      );
+      expect(message).not.toContain('hunter2');
+      // The first entry is valid, so only the second is named — by its
+      // place in the list.
+      expect(message).toMatch(/Entry 2\b/);
+      expect(message).toContain('RE-ATTEMPT, PICKUP_RESCHEDULE');
+    });
 
     it('accepts a valid list, trimmed and in the code-owned order', async () => {
       const { svc, overrideUpsert } = makeService({ systemRow: ndrRow });

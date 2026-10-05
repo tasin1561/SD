@@ -71,6 +71,10 @@ export class ResellerSweepsService {
       await this.issues.raise({
         kind: SystemIssueKind.RESELLER_RISK,
         severity: f.severity === 'HIGH' ? SystemIssueSeverity.HIGH : SystemIssueSeverity.MEDIUM,
+        // RS-9: MEDIUM, HIGH at twice the threshold. A signal that falls
+        // back from 2x to 1x is still flagged and is genuinely less
+        // urgent than it was, so this key may go quieter.
+        severityMayFall: true,
         title: `Reseller store “${f.storeName}”: ${RULE_TITLES[f.rule]}`,
         detail:
           `${f.reason} Seller: ${f.sellerName}. Look at the store on Reseller stores → Analysis; ` +
