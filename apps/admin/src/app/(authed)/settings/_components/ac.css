@@ -299,6 +299,28 @@
   background: var(--blue-tint);
   color: var(--blue-on-tint);
 }
+/* A set of names in one cell — the roles a person holds. Wraps rather
+   than scrolls, because the table cell becomes a stacked card below
+   `md` and a nested scroller there is a target nobody can hit. */
+.ac-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ac-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 1px var(--sp-2);
+  border: 1px solid var(--blue-line);
+  border-radius: var(--r-pill);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
 .ac-buttons {
   display: flex;
   flex-wrap: wrap;
