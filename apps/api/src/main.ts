@@ -14,6 +14,22 @@ import { EnvService } from './config/env.service';
 
 /** The three courier document pushes — the only routes that may be big. */
 const DOCUMENT_WEBHOOK_PREFIX = '/public/tracking/documents';
+/**
+ * The hand upload of a courier wallet export.
+ *
+ * `WalletSyncService` tells an operator, at the moment the nightly sync
+ * has failed, that "the ledger can be uploaded by hand on the Delhivery
+ * page" — and that upload could not accept the file the sync downloads:
+ * a 90-day Delhivery export is ~3.3 MB, ~4.4 MB once base64'd into the
+ * JSON body, against a 1 MB cap. The documented fallback was unusable
+ * for the only file anybody would ever bring to it, and it failed at
+ * the exact moment somebody was already dealing with a broken sync.
+ *
+ * Measured 2026-10-05 on the real export. The window is 90 days by
+ * COST-1 and grows with volume, so this rides the same 12 MB ceiling
+ * the document pushes use rather than a figure cut to today's size.
+ */
+const WALLET_IMPORT_PREFIX = '/admin/courier/wallet-import';
 const GENERAL_BODY_LIMIT = '1mb';
 const GENERAL_BODY_LIMIT_BYTES = 1024 * 1024;
 const DOCUMENT_BODY_LIMIT = '12mb';
@@ -56,7 +72,10 @@ async function bootstrap(): Promise<void> {
   // `useBodyParser` appends at call time, which is why bodyParser is off
   // at create.
   app.use((req: IncomingMessage, res: ServerResponse, next: () => void) => {
-    if ((req.url ?? '').startsWith(DOCUMENT_WEBHOOK_PREFIX)) return next();
+    const url = req.url ?? '';
+    if (url.startsWith(DOCUMENT_WEBHOOK_PREFIX) || url.startsWith(WALLET_IMPORT_PREFIX)) {
+      return next();
+    }
     const declared = Number(req.headers['content-length'] ?? '0');
     if (Number.isFinite(declared) && declared > GENERAL_BODY_LIMIT_BYTES) {
       res.statusCode = 413;
