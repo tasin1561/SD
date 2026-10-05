@@ -15,6 +15,11 @@ interface Preview {
   readonly email: string;
   readonly fullName: string;
   readonly storeName: string;
+  /**
+   * Every role the invitation offers, already joined by the server
+   * (`offered.map(r => r.name).join(', ')`) — an invitation may offer
+   * more than one, so the label is plural.
+   */
   readonly roleName: string;
   readonly expiresAt: string;
 }
@@ -100,7 +105,7 @@ export function AcceptForm(): ReactElement {
       <dl className="rd-auth-facts">
         <dt>Store</dt>
         <dd>{preview.storeName}</dd>
-        <dt>Your role</dt>
+        <dt>Your roles</dt>
         <dd>{preview.roleName}</dd>
         <dt>Email</dt>
         <dd>{preview.email}</dd>

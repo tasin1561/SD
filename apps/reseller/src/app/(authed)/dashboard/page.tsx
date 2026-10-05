@@ -147,7 +147,9 @@ export default function DashboardPage(): ReactElement {
                     ? seller.companyName
                     : '—',
             },
-            { label: 'Your role', value: me.roleName },
+            // Every role held (see /account): `roleName` is the first
+            // grant and would understate somebody holding two.
+            { label: 'Your roles', value: me.roleNames.join(' and ') || '—' },
           ]}
         />
       </RdCard>
