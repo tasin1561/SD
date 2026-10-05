@@ -79,7 +79,7 @@ describe('reseller store terms (e2e)', () => {
         name: `${label} ${Math.random().toString(36).slice(2, 8)}`,
         contactEmail: email,
         contactPhone: '+919800000002',
-        invite: { email, fullName: `${label} Owner`, roleKey: 'owner' },
+        invite: { email, fullName: `${label} Owner`, roleKeys: ['owner'] },
       })
       .expect(201);
     const storeId = (created.body as { id: string }).id;
