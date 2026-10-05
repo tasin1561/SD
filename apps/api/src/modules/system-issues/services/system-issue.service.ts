@@ -24,6 +24,36 @@ export interface RecordedJobFailure {
   };
 }
 
+/**
+ * How loud each severity is. Ordered so a recurrence can be asked
+ * whether it is louder than what is already on the row, which is the
+ * one comparison `raise()` needs and the one the enum cannot answer.
+ */
+const SEVERITY_RANK: Readonly<Record<SystemIssueSeverity, number>> = {
+  [SystemIssueSeverity.LOW]: 0,
+  [SystemIssueSeverity.MEDIUM]: 1,
+  [SystemIssueSeverity.HIGH]: 2,
+  [SystemIssueSeverity.CRITICAL]: 3,
+};
+
+/** Is `a` louder than `b`? The only comparison this service needs. */
+export function isLouderSeverity(a: SystemIssueSeverity, b: SystemIssueSeverity): boolean {
+  return SEVERITY_RANK[a] > SEVERITY_RANK[b];
+}
+
+/** Severities strictly quieter than `severity` — the CAS predicate for an escalation. */
+export function severitiesBelow(severity: SystemIssueSeverity): readonly SystemIssueSeverity[] {
+  const floor = SEVERITY_RANK[severity];
+  return (Object.keys(SEVERITY_RANK) as SystemIssueSeverity[]).filter(
+    (s) => SEVERITY_RANK[s] < floor,
+  );
+}
+
+/** NOTIF-16: only these interrupt anybody. */
+function notifies(severity: SystemIssueSeverity): boolean {
+  return severity === SystemIssueSeverity.HIGH || severity === SystemIssueSeverity.CRITICAL;
+}
+
 export interface RaiseIssueInput {
   readonly kind: SystemIssueKind;
   readonly severity: SystemIssueSeverity;
@@ -38,6 +68,26 @@ export interface RaiseIssueInput {
    */
   readonly dedupeKey: string;
   readonly metadata?: Prisma.InputJsonValue;
+  /**
+   * This caller means it when it asks for a QUIETER severity than the
+   * open row already carries.
+   *
+   * Off by default, and that default is the point. A recurrence that
+   * lowers severity switches off notification — NOTIF-16 tells somebody
+   * about HIGH and CRITICAL, and only on a NEW issue — so a silent drop
+   * means nobody hears about this key again, ever. That is exactly what
+   * happened to `wallet-sync:<account>`: two diagnoses shared one key,
+   * the challenge branch raised HIGH on night one, and every later night
+   * the generic branch quietly rewrote it to MEDIUM. Six nights, one
+   * notification.
+   *
+   * Set it where a de-escalation is the real answer: an invoice
+   * disagreement that is HIGH while it can still be disputed and MEDIUM
+   * once it cannot (COST-3), a fraud signal that falls back under twice
+   * its threshold (RS-9). Everywhere else a drop is two problems wearing
+   * one key, and the right fix is a second key.
+   */
+  readonly severityMayFall?: boolean;
   /**
    * Stop this staff member scanning until the issue is resolved.
    *
@@ -160,24 +210,41 @@ export class SystemIssueService implements OnModuleDestroy {
   private async raiseInner(input: RaiseIssueInput): Promise<{ id: string; isNew: boolean } | null> {
     const now = new Date();
     try {
-      // Bump first: the common case after the first failure is a repeat.
+      /*
+        ── A RECURRENCE RESTATES THE WHOLE DIAGNOSIS ──────────────
+
+        The dedupe key is the issue's IDENTITY; everything that describes
+        it moves together. This used to refresh `detail` and `severity`
+        and leave `kind` and `title` at whatever the first raise said,
+        which produces a row that contradicts itself the moment two
+        failure modes reach one key: `wallet-sync:<account>` sat on
+        /system-issues for six days titled "Delhivery is asking … to
+        prove it is human" with a selector timeout for a detail, and
+        that title is what a person acts on. The same freeze made
+        `backup-watch` able to say "no off-site backup has ever
+        completed" after one had.
+
+        Severity is the exception and is handled below: it is not a
+        description, it is who gets told.
+      */
       const bumped = await this.prisma.client.systemIssue.updateMany({
         where: { dedupeKey: input.dedupeKey, resolvedAt: null },
         data: {
           occurrenceCount: { increment: 1 },
           lastSeenAt: now,
-          // A recurrence re-states the current detail: the second
-          // failure may say more than the first.
+          kind: input.kind,
+          title: input.title,
           detail: input.detail,
-          severity: input.severity,
         },
       });
       if (bumped.count > 0) {
         const existing = await this.prisma.client.systemIssue.findFirst({
           where: { dedupeKey: input.dedupeKey, resolvedAt: null },
-          select: { id: true },
+          select: { id: true, severity: true },
         });
-        return existing === null ? null : { id: existing.id, isNew: false };
+        if (existing === null) return null;
+        await this.applySeverityOnRecurrence(input, existing);
+        return { id: existing.id, isNew: false };
       }
 
       const created = await this.prisma.client.systemIssue.create({
@@ -222,6 +289,95 @@ export class SystemIssueService implements OnModuleDestroy {
         'Could not raise a system issue',
       );
       return null;
+    }
+  }
+
+  /**
+   * Move an open row's severity, or refuse to — and never do either
+   * quietly.
+   *
+   * ── WHY THIS IS NOT JUST ANOTHER FIELD ───────────────────────────────
+   * Severity decides who is TOLD. NOTIF-16 notifies on HIGH and
+   * CRITICAL and only when the issue is NEW, so the two directions are
+   * not symmetrical at all:
+   *
+   *   A DROP silences the key for the rest of its life. Nobody is told
+   *   again whatever happens, because the row is already open. That is
+   *   how six nights of Delhivery wallet-sync failures produced one
+   *   notification: the challenge branch opened it HIGH, and every later
+   *   night the generic branch rewrote it to MEDIUM. So a drop needs the
+   *   caller to have ASKED for it (`severityMayFall`), and either way it
+   *   is logged — an unasked-for drop is almost always two problems
+   *   sharing one key, which is a bug in the key.
+   *
+   *   A RISE is the opposite: the row was MEDIUM, nobody was told, and
+   *   it has now become HIGH. Left alone it stays unannounced for ever,
+   *   which is the same silence from the other end. So a rise is applied
+   *   and, when it crosses into notifying territory, announced — once,
+   *   because severity can only cross it once while the row is open and
+   *   because `notify()` dedupes on `system_issue:<id>` anyway.
+   *
+   * The write is a guarded `updateMany` on the severity it READ, not a
+   * read-then-write: under READ COMMITTED two concurrent raises would
+   * otherwise both decide they were the louder one.
+   */
+  private async applySeverityOnRecurrence(
+    input: RaiseIssueInput,
+    existing: { readonly id: string; readonly severity: SystemIssueSeverity },
+  ): Promise<void> {
+    if (input.severity === existing.severity) return;
+
+    if (!isLouderSeverity(input.severity, existing.severity)) {
+      if (input.severityMayFall !== true) {
+        this.logger.warn(
+          {
+            dedupeKey: input.dedupeKey,
+            source: input.source,
+            was: existing.severity,
+            asked: input.severity,
+          },
+          'A recurrence asked for a quieter severity and was refused — the row keeps the louder ' +
+            'one. Two diagnoses are probably sharing one dedupe key; give them one each.',
+        );
+        return;
+      }
+      await this.prisma.client.systemIssue.updateMany({
+        where: { dedupeKey: input.dedupeKey, resolvedAt: null, severity: existing.severity },
+        data: { severity: input.severity },
+      });
+      this.logger.log(
+        { dedupeKey: input.dedupeKey, was: existing.severity, now: input.severity },
+        'System issue de-escalated at its own request',
+      );
+      return;
+    }
+
+    // Louder. Guarded on being one of the quieter values, so a
+    // concurrent raise that already escalated further is left alone.
+    const raised = await this.prisma.client.systemIssue.updateMany({
+      where: {
+        dedupeKey: input.dedupeKey,
+        resolvedAt: null,
+        severity: { in: [...severitiesBelow(input.severity)] },
+      },
+      data: { severity: input.severity },
+    });
+    if (raised.count === 0) return;
+    this.logger.warn(
+      { dedupeKey: input.dedupeKey, was: existing.severity, now: input.severity },
+      'An open system issue got worse',
+    );
+    if (notifies(input.severity) && !notifies(existing.severity)) {
+      // It was below the notifying line when it opened, so nobody has
+      // ever been told about it. `notify()` gates on severity itself and
+      // dedupes on the issue id, so this cannot double-send.
+      await this.notifier.notify({
+        issueId: existing.id,
+        kind: input.kind,
+        severity: input.severity,
+        title: input.title,
+        detail: input.detail,
+      });
     }
   }
 
