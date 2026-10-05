@@ -95,10 +95,23 @@ export class AdminStoreWalletController {
     });
   }
 
+  /**
+   * Bank detail, so not on the class's plain `money.view` — see
+   * `AdminTopupController.proof` for the argument and why the key is
+   * `money.topups.review` rather than a new one. The read is audited
+   * HIGH in the service.
+   */
   @Get('topups/:topupId/proof')
-  @ApiOperation({ summary: 'A short-lived link to a claim’s proof' })
-  proof(@Param('topupId', new ParseUUIDPipe()) topupId: string): Promise<{ url: string }> {
-    return this.topups.proofUrl(topupId, null);
+  @RequirePermissions('money.topups.review')
+  @ApiOperation({
+    summary:
+      'A short-lived link to a claim’s proof. It is bank detail, so the read is audited HIGH.',
+  })
+  proof(
+    @Param('topupId', new ParseUUIDPipe()) topupId: string,
+    @CurrentStaff() staff: AuthenticatedStaff,
+  ): Promise<{ url: string }> {
+    return this.topups.proofUrl(topupId, { kind: 'STAFF', staffId: staff.id });
   }
 
   @Post('topups/:topupId/accept')

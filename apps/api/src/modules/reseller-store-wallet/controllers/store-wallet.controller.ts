@@ -94,7 +94,10 @@ export class StoreWalletController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('topupId', new ParseUUIDPipe()) topupId: string,
   ): Promise<{ url: string }> {
-    return this.topups.proofUrl(topupId, user.storeId);
+    // The store's own claim only — the service scopes on it. Not
+    // audited: its own document, and a row per self-read would bury the
+    // staff reads the audit exists for.
+    return this.topups.proofUrl(topupId, { kind: 'STORE', storeId: user.storeId });
   }
 
   @Post('topups/proof-upload')

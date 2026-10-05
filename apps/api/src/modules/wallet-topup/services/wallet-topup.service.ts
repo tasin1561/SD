@@ -70,6 +70,17 @@ const PROOF_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'appl
 const PROOF_PRESIGN_TTL_SECONDS = 15 * 60;
 const PROOF_READ_TTL_SECONDS = 15 * 60;
 
+/**
+ * Who is asking for a proof image.
+ *
+ * A seller may only ever read their own (the id scopes the query); staff
+ * may read any, and that read is audited. Stated as a union so neither
+ * case can be reached by accident — see `proofUrl`.
+ */
+export type TopupProofReader =
+  | { readonly kind: 'SELLER'; readonly sellerId: string }
+  | { readonly kind: 'STAFF'; readonly staffId: string; readonly ctx?: ClientContext };
+
 export interface TopupPresignResult {
   readonly uploadUrl: string;
   readonly spacesKey: string;
@@ -378,14 +389,39 @@ export class WalletTopupService {
   /**
    * A short-lived link to the proof image.
    *
-   * Callers must have already established that the requester may see
-   * this request — a seller their own, staff any. The URL itself carries
-   * no further check once minted, which is why the TTL is minutes.
+   * ── THE PROOF IS BANK DETAIL, AND READING IT IS AUDITED ────────────
+   * A top-up proof is a screenshot or PDF of a bank transfer: the
+   * seller's account name and number, and what they moved. The SAME data
+   * in structured form sits behind `sellers.bank_account.reveal` — marked
+   * dangerous, and audited HIGH before the plaintext is returned. This
+   * route handed the identical facts back under a plain read key with no
+   * row anywhere saying anybody had looked. One door recorded, the other
+   * not, for the same information.
+   *
+   * So a STAFF read is audited HIGH, before the URL is minted, exactly as
+   * `AdminSellerService.revealBankAccount` does it (and as CUR-1 requires
+   * of a credential decrypt). The seller reading their OWN proof is not
+   * audited: it is their document and they uploaded it, and a row per
+   * self-read would bury the staff reads that are the point.
+   *
+   * ── WHY THE READER IS A UNION AND NOT A NULLABLE ID ────────────────
+   * It was `sellerId: string | null`, where null meant "staff, allow
+   * any". That is a sensible scoping argument and a bad audit one: the
+   * service could not name who was asking, so the audit could only have
+   * lived in the controller, where the next caller would forget it. The
+   * reader now SAYS which it is, so there is no shape in which the
+   * service holds a sensitive read it cannot attribute.
+   *
+   * The URL itself carries no further check once minted, which is why
+   * the TTL is minutes.
    */
-  async proofUrl(topupId: string, sellerId: string | null): Promise<string> {
+  async proofUrl(topupId: string, reader: TopupProofReader): Promise<string> {
     const row = await this.prisma.client.walletTopupRequest.findFirst({
-      where: { id: topupId, ...(sellerId === null ? {} : { sellerId }) },
-      select: { proofSpacesKey: true },
+      where: {
+        id: topupId,
+        ...(reader.kind === 'SELLER' ? { sellerId: reader.sellerId } : {}),
+      },
+      select: { proofSpacesKey: true, sellerId: true },
     });
     if (!row?.proofSpacesKey) {
       throw new NotFoundException({
@@ -393,6 +429,26 @@ export class WalletTopupService {
         message: 'This request has no uploaded proof',
       });
     }
+
+    if (reader.kind === 'STAFF') {
+      // BEFORE the URL exists. A link minted and then not recorded is a
+      // read that happened with nothing to show it.
+      await this.audit.log({
+        actorType: ActorType.STAFF,
+        staffUserId: reader.staffId,
+        sellerId: row.sellerId,
+        action: 'staff.wallet_topup.proof_revealed',
+        entityType: 'wallet_topup_request',
+        entityId: topupId,
+        severity: 'HIGH',
+        metadata: {
+          ipAddress: reader.ctx?.ipAddress,
+          userAgent: reader.ctx?.userAgent,
+          requestId: reader.ctx?.requestId,
+        },
+      });
+    }
+
     return this.spaces.presignGetUrl(row.proofSpacesKey, PROOF_READ_TTL_SECONDS);
   }
 
