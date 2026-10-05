@@ -1982,6 +1982,7 @@ import type {
   StaffInvitationListItem,
   CreatedStaffInvitation,
   CreateStaffInvitationRequest,
+  SetStaffRolesResult,
   StaffUserRow,
 } from '@skydrop/api-client';
 
@@ -2060,20 +2061,35 @@ export function useStaffUsersList(): UseQueryResult<StaffUserRow[]> {
   });
 }
 
-/** Takes a role ROW id, so a role somebody invented can be assigned. */
-export function useUpdateStaffRole(): UseMutationResult<
-  { id: string; roleId: string; roleName: string },
+/**
+ * REPLACES the set of roles somebody holds.
+ *
+ * Role ROW ids, so a role somebody invented this morning is as valid as
+ * a seeded one, and SEVERAL of them, because permissions resolve as the
+ * union: "call agent who also works the support desk" is two roles, not
+ * a bespoke eighth.
+ *
+ * `/roles`, not the transitional `/role` — the singular route exists
+ * only for the deploy window in which this app still sent one role, and
+ * the server's own note says to delete it once the UI sends `roleIds`.
+ *
+ * An EMPTY list is deliberately sent rather than blocked here: the
+ * server refuses it with `NO_ROLES`, and FE-2 means that refusal is the
+ * enforcement and this is only the form that carried it.
+ */
+export function useSetStaffRoles(): UseMutationResult<
+  SetStaffRolesResult,
   Error,
-  { id: string; roleId: string }
+  { id: string; roleIds: readonly string[] }
 > {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, roleId }) =>
-      client.request<{ id: string; roleId: string; roleName: string }>(
-        `/api/admin/staff/users/${id}/role`,
-        { method: 'PATCH', body: { roleId } },
-      ),
+    mutationFn: ({ id, roleIds }) =>
+      client.request<SetStaffRolesResult>(`/api/admin/staff/users/${id}/roles`, {
+        method: 'PATCH',
+        body: { roleIds },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['admin-staff'] });
     },

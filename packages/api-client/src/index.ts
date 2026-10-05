@@ -164,6 +164,7 @@ export type {
   CreatedStaffInvitation,
   CreateStaffInvitationRequest,
   StaffUserRow,
+  SetStaffRolesResult,
   AcceptStaffInvitationRequest,
 } from './endpoints/admin-staff';
 export type {

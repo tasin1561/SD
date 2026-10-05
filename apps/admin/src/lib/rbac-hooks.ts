@@ -46,20 +46,35 @@ export interface Catalogue {
 const ROOT = '/api/admin/staff-roles';
 const KEY = ['admin-staff-roles'];
 
-export function usePermissionCatalogue(): UseQueryResult<Catalogue> {
+/**
+ * `enabled` exists because this whole controller is behind
+ * `rbac.manage`, and `/staff` is behind `staff.view` — so the staff
+ * screen, which needs the role list to offer a choice, can be open to
+ * somebody who may not read it. Firing the request anyway spends a round
+ * trip to be refused and leaves a 403 in the log for a page that is
+ * working as designed. Pass the permission in (CLAUDE.md: use the
+ * permission on the QUERY, not just the markup).
+ */
+export interface RbacQueryOptions {
+  readonly enabled?: boolean | undefined;
+}
+
+export function usePermissionCatalogue(opts: RbacQueryOptions = {}): UseQueryResult<Catalogue> {
   const client = useApiClient();
   return useQuery({
     queryKey: [...KEY, 'catalogue'],
+    enabled: opts.enabled ?? true,
     // The catalogue only changes with a deploy.
     staleTime: 5 * 60 * 1000,
     queryFn: () => client.request<Catalogue>(`${ROOT}/catalogue`),
   });
 }
 
-export function useRoles(): UseQueryResult<readonly RoleView[]> {
+export function useRoles(opts: RbacQueryOptions = {}): UseQueryResult<readonly RoleView[]> {
   const client = useApiClient();
   return useQuery({
     queryKey: [...KEY, 'list'],
+    enabled: opts.enabled ?? true,
     queryFn: () => client.request<readonly RoleView[]>(ROOT),
   });
 }
