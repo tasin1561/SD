@@ -94,8 +94,12 @@ function DisputeFiguresAction({ orderId }: { readonly orderId: string }): ReactE
  * RS-6 phase 3c — what one of your reseller stores' orders earns YOU:
  * the transfer price, your share of each fee, and when it lands. The
  * figures come from the API (the plan is decided there, never here).
- * Rendered only for a reseller order; hidden from a VIEWER, whom the
- * endpoint refuses (cosmetic — the server is the boundary).
+ * Rendered only for a reseller order, for anybody the endpoint will
+ * answer. It does NOT close itself to a VIEWER: this said the endpoint
+ * refuses that role and it does not — the controller is gated on
+ * `orders.view`, which `viewer` holds. The caller's `enabled` is that
+ * same permission and nothing more; a narrower gate here would be the
+ * UI pretending to enforce (FE-2, RBAC-1).
  */
 export function ResellerMoneyPanel({
   orderId,

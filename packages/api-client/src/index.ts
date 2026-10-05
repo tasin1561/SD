@@ -172,6 +172,8 @@ export type {
   CreatedTeamInvitation,
   CreateTeamInvitationRequest,
   TeamMemberRow,
+  SetTeamMemberRolesRequest,
+  SetTeamMemberRolesResult,
   AcceptTeamInvitationRequest,
 } from './endpoints/seller-team';
 export type {

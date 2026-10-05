@@ -1718,6 +1718,7 @@ import type {
   CreatedTeamInvitation,
   CreateTeamInvitationRequest,
   TeamMemberRow,
+  SetTeamMemberRolesResult,
 } from '@skydrop/api-client';
 
 export function useTeamInvitationsList(): UseQueryResult<{
@@ -1795,20 +1796,30 @@ export function useTeamMembersList(): UseQueryResult<TeamMemberRow[]> {
   });
 }
 
-/** Takes a role ROW id, so a role the company invented can be assigned. */
-export function useUpdateTeamMemberRole(): UseMutationResult<
-  { id: string; roleId: string; roleName: string },
+/**
+ * REPLACES the roles a member holds — role ROW ids, so a role the
+ * company invented can be assigned, and SEVERAL of them, because
+ * permissions are the union of every role held.
+ *
+ * Replace and not merge: "add a role" cannot express taking one away,
+ * and an API that can only add is how somebody keeps an access tier they
+ * were moved off. An empty list is refused — by the DTO, the service or
+ * the guard depending on how it arrives — and whichever verdict comes
+ * back is what the screen shows. This hook knows no error codes (FE-2).
+ */
+export function useUpdateTeamMemberRoles(): UseMutationResult<
+  SetTeamMemberRolesResult,
   Error,
-  { id: string; roleId: string }
+  { id: string; roleIds: readonly string[] }
 > {
   const client = useApiClient();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, roleId }) =>
-      client.request<{ id: string; roleId: string; roleName: string }>(
-        `/api/seller/team/members/${id}/role`,
-        { method: 'PATCH', body: { roleId } },
-      ),
+    mutationFn: ({ id, roleIds }) =>
+      client.request<SetTeamMemberRolesResult>(`/api/seller/team/members/${id}/roles`, {
+        method: 'PATCH',
+        body: { roleIds },
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['seller-team'] });
     },

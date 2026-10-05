@@ -47,20 +47,37 @@ export interface ResellerStoreEventView {
   readonly createdAt: string;
 }
 
+/**
+ * `StoreTeamView` as the API returns it. `roleName` / `roleKey` are the
+ * FIRST role held — labels the server keeps truthful — and `roleNames` /
+ * `roleKeys` are the whole set, which is what a screen should show: a
+ * person's access is the union of every role they hold, so one of them
+ * is not a summary of it. Declaring only `roleName` is how a member
+ * holding Ops and Finance read as holding Ops.
+ */
 export interface ResellerTeamView {
   readonly members: ReadonlyArray<{
     readonly id: string;
     readonly email: string;
     readonly fullName: string;
+    readonly roleKey: string;
+    readonly roleKeys: readonly string[];
+    readonly roleNames: readonly string[];
     readonly roleName: string;
+    readonly isOwner: boolean;
     readonly lastLoginAt: string | null;
+    readonly createdAt: string;
   }>;
   readonly invitations: ReadonlyArray<{
     readonly id: string;
     readonly email: string;
     readonly fullName: string;
+    readonly roleKey: string;
+    readonly roleKeys: readonly string[];
+    readonly roleNames: readonly string[];
     readonly roleName: string;
     readonly expiresAt: string;
+    readonly createdAt: string;
   }>;
   readonly roles: ReadonlyArray<{
     readonly key: string;
@@ -75,10 +92,29 @@ export interface ResellerStoreDetail extends ResellerStoreView {
   readonly team: ResellerTeamView;
 }
 
+/**
+ * The first user of a store, or a colleague added to one.
+ *
+ * PLURAL since the multi-role change: a store user holds several roles
+ * and their permissions are the union, so somebody can do the daily work
+ * AND the money without a bespoke sixth role being invented for them.
+ *
+ * This was `roleKey` while the server took `roleKeys`, and the two gates
+ * that should have caught it both stayed green: `InviteInput` is this
+ * app's OWN interface so `tsc` was perfectly happy, and
+ * `check-frontend-routes.py` compares PATHS, which had not changed —
+ * only the body. Under the global `whitelist + forbidNonWhitelisted`
+ * each request then failed TWICE (`roleKey` unknown, `roleKeys`
+ * missing), and since an invitation has been required to create or
+ * approve a store since 2026-09-16, NO reseller store could be opened at
+ * all. Same shape as the image-upload feature that shipped calling a URL
+ * that 404'd: a screen existing is not evidence its request works.
+ */
 export interface InviteInput {
   readonly email: string;
   readonly fullName: string;
-  readonly roleKey: StoreRoleKey;
+  /** `store_roles.key`s — at least one. Never a single key. */
+  readonly roleKeys: readonly StoreRoleKey[];
 }
 
 export interface CreateResellerStoreInput {
