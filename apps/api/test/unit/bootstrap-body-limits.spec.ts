@@ -48,6 +48,22 @@ describe('main.ts — courier document body limits', () => {
     expect(g).toBeLessThan(d);
   });
 
+  it('exempts the hand upload of a courier wallet export, and ONLY the admin route', () => {
+    // `WalletSyncService` tells an operator — at the moment the nightly
+    // sync has already failed — that the ledger can be uploaded by hand.
+    // That upload could not accept the file the sync downloads: a 90-day
+    // Delhivery export is ~3.3 MB, ~4.4 MB base64'd into the JSON body,
+    // against a 1 MB cap. The documented fallback was unusable for the
+    // only file anybody would bring to it.
+    expect(src).toContain("WALLET_IMPORT_PREFIX = '/admin/courier/wallet-import'");
+    expect(src).toContain('url.startsWith(WALLET_IMPORT_PREFIX)');
+    // It is an ADMIN route behind `money.treasury.manage`, which is what
+    // makes a larger body acceptable here and not on a public one: the
+    // body is buffered before any guard runs, so every exemption is a
+    // memory cost somebody unauthenticated could otherwise impose.
+    expect(src).not.toMatch(/WALLET_IMPORT_PREFIX = '\/(public|seller|store)/);
+  });
+
   it('keeps the guard keyed on the document prefix, not on a method or a courier', () => {
     // Scoping by anything else would either miss a route or open all of
     // them; the prefix is what the three endpoints actually share.
