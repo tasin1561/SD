@@ -28,33 +28,15 @@ datasource db {
 // ============================================================
 
 model StaffUser {
-  id              String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  email           String     @unique
-  emailDisplay    String     @map("email_display")
-  passwordHash    String     @map("password_hash")
-  /// DEAD COLUMN, phase 1 of 2. Nothing reads or writes it any more —
-  /// `staff_user_roles` is the only record of what anybody holds.
-  /// It is still DECLARED because it is still IN THE DATABASE: dropping
-  /// it in the same deploy that stopped writing it would have taken the
-  /// platform down. `deploy.sh` migrates at step 4 and restarts pm2 at
-  /// step 7, and for the six app builds in between the OLD code is still
-  /// serving and still selects this. `drop_transitional_role_columns`
-  /// removes it for real, one deploy later.
-  role            StaffRole?
-  /// DEAD COLUMN, phase 1 of 2. Nothing reads or writes it any more —
-  /// `staff_user_roles` is the only record of what anybody holds.
-  /// It is still DECLARED because it is still IN THE DATABASE: dropping
-  /// it in the same deploy that stopped writing it would have taken the
-  /// platform down. `deploy.sh` migrates at step 4 and restarts pm2 at
-  /// step 7, and for the six app builds in between the OLD code is still
-  /// serving and still selects this. `drop_transitional_role_columns`
-  /// removes it for real, one deploy later.
-  roleId          String?    @map("role_id") @db.Uuid
-  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz
-  lastLoginAt     DateTime?  @map("last_login_at") @db.Timestamptz
-  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt       DateTime?  @map("deleted_at") @db.Timestamptz
+  id              String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  email           String    @unique
+  emailDisplay    String    @map("email_display")
+  passwordHash    String    @map("password_hash")
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
 
   /// Every role this person holds — the AUTHORITY for authorisation.
   roles                      StaffUserRoleAssignment[]
@@ -404,25 +386,16 @@ model SellerInvitation {
 // admin can change the role later with audit MEDIUM). Only SUPER_ADMIN
 // can invite.
 model StaffInvitation {
-  id           String     @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
   email        String
-  token        String     @unique
-  /// DEAD COLUMN, phase 1 of 2. Nothing reads or writes it any more —
-  /// `staff_invitation_roles` is the only record of what anybody holds.
-  /// It is still DECLARED because it is still IN THE DATABASE: dropping
-  /// it in the same deploy that stopped writing it would have taken the
-  /// platform down. `deploy.sh` migrates at step 4 and restarts pm2 at
-  /// step 7, and for the six app builds in between the OLD code is still
-  /// serving and still selects this. `drop_transitional_role_columns`
-  /// removes it for real, one deploy later.
-  role         StaffRole?
-  invitedById  String     @map("invited_by_id") @db.Uuid
-  acceptedById String?    @map("accepted_by_id") @db.Uuid
-  expiresAt    DateTime   @map("expires_at") @db.Timestamptz
-  usedAt       DateTime?  @map("used_at") @db.Timestamptz
-  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt    DateTime?  @map("deleted_at") @db.Timestamptz
+  token        String    @unique
+  invitedById  String    @map("invited_by_id") @db.Uuid
+  acceptedById String?   @map("accepted_by_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  usedAt       DateTime? @map("used_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
 
   invitedBy  StaffUser             @relation("StaffInvitedBy", fields: [invitedById], references: [id])
   acceptedBy StaffUser?            @relation("StaffInvitationAccepted", fields: [acceptedById], references: [id])
@@ -3050,15 +3023,6 @@ model StoreUser {
   emailDisplay    String    @map("email_display")
   passwordHash    String    @map("password_hash")
   fullName        String    @map("full_name")
-  /// DEAD COLUMN, phase 1 of 2. Nothing reads or writes it any more —
-  /// `store_user_roles` is the only record of what anybody holds.
-  /// It is still DECLARED because it is still IN THE DATABASE: dropping
-  /// it in the same deploy that stopped writing it would have taken the
-  /// platform down. `deploy.sh` migrates at step 4 and restarts pm2 at
-  /// step 7, and for the six app builds in between the OLD code is still
-  /// serving and still selects this. `drop_transitional_role_columns`
-  /// removes it for real, one deploy later.
-  roleId          String?   @map("role_id") @db.Uuid
   emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
   lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
@@ -3150,15 +3114,6 @@ model StoreUserInvitation {
   email              String
   fullName           String    @map("full_name")
   token              String    @unique
-  /// DEAD COLUMN, phase 1 of 2. Nothing reads or writes it any more —
-  /// `store_user_invitation_roles` is the only record of what anybody holds.
-  /// It is still DECLARED because it is still IN THE DATABASE: dropping
-  /// it in the same deploy that stopped writing it would have taken the
-  /// platform down. `deploy.sh` migrates at step 4 and restarts pm2 at
-  /// step 7, and for the six app builds in between the OLD code is still
-  /// serving and still selects this. `drop_transitional_role_columns`
-  /// removes it for real, one deploy later.
-  roleId             String?   @map("role_id") @db.Uuid
   invitedByActorType ActorType @map("invited_by_actor_type")
   invitedById        String?   @map("invited_by_id") @db.Uuid
   acceptedById       String?   @map("accepted_by_id") @db.Uuid
@@ -7943,36 +7898,18 @@ model SellerBankChangeRequest {
 }
 
 model SellerUser {
-  id              String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId        String          @map("seller_id") @db.Uuid
-  email           String          @unique
-  emailDisplay    String          @map("email_display")
-  passwordHash    String          @map("password_hash")
-  fullName        String          @map("full_name")
-  /// DEAD COLUMN, phase 1 of 2. Nothing reads or writes it any more —
-  /// `seller_user_roles` is the only record of what anybody holds.
-  /// It is still DECLARED because it is still IN THE DATABASE: dropping
-  /// it in the same deploy that stopped writing it would have taken the
-  /// platform down. `deploy.sh` migrates at step 4 and restarts pm2 at
-  /// step 7, and for the six app builds in between the OLD code is still
-  /// serving and still selects this. `drop_transitional_role_columns`
-  /// removes it for real, one deploy later.
-  role            SellerUserRole?
-  /// DEAD COLUMN, phase 1 of 2. Nothing reads or writes it any more —
-  /// `seller_user_roles` is the only record of what anybody holds.
-  /// It is still DECLARED because it is still IN THE DATABASE: dropping
-  /// it in the same deploy that stopped writing it would have taken the
-  /// platform down. `deploy.sh` migrates at step 4 and restarts pm2 at
-  /// step 7, and for the six app builds in between the OLD code is still
-  /// serving and still selects this. `drop_transitional_role_columns`
-  /// removes it for real, one deploy later.
-  roleId          String?         @map("role_id") @db.Uuid
-  invitedById     String?         @map("invited_by_id") @db.Uuid
-  emailVerifiedAt DateTime?       @map("email_verified_at") @db.Timestamptz
-  lastLoginAt     DateTime?       @map("last_login_at") @db.Timestamptz
-  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt       DateTime?       @map("deleted_at") @db.Timestamptz
+  id              String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId        String    @map("seller_id") @db.Uuid
+  email           String    @unique
+  emailDisplay    String    @map("email_display")
+  passwordHash    String    @map("password_hash")
+  fullName        String    @map("full_name")
+  invitedById     String?   @map("invited_by_id") @db.Uuid
+  emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
+  lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
 
   /// Scope this member to ONE store, or null for the whole company.
   ///
@@ -8083,26 +8020,17 @@ model SellerUserRoleAssignment {
 }
 
 model SellerUserInvitation {
-  id           String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  sellerId     String          @map("seller_id") @db.Uuid
+  id           String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  sellerId     String    @map("seller_id") @db.Uuid
   email        String
-  token        String          @unique
-  /// DEAD COLUMN, phase 1 of 2. Nothing reads or writes it any more —
-  /// `seller_user_invitation_roles` is the only record of what anybody holds.
-  /// It is still DECLARED because it is still IN THE DATABASE: dropping
-  /// it in the same deploy that stopped writing it would have taken the
-  /// platform down. `deploy.sh` migrates at step 4 and restarts pm2 at
-  /// step 7, and for the six app builds in between the OLD code is still
-  /// serving and still selects this. `drop_transitional_role_columns`
-  /// removes it for real, one deploy later.
-  role         SellerUserRole?
-  invitedById  String          @map("invited_by_id") @db.Uuid
-  acceptedById String?         @map("accepted_by_id") @db.Uuid
-  expiresAt    DateTime        @map("expires_at") @db.Timestamptz
-  usedAt       DateTime?       @map("used_at") @db.Timestamptz
-  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime        @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt    DateTime?       @map("deleted_at") @db.Timestamptz
+  token        String    @unique
+  invitedById  String    @map("invited_by_id") @db.Uuid
+  acceptedById String?   @map("accepted_by_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz
+  usedAt       DateTime? @map("used_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz
 
   seller     Seller                     @relation(fields: [sellerId], references: [id])
   invitedBy  SellerUser                 @relation("SellerUserInvitedByUser", fields: [invitedById], references: [id])
@@ -10216,27 +10144,4 @@ model StoreNotificationPreference {
   @@unique([storeId, category])
   @@index([storeId])
   @@map("store_notification_preferences")
-}
-
-enum StaffRole {
-  SUPER_ADMIN            @map("super_admin")
-  SELLER_APPROVAL_ADMIN  @map("seller_approval_admin")
-  CALL_AGENT             @map("call_agent")
-  WAREHOUSE_STAFF        @map("warehouse_staff")
-  WAREHOUSE_SUPERVISOR   @map("warehouse_supervisor")
-  MANUAL_PLACEMENT_ADMIN @map("manual_placement_admin")
-  FINANCE                @map("finance")
-
-  @@map("staff_role")
-}
-
-enum SellerUserRole {
-  OWNER     @map("owner")
-  ADMIN     @map("admin")
-  OPS       @map("ops")
-  INVENTORY @map("inventory")
-  FINANCE   @map("finance")
-  VIEWER    @map("viewer")
-
-  @@map("seller_user_role")
 }
