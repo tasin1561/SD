@@ -67,7 +67,6 @@ export class StaffJwtGuard implements CanActivate {
       select: {
         id: true,
         email: true,
-        role: true,
         emailVerifiedAt: true,
         roles: ROLE_ASSIGNMENTS,
       },
@@ -85,7 +84,7 @@ export class StaffJwtGuard implements CanActivate {
     // and leaving them holding a valid session with an empty grant set
     // is a worse state than asking them to sign in again. This is the
     // same answer the single-role guard gave; it now asks it of the
-    // union, and `role_id` is no longer consulted at all.
+    // union, which is the only place a role is recorded.
     const resolved = resolveRoles(staff.roles, ALL_PERMISSION_KEYS);
     if (resolved.roles.length === 0) {
       throw new UnauthorizedException({
@@ -97,7 +96,6 @@ export class StaffJwtGuard implements CanActivate {
     req.staff = {
       id: staff.id,
       email: staff.email,
-      role: staff.role,
       roleKey: resolved.primary?.key ?? '',
       roleName: resolved.primary?.name ?? '',
       roleKeys: resolved.roles.map((r) => r.key),

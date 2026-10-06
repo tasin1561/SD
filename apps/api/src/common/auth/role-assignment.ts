@@ -5,21 +5,20 @@ import type { Prisma } from '@skydrop/db';
  * identities.
  *
  * ── WHY A HELPER AND NOT FOUR NESTED `create`s ──────────────────────
- * `*_user_roles` is the AUTHORITY for authorisation and `*_users.role_id`
- * is transitional (see `20261005000000_multi_role_per_person`). Both have
- * to be written, in step, by every path that creates or re-roles
- * somebody — and there are four such paths per identity, which is
- * exactly the number at which they start to disagree. A seller user
- * created with a `role_id` and no join rows is not a narrower login: the
- * guard reads zero live roles and answers UNAUTHORIZED, so that person
- * cannot sign in at all.
+ * `*_user_roles` is the SOLE authority for authorisation, and there are
+ * four paths per identity that create or re-role somebody — exactly the
+ * number at which hand-written copies start to disagree. A seller user
+ * created with no join rows is not a narrower login: the guard reads
+ * zero live roles and answers UNAUTHORIZED, so that person cannot sign
+ * in at all. One helper is what keeps every path writing the same shape.
  *
- * ── THE LEGACY COLUMN IS THE FIRST ROLE, AND IT IS A LABEL ──────────
- * `role_id` is kept non-null and truthful by pointing it at the first
- * role in the list. It is NOT consulted for authorisation anywhere any
- * more; a follow-up migration drops it. Which one decides is stated
- * rather than left to be inferred, because a column two things disagree
- * about is the drift CNS-2 and BIN-1 exist to prevent.
+ * ── THE TRANSITIONAL COLUMN IS GONE ─────────────────────────────────
+ * `*_users.role_id` and the `role` enums beside it were dropped by
+ * `20261006..._drop_transitional_role_columns`. They were written here
+ * too, as a label pointing at the first role, for as long as code from
+ * before the multi-role deploy might still read them. Nothing does, so
+ * there is now one place a role is recorded rather than two that could
+ * disagree — the drift CNS-2 and BIN-1 exist to prevent.
  *
  * ── REPLACE, NEVER MERGE ────────────────────────────────────────────
  * `setStaffRoles` and its twins REPLACE the set. "Add a role" and "set
@@ -35,15 +34,13 @@ export const NO_ROLES = 'NO_ROLES';
 export const NO_ROLES_MESSAGE =
   'A person must hold at least one role. Somebody with none cannot sign in at all.';
 
-/** Deduped, order preserved — the first entry becomes the legacy label. */
+/** Deduped, order preserved — the order the person chose is kept. */
 export function normaliseRoleIds(roleIds: readonly string[]): readonly string[] {
   return [...new Set(roleIds)];
 }
 
-function firstOrThrow(roleIds: readonly string[]): string {
-  const first = roleIds[0];
-  if (first === undefined) throw new Error(NO_ROLES_MESSAGE);
-  return first;
+function requireAtLeastOne(roleIds: readonly string[]): void {
+  if (roleIds.length === 0) throw new Error(NO_ROLES_MESSAGE);
 }
 
 export async function setStaffRoles(
@@ -52,7 +49,7 @@ export async function setStaffRoles(
   roleIds: readonly string[],
 ): Promise<void> {
   const ids = normaliseRoleIds(roleIds);
-  const primary = firstOrThrow(ids);
+  requireAtLeastOne(ids);
   await tx.staffUserRoleAssignment.deleteMany({
     where: { staffUserId, roleId: { notIn: [...ids] } },
   });
@@ -60,7 +57,6 @@ export async function setStaffRoles(
     data: ids.map((roleId) => ({ staffUserId, roleId })),
     skipDuplicates: true,
   });
-  await tx.staffUser.update({ where: { id: staffUserId }, data: { roleId: primary } });
 }
 
 export async function setSellerUserRoles(
@@ -69,7 +65,7 @@ export async function setSellerUserRoles(
   roleIds: readonly string[],
 ): Promise<void> {
   const ids = normaliseRoleIds(roleIds);
-  const primary = firstOrThrow(ids);
+  requireAtLeastOne(ids);
   await tx.sellerUserRoleAssignment.deleteMany({
     where: { sellerUserId, roleId: { notIn: [...ids] } },
   });
@@ -77,7 +73,6 @@ export async function setSellerUserRoles(
     data: ids.map((roleId) => ({ sellerUserId, roleId })),
     skipDuplicates: true,
   });
-  await tx.sellerUser.update({ where: { id: sellerUserId }, data: { roleId: primary } });
 }
 
 export async function setStoreUserRoles(
@@ -86,7 +81,7 @@ export async function setStoreUserRoles(
   roleIds: readonly string[],
 ): Promise<void> {
   const ids = normaliseRoleIds(roleIds);
-  const primary = firstOrThrow(ids);
+  requireAtLeastOne(ids);
   await tx.storeUserRoleAssignment.deleteMany({
     where: { storeUserId, roleId: { notIn: [...ids] } },
   });
@@ -94,7 +89,6 @@ export async function setStoreUserRoles(
     data: ids.map((roleId) => ({ storeUserId, roleId })),
     skipDuplicates: true,
   });
-  await tx.storeUser.update({ where: { id: storeUserId }, data: { roleId: primary } });
 }
 
 /**
@@ -105,12 +99,9 @@ export async function setStoreUserRoles(
  * the difference between a narrower login and a broken one.
  */
 export function rolesOnCreate(roleIds: readonly string[]): {
-  roleId: string;
   roles: { create: { roleId: string }[] };
 } {
   const ids = normaliseRoleIds(roleIds);
-  return {
-    roleId: firstOrThrow(ids),
-    roles: { create: ids.map((roleId) => ({ roleId })) },
-  };
+  requireAtLeastOne(ids);
+  return { roles: { create: ids.map((roleId) => ({ roleId })) } };
 }

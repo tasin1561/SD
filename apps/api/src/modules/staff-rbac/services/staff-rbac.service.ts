@@ -90,9 +90,9 @@ export class StaffRbacService {
       orderBy: [{ isSuperAdmin: 'desc' }, { isSystem: 'desc' }, { name: 'asc' }],
       include: {
         permissions: { select: { permission: true } },
-        // Counted through the JOIN TABLE — the authority — not through
-        // the transitional `staff_users.role_id`, which would miss
-        // everybody holding this role as their second one.
+        // Counted through the JOIN TABLE — the authority, and every
+        // role held. A single-role column would miss everybody holding
+        // this role as their second one.
         _count: { select: { userRoles: { where: { user: { deletedAt: null } } } } },
       },
     });

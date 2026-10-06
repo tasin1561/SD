@@ -10,7 +10,6 @@
  */
 'use client';
 
-import type { StaffRole } from '@skydrop/db';
 import type { ApiClient, StaffMe, SellerMe, StoreMe } from '@skydrop/api-client';
 import { useAuthCtx } from './context';
 
@@ -43,21 +42,22 @@ export function useHasAccessToken(): boolean {
 }
 
 /**
- * Cosmetic role gate.
+ * Cosmetic role gate: does this person hold ANY of these role keys?
  *
  * DEPRECATED in favour of `hasPermission`. A check against a role NAME
  * cannot see a role somebody invented — the whole point of roles being
  * data — so a custom "Warehouse manager" holding every warehouse
  * permission would still be hidden from a control gated this way.
+ *
+ * Reads `roleKeys`, which is EVERY role held, rather than the single
+ * legacy enum this used to read. That enum was null for anybody holding
+ * only an access tier or an invented role, so the gate answered false
+ * for people who plainly qualified. Pass `StaffRoleKey.*` for a seeded
+ * role; any other key is a plain string, because the list is open.
  */
-export function hasStaffRole(identity: StaffMe | null, allowed: readonly StaffRole[]): boolean {
+export function hasStaffRole(identity: StaffMe | null, allowed: readonly string[]): boolean {
   if (identity === null) return false;
-  // `role` is the LEGACY enum and is NULL for anybody holding only
-  // roles with no enum spelling — every access tier, and every role an
-  // operator invented. A null answers FALSE rather than being coerced,
-  // which is the right answer for a cosmetic gate and one more reason
-  // to use `hasPermission`.
-  return identity.role !== null && allowed.includes(identity.role);
+  return identity.roleKeys.some((held) => allowed.includes(held));
 }
 
 /**

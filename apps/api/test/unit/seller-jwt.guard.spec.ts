@@ -1,6 +1,6 @@
 import { ForbiddenException, UnauthorizedException, type ExecutionContext } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
-import { SellerStatus, SellerUserRole } from '@skydrop/db';
+import { SellerStatus } from '@skydrop/db';
 import { SellerJwtGuard } from '../../src/common/guards/seller-jwt.guard';
 import {
   REQUIRE_SELLER_PERMISSIONS_KEY,
@@ -60,11 +60,9 @@ function makeGuard(opts: {
     id: 'user-1',
     email: 'u@example.com',
     fullName: 'U',
-    role: SellerUserRole.OPS,
     emailVerifiedAt: new Date(),
-    // A LIST, because the guard reads `seller_user_roles` — the
-    // authority — rather than the transitional `role_id` relation it
-    // used to select.
+    // A LIST, because `seller_user_roles` is the only authority: the
+    // guard reads every row, not one role off the user.
     roles: [
       {
         role: {

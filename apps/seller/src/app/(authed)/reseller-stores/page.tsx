@@ -385,7 +385,7 @@ function CreateModal({
         <TextField
           id="rs-phone"
           label="Contact phone"
-          hint="With the country code, e.g. +919812345678."
+          hint="With the country code — +8801712345678 for Bangladesh, +919812345678 for India."
           type="tel"
           required
           value={contactPhone}

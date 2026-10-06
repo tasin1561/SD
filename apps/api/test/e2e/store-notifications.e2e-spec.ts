@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
-import { NotificationChannel, SellerStatus, StaffRole } from '@skydrop/db';
+import { NotificationChannel, SellerStatus, StaffRoleKey } from '@skydrop/db';
 import { ResellerTermsNotifier } from '../../src/modules/reseller-store-terms/services/reseller-terms-notifier.service';
 import { StoreRequestNotifier } from '../../src/modules/store-order-request/services/store-request-notifier.service';
 import {
@@ -175,7 +175,7 @@ describe('reseller store notifications (e2e)', () => {
   beforeEach(async () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')
       .send({ email: staff.email, password: staff.password })

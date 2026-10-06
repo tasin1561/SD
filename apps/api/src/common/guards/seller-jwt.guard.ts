@@ -151,7 +151,6 @@ export class SellerJwtGuard implements CanActivate {
         id: true,
         email: true,
         fullName: true,
-        role: true,
         emailVerifiedAt: true,
         roles: SELLER_ROLE_ASSIGNMENTS,
         seller: {
@@ -279,7 +278,6 @@ export class SellerJwtGuard implements CanActivate {
       emailVerifiedAt: user.emailVerifiedAt,
       jti: claims.jti,
       userId: user.id,
-      role: user.role,
       roleKey: resolved.primary?.key ?? '',
       roleName: resolved.primary?.name ?? '',
       roleKeys: resolved.roles.map((r) => r.key),

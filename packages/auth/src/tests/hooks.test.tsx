@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import type React from 'react';
 import type { StaffMe } from '@skydrop/api-client';
+import { StaffRoleKey } from '@skydrop/db';
 import { AuthProvider } from '../client/context';
 import {
   useStaffIdentity,
@@ -15,17 +16,29 @@ const STAFF: StaffMe = {
   id: 'sx',
   email: 'a@b',
   emailDisplay: 'a@b',
-  // The role enum is a string at runtime; the imported StaffRole
-  // type is a TS enum — using SUPER_ADMIN literal is fine.
-  role: 'SUPER_ADMIN' as StaffMe['role'],
-  roleKey: 'super_admin',
+  roleKey: StaffRoleKey.SUPER_ADMIN,
   roleName: 'Super admin',
-  roleKeys: ['super_admin'],
+  roleKeys: [StaffRoleKey.SUPER_ADMIN],
   roleNames: ['Super admin'],
   permissions: ['staff.view', 'rbac.manage'],
   emailVerifiedAt: null,
   lastLoginAt: null,
   createdAt: '2026-01-01T00:00:00.000Z',
+};
+
+/**
+ * Somebody the OLD gate could not see: an access tier plus a role this
+ * operator invented. Neither had a spelling in the dropped enum, so the
+ * single `role` field was null for them and every `hasStaffRole` check
+ * answered false — while they plainly held `support`.
+ */
+const INVENTED_ROLE_STAFF: StaffMe = {
+  ...STAFF,
+  id: 'sy',
+  roleKey: StaffRoleKey.SUPPORT,
+  roleName: 'Support',
+  roleKeys: [StaffRoleKey.SUPPORT, 'returns_desk'],
+  roleNames: ['Support', 'Returns desk'],
 };
 
 function Probe(): React.ReactElement {
@@ -38,10 +51,13 @@ function Probe(): React.ReactElement {
       <span data-testid="client">{client ? 'ok' : 'missing'}</span>
       <span data-testid="hasToken">{hasToken ? 'yes' : 'no'}</span>
       <span data-testid="hasRoleSuperAdmin">
-        {hasStaffRole(identity, ['SUPER_ADMIN' as NonNullable<StaffMe['role']>]) ? 'yes' : 'no'}
+        {hasStaffRole(identity, [StaffRoleKey.SUPER_ADMIN]) ? 'yes' : 'no'}
       </span>
       <span data-testid="hasRoleFinance">
-        {hasStaffRole(identity, ['FINANCE' as NonNullable<StaffMe['role']>]) ? 'yes' : 'no'}
+        {hasStaffRole(identity, [StaffRoleKey.FINANCE]) ? 'yes' : 'no'}
+      </span>
+      <span data-testid="hasRoleSupport">
+        {hasStaffRole(identity, [StaffRoleKey.SUPPORT]) ? 'yes' : 'no'}
       </span>
     </div>
   );
@@ -67,6 +83,21 @@ describe('AuthProvider + hooks', () => {
     );
     expect(screen.getByTestId('hasRoleSuperAdmin').textContent).toBe('yes');
     expect(screen.getByTestId('hasRoleFinance').textContent).toBe('no');
+  });
+
+  it('hasStaffRole sees EVERY role held, not just the first', () => {
+    // The gate reads `roleKeys`. Under the single enum this person was
+    // invisible to it twice over: `support` is an access tier and
+    // `returns_desk` was invented here, so neither could be spelled,
+    // the field was null, and the first answer below was "no" for
+    // somebody who plainly held Support.
+    render(
+      <AuthProvider<StaffMe> identityKind="staff" initialIdentity={INVENTED_ROLE_STAFF}>
+        <Probe />
+      </AuthProvider>,
+    );
+    expect(screen.getByTestId('hasRoleSupport').textContent).toBe('yes');
+    expect(screen.getByTestId('hasRoleSuperAdmin').textContent).toBe('no');
   });
 
   it('null identity (logged-out layout) → hooks return null + hasStaffRole returns false', () => {

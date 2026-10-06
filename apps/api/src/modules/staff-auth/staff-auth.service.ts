@@ -35,7 +35,7 @@ export interface ClientContext {
 export interface StaffLoginResult {
   accessToken: SignedAccessToken;
   refresh: IssuedRefresh;
-  staff: { id: string; email: string; role: string | null };
+  staff: { id: string; email: string };
 }
 
 export interface StaffRefreshResult {
@@ -73,7 +73,7 @@ export class StaffAuthService {
 
     const staff = await this.prisma.client.staffUser.findFirst({
       where: { email: normalizedEmail },
-      select: { id: true, email: true, passwordHash: true, role: true, deletedAt: true },
+      select: { id: true, email: true, passwordHash: true, deletedAt: true },
     });
 
     if (!staff) {
@@ -140,7 +140,7 @@ export class StaffAuthService {
         ipAddress: ctx.ipAddress ?? null,
         tx,
       });
-      const accessToken = this.jwt.signStaffAccess({ subject: staff.id, role: staff.role ?? '' });
+      const accessToken = this.jwt.signStaffAccess({ subject: staff.id });
 
       await this.audit.log(
         {
@@ -162,7 +162,7 @@ export class StaffAuthService {
       return {
         accessToken,
         refresh,
-        staff: { id: staff.id, email: staff.email, role: staff.role },
+        staff: { id: staff.id, email: staff.email },
       };
     });
   }
@@ -184,7 +184,7 @@ export class StaffAuthService {
 
     const staff = await this.prisma.client.staffUser.findFirst({
       where: { id: userId, deletedAt: null },
-      select: { id: true, role: true },
+      select: { id: true },
     });
     if (!staff) {
       // The user was deleted between issuing and refreshing — revoke the
@@ -193,7 +193,7 @@ export class StaffAuthService {
       throw this.invalidRefresh();
     }
 
-    const accessToken = this.jwt.signStaffAccess({ subject: staff.id, role: staff.role ?? '' });
+    const accessToken = this.jwt.signStaffAccess({ subject: staff.id });
     return { accessToken, refresh: issued };
   }
 
@@ -553,7 +553,6 @@ export class StaffAuthService {
     id: string;
     email: string;
     emailDisplay: string;
-    role: string | null;
     roleKey: string;
     roleName: string;
     roleKeys: readonly string[];
@@ -569,7 +568,6 @@ export class StaffAuthService {
         id: true,
         email: true,
         emailDisplay: true,
-        role: true,
         emailVerifiedAt: true,
         lastLoginAt: true,
         createdAt: true,

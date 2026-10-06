@@ -2,10 +2,15 @@
  * Auth endpoint shapes — mirrors the API's actual response bodies
  * captured in the M12 pre-flight. Identity-parameterized: the staff
  * and seller surfaces share request/response patterns; per-identity
- * differences (StaffMe.role vs SellerMe.companyName/status) are
- * encoded in their own types.
+ * differences (SellerMe.companyName/status, StoreMe.store) are encoded
+ * in their own types.
+ *
+ * All three identities carry `roleKeys` + `roleNames` rather than one
+ * role: a person holds several, and an operator can invent one, so no
+ * single field could name what somebody is. `roleKey` / `roleName` are
+ * the FIRST of them, a label — never the answer to what they may do,
+ * which is `permissions`.
  */
-import type { StaffRole } from '@skydrop/db';
 
 /** Login / refresh response shape (identical for staff + seller). */
 export interface AccessTokenResponse {
@@ -19,13 +24,6 @@ export interface StaffMe {
   readonly id: string;
   readonly email: string;
   readonly emailDisplay: string;
-  /**
-   * LEGACY enum. No longer what authorisation is decided on — read
-   * `permissions`. NULL since a person may hold several roles: an access
-   * tier, or any role an operator invented, has no spelling here. Show
-   * `roleNames` instead.
-   */
-  readonly role: StaffRole | null;
   /** The FIRST role held — a label. `roleKeys` is all of them. */
   readonly roleKey: string;
   readonly roleName: string;
@@ -97,8 +95,6 @@ export interface SellerMe {
   readonly createdAt: string;
   // Phase 1B — the signed-in team member identity.
   readonly sellerUserId: string;
-  /** LEGACY enum, display only — NULL for a custom-role-only person. */
-  readonly role: 'OWNER' | 'ADMIN' | 'OPS' | 'INVENTORY' | 'FINANCE' | 'VIEWER' | null;
   readonly fullName: string;
 }
 

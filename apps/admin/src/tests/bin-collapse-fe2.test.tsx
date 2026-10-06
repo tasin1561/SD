@@ -23,6 +23,7 @@ import {
   SnapshotList,
 } from '@/app/(authed)/warehouse/collapse/_components/bin-collapse-index';
 import { buildFetchMock, renderWithProviders, makeStaff } from './helpers';
+import { StaffRoleKey } from '@skydrop/db';
 
 const REASON = 'Racking is being ripped out on Saturday and re-laid from scratch next week.';
 const noop = (): void => undefined;
@@ -236,7 +237,10 @@ describe('the backup is visible, and so is when it goes', () => {
     ]);
     renderWithProviders(<SnapshotList warehouseId="wh-1" mayRestore />, {
       fetchImpl,
-      identity: makeStaff('SUPER_ADMIN' as never, ['warehouse.view', 'warehouse.bins.collapse']),
+      identity: makeStaff(
+        [StaffRoleKey.SUPER_ADMIN],
+        ['warehouse.view', 'warehouse.bins.collapse'],
+      ),
     });
 
     await waitFor(() => {
@@ -269,7 +273,10 @@ describe('the backup is visible, and so is when it goes', () => {
     ]);
     renderWithProviders(<SnapshotList warehouseId="wh-1" mayRestore />, {
       fetchImpl,
-      identity: makeStaff('SUPER_ADMIN' as never, ['warehouse.view', 'warehouse.bins.collapse']),
+      identity: makeStaff(
+        [StaffRoleKey.SUPER_ADMIN],
+        ['warehouse.view', 'warehouse.bins.collapse'],
+      ),
     });
 
     await waitFor(() => screen.getByRole('button', { name: /Put the layout back/i }));

@@ -20,7 +20,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StatusActionPanel } from '@/app/(authed)/sellers/_components/status-action-panel';
 import { buildFetchMock, renderWithProviders, makeStaff } from './helpers';
-import type { StaffRole } from '@skydrop/db';
+import { StaffRoleKey } from '@skydrop/db';
 
 describe('FE-2 boundary — seller status action', () => {
   it('SUSPENDED button: open modal → server-rejects with [INSUFFICIENT_ROLE] → UI displays the verdict verbatim (NOT pre-empted)', async () => {
@@ -98,7 +98,7 @@ describe('FE-2 boundary — seller status action', () => {
     renderWithProviders(
       <StatusActionPanel sellerId="seller-1" currentStatus="APPROVED" canChangeStatus={false} />,
       {
-        identity: makeStaff('CALL_AGENT' as StaffRole),
+        identity: makeStaff([StaffRoleKey.CALL_AGENT]),
       },
     );
 

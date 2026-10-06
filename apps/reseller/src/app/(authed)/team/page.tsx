@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
-import { CircleAlert, Mail, ShieldCheck, Trash2, User, UserPlus, Undo2 } from 'lucide-react';
+import { CircleAlert, Mail, Send, ShieldCheck, Trash2, User, UserPlus, Undo2 } from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Button } from '@skydrop/ui/app/button';
@@ -17,6 +17,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import {
   useInviteStoreMember,
   useRemoveStoreMember,
+  useResendStoreInvitation,
   useRevokeStoreInvitation,
   useSetStoreMemberRoles,
   useStoreTeam,
@@ -351,11 +352,13 @@ function InvitationRow({
     email: string;
     roleNames: readonly string[];
     expiresAt: string;
+    expired: boolean;
   };
   manage: boolean;
 }): ReactElement {
   const toast = useToast();
   const revoke = useRevokeStoreInvitation();
+  const resend = useResendStoreInvitation();
   const [confirming, setConfirming] = useState(false);
   return (
     <Tr>
@@ -366,14 +369,42 @@ function InvitationRow({
       <Td>
         <RoleList names={invitation.roleNames} />
       </Td>
-      <Td className="rd-cell-muted">{when(invitation.expiresAt)}</Td>
+      {/* The word, not only the tint — an expired invitation and a live
+          one must not read the same to anybody who cannot tell them
+          apart by colour. */}
+      <Td className="rd-cell-muted">
+        {invitation.expired
+          ? `Expired ${when(invitation.expiresAt)} — never accepted`
+          : when(invitation.expiresAt)}
+      </Td>
       {manage ? (
         <Td align="right">
+          <Button
+            variant={invitation.expired ? 'primary' : 'secondary'}
+            size="sm"
+            icon={<Send size={14} />}
+            disabled={resend.isPending || revoke.isPending}
+            onClick={async () => {
+              try {
+                await resend.mutateAsync({ invitationId: invitation.id });
+                // Names the dead link: somebody who forwards the first
+                // email after resending is sending a key that no longer
+                // turns, and would have no way to know.
+                toast.success(
+                  `Sent again to ${invitation.email}. The earlier link no longer works.`,
+                );
+              } catch (err) {
+                toast.error(serverVerdict(err));
+              }
+            }}
+          >
+            {invitation.expired ? 'Send again' : 'Resend'}
+          </Button>
           <Button
             variant="secondary"
             size="sm"
             icon={<Undo2 size={14} />}
-            disabled={revoke.isPending}
+            disabled={revoke.isPending || resend.isPending}
             onClick={() => setConfirming(true)}
           >
             Withdraw

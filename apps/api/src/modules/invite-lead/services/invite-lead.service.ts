@@ -246,10 +246,10 @@ export class InviteLeadService {
       // This was `where: { role: StaffRole.SUPER_ADMIN }`, and it is the
       // dangerous shape: it does not fail, it quietly tells nobody. A
       // role name cannot see a role somebody invented, and multi-role
-      // makes it worse — `staff_users.role` is NULLABLE now and the
-      // access tiers have no enum spelling at all, so an enum predicate
-      // matches fewer of the people it is about every time somebody is
-      // given one of the new roles.
+      // made it worse — the access tiers never had an enum spelling at
+      // all, so an enum predicate matched fewer of the people it is
+      // about every time somebody was given one of the new roles. The
+      // column itself is gone now.
       //
       // A super-admin role is included for the reason the audience
       // selectors include them: they hold every permission implicitly

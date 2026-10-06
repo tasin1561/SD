@@ -73,9 +73,9 @@ export class AdminAgentService {
    * so a custom "Night shift lead" holding `callcenter.work` was absent
    * from the supervisor's agent list while taking calls all evening.
    *
-   * Multi-role turned that from stale into actively wrong:
-   * `staff_users.role` is NULLABLE now and the access tiers have no enum
-   * spelling at all, so an enum predicate matches fewer and fewer of the
+   * Multi-role turned that from stale into actively wrong, and the
+   * column has since been dropped: the access tiers never had an enum
+   * spelling at all, so an enum predicate matched fewer and fewer of the
    * people it is about — silently, because an empty list reads exactly
    * like a quiet night.
    *

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
-import { SellerStatus, StaffRole } from '@skydrop/db';
+import { SellerStatus, StaffRoleKey } from '@skydrop/db';
 import { ResellerStoreTermsService } from '../../src/modules/reseller-store-terms/services/reseller-store-terms.service';
 import {
   bootTestApp,
@@ -121,7 +121,7 @@ describe('reseller store terms (e2e)', () => {
   beforeEach(async () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')
       .send({ email: staff.email, password: staff.password })

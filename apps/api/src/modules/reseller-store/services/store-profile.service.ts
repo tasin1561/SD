@@ -96,7 +96,7 @@ export class StoreProfileService {
       if (v !== '' && !E164.test(v)) {
         throw new BadRequestException({
           code: 'INVALID_PHONE',
-          message: 'contactPhone must be E.164, e.g. +919812345678',
+          message: 'contactPhone must be E.164, e.g. +8801712345678 or +919812345678',
         });
       }
       data.contactPhone = v || null;

@@ -9,6 +9,7 @@
 
 export { prisma, PrismaClient } from './client';
 export * from './enums';
+export * from './seeded-roles';
 
 export { Prisma } from '@prisma/client';
 export type {

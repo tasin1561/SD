@@ -1,4 +1,5 @@
 import request from 'supertest';
+import { StaffRoleKey } from '@skydrop/db';
 import {
   bootTestApp,
   createTestStaff,
@@ -56,7 +57,7 @@ describe('Staff auth (e2e)', () => {
       .set('Authorization', `Bearer ${login.body.accessToken}`)
       .expect(200);
     expect(me.body.email).toBe(staff.email);
-    expect(me.body.role).toBe('SUPER_ADMIN');
+    expect(me.body.roleKeys).toEqual([StaffRoleKey.SUPER_ADMIN]);
 
     const rotated = await request(h.baseUrl)
       .post('/auth/staff/refresh')
@@ -254,7 +255,7 @@ describe('Staff auth (e2e)', () => {
         .set('Authorization', `Bearer ${accessToken}`)
         .expect(200);
       expect(me.body.email).toBe(staff.email);
-      expect(me.body.role).toBe('SUPER_ADMIN');
+      expect(me.body.roleKeys).toEqual([StaffRoleKey.SUPER_ADMIN]);
       // No Set-Cookie on a /me response — cookie path or bearer, /me
       // never rotates.
       expect(me.headers['set-cookie']).toBeUndefined();
@@ -267,7 +268,7 @@ describe('Staff auth (e2e)', () => {
         .set('Cookie', cookieValue)
         .expect(200);
       expect(me.body.email).toBe(staff.email);
-      expect(me.body.role).toBe('SUPER_ADMIN');
+      expect(me.body.roleKeys).toEqual([StaffRoleKey.SUPER_ADMIN]);
       // Critical: the response carries NO Set-Cookie — the cookie was
       // not rotated.
       expect(me.headers['set-cookie']).toBeUndefined();

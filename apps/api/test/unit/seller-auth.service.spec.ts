@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
-import { ActorType, Currency, SellerStatus, SellerUserRole } from '@skydrop/db';
+import { ActorType, Currency, SellerStatus } from '@skydrop/db';
 import { SellerAuthService } from '../../src/modules/seller-auth/seller-auth.service';
 import { PasswordService } from '../../src/modules/auth-common/services/password.service';
 import { JwtService } from '../../src/modules/auth-common/services/jwt.service';
@@ -86,7 +86,6 @@ interface SellerUserRow {
   emailDisplay: string;
   fullName: string;
   passwordHash: string;
-  role: SellerUserRole;
   emailVerifiedAt: Date | null;
   lastLoginAt: Date | null;
   createdAt: Date;
@@ -123,7 +122,7 @@ interface FakeClient {
     create: jest.Mock;
   };
   /** Registration provisions the company's six starting roles in the
-   *  same tx, because `seller_users.role_id` is NOT NULL. */
+   *  same tx: a seller user with no role row cannot sign in at all. */
   sellerRoleDefinition: {
     create: jest.Mock;
     findFirst: jest.Mock;
@@ -281,7 +280,6 @@ function buildClient(): FakeClient {
           id: row.id,
           email: row.email,
           passwordHash: row.passwordHash,
-          role: row.role,
           deletedAt: row.deletedAt,
           seller: seller
             ? { id: seller.id, status: seller.status, deletedAt: seller.deletedAt }
@@ -298,7 +296,6 @@ function buildClient(): FakeClient {
             emailDisplay: string;
             fullName: string;
             passwordHash: string;
-            role: SellerUserRole;
           };
         }) => {
           sellerUserSeq += 1;
@@ -309,7 +306,6 @@ function buildClient(): FakeClient {
             emailDisplay: data.emailDisplay,
             fullName: data.fullName,
             passwordHash: data.passwordHash,
-            role: data.role,
             emailVerifiedAt: data.emailVerifiedAt ?? null,
             lastLoginAt: data.lastLoginAt ?? null,
             createdAt: new Date(),
@@ -587,7 +583,6 @@ async function seedSeller(
     emailDisplay: row.emailDisplay,
     fullName: row.contactPersonName,
     passwordHash: row.passwordHash,
-    role: SellerUserRole.OWNER,
     emailVerifiedAt: row.emailVerifiedAt,
     lastLoginAt: row.lastLoginAt,
     createdAt: row.createdAt,

@@ -232,9 +232,10 @@ export function AuthedShell({
           identityPrimary={identity.emailDisplay}
           // Every role, not `roleName` — that is the FIRST one only, and
           // a person holding a tier plus a job function read as holding
-          // just the tier. `role` (the legacy enum) is worse again: it is
-          // null for an access tier and for anything invented on /roles,
-          // so it is blank for exactly the people this is newest for.
+          // just the tier. The single `role` enum this replaced was
+          // worse again: null for an access tier and for anything
+          // invented on /roles, so it was blank for exactly the people
+          // that screen is newest for.
           identitySecondary={identity.roleNames.join(' · ')}
           // Clicking who you are signed in as is where a person looks for
           // their own account — the page has no nav entry because it is

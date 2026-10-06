@@ -21,9 +21,8 @@ interface Row {
   sellerStatus?: SellerStatus;
   /**
    * A SECOND role, for the multi-role cases. The fixture carries a
-   * `roles` LIST because that is what the guard reads now — the
-   * single-role `role` relation it used to select is the transitional
-   * `role_id` and is no longer consulted.
+   * `roles` LIST because `store_user_roles` is the only authority: a
+   * person holds as many roles as were granted, never just one.
    */
   second?: { key: string; perms?: string[]; isOwner?: boolean; deleted?: boolean };
   /** Every role soft-deleted — a person with nothing to reason about. */

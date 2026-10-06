@@ -62,10 +62,10 @@ describe('NotificationAudienceService — who should hear about this', () => {
         where: expect.objectContaining({
           sellerId: 'sel-1',
           // Through the JOIN TABLE, because a person may hold several
-          // roles: matching on the transitional `role_id` relation
-          // would silently miss everybody whose SECOND role is the one
-          // granting it — which is how a stock alert comes to reach
-          // nobody with nothing failing.
+          // roles: matching on one role per person would silently miss
+          // everybody whose SECOND role is the one granting it — which
+          // is how a stock alert comes to reach nobody with nothing
+          // failing.
           roles: {
             some: {
               role: {

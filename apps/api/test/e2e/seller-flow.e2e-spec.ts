@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { SellerStatus } from '@skydrop/db';
+import { SellerRoleKey, SellerStatus } from '@skydrop/db';
 import {
   bootTestApp,
   createTestStaff,
@@ -331,9 +331,14 @@ describe('Seller flow (e2e): invitation → register → login → api keys → 
     // The authenticating SellerUser is already verified at registration.
     const owner = await h.prisma.sellerUser.findFirst({
       where: { sellerId: reg.body.seller.id },
-      select: { emailVerifiedAt: true, role: true },
+      select: {
+        emailVerifiedAt: true,
+        roles: { select: { role: { select: { key: true } } } },
+      },
     });
-    expect(owner?.role).toBe('OWNER');
+    // Exactly OWNER and nothing else — `seller_user_roles` is the only
+    // record of what they hold.
+    expect(owner?.roles.map((r) => r.role.key)).toEqual([SellerRoleKey.OWNER]);
     expect(owner?.emailVerifiedAt).toBeInstanceOf(Date);
 
     const res = await request(h.baseUrl)

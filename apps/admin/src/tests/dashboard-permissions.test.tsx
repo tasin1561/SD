@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { DashboardView } from '@/app/(authed)/dashboard/_components/dashboard-view';
 import { buildFetchMock, makeStaff, renderWithProviders } from './helpers';
+import { StaffRoleKey } from '@skydrop/db';
 
 /**
  * The dashboard shows what you may see, and asks for nothing else.
@@ -75,7 +76,7 @@ describe('dashboard — permission gating', () => {
   it('a call agent issues NO request they would be refused', async () => {
     const fetchImpl = mock();
     renderWithProviders(<DashboardView />, {
-      identity: makeStaff('CALL_AGENT' as never, ['orders.view', 'callcenter.work']),
+      identity: makeStaff([StaffRoleKey.CALL_AGENT], ['orders.view', 'callcenter.work']),
       fetchImpl,
     });
 
@@ -92,7 +93,7 @@ describe('dashboard — permission gating', () => {
 
   it('a call agent is not shown a refusal on their own landing page', async () => {
     renderWithProviders(<DashboardView />, {
-      identity: makeStaff('CALL_AGENT' as never, ['orders.view']),
+      identity: makeStaff([StaffRoleKey.CALL_AGENT], ['orders.view']),
       fetchImpl: mock(),
     });
 
@@ -108,12 +109,10 @@ describe('dashboard — permission gating', () => {
   it('a super admin still gets the whole page', async () => {
     const fetchImpl = mock();
     renderWithProviders(<DashboardView />, {
-      identity: makeStaff('SUPER_ADMIN' as never, [
-        'orders.view',
-        'tickets.view',
-        'money.view',
-        'reports.view',
-      ]),
+      identity: makeStaff(
+        [StaffRoleKey.SUPER_ADMIN],
+        ['orders.view', 'tickets.view', 'money.view', 'reports.view'],
+      ),
       fetchImpl,
     });
 
@@ -130,7 +129,7 @@ describe('dashboard — permission gating', () => {
 
   it('somebody with none of these is told so, rather than shown an empty page', async () => {
     renderWithProviders(<DashboardView />, {
-      identity: makeStaff('WAREHOUSE_STAFF' as never, ['warehouse.pick']),
+      identity: makeStaff([StaffRoleKey.WAREHOUSE_STAFF], ['warehouse.pick']),
       fetchImpl: mock(),
     });
     expect(await screen.findByText(/no permissions that show anything here/i)).toBeInTheDocument();

@@ -105,11 +105,10 @@ export class NotificationAudienceService {
       case 'SELLER_ORG':
         return this.sellerUsers({ sellerId: selector.sellerId });
       case 'SELLER_ROLE':
-        // Through the JOIN TABLE, not the to-one relation: a person may
-        // hold several roles, and matching on the transitional
-        // `role_id` column would miss everybody whose SECOND role is
-        // the one named — silently, which is how a stock alert comes to
-        // reach nobody.
+        // Through the JOIN TABLE: a person may hold several roles, and
+        // matching on a single-role column would miss everybody whose
+        // SECOND role is the one named — silently, which is how a stock
+        // alert comes to reach nobody.
         return this.sellerUsers({
           sellerId: selector.sellerId,
           roles: { some: { role: { key: selector.roleKey, deletedAt: null } } },
@@ -251,7 +250,7 @@ export class NotificationAudienceService {
    * A deleted person, and a person whose EVERY role has been deleted,
    * are both excluded — the roles are how the guard decides what they
    * may do, and a login the guard refuses is not an audience. Asked of
-   * the join table, not the transitional `role_id`: somebody holding a
+   * the join table, which is every role held: somebody holding a
    * deleted role AND a live one is still a live login.
    */
   private async storeUsers(where: Record<string, unknown>): Promise<ResolvedRecipient[]> {

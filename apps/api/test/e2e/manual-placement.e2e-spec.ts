@@ -4,7 +4,7 @@ import {
   OrderStatus,
   ReservationStatus,
   ShipmentStatus,
-  StaffRole,
+  StaffRoleKey,
   StockMovementType,
 } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
@@ -404,7 +404,7 @@ describe('Manual courier placement (e2e)', () => {
 
     const agent = await createTestStaff(h.prisma, {
       email: `agent-${Date.now()}@skydrop.test`,
-      role: StaffRole.CALL_AGENT,
+      role: StaffRoleKey.CALL_AGENT,
     });
     const aLogin = await request(h.baseUrl)
       .post('/auth/staff/login')
@@ -424,7 +424,7 @@ describe('Manual courier placement (e2e)', () => {
 
     const mpa = await createTestStaff(h.prisma, {
       email: `mpa-${Date.now()}@skydrop.test`,
-      role: StaffRole.MANUAL_PLACEMENT_ADMIN,
+      role: StaffRoleKey.MANUAL_PLACEMENT_ADMIN,
     });
     const mLogin = await request(h.baseUrl)
       .post('/auth/staff/login')

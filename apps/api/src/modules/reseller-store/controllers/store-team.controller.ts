@@ -62,6 +62,24 @@ export class StoreTeamController {
     return this.team.inviteAsStore(user, body);
   }
 
+  @Post('invitations/:invitationId/resend')
+  @RequireStorePermissions('team.manage')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Send a pending invitation again — new token, new expiry, old link dead',
+  })
+  resend(
+    @CurrentStoreUser() user: AuthenticatedStoreUser,
+    @Param('invitationId', new ParseUUIDPipe({ version: '7' })) invitationId: string,
+  ): Promise<StoreInvitationView> {
+    return this.team.resendInvitation(user.storeId, invitationId, {
+      type: ActorType.STORE,
+      id: user.id,
+      sellerId: user.sellerId,
+      name: user.fullName,
+    });
+  }
+
   @Post('invitations/:invitationId/revoke')
   @RequireStorePermissions('team.manage')
   @HttpCode(HttpStatus.NO_CONTENT)

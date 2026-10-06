@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, NotificationRecipientType, SellerUserRole } from '@skydrop/db';
+import { ActorType, NotificationRecipientType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -13,16 +13,6 @@ import { TokenHashService } from '../../auth-common/services/token-hash.service'
 import { EmailQueue } from '../../email/queue/email.queue';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { CreateTeamInvitationDto } from '../dto/create-team-invitation.dto';
-/** The six defaults, whose keys mirror the legacy enum's spelling. */
-const LEGACY_SELLER_ROLE_KEYS = new Set([
-  'owner',
-  'admin',
-  'ops',
-  'inventory',
-  'finance',
-  'viewer',
-]);
-
 import {
   assertMayGrantRole,
   type GrantableRole,
@@ -37,12 +27,6 @@ import {
   rolesOnCreate,
   setSellerUserRoles,
 } from '../../../common/auth/role-assignment';
-
-/** The enum spelling of the first role that has one, else null. */
-function legacySellerEnumFor(roleKeys: readonly string[]): SellerUserRole | null {
-  const match = roleKeys.find((k) => LEGACY_SELLER_ROLE_KEYS.has(k));
-  return match === undefined ? null : (match.toUpperCase() as SellerUserRole);
-}
 
 /** The live roles out of a loaded assignment list. */
 function liveRolesOf<T extends { deletedAt: Date | null }>(
@@ -68,13 +52,30 @@ const SELLER_ROLE_ASSIGNMENTS = {
   },
 };
 
-const DEFAULT_EXPIRES_IN_DAYS = 7;
+/**
+ * How long an invitation stays good for.
+ *
+ * Thirty days, not the seven this started at. Seven looks generous at
+ * the moment somebody clicks Invite and is not: these go to a shop
+ * owner's inbox, where they sit under a weekend, a holiday and whatever
+ * else arrived that week. Measured on 2026-10-06, a reseller store
+ * invitation sent on 27 September lapsed on 4 October with the store
+ * still showing nobody on its team, and the first anybody knew of it was
+ * the owner going back through Gmail.
+ *
+ * The window is not what makes this safe. The token is single-use, held
+ * only as a hash, and revocable at any moment — that is the control. A
+ * shorter window only costs somebody their onboarding.
+ *
+ * The same number everywhere on purpose: four invitation types that
+ * expire on four different schedules is one more thing to remember and
+ * the first source of "why did that one lapse and this one not".
+ */
+const DEFAULT_EXPIRES_IN_DAYS = 30;
 
 export interface TeamInvitationView {
   readonly id: string;
   readonly email: string;
-  /** LEGACY enum — null when no offered role has a spelling. */
-  readonly role: SellerUserRole | null;
   /** `seller_roles.id`s the invitation offers, in the order chosen. */
   readonly roleIds: readonly string[];
   readonly roleNames: readonly string[];
@@ -96,8 +97,6 @@ export interface TeamMemberView {
   readonly email: string;
   readonly emailDisplay: string;
   readonly fullName: string;
-  /** Legacy enum, display only — null for a custom-role-only person. */
-  readonly role: SellerUserRole | null;
   /** The FIRST role held — a label. `roleIds` is all of them. */
   readonly roleId: string;
   readonly roleName: string;
@@ -167,7 +166,7 @@ export class SellerTeamService {
    *
    * Resolved BEFORE anything is written, so an invitation is never
    * half-created, and returned in the order ASKED FOR because the first
-   * role becomes the legacy label.
+   * one becomes the label a screen shows.
    */
   private async rolesToGrant(
     sellerId: string,
@@ -286,9 +285,6 @@ export class SellerTeamService {
         sellerId,
         email: input.email,
         token: tokenHash,
-        // Display and history; null when no invited role has an enum
-        // spelling, which is every role the company invented.
-        role: legacySellerEnumFor(roles.map((r) => r.key)),
         invitedById: actor.sellerUserId,
         expiresAt,
         roles: { create: roles.map((r) => ({ roleId: r.id })) },
@@ -438,7 +434,6 @@ export class SellerTeamService {
   ): Promise<{
     sellerUserId: string;
     email: string;
-    role: SellerUserRole | null;
     sellerId: string;
   }> {
     const tokenHash = this.hashes.sha256Hex(plaintextToken);
@@ -448,7 +443,6 @@ export class SellerTeamService {
         id: true,
         sellerId: true,
         email: true,
-        role: true,
         roles: {
           orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
           select: { role: { select: { id: true, key: true, deletedAt: true } } },
@@ -523,11 +517,10 @@ export class SellerTeamService {
           emailDisplay: inv.email,
           passwordHash,
           fullName,
-          role: legacySellerEnumFor(offered.map((r) => r.key)),
           emailVerifiedAt: now,
           ...rolesOnCreate(offered.map((r) => r.id)),
         },
-        select: { id: true, email: true, role: true, sellerId: true },
+        select: { id: true, email: true, sellerId: true },
       });
       await tx.sellerUserInvitation.update({
         where: { id: inv.id },
@@ -550,7 +543,6 @@ export class SellerTeamService {
     return {
       sellerUserId: created.id,
       email: created.email,
-      role: created.role,
       sellerId: created.sellerId,
     };
   }
@@ -567,7 +559,6 @@ export class SellerTeamService {
         email: true,
         emailDisplay: true,
         fullName: true,
-        role: true,
         roles: {
           orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
           select: { role: { select: { id: true, name: true, deletedAt: true } } },
@@ -583,7 +574,6 @@ export class SellerTeamService {
       email: r.email,
       emailDisplay: r.emailDisplay,
       fullName: r.fullName,
-      role: r.role,
       // The FIRST live role is the label; `roleIds` is what the screen
       // should actually show, because a person may hold several.
       roleId: liveRolesOf(r.roles)[0]?.id ?? '',
@@ -604,10 +594,9 @@ export class SellerTeamService {
    * Takes role ROW ids, not enum values — that is what lets somebody be
    * given a role the company invented this morning — and SEVERAL,
    * because "handles inbound stock and the wallet" is two roles rather
-   * than a seventh one invented for one person. The legacy `role`
-   * column is kept in step only for the six defaults; a custom role has
-   * no enum spelling and the column is no longer consulted for
-   * authorisation, so it is left NULL rather than filled with a lie.
+   * than a seventh one invented for one person. `seller_user_roles` is
+   * the whole record of what somebody holds, so replacing it is the
+   * entire write.
    */
   async setRoles(
     sellerId: string,
@@ -699,10 +688,6 @@ export class SellerTeamService {
         targetUserId,
         targets.map((t) => t.id),
       );
-      await tx.sellerUser.update({
-        where: { id: targetUserId },
-        data: { role: legacySellerEnumFor(targets.map((t) => t.key)) },
-      });
     });
 
     await this.audit.log({
@@ -738,7 +723,11 @@ export class SellerTeamService {
     }
     const target = await this.prisma.client.sellerUser.findFirst({
       where: { id: targetUserId, sellerId },
-      select: { id: true, role: true, deletedAt: true },
+      select: {
+        id: true,
+        deletedAt: true,
+        roles: { select: { role: { select: { isOwner: true, deletedAt: true } } } },
+      },
     });
     if (!target) {
       throw new NotFoundException({
@@ -748,14 +737,16 @@ export class SellerTeamService {
     }
     if (target.deletedAt !== null) return;
 
-    // Last-OWNER protection.
-    if (target.role === 'OWNER') {
-      const otherOwners = await this.prisma.client.sellerUser.count({
+    // Last-OWNER protection. Ownership is a role ROW somebody may hold
+    // beside others, so it is asked of the join table — the same count
+    // `setRoles` makes, because losing the last owner by removing the
+    // person is the same loss as moving them off the role.
+    if (target.roles.some((r) => r.role.isOwner && r.role.deletedAt === null)) {
+      const otherOwners = await this.prisma.client.sellerUserRoleAssignment.count({
         where: {
-          sellerId,
-          role: 'OWNER',
-          deletedAt: null,
-          id: { not: targetUserId },
+          sellerUserId: { not: targetUserId },
+          user: { sellerId, deletedAt: null },
+          role: { isOwner: true, deletedAt: null },
         },
       });
       if (otherOwners === 0) {
@@ -797,7 +788,6 @@ export class SellerTeamService {
   private invitationSelect = {
     id: true,
     email: true,
-    role: true,
     invitedById: true,
     acceptedById: true,
     expiresAt: true,
@@ -830,7 +820,6 @@ export class SellerTeamService {
   private toInvView(row: {
     id: string;
     email: string;
-    role: SellerUserRole | null;
     invitedById: string;
     acceptedById: string | null;
     expiresAt: Date;
@@ -846,7 +835,6 @@ export class SellerTeamService {
     return {
       id: row.id,
       email: row.email,
-      role: row.role,
       roleIds: live.map((r) => r.id),
       roleNames: live.map((r) => r.name),
       invitedById: row.invitedById,

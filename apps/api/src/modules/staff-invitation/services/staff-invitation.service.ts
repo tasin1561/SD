@@ -5,7 +5,7 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { ActorType, NotificationRecipientType, StaffRole } from '@skydrop/db';
+import { ActorType, NotificationRecipientType } from '@skydrop/db';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
@@ -29,30 +29,10 @@ import {
   setStaffRoles,
 } from '../../../common/auth/role-assignment';
 
-/**
- * The seven seeded roles, whose keys mirror the legacy enum's spelling.
- *
- * Nothing else has one — not a role an operator invented, and not the
- * three access tiers (`admin`, `support`, `readonly`). So the legacy
- * `role` column is NULL for somebody holding only those, which is why
- * it is nullable: writing an enum that names a different role is a lie
- * a stale reader could act on.
- */
-const LEGACY_ROLE_KEYS = new Set([
-  'super_admin',
-  'seller_approval_admin',
-  'call_agent',
-  'warehouse_staff',
-  'warehouse_supervisor',
-  'manual_placement_admin',
-  'finance',
-]);
-
 /** Everything a view of an invitation needs, in one place. */
 const INVITATION_SELECT = {
   id: true,
   email: true,
-  role: true,
   invitedById: true,
   acceptedById: true,
   expiresAt: true,
@@ -72,12 +52,6 @@ function liveStaffRoles<T extends { deletedAt: Date | null }>(
   return assignments.map((a) => a.role).filter((r) => r.deletedAt === null);
 }
 
-/** The enum spelling of the first role that has one, else null. */
-function legacyEnumFor(roleKeys: readonly string[]): StaffRole | null {
-  const match = roleKeys.find((k) => LEGACY_ROLE_KEYS.has(k));
-  return match === undefined ? null : (match.toUpperCase() as StaffRole);
-}
-
 /**
  * Phase 1B — admin staff invitations.
  *
@@ -89,13 +63,30 @@ function legacyEnumFor(roleKeys: readonly string[]): StaffRole | null {
  *   for the auth flow to issue tokens.
  * - All writes audited; SUPER_ADMIN-only at the controller layer.
  */
-const DEFAULT_EXPIRES_IN_DAYS = 7;
+/**
+ * How long an invitation stays good for.
+ *
+ * Thirty days, not the seven this started at. Seven looks generous at
+ * the moment somebody clicks Invite and is not: these go to a shop
+ * owner's inbox, where they sit under a weekend, a holiday and whatever
+ * else arrived that week. Measured on 2026-10-06, a reseller store
+ * invitation sent on 27 September lapsed on 4 October with the store
+ * still showing nobody on its team, and the first anybody knew of it was
+ * the owner going back through Gmail.
+ *
+ * The window is not what makes this safe. The token is single-use, held
+ * only as a hash, and revocable at any moment — that is the control. A
+ * shorter window only costs somebody their onboarding.
+ *
+ * The same number everywhere on purpose: four invitation types that
+ * expire on four different schedules is one more thing to remember and
+ * the first source of "why did that one lapse and this one not".
+ */
+const DEFAULT_EXPIRES_IN_DAYS = 30;
 
 export interface InvitationListItem {
   readonly id: string;
   readonly email: string;
-  /** LEGACY enum — null when no offered role has a spelling. */
-  readonly role: StaffRole | null;
   /** `staff_roles.id`s the invitation offers, in the order chosen. */
   readonly roleIds: readonly string[];
   /** Their names, same order — what a screen should show. */
@@ -188,12 +179,9 @@ export class StaffInvitationService {
       // safe answer: an unknown actor holds nothing we can check against.
       throw new NotFoundException({ code: 'STAFF_NOT_FOUND', message: 'Staff user not found' });
     }
-    // Every role they hold, not the first: this read was through the
-    // single-role relation, which under multi-role is the TRANSITIONAL
-    // `role_id`. It fails CLOSED — the actor is judged on a narrower set
-    // than they really hold — so it is not a hole, but a super admin
-    // whose super-admin role happened to be their SECOND would have been
-    // refused a grant they are plainly entitled to make.
+    // Every role they hold, not the first: a super admin whose
+    // super-admin role happens to be their SECOND is plainly entitled to
+    // make a grant, and judging them on one role would refuse it.
     const live = me.roles.map((r) => r.role).filter((r) => r.deletedAt === null);
     return {
       isSuperuser: live.some((r) => r.isSuperAdmin),
@@ -234,9 +222,9 @@ export class StaffInvitationService {
       });
     }
     // Returned in the ORDER ASKED FOR, not the order the database
-    // happened to return: the first role becomes the legacy label and
-    // the primary name in an audit row, and that must be the operator's
-    // choice rather than an id sort.
+    // happened to return: the first role becomes the label a screen
+    // shows and the primary name in an audit row, and that must be the
+    // operator's choice rather than an id sort.
     const byId = new Map(found.map((r) => [r.id, r]));
     return ids.map((id) => {
       const r = byId.get(id);
@@ -300,9 +288,6 @@ export class StaffInvitationService {
       data: {
         email: input.email,
         token: tokenHash,
-        // Display and history; null when no invited role has an enum
-        // spelling, which is the ordinary case for the access tiers.
-        role: legacyEnumFor(roles.map((r) => r.key)),
         invitedById: actor.staffId,
         expiresAt,
         roles: { create: roles.map((r) => ({ roleId: r.id })) },
@@ -452,20 +437,19 @@ export class StaffInvitationService {
     plaintextToken: string,
     plaintextPassword: string,
     ctx: ClientContext,
-  ): Promise<{ staffId: string; email: string; role: StaffRole | null }> {
+  ): Promise<{ staffId: string; email: string }> {
     const tokenHash = this.hashes.sha256Hex(plaintextToken);
     const inv = await this.prisma.client.staffInvitation.findUnique({
       where: { token: tokenHash },
       select: {
         id: true,
         email: true,
-        role: true,
         expiresAt: true,
         usedAt: true,
         deletedAt: true,
         roles: {
           orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
-          select: { role: { select: { id: true, key: true, deletedAt: true } } },
+          select: { role: { select: { id: true, key: true, name: true, deletedAt: true } } },
         },
       },
     });
@@ -536,13 +520,10 @@ export class StaffInvitationService {
           email: emailLower,
           emailDisplay: inv.email,
           passwordHash,
-          // Display and history; null when no offered role has an enum
-          // spelling (every access tier, and every custom role).
-          role: legacyEnumFor(offered.map((r) => r.key)),
           emailVerifiedAt: now,
           ...rolesOnCreate(offered.map((r) => r.id)),
         },
-        select: { id: true, email: true, role: true },
+        select: { id: true, email: true },
       });
       await tx.staffInvitation.update({
         where: { id: inv.id },
@@ -583,7 +564,9 @@ export class StaffInvitationService {
         },
         variables: {
           email: created.email,
-          role: created.role,
+          // What the person reads — every role they were given, not one
+          // of them, because the welcome note is how they find out.
+          role: roleNamesFor(offered),
           login_url: `${this.env.adminAppUrl}/login`,
           support_email: this.env.supportEmail,
         },
@@ -596,7 +579,7 @@ export class StaffInvitationService {
       );
     }
 
-    return { staffId: created.id, email: created.email, role: created.role };
+    return { staffId: created.id, email: created.email };
   }
 
   // ── Active staff users (admin "team" page) ─────────────────────────
@@ -606,8 +589,6 @@ export class StaffInvitationService {
       id: string;
       email: string;
       emailDisplay: string;
-      /** Legacy enum, display only — null for a custom-role-only person. */
-      role: StaffRole | null;
       /** The FIRST role held — a label. `roleIds` is all of them. */
       roleId: string;
       roleName: string;
@@ -626,11 +607,10 @@ export class StaffInvitationService {
         id: true,
         email: true,
         emailDisplay: true,
-        role: true,
-        // Through the JOIN TABLE, not the transitional `role_id`: the
-        // staff list is what somebody reads to see who can do what, and
-        // showing ONE role for a person holding three is a wrong answer
-        // that looks like a right one.
+        // Every role, not just the first: the staff list is what
+        // somebody reads to see who can do what, and showing ONE role
+        // for a person holding three is a wrong answer that looks like a
+        // right one.
         roles: {
           orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
           select: { role: { select: { id: true, name: true, deletedAt: true } } },
@@ -645,7 +625,6 @@ export class StaffInvitationService {
       id: r.id,
       email: r.email,
       emailDisplay: r.emailDisplay,
-      role: r.role,
       roleId: liveStaffRoles(r.roles)[0]?.id ?? '',
       roleName: liveStaffRoles(r.roles)[0]?.name ?? '',
       roleIds: liveStaffRoles(r.roles).map((x) => x.id),
@@ -665,10 +644,8 @@ export class StaffInvitationService {
    * because the job functions and the access tiers are two axes: "call
    * agent who also handles tickets" is two roles, not a bespoke eighth.
    *
-   * The legacy `staff_users.role` column is written with the enum
-   * spelling of the first role that HAS one, and left NULL when none
-   * does. It is no longer consulted for authorisation anywhere, so a
-   * null is honest where a borrowed enum would be a lie.
+   * `staff_user_roles` is the whole record of what somebody holds, so
+   * replacing it is the entire write.
    */
   async setRoles(
     targetStaffId: string,
@@ -761,10 +738,6 @@ export class StaffInvitationService {
         targetStaffId,
         targets.map((t) => t.id),
       );
-      await tx.staffUser.update({
-        where: { id: targetStaffId },
-        data: { role: legacyEnumFor(targets.map((t) => t.key)) },
-      });
     });
 
     await this.audit.log({
@@ -859,7 +832,6 @@ export class StaffInvitationService {
   private toView(row: {
     id: string;
     email: string;
-    role: StaffRole | null;
     invitedById: string;
     acceptedById: string | null;
     expiresAt: Date;
@@ -875,7 +847,6 @@ export class StaffInvitationService {
     return {
       id: row.id,
       email: row.email,
-      role: row.role,
       roleIds: live.map((r) => r.id),
       roleNames: live.map((r) => r.name),
       invitedById: row.invitedById,

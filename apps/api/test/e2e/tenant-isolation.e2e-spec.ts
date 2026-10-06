@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
-import { ProductStatus, SellerStatus, StaffRole } from '@skydrop/db';
+import { ProductStatus, SellerStatus, StaffRoleKey, StoreRoleKey } from '@skydrop/db';
 import {
   bootTestApp,
   createTestStaff,
@@ -92,7 +92,7 @@ describe('cross-tenant isolation (e2e)', () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
 
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     const sLogin = await request(h.baseUrl)
       .post('/auth/staff/login')
       .send({ email: staff.email, password: staff.password })
@@ -627,10 +627,12 @@ describe('cross-tenant isolation (e2e)', () => {
     // And nothing moved.
     const bUser = await h.prisma.storeUser.findUniqueOrThrow({
       where: { id: storeB.storeUserId },
-      select: { deletedAt: true, role: { select: { key: true } } },
+      select: { deletedAt: true, roles: { select: { role: { select: { key: true } } } } },
     });
     expect(bUser.deletedAt).toBeNull();
-    expect(bUser.role.key).toBe('owner');
+    // Still exactly OWNER: store A's PATCH did not add 'viewer' beside it
+    // and did not replace it either.
+    expect(bUser.roles.map((r) => r.role.key)).toEqual([StoreRoleKey.OWNER]);
     const bInv = await h.prisma.storeUserInvitation.findUniqueOrThrow({
       where: { id: bInvitationId.id },
       select: { deletedAt: true },

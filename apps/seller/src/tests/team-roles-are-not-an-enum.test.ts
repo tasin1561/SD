@@ -16,10 +16,14 @@ import { describe, expect, it } from 'vitest';
  *     the wrong access.
  *
  *  2. Every screen that showed "the role" read `.role`, the legacy enum,
- *     which is NULL for anybody holding only roles the company invented.
- *     A null prints as nothing. So the one surface that most needs to be
- *     right about custom roles would have been blank for exactly the
- *     people who have them, silently.
+ *     which was NULL for anybody holding only roles the company
+ *     invented. A null prints as nothing, so the one surface that most
+ *     needs to be right about custom roles was blank for exactly the
+ *     people who have them, silently. The field has since been dropped
+ *     from the API shapes, which is why the sweep below is for a read of
+ *     ANY single role rather than for that one spelling: the next way
+ *     this goes wrong is a screen settling for `roleName`, the FIRST
+ *     role, and calling it theirs.
  *
  * Pinned by reading the source rather than by rendering, because both
  * failures are an ABSENCE: a render test asserting "a role is shown"
@@ -92,12 +96,8 @@ describe('the invitation form offers the company’s OWN roles', () => {
 describe('the team screen shows every role a person holds', () => {
   const src = read(TEAM_INDEX);
 
-  it('renders roleNames, not the legacy enum', () => {
+  it('renders roleNames, not one role', () => {
     expect(src).toContain('roleNamesOf');
-    // `m.role` / `inv.role` — the legacy enum — must not be read. The
-    // boundary `\b` keeps `roleName`, `roleId`, `roleIds` and `roleNames`
-    // out of the match.
-    expect(src).not.toMatch(/\b(?:m|inv|member)\.role\b(?![A-Za-z])/);
   });
 
   it('writes through the plural hook', () => {
@@ -160,11 +160,32 @@ describe('no team screen reacts to a server error code by name', () => {
 });
 
 describe('the one-shot invitation reveal', () => {
-  it('names every offered role rather than the legacy enum', () => {
+  it('names every offered role rather than one of them', () => {
     const src = read(REVEAL_CARD);
     expect(src).toContain('roleNames');
-    expect(src).not.toMatch(/invitation\.role\b(?![A-Za-z])/);
   });
+});
+
+/**
+ * ── NO SCREEN READS A SINGLE `role` ─────────────────────────────────
+ * The field is gone from the API shapes, so TypeScript now catches a
+ * read of it — but only while the object being read is typed. A `any`,
+ * a fixture, a destructured response or a hand-written fetch is not,
+ * and this is the file where that came back once already.
+ *
+ * Any receiver, not the three names that happened to be in use when the
+ * enum was removed: `row.role` and `u.role` sailed past that version of
+ * this check. The boundary `\b` plus the negative lookahead keep
+ * `roleId`, `roleKey`, `roleName`, `roleIds` and `roleNames` out of it,
+ * and a JSX `role="status"` has no dot in front.
+ */
+describe('no team screen reads "the role"', () => {
+  for (const file of [INVITE_MODAL, TEAM_INDEX, REVEAL_CARD, HOOKS]) {
+    const name = file.replace(/.*\/(src\/)?/, '');
+    it(`${name} reads the set, never one role`, () => {
+      expect(read(file)).not.toMatch(/\.role\b(?![A-Za-z])/);
+    });
+  }
 });
 
 describe('the role-assignment hook', () => {

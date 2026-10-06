@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { ActorType, OrderStatus, ShipmentStatus, StaffRole } from '@skydrop/db';
+import { ActorType, OrderStatus, ShipmentStatus, StaffRoleKey } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import {
@@ -292,7 +292,7 @@ describe('Warehouse pick flow (e2e)', () => {
 
   it('supervisor force-expire: 403 when the role lacks warehouse.pick.supervise', async () => {
     const agent = await createTestStaff(h.prisma, {
-      role: StaffRole.CALL_AGENT,
+      role: StaffRoleKey.CALL_AGENT,
     });
     const aLogin = await request(h.baseUrl)
       .post('/auth/staff/login')

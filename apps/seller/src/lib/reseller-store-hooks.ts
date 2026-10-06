@@ -77,6 +77,8 @@ export interface ResellerTeamView {
     readonly roleNames: readonly string[];
     readonly roleName: string;
     readonly expiresAt: string;
+    /** Past its date. The server decides, because it holds the clock. */
+    readonly expired: boolean;
     readonly createdAt: string;
   }>;
   readonly roles: ReadonlyArray<{
@@ -591,6 +593,22 @@ export function useInviteToResellerStore(): UseMutationResult<
       client.request(`/api/seller/reseller-stores/${storeId}/invitations`, {
         method: 'POST',
         body,
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
+  });
+}
+
+export function useResendResellerInvitation(): UseMutationResult<
+  unknown,
+  Error,
+  { storeId: string; invitationId: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ storeId, invitationId }) =>
+      client.request(`/api/seller/reseller-stores/${storeId}/invitations/${invitationId}/resend`, {
+        method: 'POST',
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: KEY }),
   });

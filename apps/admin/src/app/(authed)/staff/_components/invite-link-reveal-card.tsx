@@ -26,9 +26,10 @@ export function InviteLinkRevealCard({
           <h2 className="ac-card__title">Invitation link — copy + share</h2>
           <div className="ac-text">
             {invitation.email}{' '}
-            {/* `invitation.role` is the LEGACY enum and is null for an
-                access tier and for any role invented here — it printed
-                "null" for exactly the people this screen now invites. */}
+            {/* Every role the invitation offers. Naming one of them
+                would be naming one of several, and the field that used
+                to hold "the role" printed "null" for an access tier and
+                for anything invented here anyway. */}
             <span className="ac-faint">· {invitation.roleNames.join(', ')}</span>
           </div>
         </div>

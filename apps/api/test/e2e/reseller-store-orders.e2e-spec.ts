@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
-import { ActorType, OrderStatus, ProductStatus, SellerStatus, StaffRole } from '@skydrop/db';
+import { ActorType, OrderStatus, ProductStatus, SellerStatus, StaffRoleKey } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import {
   bootTestApp,
@@ -194,7 +194,7 @@ describe('reseller store orders (e2e)', () => {
   beforeEach(async () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     staffId = staff.id;
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')

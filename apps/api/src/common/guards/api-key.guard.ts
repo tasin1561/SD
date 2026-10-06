@@ -173,21 +173,18 @@ export class ApiKeyGuard implements CanActivate {
       status: row.seller.status,
       emailVerifiedAt: null,
       jti: row.id, // surface the api-key id as the "jti" for downstream audits
-      // API-key auth doesn't have a person — `role` and `fullName` are a
-      // synthetic attribution, kept so downstream audit rows read
-      // sensibly. Endpoints that want per-person attribution should use
-      // bearer-token auth instead.
-      //
-      // `role: 'ADMIN'` is a legacy enum field and grants NOTHING: the
-      // permission set below is the only thing anything reads, and it
-      // comes from the key's scopes.
+      // API-key auth doesn't have a person — the role labels and
+      // `fullName` are a synthetic attribution, kept so downstream audit
+      // rows read sensibly. Endpoints that want per-person attribution
+      // should use bearer-token auth instead. None of them grant
+      // anything: the permission set below is the only thing anything
+      // reads, and it comes from the key's scopes.
       roleKey: 'api_key',
       roleName: 'API key',
       roleKeys: ['api_key'],
       roleNames: ['API key'],
       permissions: held,
       userId: row.id,
-      role: 'ADMIN',
       fullName: 'API Key',
     };
 

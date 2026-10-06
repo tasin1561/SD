@@ -1,22 +1,22 @@
-import type { StaffRole } from '@skydrop/db';
-
 /**
  * ── A PERSON HOLDS SEVERAL ROLES ────────────────────────────────────
  * Every shape here carries `roleIds` + `roleNames` (plural, in the order
  * chosen) because that is what the server stores and resolves
  * permissions from — the UNION of every live role held.
  *
- * `role`, `roleId` and `roleName` survive as LABELS of the FIRST role,
- * and `role` is now NULLABLE: it is the legacy `StaffRole` enum, and
+ * `roleId` and `roleName` survive as LABELS of the FIRST role, and a
+ * label is all they are: somebody on an access tier plus two job
+ * functions has two more roles that a label cannot show. A screen that
+ * names "their role" is naming one of several, so render `roleNames`.
+ *
+ * The single `role` field is gone. It was the `StaffRole` enum, and
  * neither an access tier (`admin` / `support` / `readonly`) nor a role
- * an operator invented has a spelling in it. A screen that renders
- * `role` prints "null" for exactly those people, so render `roleNames`.
+ * an operator invented ever had a spelling in it, so it printed "null"
+ * for exactly the people the role rows were built for.
  */
 export interface StaffInvitationListItem {
   readonly id: string;
   readonly email: string;
-  /** LEGACY enum — null when no offered role has a spelling. */
-  readonly role: StaffRole | null;
   /** `staff_roles.id`s the invitation offers, in the order chosen. */
   readonly roleIds: readonly string[];
   /** Their display names, same order — what a screen should show. */
@@ -35,12 +35,12 @@ export interface CreatedStaffInvitation extends StaffInvitationListItem {
 }
 
 /**
- * Role ROW ids, never the `StaffRole` enum.
+ * Role ROW ids, never a role's name.
  *
- * The enum was the whole of this field, which meant **nobody could be
- * invited onto a role the team invented** — the only way in was to
- * invite somebody as one of the seven seeded ones and re-role them
- * afterwards. Plural for the same reason the assignment is: a job
+ * The `StaffRole` enum was the whole of this field, which meant
+ * **nobody could be invited onto a role the team invented** — the only
+ * way in was to invite somebody as one of the seven seeded ones and
+ * re-role them afterwards. Plural for the same reason the assignment is: a job
  * function and an access tier are two axes, and an invitation that
  * cannot say both makes a correction the first task after somebody joins.
  */
@@ -59,8 +59,6 @@ export interface StaffUserRow {
   readonly id: string;
   readonly email: string;
   readonly emailDisplay: string;
-  /** LEGACY enum, display only — null for an access-tier-only person. */
-  readonly role: StaffRole | null;
   /** The FIRST role held — a label. `roleIds` is all of them. */
   readonly roleId: string;
   readonly roleName: string;
