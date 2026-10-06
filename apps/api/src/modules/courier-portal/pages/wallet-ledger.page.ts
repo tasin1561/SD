@@ -68,8 +68,22 @@ export class WalletLedgerPage {
 
     // Playwright must be waiting BEFORE the click — a download that
     // starts while nothing is listening is simply lost.
+    //
+    // WAIT ON THE CONTEXT, NOT THE PAGE. `page.waitForEvent('download')`
+    // only ever fires for a download that THIS page started. If the
+    // export is handed to a new tab — `target="_blank"`, or a
+    // `window.open` the click performs — the download belongs to that
+    // popup, and the wait on this page sits there until it times out
+    // while the file arrives and is thrown away. The symptom is exactly
+    // what we saw on 5 and 6 October: a button that is present, enabled
+    // and single-match, a click that lands and takes focus, no dialog,
+    // no error, and 120 seconds of nothing.
+    //
+    // The context sees downloads from every page in it, this one
+    // included, so this is strictly broader than what it replaces and
+    // costs nothing if the export never was a popup.
     const [download] = await Promise.all([
-      this.page.waitForEvent('download', { timeout: DOWNLOAD_WAIT_MS }),
+      this.page.context().waitForEvent('download', { timeout: DOWNLOAD_WAIT_MS }),
       this.page.getByRole('button', { name: DOWNLOAD_BUTTON }).first().click(),
     ]);
 

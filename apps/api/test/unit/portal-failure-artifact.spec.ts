@@ -135,6 +135,7 @@ describe('the artefact rides on the error', () => {
       screenshotKey: 'k',
       textKey: null,
       control: null,
+      pages: [],
       error: null,
     });
     expect(out).toBe(err);
@@ -149,6 +150,7 @@ describe('the artefact rides on the error', () => {
       screenshotKey: 'k',
       textKey: null,
       control: null,
+      pages: [],
       error: null,
     });
     expect(Object.keys(err)).toEqual(['context']);
@@ -165,11 +167,42 @@ describe('the artefact rides on the error', () => {
       screenshotKey: 'courier-probes/portal-failures/j/r/abc/page.png',
       textKey: null,
       control: '0 match(es)',
+      pages: [],
       error: null,
     });
     expect(text).toContain('Page: https://one.delhivery.com/finances');
     expect(text).toContain('0 match(es)');
     expect(text).toContain('page.png');
+  });
+
+  it('names the other tabs, because a click can hand its work to one', () => {
+    const text = describePortalFailureArtifact({
+      url: 'https://one.delhivery.com/finances/unified/transactions',
+      screenshotKey: null,
+      textKey: null,
+      control: null,
+      pages: [
+        'https://one.delhivery.com/finances/unified/transactions',
+        'https://one.delhivery.com/reports/export',
+      ],
+      error: null,
+    });
+    expect(text).toContain('Other pages open:');
+    expect(text).toContain('/reports/export');
+  });
+
+  it('stays quiet when the only page open is the one we were watching', () => {
+    // A line reading "Other pages open: <the page we were on>" on every
+    // failure is noise that teaches a reader to skip the field.
+    const text = describePortalFailureArtifact({
+      url: 'https://one.delhivery.com/finances/unified/transactions',
+      screenshotKey: null,
+      textKey: null,
+      control: null,
+      pages: ['https://one.delhivery.com/finances/unified/transactions'],
+      error: null,
+    });
+    expect(text).not.toContain('Other pages open');
   });
 });
 

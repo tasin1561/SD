@@ -66,6 +66,16 @@ export interface PortalFailureArtifact {
    * failure message says what we waited FOR; this says what was there.
    */
   readonly control: string | null;
+  /**
+   * Every page open in the context when it failed, this one included.
+   *
+   * Because a click that hands its work to a NEW TAB is invisible in
+   * every other field here: the page we are watching looks perfectly
+   * healthy, the control looks right, and the thing we were waiting for
+   * happened somewhere we were not looking. One extra line answers that
+   * in the artefact rather than in a second day of guessing.
+   */
+  readonly pages: readonly string[];
   /** Non-null when the capture itself went wrong. Never thrown. */
   readonly error: string | null;
 }
@@ -108,6 +118,7 @@ export function describePortalFailureArtifact(a: PortalFailureArtifact): string 
   const lines = [
     a.url === null ? null : `Page: ${a.url}`,
     a.control === null ? null : `What was on the control we waited for: ${a.control}`,
+    a.pages.length <= 1 ? null : `Other pages open: ${a.pages.join(', ')}`,
     a.screenshotKey === null ? null : `Screenshot: ${a.screenshotKey}`,
     a.textKey === null ? null : `Page text: ${a.textKey}`,
     a.error === null ? null : `(the capture itself failed: ${a.error})`,
@@ -153,12 +164,24 @@ export class PortalFailureArtifactService {
     let control: string | null = null;
     let screenshotKey: string | null = null;
     let textKey: string | null = null;
+    let pages: readonly string[] = [];
     const problems: string[] = [];
 
     try {
       url = safeUrl(input.page.url());
     } catch (err) {
       problems.push(`url: ${short(err)}`);
+    }
+
+    // Read before anything slow: a popup can be closed by the site, and
+    // the point of this field is what was open at the moment of failure.
+    try {
+      pages = input.page
+        .context()
+        .pages()
+        .map((pg) => safeUrl(pg.url()) ?? '(unreadable)');
+    } catch (err) {
+      problems.push(`pages: ${short(err)}`);
     }
 
     if (input.describeControl !== undefined) {
@@ -199,6 +222,7 @@ export class PortalFailureArtifactService {
       screenshotKey,
       textKey,
       control,
+      pages,
       error: problems.length === 0 ? null : problems.join('; ').slice(0, 300),
     };
     this.logger.warn({ ...artifact, job: input.job }, 'Captured a portal failure artefact');
