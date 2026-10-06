@@ -7,7 +7,7 @@ import {
   ProductStatus,
   ResellerStoreActionMode,
   SellerStatus,
-  StaffRole,
+  StaffRoleKey,
   StoreAddressChangeStatus,
   StoreOrderRequestStatus,
 } from '@skydrop/db';
@@ -209,7 +209,7 @@ describe('reseller store request races (e2e)', () => {
   beforeEach(async () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     staffId = staff.id;
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')

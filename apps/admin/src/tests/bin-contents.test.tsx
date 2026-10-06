@@ -5,13 +5,14 @@ import { BinsIndex } from '../app/(authed)/warehouse/bins/_components/bins-index
 import { BinDetail } from '../app/(authed)/warehouse/bins/[binId]/_components/bin-detail';
 import { MovementsIndex } from '../app/(authed)/inventory/movements/_components/movements-index';
 import { buildFetchMock, makeStaff, renderWithProviders } from './helpers';
+import { StaffRoleKey } from '@skydrop/db';
 
 /**
  * "Where can I see what R-01-01 and D-01-01 hold?" — and, from the owner's
  * follow-up, every bin with its products and sellers on one screen.
  */
 
-const staff = makeStaff('SUPER_ADMIN' as never, ['warehouse.view', 'inventory.view']);
+const staff = makeStaff([StaffRoleKey.SUPER_ADMIN], ['warehouse.view', 'inventory.view']);
 
 const kurta = {
   stockLevelId: 'sl-1',
@@ -300,7 +301,7 @@ describe('one bin, all of it', () => {
 
   it('hides the movements link from someone who cannot read the ledger', async () => {
     renderWithProviders(<BinDetail binId="b-floor" />, {
-      identity: makeStaff('SUPER_ADMIN' as never, ['warehouse.view']),
+      identity: makeStaff([StaffRoleKey.SUPER_ADMIN], ['warehouse.view']),
       fetchImpl: buildFetchMock([
         { match: /\/api\/admin\/bin-contents\/b-floor/, responses: [{ status: 200, body: page }] },
       ]),

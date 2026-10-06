@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { StaffRole } from '@skydrop/db';
+import { StaffRoleKey, type StaffRoleKeyValue } from '@skydrop/db';
 import {
   bootTestApp,
   createTestStaff,
@@ -42,7 +42,7 @@ describe('Invite leads (e2e)', () => {
     await h.close();
   });
 
-  async function loginAs(role: StaffRole): Promise<{ Authorization: string }> {
+  async function loginAs(role: StaffRoleKeyValue): Promise<{ Authorization: string }> {
     const staff = await createTestStaff(h.prisma, { role });
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')
@@ -55,7 +55,7 @@ describe('Invite leads (e2e)', () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
     await h.prisma.inviteLead.deleteMany({});
-    adminAuth = await loginAs(StaffRole.SUPER_ADMIN);
+    adminAuth = await loginAs(StaffRoleKey.SUPER_ADMIN);
   });
 
   it('records a request from an anonymous visitor', async () => {
@@ -274,7 +274,7 @@ describe('Invite leads (e2e)', () => {
   });
 
   it('is closed to staff who do not decide who gets invited', async () => {
-    const warehouse = await loginAs(StaffRole.WAREHOUSE_STAFF);
+    const warehouse = await loginAs(StaffRoleKey.WAREHOUSE_STAFF);
     await request(h.baseUrl).get('/admin/invite-leads').set(warehouse).expect(403);
     await request(h.baseUrl).get('/admin/invite-leads').expect(401);
   });

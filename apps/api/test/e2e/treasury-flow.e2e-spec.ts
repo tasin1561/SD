@@ -5,7 +5,7 @@ import {
   BankOwnerKind,
   Currency,
   Prisma,
-  StaffRole,
+  StaffRoleKey,
   WalletEntryDirection,
 } from '@skydrop/db';
 import { WalletService } from '../../src/modules/seller-wallet/services/wallet.service';
@@ -50,7 +50,7 @@ describe('Treasury (e2e)', () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
 
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')
       .send({ email: staff.email, password: staff.password })

@@ -1,5 +1,3 @@
-import type { SellerUserRole, StaffRole } from '@skydrop/db';
-
 declare global {
   namespace Express {
     interface Request {
@@ -30,17 +28,6 @@ export interface AuthenticatedStoreApiKey {
 export interface AuthenticatedStaff {
   id: string;
   email: string;
-  /**
-   * LEGACY, and no longer consulted for authorisation — the permission
-   * guard is. Kept only because `staff_users.role` and
-   * `staff_invitations.role` still carry it; both go when a staff member
-   * is invited against a role ROW rather than an enum value.
-   *
-   * NULL since multi-role: a person holding only roles with no enum
-   * spelling — every access tier, and every role an operator invented —
-   * has nothing honest to put here. Nothing reads it.
-   */
-  role: StaffRole | null;
   /**
    * The FIRST of the roles this person holds — a label for display and
    * audit prose, NEVER an authorisation input. Somebody may hold
@@ -73,7 +60,8 @@ export interface AuthenticatedSeller {
   /**
    * Seller.id — the company. Existing controllers were written when one
    * seller account had one user, so this id is kept as the COMPANY id
-   * for back-compat. Per-user attribution uses `userId` + `role` below.
+   * for back-compat. Per-user attribution uses `userId` + the role
+   * labels below.
    */
   id: string;
   email: string;
@@ -88,11 +76,6 @@ export interface AuthenticatedSeller {
   jti: string | null;
   /** SellerUser.id — the person who authenticated. */
   userId: string;
-  /**
-   * LEGACY enum. No longer consulted for authorisation, and NULL for
-   * somebody holding only roles the company invented.
-   */
-  role: SellerUserRole | null;
   /**
    * The FIRST role held — a label, never an authorisation input. See
    * `roleKeys` for all of them.

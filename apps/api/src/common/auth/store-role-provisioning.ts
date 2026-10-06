@@ -4,10 +4,10 @@ import { DEFAULT_STORE_ROLES, type StoreRoleKey } from './store-permissions';
 /**
  * Create a reseller store's five starting roles, in the caller's tx.
  *
- * Runs in the SAME transaction that creates the store: `store_users.role_id`
- * is NOT NULL, so a store without roles is a store whose first invitation
- * could never be accepted. Idempotent on (store, key) — a retried
- * transaction finds the rows it already made.
+ * Runs in the SAME transaction that creates the store: a user with no
+ * role rows cannot sign in, so a store without roles is a store whose
+ * first invitation could never be accepted. Idempotent on (store, key)
+ * — a retried transaction finds the rows it already made.
  */
 export async function provisionDefaultStoreRoles(
   tx: Prisma.TransactionClient,

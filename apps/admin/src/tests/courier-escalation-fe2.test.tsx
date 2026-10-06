@@ -18,7 +18,7 @@ import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CourierTemplatesIndex } from '@/app/(authed)/courier-escalation/templates/_components/templates-index';
 import { buildFetchMock, renderWithProviders, makeStaff } from './helpers';
-import type { StaffRole } from '@skydrop/db';
+import { StaffRoleKey } from '@skydrop/db';
 
 const CANDIDATE = {
   id: 'cand-1',
@@ -31,7 +31,7 @@ const CANDIDATE = {
   lastSeenAt: '2026-08-05T10:00:00.000Z',
 };
 
-const WRITER = makeStaff('SUPER_ADMIN' as StaffRole, ['courier.ops.view', 'courier.ops.write']);
+const WRITER = makeStaff([StaffRoleKey.SUPER_ADMIN], ['courier.ops.view', 'courier.ops.write']);
 
 function routes(promoteResponse: { status: number; body?: unknown }) {
   return [
@@ -123,7 +123,7 @@ describe('FE-2 boundary — courier pattern promotion', () => {
 
     renderWithProviders(<CourierTemplatesIndex />, {
       fetchImpl,
-      identity: makeStaff('CALL_AGENT' as StaffRole, ['courier.ops.view']),
+      identity: makeStaff([StaffRoleKey.CALL_AGENT], ['courier.ops.view']),
     });
 
     // The body is still READABLE — hiding the corpus from someone allowed

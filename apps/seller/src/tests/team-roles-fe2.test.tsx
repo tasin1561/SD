@@ -89,9 +89,6 @@ const MEMBER = {
   email: 'jo@example.com',
   emailDisplay: 'jo@example.com',
   fullName: 'Jo Rahman',
-  // Null, as the server returns for somebody whose roles have no enum
-  // spelling between them. Nothing on the screen may read it.
-  role: null,
   roleId: 'role-ops',
   roleName: 'Ops',
   roleIds: ['role-ops', 'role-returns'],

@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { ActorType, OrderStatus, StaffRole, SystemIssueKind } from '@skydrop/db';
+import { ActorType, OrderStatus, StaffRoleKey, SystemIssueKind } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import {
@@ -410,7 +410,7 @@ describe('Pack box session (e2e)', () => {
     // A second packer, same parcel. The partial unique index is what
     // actually stops this — the check before it would pass for both if
     // they arrived together.
-    const other = await createTestStaff(h.prisma, { role: StaffRole.WAREHOUSE_STAFF });
+    const other = await createTestStaff(h.prisma, { role: StaffRoleKey.WAREHOUSE_STAFF });
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')
       .send({ email: other.email, password: other.password })

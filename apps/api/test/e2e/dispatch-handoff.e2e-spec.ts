@@ -6,7 +6,7 @@ import {
   SystemIssueSeverity,
   OrderStatus,
   ShipmentStatus,
-  StaffRole,
+  StaffRoleKey,
   StockMovementType,
 } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
@@ -394,7 +394,7 @@ describe('Dispatch handoff endpoint (e2e)', () => {
 
     const picker = await createTestStaff(h.prisma, {
       email: `picker-${Date.now()}@skydrop.test`,
-      role: StaffRole.WAREHOUSE_STAFF,
+      role: StaffRoleKey.WAREHOUSE_STAFF,
     });
     const pLogin = await request(h.baseUrl)
       .post('/auth/staff/login')
@@ -614,7 +614,7 @@ describe('Dispatch handoff endpoint (e2e)', () => {
     // A second supervisor, untouched by the first one's mistake.
     const other = await createTestStaff(h.prisma, {
       email: `sup2-${Date.now()}@skydrop.test`,
-      role: StaffRole.WAREHOUSE_SUPERVISOR,
+      role: StaffRoleKey.WAREHOUSE_SUPERVISOR,
     });
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')

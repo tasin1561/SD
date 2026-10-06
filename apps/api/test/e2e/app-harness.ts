@@ -14,14 +14,13 @@ import { Logger } from 'nestjs-pino';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import argon2 from 'argon2';
-import { prisma, StaffRole, type PrismaClient } from '@skydrop/db';
+import { prisma, StaffRoleKey, type StaffRoleKeyValue, type PrismaClient } from '@skydrop/db';
 import { AppModule } from '../../src/app.module';
 import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
 import { SystemIssueService } from '../../src/modules/system-issues/services/system-issue.service';
 import { NotificationListener } from '../../src/modules/notifications/services/notification-listener.service';
 import { SystemIssueNotifier } from '../../src/modules/system-issues/services/system-issue-notifier.service';
 import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
-import { staffRoleKeyForEnum } from '../../src/common/auth/staff-role-key';
 import { rolesOnCreate } from '../../src/common/auth/role-assignment';
 import { SellerIssueEscalationService } from '../../src/modules/courier-escalation/services/seller-issue-escalation.service';
 import { OutboundWebhookListener } from '../../src/modules/seller-webhook-delivery/services/outbound-webhook-listener.service';
@@ -786,11 +785,11 @@ export async function resetWarehouseState(prisma: PrismaClient): Promise<void> {
 
 export async function createTestStaff(
   prisma: PrismaClient,
-  overrides: Partial<{ email: string; password: string; role: StaffRole }> = {},
-): Promise<{ id: string; email: string; role: StaffRole; password: string }> {
+  overrides: Partial<{ email: string; password: string; role: StaffRoleKeyValue }> = {},
+): Promise<{ id: string; email: string; role: StaffRoleKeyValue; password: string }> {
   const email = overrides.email ?? `staff-${Date.now()}-${Math.random()}@test.local`;
   const password = overrides.password ?? 'TestStaff-Password!42';
-  const role = overrides.role ?? StaffRole.SUPER_ADMIN;
+  const role = overrides.role ?? StaffRoleKey.SUPER_ADMIN;
   const passwordHash = await argon2.hash(password, {
     type: argon2.argon2id,
     memoryCost: 19456,
@@ -798,7 +797,7 @@ export async function createTestStaff(
     parallelism: 1,
   });
   const roleRow = await prisma.staffRoleDefinition.findFirstOrThrow({
-    where: { key: staffRoleKeyForEnum(role), deletedAt: null },
+    where: { key: role, deletedAt: null },
     select: { id: true },
   });
   const staff = await prisma.staffUser.create({
@@ -806,9 +805,8 @@ export async function createTestStaff(
       email: email.toLowerCase(),
       emailDisplay: email,
       passwordHash,
-      role,
-      // The JOIN ROW matters: `staff_user_roles` is what the guard
-      // reads, and a staff row with only `role_id` cannot sign in.
+      // The JOIN ROW is the whole of it: `staff_user_roles` is what the
+      // guard reads, and a staff row with none cannot sign in at all.
       ...rolesOnCreate([roleRow.id]),
     },
   });

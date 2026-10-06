@@ -8,6 +8,7 @@ import {
   CircleDot,
   CirclePause,
   CirclePlay,
+  AlertTriangle,
   Mail,
   Store,
   UserPlus,
@@ -39,6 +40,7 @@ import {
   useApproveResellerStore,
   useCloseResellerStore,
   useInviteToResellerStore,
+  useResendResellerInvitation,
   usePauseResellerStore,
   useRejectResellerStore,
   useResellerStore,
@@ -790,6 +792,19 @@ function TeamSection({
 }): ReactElement {
   const toast = useToast();
   const invite = useInviteToResellerStore();
+  const resend = useResendResellerInvitation();
+
+  async function doResend(invitationId: string, email: string): Promise<void> {
+    try {
+      await resend.mutateAsync({ storeId: store.id, invitationId });
+      // Says the old link is dead, because somebody who forwards the
+      // first email after resending will otherwise be sending a key
+      // that no longer turns.
+      toast.success(`Invitation sent again to ${email}. The earlier link no longer works.`);
+    } catch (err) {
+      toast.error(serverVerdict(err));
+    }
+  }
   const revoke = useRevokeResellerInvitation();
   const [withdrawing, setWithdrawing] = useState<{ id: string; email: string } | null>(null);
   const [inviting, setInviting] = useState(false);
@@ -880,21 +895,42 @@ function TeamSection({
                 <Td className="rs-strong">{i.fullName}</Td>
                 <Td className="rs-small">{i.email}</Td>
                 <Td className="rs-small">{roleLine(i)}</Td>
+                {/* The word as well as the colour: an expired row and a
+                    live one must not differ only by tint. */}
                 <Td className="rs-small">
                   <span className="rs-row">
-                    <Mail size={13} aria-hidden />
-                    Invited — expires {when(i.expiresAt)}
+                    {i.expired ? (
+                      <>
+                        <AlertTriangle size={13} aria-hidden />
+                        Expired {when(i.expiresAt)} — never accepted
+                      </>
+                    ) : (
+                      <>
+                        <Mail size={13} aria-hidden />
+                        Invited — expires {when(i.expiresAt)}
+                      </>
+                    )}
                   </span>
                 </Td>
                 <Td>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    disabled={revoke.isPending}
-                    onClick={() => setWithdrawing({ id: i.id, email: i.email })}
-                  >
-                    Withdraw
-                  </Button>
+                  <span className="rs-row">
+                    <Button
+                      variant={i.expired ? 'primary' : 'secondary'}
+                      size="sm"
+                      disabled={resend.isPending || revoke.isPending}
+                      onClick={() => void doResend(i.id, i.email)}
+                    >
+                      {i.expired ? 'Send again' : 'Resend'}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={revoke.isPending || resend.isPending}
+                      onClick={() => setWithdrawing({ id: i.id, email: i.email })}
+                    >
+                      Withdraw
+                    </Button>
+                  </span>
                 </Td>
               </Tr>
             ))}

@@ -13,7 +13,6 @@ import {
   OnboardingStepActor,
   SellerOnboardingStep,
   SellerStatus,
-  SellerUserRole,
 } from '@skydrop/db';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { EnvService } from '../../config/env.service';
@@ -101,8 +100,6 @@ export interface SellerMe {
   createdAt: Date;
   // Phase 1B — the signed-in user identity.
   sellerUserId: string;
-  /** LEGACY enum, display only — null for a custom-role-only person. */
-  role: SellerUserRole | null;
   fullName: string;
   /** The company's short code — shown as a fixed prefix on recipient
    *  names. Read-only to the seller; staff-editable only. */
@@ -293,9 +290,9 @@ export class SellerAuthService {
         },
       });
 
-      // The company's six starting roles, BEFORE its first login —
-      // `seller_users.role_id` is NOT NULL, so a company without roles
-      // is a company whose owner row cannot be created.
+      // The company's six starting roles, BEFORE its first login — a
+      // user row with no join rows cannot sign in, so the owner cannot
+      // be created until the roles it points at exist.
       const { ownerRoleId } = await provisionDefaultSellerRoles(tx, createdSeller.id);
 
       // Phase 1B — the OWNER SellerUser row carries the auth credentials
@@ -308,14 +305,13 @@ export class SellerAuthService {
           emailDisplay: invitation.email,
           passwordHash,
           fullName: input.contactPersonName,
-          role: 'OWNER',
           emailVerifiedAt: now,
-          // Both the join row and the transitional `role_id`, in one
-          // write: a user row without its join row cannot sign in at
-          // all, because the guard reads zero live roles.
+          // The join row in the same write as the user: a user row
+          // without one cannot sign in at all, because the guard reads
+          // zero live roles.
           ...rolesOnCreate([ownerRoleId]),
         },
-        select: { id: true, role: true },
+        select: { id: true },
       });
 
       await tx.sellerInvitation.update({
@@ -334,7 +330,6 @@ export class SellerAuthService {
         subject: createdOwner.id,
         status: createdSeller.status,
         sellerId: createdSeller.id,
-        role: createdOwner.role ?? '',
       });
 
       await this.audit.log(
@@ -426,7 +421,6 @@ export class SellerAuthService {
         id: true,
         email: true,
         passwordHash: true,
-        role: true,
         deletedAt: true,
         seller: {
           select: { id: true, status: true, deletedAt: true },
@@ -525,7 +519,6 @@ export class SellerAuthService {
         subject: user.id,
         status: seller.status,
         sellerId: seller.id,
-        role: user.role ?? '',
       });
 
       await tx.sellerUser.update({
@@ -579,7 +572,6 @@ export class SellerAuthService {
       where: { id: userId, deletedAt: null },
       select: {
         id: true,
-        role: true,
         seller: { select: { id: true, status: true, deletedAt: true } },
       },
     });
@@ -600,7 +592,6 @@ export class SellerAuthService {
       subject: user.id,
       status: user.seller.status,
       sellerId: user.seller.id,
-      role: user.role ?? '',
     });
     return { accessToken, refresh: issued };
   }
@@ -983,7 +974,7 @@ export class SellerAuthService {
     // Phase 1B: the auth path identifies a SellerUser (the person who
     // signed in). The SellerMe projection still mirrors the COMPANY
     // shape downstream FE expects — companyName/phone/etc. come from
-    // the parent Seller; the user's own email/role/fullName are
+    // the parent Seller; the user's own email/roles/fullName are
     // surfaced alongside for the team-aware UI.
     const user = await this.prisma.client.sellerUser.findFirst({
       where: { id: sellerUserId, deletedAt: null },
@@ -992,7 +983,6 @@ export class SellerAuthService {
         email: true,
         emailDisplay: true,
         fullName: true,
-        role: true,
         emailVerifiedAt: true,
         roles: {
           orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
@@ -1072,7 +1062,6 @@ export class SellerAuthService {
       emailVerifiedAt: user.emailVerifiedAt,
       createdAt: user.seller.createdAt,
       sellerUserId: user.id,
-      role: user.role,
       roleKey: resolved.primary?.key ?? '',
       roleName: resolved.primary?.name ?? '',
       roleKeys: resolved.roles.map((r) => r.key),

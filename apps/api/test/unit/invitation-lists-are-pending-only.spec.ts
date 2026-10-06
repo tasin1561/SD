@@ -24,6 +24,16 @@ import { join } from 'node:path';
  * accepted in time still needs a decision — resend it or revoke it —
  * and hiding it is how a colleague waits a week for a link that was
  * never going to work.
+ *
+ * ── THE STORE TEAM WAS MISSING FROM THIS LIST, AND IT HAPPENED ───────
+ * This rule was written for the staff and seller lists and the reseller
+ * store's `team()` was never added to CASES, so it kept the `expiresAt`
+ * filter nobody had noticed. On 2026-10-06 a store invited on 27
+ * September lapsed on 4 October, vanished from the store's team page —
+ * which went back to reading "Nobody on the team yet" — and the owner
+ * found out by searching their sent mail. Exactly the failure the
+ * paragraph above describes, in the one place this test was not looking.
+ * A rule that holds in two of three places is a rule nobody can rely on.
  */
 
 const CASES = [
@@ -36,6 +46,13 @@ const CASES = [
     what: 'seller team invitations',
     file: 'src/modules/seller-team/services/seller-team.service.ts',
     method: 'async listInvitations(',
+  },
+  {
+    what: 'reseller store team invitations',
+    file: 'src/modules/reseller-store/services/store-team.service.ts',
+    // `team()` reads members, invitations and roles in one Promise.all,
+    // so the window below has to reach past the members query.
+    method: 'storeUserInvitation.findMany(',
   },
 ];
 

@@ -1,22 +1,20 @@
-import type { SellerUserRole } from '@skydrop/db';
-
 /**
  * ── A PERSON HOLDS SEVERAL ROLES ────────────────────────────────────
  * `seller_user_roles` is the authority and permissions are the UNION of
- * every live role held; `role` is the LEGACY enum, kept as a display
- * label and NULL for anybody holding only roles the company invented
- * (which have no enum spelling). Read `roleNames` — a screen that reads
- * `role` shows nothing for exactly the people a custom role was made
- * for, and shows it without failing.
+ * every live role held. There is no longer a single `role` field: it
+ * was an enum that spelled only the six roles shipped with the product,
+ * so it was null for anybody holding only roles the company invented —
+ * a screen reading it showed nothing for exactly the people a custom
+ * role was made for, and showed it without failing. Render `roleNames`.
  *
  * `roleId` / `roleName` are the FIRST role held, a label the server
- * keeps truthful. They are NOT the answer to "what can this person do";
- * `roleIds` / `roleNames` are the whole set.
+ * keeps truthful. They are NOT the answer to "what can this person do",
+ * and they are not "their role" either — somebody on three roles has
+ * two more that a label cannot show. `roleIds` / `roleNames` are the
+ * whole set.
  */
 export interface TeamInvitationListItem {
   readonly id: string;
-  /** LEGACY enum — null when no offered role has a spelling. */
-  readonly role: SellerUserRole | null;
   /** `seller_roles.id`s the invitation offers, in the order chosen. */
   readonly roleIds: readonly string[];
   /** Their display names, same order — what a screen should show. */
@@ -63,8 +61,6 @@ export interface TeamMemberRow {
   readonly email: string;
   readonly emailDisplay: string;
   readonly fullName: string;
-  /** LEGACY enum, display only — null for a custom-role-only person. */
-  readonly role: SellerUserRole | null;
   readonly emailVerifiedAt: string | null;
   readonly lastLoginAt: string | null;
   readonly createdAt: string;

@@ -4,7 +4,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { AuthProvider } from '@skydrop/auth/client';
 import { Toaster } from '@skydrop/ui/components';
 import type { StaffMe } from '@skydrop/api-client';
-import type { StaffRole } from '@skydrop/db';
+import { StaffRoleKey } from '@skydrop/db';
 import { vi } from 'vitest';
 
 /**
@@ -42,19 +42,27 @@ const ALL_TEST_PERMISSIONS: readonly string[] = [
   'rbac.manage',
 ];
 
+/**
+ * A staff identity holding the given role KEYS — several, because that
+ * is what a person holds. `StaffRoleKey.*` names one the migrations
+ * seed; any other key is a plain string, since an operator can invent a
+ * role and nothing here could list it.
+ */
 export function makeStaff(
-  role: StaffRole = 'SUPER_ADMIN' as StaffRole,
+  roleKeys: readonly string[] = [StaffRoleKey.SUPER_ADMIN],
   permissions?: readonly string[],
 ): StaffMe {
+  // The display names the server would resolve are not what these tests
+  // are about, so the key stands in for one. `roleKey`/`roleName` are
+  // the FIRST role, a label — never "their role".
   return {
     id: 'staff-1',
     email: 't@example.com',
     emailDisplay: 't@example.com',
-    role,
-    roleKey: role.toLowerCase(),
-    roleName: role,
-    roleKeys: [role.toLowerCase()],
-    roleNames: [role],
+    roleKey: roleKeys[0] ?? '',
+    roleName: roleKeys[0] ?? '',
+    roleKeys,
+    roleNames: [...roleKeys],
     // Defaults to a super admin's whole catalogue, so a test about
     // something else is not silently gated by a permission it never
     // meant to exercise. Pass a list to test the gating itself.

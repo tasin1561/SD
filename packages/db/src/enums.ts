@@ -3,8 +3,6 @@
 // '@prisma/client' directly.
 
 export {
-  // Layer 1 — Identity & Access
-  StaffRole,
   BankChangeStatus,
   SellerCapability,
   SellerStatus,
@@ -106,8 +104,6 @@ export {
   NotificationFrequency,
   // Phase 1B — Wallet + remittance
   WalletEntryDirection,
-  // Seller team (RBAC)
-  SellerUserRole,
   // R2 — withdrawal requests
   WithdrawalRequestStatus,
   WithdrawalRequestedBy,

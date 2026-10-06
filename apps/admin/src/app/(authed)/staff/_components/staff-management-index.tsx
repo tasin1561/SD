@@ -285,9 +285,9 @@ export function StaffManagementIndex(): ReactElement {
                       <span className="ac-cell-main">{inv.email}</span>
                     </Td>
                     <Td>
-                      {/* `inv.role` — the legacy enum — is null for an
-                          access tier and for anything invented here, so
-                          the names are what is shown. */}
+                      {/* An invitation offers a SET of roles, so the
+                          names of all of them are what is shown. There
+                          is no single one to fall back to. */}
                       {inv.roleNames.length === 0 ? (
                         // The server drops a role deleted since the
                         // invitation was sent, because accepting will

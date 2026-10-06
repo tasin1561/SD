@@ -14,11 +14,11 @@ import { roleLine } from '@/lib/role-words';
  * It sits above the two lists rather than inside them: it is a thing
  * that has just happened, not a standing part of the page.
  *
- * The note names EVERY role the invitation offers. `invitation.role` is
- * the legacy enum and is null whenever none of the offered roles has an
- * enum spelling — i.e. whenever the company invited somebody onto a
- * role it built itself — which printed the address followed by a bare
- * interpunct.
+ * The note names EVERY role the invitation offers. The single field
+ * that used to hold "the role" was null whenever none of the offered
+ * roles had an enum spelling — i.e. whenever the company invited
+ * somebody onto a role it built itself — which printed the address
+ * followed by a bare interpunct.
  */
 export function InviteLinkRevealCard({
   invitation,

@@ -67,8 +67,8 @@ class ResellerStoreFieldsDto {
   @MaxLength(254)
   contactEmail!: string;
 
-  @ApiProperty({ example: '+919812345678', description: 'E.164' })
-  @Matches(E164, { message: 'contactPhone must be E.164, e.g. +919812345678' })
+  @ApiProperty({ example: '+8801712345678', description: 'E.164 — any country' })
+  @Matches(E164, { message: 'contactPhone must be E.164, e.g. +8801712345678 or +919812345678' })
   contactPhone!: string;
 
   @ApiPropertyOptional({ enum: ResellerWalletManager, default: ResellerWalletManager.SELLER })

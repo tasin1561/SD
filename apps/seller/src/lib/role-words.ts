@@ -21,10 +21,10 @@
  * preferred, because preferring it is how a person holding three roles
  * reads as holding one.
  *
- * The LEGACY `role` enum is deliberately NOT consulted: it is null for
- * anybody holding only roles the company invented, which is precisely
- * the person a custom role was made for, and a null prints as nothing
- * without anything failing.
+ * The single `role` enum this replaced is not consulted, and no longer
+ * exists to consult: it was null for anybody holding only roles the
+ * company invented, which is precisely the person a custom role was
+ * made for, and a null prints as nothing without anything failing.
  */
 export function roleNamesOf(member: {
   readonly roleNames?: readonly string[] | undefined;

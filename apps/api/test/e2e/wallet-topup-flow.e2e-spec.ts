@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { StaffRole } from '@skydrop/db';
+import { StaffRoleKey } from '@skydrop/db';
 import {
   bootTestApp,
   createTestStaff,
@@ -38,7 +38,7 @@ describe('Wallet top-up flow (e2e)', () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
 
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')
       .send({ email: staff.email, password: staff.password })

@@ -23,10 +23,15 @@ export interface StoreAccessClaims extends JwtPayload {
 
 const ACCESS_TTL_SECONDS = 5 * 60; // 5 min, per spec
 
+/**
+ * No role travels in the token. A person holds several, an admin may
+ * change them mid-session, and a claim minted five minutes ago would
+ * answer with the old set — so the guard resolves them from
+ * `staff_user_roles` on every request instead.
+ */
 export interface StaffAccessClaims extends JwtPayload {
   sub: string;
   aud: 'skydrop-staff';
-  role: string;
   jti: string;
 }
 
@@ -37,8 +42,6 @@ export interface SellerAccessClaims extends JwtPayload {
   status: string;
   /** Parent Seller.id (the company). */
   sellerId: string;
-  /** SellerUser.role. */
-  role: string;
   jti: string;
 }
 
@@ -53,9 +56,9 @@ export interface SignedAccessToken {
 export class JwtService {
   constructor(private readonly env: EnvService) {}
 
-  signStaffAccess(input: { subject: string; role: string }): SignedAccessToken {
+  signStaffAccess(input: { subject: string }): SignedAccessToken {
     return this.sign({
-      payload: { role: input.role },
+      payload: {},
       subject: input.subject,
       audience: 'skydrop-staff',
     });
@@ -65,10 +68,9 @@ export class JwtService {
     subject: string;
     status: string;
     sellerId: string;
-    role: string;
   }): SignedAccessToken {
     return this.sign({
-      payload: { status: input.status, sellerId: input.sellerId, role: input.role },
+      payload: { status: input.status, sellerId: input.sellerId },
       subject: input.subject,
       audience: 'skydrop-seller',
     });

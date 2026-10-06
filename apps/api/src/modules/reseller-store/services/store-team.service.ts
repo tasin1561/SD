@@ -47,7 +47,26 @@ import { TokenHashService } from '../../auth-common/services/token-hash.service'
 import { EmailQueue } from '../../email/queue/email.queue';
 import { acceptsInvitations } from './reseller-store-lifecycle';
 
-const INVITATION_TTL_DAYS = 7;
+/**
+ * How long an invitation stays good for.
+ *
+ * Thirty days, not the seven this started at. Seven looks generous at
+ * the moment somebody clicks Invite and is not: these go to a shop
+ * owner's inbox, where they sit under a weekend, a holiday and whatever
+ * else arrived that week. Measured on 2026-10-06, a reseller store
+ * invitation sent on 27 September lapsed on 4 October with the store
+ * still showing nobody on its team, and the first anybody knew of it was
+ * the owner going back through Gmail.
+ *
+ * The window is not what makes this safe. The token is single-use, held
+ * only as a hash, and revocable at any moment — that is the control. A
+ * shorter window only costs somebody their onboarding.
+ *
+ * The same number everywhere on purpose: four invitation types that
+ * expire on four different schedules is one more thing to remember and
+ * the first source of "why did that one lapse and this one not".
+ */
+const INVITATION_TTL_DAYS = 30;
 
 /** Who is inviting: the seller behind the store, or the store's own team. */
 export type InvitingActor =
@@ -81,6 +100,15 @@ export interface StoreInvitationView {
   readonly roleNames: readonly string[];
   readonly roleName: string;
   readonly expiresAt: string;
+  /**
+   * Past its date, and still the only record that anybody was asked.
+   *
+   * Sent rather than inferred on the client: the server is the one
+   * holding the clock the token is actually checked against, and two
+   * clocks disagreeing is how a row reads "expired" beside a link that
+   * still works.
+   */
+  readonly expired: boolean;
   readonly createdAt: string;
 }
 
@@ -233,9 +261,8 @@ export class StoreTeamService {
           email: input.email.trim(),
           fullName: input.fullName.trim(),
           token: this.hashes.sha256Hex(plaintext),
-          // The join rows are what accepting reads; `role_id` is the
-          // transitional label.
-          roleId: roles[0]?.id ?? '',
+          // The join rows are the only record of what was offered, and
+          // what accepting reads back.
           roles: { create: roles.map((r) => ({ roleId: r.id })) },
           invitedByActorType: input.actor.kind === 'SELLER' ? ActorType.SELLER : ActorType.STORE,
           invitedById:
@@ -319,6 +346,100 @@ export class StoreTeamService {
     });
   }
 
+  /**
+   * Send it again, with a fresh token and a fresh clock.
+   *
+   * The alternative was what the store team had until now: revoke, then
+   * retype the address, the name and the roles, and hope they match what
+   * was offered the first time. The seller team and the staff console
+   * both grew this endpoint for that reason; the store never did, so a
+   * lapsed invitation was a dead end on screen.
+   *
+   * The OLD TOKEN STOPS WORKING. A resend is not a second key to the
+   * same door — if the first email went somewhere it should not have,
+   * resending is the thing that takes it back.
+   */
+  async resendInvitation(
+    storeId: string,
+    invitationId: string,
+    actor: { type: ActorType; id: string; sellerId: string; name: string },
+  ): Promise<StoreInvitationView> {
+    const existing = await this.prisma.client.storeUserInvitation.findFirst({
+      where: { id: invitationId, storeId },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        usedAt: true,
+        deletedAt: true,
+        store: { select: { name: true, displayName: true, status: true } },
+        roles: { select: { role: { select: { name: true, deletedAt: true } } } },
+      },
+    });
+    if (existing === null || existing.deletedAt !== null) {
+      throw new NotFoundException({
+        code: 'INVITATION_NOT_FOUND',
+        message: 'No pending invitation with that id',
+      });
+    }
+    if (existing.usedAt !== null) {
+      throw new ConflictException({
+        code: 'INVITATION_ALREADY_USED',
+        message: 'That invitation has already been accepted.',
+      });
+    }
+    // Same gate as inviting afresh: a store that is closed or rejected
+    // must not be able to put a live login back on the doormat by
+    // resending something issued while it was open.
+    if (existing.store.status === null || !acceptsInvitations(existing.store.status)) {
+      throw new ConflictException({
+        code: 'STORE_NOT_OPEN_FOR_INVITATIONS',
+        message: 'Invitations go out once the store is open (active or paused).',
+      });
+    }
+
+    const plaintext = this.hashes.generateInvitationToken();
+    const expiresAt = new Date(Date.now() + INVITATION_TTL_DAYS * 86_400_000);
+    await this.prisma.client.storeUserInvitation.update({
+      where: { id: invitationId },
+      data: { token: this.hashes.sha256Hex(plaintext), expiresAt },
+    });
+
+    await this.audit.log({
+      actorType: actor.type,
+      ...(actor.type === ActorType.STAFF ? { staffUserId: actor.id } : { actorId: actor.id }),
+      sellerId: actor.sellerId,
+      action: 'store.team_invitation.resent',
+      entityType: 'store_user_invitation',
+      entityId: invitationId,
+      severity: 'MEDIUM',
+      metadata: { storeId, email: existing.email },
+    });
+
+    await this.sendInvitationEmail({
+      invitationId,
+      plaintext,
+      email: existing.email,
+      fullName: existing.fullName,
+      roleName: existing.roles
+        .filter((r) => r.role.deletedAt === null)
+        .map((r) => r.role.name)
+        .join(', '),
+      storeName: existing.store.displayName ?? existing.store.name,
+      // Whoever is sending it NOW. The original inviter may have left
+      // the team since, and an email signed by somebody who can no
+      // longer be asked about it is worse than no name.
+      inviterName: actor.name,
+      expiresAt,
+    });
+
+    const view = (await this.team(storeId)).invitations.find((i) => i.id === invitationId);
+    if (view === undefined) {
+      throw new NotFoundException({ code: 'INVITATION_NOT_FOUND', message: 'Invitation vanished' });
+    }
+    return view;
+  }
+
   async revokeInvitation(
     storeId: string,
     invitationId: string,
@@ -350,6 +471,7 @@ export class StoreTeamService {
   // ── Team reads ─────────────────────────────────────────────────────
 
   async team(storeId: string): Promise<StoreTeamView> {
+    const now = Date.now();
     const [members, invitations, roles] = await Promise.all([
       this.prisma.client.storeUser.findMany({
         where: { storeId, deletedAt: null },
@@ -365,7 +487,16 @@ export class StoreTeamService {
         },
       }),
       this.prisma.client.storeUserInvitation.findMany({
-        where: { storeId, usedAt: null, deletedAt: null, expiresAt: { gt: new Date() } },
+        // EXPIRED ONES INCLUDED, deliberately. Filtering on the clock
+        // here made a lapsed invitation vanish from the screen: the page
+        // went back to "Nobody on the team yet" and the only trace that
+        // anybody had ever been asked was in the inviter's sent mail.
+        // Measured on 2026-10-06 — a store invited on 27 September, gone
+        // from the team page on 4 October, and the owner found out by
+        // searching Gmail. The seller team and staff lists never filtered
+        // this way; the store was the odd one out. Revoked (`deletedAt`)
+        // and redeemed (`usedAt`) stay out, because those are finished.
+        where: { storeId, usedAt: null, deletedAt: null },
         orderBy: { createdAt: 'desc' },
         take: 200,
         select: {
@@ -405,6 +536,7 @@ export class StoreTeamService {
         roleKeys: liveRolesOf(i.roles).map((r) => r.key),
         roleNames: liveRolesOf(i.roles).map((r) => r.name),
         expiresAt: i.expiresAt.toISOString(),
+        expired: i.expiresAt.getTime() <= now,
         createdAt: i.createdAt.toISOString(),
       })),
       roles,

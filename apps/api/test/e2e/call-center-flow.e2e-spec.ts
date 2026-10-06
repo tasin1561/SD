@@ -4,7 +4,7 @@ import {
   CallQueueStatus,
   OrderStatus,
   ReservationStatus,
-  StaffRole,
+  StaffRoleKey,
 } from '@skydrop/db';
 import { AssignmentExpirationService } from '../../src/modules/call-center/services/assignment-expiration.service';
 import {
@@ -410,7 +410,7 @@ describe('Call center flow (e2e)', () => {
 
     const agent2 = await createTestStaff(h.prisma, {
       email: `cc-agent2-${Date.now()}@ops.io`,
-      role: StaffRole.CALL_AGENT,
+      role: StaffRoleKey.CALL_AGENT,
     });
     const a2Login = await request(h.baseUrl)
       .post('/auth/staff/login')

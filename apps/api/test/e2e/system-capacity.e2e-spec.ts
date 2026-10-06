@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { StaffRole } from '@skydrop/db';
+import { StaffRoleKey, type StaffRoleKeyValue } from '@skydrop/db';
 import {
   bootTestApp,
   createTestStaff,
@@ -28,7 +28,7 @@ describe('System capacity (e2e)', () => {
     await h.close();
   });
 
-  async function loginAs(role: StaffRole): Promise<{ Authorization: string }> {
+  async function loginAs(role: StaffRoleKeyValue): Promise<{ Authorization: string }> {
     const staff = await createTestStaff(h.prisma, { role });
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')
@@ -40,7 +40,7 @@ describe('System capacity (e2e)', () => {
   beforeEach(async () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
-    superAdmin = await loginAs(StaffRole.SUPER_ADMIN);
+    superAdmin = await loginAs(StaffRoleKey.SUPER_ADMIN);
   });
 
   it('reports live readings, each with a ceiling and a remedy', async () => {
@@ -97,7 +97,7 @@ describe('System capacity (e2e)', () => {
   });
 
   it('is SUPER_ADMIN only — it describes how to bring the platform down', async () => {
-    const finance = await loginAs(StaffRole.FINANCE);
+    const finance = await loginAs(StaffRoleKey.FINANCE);
     await request(h.baseUrl).get('/admin/system/capacity').set(finance).expect(403);
 
     await request(h.baseUrl).get('/admin/system/capacity').expect(401);

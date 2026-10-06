@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { PickupRequestStatus, StaffRole } from '@skydrop/db';
+import { PickupRequestStatus, StaffRoleKey } from '@skydrop/db';
 import {
   bootTestApp,
   createTestStaff,
@@ -45,7 +45,7 @@ describe('courier-ops (e2e)', () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
 
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')
       .send({ email: staff.email, password: staff.password })
@@ -208,7 +208,7 @@ describe('courier-ops (e2e)', () => {
 
   describe('RBAC', () => {
     it('a warehouse hand cannot raise a pickup — that summons a vehicle', async () => {
-      const hand = await createTestStaff(h.prisma, { role: StaffRole.WAREHOUSE_STAFF });
+      const hand = await createTestStaff(h.prisma, { role: StaffRoleKey.WAREHOUSE_STAFF });
       const login = await request(h.baseUrl)
         .post('/auth/staff/login')
         .send({ email: hand.email, password: hand.password })
@@ -227,7 +227,7 @@ describe('courier-ops (e2e)', () => {
     });
 
     it('a call agent cannot read the margin report — it is commercially sensitive', async () => {
-      const agent = await createTestStaff(h.prisma, { role: StaffRole.CALL_AGENT });
+      const agent = await createTestStaff(h.prisma, { role: StaffRoleKey.CALL_AGENT });
       const login = await request(h.baseUrl)
         .post('/auth/staff/login')
         .send({ email: agent.email, password: agent.password })

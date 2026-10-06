@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { ActorType, ManifestStatus, OrderStatus, ShipmentStatus, StaffRole } from '@skydrop/db';
+import { ActorType, ManifestStatus, OrderStatus, ShipmentStatus, StaffRoleKey } from '@skydrop/db';
 import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
 import { ShipmentProvisionService } from '../../src/modules/shipment-provision/services/shipment-provision.service';
 import {
@@ -364,7 +364,7 @@ describe('Warehouse manifest flow (e2e)', () => {
 
   it('role gate: CALL_AGENT → 403 on list / detail / close / move', async () => {
     const agent = await createTestStaff(h.prisma, {
-      role: StaffRole.CALL_AGENT,
+      role: StaffRoleKey.CALL_AGENT,
     });
     const aLogin = await request(h.baseUrl)
       .post('/auth/staff/login')

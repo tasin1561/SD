@@ -606,8 +606,8 @@ export class StoreAuthService {
             fullName: input.fullName.trim(),
             // Reaching this code needed a token mailed to this address.
             emailVerifiedAt: now,
-            // Both the join rows and the transitional `role_id`, in one
-            // write: a user row without its join rows cannot sign in.
+            // The join rows in the same write as the user: a user row
+            // without them cannot sign in at all.
             ...rolesOnCreate(inv.offered.map((r) => r.id)),
           },
           select: { id: true },
@@ -778,9 +778,7 @@ export class StoreAuthService {
         expiresAt: true,
         usedAt: true,
         deletedAt: true,
-        // The transitional `role_id` relation is deliberately NOT
-        // selected: `roles` below is the authority, and a field nothing
-        // reads is a field somebody reaches for later by mistake.
+        // `roles` is the whole of what the invitation offers.
         roles: {
           orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
           select: { role: { select: { id: true, name: true, deletedAt: true } } },

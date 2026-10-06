@@ -8,7 +8,7 @@ import {
   Prisma,
   ProductStatus,
   SellerStatus,
-  StaffRole,
+  StaffRoleKey,
 } from '@skydrop/db';
 import { CourierSettlementService } from '../../src/modules/courier-settlement/services/courier-settlement.service';
 import { OrderAdminOverrideService } from '../../src/modules/order/services/order-admin-override.service';
@@ -271,7 +271,7 @@ describe('reseller order money (e2e)', () => {
   beforeEach(async () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     staffId = staff.id;
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')

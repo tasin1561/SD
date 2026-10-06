@@ -1,5 +1,4 @@
 import type { StaffUserRow } from '@skydrop/api-client';
-import type { StaffRole } from '@skydrop/db';
 import type { Catalogue, RoleView } from '@/lib/rbac-hooks';
 
 /**
@@ -172,7 +171,6 @@ function staffRow(over: Partial<StaffUserRow> & Pick<StaffUserRow, 'id'>): Staff
   return {
     email: `${over.id}@skydrop.test`,
     emailDisplay: `${over.id}@skydrop.test`,
-    role: null,
     roleId: '',
     roleName: '',
     roleIds: [],
@@ -194,7 +192,6 @@ function staffRow(over: Partial<StaffUserRow> & Pick<StaffUserRow, 'id'>): Staff
 export const USERS: readonly StaffUserRow[] = [
   staffRow({
     id: 'u-two-roles',
-    role: 'CALL_AGENT' as StaffRole,
     roleId: 'r-call',
     roleName: 'Call agent',
     roleIds: ['r-call', 'r-support'],

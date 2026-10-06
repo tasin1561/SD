@@ -87,8 +87,8 @@ export class SellerRbacService {
       orderBy: [{ isOwner: 'desc' }, { isSystem: 'desc' }, { name: 'asc' }],
       include: {
         permissions: { select: { permission: true } },
-        // Through the JOIN TABLE, not the transitional
-        // `seller_users.role_id`: a person may hold several roles.
+        // Through the JOIN TABLE, which records every role held: a
+        // person may hold several.
         _count: { select: { userRoles: { where: { user: { deletedAt: null } } } } },
       },
     });

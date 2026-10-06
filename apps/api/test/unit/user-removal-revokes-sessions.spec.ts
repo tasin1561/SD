@@ -1,4 +1,3 @@
-import { SellerUserRole } from '@skydrop/db';
 import { SellerTeamService } from '../../src/modules/seller-team/services/seller-team.service';
 import { StaffInvitationService } from '../../src/modules/staff-invitation/services/staff-invitation.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
@@ -40,7 +39,10 @@ function harness(opts: { alreadyRemovedMeanwhile?: boolean } = {}): Harness {
     sellerUser: {
       findFirst: jest.fn().mockResolvedValue({
         id: 'member-1',
-        role: SellerUserRole.VIEWER,
+        // Not an owner, so the last-OWNER guard lets the removal
+        // through. `seller_user_roles` is what says so — there is no
+        // role on the user row to read.
+        roles: [{ role: { key: 'viewer', name: 'Viewer', isOwner: false, deletedAt: null } }],
         deletedAt: null,
       }),
       count: jest.fn().mockResolvedValue(1),

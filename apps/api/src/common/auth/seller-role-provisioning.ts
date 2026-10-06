@@ -5,9 +5,9 @@ import { DEFAULT_SELLER_ROLES } from './seller-permissions';
  * Give a brand-new company its six starting roles.
  *
  * MUST run inside the same transaction that creates the seller, and
- * BEFORE its owner row — `seller_users.role_id` is NOT NULL, so a
- * company without roles is a company whose first login cannot be
- * created. The migration did this for every seller that already
+ * BEFORE its owner row — a user with no role rows cannot sign in at
+ * all, so a company without roles is a company whose first login cannot
+ * be created. The migration did this for every seller that already
  * existed; this is the same thing for every one that arrives after.
  *
  * The six are a STARTING POINT, not the vocabulary: an owner can edit

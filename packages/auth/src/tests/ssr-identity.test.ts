@@ -29,7 +29,10 @@ describe('resolveStaffSsrIdentity', () => {
         id: 'sx',
         email: 'a@b',
         emailDisplay: 'a@b',
-        role: 'SUPER_ADMIN',
+        roleKey: 'super_admin',
+        roleName: 'Super admin',
+        roleKeys: ['super_admin', 'finance'],
+        roleNames: ['Super admin', 'Finance'],
         emailVerifiedAt: null,
         lastLoginAt: null,
         createdAt: '2026-01-01T00:00:00.000Z',
@@ -46,7 +49,9 @@ describe('resolveStaffSsrIdentity', () => {
     expect(result.state).toBe('authenticated');
     if (result.state === 'authenticated') {
       expect(result.identity.email).toBe('a@b');
-      expect(result.identity.role).toBe('SUPER_ADMIN');
+      // Every role, in the order the body carried them: this resolver
+      // hands the body through untouched, and a person holds several.
+      expect(result.identity.roleKeys).toEqual(['super_admin', 'finance']);
     }
     // Hard assertion: ONE call total — no refresh, no retry.
     expect(fetchImpl).toHaveBeenCalledTimes(1);

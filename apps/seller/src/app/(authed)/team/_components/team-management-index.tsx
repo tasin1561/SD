@@ -489,11 +489,11 @@ export function TeamManagementIndex(): ReactElement {
                           <span className="sk-ident">{inv.email}</span>
                         </Td>
                         <Td>
-                          {/* An invitation offers a SET of roles, and
-                              `inv.role` — the legacy enum — is null
-                              whenever none of them has an enum spelling,
-                              i.e. whenever the company invited somebody
-                              onto a role it built itself. */}
+                          {/* An invitation offers a SET of roles, so
+                              all of their names are shown. The single
+                              field that used to hold "the role" was null
+                              whenever the company invited somebody onto
+                              a role it built itself. */}
                           <span className="team-member__roles">
                             {offered.length === 0 ? (
                               <StatusChip kind="failed" label="No role" size="sm" />

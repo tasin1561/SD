@@ -5,9 +5,10 @@ import {
   NotificationSubjectType,
   NotificationSubscriptionMode,
   SellerStatus,
-  StaffRole,
+  StaffRoleKey,
 } from '@skydrop/db';
 import { NotificationDispatchService } from '../../src/modules/notification-audience/services/notification-dispatch.service';
+import { setSellerUserRoles, setStaffRoles } from '../../src/common/auth/role-assignment';
 import {
   bootTestApp,
   createTestStaff,
@@ -106,7 +107,7 @@ describe('Notification audience (e2e)', () => {
     await flushTestRedis();
     await resetAuthState(h.prisma, h.app);
 
-    const staff = await createTestStaff(h.prisma, { role: StaffRole.SUPER_ADMIN });
+    const staff = await createTestStaff(h.prisma, { role: StaffRoleKey.SUPER_ADMIN });
     staffId = staff.id;
     const sLogin = await request(h.baseUrl)
       .post('/auth/staff/login')
@@ -318,10 +319,9 @@ describe('Notification audience (e2e)', () => {
       where: { sellerId: alpha.sellerId, key: 'viewer' },
       select: { id: true },
     });
-    await h.prisma.sellerUser.update({
-      where: { id: alpha.userId },
-      data: { roleId: viewerRole.id },
-    });
+    // REPLACE what they hold — `seller_user_roles` is the only record
+    // of it, so leaving OWNER beside VIEWER would prove nothing.
+    await setSellerUserRoles(h.prisma, alpha.userId, [viewerRole.id]);
 
     const login = await request(h.baseUrl)
       .post('/auth/seller/login')
@@ -680,8 +680,11 @@ describe('Notification audience (e2e)', () => {
       },
       select: { id: true },
     });
-    const reader = await createTestStaff(h.prisma, { role: StaffRole.CALL_AGENT });
-    await h.prisma.staffUser.update({ where: { id: reader.id }, data: { roleId: role.id } });
+    const reader = await createTestStaff(h.prisma, { role: StaffRoleKey.CALL_AGENT });
+    // REPLACE the seeded role with the reader one — `staff_user_roles`
+    // is the only record of what they hold, so a leftover CALL_AGENT
+    // beside it would be the role actually under test.
+    await setStaffRoles(h.prisma, reader.id, [role.id]);
     const login = await request(h.baseUrl)
       .post('/auth/staff/login')
       .send({ email: reader.email, password: reader.password })

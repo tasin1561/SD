@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { BinOpsPanel } from '../app/(authed)/warehouse/bins/_components/bin-ops-panel';
 import { buildFetchMock, makeStaff, renderWithProviders } from './helpers';
+import { StaffRoleKey } from '@skydrop/db';
 
 /**
  * "Apply a list of moves" asks WHICH LINE, by name.
@@ -20,7 +21,7 @@ import { buildFetchMock, makeStaff, renderWithProviders } from './helpers';
  * rather than carrying a row of another bin's stock across.
  */
 
-const staff = makeStaff('SUPER_ADMIN' as never, ['warehouse.view', 'warehouse.manage']);
+const staff = makeStaff([StaffRoleKey.SUPER_ADMIN], ['warehouse.view', 'warehouse.manage']);
 
 const BINS = [
   { id: 'b-floor', code: 'FLOOR', type: 'STORAGE' },

@@ -23,7 +23,6 @@ interface StaffRow {
   email: string;
   emailDisplay: string;
   passwordHash: string;
-  role: string;
   emailVerifiedAt: Date | null;
   lastLoginAt: Date | null;
   createdAt: Date;
@@ -325,7 +324,6 @@ async function seedStaff(
     email: 'admin@skydrop.global',
     emailDisplay: 'Admin@Skydrop.Global',
     passwordHash: hash,
-    role: 'SUPER_ADMIN',
     emailVerifiedAt: null,
     lastLoginAt: null,
     createdAt: new Date(),
@@ -434,7 +432,9 @@ describe('StaffAuthService — login', () => {
     expect(result.accessToken.token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
     expect(result.accessToken.expiresIn).toBe(300);
     expect(result.refresh.token).toMatch(/^[A-Za-z0-9_-]+$/);
-    expect(result.staff).toEqual({ id: staff.id, email: staff.email, role: staff.role });
+    // Who signed in, and nothing about what they may do: authority is
+    // `staff_user_roles`, which login does not read.
+    expect(result.staff).toEqual({ id: staff.id, email: staff.email });
 
     // lastLoginAt updated
     const stored = sut.client.staffUser.rows[0]!;

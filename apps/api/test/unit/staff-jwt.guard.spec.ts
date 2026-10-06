@@ -1,6 +1,5 @@
 import { ForbiddenException, UnauthorizedException, type ExecutionContext } from '@nestjs/common';
 import type { Reflector } from '@nestjs/core';
-import { StaffRole } from '@skydrop/db';
 import { StaffJwtGuard } from '../../src/common/guards/staff-jwt.guard';
 import {
   REQUIRE_PERMISSIONS_KEY,
@@ -49,7 +48,6 @@ function makeGuard(opts: Opts) {
       : {
           id: 'staff-1',
           email: 's@skydrop.global',
-          role: StaffRole.CALL_AGENT,
           emailVerifiedAt: new Date(),
           roles: roles.map((r) => ({
             role: {

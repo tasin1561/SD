@@ -70,6 +70,10 @@ export interface StoreInvitationView {
   readonly roleKeys: readonly string[];
   readonly roleNames: readonly string[];
   readonly expiresAt: string;
+  /** Past its date. The server decides — it holds the clock the token
+   *  is checked against, and two clocks disagreeing is how a row reads
+   *  "expired" beside a link that still works. */
+  readonly expired: boolean;
   readonly createdAt: string;
 }
 
@@ -189,6 +193,22 @@ export function useInviteStoreMember(): UseMutationResult<
   return useMutation({
     mutationFn: (body) =>
       client.request<StoreInvitationView>('/api/store/team/invitations', { method: 'POST', body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: TEAM }),
+  });
+}
+
+export function useResendStoreInvitation(): UseMutationResult<
+  StoreInvitationView,
+  Error,
+  { invitationId: string }
+> {
+  const client = useApiClient();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ invitationId }) =>
+      client.request<StoreInvitationView>(`/api/store/team/invitations/${invitationId}/resend`, {
+        method: 'POST',
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: TEAM }),
   });
 }

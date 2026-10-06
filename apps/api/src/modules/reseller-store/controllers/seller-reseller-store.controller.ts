@@ -170,6 +170,26 @@ export class SellerResellerStoreController {
     });
   }
 
+  @Post(':storeId/invitations/:invitationId/resend')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Send a pending invitation again — new token, new expiry, old link dead',
+  })
+  async resendInvitation(
+    @CurrentSeller() seller: AuthenticatedSeller,
+    @Param('storeId', new ParseUUIDPipe({ version: '7' })) storeId: string,
+    @Param('invitationId', new ParseUUIDPipe({ version: '7' })) invitationId: string,
+  ): Promise<StoreInvitationView> {
+    // Proves the store is THIS seller's before touching its rows.
+    await this.team.sellerStore(seller.id, storeId);
+    return this.team.resendInvitation(storeId, invitationId, {
+      type: ActorType.SELLER,
+      id: seller.userId,
+      sellerId: seller.id,
+      name: seller.fullName,
+    });
+  }
+
   @Post(':storeId/invitations/:invitationId/revoke')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Withdraw a pending invitation' })

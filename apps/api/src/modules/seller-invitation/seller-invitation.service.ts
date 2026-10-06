@@ -19,7 +19,26 @@ import type {
   InvitationListStatus,
 } from './dto/list.dto';
 
-const DEFAULT_EXPIRES_IN_DAYS = 7;
+/**
+ * How long an invitation stays good for.
+ *
+ * Thirty days, not the seven this started at. Seven looks generous at
+ * the moment somebody clicks Invite and is not: these go to a shop
+ * owner's inbox, where they sit under a weekend, a holiday and whatever
+ * else arrived that week. Measured on 2026-10-06, a reseller store
+ * invitation sent on 27 September lapsed on 4 October with the store
+ * still showing nobody on its team, and the first anybody knew of it was
+ * the owner going back through Gmail.
+ *
+ * The window is not what makes this safe. The token is single-use, held
+ * only as a hash, and revocable at any moment — that is the control. A
+ * shorter window only costs somebody their onboarding.
+ *
+ * The same number everywhere on purpose: four invitation types that
+ * expire on four different schedules is one more thing to remember and
+ * the first source of "why did that one lapse and this one not".
+ */
+const DEFAULT_EXPIRES_IN_DAYS = 30;
 
 interface CreateInput {
   email: string;

@@ -13,7 +13,7 @@ describe('JwtService', () => {
   const svc = new JwtService(env);
 
   it('signs a staff access token that verifies and exposes claims', () => {
-    const signed = svc.signStaffAccess({ subject: 'staff-uuid-1', role: 'SUPER_ADMIN' });
+    const signed = svc.signStaffAccess({ subject: 'staff-uuid-1' });
     expect(signed.token.split('.').length).toBe(3);
     expect(signed.expiresIn).toBe(300);
     expect(signed.expiresAt.getTime()).toBeGreaterThan(Date.now());
@@ -21,28 +21,33 @@ describe('JwtService', () => {
     const claims = svc.verifyStaffAccess(signed.token);
     expect(claims.sub).toBe('staff-uuid-1');
     expect(claims.aud).toBe('skydrop-staff');
-    expect(claims.role).toBe('SUPER_ADMIN');
+    // NO role travels in the token. A person holds several and an admin
+    // may change them mid-session, so a claim minted five minutes ago
+    // would answer with the old set; the guard reads `staff_user_roles`
+    // on every request instead.
+    expect(claims.role).toBeUndefined();
     expect(claims.jti).toBe(signed.jti);
     expect(claims.iss).toBe('skydrop');
   });
 
-  it('signs a seller access token with status + sellerId + role claims', () => {
+  it('signs a seller access token with status + sellerId, and no role', () => {
     const signed = svc.signSellerAccess({
       subject: 'user-uuid-1',
       status: 'APPROVED',
       sellerId: 'seller-uuid-1',
-      role: 'OWNER',
     });
     const claims = svc.verifySellerAccess(signed.token);
     expect(claims.sub).toBe('user-uuid-1');
     expect(claims.aud).toBe('skydrop-seller');
     expect(claims.status).toBe('APPROVED');
     expect(claims.sellerId).toBe('seller-uuid-1');
-    expect(claims.role).toBe('OWNER');
+    // Same as the staff token: authority is resolved per request from
+    // `seller_user_roles`, never carried.
+    expect(claims.role).toBeUndefined();
   });
 
   it('rejects a token with the wrong audience', () => {
-    const staffToken = svc.signStaffAccess({ subject: 's', role: 'CALL_AGENT' }).token;
+    const staffToken = svc.signStaffAccess({ subject: 's' }).token;
     expect(() => svc.verifySellerAccess(staffToken)).toThrow(UnauthorizedException);
   });
 
