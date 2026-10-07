@@ -3690,6 +3690,28 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate:
       'Hi {{ company_name }}, order {{ order_number }} for {{ recipient_name }} was delivered on {{ delivered_at }}. AWB {{ awb_number }} / {{ courier_name }}. View the order at {{ app_url }}.',
   },
+  // One message a day instead of a reconstruction from an inbox.
+  //
+  // Deliberately ONE template for sellers and stores rather than two.
+  // The reader differs but the question does not — "how did yesterday
+  // go" — and two templates would be two places for the same wording to
+  // drift. `who` carries the company or the store name, which is the
+  // only part that changes.
+  //
+  // `recipientType` is SELLER because a template must declare one and
+  // the seller is the larger audience; the dispatch layer resolves the
+  // actual people from the audience selector, so a store user receives
+  // this exactly as a seller's team member does.
+  {
+    code: 'daily.digest.email',
+    name: 'Daily activity digest — delivered, returned, not delivered',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.SELLER,
+    subject:
+      'Yesterday ({{ day }}): {{ delivered }} delivered, {{ returned }} back, {{ not_delivered }} not delivered',
+    bodyTemplate:
+      'Hi {{ who }}, here is {{ day }} in one message.\n\nDelivered: {{ delivered }}\nCame back: {{ returned }}\nNot delivered: {{ not_delivered }}\n\n{{ detail }}\n\nThis arrives only on days something moved — a morning with nothing in it is a morning with no email. Open the app at {{ app_url }}.',
+  },
   {
     code: 'seller.order_delivery_failed.email',
     name: 'Order delivery failed — email to seller (M11, NDR)',
