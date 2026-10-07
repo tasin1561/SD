@@ -17,6 +17,7 @@
  *   node scripts/tutorials/peek.mjs /orders
  *   node scripts/tutorials/peek.mjs '/orders?search=RSH-LIFE-DELIVERED' out.png
  *   node scripts/tutorials/peek.mjs --admin /system-issues
+ *   node scripts/tutorials/peek.mjs --reseller /catalogue
  *   node scripts/tutorials/peek.mjs --admin --routes /topups /withdrawals /pnl
  *
  * `--routes` takes SEVERAL and visits them on ONE sign-in, writing each
@@ -49,21 +50,34 @@ import fs from 'node:fs/promises';
 const args = process.argv.slice(2);
 const admin = args[0] === '--admin';
 if (admin) args.shift();
+// `--reseller` drives apps/reseller as a STORE USER — a different
+// person, not a different view: she cannot see unit cost, real stock,
+// the share held back from her catalogue, or that another store exists.
+// Section R is written by looking at HER screens, because looking at the
+// seller's would show figures those videos must never show.
+const reseller = args[0] === '--reseller';
+if (reseller) args.shift();
 
 /** Which stack's console. Required, like everywhere else — see `lib/stacks.mjs`. */
 const STACK = resolveStack();
 
-const APP = admin
+const APP = reseller
   ? {
-      base: process.env.ADMIN_APP_URL ?? STACK.admin.url,
-      email: process.env.TUTORIAL_OPS_EMAIL ?? 'tutorial-ops@skydrop.local',
-      password: process.env.TUTORIAL_OPS_PASSWORD ?? 'Tutorial-Ops-2026',
+      base: process.env.RESELLER_APP_URL ?? STACK.reseller.url,
+      email: process.env.DEMO_STORE_EMAIL ?? 'anjali@punesilkstudio.test',
+      password: process.env.DEMO_STORE_PASSWORD ?? 'Store-Demo-2026',
     }
-  : {
-      base: process.env.SELLER_APP_URL ?? STACK.seller.url,
-      email: process.env.DEMO_SELLER_EMAIL ?? 'demo@rangpursilk.test',
-      password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
-    };
+  : admin
+    ? {
+        base: process.env.ADMIN_APP_URL ?? STACK.admin.url,
+        email: process.env.TUTORIAL_OPS_EMAIL ?? 'tutorial-ops@skydrop.local',
+        password: process.env.TUTORIAL_OPS_PASSWORD ?? 'Tutorial-Ops-2026',
+      }
+    : {
+        base: process.env.SELLER_APP_URL ?? STACK.seller.url,
+        email: process.env.DEMO_SELLER_EMAIL ?? 'demo@rangpursilk.test',
+        password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
+      };
 
 const tour = args[0] === '--routes';
 if (tour) args.shift();
@@ -112,7 +126,11 @@ await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
 for (const route of routes) {
   const out = tour
     ? shotPath(route)
-    : (args[1] ?? path.join(VERIFY_DIR, admin ? 'peek-admin.png' : 'peek.png'));
+    : (args[1] ??
+      path.join(
+        VERIFY_DIR,
+        reseller ? 'peek-reseller.png' : admin ? 'peek-admin.png' : 'peek.png',
+      ));
   await page.goto(`${APP.base}${route}`, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle').catch(() => {});
   await page.waitForTimeout(2500);

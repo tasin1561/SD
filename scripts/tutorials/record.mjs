@@ -68,6 +68,30 @@ const APPS = {
       password: process.env.TUTORIAL_OPS_PASSWORD ?? 'Tutorial-Ops-2026',
     },
   },
+  /**
+   * The reseller portal — section R.
+   *
+   * A DIFFERENT PERSON, not a different view. This identity is Anjali
+   * Deshpande, the owner of Pune Silk Studio — the store section G
+   * already films the seller dealing WITH. Hers is the one seeded store
+   * whose invitation is accepted, so it is the only one that can sign
+   * in; Kolkata Silk Room is seeded with an invitation nobody takes up,
+   * which is deliberate (G1 films it being sent).
+   *
+   * She cannot see what the stock costs, how
+   * much of it there really is, the share held back from the catalogue,
+   * or that any other store exists. Filming section R as the seller
+   * would have produced videos that quietly show a shopkeeper figures
+   * they are never shown, which is the one thing the reseller boundary
+   * exists to prevent.
+   */
+  reseller: {
+    baseUrl: process.env.RESELLER_APP_URL ?? STACK.reseller.url,
+    identity: {
+      email: process.env.DEMO_STORE_EMAIL ?? 'anjali@punesilkstudio.test',
+      password: process.env.DEMO_STORE_PASSWORD ?? 'Store-Demo-2026',
+    },
+  },
 };
 
 /**

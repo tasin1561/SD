@@ -3542,6 +3542,12 @@ model OrderEvent {
   @@index([orderId, createdAt])
   @@index([type])
   @@index([toStatus])
+  /// The daily digest asks "which orders reached DELIVERED / an RTO
+  /// status / DELIVERY_FAILED yesterday", which is a status filter AND a
+  /// time window. `toStatus` alone makes that read every event ever
+  /// recorded for those statuses and throw away all but one day of them,
+  /// and this table only grows.
+  @@index([toStatus, createdAt])
   @@map("order_events")
 }
 
