@@ -57,6 +57,7 @@ import { CourierEscalationModule } from './modules/courier-escalation/courier-es
 import { CourierNdrRunnerModule } from './modules/courier-ndr-runner/courier-ndr-runner.module';
 import { CourierOpsModule } from './modules/courier-ops/courier-ops.module';
 import { CourierCostSyncModule } from './modules/courier-cost-sync/courier-cost-sync.module';
+import { ImpersonationModule } from './modules/impersonation/impersonation.module';
 import { ShiprocketCostSyncModule } from './modules/shiprocket-cost-sync/shiprocket-cost-sync.module';
 import { CourierAccountAdminModule } from './modules/courier-account-admin/courier-account-admin.module';
 import { CourierSettlementModule } from './modules/courier-settlement/courier-settlement.module';
@@ -116,6 +117,9 @@ import { StaffInvitationModule } from './modules/staff-invitation/staff-invitati
 import { SellerTeamModule } from './modules/seller-team/seller-team.module';
 import { ThrottlerModule } from './common/throttler/throttler.module';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { ImpersonationRuntimeModule } from './common/impersonation/impersonation-runtime.module';
+import { ImpersonationAlsMiddleware } from './common/impersonation/impersonation-als.middleware';
+import { ImpersonationExchangeModule } from './modules/impersonation-exchange/impersonation-exchange.module';
 import { pinoConfig } from './common/pino/logger-config';
 import { envSchema } from './config/env.schema';
 import { DeliveryActionModule } from './modules/delivery-action/delivery-action.module';
@@ -272,11 +276,35 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     InvoiceModule,
     StaffInvitationModule,
     SellerTeamModule,
+    ImpersonationModule,
+    // Support impersonation, the per-request half: the ambient context and
+    // the deny list (runtime), and the two endpoints a session ARRIVES at
+    // once the admin side has opened it (exchange).
+    ImpersonationRuntimeModule,
+    ImpersonationExchangeModule,
     HealthModule,
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(RequestIdMiddleware).forRoutes('*');
+    /*
+      ── WHY THE IMPERSONATION CONTEXT IS OPENED IN MIDDLEWARE ─────────
+
+      `runImpersonated()` is `AsyncLocalStorage.run`, so the context
+      exists only for the duration of the function it is given. Middleware
+      is the only hook whose call to `next()` has the REST of the request
+      inside it — the guards, the pipes, the handler, the exception filter
+      — which is what makes one scope cover everything that might write an
+      audit row. A guard or an interceptor would have returned before the
+      handler ran, and the rows would have said the seller acted alone,
+      into an append-only table.
+
+      EVERY route, deliberately: the ambient context has to be open
+      wherever `AuditLogService.log` might be reached, and that is
+      everywhere. A request with no impersonation cookie costs one
+      `req.cookies` lookup here and is otherwise untouched.
+    */
+    consumer.apply(ImpersonationAlsMiddleware).forRoutes('*');
   }
 }

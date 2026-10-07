@@ -1,0 +1,166 @@
+/* The support-session bar.
+ *
+ * Tokens only (FE-6), so both themes work without a second rule: the
+ * danger fill and its computed foreground are `--red-fill` /
+ * `--red-on-fill`, which the theme redefines for light. There is no hex
+ * anywhere in this file and no `prefers-color-scheme` block, because
+ * every value it uses is already theme-aware.
+ *
+ * ── WHY TWO ELEMENTS ──────────────────────────────────────────────────
+ * The BAR says what is happening and carries the End button. The FRAME
+ * is a red edge around the whole viewport that nothing can scroll away
+ * from, drawn with `position: fixed` and `pointer-events: none` so it
+ * costs nothing and intercepts nothing. The bar alone was not enough:
+ * the one person this feature endangers is somebody who has forgotten
+ * where they are, and forgetting is exactly what happens three screens
+ * deep into a wallet. A permanent red edge is visible from the corner of
+ * the eye on every screen and at every scroll position, and no part of
+ * the seller's own UI ever paints one.
+ */
+
+.imp-bar {
+  /* Sticks directly under the shell's own header — `--sk-sticky-top` is
+     the shell's variable for exactly this, so the bar lands where every
+     other sticky element in the app lands, rather than guessing at the
+     header's height. */
+  position: sticky;
+  top: var(--sk-sticky-top, 0px);
+  /* Above the page header (20) and the shell's table surfaces; BELOW the
+     nav drawer (50) and a dialog, so neither is covered by it. */
+  z-index: 45;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-width: 0;
+  margin-bottom: var(--sp-4);
+  padding: var(--sp-3);
+  border: 2px solid var(--red-fill-hover);
+  border-radius: var(--r-md);
+  background: var(--red-fill);
+  color: var(--red-on-fill);
+  box-shadow: var(--elev-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}
+
+.imp-bar__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+}
+
+.imp-bar__says {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.imp-bar__lead {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-bold);
+  /* An account name can be one long unbroken word. */
+  overflow-wrap: anywhere;
+}
+
+.imp-bar__sub {
+  margin: 2px 0 0;
+  /* No opacity on the text: `--red-on-fill` is the value whose contrast
+     against `--red-fill` was computed, and fading it undoes that. */
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.imp-bar__facts {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+/* The mode, and the clock. Outlined rather than filled: a second solid
+   colour on a solid ground is unreadable in one theme or the other. */
+.imp-bar__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--red-on-fill);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.imp-bar__clock {
+  font-family: var(--app-mono);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+}
+
+/* The End button. Its own rules rather than the shared `Button`,
+   because every variant we have is coloured for a page background and
+   would vanish on this one. A 44px target on every pointer. */
+.imp-bar__end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: var(--red-on-fill);
+  color: var(--red-fill);
+  font: inherit;
+  font-weight: var(--fw-bold);
+  cursor: pointer;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.imp-bar__end:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.imp-bar__end:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+.imp-bar__end:focus-visible {
+  outline: 3px solid var(--red-on-fill);
+  outline-offset: 3px;
+}
+
+/* On a phone the button takes the full width rather than being squeezed
+   beside the clock — and nothing in here can overflow 320px, because
+   every row wraps and every box is `min-width: 0`. */
+@media (max-width: 479px) {
+  .imp-bar__end {
+    flex: 1 1 100%;
+  }
+}
+
+.imp-bar__error {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  overflow-wrap: anywhere;
+}
+
+/* The frame. Inset so it cannot add a scrollbar, and `pointer-events:
+   none` so it is decoration in the strictest sense — it can never
+   swallow a click meant for the page under it. */
+.imp-frame {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 3px var(--red-fill);
+}

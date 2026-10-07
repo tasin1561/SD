@@ -65,6 +65,15 @@ const PUBLIC_CONTROLLERS: Readonly<Record<string, string>> = {
   'staff-invitation-public.controller.ts':
     'accept a staff invitation — the token is the credential',
   'seller-team-public.controller.ts': 'accept a seller team invitation — same',
+  // Spending a support handoff token at the SELLER or STORE origin. The
+  // admin console cannot mint a cookie for another origin (`__Host-` is
+  // origin-bound), so the staff member arrives here carrying a
+  // single-use token and nothing else — there is no session to
+  // authenticate as until this call has succeeded. Same shape as the
+  // invitation redemptions above: the token is the credential, looked up
+  // by its sha256 and burned atomically.
+  'impersonation-exchange.controller.ts':
+    'spend a support handoff token — the token is the credential',
   // A stranger asking to be invited. Rate-limited; it creates a lead row
   // and nothing else.
   'public-invite-lead.controller.ts': 'marketing invite-request form',

@@ -11,6 +11,7 @@
  * the FIRST of them, a label — never the answer to what they may do,
  * which is `permissions`.
  */
+import type { ImpersonationBannerContext } from './admin-impersonation';
 
 /** Login / refresh response shape (identical for staff + seller). */
 export interface AccessTokenResponse {
@@ -96,6 +97,22 @@ export interface SellerMe {
   // Phase 1B — the signed-in team member identity.
   readonly sellerUserId: string;
   readonly fullName: string;
+  /**
+   * Set ONLY while a staff member is inside this account on a support
+   * session. Absent or null on every real seller's `/me` for ever,
+   * because a real seller never has one — so the banner's condition is
+   * just "is this here": nothing to get wrong, and no permission for the
+   * seller app to check.
+   *
+   * OPTIONAL, and as of 2026-10-07 the API does not send it yet: the
+   * facts exist (the exchange endpoint returns them when the handoff is
+   * spent) but `/auth/seller/me` does not carry them, and a banner on
+   * every page needs them on every request. A `/me` without it reads as
+   * "nobody is impersonating", which is the truth for every session that
+   * exists today and the safe way round for a field whose absence hides
+   * a warning rather than inventing one.
+   */
+  readonly impersonation?: ImpersonationBannerContext | null;
 }
 
 /** A reseller store's lifecycle (RS-1). Mirrors the API's ResellerStoreStatus. */
@@ -143,6 +160,8 @@ export interface StoreMe {
   };
   /** The one seller this store resells for. */
   readonly seller: { readonly id: string; readonly companyName: string };
+  /** The same support-session marker as `SellerMe.impersonation` — see there. */
+  readonly impersonation?: ImpersonationBannerContext | null;
 }
 
 export interface LoginRequest {

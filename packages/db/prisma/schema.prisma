@@ -115,6 +115,9 @@ model StaffUser {
   labelReprintsDecided      LabelReprintRequest[]   @relation("LabelReprintDecidedBy")
   labelReprintsPrinted      LabelReprintRequest[]   @relation("LabelReprintPrintedBy")
 
+  /// Support sessions this person opened.
+  impersonationSessions ImpersonationSession[] @relation("ImpersonationActor")
+
   @@index([deletedAt])
   @@map("staff_users")
 }
@@ -353,6 +356,9 @@ model Seller {
   sellerFavouriteVariants  SellerFavouriteVariant[]
   shipmentAddressChanges   ShipmentAddressChange[]
 
+  /// Support sessions opened against this seller.
+  impersonationSessions ImpersonationSession[]
+
   @@index([status])
   @@index([deletedAt])
   @@index([approvedById])
@@ -573,24 +579,33 @@ model SellerNote {
 }
 
 model AuditLog {
-  id          String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  actorType   ActorType     @map("actor_type")
-  actorId     String?       @map("actor_id") @db.Uuid
-  staffUserId String?       @map("staff_user_id") @db.Uuid
-  sellerId    String?       @map("seller_id") @db.Uuid
-  action      String
-  entityType  String        @map("entity_type")
-  entityId    String?       @map("entity_id") @db.Uuid
-  changes     Json?
-  metadata    Json?
+  id                        String        @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  actorType                 ActorType     @map("actor_type")
+  actorId                   String?       @map("actor_id") @db.Uuid
+  staffUserId               String?       @map("staff_user_id") @db.Uuid
+  /// Set ONLY on a row written during support impersonation: the staff
+  /// member who was acting. `actorId` stays the SELLER or STORE user —
+  /// the account the action happened in — so a reader sees both halves
+  /// of "who did this" without joining anything.
+  ///
+  /// Stamped by `AuditLogService` from the request's impersonation
+  /// context rather than passed by each caller, because a caller that
+  /// forgets would produce a row claiming the seller did it.
+  impersonatedByStaffUserId String?       @map("impersonated_by_staff_user_id") @db.Uuid
+  sellerId                  String?       @map("seller_id") @db.Uuid
+  action                    String
+  entityType                String        @map("entity_type")
+  entityId                  String?       @map("entity_id") @db.Uuid
+  changes                   Json?
+  metadata                  Json?
   /// How much a reader should care.
   ///
   /// Lived in `metadata.severity` because there was no column, which
   /// meant "show me everything CRITICAL this month" was a JSON scan
   /// over the largest table we keep. It is still written into metadata
   /// as well, so every existing reader and assertion keeps working.
-  severity    AuditSeverity @default(LOW)
-  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  severity                  AuditSeverity @default(LOW)
+  createdAt                 DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
   staffUser StaffUser? @relation("AuditLogStaff", fields: [staffUserId], references: [id])
   seller    Seller?    @relation("AuditLogSeller", fields: [sellerId], references: [id])
@@ -2972,6 +2987,9 @@ model SellerStore {
   /// is invisible here and will not drift-check; it is what makes two
   /// defaults for one seller unrepresentable rather than merely
   /// unlikely.
+
+  /// Support sessions opened against this store.
+  impersonationSessions ImpersonationSession[]
 
   @@unique([sellerId, name])
   /// RS-5 — the target of `orders (store_id, store_kind)`: an order's kind
@@ -5416,6 +5434,21 @@ enum ActorType {
   /// RS-2: a reseller store user (store_users). Its own value because
   /// "the store did this" and "the seller did this" are different facts.
   STORE  @map("store")
+
+  /// A STAFF member acting as a seller, through support impersonation.
+  ///
+  /// ── WHY THIS IS NOT JUST `SELLER` WITH A NOTE ──────────────────────
+  /// If an order placed by staff-as-seller wrote a row identical to one
+  /// the seller placed, the audit would be a SEPARATE CLAIM sitting
+  /// beside the data rather than part of it — and six months into "we
+  /// never placed that order" the answer would be matching timestamps
+  /// across two tables. The row itself has to say which it was.
+  STAFF_AS_SELLER @map("staff_as_seller")
+
+  /// The same, for a reseller store. Its own value for the same reason
+  /// `STORE` is its own value: the store and its seller are different
+  /// businesses and must stay distinguishable in the record.
+  STAFF_AS_STORE @map("staff_as_store")
 
   @@map("actor_type")
 }
@@ -10150,4 +10183,73 @@ model StoreNotificationPreference {
   @@unique([storeId, category])
   @@index([storeId])
   @@map("store_notification_preferences")
+}
+
+/// One support-impersonation session: a staff member acting as a seller
+/// or a store, for a bounded time, for a stated reason.
+///
+/// ── WHY A ROW AND NOT JUST A TOKEN ──────────────────────────────────
+/// The token answers "may this request act as them". This answers the
+/// questions asked afterwards: who, as whom, when, for how long, why,
+/// and what it touched. A session that exists only as a signed string
+/// leaves nothing to review and nothing to end early.
+///
+/// NOT soft-deletable and never updated except to close it. The row is
+/// the record.
+model ImpersonationSession {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+
+  /// Who is acting.
+  staffUserId String @map("staff_user_id") @db.Uuid
+
+  /// Which kind of account, and which one. Two nullable columns rather
+  /// than one polymorphic id, so the foreign keys are real.
+  sellerId String? @map("seller_id") @db.Uuid
+  storeId  String? @map("store_id") @db.Uuid
+
+  /// Free text, REQUIRED, and shown in every review. "Checking a payout"
+  /// is a reason; an empty string is not, which is why the DTO sets a
+  /// minimum length rather than leaving it optional.
+  reason String @db.Text
+
+  /// WRITE access was asked for and granted. False is the read-only
+  /// session: every mutating request is refused by the guard.
+  mayWrite Boolean @default(false) @map("may_write")
+
+  /// The second factor cleared. A session is unusable until this is set
+  /// — the row is created when the OTP is SENT, so an abandoned attempt
+  /// is still visible to a reviewer.
+  otpVerifiedAt DateTime? @map("otp_verified_at") @db.Timestamptz
+
+  /// When it stops working, set at creation and never extended. A
+  /// support session that can be renewed is just a second login.
+  expiresAt DateTime @map("expires_at") @db.Timestamptz
+
+  /// Set when it is ended — by the staff member, by expiry, or by an
+  /// admin ending somebody else's.
+  endedAt     DateTime? @map("ended_at") @db.Timestamptz
+  endedReason String?   @map("ended_reason")
+
+  /// Where from. Recorded because "who" is not the whole question.
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent") @db.Text
+
+  /// How many requests it made, and how many of those CHANGED something.
+  /// Counted so a review can sort by the sessions that did the most
+  /// without reading every audit row.
+  requestCount Int @default(0) @map("request_count")
+  writeCount   Int @default(0) @map("write_count")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  staff  StaffUser    @relation("ImpersonationActor", fields: [staffUserId], references: [id], onDelete: Restrict)
+  seller Seller?      @relation(fields: [sellerId], references: [id], onDelete: Restrict)
+  store  SellerStore? @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@index([staffUserId, createdAt])
+  @@index([sellerId, createdAt])
+  @@index([storeId, createdAt])
+  /// The review query: everything still open.
+  @@index([endedAt])
+  @@map("impersonation_sessions")
 }

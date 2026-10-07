@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { ActorType, Currency, SellerStatus } from '@skydrop/db';
+import type { ImpersonationBannerService } from '../../src/common/impersonation/impersonation-banner';
 import { SellerAuthService } from '../../src/modules/seller-auth/seller-auth.service';
 import { PasswordService } from '../../src/modules/auth-common/services/password.service';
 import { JwtService } from '../../src/modules/auth-common/services/jwt.service';
@@ -536,6 +537,11 @@ function makeSut(): Sut {
     email,
     onboarding,
     notificationPreferences,
+    // Nobody is impersonating a unit test. Null is the answer on every
+    // ordinary request, which is what this models.
+    {
+      current: jest.fn().mockResolvedValue(null),
+    } as unknown as ImpersonationBannerService,
     // Sign-in must not depend on the FX table having a row: a rate that
     // cannot be resolved is a display inconvenience, never a reason a
     // seller cannot reach their account. Throwing here proves it.

@@ -43,11 +43,28 @@ METHOD = re.compile(r"@(Get|Post|Patch|Put|Delete)\(\s*(?:'([^']*)')?\s*\)")
 routes = []  # (METHOD, regex, literal)
 for f in API.rglob('*.controller.ts'):
     text = f.read_text()
-    m = CONTROLLER.search(text)
-    if not m:
+    # ONE FILE MAY DECLARE SEVERAL CONTROLLERS, and taking only the first
+    # is not merely a miss — it attributes every later controller's
+    # methods to the FIRST prefix, so the table gains routes that do not
+    # exist while losing the ones that do. `impersonation-exchange`
+    # declares the seller and store exchanges side by side (the two
+    # prefixes ARE the identity binding), and its real
+    # `POST /auth/store/impersonation/exchange` was reported as a route
+    # the API does not serve while a phantom
+    # `POST /auth/seller/impersonation/exchange` sat beside it. A gate
+    # that fails on something correct is one people learn to skip.
+    # Each method belongs to the nearest @Controller ABOVE it.
+    marks = [(m.start(), (m.group(1) or '').strip('/')) for m in CONTROLLER.finditer(text)]
+    if not marks:
         continue
-    prefix = (m.group(1) or '').strip('/')
     for mm in METHOD.finditer(text):
+        at = mm.start()
+        prefix = ''
+        for start, pre in marks:
+            if start < at:
+                prefix = pre
+            else:
+                break
         verb = mm.group(1).upper()
         sub = (mm.group(2) or '').strip('/')
         full = '/' + '/'.join(p for p in (prefix, sub) if p)

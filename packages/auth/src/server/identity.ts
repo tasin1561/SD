@@ -34,6 +34,14 @@ import type { IdentityKind, SellerMe, StaffMe, StoreMe } from '@skydrop/api-clie
  * `IdentityKind`, so a fourth identity fails to compile until somebody
  * names its cookie. RS-2 added `store` (apps/reseller).
  */
+/**
+ * The support-session cookie, named here as well as in the API because
+ * this package cannot import from it. `impersonation-cookie.ts` in the
+ * API is the authority; `ssr-impersonation-cookie.test.ts` holds the two
+ * together.
+ */
+const IMPERSONATION_COOKIE = '__Host-impersonation';
+
 const COOKIE_BY_KIND: Record<IdentityKind, string> = {
   staff: '__Host-staffRefresh',
   seller: '__Host-sellerRefresh',
@@ -51,6 +59,24 @@ export interface SsrIdentityRequest {
    *  next/headers cookies()). Pass empty string if the cookie
    *  is absent (we'll surface as `notAuthenticated`). */
   readonly cookieValue: string;
+  /**
+   * A SUPPORT SESSION's cookie, when the browser is carrying one.
+   *
+   * ── WHY THIS IS A SECOND COOKIE AND NOT THE FIRST ───────────────────
+   * A staff member inside somebody's account on a support session holds
+   * `__Host-impersonation` and NO refresh cookie — they never signed in
+   * as the seller, because there is no password they could have used.
+   * Without this, `cookieValue` is empty, this resolver answers
+   * `not-authenticated` before it asks the API anything, and the layout
+   * redirects to /login: the session is unreachable from the first
+   * navigation, and the API's guard — which handles the cookie
+   * perfectly — never gets a say.
+   *
+   * Forwarded ALONGSIDE the refresh cookie rather than instead of it.
+   * The API decides which one it honours; this only stops the browser's
+   * credentials being dropped on the floor before they arrive.
+   */
+  readonly impersonationCookieValue?: string;
   /** Override fetch for tests. */
   readonly fetchImpl?: typeof fetch;
 }
@@ -92,7 +118,13 @@ export async function resolveStoreSsrIdentity(
 }
 
 async function resolveSsrIdentity<T>(req: SsrIdentityRequest): Promise<SsrIdentityResult<T>> {
-  if (!req.cookieValue) return { state: 'not-authenticated' };
+  // EITHER credential is enough to be worth asking. A support session
+  // carries only the impersonation cookie; refusing on the absence of a
+  // refresh cookie would log the staff member out of an account they
+  // are legitimately inside, on the first page they open.
+  if (!req.cookieValue && !req.impersonationCookieValue) {
+    return { state: 'not-authenticated' };
+  }
   const cookieName = COOKIE_BY_KIND[req.identityKind];
   const fetchImpl = req.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
@@ -103,7 +135,18 @@ async function resolveSsrIdentity<T>(req: SsrIdentityRequest): Promise<SsrIdenti
       // Forward the EXACT cookie the browser sent. We pass the
       // raw cookie value (e.g. "abc123") under the right name —
       // the API's cookie-parser middleware picks it up.
-      Cookie: `${cookieName}=${req.cookieValue}`,
+      //
+      // Both, when both are present: the API's guard prefers the
+      // support session, and sending only one of them would make the
+      // answer depend on which this file happened to pick.
+      Cookie: [
+        req.cookieValue ? `${cookieName}=${req.cookieValue}` : null,
+        req.impersonationCookieValue
+          ? `${IMPERSONATION_COOKIE}=${req.impersonationCookieValue}`
+          : null,
+      ]
+        .filter((c): c is string => c !== null)
+        .join('; '),
     },
     cache: 'no-store',
   });

@@ -160,6 +160,27 @@ export type {
 } from './endpoints/admin-remittances';
 export type { ReportSummary } from './endpoints/admin-reports';
 export type {
+  EndImpersonationRequest,
+  ImpersonationBannerContext,
+  ImpersonationExchangeRequest,
+  ImpersonationHandoff,
+  ImpersonationSessionSummary,
+  ImpersonationSessionView,
+  ImpersonationSessionsQuery,
+  ImpersonationSubjectKind,
+  StartImpersonationRequest,
+  StartImpersonationResult,
+  VerifyImpersonationRequest,
+  VerifyImpersonationResult,
+} from './endpoints/admin-impersonation';
+// VALUES, not types: the reason field counts characters against the
+// floor and the code field draws one box per digit. Both numbers are
+// the server's, restated once so the two cannot drift.
+export {
+  IMPERSONATION_OTP_LENGTH,
+  MIN_IMPERSONATION_REASON,
+} from './endpoints/admin-impersonation';
+export type {
   StaffInvitationListItem,
   CreatedStaffInvitation,
   CreateStaffInvitationRequest,

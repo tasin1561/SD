@@ -21,6 +21,7 @@ import { SystemIssueService } from '../../src/modules/system-issues/services/sys
 import { NotificationListener } from '../../src/modules/notifications/services/notification-listener.service';
 import { SystemIssueNotifier } from '../../src/modules/system-issues/services/system-issue-notifier.service';
 import { OrderConfirmedAwbListener } from '../../src/modules/courier-awb/services/order-confirmed-awb-listener.service';
+import { ImpersonationService } from '../../src/modules/impersonation/services/impersonation.service';
 import { rolesOnCreate } from '../../src/common/auth/role-assignment';
 import { SellerIssueEscalationService } from '../../src/modules/courier-escalation/services/seller-issue-escalation.service';
 import { OutboundWebhookListener } from '../../src/modules/seller-webhook-delivery/services/outbound-webhook-listener.service';
@@ -208,6 +209,31 @@ export async function drainSystemIssues(app: NestExpressApplication): Promise<vo
   }
 }
 
+/**
+ * Quiesce the impersonated-request counters.
+ *
+ * `ImpersonationGuard` fires `noteRequest` with `void` on every request
+ * a support session makes — correct in production, where the seller's
+ * request must not wait on a sort key. The UPDATE then outlives the
+ * request and holds FK RowShareLocks on `impersonation_sessions`, which
+ * references `staff_users`, `sellers` and `seller_stores` with
+ * `onDelete: Restrict`. Still running when the reset below deletes those
+ * parents, it is the same 40P01/23001 the four drains above were each
+ * added for.
+ *
+ * `impersonation.e2e-spec.ts` drives real impersonated requests
+ * (`/seller/api-keys`, `/store/wallet/withdrawals`), so each one fires
+ * a counter — the exposure is live, not theoretical. Wired in the same
+ * commit as the writer this time, which is what NOTIF-19 asks for.
+ */
+export async function drainImpersonationCounters(app: NestExpressApplication): Promise<void> {
+  try {
+    await app.get(ImpersonationService, { strict: false }).drainInFlight();
+  } catch {
+    // Not registered in this app; nothing in flight by definition.
+  }
+}
+
 export async function resetAuthState(
   prisma: PrismaClient,
   app?: NestExpressApplication,
@@ -234,6 +260,7 @@ export async function resetAuthState(
     // INSERT outlives the request and races this reset. Found on CI,
     // shard 1 of 4, as a 40P01 naming neither the test nor the cause.
     await drainSellerIssueEscalation(app);
+    await drainImpersonationCounters(app);
     /*
       AND THE FOUR THAT WERE NEVER WIRED.
 
@@ -283,6 +310,14 @@ export async function resetAuthState(
     // a subject id that is about to stop existing — a leftover row
     // would silently silence a topic for a REUSED id in a later suite,
     // which is the kind of cross-suite ghost that takes a day to find.
+    // A support-impersonation session holds a staff_user, a seller and a
+    // store, ALL `onDelete: Restrict`. It is only wiped today because
+    // `resetOrderState` truncates `seller_stores` CASCADE and the store
+    // FK drags it in — an accident, not a decision. The day that column
+    // or that truncate changes, `staffUser.deleteMany({})` below starts
+    // failing 23001 for every suite in the repo. Named explicitly for
+    // the same reason `seller_users` is (MUST #12).
+    prisma.impersonationSession.deleteMany({}),
     prisma.notificationSubscription.deleteMany({}),
     prisma.notificationLog.deleteMany({}),
     prisma.notificationBroadcast.deleteMany({}),

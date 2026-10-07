@@ -73,10 +73,18 @@ export function sideOf(actor: ActorType): TicketSide {
     case ActorType.STAFF:
     case ActorType.SYSTEM:
       return 'US';
+    // A support session acts INSIDE their account, so for every
+    // customer-facing reading of "whose side was this on" the answer is
+    // theirs — the order's story is not the place to tell a customer
+    // that Skydrop was at the keyboard. The fact that it was lives in
+    // `audit_logs.impersonated_by_staff_user_id`, where a reviewer looks
+    // and a recipient does not.
     case ActorType.SELLER:
     case ActorType.API:
+    case ActorType.STAFF_AS_SELLER:
       return 'SELLER';
     case ActorType.STORE:
+    case ActorType.STAFF_AS_STORE:
       return 'STORE';
   }
 }

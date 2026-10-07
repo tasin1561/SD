@@ -155,6 +155,12 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [prefix: string, permissio
   ['/webhooks', 'webhooks.view'],
   ['/staff', 'staff.view'],
   ['/roles', 'rbac.manage'],
+  // The OVERSIGHT key, not the one that opens a session. Somebody who
+  // may go inside a seller's account is not thereby somebody who may
+  // read everybody else's sessions — that is the whole point of the
+  // third permission existing, and gating this page on
+  // `support.impersonate` would quietly undo it.
+  ['/impersonation', 'support.impersonate.review'],
   ['/system/capacity', 'system.capacity.view'],
   ['/settings', 'system.settings.view'],
 ];

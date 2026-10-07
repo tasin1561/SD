@@ -1,3 +1,4 @@
+import { ImpersonationRuntimeModule } from '../../common/impersonation/impersonation-runtime.module';
 import { Module } from '@nestjs/common';
 import { FxModule } from '../fx/fx.module';
 import { SellerAuthController } from './seller-auth.controller';
@@ -8,7 +9,17 @@ import { SellerOnboardingModule } from '../seller-onboarding/seller-onboarding.m
 import { SellerNotificationPreferenceModule } from '../seller-notification-preference/seller-notification-preference.module';
 
 @Module({
-  imports: [EmailModule, SellerOnboardingModule, SellerNotificationPreferenceModule, FxModule],
+  imports: [
+    // `ImpersonationBannerService` lives here. Importing the runtime
+    // module is what makes `/me` able to say a support session is in
+    // progress — without it Nest cannot construct this service at all
+    // and the whole API refuses to boot.
+    ImpersonationRuntimeModule,
+    EmailModule,
+    SellerOnboardingModule,
+    SellerNotificationPreferenceModule,
+    FxModule,
+  ],
   controllers: [SellerAuthController],
   providers: [SellerAuthService, SellerJwtGuard],
   exports: [SellerJwtGuard, SellerAuthService],

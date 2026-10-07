@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeftRight, Eye, PackageSearch, PencilLine } from 'lucide-react';
+import { ArrowLeftRight, Eye, PackageSearch, PencilLine, ShieldAlert } from 'lucide-react';
 import { useState, type ReactElement } from 'react';
 import { useRevealBankAccount, useSellerDetail, useUpdateSellerInitials } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -17,6 +17,7 @@ import { SellerSettingsSection } from './seller-settings-section';
 import { CreditAfterConfirmationPanel } from './credit-after-confirmation-panel';
 import { SellerCourierLinksSection } from './seller-courier-links-section';
 import { BulkDequeuePanel } from './bulk-dequeue-panel';
+import { StartImpersonationDialog } from '../../impersonation/_components/start-impersonation-dialog';
 import { serverVerdict } from '@/lib/server-verdict';
 import {
   AcAlert,
@@ -40,6 +41,11 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
   const canChangeStatus = usePermission('sellers.approve', 'sellers.suspend');
   // Cosmetic (FE-2): the transfer page and its endpoints refuse without it.
   const canTransfer = usePermission('money.wallet.transfer');
+  // Going INSIDE this account. `support.impersonate` is the key that
+  // opens a session; whether it may also WRITE is asked separately, in
+  // the dialog, because that is where the choice is made.
+  const canImpersonate = usePermission('support.impersonate');
+  const [impersonating, setImpersonating] = useState(false);
 
   if (detail.isLoading || detail.isError || !detail.data) {
     return (
@@ -98,9 +104,33 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
                 <span className="sk-btn__label">Debit or credit wallet →</span>
               </Link>
             )}
+            {canImpersonate && (
+              /* Destructive, because it is: for as long as the session
+                 lasts, this console's operator is indistinguishable from
+                 the seller in their own account's history. A secondary
+                 button beside "their orders" would read as one more way
+                 to look at them. */
+              <Button
+                variant="destructive"
+                size="md"
+                icon={<ShieldAlert size={15} />}
+                onClick={() => setImpersonating(true)}
+              >
+                Sign in as {d.companyName}
+              </Button>
+            )}
           </div>
         }
       />
+
+      {impersonating && (
+        <StartImpersonationDialog
+          subjectKind="SELLER"
+          subjectId={d.id}
+          subjectName={d.companyName}
+          onClose={() => setImpersonating(false)}
+        />
+      )}
 
       <AcSection title="Profile">
         <AcDl

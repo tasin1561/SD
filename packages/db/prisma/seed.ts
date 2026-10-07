@@ -3438,6 +3438,32 @@ const notificationTemplates: TemplateSeed[] = [
       'Hi {{ company_name }}, your Skydrop onboarding is complete. You can now ship inventory to our warehouse and start placing orders from {{ app_url }}. Questions? {{ support_email }}.',
   },
   {
+    /*
+      The staff member's own second factor for going inside a seller's
+      or a reseller store's account.
+
+      Addressed to the STAFF member and never to the account holder.
+      Asking a seller to read a code out would teach every one of them
+      that a support call legitimately asks for codes, which is the
+      exact habit every phishing campaign depends on. This code proves
+      the person driving the admin console is whose login it is — a
+      stolen admin session can read the console, but it cannot read
+      that person's mail.
+
+      The body names WHOSE account, WHAT level of access was asked for
+      and the REASON given, because the real value of this mail is to
+      somebody who did not request it: those three facts are what let
+      them recognise, in one read, that it was not them.
+    */
+    code: 'staff.impersonation_otp.email',
+    name: 'Support session — confirmation code',
+    channel: NotificationChannel.EMAIL,
+    recipientType: NotificationRecipientType.STAFF,
+    subject: 'Confirm your support session into {{ subject_label }} — code {{ code }}',
+    bodyTemplate:
+      'Hi {{ staff_name }}, someone signed in as you asked to open a {{ access }} support session inside {{ subject_label }}.\n\nReason given: {{ reason }}\n\nYour code is {{ code }}. It expires in {{ expires_minutes }} minutes and works once, and the session itself lasts {{ session_minutes }} minutes from when it was asked for and is never extended.\n\nIf this was not you, do not enter the code — nothing has been opened yet, and the session cannot be used without it. Tell whoever runs access, and change your password.',
+  },
+  {
     code: 'staff.bin_collapse_challenge.email',
     name: 'Bin collapse — confirmation code',
     channel: NotificationChannel.EMAIL,
@@ -4112,8 +4138,18 @@ const notificationTemplates: TemplateSeed[] = [
  * by naming rather than by somebody remembering.
  */
 function categoryForTemplate(code: string): NotificationCategory {
+  // `otp` is here because a ONE-TIME CODE is a credential, and leaving it
+  // out is not a cosmetic miss: OPERATIONAL is `mutable: true` and
+  // permits IN_APP, so `staff.impersonation_otp.email` — the second
+  // factor for going inside a seller's account — was both silenceable by
+  // the person it protects and eligible for delivery to the console they
+  // are already signed into, which is not a second factor at all.
+  // CLAUDE.md names this exact accident as the one way NOTIF-9 can be
+  // lost: a credential template whose code does not match this regex
+  // silently becomes operational. `notification-category.spec.ts` now
+  // cross-checks the two vocabularies so the next one fails the build.
   const credential =
-    /(invitation|invite|password_reset|password_changed|email_verification|email_change|welcome)/.test(
+    /(invitation|invite|password_reset|password_changed|email_verification|email_change|welcome|otp)/.test(
       code,
     );
   if (credential) return NotificationCategory.CREDENTIAL;

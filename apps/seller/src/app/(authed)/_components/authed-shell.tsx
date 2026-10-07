@@ -10,6 +10,7 @@ import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
 import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
 import { ToastProvider } from '@skydrop/ui/app/toast';
 import { RestrictionBanner } from './restriction-banner';
+import { ImpersonationBanner } from './impersonation-banner';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { canSeePath } from '@/lib/page-access';
 import { useStoreRequestCount } from '@/lib/reseller-store-hooks';
@@ -286,6 +287,11 @@ export function AuthedShell({
           signingOut={loggingOut}
           themeControl={<ThemeSwitch />}
         >
+          {/* FIRST, above everything, on every page: a staff member
+            inside somebody else's account has to be told so before they
+            read anything else on the screen. Renders nothing at all for
+            the account's own people, who never have a session. */}
+          <ImpersonationBanner identity={identity} />
           {/* A hold changes what the whole portal will do, so it is said
             on every page rather than discovered by a refusal. */}
           <RestrictionBanner />

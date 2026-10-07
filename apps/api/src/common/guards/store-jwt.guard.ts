@@ -18,6 +18,10 @@ import {
   STORE_SELF_SERVICE_KEY,
 } from '../auth/require-store-permissions.decorator';
 import { resolveRoles, roleNamesFor } from '../auth/role-union';
+import {
+  currentImpersonation,
+  type ImpersonationContext,
+} from '../impersonation/impersonation-context';
 
 /** Every role this person holds, oldest grant first — see the staff guard. */
 const STORE_ROLE_ASSIGNMENTS = {
@@ -86,6 +90,15 @@ export function storeMayBeUsed(input: {
  * `req.storeUser.storeId` is what every store endpoint then scopes by, in
  * the WHERE clause. The token's own `storeId` claim is not trusted for
  * that: the store is read off the user row.
+ *
+ * IMPERSONATION (support sessions): the seller guard's arrangement,
+ * exactly. When a support session's context is open, the only extra
+ * question this guard answers is WHICH StoreUser the request is about;
+ * everything after — the store's usability, the seller behind it, the
+ * roles, the permission gate — is the same code over the SUBJECT STORE's
+ * own roles. The staff member's permissions are never loaded here to be
+ * unioned with or to override them: `support.impersonate` buys the
+ * session, not a wider account.
  */
 @Injectable()
 export class StoreJwtGuard implements CanActivate {
@@ -105,11 +118,26 @@ export class StoreJwtGuard implements CanActivate {
 
     const req = ctx.switchToHttp().getRequest<Request>();
     const token = extractBearer(req.header('authorization'));
-    if (token === null) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Bearer token required' });
-    }
-    const claims = this.jwt.verifyStoreAccess(token);
 
+    // ── A SUPPORT SESSION, which short-circuits the bearer token ─────
+    // Checked first and exclusively: one request carries one identity,
+    // and a header that could win over the session cookie would mean two.
+    // `jti` is the ACCESS token's id, which a support session has no
+    // equivalent of — it is attribution, not authority, and the session
+    // it belongs to is the impersonation row instead.
+    const impersonation = currentImpersonation();
+    let claims: { sub: string; jti: string | null };
+    if (impersonation !== null) {
+      claims = { sub: await this.impersonatedStoreUserId(impersonation), jti: null };
+    } else {
+      if (token === null) {
+        throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Bearer token required' });
+      }
+      claims = this.jwt.verifyStoreAccess(token);
+    }
+
+    // Everything below is shared by both paths, so a second way in cannot
+    // skip the store's status, the seller behind it, or the RBAC gate.
     const user = await this.prisma.client.storeUser.findFirst({
       where: { id: claims.sub, deletedAt: null },
       select: {
@@ -240,6 +268,54 @@ export class StoreJwtGuard implements CanActivate {
       permissions: held,
     };
     return true;
+  }
+
+  /**
+   * Which StoreUser a support session acts as.
+   *
+   * ── WHY A USER AT ALL, WHEN THE SESSION NAMES A STORE ───────────────
+   * `impersonation_sessions` records the STORE, because a store is what
+   * support is asked to look at. Permissions, though, hang off a USER's
+   * roles — so "what this store can do" has to resolve to somebody's
+   * actual grants, or it becomes a second authorisation model with its
+   * own bugs and its own blind spots. The store's OWNER user is that
+   * somebody: the one whose answer to "may I?" is the store's answer and
+   * not one member's narrower view of it.
+   *
+   * Refuses rather than falling back to any other member when there is no
+   * owner. A store support cannot enter is a ticket somebody fixes; a
+   * store support entered as the wrong person is an audit trail nobody
+   * can read straight afterwards.
+   *
+   * Only the ID is returned, on purpose: the store's status, the seller
+   * behind it and the permission gate are then applied by the SAME code
+   * the ordinary path runs.
+   */
+  private async impersonatedStoreUserId(ctx: ImpersonationContext): Promise<string> {
+    if (ctx.subject.kind !== 'STORE') {
+      throw new ForbiddenException({
+        code: 'IMPERSONATION_WRONG_SUBJECT',
+        message: 'This support session is inside a seller account, not a store.',
+      });
+    }
+    const owner = await this.prisma.client.storeUser.findFirst({
+      where: {
+        storeId: ctx.subject.id,
+        deletedAt: null,
+        roles: { some: { role: { isOwner: true, deletedAt: null } } },
+      },
+      // Oldest first, so the session resolves to the same person on every
+      // request even where a store has more than one owner.
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (owner === null) {
+      throw new UnauthorizedException({
+        code: 'IMPERSONATION_SUBJECT_UNAVAILABLE',
+        message: 'This store has no owner account to act as, so the session cannot be used.',
+      });
+    }
+    return owner.id;
   }
 }
 

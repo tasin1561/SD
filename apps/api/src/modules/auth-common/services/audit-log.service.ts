@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Prisma, type ActorType } from '@skydrop/db';
+import { ActorType, Prisma } from '@skydrop/db';
+import { currentImpersonation } from '../../../common/impersonation/impersonation-context';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 
 /**
@@ -111,9 +112,35 @@ export class AuditLogService {
           'entityId is not a UUID — recorded in metadata instead (audit_logs.entity_id is a uuid column)',
         );
       }
+      /*
+        ── BOTH IDENTITIES, STAMPED HERE AND NOWHERE ELSE ──────────────
+
+        During a support session the action really did happen in the
+        seller's account, so `actorId` stays the seller — that is the
+        truthful answer to "whose account". What a reader also needs is
+        who was at the keyboard, and that is read from the ambient
+        context rather than passed in by each of the ~200 callers.
+
+        A caller that forgot would write a row claiming the seller did
+        it, and `audit_logs` is append-only (MUST NOT #3) — there would
+        be no correcting it. The one writer reads it once instead.
+
+        `actorType` is upgraded for the same reason: a row that says
+        SELLER and carries an impersonator is two facts that could
+        disagree, and only one of them is indexed.
+      */
+      const imp = currentImpersonation();
+      const actorType =
+        imp === null
+          ? input.actorType
+          : imp.subject.kind === 'SELLER'
+            ? ActorType.STAFF_AS_SELLER
+            : ActorType.STAFF_AS_STORE;
+
       const row = await client.auditLog.create({
         data: {
-          actorType: input.actorType,
+          actorType,
+          impersonatedByStaffUserId: imp?.staffUserId ?? null,
           actorId: input.actorId ?? null,
           staffUserId: input.staffUserId ?? null,
           sellerId: input.sellerId ?? null,

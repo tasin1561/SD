@@ -643,6 +643,44 @@ export const PERMISSIONS = [
     group: 'System',
   },
   {
+    key: 'support.impersonate',
+    label: 'Sign in as a seller or a store',
+    description:
+      'Open a support session inside a seller’s or a reseller store’s account and see exactly what they see. Read-only on its own, and every session is recorded with who, as whom, for how long and why.',
+    group: 'System',
+    dangerous: true,
+  },
+  {
+    key: 'support.impersonate.write',
+    /**
+     * RESERVED: no endpoint declares it, and that is the design.
+     *
+     * `@RequirePermissions(a, b)` means a OR b, so "always
+     * `support.impersonate`, and ALSO this one when the request asks for
+     * write" cannot be said in metadata at all. It is checked when the
+     * session is opened, and from then on it lives on the session row as
+     * `mayWrite`, which the impersonation guard reads on every request.
+     *
+     * A route gate would also be the wrong shape: the permission does
+     * not open one endpoint, it decides whether a hundred ordinary
+     * seller endpoints answer for the length of one session.
+     */
+    reserved: true,
+    label: 'Act inside a seller’s or store’s account',
+    description:
+      'Not just look — DO, inside their account, under their name. Refused for anything that creates lasting access or moves money: passwords, email, bank details, withdrawals, API keys, invitations, roles and accepting terms stay impossible. Held alongside the permission to open the session, never instead of it.',
+    group: 'System',
+    dangerous: true,
+  },
+  {
+    key: 'support.impersonate.review',
+    label: 'Review support sessions',
+    description:
+      'Read every impersonation session anybody has opened, and end one that is still running. The oversight half: somebody has to be able to see this who is not the person using it.',
+    group: 'System',
+    dangerous: true,
+  },
+  {
     key: 'system.settings.view',
     label: 'View system settings',
     description: 'The runtime configuration every module reads.',
