@@ -23,11 +23,18 @@ export default async function AuthedLayout({
 }: {
   children: ReactNode;
 }): Promise<ReactElement> {
-  const cookieValue = (await cookies()).get('__Host-storeRefresh')?.value ?? '';
+  const jar = await cookies();
+  const cookieValue = jar.get('__Host-storeRefresh')?.value ?? '';
+  // A support session carries ONLY this cookie — the staff member never
+  // signed in as the seller, so there is no refresh cookie and never
+  // will be. Reading it here is what stops the layout bouncing them to
+  // /login on the first page they open.
+  const impersonationCookieValue = jar.get('__Host-impersonation')?.value ?? '';
   const result = await resolveStoreSsrIdentity({
     apiOrigin: apiOrigin(),
     identityKind: 'store',
     cookieValue,
+    impersonationCookieValue,
   });
   if (result.state !== 'authenticated') redirect('/login');
   const identity: StoreMe = result.identity;

@@ -78,6 +78,32 @@ const ADMIN_EXCLUDES_INVARIANT_BYPASSES: readonly PermissionKey[] = [
   'reseller.credit_after_confirmation.enable', // RS-4
 ];
 
+/**
+ * IMPERSONATION — the SIXTH bypass, withheld for a reason the other
+ * five do not have.
+ *
+ * Signing in as a seller bypasses the account boundary itself: not an
+ * invariant inside our system, but the line between our staff and
+ * somebody else's business. It belongs with the five above on that
+ * ground alone.
+ *
+ * The decisive half is the OVERSIGHT SPLIT. `support.impersonate.review`
+ * exists so that somebody who is not the person using it can read every
+ * session and end one still running. Derived into Admin, the same
+ * person holds both — every Admin reviews their own sessions, and the
+ * check that justifies the whole feature is a check on nobody. A
+ * two-person rule that one role satisfies alone is not a rule.
+ *
+ * So all three are granted deliberately, by somebody holding
+ * `rbac.manage`, to named people on each side of the split. Nothing
+ * seeded holds them.
+ */
+const ADMIN_EXCLUDES_IMPERSONATION: readonly PermissionKey[] = [
+  'support.impersonate',
+  'support.impersonate.write',
+  'support.impersonate.review',
+];
+
 /** A read key by NAME, which is the only honest test available. */
 function isViewKey(key: PermissionKey): boolean {
   return key.endsWith('.view');
@@ -93,6 +119,7 @@ export interface StaffRolePreset {
 const ADMIN_EXCLUDED = new Set<string>([
   ...ADMIN_EXCLUDES_ACCESS_AND_BANKING,
   ...ADMIN_EXCLUDES_INVARIANT_BYPASSES,
+  ...ADMIN_EXCLUDES_IMPERSONATION,
 ]);
 
 export const STAFF_ROLE_PRESETS: readonly StaffRolePreset[] = [
@@ -101,8 +128,9 @@ export const STAFF_ROLE_PRESETS: readonly StaffRolePreset[] = [
     name: 'Admin',
     description:
       'Runs the platform: orders, the warehouse, couriers, sellers and the money that moves ' +
-      'through it. Can see who has access but not change it, and cannot touch our bank ' +
-      'accounts or a seller’s, or any of the five overrides that bypass an invariant.',
+      'through it. Can see who has access but not change it, cannot touch our bank ' +
+      'accounts or a seller’s, cannot sign in as a seller, and holds none of the five ' +
+      'overrides that bypass an invariant.',
     permissions: ALL_PERMISSION_KEYS.filter((key) => !ADMIN_EXCLUDED.has(key)),
   },
   {

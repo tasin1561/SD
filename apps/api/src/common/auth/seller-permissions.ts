@@ -471,6 +471,51 @@ export const DEFAULT_SELLER_ROLES: ReadonlyArray<{
     ],
   },
   {
+    key: 'member',
+    name: 'Member',
+    description:
+      'Runs the business day to day, including the reseller channel. Everything except changing who can get in, and everything except moving money out.',
+    permissions: [
+      // 1–3. Orders: place one, place a day of them, and follow them.
+      'orders.view',
+      'orders.create',
+      'orders.import',
+      // 4 + 11. What a parcel costs and what the company is owed. The
+      // per-PINCODE rate this role was asked for does not exist: the
+      // pricing engine is a flat fee by deliberate decision, after a
+      // zone/slab lookup priced an order at ₹0.00 in production. This
+      // grants the charge breakdown that DOES exist rather than implying
+      // a screen that does not.
+      'charges.view',
+      'wallet.view',
+      // Company details and the bank account ON them — reading only.
+      // `profile.manage` is withheld on purpose: bank details decide
+      // where the money lands.
+      'profile.view',
+      // 5. Raising a problem with Skydrop, and reading the answer.
+      'tickets.create',
+      'tickets.view',
+      // 6. Choosing what reaches them. The daily digest itself needs no
+      // permission beyond `orders.view` — it goes to whoever may see the
+      // orders it summarises.
+      'notifications.manage',
+      // 7 + 9. Every reseller store's scorecard, balance and the transfer
+      // revenue it brought in — which is what "what we owe the associate"
+      // is made of, since a store earns its margin directly rather than
+      // being paid a commission afterwards.
+      'stores.reports',
+      'stores.wallet',
+      'stores.order_money.view',
+      // 8. What is on the shelf.
+      'inventory.view',
+      'catalog.view',
+      // 10. Setting what a store pays and what it may charge — the
+      // closest thing the model has to "customise their commission",
+      // because the spread IS their earning.
+      'stores.pricing',
+    ],
+  },
+  {
     key: 'viewer',
     name: 'Viewer',
     description: 'Read-only, and only the orders. The narrowest login there is.',

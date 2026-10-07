@@ -121,6 +121,27 @@ describe('staff access tiers (Admin / Support / Read-only)', () => {
     });
 
     /**
+     * Impersonation, the sixth bypass. The decisive one is
+     * `support.impersonate.review`: it exists so somebody who is NOT the
+     * person using impersonation can read every session and end one
+     * still running. Derived into Admin, every Admin reviews their own
+     * sessions and the oversight half checks nobody.
+     */
+    it.each(['support.impersonate', 'support.impersonate.write', 'support.impersonate.review'])(
+      'withholds %s, so the two-person split is real',
+      (key) => {
+        expect(held.has(key)).toBe(false);
+      },
+    );
+
+    /** Nothing SEEDED holds impersonation — it is granted to named people. */
+    it('is granted by no seeded preset at all', () => {
+      for (const preset of STAFF_ROLE_PRESETS) {
+        expect(preset.permissions.filter((k) => k.startsWith('support.impersonate'))).toEqual([]);
+      }
+    });
+
+    /**
      * NOT "every dangerous key": an Admin must be able to resolve a
      * ticket, record a remittance and cancel a parcel at the courier.
      * Dangerous means "confirm twice", not "nobody but the owner".

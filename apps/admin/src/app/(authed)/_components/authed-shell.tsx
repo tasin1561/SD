@@ -54,6 +54,7 @@ import {
 } from 'lucide-react';
 import { canSeePath } from '@/lib/page-access';
 import { PermissionBoundary } from './permission-boundary';
+import { LiveSupportSessions } from './live-support-sessions';
 import { OrderOmnisearch } from './order-omnisearch';
 
 /**
@@ -212,6 +213,11 @@ export function AuthedShell({
         { href: '/webhooks', label: 'Webhooks', icon: <Webhook size={15} /> },
         { href: '/staff', label: 'Staff', icon: <ShieldCheck size={15} /> },
         { href: '/roles', label: 'Roles', icon: <KeyRound size={15} /> },
+        // The log of who has been inside whose account. Filtered on
+        // `support.impersonate.review` by `canSeePath`, so a person who
+        // USES impersonation but may not review it does not see a link
+        // to a page whose only query would refuse them.
+        { href: '/impersonation', label: 'Support sessions', icon: <ShieldAlert size={15} /> },
         { href: '/system/capacity', label: 'System limits', icon: <Activity size={15} /> },
         { href: '/settings', label: 'Settings', icon: <Settings size={15} /> },
       ],
@@ -248,8 +254,16 @@ export function AuthedShell({
           headerCenter={<OrderOmnisearch />}
           // The bell, and ONLY the bell, survives below `lg`: it is the
           // one control that says something needs you, and the inbox has
-          // no other route on a phone.
-          headerAlways={<NotificationBellContainer />}
+          // no other route on a phone. The support-session chip joins it
+          // for the same reason and renders nothing at all when no
+          // session is running, so it costs the other 99% of pages a
+          // DOM node and no space.
+          headerAlways={
+            <>
+              <LiveSupportSessions />
+              <NotificationBellContainer />
+            </>
+          }
           pathname={pathname}
           Link={Link}
           onSignOut={() => {

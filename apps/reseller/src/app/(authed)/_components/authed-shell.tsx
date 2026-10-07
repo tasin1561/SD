@@ -30,6 +30,7 @@ import { can, canSeePath } from '@/lib/page-access';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 import { useStoreCallReviews } from '@/lib/review-hooks';
 import { TermsBanner } from './terms-banner';
+import { ImpersonationBanner } from './impersonation-banner';
 
 /**
  * The reseller shell — the brand `Shell` (apps restyle, Phase 4), as in seller;
@@ -149,6 +150,11 @@ export function AuthedShell({
           signingOut={signingOut}
           themeControl={<ThemeSwitch />}
         >
+          {/* FIRST, above everything, on every page: a staff member
+            inside somebody else's store has to be told so before they
+            read anything else on the screen. Renders nothing at all for
+            the store's own people, who never have a session. */}
+          <ImpersonationBanner identity={identity} />
           {/* RS-4: stays until the terms in force are accepted. */}
           <TermsBanner enabled={can(identity, 'terms.view')} />
           {children}

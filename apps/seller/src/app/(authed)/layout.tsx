@@ -42,11 +42,17 @@ export default async function AuthedLayout({
 }): Promise<ReactElement> {
   const jar = await cookies();
   const cookieValue = jar.get('__Host-sellerRefresh')?.value ?? '';
+  // A support session carries ONLY this cookie — the staff member never
+  // signed in as the seller, so there is no refresh cookie and never
+  // will be. Reading it here is what stops the layout bouncing them to
+  // /login on the first page they open.
+  const impersonationCookieValue = jar.get('__Host-impersonation')?.value ?? '';
 
   const result = await resolveSellerSsrIdentity({
     apiOrigin: apiOrigin(),
     identityKind: 'seller',
     cookieValue,
+    impersonationCookieValue,
   });
 
   if (result.state !== 'authenticated') {

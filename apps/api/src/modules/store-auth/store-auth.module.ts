@@ -1,3 +1,4 @@
+import { ImpersonationRuntimeModule } from '../../common/impersonation/impersonation-runtime.module';
 import { Module } from '@nestjs/common';
 import { StoreJwtGuard } from '../../common/guards/store-jwt.guard';
 import { AuthCommonModule } from '../auth-common/auth-common.module';
@@ -15,7 +16,15 @@ import { StoreAuthService } from './store-auth.service';
  * other.
  */
 @Module({
-  imports: [AuthCommonModule, EmailModule],
+  imports: [
+    // `ImpersonationBannerService` lives here. Importing the runtime
+    // module is what makes `/me` able to say a support session is in
+    // progress — without it Nest cannot construct this service at all
+    // and the whole API refuses to boot.
+    ImpersonationRuntimeModule,
+    AuthCommonModule,
+    EmailModule,
+  ],
   controllers: [StoreAuthController],
   providers: [StoreAuthService, StoreJwtGuard],
 })

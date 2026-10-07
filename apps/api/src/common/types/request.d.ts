@@ -9,6 +9,27 @@ declare global {
       apiKey?: AuthenticatedApiKey;
       /** RS-5 — set by StoreApiKeyGuard. */
       storeApiKey?: AuthenticatedStoreApiKey;
+      /**
+       * The refusal to throw for the impersonation cookie on this
+       * request — set by ImpersonationAlsMiddleware, rethrown by
+       * ImpersonationGuard. An `HttpException`, typed loosely here
+       * because a global .d.ts should not pull Nest into every file that
+       * sees an express Request.
+       *
+       * It is carried rather than thrown where it is found because
+       * express middleware sits OUTSIDE Nest's exception filter, and a
+       * 401 from there would reach the client as an HTML error page
+       * instead of the `{code, message}` body every other refusal uses.
+       * The exception OBJECT travels, not a copy of its words, so the
+       * session service's own codes and sentences arrive unaltered.
+       *
+       * Note what is NOT here: the impersonation context itself. That
+       * lives in AsyncLocalStorage (`currentImpersonation()`) so the
+       * audit writer can read it without ~200 call sites passing it, and
+       * a second copy on the request is how the two would come to
+       * disagree about whether anybody was impersonating.
+       */
+      impersonationRejection?: unknown;
     }
   }
 }

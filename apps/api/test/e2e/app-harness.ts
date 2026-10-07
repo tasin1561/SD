@@ -283,6 +283,14 @@ export async function resetAuthState(
     // a subject id that is about to stop existing — a leftover row
     // would silently silence a topic for a REUSED id in a later suite,
     // which is the kind of cross-suite ghost that takes a day to find.
+    // A support-impersonation session holds a staff_user, a seller and a
+    // store, ALL `onDelete: Restrict`. It is only wiped today because
+    // `resetOrderState` truncates `seller_stores` CASCADE and the store
+    // FK drags it in — an accident, not a decision. The day that column
+    // or that truncate changes, `staffUser.deleteMany({})` below starts
+    // failing 23001 for every suite in the repo. Named explicitly for
+    // the same reason `seller_users` is (MUST #12).
+    prisma.impersonationSession.deleteMany({}),
     prisma.notificationSubscription.deleteMany({}),
     prisma.notificationLog.deleteMany({}),
     prisma.notificationBroadcast.deleteMany({}),

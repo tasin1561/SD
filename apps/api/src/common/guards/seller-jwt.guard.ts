@@ -26,6 +26,10 @@ import {
   sellerAuthorizationVerdict,
 } from '../auth/seller-authorization';
 import { resolveRoles, roleNamesFor } from '../auth/role-union';
+import {
+  currentImpersonation,
+  type ImpersonationContext,
+} from '../impersonation/impersonation-context';
 
 /** Every role this person holds, oldest grant first — see the staff guard. */
 const SELLER_ROLE_ASSIGNMENTS = {
@@ -80,6 +84,23 @@ const SELLER_ROLE_ASSIGNMENTS = {
  * migration while the comment and the spec pinning it both still named a
  * decorator nothing consulted. A deleted mechanism has to lose its
  * scaffolding in the same change.
+ *
+ * IMPERSONATION (support sessions): a third way IN, and deliberately not
+ * a third set of rules. When `ImpersonationAlsMiddleware` has opened a
+ * support session's context, this guard answers one extra question —
+ * WHICH SellerUser row the request is about — and then runs the ordinary
+ * body below completely unchanged: the same status gate, the same role
+ * resolution, the same permission verdict, over the SUBJECT's own roles.
+ *
+ * That is the whole point. A staff member inside a seller's account can
+ * do what that seller can do and nothing else, and the way to be sure of
+ * it is that no code path here ever loads the staff member's permissions
+ * to compare, union or override. The staff member's own permission
+ * (`support.impersonate`) is spent at the admin console, on the question
+ * of whether they may open a session at all; once they are inside, their
+ * staff role has no say. Two permission sets unioned would let a support
+ * session reach things the seller themselves cannot, which is the exact
+ * failure this design is shaped to make unrepresentable.
  */
 @Injectable()
 export class SellerJwtGuard implements CanActivate {
@@ -101,15 +122,25 @@ export class SellerJwtGuard implements CanActivate {
     const req = ctx.switchToHttp().getRequest<Request>();
     const token = extractBearer(req.header('authorization'));
 
-    // ── NO BEARER: a browser NAVIGATION, not a fetch ─────────────────
-    // The access token lives in JS memory (FE-1) and the ApiClient
-    // sends it as a header, which a plain <a href> cannot do. A route
-    // that opts in with @AllowCookieAuth may fall back to the refresh
-    // cookie — validated READ-ONLY, never rotated (FE-4), because
-    // rotating here would race the client's silent refresh and burn a
-    // legitimate session.
+    // Three credentials, in order of precedence, and exactly one wins.
     let subjectId: string;
-    if (token === null) {
+
+    // ── A SUPPORT SESSION, which short-circuits the other two ────────
+    // If a bearer token were allowed to win here, a staff member who also
+    // held a seller login could be inside one account by cookie and
+    // another by header, and only the audit row would be able to tell.
+    // One request, one identity.
+    const impersonation = currentImpersonation();
+    if (impersonation !== null) {
+      subjectId = await this.impersonatedSellerUserId(impersonation);
+    } else if (token === null) {
+      // ── NO BEARER: a browser NAVIGATION, not a fetch ───────────────
+      // The access token lives in JS memory (FE-1) and the ApiClient
+      // sends it as a header, which a plain <a href> cannot do. A route
+      // that opts in with @AllowCookieAuth may fall back to the refresh
+      // cookie — validated READ-ONLY, never rotated (FE-4), because
+      // rotating here would race the client's silent refresh and burn a
+      // legitimate session.
       const allowsCookie = this.reflector.getAllAndOverride<boolean>(ALLOW_COOKIE_AUTH_KEY, [
         ctx.getHandler(),
         ctx.getClass(),
@@ -133,14 +164,15 @@ export class SellerJwtGuard implements CanActivate {
       subjectId = this.jwt.verifySellerAccess(token).sub;
     }
 
-    // Everything below is unchanged and shared by both paths: the
+    // Everything below is unchanged and shared by all three paths: the
     // suspended-seller check, the status gate and the RBAC policy live
     // here precisely so a second way in cannot skip them.
-    // `jti` identifies the ACCESS token, which the cookie path does not
-    // have — null there, and the session it belongs to is the refresh
-    // row instead. Nothing downstream requires it to be present.
+    // `jti` identifies the ACCESS token, which neither the cookie path nor
+    // a support session has — null for both, and the session it belongs to
+    // is the refresh row or the impersonation row instead. It is
+    // attribution, not authority, and nothing downstream requires it.
     const claims: { sub: string; jti: string | null } =
-      token === null
+      token === null || impersonation !== null
         ? { sub: subjectId, jti: null }
         : { sub: subjectId, jti: this.jwt.verifySellerAccess(token).jti };
 
@@ -286,6 +318,58 @@ export class SellerJwtGuard implements CanActivate {
       fullName: user.fullName,
     };
     return true;
+  }
+
+  /**
+   * Which SellerUser a support session acts as.
+   *
+   * ── WHY A USER AT ALL, WHEN THE SESSION NAMES A COMPANY ─────────────
+   * `impersonation_sessions` records a SELLER — the company — because
+   * that is what support is asked to look at. But every permission in
+   * this system hangs off a USER's roles, and "what the seller can do"
+   * has to resolve to somebody's actual grants or it is a second
+   * authorisation model with its own bugs. So the session resolves to the
+   * company's OWNER user: the one identity whose answer to "may I?" is
+   * the account's own answer rather than one department's view of it.
+   *
+   * The owner role is a safe thing to lean on here — the schema
+   * guarantees exactly one per seller and forbids moving its last holder
+   * off it, precisely so a company cannot be left with nobody who can
+   * act for it. If that ever fails anyway, this refuses rather than
+   * falling back to some other user: an account support cannot enter is
+   * a ticket, and an account support enters as the wrong person is a
+   * mystery in the audit log.
+   *
+   * It returns only the ID. Everything after this — the user row, the
+   * deleted checks, the seller status gate, the roles, the permission
+   * verdict — is the SAME code the ordinary path runs, which is what
+   * keeps a support session from being a route around any of it.
+   */
+  private async impersonatedSellerUserId(ctx: ImpersonationContext): Promise<string> {
+    if (ctx.subject.kind !== 'SELLER') {
+      throw new ForbiddenException({
+        code: 'IMPERSONATION_WRONG_SUBJECT',
+        message: 'This support session is inside a store, not a seller account.',
+      });
+    }
+    const owner = await this.prisma.client.sellerUser.findFirst({
+      where: {
+        sellerId: ctx.subject.id,
+        deletedAt: null,
+        roles: { some: { role: { isOwner: true, deletedAt: null } } },
+      },
+      // Oldest first, so the same session resolves to the same person on
+      // every request even if the company has more than one owner.
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (owner === null) {
+      throw new UnauthorizedException({
+        code: 'IMPERSONATION_SUBJECT_UNAVAILABLE',
+        message: 'This seller has no owner account to act as, so the session cannot be used.',
+      });
+    }
+    return owner.id;
   }
 }
 

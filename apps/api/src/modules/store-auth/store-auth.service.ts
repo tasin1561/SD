@@ -14,6 +14,10 @@ import {
   type ResellerWalletManager,
 } from '@skydrop/db';
 import { EnvService } from '../../config/env.service';
+import {
+  ImpersonationBannerService,
+  type ImpersonationBannerContext,
+} from '../../common/impersonation/impersonation-banner';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../infrastructure/spaces/spaces.service';
 import { ALL_STORE_PERMISSION_KEYS } from '../../common/auth/store-permissions';
@@ -47,6 +51,12 @@ export interface StoreSession {
 
 /** GET /auth/store/me — what the reseller portal renders from. */
 export interface StoreMe {
+  /**
+   * The support session a staff member is inside this account on, or
+   * null — which is nearly always. Drives the warning bar on every
+   * page; a courtesy, never a control (FE-2).
+   */
+  readonly impersonation: ImpersonationBannerContext | null;
   /** StoreUser.id — the person signed in. */
   readonly id: string;
   readonly email: string;
@@ -118,6 +128,7 @@ export class StoreAuthService {
     private readonly audit: AuditLogService,
     private readonly email: EmailQueue,
     private readonly spaces: SpacesService,
+    private readonly impersonationBanner: ImpersonationBannerService,
   ) {}
 
   // ---------- LOGIN ----------
@@ -732,6 +743,16 @@ export class StoreAuthService {
       });
     }
     return {
+      /**
+       * Set only while a staff member is inside this account on a support
+       * session — null on every ordinary request, which is nearly all of
+       * them. It is what puts the warning bar on EVERY page rather than
+       * only on the one the staff member arrived at.
+       *
+       * A COURTESY, not a control (FE-2): the guard refuses what a
+       * session may not do whether or not a bar is drawn.
+       */
+      impersonation: await this.impersonationBanner.current(),
       id: user.id,
       email: user.email,
       emailDisplay: user.emailDisplay,

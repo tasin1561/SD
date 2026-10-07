@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState, type ReactElement } from 'react';
-import { PauseCircle } from 'lucide-react';
+import { PauseCircle, ShieldAlert } from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
 import { resellerStoreStatusKind, resellerStoreStatusLabel } from '@skydrop/ui/status';
 import { Button } from '@skydrop/ui/app/button';
@@ -27,6 +27,7 @@ import { useAdminResellerStoreTerms } from '@/lib/reseller-terms-hooks';
 import { StoreWalletPanel } from './_components/store-wallet-panel';
 import { usePermission } from '@/lib/use-permission';
 import { PauseStoreModal } from '../_components/pause-store-modal';
+import { StartImpersonationDialog } from '../../impersonation/_components/start-impersonation-dialog';
 
 function when(iso: string | null): string {
   return iso === null
@@ -183,6 +184,11 @@ export default function AdminResellerStorePage(): ReactElement {
   const store = useAdminResellerStore(storeId);
   const mayPause = usePermission('reseller.stores.pause');
   const [pausing, setPausing] = useState(false);
+  // Going INSIDE the store's account. `support.impersonate` opens a
+  // session; whether it may also WRITE is asked in the dialog, which is
+  // where the choice is actually made.
+  const canImpersonate = usePermission('support.impersonate');
+  const [impersonating, setImpersonating] = useState(false);
 
   const crumbs = [{ label: 'Reseller stores', href: '/reseller-stores' }] as const;
   // The header and the way back stay on screen while the store loads or
@@ -216,20 +222,43 @@ export default function AdminResellerStorePage(): ReactElement {
           </div>
         }
         action={
-          mayPause && s.status === 'ACTIVE' ? (
-            <Button
-              variant="destructive"
-              size="md"
-              icon={<PauseCircle size={15} />}
-              onClick={() => setPausing(true)}
-            >
-              Pause store
-            </Button>
-          ) : undefined
+          <div className="ac-buttons">
+            {canImpersonate ? (
+              /* Destructive, because for as long as the session lasts
+                 this console's operator is indistinguishable from the
+                 shopkeeper in their own store's history. */
+              <Button
+                variant="destructive"
+                size="md"
+                icon={<ShieldAlert size={15} />}
+                onClick={() => setImpersonating(true)}
+              >
+                Sign in as {s.name}
+              </Button>
+            ) : null}
+            {mayPause && s.status === 'ACTIVE' ? (
+              <Button
+                variant="destructive"
+                size="md"
+                icon={<PauseCircle size={15} />}
+                onClick={() => setPausing(true)}
+              >
+                Pause store
+              </Button>
+            ) : null}
+          </div>
         }
       />
       {pausing ? (
         <PauseStoreModal storeId={s.id} storeName={s.name} onClose={() => setPausing(false)} />
+      ) : null}
+      {impersonating ? (
+        <StartImpersonationDialog
+          subjectKind="STORE"
+          subjectId={s.id}
+          subjectName={s.name}
+          onClose={() => setImpersonating(false)}
+        />
       ) : null}
 
       <AcSection title="Details">

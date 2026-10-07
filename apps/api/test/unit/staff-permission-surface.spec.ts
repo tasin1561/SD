@@ -209,8 +209,19 @@ describe('staff permission surface', () => {
         .map((p) => `${h.file} ${h.name}() → '${p}'`),
     );
     expect(declaring).toEqual([]);
-    // `reseller.credit_after_confirmation.enable` left the list with RS-4's
-    // per-seller switch (POST /admin/sellers/:id/reseller-credit-after-confirmation).
-    expect([...reserved].sort()).toEqual([]);
+    // The list itself, named rather than counted, so adding a reserved
+    // permission is a deliberate act somebody reads this comment while
+    // doing. `reseller.credit_after_confirmation.enable` left it with
+    // RS-4's per-seller switch.
+    //
+    // `support.impersonate.write` cannot be an endpoint gate even in
+    // principle: `@RequirePermissions(a, b)` means a OR b, so "always
+    // `support.impersonate`, and ALSO this when write is asked for"
+    // is inexpressible as metadata. It is spent when the session is
+    // opened and then lives on the row as `mayWrite`, which the
+    // impersonation guard reads per request. It does not open one
+    // endpoint; it decides whether a hundred ordinary seller endpoints
+    // answer for the length of one session.
+    expect([...reserved].sort()).toEqual(['support.impersonate.write']);
   });
 });

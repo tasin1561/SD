@@ -1,0 +1,34 @@
+/*
+ * The live-support-session chip. Danger-toned on purpose: it is the same
+ * fact the impersonated app shows in a red bar, and the two should not
+ * disagree about how serious it is.
+ *
+ * Colours come from the brand tokens (FE-6) — never a literal, so it
+ * reads correctly in both themes without a second declaration.
+ */
+.live-imp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  /* Matches the bell's touch floor. Both sit in the header slot that
+     survives below `lg`, where a 44px target is the rule, not a nicety. */
+  min-height: 44px;
+  padding: 0 0.5rem;
+  border-radius: 999px;
+  color: var(--red-on-fill, #fff);
+  background: var(--red-fill, #ba1a1a);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  /* Not an animation: a pulsing chip in the header of every page is the
+     kind of motion people route around by not looking at the header. */
+}
+
+.live-imp:hover {
+  background: var(--red-fill-hover, var(--red-fill, #ba1a1a));
+}
+
+.live-imp__n {
+  font-variant-numeric: tabular-nums;
+}
