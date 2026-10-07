@@ -12,6 +12,7 @@ import {
   Send,
   Trash2,
   UserRound,
+  Wallet,
 } from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import { Money } from '@skydrop/ui/components';
@@ -22,6 +23,7 @@ import { VanDriveOffButton } from '@skydrop/ui/app/van-drive-off';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { Select } from '@skydrop/ui/app/select';
+import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
 import { NumberStepper } from '@skydrop/ui/app/number-stepper';
 import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
@@ -97,6 +99,18 @@ export default function NewStoreOrderPage(): ReactElement {
   const [error, setError] = useState<string | null>(null);
   /** "Place order" asks once before it sends. */
   const [confirmPlace, setConfirmPlace] = useState(false);
+  /**
+   * COD or prepaid.
+   *
+   * Prepaid has been a real path since RS-6 phase 3c — the store's wallet
+   * pays the seller's transfer price and the store's share of the delivery
+   * fee at confirmation, refused as `STORE_BALANCE_INSUFFICIENT` inside the
+   * create transaction if it cannot cover them. This form hard-coded 'COD'
+   * and carried a notice saying cash on delivery was the only option, so a
+   * store could not place a prepaid order at all even though the API, the
+   * CSV importer and the API-key path all accepted one.
+   */
+  const [payment, setPayment] = useState<'COD' | 'PREPAID'>('COD');
   /** The van's BUSY state: from the send until the page leaves (or a refusal). */
   const [placing, setPlacing] = useState(false);
   /** Drives the van's error state only: set when the order did not go through. */
@@ -111,6 +125,21 @@ export default function NewStoreOrderPage(): ReactElement {
     return Number.isFinite(q) && Number.isFinite(r) ? sum + q * r : sum;
   }, 0);
   const collectDefault = retailTotal + (Number(deliveryFee) || 0);
+  /*
+    What the wallet pays for the GOODS on a prepaid order.
+
+    The store's share of the delivery fee is added to it at confirmation
+    and is deliberately NOT guessed at here: the split lives on the terms
+    version the order will be placed under, which this form does not hold.
+    Naming the goods and saying the share follows is honest; inventing a
+    total would be a figure the wallet then disagrees with.
+  */
+  const prepaidGoods = lines.reduce((sum, l) => {
+    const q = Number(l.quantity);
+    const transfer = Number(byId.get(l.variantId)?.transferPriceInr ?? NaN);
+    return Number.isFinite(q) && Number.isFinite(transfer) ? sum + q * transfer : sum;
+  }, 0);
+  const prepaid = payment === 'PREPAID';
   const chosenCount = lines.filter((l) => l.variantId !== '').length;
 
   function update(key: number, patch: Partial<Line>): void {
@@ -130,9 +159,16 @@ export default function NewStoreOrderPage(): ReactElement {
         recipientAddressLine1: line1.trim(),
         recipientAddressLine2: landmark.trim(),
         recipientPostalCode: pin.trim(),
-        paymentMode: 'COD',
-        ...(deliveryFee.trim() === '' ? {} : { deliveryFeeInr: Number(deliveryFee) }),
-        ...(codAmount.trim() === '' ? {} : { codAmountInr: Number(codAmount) }),
+        paymentMode: payment,
+        /*
+          Both of these describe the COLLECTABLE, and a prepaid order has
+          none: `deliveryFeeInr` is documented as "added to the collectable
+          amount", and `codAmountInr` is REFUSED outright for PREPAID
+          ("codAmountInr must be absent for PREPAID orders"). Sending either
+          would be a 400 the store could do nothing about.
+        */
+        ...(prepaid || deliveryFee.trim() === '' ? {} : { deliveryFeeInr: Number(deliveryFee) }),
+        ...(prepaid || codAmount.trim() === '' ? {} : { codAmountInr: Number(codAmount) }),
         ...(notes.trim() === '' ? {} : { notes: notes.trim() }),
         ...(acknowledgeDuplicate ? { acknowledgeDuplicate: true } : {}),
         items: lines
@@ -369,30 +405,58 @@ export default function NewStoreOrderPage(): ReactElement {
 
       <RoSection id="ro-new-payment" title="Payment">
         <div className="ro-stack ro-stack--tight">
+          <ChoiceCards
+            label="How is this one paid for?"
+            name="store-order-payment"
+            columns={2}
+            value={payment}
+            onChange={(v) => setPayment(v === 'PREPAID' ? 'PREPAID' : 'COD')}
+            options={[
+              {
+                value: 'COD',
+                icon: <Banknote size={16} />,
+                title: 'Cash on delivery',
+                description:
+                  'The courier collects from your customer on the doorstep and the money comes back to you.',
+              },
+              {
+                value: 'PREPAID',
+                icon: <Wallet size={16} />,
+                title: 'Prepaid',
+                description:
+                  'Your customer has already paid you. Your store wallet covers the goods and your share of the delivery fee when the order is confirmed.',
+              },
+            ]}
+          />
+
           <div className="ro-grid-3">
-            <TextField
-              label="Delivery charge to the customer (₹, optional)"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
-              value={deliveryFee}
-              onChange={(e) => setDeliveryFee(e.target.value)}
-            />
-            <TextField
-              label="Cash to collect (₹)"
-              hint={
-                <>
-                  Leave blank to collect <Money amount={collectDefault} convert={false} />
-                </>
-              }
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
-              value={codAmount}
-              onChange={(e) => setCodAmount(e.target.value)}
-            />
+            {prepaid ? null : (
+              <>
+                <TextField
+                  label="Delivery charge to the customer (₹, optional)"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  value={deliveryFee}
+                  onChange={(e) => setDeliveryFee(e.target.value)}
+                />
+                <TextField
+                  label="Cash to collect (₹)"
+                  hint={
+                    <>
+                      Leave blank to collect <Money amount={collectDefault} convert={false} />
+                    </>
+                  }
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  value={codAmount}
+                  onChange={(e) => setCodAmount(e.target.value)}
+                />
+              </>
+            )}
             <TextField
               label="Your reference (optional)"
               value={reference}
@@ -406,12 +470,28 @@ export default function NewStoreOrderPage(): ReactElement {
             maxLength={2000}
             showCount
           />
-          <Notice tone="info" icon={<Banknote size={16} />}>
-            <span>
-              Cash on delivery only for now. Skydrop’s call centre confirms every order with the
-              customer before it is packed.
-            </span>
-          </Notice>
+          {prepaid ? (
+            <Notice tone="info" icon={<Wallet size={16} />}>
+              <span>
+                Nothing is collected on delivery. When this order is confirmed your wallet pays the
+                goods at your seller’s transfer price
+                {prepaidGoods > 0 ? (
+                  <>
+                    {' '}
+                    — <Money amount={prepaidGoods} convert={false} /> for what is on this order
+                  </>
+                ) : null}
+                , plus your share of the delivery fee. If the wallet cannot cover it the order is
+                refused and nothing is placed.
+              </span>
+            </Notice>
+          ) : (
+            <Notice tone="info" icon={<Banknote size={16} />}>
+              <span>
+                Skydrop’s call centre confirms every order with the customer before it is packed.
+              </span>
+            </Notice>
+          )}
         </div>
       </RoSection>
 
@@ -434,7 +514,7 @@ export default function NewStoreOrderPage(): ReactElement {
         <p className="ro-bar__summary">
           {chosenCount === 0
             ? 'No products chosen yet'
-            : `${chosenCount} ${chosenCount === 1 ? 'product' : 'products'} · cash on delivery`}
+            : `${chosenCount} ${chosenCount === 1 ? 'product' : 'products'} · ${prepaid ? 'prepaid' : 'cash on delivery'}`}
         </p>
         <div className="ro-bar__actions">
           <LinkButton href="/orders" variant="ghost">
@@ -463,18 +543,26 @@ export default function NewStoreOrderPage(): ReactElement {
         title="Place this order?"
         entity={`${name.trim()} · ${phone.trim()}`}
         amount={
-          <>
-            {codAmount.trim() === '' ? (
-              <Money amount={collectDefault} convert={false} />
-            ) : (
-              <Money amount={codAmount.trim()} convert={false} />
-            )}{' '}
-            to collect
-          </>
+          prepaid ? (
+            <>
+              <Money amount={prepaidGoods} convert={false} /> of goods from your wallet
+            </>
+          ) : (
+            <>
+              {codAmount.trim() === '' ? (
+                <Money amount={collectDefault} convert={false} />
+              ) : (
+                <Money amount={codAmount.trim()} convert={false} />
+              )}{' '}
+              to collect
+            </>
+          )
         }
         consequence={`It is placed for ${
           chosenCount === 1 ? 'one product' : `${chosenCount} products`
-        }, cash on delivery, and goes to Skydrop’s call centre, who confirm it with the customer before it is packed.`}
+        }, ${
+          prepaid ? 'paid from your wallet when it is confirmed' : 'cash on delivery'
+        }, and goes to Skydrop’s call centre, who confirm it with the customer before it is packed.`}
         confirmLabel="Place order"
         cancelLabel="Not yet"
         // Closes at once: the van on the page carries the busy state while

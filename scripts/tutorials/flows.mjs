@@ -15753,10 +15753,19 @@ export const FLOWS = {
 
       async payment({ page, stage }) {
         await stage.glide(320);
-        // COD is fixed on this form — the notice says so, and that
-        // notice is what the narration is reading.
-        await stage.dwellOn(page.getByText(/Cash on delivery only for now/i).first(), 2600);
-        await stage.dwellOn(page.getByLabel(/Cash to collect/i).first(), 2200);
+        await stage.dwellOn(page.getByText('Cash on delivery', { exact: true }).first(), 2200);
+        await stage.dwellOn(page.getByLabel(/Cash to collect/i).first(), 2000);
+      },
+
+      async prepaid({ page, stage }) {
+        /*
+          The CHOICE is filmed; the order is still placed on COD.
+          Selecting prepaid for real would spend the seeded store's
+          wallet, and a balance that cannot cover the goods is refused
+          as `STORE_BALANCE_INSUFFICIENT` — a correct refusal, and a
+          failed take under narration about placing an order.
+        */
+        await stage.dwellOn(page.getByText('Prepaid', { exact: true }).first(), 3800);
       },
 
       async submit({ page, stage }) {

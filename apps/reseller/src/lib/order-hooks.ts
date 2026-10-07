@@ -126,7 +126,19 @@ export interface CreateStoreOrderInput {
   readonly recipientCity?: string;
   readonly recipientStateProvince?: string;
   readonly recipientPostalCode: string;
-  readonly paymentMode: 'COD';
+  /*
+    Both modes. This said `'COD'` alone while the API, the CSV importer
+    and the API-key path all accepted PREPAID (RS-6 phase 3c), so the
+    store portal could not express a prepaid order even in its types —
+    the same shape as the union member that went missing from a
+    hand-written client type and printed a store's words as Skydrop's.
+
+    `codAmountInr` is REFUSED for PREPAID server-side ("codAmountInr must
+    be absent for PREPAID orders"), and `deliveryFeeInr` is documented as
+    "added to the collectable amount", which a prepaid order does not
+    have. Both stay optional here and the form omits them.
+  */
+  readonly paymentMode: 'COD' | 'PREPAID';
   readonly codAmountInr?: number;
   readonly deliveryFeeInr?: number;
   readonly discountInr?: number;

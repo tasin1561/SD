@@ -5321,11 +5321,15 @@ export const VIDEOS = [
       },
       {
         id: 'payment',
-        say: 'Payment is cash on delivery, and today it is the only option here — the courier collects from your customer and the money comes back to you. Leave the amount blank and Skydrop collects what you sold it for plus any delivery charge you added.',
+        say: 'Then how it is paid for. Cash on delivery is the usual one: the courier collects from your customer at the door and the money comes back to you. Leave the amount blank and Skydrop collects what you sold it for, plus any delivery charge you added.',
+      },
+      {
+        id: 'prepaid',
+        say: 'Prepaid is the other one, for when your customer has already paid you. Nothing is collected at the door; instead your wallet pays the goods at your supplier’s price and your share of the delivery when the order is confirmed — and if it cannot cover that, the order is refused rather than placed.',
       },
       {
         id: 'submit',
-        say: 'Place it, and it asks you to confirm — who it is for and what is being collected. Then it joins the call-centre queue.',
+        say: 'This one is cash on delivery. Place it, and it asks you to confirm — who it is for and what is being collected. Then it joins the call-centre queue.',
       },
       {
         id: 'outro',
