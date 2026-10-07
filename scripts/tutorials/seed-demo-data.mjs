@@ -2029,7 +2029,10 @@ async function standingStoreFor(sellerId, sellerToken) {
         invite: {
           email: RESELLING.inviteEmail,
           fullName: RESELLING.inviteName,
-          roleKey: 'owner',
+          // PLURAL since multi-role — the DTO's `@ArrayMinSize(1)`
+          // refuses the old singular `roleKey` with a 400, which would
+          // have failed the seed on the store it opens.
+          roleKeys: ['owner'],
         },
       },
     });

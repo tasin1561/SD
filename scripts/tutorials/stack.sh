@@ -52,10 +52,12 @@ REDIS_DB="$(jq_of redisDb)"
 API_PORT="$(jq_of api.port)"
 SELLER_PORT="$(jq_of seller.port)"
 ADMIN_PORT="$(jq_of admin.port)"
+RESELLER_PORT="$(jq_of reseller.port)"
 SIM_PORT="$(jq_of sim.port)"
 API_URL="$(jq_of api.url)"
 SELLER_URL="$(jq_of seller.url)"
 ADMIN_URL="$(jq_of admin.url)"
+RESELLER_URL="$(jq_of reseller.url)"
 SIM_URL_V="$(jq_of sim.url)"
 
 RUN_DIR="$ROOT/scripts/tutorials/out/stack-$STACK_NAME"
@@ -134,13 +136,14 @@ status() {
   echo "  database   $DB_NAME"
   echo "  redis DB   $REDIS_DB"
   local ok=0
-  for pair in "api:$API_URL/health" "seller:$SELLER_URL/login" "admin:$ADMIN_URL/login" "sim:$SIM_URL_V/_sim/parcels"; do
+  for pair in "api:$API_URL/health" "seller:$SELLER_URL/login" "admin:$ADMIN_URL/login" "reseller:$RESELLER_URL/login" "sim:$SIM_URL_V/_sim/parcels"; do
     local what="${pair%%:*}" url="${pair#*:}"
     if up "$url"; then
       case "$what" in
         seller | admin)
           local base="$SELLER_URL"
           [ "$what" = admin ] && base="$ADMIN_URL"
+          [ "$what" = reseller ] && base="$RESELLER_URL"
           if fresh_build "$base"; then
             printf '  %-9s UP    %s\n' "$what" "$url"
           else
@@ -252,6 +255,11 @@ if [ "$CMD" = "up" ]; then
     || { echo "apps/seller is not built — pnpm --filter @skydrop/seller build"; exit 1; }
   [ -f "$ROOT/apps/admin/.next/BUILD_ID" ] \
     || { echo "apps/admin is not built — pnpm --filter @skydrop/admin build"; exit 1; }
+  # The reseller portal — the store's OWN staff sign in here, and section
+  # R of the curriculum is filmed against it. Its absence was why the
+  # reseller app had ports in `lib/stacks.mjs` and no process to use them.
+  [ -f "$ROOT/apps/reseller/.next/BUILD_ID" ] \
+    || { echo "apps/reseller is not built — pnpm --filter @skydrop/reseller build"; exit 1; }
 
   start_one api "$API_URL/health" "$ROOT/apps/api" node dist/main.js
   wait_for api "$API_URL/health"
@@ -274,8 +282,11 @@ if [ "$CMD" = "up" ]; then
     env PORT="$SELLER_PORT" npx next start -p "$SELLER_PORT" -H 127.0.0.1
   start_one admin "$ADMIN_URL/login" "$ROOT/apps/admin" \
     env PORT="$ADMIN_PORT" npx next start -p "$ADMIN_PORT" -H 127.0.0.1
+  start_one reseller "$RESELLER_URL/login" "$ROOT/apps/reseller" \
+    env PORT="$RESELLER_PORT" npx next start -p "$RESELLER_PORT" -H 127.0.0.1
   wait_for seller "$SELLER_URL/login"
   wait_for admin "$ADMIN_URL/login"
+  wait_for reseller "$RESELLER_URL/login"
 
   echo
   node "$ROOT/scripts/tutorials/provision-stack.mjs"

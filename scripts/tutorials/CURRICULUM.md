@@ -4871,6 +4871,94 @@ render an identical page when their world is missing.
 
 ---
 
+## R — The reseller portal
+
+**A third app, and a DIFFERENT READER.** Sections A–G address the seller who
+owns the stock; H–P address Skydrop's own staff. This section addresses the
+**shopkeeper** — a reseller store's own staff, signing in at
+`reseller.skydrop.global`. Section G teaches a seller to open a store and set
+its terms; the people who then have to USE it had nothing, which is the gap
+this closes.
+
+**It is filmed as a store user, not as the seller looking at a store.** The
+identity is Anjali Deshpande of Pune Silk Studio — the store section G already
+films the seller dealing WITH, so the two sections meet. That is not a
+convenience: a store user cannot see unit cost, real stock, the share held back
+from their catalogue, or that any other store exists. Filming this section as
+the seller would have produced videos quietly showing a shopkeeper figures they
+are never shown, which is the one thing the reseller boundary exists to prevent.
+
+**18 tutorials**, derived from the app's 23 routes under
+`apps/reseller/src/app/(authed)/` and the 16 gated entries in its
+`page-access.ts` — grouped by the task a person does, not one per page.
+
+**Filmed in batches of six, one batch a day** (owner, 2026-10-07), so the
+section can be reviewed a day at a time rather than all at once.
+
+| Day | Theme | Tutorials |
+| --- | --- | --- |
+| 1 | Selling | R1–R6 |
+| 2 | When something goes wrong | R7–R12 |
+| 3 | Money and admin | R13–R18 |
+
+**The voice budget is the binding constraint**, not the filming. At the
+measured average of 2,162 characters of narration per tutorial, 18 comes to
+roughly 39,000 — against 41,570 left on the ring when this section was planned.
+That is about ONE re-take of slack across the whole section, which is why every
+flow is proved in `--check` mode (records nothing, spends nothing) before a
+single clip is bought.
+
+### R1. Find your way around the store · `planned` — `store-find-your-way-around.mp4`
+
+**Promise** — what this portal is, and where everything lives.
+**Covers** `/dashboard` and the shell: the sidebar, the search, the inbox bell,
+and the standing facts along the bottom. No click that changes anything.
+
+### R2. What you may sell, and for how much · `planned` — `store-what-you-may-sell.mp4`
+
+**Promise** — your catalogue is a list your supplier decides, and a price you
+partly decide.
+**Covers** `/catalogue` — `Product | You pay | Sell between | Suggested |
+Available`, and the columns that are DELIBERATELY ABSENT: cost, real stock, the
+hidden share, set-asides, other stores.
+
+### R3. Place an order for a customer · `planned` — `store-place-an-order.mp4`
+
+**Promise** — taking an order from your own customer into Skydrop.
+**Covers** `/orders/new` — the picker reading your catalogue, COD or prepaid,
+and what the store is charged for it.
+
+### R4. A day's orders from a spreadsheet · `planned` — `store-upload-bulk-orders.mp4`
+
+**Promise** — a day's worth at once instead of one at a time.
+**Covers** `/orders/import` — the template, the check before importing, and the
+rows that will not import.
+
+### R5. Find an order · `planned` — `store-find-an-order.mp4`
+
+**Promise** — finding any order from whatever the customer gives you.
+**Covers** `/orders` — the status chips and their counts, the presets, the
+search, and a filter that survives a reload because it lives in the address.
+
+### R6. Read an order · `planned` — `store-read-an-order.mp4`
+
+**Promise** — one order read top to bottom, pressing nothing.
+**Covers** `/orders/[id]` — the tracker, the recipient snapshot, the charges,
+and what a store is shown as against what the seller is shown.
+
+### R7–R18 · `planned`
+
+Day 2 — **R7** what to do when a delivery goes wrong (the seven capabilities and
+the Directly / Needs my approval policy), **R8** "keep trying?"
+(`/orders/call-reviews`), **R9** your customers, **R10** raising it with Skydrop
+(`/tickets`), **R11** the terms you are trading under, **R12** your team.
+
+Day 3 — **R13** your wallet, **R14** your expenses, **R15** how the shop is
+doing (`/reports`), **R16** month by month (`/reports/analysis`), **R17** your
+inbox and your own login, **R18** keys and webhooks.
+
+Each gets its own entry here as it is filmed, in the same shape as R1–R6.
+
 ## Pages deliberately not filmed
 
 Every remaining page, with the reason.
