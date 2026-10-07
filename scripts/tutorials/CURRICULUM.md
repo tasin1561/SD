@@ -4901,6 +4901,47 @@ section can be reviewed a day at a time rather than all at once.
 | 2 | When something goes wrong | R7–R12 |
 | 3 | Money and admin | R13–R18 |
 
+**DAY 1 IS WRITTEN AND NOT YET FILMED (2026-10-07).** R1–R6 have their
+narration, their flows and their seeding; what is missing is a run. Docker
+Desktop's WSL integration was off on the filming machine, so `pnpm db:up`
+could not bring Postgres and Redis up and `stack.sh` had nothing to point at.
+Nothing was bought: narration costs characters only when it is GENERATED, and
+no clip was recorded.
+
+Measured rather than estimated: **day 1's narration is 10,112 characters**,
+against the 2,162-per-tutorial average this section was planned on — so the
+six came in under the ~13,000 budgeted and the ring stands at 41,570 with
+31,458 left for the twelve on days 2 and 3. That is 2,621 each, which is
+slack rather than a squeeze.
+
+What day 1 settled that days 2 and 3 inherit:
+
+- **The world is G6/G7's, not a new one.** Anjali Deshpande is the invited
+  user of Pune Silk Studio, which IS `REQUEST_STORE` — the TRADING store.
+  `tradingStoreWorld` already gives it the four things the portal cannot open
+  without (accepted terms, a priced and enabled catalogue,
+  `reseller.orders_enabled` on for the seller, an action policy), so
+  `STORE_PORTAL_SLUGS` joins the same union rather than seeding a second
+  store. A second would be a second place for all four to drift, and the first
+  symptom would be a video narrating an empty table.
+- **A terminal order for anything read-only.** Sections 6–10 of
+  `/orders/[id]` are all conditional on `!terminal`, so a live order puts five
+  panels of things to PRESS inside a video whose promise is that it presses
+  nothing. R6 opens a DELIVERED order deliberately.
+- **Three selector rules this portal forces**, all written down in `flows.mjs`
+  above section R: `AsyncButton`/`VanDriveOffButton` hold all four phase
+  labels in the DOM at once so only `role` + accessible name reaches them;
+  every confirm dialog reuses its page button's label, so every confirm is
+  scoped through `getByRole('dialog')`; and the status tabs and the status
+  `<select>` present the same words, so tabs are reached by `role: 'tab'`.
+
+**A page's own instruction was wrong and is fixed, not narrated around.**
+`/orders/import` told stores "Re-upload a reference to correct an order you
+have not had confirmed yet." `OrderService.applyBulkPatch` refuses a reseller
+order outright — `RESELLER_ORDER_NOT_EDITABLE`, and BEFORE the status check,
+so the condition the subtitle named never even applies. A store following that
+sentence gets an error row every time. The subtitle now says what happens.
+
 **The voice budget is the binding constraint**, not the filming. At the
 measured average of 2,162 characters of narration per tutorial, 18 comes to
 roughly 39,000 — against 41,570 left on the ring when this section was planned.

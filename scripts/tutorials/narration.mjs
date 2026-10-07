@@ -5212,6 +5212,260 @@ export const VIDEOS = [
       },
     ],
   },
+  {
+    slug: 'store-find-your-way-around',
+    title: 'Finding your way around the store',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'This is your own login into Skydrop. You sell your supplier’s stock under your own name — your customer sees your shop, not theirs — and this is where you place those orders and follow them.',
+      },
+      {
+        id: 'dashboard',
+        say: 'Notice the page is titled with your shop’s name, and underneath it says who you are reselling for. Everything in here is scoped to your shop: you will not see another store’s orders, and they will not see yours.',
+      },
+      {
+        id: 'tiles',
+        say: 'Three figures across the top. What is in your wallet, what you are owed for orders still working their way through, and what you owe your supplier for goods already sold.',
+      },
+      {
+        id: 'nav',
+        say: 'Everything else lives in the sidebar, grouped by the job you came to do. Store is the day job — orders, catalogue, wallet. Setup is your team and your settings. You is your own inbox and account.',
+      },
+      {
+        id: 'search',
+        say: 'The search at the top takes whatever the customer gives you — an order number, a reference of your own, their name, or the waybill off the parcel. You do not have to know which kind of thing you are holding.',
+      },
+      {
+        id: 'inbox',
+        say: 'The bell is your inbox, and it is there at every size of screen. Skydrop puts things here rather than only emailing you, so if your supplier changes one of your orders or answers something you asked, it lands there.',
+      },
+      {
+        id: 'your-store',
+        say: 'Then the facts about your shop. Worth reading once: what customers see is your display name, not your registered one. And who manages your wallet — you top it up and withdraw through whoever that says.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the sidebar is grouped by job, the search finds anything from whatever you have in your hand, and the bell is where Skydrop talks to you. Next, what you are allowed to sell.',
+      },
+    ],
+  },
+  {
+    slug: 'store-what-you-may-sell',
+    title: 'What you may sell, and for how much',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Your catalogue is not a shop you fill in yourself. It is a list your supplier decides, at a price the two of you agreed — and within that, a price you choose.',
+      },
+      {
+        id: 'table',
+        say: 'Five columns, and that is the whole of it. The product, what you pay, the range you may sell it in, what your supplier suggests you charge, and how many you can sell right now.',
+      },
+      {
+        id: 'glossary',
+        say: 'What you pay has a note on it. That is the transfer price — what your shop owes your supplier for each one you sell. The gap between it and what you charge is yours, before your share of Skydrop’s fees.',
+      },
+      {
+        id: 'range',
+        say: 'Sell between is the part worth understanding. Below the bottom of it the order is refused — not warned about, refused — because the floor is what protects your supplier’s margin. Above the top, the same.',
+      },
+      {
+        id: 'available',
+        say: 'Available is what you may sell, which is deliberately not what is in the warehouse. Your supplier can hold a share back, or set stock aside for one shop, so this figure is yours rather than the building’s.',
+      },
+      {
+        id: 'absent',
+        say: 'And notice what has no column. Not what the goods cost your supplier, not how much stock there really is, not what they held back, and no sign that any other shop exists. None of that is yours to see, so none of it is sent to this page.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the list and the range are your supplier’s decision, the price inside the range is yours, and Available is the number to trust when you promise a customer something. Next, placing an order.',
+      },
+    ],
+  },
+  {
+    slug: 'store-place-an-order',
+    title: 'Placing an order for a customer',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A customer has bought something from you. This is how that becomes a parcel: you type it here, and your supplier’s warehouse picks, packs and ships it under your name.',
+      },
+      {
+        id: 'open-form',
+        say: 'Orders in the sidebar, then New order. The form has three parts, listed along the top, and it starts with what they bought rather than who they are.',
+      },
+      {
+        id: 'product',
+        say: 'The product list is your catalogue, so you can only choose what you are allowed to sell. Each one tells you how many are available, and anything you cannot sell right now cannot be picked at all.',
+      },
+      {
+        id: 'line-note',
+        say: 'Once it is chosen, the line tells you the two figures that matter: what you pay your supplier for each one, and how many your shop may sell. The same two you saw on the catalogue.',
+      },
+      {
+        id: 'retail',
+        say: 'Sell at is what your customer pays, and it arrives already filled in with your supplier’s suggestion. Change it to your own price — the hint underneath is the range you have to stay inside.',
+      },
+      {
+        id: 'customer',
+        say: 'Then who it goes to. Their name, an Indian mobile with the country code, and the PIN code. The PIN is the whole of the routing — the courier works the city out itself, so there is nothing else to type.',
+      },
+      {
+        id: 'landmark',
+        say: 'The landmark is its own field and it is required. On a lot of Indian addresses it is the line that decides whether the driver finds the door, so write what you would say to them on the phone.',
+      },
+      {
+        id: 'payment',
+        say: 'Payment is cash on delivery, and today it is the only option here — the courier collects from your customer and the money comes back to you. Leave the amount blank and Skydrop collects what you sold it for plus any delivery charge you added.',
+      },
+      {
+        id: 'submit',
+        say: 'Place it, and it asks you to confirm — who it is for and what is being collected. Then it joins the call-centre queue.',
+      },
+      {
+        id: 'outro',
+        say: 'An agent rings your customer to confirm the order, and only once they say yes is stock held and a courier booked. That call is the single biggest reason returns stay low, and it is why nothing ships the moment you press the button.',
+      },
+    ],
+  },
+  {
+    slug: 'store-upload-bulk-orders',
+    title: 'A day’s orders from a spreadsheet',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Typing one order at a time is fine for one. For a day’s worth, upload them — the same orders, from a spreadsheet, in one go.',
+      },
+      {
+        id: 'template',
+        say: 'Start by downloading the template, so the columns are the ones Skydrop reads. Leave the retail price blank on a row and your supplier’s suggested price is used for it.',
+      },
+      {
+        id: 'rows',
+        say: 'One row is one product line. Give two rows the same reference and they become one order with two things in it — that is how you sell somebody a saree and a blouse in one parcel.',
+      },
+      {
+        id: 'file',
+        say: 'Choose the file, then upload and check. Nothing is placed yet: checking and importing are two separate presses on purpose, because a spreadsheet is the easiest place in this whole system to make a hundred mistakes at once.',
+      },
+      {
+        id: 'preview',
+        say: 'The check reads the whole file and tells you what it found — how many rows, how many orders that makes, and any row that will not import, with the reason and the row number. Read this before going further.',
+      },
+      {
+        id: 'bad-row',
+        say: 'Here is the one that will not, and it says why: that price is below the floor your supplier set for it. The other five are fine and will go in — a bad row is refused on its own, it does not stop the rest of the file.',
+      },
+      {
+        id: 'import',
+        say: 'Now import. It confirms the count, then each good row becomes one of your orders and goes to the call centre exactly as a typed one does. If a whole column Skydrop needs were missing, there would be no import button at all — the file would have to be fixed first.',
+      },
+      {
+        id: 'uploads',
+        say: 'Every upload stays on this list with how many orders it made and how many rows failed, and a failed one gives you an error report to download — the same file back, with the reason against each row.',
+      },
+      {
+        id: 'outro',
+        say: 'So: start from the template, remember a shared reference means one order, and read the check before importing. A reference you have already used comes back as an error — re-uploading never quietly changes an order you have already placed.',
+      },
+    ],
+  },
+  {
+    slug: 'store-find-an-order',
+    title: 'Finding an order',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A customer rings asking where their parcel is. They will not have an order number. This is how you find it from whatever they do give you.',
+      },
+      {
+        id: 'list',
+        say: 'Orders is everything your shop has sold, newest first — the order and your own reference, the customer, where it has got to, what is being collected, and when you placed it.',
+      },
+      {
+        id: 'tabs',
+        say: 'Across the top are the stages an order goes through, as shortcuts. Pending confirmation is waiting on the call centre, dispatched and out for delivery are moving, and cancelled is the ones that came to nothing.',
+      },
+      {
+        id: 'filter',
+        say: 'Press one and the list narrows. Watch the address bar as you do — the filter is written into the web address, so this view is a link you can bookmark or send to a colleague.',
+      },
+      {
+        id: 'reload',
+        say: 'Which also means a reload does not lose your place: refresh and the filter is still applied, because it was never hidden away inside the page. The heading tells you how many of your total you are looking at.',
+      },
+      {
+        id: 'search',
+        say: 'And the search takes whatever the customer has — the order number, your own reference, their name, or the waybill printed on the parcel. Any one of the four finds it.',
+      },
+      {
+        id: 'reset',
+        say: 'The filter panel counts how many filters are on and clears them in one press, which matters more than it sounds: a search left in place is the usual reason an order somebody is sure exists cannot be found.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the tabs are the stages as shortcuts, the filter lives in the address so it survives a reload and can be shared, and the search works from whatever the customer happens to have in front of them.',
+      },
+    ],
+  },
+  {
+    slug: 'store-read-an-order',
+    title: 'Reading an order',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'One order, read top to bottom, pressing nothing. Everything you would want to tell a customer who has rung up is on this page.',
+      },
+      {
+        id: 'head',
+        say: 'The heading is the order’s own number — the one to quote to Skydrop — with where it has got to beside it, and your own reference and the date it was placed underneath.',
+      },
+      {
+        id: 'customer',
+        say: 'Then who it went to, exactly as it was when the order was placed. Correct an address later and that correction is recorded as its own change, so this block never quietly rewrites itself behind you.',
+      },
+      {
+        id: 'money',
+        say: 'The money, in one place: what is being collected, what you sold it for, and what you pay your supplier. And the terms version it was placed under — the deal as it stood that day, fixed, whatever has been agreed since.',
+      },
+      {
+        id: 'products',
+        say: 'What is in the parcel, line by line, with what you sold each at and what each costs you. The difference down this column is your margin on this order.',
+      },
+      {
+        id: 'parcel',
+        say: 'Once a courier has it there is a waybill here, and which courier is carrying it. That is the number a customer can track themselves, and the one to quote if you ever have to chase it.',
+      },
+      {
+        id: 'earns',
+        say: 'Then what the order actually earns you, worked out rather than estimated: the cash collected, less the goods at your supplier’s price, less your share of the tax and the fees — and what is left is what reaches your wallet.',
+      },
+      {
+        id: 'credit-state',
+        say: 'With a word for where that money has got to. Waiting means the order is not finished; due means it is owed and timed; credited means it is already in your wallet. Nothing here is a promise about an order that has not arrived yet.',
+      },
+      {
+        id: 'fees',
+        say: 'Underneath, each Skydrop fee and your share of it. Your supplier agreed with Skydrop which of you carries what, and this is that agreement applied to this one parcel rather than a rate card you have to interpret.',
+      },
+      {
+        id: 'timeline',
+        say: 'And the timeline at the bottom: every step this order has taken, in order. These are the courier’s own scans as they arrive, not our guesses, so it is the same information the delivery driver’s app has.',
+      },
+      {
+        id: 'outro',
+        say: 'Worth saying plainly to finish: your supplier can see this whole order too, your customer’s details included. It is their stock and their money at risk, and somebody who cannot see who a parcel is going to cannot help you when it goes wrong.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */

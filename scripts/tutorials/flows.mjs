@@ -1504,6 +1504,62 @@ function statusChip(page, word) {
   return page.locator('.sk-ph__meta .sk-chip').filter({ hasText: word }).first();
 }
 
+/**
+ * One dashboard card of the reseller portal, by its title.
+ *
+ * `RdCard` is local to apps/reseller (`settings/_components/rd-parts.tsx`)
+ * and renders a `.rd-card` with the title as an ordinary heading, so
+ * there is no role to filter on — the card is found by the heading it
+ * contains.
+ */
+function rdCard(page, title) {
+  return page
+    .locator('.rd-card')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+    .first();
+}
+
+/**
+ * One `RoSection` of a store order page, by its heading.
+ *
+ * Every section on the order detail is `<section class="ro-section">`
+ * wrapping a `SectionHeading` over one card, so the heading is the only
+ * handle. Returned UNFILTERED by count so a caller can ask whether a
+ * conditional section rendered at all — half the sections on that page
+ * depend on the order not being terminal.
+ */
+function roSection(page, heading) {
+  return page
+    .locator('.ro-section')
+    .filter({ has: page.getByRole('heading', { name: heading, exact: true }) })
+    .first();
+}
+
+/** The nth cell of the first body row — for dwelling on one column. */
+function firstBodyCell(page, nth) {
+  return page.locator(`tbody tr:first-child td:nth-child(${nth})`).first();
+}
+
+/** The CSV the store bulk-upload video uploads. Six rows, four orders, one refused. */
+const STORE_BULK_CSV = path.join(TUTORIALS_DIR, 'fixtures', 'pune-store-bulk-orders.csv');
+
+/**
+ * The order R3 places on camera, and the customer R5 then searches for.
+ *
+ * The retail is inside Pune Silk Studio's agreed range for the jamdani
+ * (₹2,400–₹3,200) on purpose: R2 has just taught that outside it the
+ * order is refused, so placing one outside it here would film the
+ * refusal under narration about placing an order.
+ */
+const STORE_ORDER = {
+  name: 'Vaishnavi Joshi',
+  phone: '+919822078825',
+  pin: '411038',
+  line1: '21 Karve Road, Kothrud',
+  landmark: 'Beside the Dashabhuja temple gate',
+  retail: '2950',
+};
+
 export const FLOWS = {
   'place-an-order': {
     /** Everything before scene one: sign in and land where the intro expects. */
@@ -15468,6 +15524,509 @@ export const FLOWS = {
 
       async outro({ page, stage }) {
         await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
+      },
+    },
+  },
+
+  /*
+   * ── SECTION R — THE STORE'S OWN PORTAL ────────────────────────────
+   *
+   * Every one of these declares `app: 'reseller'`, which is what makes
+   * `signIn` use Anjali Deshpande of Pune Silk Studio rather than the
+   * demo seller. Filming these as the SELLER would have produced videos
+   * that quietly show a shopkeeper figures they are never shown — the
+   * cost of the goods, how much stock there really is — which is the
+   * one thing the reseller boundary exists to prevent.
+   *
+   * THREE SELECTOR RULES this portal forces, each learned from its
+   * source rather than from a failed take:
+   *
+   *   · `AsyncButton` and `VanDriveOffButton` hold ALL FOUR phase
+   *     labels in the DOM at once (idle, busy, done, error) with the
+   *     strip `aria-hidden` and the accessible name pinned to the idle
+   *     one. So `getByRole('button', { name })` is the only reach that
+   *     works; `getByText('Place order')` is a strict-mode failure.
+   *   · Confirm dialogs REUSE the page button's label — `Place order`,
+   *     `Import 4 orders`. Every confirm is scoped through
+   *     `page.getByRole('dialog')`.
+   *   · The status tabs and the status `<select>` both present the same
+   *     words, so a bare `getByText('Delivered')` matches two controls.
+   *     Tabs are reached by `role: 'tab'`.
+   */
+
+  'store-find-your-way-around': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async dashboard({ page, stage }) {
+        // The heading IS the shop's own name and the subtitle says who
+        // it resells for — the two facts the narration opens on.
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 1800);
+        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 2400);
+      },
+
+      async tiles({ page, stage }) {
+        // `section[aria-label="Wallet"]`, and it is absent entirely if
+        // the position read fails — so this never asserts, it dwells.
+        const tiles = page.locator('section[aria-label="Wallet"]').first();
+        if ((await tiles.count()) > 0) await stage.dwellOn(tiles, 3200);
+        else await page.waitForTimeout(3200);
+      },
+
+      async nav({ page, stage }) {
+        await stage.dwellOn(navGroup(page, 'Store'), 2600);
+        await stage.dwellOn(navGroup(page, 'Setup'), 1600);
+        await stage.dwellOn(navGroup(page, 'You'), 1600);
+      },
+
+      async search({ page, stage }) {
+        const box = page.getByLabel(/search/i).first();
+        if ((await box.count()) > 0) {
+          await stage.typeIn(box, 'PSS-2026', { after: 1600 });
+          await page.waitForTimeout(1000);
+          await dismiss(page);
+          await box.fill('');
+        } else {
+          await page.waitForTimeout(2800);
+        }
+      },
+
+      async inbox({ page, stage }) {
+        const bell = page.getByRole('button', { name: /notification|inbox/i }).first();
+        if ((await bell.count()) > 0) {
+          await stage.clickIt(bell, { after: 1600 });
+          await page.waitForTimeout(1400);
+          await dismiss(page);
+        } else {
+          await page.waitForTimeout(2600);
+        }
+      },
+
+      async 'your-store'({ page, stage }) {
+        await stage.glide(320);
+        await stage.dwellOn(rdCard(page, 'Your store'), 3400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(rdCard(page, 'What you can sell'), 2400);
+        await stage.glide(-320);
+      },
+    },
+  },
+
+  'store-what-you-may-sell': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/catalogue', (page) =>
+        page.getByRole('columnheader', { name: 'Available' }).first().waitFor({ timeout: 15_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async table({ page, stage }) {
+        for (const col of ['Product', 'Sell between', 'Suggested', 'Available']) {
+          await stage.dwellOn(page.getByRole('columnheader', { name: col }).first(), 900);
+        }
+      },
+
+      async glossary({ page, stage }) {
+        /*
+          `You pay` is not a plain header — it is a `GlossaryTerm`, a
+          real <button> inside the <th> that opens a tooltip card
+          titled "Transfer price". Clicking it is the beat; the card is
+          what the narration is reading out.
+        */
+        const term = page.getByRole('button', { name: 'You pay', exact: true }).first();
+        await stage.clickIt(term, { after: 1400 });
+        const card = page.getByRole('tooltip').first();
+        if ((await card.count()) > 0) await stage.dwellOn(card, 3000);
+        else await page.waitForTimeout(3000);
+        await dismiss(page);
+      },
+
+      async range({ page, stage }) {
+        await stage.dwellOn(firstBodyCell(page, 3), 3200);
+      },
+
+      async available({ page, stage }) {
+        await stage.dwellOn(firstBodyCell(page, 5), 3400);
+      },
+
+      async absent({ page, stage }) {
+        // The whole header row: the argument is about what has NO
+        // column, so the shot is the full set of five.
+        await stage.dwellOn(page.locator('thead tr').first(), 3600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 2600);
+      },
+    },
+  },
+
+  'store-place-an-order': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signIn(ctx);
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 1800);
+      },
+
+      async 'open-form'({ page, stage }) {
+        await stage.clickIt(page.locator('a[href="/orders"]').first(), { after: 900 });
+        await page.waitForURL((u) => u.pathname === '/orders', { timeout: 20_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.clickIt(page.getByRole('link', { name: 'New order', exact: true }).first(), {
+          after: 1200,
+        });
+        await page.waitForURL((u) => u.pathname === '/orders/new', { timeout: 20_000 });
+        // The stepper names the three parts, and the narration says the
+        // form starts with what they bought rather than who they are.
+        await stage.dwellOn(page.locator('ol.sk-stepper__rail').first(), 2200);
+      },
+
+      async product({ page, stage }) {
+        // A native <select> — `selectOption` is the supported path, and
+        // an option whose availability is zero is `disabled`, which is
+        // the fact the narration names.
+        const picker = page.getByLabel('Product', { exact: true }).first();
+        await stage.point(picker, { settle: 600 });
+        await picker.selectOption({ index: 1 });
+        await page.waitForTimeout(1400);
+      },
+
+      async 'line-note'({ page, stage }) {
+        // "You pay the seller ₹X each · N available" — the two figures
+        // the catalogue showed, repeated where the decision is made.
+        await stage.dwellOn(page.locator('p.ro-line__note').first(), 3200);
+      },
+
+      async retail({ page, stage }) {
+        const price = page.getByLabel('Retail price per unit').first();
+        await stage.typeIn(price, STORE_ORDER.retail, { clear: true, after: 1200 });
+        // The hint underneath is the range, which is what makes the
+        // typed figure legible as a choice rather than a number.
+        await page.waitForTimeout(1200);
+      },
+
+      async customer({ page, stage }) {
+        await stage.typeIn(page.getByLabel('Name', { exact: true }).first(), STORE_ORDER.name, {
+          after: 400,
+        });
+        await stage.typeIn(page.getByLabel('Phone', { exact: true }).first(), STORE_ORDER.phone, {
+          clear: true,
+          after: 400,
+        });
+        await stage.typeIn(page.getByLabel('PIN code', { exact: true }).first(), STORE_ORDER.pin, {
+          after: 400,
+        });
+        await stage.typeIn(page.getByLabel('Address', { exact: true }).first(), STORE_ORDER.line1, {
+          after: 600,
+        });
+      },
+
+      async landmark({ page, stage }) {
+        await stage.typeIn(
+          page.getByLabel('Landmark', { exact: true }).first(),
+          STORE_ORDER.landmark,
+          { after: 1400 },
+        );
+      },
+
+      async payment({ page, stage }) {
+        await stage.glide(320);
+        // COD is fixed on this form — the notice says so, and that
+        // notice is what the narration is reading.
+        await stage.dwellOn(page.getByText(/Cash on delivery only for now/i).first(), 2600);
+        await stage.dwellOn(page.getByLabel(/Cash to collect/i).first(), 2200);
+      },
+
+      async submit({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: 'Place order', exact: true }).first(),
+          {
+            after: 1200,
+          },
+        );
+        const dialog = page.getByRole('dialog');
+        await dialog.first().waitFor({ timeout: 15_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm').first(), 2600);
+        // The dialog's confirm carries the SAME label as the page
+        // button, which is why this is scoped to the dialog.
+        await stage.clickIt(
+          dialog.getByRole('button', { name: 'Place order', exact: true }).first(),
+          {
+            after: 1400,
+          },
+        );
+      },
+
+      async outro({ page, stage }) {
+        await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/i, { timeout: 30_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2400);
+        await stage.dwellOn(page.locator('.sk-ph__meta').first(), 2600);
+      },
+    },
+  },
+
+  'store-upload-bulk-orders': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/orders/import', (page) =>
+        page.getByRole('heading', { name: 'Upload orders' }).first().waitFor({ timeout: 15_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2000);
+      },
+
+      async template({ page, stage }) {
+        // A <button> that builds a blob and clicks a synthetic anchor —
+        // there is no href to read, and a real download event fires.
+        const dl = page.getByRole('button', { name: 'Download the template' }).first();
+        const saved = page.waitForEvent('download', { timeout: 15_000 }).catch(() => null);
+        await stage.clickIt(dl, { after: 1600 });
+        await saved;
+        await page.waitForTimeout(1200);
+      },
+
+      async rows({ page, stage }) {
+        // The subtitle states the one-row-one-line rule in the page's
+        // own words, which is what this step is about.
+        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 3600);
+      },
+
+      async file({ page, stage }) {
+        await page.locator('input[type="file"]').first().setInputFiles(STORE_BULK_CSV);
+        await page.waitForTimeout(1000);
+        await stage.clickIt(page.getByRole('button', { name: 'Upload and check' }).first(), {
+          after: 1400,
+        });
+      },
+
+      async preview({ page, stage }) {
+        // Six rows making four orders — the clause only appears when
+        // the two numbers differ, which is why the fixture is shaped
+        // that way.
+        await withRetry(page, (p) => p.locator('p.ro-body').first().waitFor({ timeout: 25_000 }));
+        await stage.dwellOn(page.locator('p.ro-body').first(), 3400);
+      },
+
+      async 'bad-row'({ page, stage }) {
+        const warn = page
+          .locator('.sk-notice')
+          .filter({ hasText: /will not import/i })
+          .first();
+        if ((await warn.count()) > 0) await stage.dwellOn(warn, 3800);
+        else await page.waitForTimeout(3800);
+      },
+
+      async import({ page, stage }) {
+        const go = page.getByRole('button', { name: /^Import \d+ orders?$/ }).first();
+        await stage.clickIt(go, { after: 1200 });
+        const dialog = page.getByRole('dialog');
+        await dialog.first().waitFor({ timeout: 15_000 });
+        await stage.dwellOn(dialog.locator('.sk-confirm').first(), 2400);
+        await stage.clickIt(dialog.getByRole('button', { name: /^Import \d+ orders?$/ }).first(), {
+          after: 1600,
+        });
+      },
+
+      async uploads({ page, stage }) {
+        // Auto-refetches every five seconds while the run is live, so
+        // this waits for the row rather than snapshotting the table.
+        await withRetry(page, (p) =>
+          p
+            .getByRole('cell', { name: /pune-store-bulk-orders\.csv/i })
+            .first()
+            .waitFor({ timeout: 30_000 }),
+        );
+        await stage.glide(320);
+        await stage.dwellOn(page.locator('table').last(), 3600);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 3000);
+      },
+    },
+  },
+
+  'store-find-an-order': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/orders', (page) =>
+        page.getByRole('columnheader', { name: 'To collect' }).first().waitFor({ timeout: 15_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2000);
+      },
+
+      async list({ page, stage }) {
+        await stage.dwellOn(page.locator('thead tr').first(), 2600);
+        await stage.dwellOn(page.locator('tbody tr').first(), 2000);
+      },
+
+      async tabs({ page, stage }) {
+        await stage.dwellOn(page.getByRole('tablist').first(), 3400);
+      },
+
+      async filter({ page, stage }) {
+        // Automatic activation: arrow keys would CHANGE the filter, so
+        // this clicks rather than keyboards through the tablist.
+        await stage.clickIt(page.getByRole('tab', { name: 'Delivered', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForURL(/status=DELIVERED/, { timeout: 15_000 }).catch(() => {});
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+      },
+
+      async reload({ page, stage }) {
+        await page.reload({ waitUntil: 'domcontentloaded' });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1200);
+        await stage.dwellOn(page.locator('.sk-sh__note').first(), 2600);
+      },
+
+      async search({ page, stage }) {
+        // Back to everything first, or the search is ANDed with a
+        // status and the narration's "any one of the four finds it"
+        // would be filmed finding nothing.
+        await stage.clickIt(page.getByRole('tab', { name: 'All', exact: true }).first(), {
+          after: 900,
+        });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const box = page.getByLabel('Search orders').first();
+        await stage.typeIn(box, STORE_ORDER.phone.replace('+91', ''), { after: 900 });
+        await box.press('Enter');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1800);
+      },
+
+      async reset({ page, stage }) {
+        const reset = page.getByRole('button', { name: 'Reset', exact: true }).first();
+        await stage.dwellOn(page.locator('.sk-filter__title').first(), 1400);
+        await stage.clickIt(reset, { after: 1600 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('tablist').first(), 2400);
+      },
+    },
+  },
+
+  'store-read-an-order': {
+    app: 'reseller',
+
+    /*
+     * A DELIVERED order on purpose. Sections 6 to 10 of this page are
+     * all conditional on `!terminal` — the delivery asks, the order
+     * change, the courier address ask — so a live order would put five
+     * panels of things to PRESS in the middle of a video whose whole
+     * promise is that it presses nothing. A terminal order shows
+     * exactly the read-only set: customer, money, products, parcel,
+     * what it earns, the timeline.
+     */
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/orders', (page) =>
+        page.getByRole('columnheader', { name: 'To collect' }).first().waitFor({ timeout: 15_000 }),
+      );
+      const { page } = ctx;
+      await page.getByRole('tab', { name: 'Delivered', exact: true }).first().click();
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await withRetry(page, (p) =>
+        p.locator('a.ro-order-link').first().waitFor({ timeout: 25_000 }),
+      );
+      await page.locator('a.ro-order-link').first().click();
+      await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/i, { timeout: 20_000 });
+      await page.waitForLoadState('networkidle').catch(() => {});
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2000);
+      },
+
+      async head({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__meta').first(), 1800);
+        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 2200);
+      },
+
+      async customer({ page, stage }) {
+        await stage.dwellOn(roSection(page, 'Customer'), 3400);
+      },
+
+      async money({ page, stage }) {
+        await stage.dwellOn(roSection(page, 'Money'), 4000);
+      },
+
+      async products({ page, stage }) {
+        await stage.glide(300);
+        await stage.dwellOn(roSection(page, 'Products'), 3600);
+      },
+
+      async parcel({ page, stage }) {
+        const parcel = roSection(page, 'Parcel');
+        if ((await parcel.count()) > 0) await stage.dwellOn(parcel, 3200);
+        else await page.waitForTimeout(3200);
+      },
+
+      async earns({ page, stage }) {
+        await stage.glide(360);
+        await stage.dwellOn(roSection(page, 'What this order earns you'), 4200);
+      },
+
+      async 'credit-state'({ page, stage }) {
+        const chip = roSection(page, 'What this order earns you').locator('.sk-chip').first();
+        if ((await chip.count()) > 0) await stage.dwellOn(chip, 3400);
+        else await page.waitForTimeout(3400);
+      },
+
+      async fees({ page, stage }) {
+        const fees = page
+          .locator('table')
+          .filter({ hasText: /Your share/i })
+          .first();
+        if ((await fees.count()) > 0) await stage.dwellOn(fees, 3600);
+        else await page.waitForTimeout(3600);
+      },
+
+      async timeline({ page, stage }) {
+        await stage.glide(400);
+        await stage.dwellOn(page.locator('ol.sk-tl__steps').first(), 4000);
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-900);
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2800);
       },
     },
   },

@@ -472,6 +472,40 @@ const STORE_REPORT_SLUGS = new Set(['how-your-stores-are-doing']);
 const STORE_DISPUTE_SLUGS = new Set(['refunds-and-disputes']);
 
 /**
+ * Section R — the STORE's OWN portal, filmed as Anjali Deshpande.
+ *
+ * ── WHY THESE REUSE G6/G7's WORLD RATHER THAN BUILDING ONE ──────────
+ * Anjali is the invited user of Pune Silk Studio, which IS
+ * `REQUEST_STORE` — the trading store. `tradingStoreWorld` already gives
+ * it the four things the portal cannot open without: accepted terms (a
+ * store whose current version is unaccepted is shown a banner and little
+ * else), a priced and enabled catalogue (R2 is a video ABOUT that
+ * table), `reseller.orders_enabled` ON for the seller (RS-5 seeds it
+ * FALSE and the create is refused by name without it), and an action
+ * policy. Building a second store for section R would mean a second
+ * place for all four to drift, and the first symptom would be a video
+ * narrating a table that is empty.
+ *
+ * `ensureSettledStoreOrders` is added for the same reason G7 has it:
+ * R5 films the status chips HAVING COUNTS and R6 reads one order's
+ * tracker top to bottom, and both of those need parcels whose fate is
+ * known. R1's dashboard reads the same orders.
+ *
+ * The HELD REQUESTS are deliberately NOT built here. Those are the
+ * SELLER's queue — what a store asked and a seller has not yet
+ * answered — and they belong to G6 and to day 2's R7, not to a video
+ * about placing and finding an order.
+ */
+const STORE_PORTAL_SLUGS = new Set([
+  'store-find-your-way-around',
+  'store-what-you-may-sell',
+  'store-place-an-order',
+  'store-upload-bulk-orders',
+  'store-find-an-order',
+  'store-read-an-order',
+]);
+
+/**
  * M6 — the THIRD kind of row on the failed-delivery register, and the
  * only one that still shows a decision anybody could make.
  *
@@ -3250,7 +3284,8 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
     STORE_ORDER_SLUGS.has(slug ?? '') ||
     STORE_REPORT_SLUGS.has(slug ?? '') ||
     STORE_DISPUTE_SLUGS.has(slug ?? '') ||
-    STORE_DELIVERY_ASK_SLUGS.has(slug ?? '');
+    STORE_DELIVERY_ASK_SLUGS.has(slug ?? '') ||
+    STORE_PORTAL_SLUGS.has(slug ?? '');
   if (!wantsStore) return;
   const log = (m) => console.log(m);
   const world = await tradingStoreWorld(sellerId, sellerToken, staffToken, log);
@@ -3268,6 +3303,12 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
   }
   if (STORE_DELIVERY_ASK_SLUGS.has(slug ?? '')) {
     await ensureHeldDeliveryAsk(sellerId, world.storeToken, staffToken, world.variantId, log);
+  }
+  if (STORE_PORTAL_SLUGS.has(slug ?? '')) {
+    // The SAME call G7 makes, for the same reason: a status chip with no
+    // count teaches nothing about what it is for, and an order detail
+    // with no scans is a tracker drawn on nothing.
+    await ensureSettledStoreOrders(sellerId, world, staffToken, log);
   }
 }
 

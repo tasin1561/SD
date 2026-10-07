@@ -190,7 +190,7 @@ export default function StoreOrderImportPage(): ReactElement {
       </BackLink>
       <PageHeader
         title="Upload orders"
-        subtitle="One row is one product line — give two rows the same reference and they become one order with two items. Retail Price is what you sell the product for; leave it blank and we use your seller’s suggested price. Re-upload a reference to correct an order you have not had confirmed yet."
+        subtitle="One row is one product line — give two rows the same reference and they become one order with two items. Retail Price is what you sell the product for; leave it blank and we use your seller’s suggested price. A reference you have already used comes back as an error row — re-uploading never changes an order you have already placed."
       />
 
       <RoSection
