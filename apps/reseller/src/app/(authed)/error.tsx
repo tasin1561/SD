@@ -12,6 +12,32 @@ import { useEffect, type ReactElement } from 'react';
  * that the layout handles via redirect. Only thrown errors land in
  * error.tsx.
  */
+/**
+ * What a tab running a build that no longer exists actually says.
+ *
+ * It was only the chunk-loader family, and that is one symptom of
+ * several. On 7 October a seller's open tab failed with "Cannot read
+ * properties of undefined (reading 'length')" while the server log
+ * filled with "The Server Reference ID did not match the expected
+ * format" — the same stale tab, a different error, and because the
+ * message did not match, the page offered a "Try again" that re-rendered
+ * the same dead build and failed again. A dead end that reads as broken
+ * software.
+ *
+ * So: every signature a replaced build produces.
+ * - chunk loader — a route whose JS hash is gone
+ * - Server Reference / server action — a POST naming an action id the
+ *   new build does not have
+ * - manifest reads — `next start` serving HTML that names files the
+ *   rebuild deleted
+ *
+ * Deliberately NOT a catch-all. Reloading on any error at all would
+ * hide real faults behind a flash, and the message below is how a real
+ * one gets reported instead of guessed at.
+ */
+export const STALE_BUILD =
+  /Loading chunk|ChunkLoadError|Failed to fetch dynamically imported|Server Reference ID|failed-to-find-server-action|prerender-manifest|app-paths-manifest|_buildManifest/i;
+
 export default function AuthedError({
   error,
   reset,
@@ -46,9 +72,7 @@ export default function AuthedError({
     from the new build too, one retry per session is enough to find
     that out, and after it the message below is shown instead.
   */
-  const isStaleBuild = /Loading chunk|ChunkLoadError|Failed to fetch dynamically imported/i.test(
-    error.message,
-  );
+  const isStaleBuild = STALE_BUILD.test(error.message);
   useEffect(() => {
     if (!isStaleBuild) return;
     const KEY = 'sd-chunk-reload';
