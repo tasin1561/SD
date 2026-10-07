@@ -267,7 +267,7 @@ export function StartImpersonationDialog({
         <AcCallout tone="warn" icon={<TriangleAlert size={15} />} role="status">
           <p>
             The next page is {subjectName}’s account, not yours. A red bar across the top will say
-            so for as long as the session lasts, and it has the button that leaves.
+            so for as long as the session lasts, and it has the button that ends the session.
           </p>
         </AcCallout>
 

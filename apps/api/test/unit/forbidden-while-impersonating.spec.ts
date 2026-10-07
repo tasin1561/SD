@@ -207,6 +207,71 @@ describe('refusalFor: what a support session may never do', () => {
     }
   });
 
+  describe('case cannot be used to walk past the list', () => {
+    /*
+      ── THE BYPASS THIS CLOSES, MEASURED ──────────────────────────────
+
+      Express routes case-INSENSITIVELY by default — `case sensitive
+      routing` is `undefined` and this app never sets it — while
+      `req.path` carries whatever the caller typed. Against the express
+      5.2.1 in this workspace, `POST /SELLER/api-keys` reaches the
+      `/seller/api-keys` handler and answers 200.
+
+      With a case-SENSITIVE matcher that did not weaken the deny list,
+      it removed it: every entry was walked past by capitalising one
+      letter, and silently, because no refusal fired and so no
+      `impersonation.request_refused` audit row was written either.
+
+      `impersonation-deny-list.spec.ts` cannot catch this — it feeds
+      `refusalFor` the paths it read out of the controllers, which are
+      canonical-case by construction. Mixed case has to be fed in
+      deliberately, which is what this block is.
+    */
+    const MANGLES: ReadonlyArray<(path: string) => string> = [
+      (p) => p.toUpperCase(),
+      // Title-case each segment: what somebody copying a path out of
+      // prose or a document would produce, and the shape least likely
+      // to look like an attack in a log.
+      (p) =>
+        p
+          .split('/')
+          .map((seg) => (seg === '' ? seg : seg[0]!.toUpperCase() + seg.slice(1)))
+          .join('/'),
+      // Just the LAST segment, which is where the dangerous noun lives.
+      (p) => {
+        const parts = p.split('/');
+        const last = parts.pop() ?? '';
+        return [...parts, last.toUpperCase()].join('/');
+      },
+    ];
+
+    for (const route of FORBIDDEN_WHILE_IMPERSONATING) {
+      const method = route.method === '*' ? 'POST' : route.method;
+
+      for (const [i, mangle] of MANGLES.entries()) {
+        it(`${route.prefix} is still refused when re-cased (${i})`, () => {
+          expect(refusalFor(method, mangle(route.prefix), true)).toBe(route.why);
+        });
+      }
+    }
+
+    it('the uppercase form of a real route is refused, end to end', () => {
+      // One concrete case written out, because the loop above derives
+      // its paths from the list and a reader wants to see the actual
+      // request that used to get through.
+      expect(refusalFor('POST', '/SELLER/api-keys', true)).not.toBeNull();
+      expect(refusalFor('PATCH', '/seller/profile/Bank-Details', true)).not.toBeNull();
+      expect(refusalFor('POST', '/seller/reseller-stores/abc/Wallet/Payouts', true)).not.toBeNull();
+    });
+
+    it('a mangled ALLOWED path is still allowed, so this is not blanket over-refusal', () => {
+      // The other direction: making the matcher case-blind must not
+      // start refusing ordinary work.
+      expect(refusalFor('POST', '/SELLER/ORDERS', true)).toBeNull();
+      expect(refusalFor('POST', '/Seller/Products', true)).toBeNull();
+    });
+  });
+
   describe('prefix matching cannot be fooled', () => {
     /*
       ── WHAT IS CORRECT FOR `/seller/api-keys-something` ──────────────

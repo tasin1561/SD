@@ -97,8 +97,13 @@ export function ImpersonationBanner({ identity }: { identity: StoreMe }): ReactE
 
   if (session === null) return null;
 
-  const remaining = Date.parse(session.expiresAt) - now;
-  const over = remaining <= 0;
+  // `null` before the first client paint (see `useNow`). An unmounted
+  // bar reads as NOT over, which is right for all but the handful of
+  // loads that happen in the last second of a session — and "you are
+  // inside their account" is the safer thing to be wrong about for one
+  // frame than "this has run out".
+  const remaining = now === null ? null : Date.parse(session.expiresAt) - now;
+  const over = remaining !== null && remaining <= 0;
 
   async function leave(): Promise<void> {
     setError(null);
@@ -168,7 +173,11 @@ export function ImpersonationBanner({ identity }: { identity: StoreMe }): ReactE
               reader every second would make the page unusable. The
               sentence above already says what is happening. */}
           <span className="imp-bar__clock">
-            {over ? 'ended' : `ends in ${describeRemaining(remaining)}`}
+            {remaining === null
+              ? 'ends shortly'
+              : over
+                ? 'ended'
+                : `ends in ${describeRemaining(remaining)}`}
           </span>
         </div>
 
@@ -210,11 +219,31 @@ function describeRemaining(ms: number): string {
  * `Date.now()` on an interval, so the countdown actually counts. `null`
  * means do not tick at all — the hook still runs (it has to, it is a
  * hook) but sets no timer.
+ *
+ * ── IT STARTS AS `null`, AND THAT IS NOT A STYLE CHOICE ─────────────
+ * This component is `'use client'`, which in the App Router still means
+ * SERVER-RENDERED and then hydrated. Seeding the clock with
+ * `useState(() => Date.now())` therefore put the SERVER's clock into
+ * the HTML and the browser's into the first client render, seconds
+ * apart — a hydration mismatch on every page load of every support
+ * session, and FE-7 records what React 19 does with one: it throws the
+ * server HTML away, regenerates the tree, and resets the `<html>`
+ * singleton's attributes to its server props. That is how the pinned
+ * theme came to be lost on pages with a mismatch.
+ *
+ * Worse than the countdown digits: `over` is derived from this too, so
+ * an expiring session rendered a DIFFERENT SENTENCE on each side.
+ *
+ * `null` until mounted is the same value on both sides. The effect sets
+ * the real time immediately, so the placeholder lasts one paint.
  */
-function useNow(everyMs: number | null): number {
-  const [now, setNow] = useState(() => Date.now());
+function useNow(everyMs: number | null): number | null {
+  const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     if (everyMs === null) return undefined;
+    // Immediately, not on the first tick: otherwise the bar reads
+    // "ends in …" for a whole second.
+    setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), everyMs);
     return () => clearInterval(t);
   }, [everyMs]);

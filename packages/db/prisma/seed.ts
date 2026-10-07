@@ -4138,8 +4138,18 @@ const notificationTemplates: TemplateSeed[] = [
  * by naming rather than by somebody remembering.
  */
 function categoryForTemplate(code: string): NotificationCategory {
+  // `otp` is here because a ONE-TIME CODE is a credential, and leaving it
+  // out is not a cosmetic miss: OPERATIONAL is `mutable: true` and
+  // permits IN_APP, so `staff.impersonation_otp.email` — the second
+  // factor for going inside a seller's account — was both silenceable by
+  // the person it protects and eligible for delivery to the console they
+  // are already signed into, which is not a second factor at all.
+  // CLAUDE.md names this exact accident as the one way NOTIF-9 can be
+  // lost: a credential template whose code does not match this regex
+  // silently becomes operational. `notification-category.spec.ts` now
+  // cross-checks the two vocabularies so the next one fails the build.
   const credential =
-    /(invitation|invite|password_reset|password_changed|email_verification|email_change|welcome)/.test(
+    /(invitation|invite|password_reset|password_changed|email_verification|email_change|welcome|otp)/.test(
       code,
     );
   if (credential) return NotificationCategory.CREDENTIAL;

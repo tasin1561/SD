@@ -73,9 +73,20 @@ export function ImpersonationReview(): ReactElement {
   const now = useNow(1_000);
 
   const all = sessions.data ?? [];
+  // `isLive(s, now)` and not the server's `s.live`, which is a fact
+  // about the moment the list was FETCHED and the list refetches every
+  // 20 seconds while the clock ticks every second. Filtering on the
+  // stale flag while the tab count and the row itself used the clock
+  // meant a session passing its deadline while somebody watched sat in
+  // neither tab for up to twenty seconds: "In there now" kept the row
+  // but drew it faded with no End button, and "Finished" excluded it.
+  // One reading of "live" per screen.
   const rows = useMemo(
-    () => (filter === 'ALL' ? all : all.filter((s) => (filter === 'LIVE' ? s.live : !s.live))),
-    [all, filter],
+    () =>
+      filter === 'ALL'
+        ? all
+        : all.filter((s) => (filter === 'LIVE' ? isLive(s, now) : !isLive(s, now))),
+    [all, filter, now],
   );
   const liveCount = all.filter((s) => isLive(s, now)).length;
 

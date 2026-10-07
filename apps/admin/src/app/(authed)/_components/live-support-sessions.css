@@ -3,8 +3,14 @@
  * fact the impersonated app shows in a red bar, and the two should not
  * disagree about how serious it is.
  *
- * Colours come from the brand tokens (FE-6) — never a literal, so it
- * reads correctly in both themes without a second declaration.
+ * Colours come from the brand tokens (FE-6) — never a literal, and
+ * never a literal as a `var()` FALLBACK either. All three of
+ * `--red-fill`, `--red-on-fill` and `--red-fill-hover` are declared in
+ * every one of brand/theme.css's four blocks, so a fallback could never
+ * fire — which is exactly what makes it harmful: a token rename would
+ * quietly paint a hardcoded red instead of breaking where somebody can
+ * see it. The same "correct by luck" shape this branch removed from
+ * `refusalFor`.
  */
 .live-imp {
   display: inline-flex;
@@ -15,8 +21,8 @@
   min-height: 44px;
   padding: 0 0.5rem;
   border-radius: 999px;
-  color: var(--red-on-fill, #fff);
-  background: var(--red-fill, #ba1a1a);
+  color: var(--red-on-fill);
+  background: var(--red-fill);
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1;
@@ -26,7 +32,7 @@
 }
 
 .live-imp:hover {
-  background: var(--red-fill-hover, var(--red-fill, #ba1a1a));
+  background: var(--red-fill-hover);
 }
 
 .live-imp__n {

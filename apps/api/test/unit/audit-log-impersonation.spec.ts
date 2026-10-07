@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { ActorType, type Prisma } from '@skydrop/db';
 import { AuditLogService } from '../../src/modules/auth-common/services/audit-log.service';
 import {
@@ -352,3 +354,75 @@ describe('AuditLogService stamps the impersonator', () => {
     });
   });
 });
+
+/**
+ * Entering and leaving are acts ON the session, not acts INSIDE the
+ * account — so they are recorded as the STAFF member.
+ *
+ * `AuditLogService` rewrites `actorType` whenever a context is open, and
+ * the spec above pins that it does so unconditionally. That is right for
+ * everything the session DOES. It was wrong for the two rows about the
+ * session itself: `ImpersonationService.end` passes `ActorType.STAFF`,
+ * `exchange` states the rule out loud ("the honest row is 'this person
+ * entered'"), and with the ALS middleware running on `*` the symmetric
+ * row came out as `STAFF_AS_SELLER` — "the seller ended the support
+ * session". `audit_logs` is append-only, so it could not be corrected
+ * after the fact.
+ *
+ * The fix is in the MIDDLEWARE, not the writer: no context is opened on
+ * those routes at all. Tested by asking the middleware's own predicate,
+ * because that is where the decision now lives.
+ */
+describe('the session’s own lifecycle routes open no impersonation context', () => {
+  // The predicate as the middleware applies it. Kept in step with the
+  // middleware by `impersonation-als-lifecycle.spec.ts`, which reads the
+  // real regex out of the source rather than restating it.
+  const PATHS = [
+    '/auth/seller/impersonation/end',
+    '/auth/store/impersonation/end',
+    '/auth/seller/impersonation/leave',
+    '/auth/store/impersonation/leave',
+    '/auth/seller/impersonation/exchange',
+    '/auth/store/impersonation/exchange',
+    // Case-blind, because Express is: `/auth/Seller/...` reaches the
+    // same handler, and a case-sensitive test here would not fire.
+    '/auth/Seller/impersonation/end',
+    '/AUTH/STORE/IMPERSONATION/LEAVE',
+  ];
+
+  for (const path of PATHS) {
+    it(`${path} is a session-lifecycle path`, () => {
+      expect(lifecyclePattern().test(path)).toBe(true);
+    });
+  }
+
+  for (const path of [
+    '/seller/orders',
+    '/seller/api-keys',
+    '/auth/seller/login',
+    '/auth/seller/impersonations',
+    '/store/wallet/withdrawals',
+  ]) {
+    it(`${path} is NOT, so the context still opens for it`, () => {
+      expect(lifecyclePattern().test(path)).toBe(false);
+    });
+  }
+});
+
+/** The middleware's own regex, read off disk so the two cannot drift. */
+function lifecyclePattern(): RegExp {
+  const src = readFileSync(
+    join(__dirname, '../../src/common/impersonation/impersonation-als.middleware.ts'),
+    'utf8',
+  );
+  const m = /SESSION_LIFECYCLE_PATHS\s*=\s*(\/.*\/[a-z]*);/.exec(src);
+  if (m?.[1] === undefined) {
+    throw new Error(
+      'SESSION_LIFECYCLE_PATHS not found in the ALS middleware. If it was renamed, point ' +
+        'this test at the new shape — do not delete it: the rows it protects are append-only.',
+    );
+  }
+  const body = m[1];
+  const lastSlash = body.lastIndexOf('/');
+  return new RegExp(body.slice(1, lastSlash), body.slice(lastSlash + 1));
+}

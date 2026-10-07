@@ -840,7 +840,48 @@ export class ImpersonationService implements ImpersonationHandoffExchange {
     };
   }
 
-  async noteRequest(sessionId: string, mutating: boolean): Promise<void> {
+  /**
+   * Counting UPDATEs still in flight.
+   *
+   * The guard fires `noteRequest` with `void` — on purpose, since the
+   * seller's request must not wait on a sort key. In production that is
+   * the whole story. In the e2e harness it is the leak shape CLAUDE.md
+   * names: the UPDATE outlives the request, holds FK RowShareLocks on
+   * `impersonation_sessions` (which references `staff_users`, `sellers`
+   * and `seller_stores`, all RESTRICT) and can still be running when
+   * `resetAuthState` issues its deletes — `40P01 deadlock detected`,
+   * on one CI shard, naming neither the test nor the cause.
+   *
+   * So the writer holds its own handles, exactly as `NotificationListener`
+   * and `OrderConfirmedAwbListener` do. The rule is written down in
+   * CLAUDE.md as applying to ANY post-commit fire-and-forget that does
+   * async DB work, and this is the fourth; `app-harness.ts` drains all
+   * four together.
+   */
+  private readonly inFlight = new Set<Promise<void>>();
+
+  /**
+   * Wait for the counters to settle. Public so the e2e harness can
+   * quiesce between tests; never called in production, where the point
+   * of the `void` is that nobody waits.
+   */
+  async drainInFlight(): Promise<void> {
+    await Promise.allSettled([...this.inFlight]);
+  }
+
+  noteRequest(sessionId: string, mutating: boolean): Promise<void> {
+    const work = this.countRequest(sessionId, mutating);
+    this.inFlight.add(work);
+    // `finally` rather than `then`: the promise must leave the set even
+    // when it rejects, or a single failure pins a handle for the life of
+    // the process and every later drain waits on it. `countRequest`
+    // swallows its own errors so this cannot reject today — the guard is
+    // for the day somebody removes that catch.
+    void work.finally(() => this.inFlight.delete(work));
+    return work;
+  }
+
+  private async countRequest(sessionId: string, mutating: boolean): Promise<void> {
     try {
       await this.prisma.client.impersonationSession.update({
         where: { id: sessionId },

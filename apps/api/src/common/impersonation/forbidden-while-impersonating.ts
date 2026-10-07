@@ -337,6 +337,34 @@ export function isMutating(method: string): boolean {
 /**
  * A prefix compiled once, at module load.
  *
+ * ── CASE-INSENSITIVE, AND THAT IS THE WHOLE LIST'S SAFETY ───────────
+ * Express routes case-INSENSITIVELY by default (`case sensitive
+ * routing` is `undefined`, and this app never sets it), while `req.path`
+ * hands over whatever the caller typed. Measured on the express 5.2.1 in
+ * this workspace: `POST /SELLER/api-keys` reaches the
+ * `/seller/api-keys` handler with a 200.
+ *
+ * So a case-sensitive matcher did not weaken this list, it REMOVED it.
+ * Every entry was bypassable by capitalising one letter — an API key
+ * minted under the seller's name, a bank detail changed, a wallet paid
+ * out — and silently, because no refusal happened and therefore no
+ * `impersonation.request_refused` audit row was written either. The
+ * uppercasing of the METHOD three lines down, beside a raw `path`, is
+ * the asymmetry that should have been the tell.
+ *
+ * The sweep in `impersonation-deny-list.spec.ts` structurally cannot
+ * catch this: it feeds `refusalFor` the paths it read out of the
+ * controllers, which are canonical-case by construction.
+ * `forbidden-while-impersonating.spec.ts` now feeds it mixed case
+ * instead.
+ *
+ * Fixed HERE rather than by making Express case-sensitive: this
+ * matcher compares a caller-controlled string against a security list
+ * and must not depend on how some other layer happens to be configured
+ * — and flipping the app to case-sensitive routing would start 404ing
+ * requests that work today, across every endpoint in the estate, to fix
+ * one matcher.
+ *
  * `:name` → exactly one path segment. Everything else keeps `startsWith`
  * semantics, INCLUDING the tail: `/seller/api-keys` still refuses
  * `/seller/api-keys-something`, and that is deliberate — see
@@ -365,6 +393,7 @@ const COMPILED: ReadonlyArray<{ readonly route: ForbiddenRoute; readonly re: Reg
           )
           .join('/') +
         (route.exact === true ? '$' : ''),
+      'i',
     ),
   }));
 

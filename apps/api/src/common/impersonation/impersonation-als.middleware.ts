@@ -44,11 +44,45 @@ import {
  * answering null for every real seller, store user, staff member and
  * background job, which is what the rest of the system is built on.
  */
+/**
+ * The session's OWN lifecycle routes, where no context is opened.
+ *
+ * ── WHY, AND IT IS ABOUT THE AUDIT RECORD ───────────────────────────
+ * `AuditLogService` rewrites `actorType` to `STAFF_AS_SELLER` whenever a
+ * context is open — deliberately, and pinned, because an act performed
+ * inside somebody's account must say so. But entering and leaving are
+ * not acts inside the account; they are acts ON the session.
+ * `ImpersonationService.end` already writes them as `ActorType.STAFF`,
+ * and `exchange` states the rule out loud: "written as the STAFF
+ * member, not as the subject: at this instant nobody is inside
+ * anybody's account yet, and the honest row is 'this person entered'."
+ *
+ * With the context open on these routes, the symmetric row could not
+ * follow that rule: pressing End on the banner stored
+ * `support.impersonation.ended` as a SELLER action. A reviewer asking
+ * "what did this staff member do" missed the session-end; one reading
+ * the seller's activity saw a session-end the seller never performed.
+ * `audit_logs` is append-only (MUST NOT #3), so neither is correctable.
+ *
+ * Nothing on these routes needs the context: each reads the signed
+ * cookie itself (`endFromInside`), clears it (`leave`), or creates the
+ * session in the first place (`exchange`). Matched case-insensitively,
+ * for the reason `forbidden-while-impersonating.ts` sets out at length —
+ * Express routes case-blind by default, so a case-sensitive test here
+ * would simply not fire on `/auth/Seller/impersonation/end`.
+ */
+const SESSION_LIFECYCLE_PATHS = /^\/auth\/(seller|store)\/impersonation(\/|$)/i;
+
 @Injectable()
 export class ImpersonationAlsMiddleware implements NestMiddleware {
   constructor(private readonly loader: ImpersonationSessionLoader) {}
 
   async use(req: Request, _res: Response, next: NextFunction): Promise<void> {
+    // Before the loader runs, so these routes cost nothing either.
+    if (SESSION_LIFECYCLE_PATHS.test(req.path)) {
+      next();
+      return;
+    }
     // Nothing may escape: express ignores the promise this returns, so a
     // rejection here would be an unhandled rejection AND a request that
     // never answers. A session we cannot read is a session we refuse —
