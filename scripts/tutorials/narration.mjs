@@ -5480,3 +5480,21 @@ export function videoBySlug(slug) {
   }
   return video;
 }
+
+/*
+  ── THE LONG VIDEOS AND THE PROMOS ──────────────────────────────────
+  Registered by EXTENSION rather than written into the array above.
+
+  This file is 5,500 lines and `flows.mjs` is 16,600; four people writing
+  a video each into them is four people editing the same two files. Each
+  long video is its own module under `long/`, and these two lines are the
+  only shared ones.
+
+  The import sits at the bottom beside what it is for. ESM hoists
+  imports, so this binds before the push runs, and `long/` imports
+  nothing from here — its modules copy the helpers they need rather than
+  importing, so there is no cycle to reason about.
+*/
+import { LONG_VIDEOS } from './long/index.mjs';
+
+VIDEOS.push(...LONG_VIDEOS);

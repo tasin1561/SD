@@ -1541,7 +1541,20 @@ function firstBodyCell(page, nth) {
 }
 
 /** The CSV the store bulk-upload video uploads. Six rows, four orders, one refused. */
-const STORE_BULK_CSV = path.join(TUTORIALS_DIR, 'fixtures', 'pune-store-bulk-orders.csv');
+/*
+  R4's sheet is GENERATED per run, not the committed fixture.
+
+  A store's repeated CSV reference is an ERROR ROW and never a patch
+  (ORD-9 for stores), and the committed fixture carries constant
+  `External Ref` values — so the take imported four orders the first time
+  it ran and produced error rows on every run after, under narration
+  saying "Import 4 orders". A video that can only be filmed once is a
+  video nobody can re-cut.
+
+  `seed-demo-data.mjs` writes this file with fresh references each run;
+  the fixture stays in the repo as the readable example of the SHAPE.
+*/
+const STORE_BULK_CSV = path.join(GENERATED_DIR, 'pune-store-bulk-orders.csv');
 
 /**
  * The order R3 places on camera, and the customer R5 then searches for.
@@ -15571,7 +15584,7 @@ export const FLOWS = {
         // The heading IS the shop's own name and the subtitle says who
         // it resells for — the two facts the narration opens on.
         await stage.dwellOn(page.locator('.sk-ph__title').first(), 1800);
-        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 2400);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2400);
       },
 
       async tiles({ page, stage }) {
@@ -15673,7 +15686,7 @@ export const FLOWS = {
       },
 
       async outro({ page, stage }) {
-        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 2600);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2600);
       },
     },
   },
@@ -15800,6 +15813,16 @@ export const FLOWS = {
   'store-upload-bulk-orders': {
     app: 'reseller',
 
+    /*
+      This flow calls `setInputFiles`, so it PUTs the CSV to a presigned
+      URL — and under `DEV_MOCK_SPACES=true` that URL is `mock://`, which
+      is not a scheme Chromium can fetch. Every seller flow that uploads
+      anything arms the shim; this one did not, so the step could only
+      ever have passed on a stack with mock spaces off. Found while
+      writing the associate video (2026-10-08).
+    */
+    needsSpacesShim: true,
+
     async prologue(ctx) {
       await signInAndOpen(ctx, '/orders/import', (page) =>
         page.getByRole('heading', { name: 'Upload orders' }).first().waitFor({ timeout: 15_000 }),
@@ -15824,7 +15847,7 @@ export const FLOWS = {
       async rows({ page, stage }) {
         // The subtitle states the one-row-one-line rule in the page's
         // own words, which is what this step is about.
-        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 3600);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3600);
       },
 
       async file({ page, stage }) {
@@ -15877,7 +15900,7 @@ export const FLOWS = {
       },
 
       async outro({ page, stage }) {
-        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 3000);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3000);
       },
     },
   },
@@ -15986,7 +16009,7 @@ export const FLOWS = {
 
       async head({ page, stage }) {
         await stage.dwellOn(page.locator('.sk-ph__meta').first(), 1800);
-        await stage.dwellOn(page.locator('.sk-ph__sub').first(), 2200);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2200);
       },
 
       async customer({ page, stage }) {
@@ -16607,3 +16630,14 @@ const REMITTANCE_EXPORT = path.join(GENERATED_DIR, 'courier-remittance.csv');
 function allocationAmount(dialog) {
   return dialog.getByLabel('Amount attributed to this order', { exact: true });
 }
+
+/*
+  The long videos and the promos — see the note in `narration.mjs`.
+
+  `Object.assign` rather than a spread inside the literal above: the
+  object is 15,000 lines long, and an edit in the middle of it is an edit
+  every future author has to merge around.
+*/
+import { LONG_FLOWS } from './long/index.mjs';
+
+Object.assign(FLOWS, LONG_FLOWS);

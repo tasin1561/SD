@@ -37,9 +37,21 @@ export function hashPassword(password) {
  * authenticates — a tutorial rig that cannot sign in because somebody
  * changed a password by hand is a re-take lost to nothing.
  *
- * RBAC is a ROW, not only the legacy `role` enum: a staff user without a
- * `staffRole` cannot be created at all, and one created with the enum
- * alone would hold no permissions.
+ * RBAC is a ROW, never a field on the person. RBAC-1b (2026-10-05)
+ * replaced the single `role_id` with the `staff_user_roles` JOIN TABLE,
+ * so somebody holds SEVERAL roles and their permissions are the union.
+ *
+ * This function wrote `role: 'SUPER_ADMIN'` and `staffRole: { connect }`
+ * until 2026-10-08, and the follow-up migration that dropped both left
+ * it writing two fields `StaffUser` no longer has — so `main()` threw on
+ * its FIRST call and **every tutorial in the library became unfilmable**,
+ * not only the new ones. Nobody met it because nothing had been filmed
+ * since; it was found while seeding the long videos.
+ *
+ * The role rows are written as their own upsert rather than a nested
+ * `create`, because a nested create on a re-seed collides with the row
+ * already there — and a seed that works once is the thing this whole
+ * file exists to avoid.
  */
 export async function ensureOpsStaff() {
   const passwordHash = await hashPassword(OPS.password);
@@ -47,21 +59,22 @@ export async function ensureOpsStaff() {
     where: { key: 'super_admin' },
     select: { id: true },
   });
-  await prisma.staffUser.upsert({
+  const staff = await prisma.staffUser.upsert({
     where: { email: OPS.email },
-    update: {
-      passwordHash,
-      role: 'SUPER_ADMIN',
-      staffRole: { connect: { id: superAdmin.id } },
-      deletedAt: null,
-    },
+    update: { passwordHash, deletedAt: null },
     create: {
       email: OPS.email,
       emailDisplay: OPS.email,
       passwordHash,
-      role: 'SUPER_ADMIN',
-      staffRole: { connect: { id: superAdmin.id } },
     },
+    select: { id: true },
+  });
+  // Idempotent: the compound primary key is (staffUserId, roleId), so a
+  // re-seed finds the row rather than duplicating or throwing.
+  await prisma.staffUserRoleAssignment.upsert({
+    where: { staffUserId_roleId: { staffUserId: staff.id, roleId: superAdmin.id } },
+    update: {},
+    create: { staffUserId: staff.id, roleId: superAdmin.id },
   });
   const login = await call('/auth/staff/login', { method: 'POST', body: OPS });
   return login.accessToken;

@@ -67,6 +67,7 @@ export const RESERVED_DATABASES = Object.freeze([
  * @property {StackService} seller
  * @property {StackService} admin
  * @property {StackService} reseller
+ * @property {StackService} associate
  * @property {StackService} sim
  */
 
@@ -84,6 +85,7 @@ function stack({
   seller,
   admin,
   reseller,
+  associate,
   sim,
 }) {
   return Object.freeze({
@@ -105,6 +107,7 @@ function stack({
     seller: service(seller),
     admin: service(admin),
     reseller: service(reseller),
+    associate: service(associate),
     sim: service(sim),
   });
 }
@@ -128,6 +131,7 @@ export const STACKS = Object.freeze({
     seller: 3003,
     admin: 3002,
     reseller: 3005,
+    associate: 3007,
     sim: 4010,
   }),
   b: stack({
@@ -140,6 +144,7 @@ export const STACKS = Object.freeze({
     seller: 3103,
     admin: 3102,
     reseller: 3105,
+    associate: 3107,
     sim: 4110,
   }),
 });
@@ -200,6 +205,7 @@ export function stackEnvironment(stack) {
     SELLER_APP_URL: stack.seller.url,
     ADMIN_APP_URL: stack.admin.url,
     RESELLER_APP_URL: stack.reseller.url,
+    ASSOCIATE_APP_URL: stack.associate.url,
     SIM_URL: stack.sim.url,
   };
 }

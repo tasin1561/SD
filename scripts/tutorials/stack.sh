@@ -53,11 +53,13 @@ API_PORT="$(jq_of api.port)"
 SELLER_PORT="$(jq_of seller.port)"
 ADMIN_PORT="$(jq_of admin.port)"
 RESELLER_PORT="$(jq_of reseller.port)"
+ASSOCIATE_PORT="$(jq_of associate.port)"
 SIM_PORT="$(jq_of sim.port)"
 API_URL="$(jq_of api.url)"
 SELLER_URL="$(jq_of seller.url)"
 ADMIN_URL="$(jq_of admin.url)"
 RESELLER_URL="$(jq_of reseller.url)"
+ASSOCIATE_URL="$(jq_of associate.url)"
 SIM_URL_V="$(jq_of sim.url)"
 
 RUN_DIR="$ROOT/scripts/tutorials/out/stack-$STACK_NAME"
@@ -136,7 +138,7 @@ status() {
   echo "  database   $DB_NAME"
   echo "  redis DB   $REDIS_DB"
   local ok=0
-  for pair in "api:$API_URL/health" "seller:$SELLER_URL/login" "admin:$ADMIN_URL/login" "reseller:$RESELLER_URL/login" "sim:$SIM_URL_V/_sim/parcels"; do
+  for pair in "api:$API_URL/health" "seller:$SELLER_URL/login" "admin:$ADMIN_URL/login" "reseller:$RESELLER_URL/login" "associate:$ASSOCIATE_URL/login" "sim:$SIM_URL_V/_sim/parcels"; do
     local what="${pair%%:*}" url="${pair#*:}"
     if up "$url"; then
       case "$what" in
@@ -144,6 +146,7 @@ status() {
           local base="$SELLER_URL"
           [ "$what" = admin ] && base="$ADMIN_URL"
           [ "$what" = reseller ] && base="$RESELLER_URL"
+          [ "$what" = associate ] && base="$ASSOCIATE_URL"
           if fresh_build "$base"; then
             printf '  %-9s UP    %s\n' "$what" "$url"
           else
@@ -260,6 +263,11 @@ if [ "$CMD" = "up" ]; then
   # reseller app had ports in `lib/stacks.mjs` and no process to use them.
   [ -f "$ROOT/apps/reseller/.next/BUILD_ID" ] \
     || { echo "apps/reseller is not built — pnpm --filter @skydrop/reseller build"; exit 1; }
+  # ASSOC-1 — the associate portal. The same absence the comment above
+  # describes, one app later: it had ports in `lib/stacks.mjs` and no
+  # process to use them until the long videos needed to film it.
+  [ -f "$ROOT/apps/associate/.next/BUILD_ID" ] \
+    || { echo "apps/associate is not built — pnpm --filter @skydrop/associate build"; exit 1; }
 
   start_one api "$API_URL/health" "$ROOT/apps/api" node dist/main.js
   wait_for api "$API_URL/health"
@@ -284,9 +292,12 @@ if [ "$CMD" = "up" ]; then
     env PORT="$ADMIN_PORT" npx next start -p "$ADMIN_PORT" -H 127.0.0.1
   start_one reseller "$RESELLER_URL/login" "$ROOT/apps/reseller" \
     env PORT="$RESELLER_PORT" npx next start -p "$RESELLER_PORT" -H 127.0.0.1
+  start_one associate "$ASSOCIATE_URL/login" "$ROOT/apps/associate" \
+    env PORT="$ASSOCIATE_PORT" npx next start -p "$ASSOCIATE_PORT" -H 127.0.0.1
   wait_for seller "$SELLER_URL/login"
   wait_for admin "$ADMIN_URL/login"
   wait_for reseller "$RESELLER_URL/login"
+  wait_for associate "$ASSOCIATE_URL/login"
 
   echo
   node "$ROOT/scripts/tutorials/provision-stack.mjs"

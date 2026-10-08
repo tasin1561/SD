@@ -426,6 +426,14 @@ const CONSIGNMENT_SLUGS = new Set([
   // E5's bill hangs on the landed consignment's INDIA arrival, so that
   // consignment has to exist before the freight pass can bill it.
   'what-the-freight-cost',
+  /*
+    THE LONG SELLER VIDEO reads `RSH-CN-LANDED` — a consignment counted
+    at both ends with a line short at each — and `RSH-CN-FLYING`, which
+    is the only thing that makes `/inventory`'s "In transit" tile a
+    figure rather than a dash. Its promo reads the same register.
+  */
+  'seller-everything',
+  'promo-seller',
 ]);
 
 /**
@@ -443,6 +451,14 @@ const FREIGHT_SLUGS = new Set([
   // it now describes the bill, so a re-take on a box without the freight
   // world would film the old page under the new words.
   'follow-a-consignment',
+  /*
+    The long seller video's whole freight act is the word PARTIALLY —
+    "partially settled" is the state it describes, and a bill at nought
+    or at a hundred per cent renders the same tiles, the same tabs and
+    the same rows. Only this pass produces a bill that is genuinely
+    part-owed; the promo never opens one.
+  */
+  'seller-everything',
 ]);
 
 /** The videos that need the second store, its orders and their held requests. */
@@ -642,6 +658,18 @@ const LIFECYCLE_SLUGS = new Set([
   // `RSH-LIFE-FAILED` for the re-attempt and `RSH-LIFE-OVERDUE`, still
   // out for delivery, for the recall.
   'acting-on-a-failed-delivery',
+  /*
+    THE LONG SELLER VIDEO AND ITS PROMO read four of these parcels and
+    nothing else can produce them: `RSH-LIFE-DELIVERED` carries the whole
+    journey the second half is about (the call, the pick, the pack, the
+    handover and the scans), `RSH-LIFE-FAILED` draws the "Delivery did not
+    succeed" panel and its "Ask admin to act" button, `RSH-LIFE-RESTOCKED`
+    is the return and the damage claim behind it, and the pair of
+    delivered parcels is what makes `/tracking`'s tiles and its two tabs
+    non-empty. The promo asks for less and for nothing different.
+  */
+  'seller-everything',
+  'promo-seller',
 ]);
 
 /** Keyed on the seller's own reference — see lib/lifecycle.mjs. */
@@ -688,12 +716,31 @@ const LIFECYCLE_REF_PREFIX = 'RSH-LIFE-';
   than in the video's own seeding. `pickWorldFor` retires them forward
   itself.
 */
+/*
+  `PSS-` is the long store videos' orders, and protecting them is the
+  SAME REFUSAL this list already makes for `RSH-STORE-`: they are
+  RESELLER orders, so each carries a terms snapshot, a store wallet
+  plan and — once confirmed — a live stock reservation, none of which
+  this function's delete list knows about. Two of them sit in
+  PENDING_CONFIRMATION and one in CONFIRMED on purpose (the associate's
+  `cancel` step takes the first row of that filter), and both statuses
+  are in `REMOVABLE_STATUSES` — so without this entry every OTHER
+  video's seed run would try to delete them and die on a foreign key
+  half way through somebody else's world. `ensureAssociateOrders`
+  retires them forward itself, the D4 / B7 rule.
+
+  The literal rather than `LONG_STORE_REF_PREFIX`, which is declared
+  with the rest of the long-video section far below: a `const` is in its
+  temporal dead zone until its own line runs, so naming it here would
+  throw at import time. The long-video block asserts the two agree.
+*/
 const PROTECTED_REF_PREFIXES = [
   LIFECYCLE_REF_PREFIX,
   'RSH-STORE-',
   'RSH-FRT-',
   'RSH-CALL-',
   'RSH-PICK-',
+  'PSS-',
 ];
 
 /** The per-seller key the delivery-fee video writes. Cleared before every take. */
@@ -2799,22 +2846,24 @@ async function superviseWorldFor(slug, sellerId, sellerToken) {
 
   const seeded = [];
   for (const a of SUPERVISE_AGENTS) {
+    // RBAC-1b: roles are rows in `staff_user_roles`, and the follow-up
+    // migration dropped `role` and `staffRole` from StaffUser entirely.
+    // Writing either throws, which is what made every tutorial seed on
+    // this branch die on its first call.
     const staff = await prisma.staffUser.upsert({
       where: { email: a.email },
-      update: {
-        passwordHash,
-        role: 'CALL_AGENT',
-        staffRole: { connect: { id: callAgentRole.id } },
-        deletedAt: null,
-      },
+      update: { passwordHash, deletedAt: null },
       create: {
         email: a.email,
         emailDisplay: a.email,
         passwordHash,
-        role: 'CALL_AGENT',
-        staffRole: { connect: { id: callAgentRole.id } },
       },
       select: { id: true, email: true },
+    });
+    await prisma.staffUserRoleAssignment.upsert({
+      where: { staffUserId_roleId: { staffUserId: staff.id, roleId: callAgentRole.id } },
+      update: {},
+      create: { staffUserId: staff.id, roleId: callAgentRole.id },
     });
     // maxActiveCalls back to 1 on EVERY run: the video raises it to
     // three on camera, and a second take opening on a cap that is
@@ -3657,6 +3706,13 @@ async function placeStoreOrder(sellerId, storeTok, variantId, spec, log) {
           retailUnitPriceInr: Number(spec.retailInr ?? REQUEST_STORE.suggestedRetailInr),
         },
       ],
+      // The same reason the associate's orders acknowledge it: this
+      // world wants several orders per customer, and `/store/orders`
+      // refuses a second one for a customer who still has an unpacked
+      // order. It only bites on a world that ALREADY has such an order,
+      // which is why stack a never showed it and a fresh stack b failed
+      // here on its first run — the same seed, a different history.
+      acknowledgeDuplicate: true,
     },
   });
   log(
@@ -6505,20 +6561,27 @@ async function staffWorldFor(slug) {
         'after changing it on camera.',
     );
   }
-  await prisma.staffUser.upsert({
+  // RBAC-1b — see the note on the call agents above.
+  const o5Staff = await prisma.staffUser.upsert({
     where: { email: O5_STAFF_EMAIL },
-    update: {
-      role: 'FINANCE',
-      staffRole: { connect: { id: role.id } },
-      deletedAt: null,
-    },
+    update: { deletedAt: null },
     create: {
       email: O5_STAFF_EMAIL,
       emailDisplay: O5_STAFF_EMAIL,
       passwordHash: await hash('Skydrop-Demo-2026'),
-      role: 'FINANCE',
-      staffRole: { connect: { id: role.id } },
     },
+    select: { id: true },
+  });
+  // O5 changes this person's role ON CAMERA, so the seed puts them back
+  // on exactly one role — any other it picked up during a take is
+  // removed, or the second take opens on somebody holding two.
+  await prisma.staffUserRoleAssignment.deleteMany({
+    where: { staffUserId: o5Staff.id, roleId: { not: role.id } },
+  });
+  await prisma.staffUserRoleAssignment.upsert({
+    where: { staffUserId_roleId: { staffUserId: o5Staff.id, roleId: role.id } },
+    update: {},
+    create: { staffUserId: o5Staff.id, roleId: role.id },
   });
   console.log(`  \u00b7 ${O5_STAFF_EMAIL} is active and back on ${role.name}`);
 
@@ -7545,16 +7608,29 @@ async function clearTutorialSettings(sellerId) {
   // Only a role NOBODY HOLDS is removed. A role with members is somebody
   // using this account for something else, and taking their access away
   // to tidy a video is worse than a second row on screen.
+  //
+  // RBAC-1b (2026-10-05) replaced `seller_users.role_id` with the
+  // `seller_user_roles` JOIN TABLE, so the relation to count is
+  // `userRoles`, not `users` — which no longer exists. Prisma refuses
+  // the unknown field, and because this sits in the seed's main line it
+  // took the WHOLE run down with it: the four long-video products, the
+  // associate and every store world after it were never written, and
+  // the only clue was a Prisma error naming a count field.
   const role = await prisma.sellerRoleDefinition.findFirst({
     where: { sellerId, name: TUTORIAL_ROLE_NAME },
-    select: { id: true, _count: { select: { users: true } } },
+    select: { id: true, _count: { select: { userRoles: true } } },
   });
   if (role !== null) {
-    if (role._count.users > 0) {
+    if (role._count.userRoles > 0) {
       console.log(
-        `  · leaving the "${TUTORIAL_ROLE_NAME}" role alone — ${role._count.users} member(s) hold it`,
+        `  · leaving the "${TUTORIAL_ROLE_NAME}" role alone — ${role._count.userRoles} member(s) hold it`,
       );
     } else {
+      // The join rows go first: `seller_user_roles.role_id` is RESTRICT,
+      // so a role somebody holds cannot be deleted under them — and a
+      // role reaching here is held by nobody, which makes this a no-op
+      // in the ordinary case and the correct order in every other.
+      await prisma.sellerUserRoleAssignment.deleteMany({ where: { roleId: role.id } });
       await prisma.sellerRolePermission.deleteMany({ where: { roleId: role.id } });
       await prisma.sellerRoleDefinition.delete({ where: { id: role.id } });
       console.log(`  · removed a previous take's "${TUTORIAL_ROLE_NAME}" role`);
@@ -8156,6 +8232,2471 @@ async function withdrawTutorialFreightBills(sellerId, staffToken) {
   console.log(`  · withdrew ${live.length} freight bill(s) a previous take left live`);
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   THE LONG VIDEOS — `scripts/tutorials/long/*.mjs`
+
+   Six scripts, three apps, one world. Each module declares what it
+   needs as `flow.seed` — plain English, written AT this file — and
+   everything below is the answer to those lists, deliberately as ONE
+   world rather than six: `seller-everything` and `promo-seller` read
+   the same catalogue, `reseller-everything` and `promo-reseller` read
+   the same store, and `associate-everything` and `promo-associate`
+   read the same person. Six separate worlds would be six places for
+   the same four products to drift apart.
+
+   WHY THE SEED LISTS OVERLAP AND THAT IS FINE: the union is built, not
+   the lists one by one. A promo asks for less than its long video and
+   never for anything different, so the long video's world satisfies
+   both — which is why the slug sets below are sets of TWO.
+
+   THE ONE PROPERTY THAT MATTERS MOST is that a SECOND take works.
+   Every one of these videos CREATES something on camera — a product,
+   three variants, a consignment, an order, a withdrawal, an
+   invitation — and a SKU, a reference and a consignment number are all
+   permanent once saved. So `clearLongTakeArtefacts` runs before
+   anything is built, and what it removes is named in the modules' own
+   seed lists. Without it the second take films a duplicate-reference
+   refusal under narration about creating the thing.
+   ══════════════════════════════════════════════════════════════════ */
+
+/** `seller-everything` + its promo. Both read the four-product world. */
+const LONG_SELLER_SLUGS = new Set(['seller-everything', 'promo-seller']);
+
+/** `reseller-everything` + its promo. Both sign in as Anjali. */
+const LONG_RESELLER_SLUGS = new Set(['reseller-everything', 'promo-reseller']);
+
+/** `associate-everything` + its promo. Both sign in as Ravi. */
+const LONG_ASSOCIATE_SLUGS = new Set(['associate-everything', 'promo-associate']);
+
+/**
+ * Every long slug. Used only for the CLEARING, which is unconditional
+ * across the six: the seller video's autumn kurti and the store
+ * video's bulk references are cheap to remove and expensive to
+ * discover left behind, and a clear that only runs for the slug that
+ * created the row is a clear that misses the run where somebody filmed
+ * two videos in a row.
+ */
+const LONG_SLUGS = new Set([...LONG_SELLER_SLUGS, ...LONG_RESELLER_SLUGS, ...LONG_ASSOCIATE_SLUGS]);
+
+/**
+ * THE FOUR PRODUCTS THE LONG SELLER VIDEO FOLLOWS.
+ *
+ * Each one is in the story to carry a DIFFERENT mechanic, and the
+ * narration reaches for it by name — so the shape of each row here is
+ * load-bearing rather than decorative, and `long/seller.mjs`'s own
+ * `flow.seed` states every one of these facts in prose:
+ *
+ *   kurti   four variants, colour × size, one carrying a photo — the
+ *           example of a product you choose something about, and the
+ *           thumbnail the order picker and the pack bench draw.
+ *   wallet  exactly ONE variant and NO options — the simple case, and
+ *           the thing the video contrasts the kurti against.
+ *   soap    its stock sits in a BATCH WITH AN EXPIRY, so the sentence
+ *           about picking the oldest first (FEFO) is true of the data
+ *           on screen rather than a claim about the product.
+ *   lamp    the HEAVIEST thing in the catalogue, because the freight
+ *           act is about weight and a line saying "the heaviest thing
+ *           you sell" must be checkable against the register.
+ *
+ * NO EM-DASH OR COMMA IN A NAME beyond the soap's one em-dash: the
+ * names go into a CSV this file writes and a comma would need quoting,
+ * which is a difference between the file and the narration for no gain.
+ * `assertLongProductNames` below is that rule as a check rather than a
+ * comment, because the next person to add a product will not read this.
+ */
+const LONG_PRODUCTS = [
+  {
+    name: 'Jamdani Cotton Kurti',
+    externalRef: 'RSH-JKURTI',
+    weightGrams: 290,
+    valueInr: 2200,
+    dims: { lengthCm: 30, widthCm: 24, heightCm: 5 },
+    /**
+     * FOUR variants, two colours × two sizes. The first carries the
+     * photo — `photo: true` rather than "the first one", so moving a
+     * row cannot silently move the picture.
+     */
+    variants: [
+      {
+        sku: 'RSH-JKURTI-ROSE-M',
+        attributes: { colour: 'Rose', size: 'Medium' },
+        qty: 26,
+        photo: true,
+      },
+      { sku: 'RSH-JKURTI-ROSE-L', attributes: { colour: 'Rose', size: 'Large' }, qty: 22 },
+      { sku: 'RSH-JKURTI-INDIGO-M', attributes: { colour: 'Indigo', size: 'Medium' }, qty: 24 },
+      { sku: 'RSH-JKURTI-INDIGO-L', attributes: { colour: 'Indigo', size: 'Large' }, qty: 18 },
+    ],
+    /** What the seller paid, so the reseller reports can show a margin. */
+    costInr: 1180,
+  },
+  {
+    name: 'Hand-stitched Leather Wallet',
+    externalRef: 'RSH-WALLET',
+    weightGrams: 120,
+    valueInr: 1450,
+    dims: { lengthCm: 12, widthCm: 10, heightCm: 3 },
+    /** ONE variant, and `attributes` deliberately absent — not `{}`. */
+    variants: [{ sku: 'RSH-WALLET-TAN', qty: 34 }],
+  },
+  {
+    name: 'Rose and Neem Soap — Box of 6',
+    externalRef: 'RSH-SOAP6',
+    weightGrams: 540,
+    valueInr: 620,
+    dims: { lengthCm: 18, widthCm: 12, heightCm: 6 },
+    variants: [{ sku: 'RSH-SOAP6-ROSENEEM', qty: 48 }],
+    costInr: 210,
+    /**
+     * EIGHTEEN MONTHS from the day it was received, which is what a
+     * soap's shelf life actually is — and what makes FEFO mean
+     * something on screen. Received through the goods receipt's own
+     * `expiresAt`, never written onto the batch afterwards: the batch
+     * is INV-1's to write, and a hand-set expiry would be a date no
+     * receipt agrees with.
+     */
+    shelfLifeDays: 540,
+  },
+  {
+    name: 'Brass Table Lamp',
+    externalRef: 'RSH-LAMP',
+    weightGrams: 1850,
+    valueInr: 3900,
+    dims: { lengthCm: 26, widthCm: 20, heightCm: 34 },
+    variants: [{ sku: 'RSH-LAMP-BRASS', qty: 14 }],
+    costInr: 2100,
+  },
+];
+
+/**
+ * What a TAKE of a long video creates, and therefore what has to be
+ * gone before the next one starts. Every entry is named in a module's
+ * own `flow.seed` with the reason, which is restated here in one line
+ * so a reader of this file does not have to open three others.
+ */
+const LONG_TAKE_ARTEFACTS = {
+  /** `long/seller.mjs` creates this product by hand, on camera. */
+  autumnProductRef: 'RSH-JKURTI-AUT',
+  /** Its variants, whose SKU the take EDITS while a SKU is still editable. */
+  autumnSkuPrefix: 'RSH-JKA-',
+  /**
+   * The three variants the three-row sheet creates. A re-upload that
+   * merely UPDATES them reports "0 created", which films as nothing
+   * having happened under narration saying three were added.
+   */
+  csvVariantSkus: ['RSH-WALLET-BLACK', 'RSH-SOAP6-SANDAL', 'RSH-LAMP-SMALL'],
+  /** The consignment the take ANNOUNCES. Its number is permanent. */
+  consignmentRef: 'RSH-LONG-CN',
+  /**
+   * The customers the store and associate videos place an order FOR, on
+   * camera, by typing their phone number into the form.
+   *
+   * These have to be cleared or the SECOND take cannot place the order
+   * at all: `/store/orders` refuses a customer who still has one
+   * unpacked (`DUPLICATE_ORDER_SUSPECTED`), so the first take leaves
+   * behind exactly the row that stops the next one. It fails at the
+   * confirm dialog with no navigation, which reads as a dead "Place
+   * order" button rather than as yesterday's take still sitting there.
+   *
+   * Keyed on the PHONE because that is what the form types and what
+   * ORD-7 makes a customer's identity — the reference field the videos
+   * leave blank, and the order number is fresh every time.
+   */
+  takeCustomerPhones: [
+    // `long/reseller.mjs` — Meera Kulkarni, the store's own order.
+    '+919822061174',
+    // `long/associate.mjs` — the associate's customer. This was GUESSED
+    // the first time and guessed wrong, which left the real one behind:
+    // the associate take then placed its order, and the NEXT take was
+    // refused by the duplicate guard at the confirm dialog with no
+    // navigation — the same dead-button symptom as the store's, twenty
+    // scenes further in and an hour later.
+    //
+    // Read them out of the scripts rather than retyping them:
+    //   grep -rhoE '\+91[0-9]{10}' scripts/tutorials/long/*.mjs | sort -u
+    '+919845117260',
+    //
+    // NOT '+919845070033'. That is Deepa Ranganathan, a SEEDED customer
+    // whose live out-for-delivery parcel the reseller video films in
+    // `delivery-asks` — she is the world, not a take's leftover, and
+    // clearing her would delete the very thing the scene is about. The
+    // list is on-camera customers the takes CREATE; a phone that
+    // appears in a script because a scene SEARCHES for it does not
+    // belong here. Both kinds show up in the same grep, which is
+    // exactly how this nearly went in.
+  ],
+};
+
+/**
+ * The seller long video's three-row catalogue sheet.
+ *
+ * WRITTEN PER RUN rather than committed, for the reason `GENERATED_DIR`
+ * exists: two agents film at once and must not share one file. The
+ * HEADERS are exact and in this order on purpose — every one of them
+ * auto-detects, so the import needs no saved mapping and the preview
+ * scene opens on ten green columns rather than on a mapping form.
+ *
+ * `long/seller.mjs`'s `flow.seed` states the headers and all three
+ * rows; this is the same list, and the two must not drift. Each row
+ * names a product that ALREADY EXISTS by its Product ID, so the import
+ * adds a VARIANT to it rather than a fifth product — which is the
+ * lesson the scene is about (the page's own subtitle says a re-upload
+ * updates what is there, matched on the seller's own reference).
+ */
+const LONG_PRODUCTS_CSV = {
+  file: 'long-seller-products.csv',
+  headers: [
+    'Product Name',
+    'Product ID',
+    'SKU',
+    'Weight (g)',
+    'Length (cm)',
+    'Width (cm)',
+    'Height (cm)',
+    'Declared value',
+    'Barcode',
+    'Options',
+  ],
+  rows: [
+    {
+      'Product Name': 'Hand-stitched Leather Wallet',
+      'Product ID': 'RSH-WALLET',
+      SKU: 'RSH-WALLET-BLACK',
+      'Weight (g)': '120',
+      'Length (cm)': '12',
+      'Width (cm)': '10',
+      'Height (cm)': '3',
+      'Declared value': '1450',
+      Barcode: '8901234510015',
+      Options: 'colour=Black',
+    },
+    {
+      'Product Name': 'Rose and Neem Soap — Box of 6',
+      'Product ID': 'RSH-SOAP6',
+      SKU: 'RSH-SOAP6-SANDAL',
+      'Weight (g)': '540',
+      'Length (cm)': '18',
+      'Width (cm)': '12',
+      'Height (cm)': '6',
+      'Declared value': '620',
+      Barcode: '8901234510022',
+      Options: 'scent=Sandalwood',
+    },
+    {
+      'Product Name': 'Brass Table Lamp',
+      'Product ID': 'RSH-LAMP',
+      SKU: 'RSH-LAMP-SMALL',
+      'Weight (g)': '1250',
+      'Length (cm)': '22',
+      'Width (cm)': '16',
+      'Height (cm)': '28',
+      'Declared value': '2900',
+      Barcode: '8901234510039',
+      Options: 'size=Small',
+    },
+  ],
+};
+
+/**
+ * The picture the kurti carries.
+ *
+ * A COMMITTED fixture, reused from the photos video — `long/seller.mjs`
+ * uses the same file for the photo it uploads on camera, and it is a
+ * silk garment against plain ground, which is what both narrations
+ * describe. Adding a second image for a thumbnail eight pixels wide
+ * buys nothing.
+ */
+const LONG_PHOTO = { file: 'muslin-rose-front.jpg', mimeType: 'image/jpeg' };
+
+/**
+ * The NAMES rule as a check.
+ *
+ * The soap's em-dash is the ONE allowed, because its name is narrated
+ * and appears in the sheet this file writes; a comma anywhere would
+ * need quoting in the CSV and would make the file and the narration
+ * disagree about the product's name. Asserted at load rather than
+ * written in a comment: the next person to add a product will read the
+ * array and not the paragraph above it.
+ */
+{
+  const bad = LONG_PRODUCTS.filter((p) => p.name.includes(',') || /—.*—/.test(p.name));
+  if (bad.length > 0) {
+    throw new Error(
+      'A long-video product name may hold no comma and at most one em-dash — it goes into a ' +
+        `CSV this file writes: ${bad.map((p) => p.name).join(' | ')}`,
+    );
+  }
+  const heaviest = LONG_PRODUCTS.reduce((a, b) => (b.weightGrams > a.weightGrams ? b : a));
+  if (heaviest.externalRef !== 'RSH-LAMP') {
+    throw new Error(
+      `\`line-lamp\` says the lamp is the heaviest thing in the catalogue; ${heaviest.name} ` +
+        `(${heaviest.weightGrams} g) is heavier. Keep the narration and the data in step.`,
+    );
+  }
+}
+
+/**
+ * The four products, their variants, their stock and the kurti's photo.
+ *
+ * EVERYTHING THROUGH THE REAL ENDPOINTS, including the batch with an
+ * expiry: `ensureStockedVariant` already receives the shared catalogue
+ * this way and the reason is the same one INV-1 states — a stock level
+ * written by hand is a level no movement explains, and the FEFO line
+ * the soap exists to make true reads the BATCH the receipt created.
+ *
+ * TOP-UP, NEVER PILE UP: the per-variant quantity is a TARGET, so a
+ * re-seed with the shelves already full receives nothing. That is the
+ * same shape `ensureStockedVariant` takes and it matters more here,
+ * because this runs before every take of six videos.
+ *
+ * It does NOT write the four products into `CATALOGUE`. The shared four
+ * (`RSH-JAMDANI-IVORY` and friends) carry the lifecycle parcels, the
+ * consignments, the freight bill and the reseller store, and adding
+ * four more to that loop would make every OTHER video's seed run
+ * receive four products it never shows.
+ */
+async function ensureLongSellerCatalogue(sellerId, sellerToken, staffToken, binId) {
+  for (const spec of LONG_PRODUCTS) {
+    const product = await ensureLongProduct(sellerId, sellerToken, spec);
+    for (const v of spec.variants) {
+      const variantId = await ensureLongVariant(sellerToken, product, spec, v);
+      await topUpLongVariant(sellerToken, staffToken, binId, spec, v, variantId);
+      if (v.photo === true) await ensureLongPhoto(sellerToken, variantId, spec);
+    }
+  }
+}
+
+/** The product row, with the DEFAULTS the video's own scenes read. */
+async function ensureLongProduct(sellerId, sellerToken, spec) {
+  const existing = await prisma.product.findFirst({
+    where: { sellerId, externalRef: spec.externalRef, deletedAt: null },
+    select: { id: true, status: true },
+  });
+  const body = {
+    name: spec.name,
+    externalRef: spec.externalRef,
+    defaultWeightGrams: spec.weightGrams,
+    defaultDeclaredValueInr: spec.valueInr,
+    defaultLengthCm: spec.dims.lengthCm,
+    defaultWidthCm: spec.dims.widthCm,
+    defaultHeightCm: spec.dims.heightCm,
+  };
+  if (existing === null) {
+    const created = await call('/seller/products', {
+      method: 'POST',
+      token: await sellerToken(),
+      body: { ...body, status: 'ACTIVE' },
+    });
+    console.log(`  · created "${spec.name}" (${spec.externalRef})`);
+    return created.id;
+  }
+  /*
+    ARCHIVED IS PUT BACK, and that is not tidiness: a goods receipt
+    against an archived variant is REFUSED, so an archive left over
+    from somebody else's take would fail the top-up below rather than
+    here — the same trap `resetCatalogueEdits` already names for the
+    C3 video's product.
+  */
+  if (existing.status === 'ARCHIVED') {
+    await call(`/seller/products/${existing.id}/unarchive`, {
+      method: 'POST',
+      token: await sellerToken(),
+    });
+    console.log(`  · un-archived "${spec.name}"`);
+  }
+  // The defaults the kurti scene reads off the product rather than the
+  // variant. Re-stated every run, because C3's take edits them.
+  await call(`/seller/products/${existing.id}`, {
+    method: 'PATCH',
+    token: await sellerToken(),
+    body,
+  });
+  return existing.id;
+}
+
+/** One variant, with its options where it has any. */
+async function ensureLongVariant(sellerToken, productId, spec, v) {
+  const existing = await prisma.productVariant.findFirst({
+    where: { skuCode: v.sku, deletedAt: null },
+    select: { id: true },
+  });
+  if (existing !== null) return existing.id;
+  const created = await call(`/seller/products/${productId}/variants`, {
+    method: 'POST',
+    token: await sellerToken(),
+    body: {
+      skuCode: v.sku,
+      weightGrams: spec.weightGrams,
+      declaredValueInr: spec.valueInr,
+      lengthCm: spec.dims.lengthCm,
+      widthCm: spec.dims.widthCm,
+      heightCm: spec.dims.heightCm,
+      // ABSENT, not `{}`, for the wallet: attributes are free-form
+      // (catalog rule 3) and an empty map is a product that HAS options
+      // and has none set, which is a different thing from the simple
+      // case the video contrasts the kurti against.
+      ...(v.attributes === undefined ? {} : { attributes: v.attributes }),
+    },
+  });
+  console.log(`  · ${v.sku} added to "${spec.name}"`);
+  return created.id;
+}
+
+/** Stock to the target, in a batch carrying an expiry where one is asked for. */
+async function topUpLongVariant(sellerToken, staffToken, binId, spec, v, variantId) {
+  const onHand = await prisma.stockLevel.aggregate({
+    where: { variantId },
+    _sum: { qtyOnHand: true },
+  });
+  const have = onHand._sum.qtyOnHand ?? 0;
+  if (have >= v.qty) return;
+  const want = v.qty - have;
+
+  const gr = await call('/seller/goods-receipts', {
+    method: 'POST',
+    token: await sellerToken(),
+    body: { lines: [{ variantId, expectedQty: want }] },
+  });
+  await call(`/admin/goods-receipts/${gr.id}/start-receiving`, {
+    method: 'POST',
+    token: staffToken,
+  });
+  await call(`/admin/goods-receipts/${gr.id}/lines`, {
+    method: 'POST',
+    token: staffToken,
+    body: {
+      lines: [
+        {
+          lineId: gr.lines[0].id,
+          receivedQty: want,
+          ...(binId === null ? {} : { putawayBinId: binId }),
+          ...(spec.costInr === undefined ? {} : { unitCostInr: spec.costInr }),
+          ...(spec.shelfLifeDays === undefined
+            ? {}
+            : { expiresAt: new Date(Date.now() + spec.shelfLifeDays * 86_400_000).toISOString() }),
+        },
+      ],
+    },
+  });
+  await call(`/admin/goods-receipts/${gr.id}/complete`, { method: 'POST', token: staffToken });
+  console.log(
+    `  · ${v.sku} — received ${want}, now ${have + want}` +
+      (spec.shelfLifeDays === undefined ? '' : ` (a batch expiring in ${spec.shelfLifeDays} days)`),
+  );
+}
+
+/**
+ * ONE picture on the kurti, through the real presign-put-register path.
+ *
+ * The bytes really go to where `SpacesService` will look for them
+ * (`mockObjectPath`, the one place that knows the layout) and the
+ * register call HEAD-verifies the object and queues the thumbnail —
+ * which is what the order picker and the pack bench actually draw
+ * (catalog rule 5b prefers `displayImageKey`, and nothing writes that
+ * but the thumbnail worker). An inserted `product_images` row would
+ * render as a broken image on both screens.
+ *
+ * IDEMPOTENT ON "HAS A PICTURE AT ALL", not on this file's name: a
+ * second copy is harmless to the data and wrong on camera, because the
+ * gallery would show two of the same garment.
+ */
+async function ensureLongPhoto(sellerToken, variantId, spec) {
+  const already = await prisma.productImage.count({ where: { variantId, deletedAt: null } });
+  if (already > 0) return;
+
+  const source = path.join(TUTORIALS_DIR, 'fixtures', LONG_PHOTO.file);
+  const bytes = await fs.readFile(source);
+  const token = await sellerToken();
+  const presign = await call(`/seller/variants/${variantId}/images/presign`, {
+    method: 'POST',
+    token,
+    body: { mimeType: LONG_PHOTO.mimeType },
+  });
+  const target = mockObjectPath(presign.uploadUrl);
+  if (target === null) {
+    console.log(
+      `  · ${spec.name} has no picture — the API handed back a real presigned URL ` +
+        `(${presign.uploadUrl}); is DEV_MOCK_SPACES off?`,
+    );
+    return;
+  }
+  await fs.mkdir(path.dirname(target), { recursive: true });
+  await fs.writeFile(target, bytes);
+  await call(`/seller/variants/${variantId}/images`, {
+    method: 'POST',
+    token,
+    body: {
+      spacesKey: presign.spacesKey,
+      mimeType: LONG_PHOTO.mimeType,
+      sizeBytes: bytes.byteLength,
+      altText: `${spec.name}, front`,
+      isPrimary: true,
+    },
+  });
+  console.log(`  · ${spec.name} now carries a picture`);
+}
+
+/**
+ * Everything a TAKE of a long video creates, removed so the next take
+ * creates it again.
+ *
+ * HARD DELETES, for the reason `clearTutorialProduct` gives: a SKU and
+ * a product reference are unique per seller and a SOFT delete leaves
+ * the key occupied, which is exactly what a re-take collides on. The
+ * rows are minutes old and carry no order, so there is nothing to
+ * preserve — and where there IS (an order line pointing at a variant,
+ * a consignment leg somebody counted) this says so and leaves it,
+ * because deleting somebody's work to tidy a video is worse than a
+ * second row on screen.
+ */
+async function clearLongTakeArtefacts(sellerId) {
+  await removeLongProducts(sellerId);
+  await removeLongCsvVariants(sellerId);
+  await removeLongConsignment(sellerId);
+  await removeDefaultCatalogueMappings(sellerId);
+  await removeTakeCustomerOrders(sellerId);
+}
+
+/**
+ * The orders the store and associate videos place ON CAMERA, and the
+ * customer rows behind them.
+ *
+ * WHY THIS EXISTS. `/store/orders` refuses a second order for a customer
+ * who still has one unpacked (`DUPLICATE_ORDER_SUSPECTED`) — right for a
+ * shop typing orders in. So a take that successfully places its order
+ * leaves behind exactly the row that stops the NEXT take placing it: the
+ * confirm dialog is accepted, the server refuses, the page does not
+ * navigate, and the run dies waiting for a URL. It presents as a dead
+ * "Place order" button and is actually yesterday's take.
+ *
+ * Keyed on the PHONE, which is what the form types and what ORD-7 makes
+ * a customer's identity. The order number is fresh every run and the
+ * videos leave the reference field blank, so neither identifies it.
+ *
+ * Only PRE-DISPATCH statuses are touched (`REMOVABLE_STATUSES`): an
+ * order that reached a courier is a real parcel in this world's history
+ * and is not a take's leftover. One that got that far is left, and the
+ * duplicate guard does not count it either.
+ */
+async function removeTakeCustomerOrders(sellerId) {
+  const phones = LONG_TAKE_ARTEFACTS.takeCustomerPhones;
+  const orders = await prisma.order.findMany({
+    where: {
+      sellerId,
+      recipientPhoneE164: { in: phones },
+      status: { in: REMOVABLE_STATUSES },
+    },
+    select: { id: true, orderNumber: true },
+  });
+  if (orders.length > 0) {
+    const ids = orders.map((o) => o.id);
+    await prisma.$transaction([
+      prisma.orderCharge.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.callQueueEntry.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.orderReattemptRequest.deleteMany({ where: { orderId: { in: ids } } }),
+      /*
+        THE THREE STORE-REQUEST TABLES, and they are the whole reason
+        this function needed a second pass.
+        
+        The reseller video ASKS ITS SELLER to cancel the order it just
+        placed (the store's `cancel` capability is ASK_SELLER, which is
+        what the video is about), and that writes a `store_order_requests`
+        row pointing at the order with a RESTRICT foreign key. So the
+        take that films the cancel leaves a row that refuses to let the
+        order be deleted, and the NEXT run dies in the clearing rather
+        than in the video — with a Prisma constraint name and no hint
+        that a take put it there.
+        
+        The other two are the same shape and are included rather than
+        waited for: an order-change request (`store_address_change_requests`)
+        and a delivery ask (`order_delivery_action_requests`), both of
+        which these videos also film.
+        
+        This is `clearPreviousOrders`'s own rule, which says it in its
+        own words: when a take creates a row that FKs `orders`, add it
+        in the same commit.
+      */
+      prisma.storeOrderRequest.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.storeAddressChangeRequest.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.orderDeliveryActionRequest.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.orderItem.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.orderEvent.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.order.deleteMany({ where: { id: { in: ids } } }),
+    ]);
+    console.log(
+      `  · removed a previous take's on-camera order(s): ${orders.map((o) => o.orderNumber).join(', ')}`,
+    );
+  }
+  // The customer row outlives the order, and a recipient panel showing
+  // a history the first take did not have is a different video.
+  const gone = await prisma.customer.deleteMany({
+    where: { phoneE164: { in: phones } },
+  });
+  if (gone.count > 0) {
+    console.log(`  · removed ${gone.count} on-camera customer record(s)`);
+  }
+}
+
+/** The autumn kurti the seller take types in, and its RSH-JKA- variants. */
+async function removeLongProducts(sellerId) {
+  const products = await prisma.product.findMany({
+    where: {
+      sellerId,
+      OR: [
+        { externalRef: LONG_TAKE_ARTEFACTS.autumnProductRef },
+        { variants: { some: { skuCode: { startsWith: LONG_TAKE_ARTEFACTS.autumnSkuPrefix } } } },
+      ],
+    },
+    select: { id: true, name: true, variants: { select: { id: true } } },
+  });
+  if (products.length === 0) return;
+  const variantIds = products.flatMap((p) => p.variants.map((v) => v.id));
+  const referenced =
+    variantIds.length === 0
+      ? 0
+      : await prisma.orderItem.count({ where: { variantId: { in: variantIds } } });
+  if (referenced > 0) {
+    console.log(
+      `  · leaving "${LONG_TAKE_ARTEFACTS.autumnProductRef}" alone — ${referenced} order ` +
+        'line(s) point at it',
+    );
+    return;
+  }
+  await prisma.$transaction([
+    prisma.productImage.deleteMany({ where: { variantId: { in: variantIds } } }),
+    prisma.stockLevel.deleteMany({ where: { variantId: { in: variantIds } } }),
+    prisma.productVariant.deleteMany({ where: { id: { in: variantIds } } }),
+    prisma.product.deleteMany({ where: { id: { in: products.map((p) => p.id) } } }),
+  ]);
+  console.log(
+    `  · removed a previous take's "${products[0].name}" and its ${variantIds.length} SKU(s)`,
+  );
+}
+
+/**
+ * The three variants the three-row sheet creates.
+ *
+ * The PRODUCTS stay — they are the seeded world and carry the stock
+ * the rest of the video reads. Only the variants the sheet ADDS go, so
+ * the import reports "3 created" rather than "3 updated"; the
+ * `csv-import` scene narrates three new variants, and an update films
+ * as nothing having happened.
+ */
+async function removeLongCsvVariants(sellerId) {
+  const variants = await prisma.productVariant.findMany({
+    where: { skuCode: { in: LONG_TAKE_ARTEFACTS.csvVariantSkus }, product: { sellerId } },
+    select: { id: true, skuCode: true },
+  });
+  if (variants.length === 0) return;
+  const ids = variants.map((v) => v.id);
+  const referenced = await prisma.orderItem.count({ where: { variantId: { in: ids } } });
+  if (referenced > 0) {
+    console.log(`  · leaving the sheet's variants alone — ${referenced} order line(s) use them`);
+    return;
+  }
+  await prisma.$transaction([
+    prisma.productImage.deleteMany({ where: { variantId: { in: ids } } }),
+    prisma.stockLevel.deleteMany({ where: { variantId: { in: ids } } }),
+    prisma.productVariant.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+  console.log(
+    `  · removed a previous take's ${variants.length} sheet variant(s): ` +
+      variants.map((v) => v.skuCode).join(', '),
+  );
+}
+
+/**
+ * The consignment the seller take ANNOUNCES.
+ *
+ * Only while every leg is still PENDING — the `clearUnstarted` rule
+ * from `lib/consignments.mjs`, restated because the reason is a
+ * product fact and not a preference: a counted leg has written stock
+ * and a batch points back at it, so deleting the receipt would leave
+ * the ledger describing goods that arrived against nothing. A take
+ * only DECLARES this consignment, so in practice its legs are always
+ * pending; a take that went further is named and left.
+ */
+async function removeLongConsignment(sellerId) {
+  const rows = await prisma.consignment.findMany({
+    where: { sellerId, sellerReference: LONG_TAKE_ARTEFACTS.consignmentRef },
+    select: { id: true, consignmentNumber: true },
+  });
+  if (rows.length === 0) return;
+  const ids = rows.map((r) => r.id);
+  const counted = await prisma.goodsReceipt.count({
+    where: { consignmentId: { in: ids }, status: { not: 'PENDING' } },
+  });
+  if (counted > 0) {
+    console.log(
+      `  · leaving ${LONG_TAKE_ARTEFACTS.consignmentRef} alone — ${counted} leg(s) have been ` +
+        'counted. Delete it by hand if you meant to rebuild it.',
+    );
+    return;
+  }
+  const receipts = await prisma.goodsReceipt.findMany({
+    where: { consignmentId: { in: ids } },
+    select: { id: true },
+  });
+  const receiptIds = receipts.map((r) => r.id);
+  await prisma.$transaction([
+    prisma.goodsReceiptLine.deleteMany({ where: { receiptId: { in: receiptIds } } }),
+    prisma.goodsReceipt.deleteMany({ where: { id: { in: receiptIds } } }),
+    prisma.consignmentEvent.deleteMany({ where: { consignmentId: { in: ids } } }),
+    prisma.consignment.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+  console.log(
+    `  · removed a previous take's ${LONG_TAKE_ARTEFACTS.consignmentRef} ` +
+      `(${rows.map((r) => r.consignmentNumber).join(', ')})`,
+  );
+}
+
+/**
+ * Any saved catalogue mapping marked DEFAULT.
+ *
+ * A default mapping is applied to an import that names none, so one
+ * left over from the upload-a-catalogue take would RE-AIM every column
+ * in the preview this video narrates — ten columns that auto-detect
+ * would open on somebody else's choices, under a line saying the
+ * sheet's own headings were understood.
+ *
+ * Only the DEFAULT flag's rows: a named mapping nobody applies is
+ * harmless and is somebody's seeded world (`CATALOGUE_IMPORT`
+ * clears its own by name).
+ */
+async function removeDefaultCatalogueMappings(sellerId) {
+  const gone = await prisma.sellerCsvMapping.deleteMany({ where: { sellerId, isDefault: true } });
+  if (gone.count > 0) {
+    console.log(`  · removed ${gone.count} DEFAULT catalogue column mapping(s)`);
+  }
+}
+
+/** The three-row sheet, written fresh so two stacks never share one. */
+async function writeLongProductsCsv() {
+  const lines = [
+    LONG_PRODUCTS_CSV.headers.join(','),
+    ...LONG_PRODUCTS_CSV.rows.map((r) =>
+      LONG_PRODUCTS_CSV.headers.map((h) => csvCell(r[h])).join(','),
+    ),
+  ];
+  await fs.mkdir(GENERATED_DIR, { recursive: true });
+  const file = path.join(GENERATED_DIR, LONG_PRODUCTS_CSV.file);
+  await fs.writeFile(file, `${lines.join('\n')}\n`, 'utf8');
+  console.log(`  · wrote ${LONG_PRODUCTS_CSV.file} — ${LONG_PRODUCTS_CSV.rows.length} rows`);
+}
+
+/**
+ * One CSV cell.
+ *
+ * Quoted only when it has to be, because the file is on camera: a
+ * sheet where every cell is quoted reads as machine output, and the
+ * preview scene is about a seller's own spreadsheet. The names in
+ * `LONG_PRODUCTS` are checked for commas at load, so in practice
+ * nothing here is ever quoted — the function is the backstop for the
+ * day somebody adds an address.
+ */
+function csvCell(value) {
+  const s = String(value ?? '');
+  return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
+}
+
+/**
+ * The seller long video's MONEY half.
+ *
+ * Three things, each named in `long/seller.mjs`'s own seed list and
+ * each false on a freshly-cleared seller:
+ *
+ *  · a BANK ACCOUNT, because `withdrawn` says out loud where the money
+ *    goes and a withdrawal with nowhere to send it is refused by name
+ *    (`NO_BANK_ACCOUNT_ON_FILE`). `clearTutorialConsignments` takes the
+ *    details OFF on every run — the profile video films the
+ *    first-time path — so they go back on here, exactly as
+ *    `walletWorldFor` does for the take-money-out video.
+ *  · HEADROOM. The take asks for ₹10,000 and the request is refused
+ *    above what is withdrawable (balance less the minimum to keep,
+ *    WAL-3), which films as a red line inside the dialog under
+ *    narration saying the request has gone in.
+ *  · an INR→BDT RATE, because the wallet's converted tile and its
+ *    "₹1 = ৳…" hint both render off one, and `wallet-open` says the
+ *    balance is shown in taka as well. Only CHECKED here: the rate is
+ *    seeded by the db seed and a seed that invents one would be
+ *    writing an exchange rate nobody chose.
+ */
+async function longSellerMoneyFor(sellerId, sellerToken, staffToken) {
+  await prisma.seller.update({
+    where: { id: sellerId },
+    data: {
+      bankName: WALLET_PAYOUT_BANK.name,
+      bankBranchName: WALLET_PAYOUT_BANK.branch,
+      bankAccountName: WALLET_PAYOUT_BANK.holder,
+      bankAccountNumber: WALLET_PAYOUT_BANK.account,
+      bankAccountNumberMasked: `••••${WALLET_PAYOUT_BANK.account.slice(-4)}`,
+      bankRoutingNumber: WALLET_PAYOUT_BANK.routing,
+      bankSwiftCode: WALLET_PAYOUT_BANK.swift,
+    },
+  });
+  await ensureWalletHasMoney(sellerId, sellerToken, staffToken);
+
+  /*
+    THE FOUR LEDGER ROWS THE VIDEO READS OUT BY NAME — "Order charges",
+    "COD collected", "COD tax deduction" and "Damage settlement".
+
+    Three of them are written by a parcel having MOVED (the delivery
+    charge at DELIVERED, the damage refund when the scrap ticket is
+    settled), and the lifecycle pass does that. The COD pair is the one
+    that is not: a COD is credited when the COURIER'S PAYOUT lands
+    (WAL-5's SETTLEMENT mode is the default), so without a recorded
+    payout the ledger has no "COD collected" line and therefore no
+    "COD tax deduction" under it. `settleOneCodForLedger` is the same
+    call E2's own world makes, and it is idempotent.
+  */
+  await settleOneCodForLedger(sellerId, staffToken);
+
+  const fx = await prisma.fxRate.findFirst({
+    where: { fromCurrency: 'INR', toCurrency: 'BDT' },
+    select: { rate: true },
+  });
+  if (fx === null) {
+    console.log(
+      '  · NO INR→BDT rate on file — the wallet’s taka tile and its "₹1 = ৳…" hint will both ' +
+        'be blank. Run the db seed, or set one on /fx-rates.',
+    );
+  }
+}
+
+/**
+ * The long videos' world, in the two halves they do and do not share.
+ *
+ * THE CATALOGUE IS BUILT FOR EVERY LONG SLUG, not only the seller's,
+ * and that is not generosity: the store videos put the kurti, the
+ * wallet and the soap on Pune Silk Studio's own shelf
+ * (`LONG_STORE_CATALOGUE`), and the associate's unpriced product IS the
+ * soap — so gating these four products on the seller slug would leave
+ * `associate-everything`'s `unpriced` step filming a product that does
+ * not exist, and `promo-reseller`'s catalogue table two rows short.
+ * Four products, seven variants, idempotent and topped up rather than
+ * piled up; cheap enough that sharing it beats six worlds that drift.
+ *
+ * The SHEET and the MONEY are the seller video's alone.
+ */
+async function longWorldFor(slug, sellerId, sellerToken, staffToken, binId) {
+  if (!LONG_SLUGS.has(slug ?? '')) return;
+  console.log('\nBuilding the long videos’ catalogue…');
+  await ensureLongSellerCatalogue(sellerId, sellerToken, staffToken, binId);
+  if (!LONG_SELLER_SLUGS.has(slug ?? '')) return;
+  await writeLongProductsCsv();
+  await longSellerMoneyFor(sellerId, sellerToken, staffToken);
+}
+/**
+ * THE PEOPLE AT PUNE SILK STUDIO, and why there are exactly these four.
+ *
+ *  · ANJALI owns the store and is who `reseller-everything` signs in as
+ *    (`REQUEST_STORE.inviteEmail` — she already exists for section R).
+ *  · RAVI sells for the store and is who `associate-everything` signs in
+ *    as. The reseller video and the associate video want the SAME person
+ *    rather than two, which is why he is named in both modules' seed
+ *    lists: the reseller video sets his prices and reads his scorecard,
+ *    and the associate video is that person's own screens.
+ *  · PRIYA is the SECOND associate, and she is not decoration. Two rows
+ *    is what makes "Copy prices from…" exist, what makes the comparison
+ *    table worth reading, and — on the associate side — what makes
+ *    `order_scope = OWN` do real work on camera rather than being a
+ *    filter over a list that would look the same either way.
+ *  · MANISHA is invited and NEVER accepts. The associate video previews
+ *    the invitation page and never submits it, so the row has to survive
+ *    the take; her token goes into the fixture because the invitation
+ *    link is the first thing that video shows.
+ *
+ * `KIRAN` is the one who must NOT exist: `reseller-everything` invites
+ * him ON CAMERA, and a second pending invitation to the same address is
+ * refused as `INVITATION_ALREADY_PENDING`.
+ */
+const LONG_STORE_PEOPLE = {
+  /** The filming associate. `record.mjs`'s `APPS.associate.identity`. */
+  associate: {
+    email: 'ravi@punesilkstudio.test',
+    fullName: 'Ravi Kulkarni',
+    password: 'Assoc-Demo-2026',
+  },
+  /** The second associate — the other row in every comparison. */
+  secondAssociate: {
+    email: 'priya@punesilkstudio.test',
+    fullName: 'Priya Gokhale',
+    password: 'Assoc-Demo-2026',
+  },
+  /** Invited, never accepted. Her link is what the `invitation` step shows. */
+  invitee: {
+    email: 'manisha@punesilkstudio.test',
+    fullName: 'Manisha Bhide',
+  },
+  /** Invited ON CAMERA, so this one must not exist when the take starts. */
+  cameraInvitee: {
+    email: 'kiran.pawar@punesilkstudio.test',
+  },
+};
+
+/**
+ * What the store's wallet has to look like.
+ *
+ * MANAGED BY SKYDROP, and this is the single easiest thing in the whole
+ * list to miss: `seller_stores.wallet_managed_by` defaults to SELLER,
+ * and a seller-managed wallet hides BOTH money cards entirely — so
+ * three of `reseller-everything`'s scenes would open on nothing at all,
+ * with no error and nothing on screen to say why.
+ */
+const LONG_STORE_WALLET = {
+  managedBy: 'SKYDROP',
+  /** The seller's risk appetite for this store. Non-zero, so the card reads a figure. */
+  negativeLimitInr: '8000',
+  /** What the store has paid in, through its own claim and a staff accept (WAL-2). */
+  topUpInr: 12000,
+};
+
+/**
+ * The associate's own price list.
+ *
+ * THREE PRICED AND ONE DELIBERATELY NOT. An associate's lines are
+ * priced from their OWN `associate_prices` row and refused by name when
+ * there is none (`ASSOCIATE_PRICE_NOT_SET`) — which is what the
+ * `unpriced` step films, and what is simply absent from a world where
+ * everything is priced. So the unpriced one is as load-bearing as the
+ * priced ones, and the load-time check below says so rather than
+ * leaving it to this paragraph.
+ *
+ * Every price is INSIDE the seller's agreed range for that product
+ * (RS-3's `minRetailInr`/`maxRetailInr`), because a price outside it is
+ * surfaced to the RESELLER as a flag — correct product behaviour, and
+ * the wrong thing on four rows of a screen about ordinary prices.
+ */
+const LONG_ASSOCIATE_PRICES = [
+  { sku: 'RSH-JAMDANI-IVORY', retail: '2850' },
+  { sku: 'RSH-KANTHA-BLUE', retail: '2250' },
+  { sku: 'RSH-JKURTI-ROSE-M', retail: '2600' },
+  /** The fourth is `unpriced` — see `LONG_STORE_CATALOGUE` below. */
+];
+
+/**
+ * What the store sells, beyond the two `REQUEST_STORE` already puts on
+ * its shelf.
+ *
+ * `promo-reseller` asks for SIX enabled variants, because scene two IS
+ * the catalogue table and two rows do not read as a shelf. Each carries
+ * a transfer price and a retail range of its own, taken from the
+ * product's declared value rather than invented: a store's margin
+ * should look like a margin.
+ *
+ * The LAST one is the associate's UNPRICED product — enabled and
+ * sellable by the store, with no `associate_prices` row for Ravi.
+ */
+const LONG_STORE_CATALOGUE = [
+  { sku: 'RSH-JKURTI-ROSE-M', transfer: '1700', min: '2300', max: '3000', suggested: '2600' },
+  { sku: 'RSH-JKURTI-INDIGO-M', transfer: '1700', min: '2300', max: '3000', suggested: '2600' },
+  { sku: 'RSH-WALLET-TAN', transfer: '1050', min: '1400', max: '1900', suggested: '1600' },
+  /** Ravi has NO price for this one. The `unpriced` step is about it. */
+  {
+    sku: 'RSH-SOAP6-ROSENEEM',
+    transfer: '420',
+    min: '600',
+    max: '850',
+    suggested: '700',
+    unpricedForAssociate: true,
+  },
+];
+
+/** The one product Ravi may not sell until somebody prices it. */
+const LONG_UNPRICED_SKU = LONG_STORE_CATALOGUE.find((c) => c.unpricedForAssociate === true).sku;
+
+{
+  const priced = new Set(LONG_ASSOCIATE_PRICES.map((p) => p.sku));
+  if (priced.size < 3) {
+    throw new Error(
+      'The associate video needs at least THREE priced products (its `prices` step).',
+    );
+  }
+  if (priced.has(LONG_UNPRICED_SKU)) {
+    throw new Error(
+      `${LONG_UNPRICED_SKU} is both priced and the unpriced one — the \`unpriced\` step films a ` +
+        '"Waiting for a price" notice that cannot render.',
+    );
+  }
+}
+
+/**
+ * The associate's own orders, and the spread is the requirement.
+ *
+ * `order_scope` is OWN, so nothing anybody else at the store placed is
+ * visible on these screens — which means the list, its status filter,
+ * its customer list and its re-attempt panel are all drawn from THIS
+ * array and nothing else. `promo-associate` asks for eight across the
+ * lifecycle; `associate-everything` additionally asks for TWO in
+ * `DELIVERY_FAILED` (the `one-order` and `reattempt` steps) and at
+ * least one left in `PENDING_CONFIRMATION` that the `place` step did
+ * not create (the `cancel` step takes the first row of that filter and
+ * must not depend on an earlier step having run).
+ *
+ * TWO CUSTOMERS BUY TWICE — Sunita and Mahesh — because the `customers`
+ * step is about "what each of them bought" and a list of one-order
+ * customers has no repeat buyer in it.
+ */
+const LONG_ASSOCIATE_ORDERS = [
+  {
+    family: 'PSS-RAVI-PENDING-A',
+    want: 'PENDING_CONFIRMATION',
+    sku: 'RSH-JAMDANI-IVORY',
+    customer: { name: 'Sunita Joshi', phone: '+919822061101' },
+    line1: '31 Prabhat Road, Lane 5',
+    line2: 'Beside the Deccan Gymkhana gate',
+    postalCode: '411004',
+    stages: [],
+  },
+  {
+    family: 'PSS-RAVI-PENDING-B',
+    want: 'PENDING_CONFIRMATION',
+    sku: 'RSH-KANTHA-BLUE',
+    customer: { name: 'Mahesh Patil', phone: '+919822061102' },
+    line1: '8 Aundh Road, Khadki',
+    line2: 'Opposite the Bopodi water tank',
+    postalCode: '411020',
+    stages: [],
+  },
+  {
+    family: 'PSS-RAVI-CONFIRMED',
+    want: 'CONFIRMED',
+    sku: 'RSH-JKURTI-ROSE-M',
+    customer: { name: 'Sunita Joshi', phone: '+919822061101' },
+    line1: '31 Prabhat Road, Lane 5',
+    line2: 'Beside the Deccan Gymkhana gate',
+    postalCode: '411004',
+    stages: [],
+  },
+  {
+    family: 'PSS-RAVI-DISPATCHED',
+    want: 'IN_TRANSIT',
+    sku: 'RSH-JAMDANI-IVORY',
+    customer: { name: 'Nilesh Pawar', phone: '+919822061103' },
+    line1: '14 Fergusson College Road',
+    line2: 'Above the Vaishali restaurant',
+    postalCode: '411005',
+    stages: ['IN_TRANSIT'],
+  },
+  {
+    family: 'PSS-RAVI-DELIVERED-A',
+    want: 'DELIVERED',
+    sku: 'RSH-KANTHA-BLUE',
+    customer: { name: 'Mahesh Patil', phone: '+919822061102' },
+    line1: '8 Aundh Road, Khadki',
+    line2: 'Opposite the Bopodi water tank',
+    postalCode: '411020',
+    stages: ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED'],
+  },
+  {
+    family: 'PSS-RAVI-DELIVERED-B',
+    want: 'DELIVERED',
+    sku: 'RSH-JKURTI-ROSE-M',
+    customer: { name: 'Shalini Bhave', phone: '+919822061104' },
+    line1: '22 Bhandarkar Road',
+    line2: 'Next to the Kamala Nehru park gate',
+    postalCode: '411004',
+    stages: ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED'],
+  },
+  {
+    family: 'PSS-RAVI-FAILED-A',
+    want: 'DELIVERY_FAILED',
+    sku: 'RSH-JAMDANI-IVORY',
+    customer: { name: 'Nilesh Pawar', phone: '+919822061103' },
+    line1: '14 Fergusson College Road',
+    line2: 'Above the Vaishali restaurant',
+    postalCode: '411005',
+    stages: [
+      'IN_TRANSIT',
+      'OUT_FOR_DELIVERY',
+      ['NDR', 'Nobody at the address; the shop below was shut'],
+    ],
+  },
+  {
+    family: 'PSS-RAVI-FAILED-B',
+    want: 'DELIVERY_FAILED',
+    sku: 'RSH-KANTHA-BLUE',
+    customer: { name: 'Anita Kale', phone: '+919822061105' },
+    line1: '5 Model Colony, Shivajinagar',
+    line2: 'Beside the Modern school gate',
+    postalCode: '411016',
+    stages: [
+      'IN_TRANSIT',
+      'OUT_FOR_DELIVERY',
+      ['NDR', 'Customer asked us to try again after the weekend'],
+    ],
+  },
+  {
+    family: 'PSS-RAVI-RETURNED',
+    /*
+      RTO_RESTOCKED, not RTO_RECEIVED, and the difference is a product
+      rule rather than a preference: TRK-6 makes the warehouse
+      `RtoReceiptService.receive` the SOLE authority for RTO_RECEIVED,
+      and an `RTO_DELIVERED` scan is deliberately INFORMATIONAL — so no
+      sequence of courier scans can land a parcel there. The helper that
+      drives the warehouse leg receives AND finalises in one go, which
+      ends at RTO_RESTOCKED. `associate.mjs`'s seed list names
+      RTO_RECEIVED; what it is asking for is a RETURNED order on the
+      list and its filter, and this is that, reachable.
+    */
+    want: 'RTO_RESTOCKED',
+    sku: 'RSH-JKURTI-ROSE-M',
+    customer: { name: 'Shalini Bhave', phone: '+919822061104' },
+    line1: '22 Bhandarkar Road',
+    line2: 'Next to the Kamala Nehru park gate',
+    postalCode: '411004',
+    stages: [
+      'IN_TRANSIT',
+      'OUT_FOR_DELIVERY',
+      ['NDR', 'Customer refused the parcel at the door'],
+      'RTO_INITIATED',
+      'RTO_IN_TRANSIT',
+    ],
+    /** One unit, one verdict: it came back unopened and goes back. */
+    disposition: {
+      condition: 'GOOD',
+      disposition: 'RESTOCK',
+      notes: 'Refused at the door, unopened and sellable.',
+    },
+  },
+];
+
+/**
+ * The SECOND associate's orders — two, which is enough.
+ *
+ * `promo-associate` wants "a second associate at the same store with
+ * orders of their own, so the scope is doing real work on camera". Two
+ * delivered orders are what the reseller video's comparison table
+ * divides by; neither video ever opens one, so neither needs a parcel
+ * driven further than DELIVERED.
+ */
+const LONG_SECOND_ASSOCIATE_ORDERS = [
+  {
+    family: 'PSS-PRIYA-PENDING',
+    want: 'PENDING_CONFIRMATION',
+    sku: 'RSH-KANTHA-BLUE',
+    customer: { name: 'Girish Nene', phone: '+919822062202' },
+    line1: '44 Sahakar Nagar',
+    line2: 'Opposite the Parvati water works gate',
+    postalCode: '411009',
+    stages: [],
+  },
+  /*
+    LAST ON PURPOSE, and it is the one ordering fact in this file that a
+    scene depends on. `promo-reseller`'s fifth scene dwells on the FIRST
+    row of `/orders` while the narration talks about the waybill and the
+    courier — and that list is newest-first, so the first row is whatever
+    this pass placed last. A pending order there has no waybill, no
+    courier and nothing the narration is describing.
+
+    Stable across runs because the pass is forward-only: an order already
+    in the state it wants is not re-placed, so `created_at` does not move.
+  */
+  {
+    family: 'PSS-PRIYA-DELIVERED',
+    want: 'DELIVERED',
+    sku: 'RSH-JAMDANI-IVORY',
+    customer: { name: 'Vrushali Sane', phone: '+919822062201' },
+    line1: '9 Karve Nagar, Lane 2',
+    line2: 'Behind the Mhatre bridge bus stop',
+    postalCode: '411052',
+    stages: ['IN_TRANSIT', 'OUT_FOR_DELIVERY', 'DELIVERED'],
+  },
+];
+
+/**
+ * What every long store-video order's reference starts with.
+ *
+ * ASSERTED against `PROTECTED_REF_PREFIXES` rather than read from it:
+ * these orders are reseller orders carrying a terms snapshot, a wallet
+ * plan and a live reservation, and two of them sit in statuses the
+ * shared clearing would otherwise delete — which would not fail here,
+ * it would fail on a foreign key in the middle of somebody else's seed
+ * run. The check is the same shape `LIFECYCLE_REF_PREFIX` already
+ * carries, and for the same reason.
+ */
+const LONG_STORE_REF_PREFIX = 'PSS-';
+{
+  if (!PROTECTED_REF_PREFIXES.includes(LONG_STORE_REF_PREFIX)) {
+    throw new Error(
+      `${LONG_STORE_REF_PREFIX} must be in PROTECTED_REF_PREFIXES so clearPreviousOrders leaves ` +
+        'the long store videos’ reseller orders alone.',
+    );
+  }
+  const strays = [...LONG_ASSOCIATE_ORDERS, ...LONG_SECOND_ASSOCIATE_ORDERS].filter(
+    (o) => !o.family.startsWith(LONG_STORE_REF_PREFIX),
+  );
+  if (strays.length > 0) {
+    throw new Error(
+      `These order families are outside ${LONG_STORE_REF_PREFIX} and would be swept: ` +
+        strays.map((o) => o.family).join(', '),
+    );
+  }
+}
+
+/**
+ * The ticket Ravi raised, and our reply on it.
+ *
+ * The `issue` step opens on the list BEFORE adding to it, and an empty
+ * register teaches nothing about what the two kinds of ticket are. The
+ * REPLY matters as much as the ticket: a thread with nothing in it
+ * reads as a message nobody answered, which is the opposite of the
+ * sentence over it.
+ */
+const LONG_ASSOCIATE_TICKET = {
+  subject: 'Customer says the parcel arrived with a torn corner',
+  body:
+    'Mrs Patil rang this morning: the box was dented on one side when the driver handed it over. ' +
+    'The kantha itself looks fine to her but she wants it noted.',
+  reply:
+    'Thank you — we have asked the courier for the handover photo and opened a damage claim with ' +
+    'them. Nothing is needed from the customer; we will come back to you within two working days.',
+};
+
+/**
+ * The daily digest in Ravi's inbox.
+ *
+ * ── WHY THIS ROW IS WRITTEN BY HAND, SAID OUT LOUD ──────────────────
+ * It is the ONE thing in this file that does not go through the
+ * product's own path, and the house rule is against exactly that (see
+ * `pendingRowsWorldFor`: "a hand-made row would be one somebody wrote
+ * to look like what the worker produces"). Three facts leave no other
+ * route: `DailyDigestService` has NO HTTP endpoint at all — it is a
+ * BullMQ worker on a schedule; it only ever reports YESTERDAY, so it
+ * cannot be asked about a world built a minute ago; and the message is
+ * IN-APP ONLY by NOTIF-23, so there is nowhere else to film it.
+ *
+ * So the row is written to the EXACT shape `NotificationDispatchService`
+ * produces for an in-app leg — same `template_code` (the topic),
+ * `template_version`, `recipient_type`, `to_in_app_user_id`,
+ * `to_store_id`, `status: SENT` with a `sent_at`, and the title
+ * `DailyDigestService.send` composes word for word. If that shape
+ * changes, this becomes a row that looks right and is not, which is the
+ * cost of the shortcut and is the reason it is written down here.
+ *
+ * The `event_id` carries the digest's own key shape
+ * (`daily-digest:associate:<id>:<day>`), so re-running the seed on the
+ * same day is deduped by the NOTIF-2 partial unique rather than by this
+ * function remembering.
+ *
+ * The BODY is not invented either: the buckets and the line format are
+ * the worker's, and the order numbers in them are read back off this
+ * person's own rows (see `ensureAssociateDigest`). Only the SCHEDULE is
+ * faked — the message says what yesterday's really would have.
+ */
+const LONG_DIGEST = {
+  topic: 'store.daily_digest',
+  /**
+   * `DailyDigestService`'s own line format, restated so the body on
+   * screen is the one the worker writes: one line per bucket, the
+   * count in brackets, the order NUMBERS after it, and nothing when a
+   * bucket is empty (its `line()` returns null and the list is
+   * filtered). Ten listed, then "and N more".
+   */
+  maxListed: 10,
+  buckets: [
+    ['Delivered', ['DELIVERED']],
+    ['Came back', ['RTO_RECEIVED', 'RTO_RESTOCKED', 'RTO_DAMAGED']],
+    ['Not delivered', ['DELIVERY_FAILED']],
+  ],
+};
+/**
+ * Pune Silk Studio, as the three store-side long videos need it.
+ *
+ * Built on `tradingStoreWorld` rather than beside it: sections G and R
+ * already film this store, and a second store (or a second copy of its
+ * terms, catalogue and policy) would be a second place for the same
+ * deal to drift. What this adds is everything the long videos ask for
+ * that the short ones never needed — a Skydrop-managed wallet, two
+ * associates, a price list with a hole in it, an unaccepted invitation,
+ * and a week of orders with their outcomes known.
+ */
+async function longStoreWorldFor(slug, sellerId, sellerToken, staffToken) {
+  const wantsStore = LONG_RESELLER_SLUGS.has(slug ?? '') || LONG_ASSOCIATE_SLUGS.has(slug ?? '');
+  if (!wantsStore) return;
+  const log = (m) => console.log(m);
+  console.log('\nBuilding the long store videos’ world…');
+
+  const world = await tradingStoreWorld(sellerId, sellerToken, staffToken, log);
+  await ensureSecondStoreProduct(sellerId, world, log);
+  await ensureLongStoreCatalogue(sellerId, world, log);
+  await ensureSecondTermsVersion(world, log);
+  await ensureLongStoreActionPolicy(slug, world, log);
+  await ensureLongStoreWallet(world, staffToken, log);
+
+  // Kiran is invited ON CAMERA by `reseller-everything`, so he must not
+  // exist and must have nothing open. Before the invitations below, so
+  // a previous take's row cannot be mistaken for Manisha's.
+  await clearCameraInvitation(world.storeId, log);
+  const manisha = await ensurePendingAssociateInvitation(world, log);
+
+  const ravi = await ensureAssociate(world, LONG_STORE_PEOPLE.associate, log);
+  const priya = await ensureAssociate(world, LONG_STORE_PEOPLE.secondAssociate, log);
+  await ensureAssociatePrices(world, ravi, log);
+  await ensureAssociatePrices(world, priya, log);
+
+  // The store's own settled pair — the delivered and the returned order
+  // the scorecards divide by (the same call G7 makes, and the reason is
+  // the same: a rate with no outcomes behind it is four dashes).
+  await ensureSettledStoreOrders(sellerId, world, staffToken, log);
+  // The live parcel the delivery ask hangs from, and the ask itself.
+  await ensureHeldDeliveryAsk(sellerId, world.storeToken, staffToken, world.variantId, log);
+
+  await clearAssociateTakeArtefacts(sellerId, [ravi, priya], log);
+  await ensureAssociateOrders(sellerId, ravi, LONG_ASSOCIATE_ORDERS, staffToken, log);
+  await ensureAssociateOrders(sellerId, priya, LONG_SECOND_ASSOCIATE_ORDERS, staffToken, log);
+  await ensureAssociateTicket(sellerId, world, ravi, staffToken, log);
+  await ensureAssociateDigest(world, ravi, log);
+
+  await writeStoreBulkCsvs(log);
+  await writeFixture('associate-everything', {
+    invitationToken: manisha.token,
+    invitationEmail: LONG_STORE_PEOPLE.invitee.email,
+    invitationFullName: LONG_STORE_PEOPLE.invitee.fullName,
+    storeName: REQUEST_STORE.storeName,
+  });
+
+  /*
+    BOTH SIGN-INS, CLEARED. These two videos FILM the sign-in — it is
+    scene two of one and scene three of the other — and store login is
+    throttled at five per fifteen minutes per email + IP. "Check, seed,
+    check, seed, take" spends four of those before the camera rolls, and
+    `ensureStoreSession` above may have spent one more, so a take with no
+    clear is a take that dies on a 429 with the form saying nothing
+    useful. It is a local Redis counter and nothing else (the throttle is
+    exactly as it was for the next request).
+  */
+  await clearLoginThrottle({ log: () => {} });
+  log('  · cleared the local sign-in counters (both videos film a login)');
+}
+
+/**
+ * SIX enabled variants on the store's shelf, each with a price of its
+ * own and a range.
+ *
+ * `promo-reseller` asks for six because scene two IS the catalogue
+ * table — `REQUEST_STORE` puts two there, and the four below take it
+ * past the point where the table reads as a shelf rather than as a
+ * demo. A price OF ITS OWN rather than the seller's default list, for
+ * the reason `ensureStoreCatalogue` already gives: G2's take clears a
+ * default price on every run.
+ *
+ * A SKU this seller does not have is NAMED AND SKIPPED rather than
+ * thrown on, because the four long-video products are built by the
+ * seller pass and a store-only seed run has not built them.
+ */
+async function ensureLongStoreCatalogue(sellerId, world, log) {
+  let added = 0;
+  for (const row of LONG_STORE_CATALOGUE) {
+    const variant = await prisma.productVariant.findFirst({
+      where: { skuCode: row.sku, product: { sellerId }, deletedAt: null },
+      select: { id: true },
+    });
+    if (variant === null) {
+      log(`  · no ${row.sku} for this seller — not on the store's shelf`);
+      continue;
+    }
+    await call(`/seller/reseller-stores/${world.storeId}/catalogue/${variant.id}`, {
+      method: 'PUT',
+      token: world.sellerTok,
+      body: {
+        enabled: true,
+        priceOverride: {
+          transferPriceInr: row.transfer,
+          minRetailInr: row.min,
+          maxRetailInr: row.max,
+          suggestedRetailInr: row.suggested,
+        },
+        stockMode: 'SHARED',
+        hiddenPercent: 0,
+      },
+    });
+    added += 1;
+  }
+  log(`  · ${added} more product(s) on "${REQUEST_STORE.storeName}"’s shelf`);
+}
+
+/**
+ * A SECOND terms version, so "Every version" is a LIST.
+ *
+ * `reseller-everything` reads that history out loud, and a history of
+ * one row says nothing about what a version is for. Published only when
+ * there is exactly one, because versions are APPEND-ONLY (RS-4) and a
+ * version per seed run would give the fourth take a list of five.
+ *
+ * It must then be ACCEPTED: an unaccepted current version refuses every
+ * order this video places (`orderReadiness`), which would film as a
+ * banner across every scene and a refusal in the one that matters.
+ *
+ * The FIGURES move on purpose — an unchanged edit is refused by name —
+ * and they move in the direction the narration describes: the store
+ * takes a bigger share of the delivery fee than it did, which is what a
+ * renegotiation looks like.
+ */
+async function ensureSecondTermsVersion(world, log) {
+  const view = await call(`/seller/reseller-stores/${world.storeId}/terms`, {
+    token: world.sellerTok,
+  });
+  // `history`, not `versions` — the view's own name for "every version,
+  // newest first (the current one included)". A key that is not there
+  // reads as an empty list, which would publish a third version on
+  // every seed run and leave the fourth take reading a history of six.
+  const history = Array.isArray(view.history) ? view.history : [];
+  const current = view.current ?? null;
+  if (current === null) {
+    log('  · no terms at all — `ensureStoreTerms` should have published version 1');
+    return;
+  }
+  if (history.length < 2) {
+    await call(`/seller/reseller-stores/${world.storeId}/terms`, {
+      method: 'POST',
+      token: world.sellerTok,
+      body: {
+        deliveryFeeStorePercent: '60',
+        returnFeeStorePercent: '40',
+        customerReturnFeeStorePercent: '100',
+        codFeeStorePercent: '50',
+        codTaxStorePercent: '100',
+        instantPayFeeStorePercent: '100',
+        storeCreditTrigger: 'AFTER_DELIVERY',
+        storeCreditDays: 2,
+        sellerCreditTrigger: 'AFTER_DELIVERY',
+        sellerCreditDays: 3,
+        note: 'Delivery share moved to 60% from October, and the store is paid two days sooner.',
+        basedOnVersion: current.version,
+      },
+    });
+    log(`  · published version ${current.version + 1} of the terms`);
+  }
+
+  // ACCEPT whatever is current now — the publish above supersedes the
+  // acceptance `ensureStoreTerms` recorded, which is RS-4 working.
+  const mine = await call('/store/terms', { token: world.storeToken });
+  const live = mine.current;
+  if (live != null && live.acceptance == null) {
+    await call(`/store/terms/${live.id}/accept`, { method: 'POST', token: world.storeToken });
+    log(`  · the store accepted version ${live.version}`);
+  }
+}
+
+/**
+ * The action policy, which differs between the two store videos — and
+ * the difference IS the beat in both.
+ *
+ * `reseller-everything` reads the policy screen and wants ONE task
+ * marked "happens now" beside six marked "your store asks first", so
+ * the contrast is on a single screen (`tradingStoreWorld` already
+ * writes exactly that, and it is restated here rather than assumed
+ * because a change there would silently retune this video).
+ *
+ * `associate-everything` wants the OTHER pair: `reattempt: ASK_SELLER`
+ * so the re-attempt FILES A REQUEST rather than calling a courier, and
+ * `cancel: DIRECT` so the cancel visibly completes. Those two steps are
+ * the teaching point, and `cancel` is the one value the two videos
+ * disagree about — which is fine, because they are different slugs and
+ * this is per slug.
+ *
+ * `chaseSkydrop: DIRECT` IS ALSO REQUIRED THERE, and the module's own
+ * seed list does not say so. Raising an issue goes through the SAME
+ * policy gate: on ASK_SELLER `StoreIssueService.raise` HOLDS the
+ * subject for seller staff and answers `{ applied: false, request }`
+ * instead of opening a thread — so the `issue` step, which waits for a
+ * `/tickets/<uuid>` URL and then films the conversation, would time out
+ * on a page that never arrives. The narration says "Skydrop and your
+ * store both reply, on one thread", which is only true of a thread that
+ * exists.
+ */
+async function ensureLongStoreActionPolicy(slug, world, log) {
+  const askFirst = {
+    recall: 'DIRECT',
+    orderChange: 'ASK_SELLER',
+    cancel: 'ASK_SELLER',
+    callCapDecision: 'ASK_SELLER',
+    chaseSkydrop: 'ASK_SELLER',
+    reattempt: 'ASK_SELLER',
+    sendBack: 'ASK_SELLER',
+  };
+  const body = LONG_ASSOCIATE_SLUGS.has(slug ?? '')
+    ? { ...askFirst, cancel: 'DIRECT', chaseSkydrop: 'DIRECT' }
+    : askFirst;
+  await call(`/seller/reseller-stores/${world.storeId}/action-policy`, {
+    method: 'PUT',
+    token: world.sellerTok,
+    body,
+  });
+  log(
+    `  · the store may recall directly${body.cancel === 'DIRECT' ? ' and cancel directly' : ''}; ` +
+      'the rest ask the seller first',
+  );
+}
+
+/**
+ * The store's wallet: managed by SKYDROP, with a limit and a movement.
+ *
+ * MANAGED BY SKYDROP is the easiest thing here to leave out and the
+ * most expensive: the column defaults to SELLER and a seller-managed
+ * wallet renders NEITHER money card, so three of
+ * `reseller-everything`'s scenes open on nothing with no error to say
+ * why. Through the real endpoint, which audits the change.
+ *
+ * The TOP-UP goes the WAL-2 way — a claim the store submits and a human
+ * accepts — because that is the pair of forms the video is about, and a
+ * credit written without a claim behind it is a balance with no
+ * explanation on the Top-ups tab.
+ *
+ * Changing the manager is REFUSED while a claim or a withdrawal is open
+ * (`STORE_WALLET_HAS_OPEN_REQUESTS`), which is why it happens first.
+ */
+async function ensureLongStoreWallet(world, staffToken, log) {
+  const store = await prisma.sellerStore.findUniqueOrThrow({
+    where: { id: world.storeId },
+    select: { walletManagedBy: true },
+  });
+  if (store.walletManagedBy !== LONG_STORE_WALLET.managedBy) {
+    await call(`/seller/reseller-stores/${world.storeId}/wallet-manager`, {
+      method: 'PATCH',
+      token: world.sellerTok,
+      body: { walletManagedBy: LONG_STORE_WALLET.managedBy },
+    });
+    log(`  · the store's wallet is now managed by ${LONG_STORE_WALLET.managedBy}`);
+  }
+
+  await call(`/seller/reseller-stores/${world.storeId}/wallet/negative-limit`, {
+    method: 'PATCH',
+    token: world.sellerTok,
+    body: { negativeLimitInr: LONG_STORE_WALLET.negativeLimitInr },
+  });
+
+  const paidIn = await prisma.storeWalletEntry.count({
+    where: { storeId: world.storeId, direction: 'TOPUP' },
+  });
+  if (paidIn > 0) {
+    log('  · the store wallet already carries a top-up');
+    return;
+  }
+  /*
+    A PLAIN ARRAY, and already filtered to rupee accounts by the
+    endpoint itself — unlike the seller's `/seller/wallet/topups/bank-accounts`,
+    which answers `{ accounts }` and carries every currency. So there is
+    nothing to pick by currency here, and asking for one would be asking
+    about a field the projection does not even select.
+  */
+  const accounts = await call('/store/wallet/bank-accounts', { token: world.storeToken });
+  const account = (Array.isArray(accounts) ? accounts : [])[0];
+  if (account === undefined) {
+    log('  · no active rupee platform bank account — the store has nowhere to pay into');
+    return;
+  }
+  const claim = await call('/store/wallet/topups', {
+    method: 'POST',
+    token: world.storeToken,
+    body: {
+      bankAccountId: account.id,
+      // `amountInr`, a STRING: the store's claim DTO takes the rupee
+      // amount as text (the seller's takes `amount`), and a number here
+      // is refused by the shape check with nothing on screen to say so.
+      amountInr: `${LONG_STORE_WALLET.topUpInr}.00`,
+      // Shaped like something copied off a banking app, because the
+      // Top-ups tab prints it: a reference announcing itself as a
+      // fixture in a published video is the tell that makes a viewer
+      // stop believing the rest of it.
+      transactionRef: `IMPS${Date.now().toString().slice(-10)}`,
+    },
+  });
+  await call(`/admin/reseller-store-wallets/topups/${claim.id}/accept`, {
+    method: 'POST',
+    token: staffToken,
+    body: { note: 'Matched against the HDFC statement.' },
+  });
+  log(`  · the store paid in ₹${LONG_STORE_WALLET.topUpInr.toLocaleString('en-IN')}`);
+}
+
+/**
+ * One ASSOCIATE, through the invitation path and nothing else.
+ *
+ * `store_user_invitations.token` holds a SHA-256 — the plaintext exists
+ * only in the email and there is no mail here — so this does exactly
+ * what `ensureStoreSession` does for Anjali: mint a plaintext, write
+ * its hash onto the invitation, and then go through the PRODUCT'S OWN
+ * acceptance endpoint with it. Only the DELIVERY of the token is faked;
+ * the user, the password hash, the role assignment and the session are
+ * all the endpoint's work.
+ *
+ * THE ROLE IS `associate` ALONE, and that is the whole point: roles
+ * compose to the WIDEST `order_scope` (RBAC-1b), so one extra role with
+ * scope ALL would turn the associate portal into the store's own —
+ * which is the one thing these videos exist to show the difference
+ * between. Asserted after the fact rather than hoped for.
+ *
+ * NOT PAUSED, every run: `orders.create` is pause-gated, so a paused
+ * associate makes the `place` step fail with the pause notice on screen
+ * under narration about placing an order. A previous take does not
+ * pause anybody, but the reseller video's own screens CAN, and the two
+ * are filmed against one world.
+ */
+async function ensureAssociate(world, spec, log) {
+  let user = await prisma.storeUser.findFirst({
+    where: { storeId: world.storeId, email: spec.email, deletedAt: null },
+    select: { id: true },
+  });
+
+  if (user === null) {
+    const invitation = await call(`/seller/reseller-stores/${world.storeId}/invitations`, {
+      method: 'POST',
+      token: world.sellerTok,
+      body: { email: spec.email, fullName: spec.fullName, roleKeys: ['associate'] },
+    });
+    const plaintext = randomBytes(32).toString('base64url');
+    await prisma.storeUserInvitation.update({
+      where: { id: invitation.id },
+      data: {
+        token: createHash('sha256').update(plaintext, 'utf8').digest('hex'),
+        expiresAt: new Date(Date.now() + 7 * 86_400_000),
+      },
+    });
+    await call('/auth/store/invitations/accept', {
+      method: 'POST',
+      body: { token: plaintext, password: spec.password, fullName: spec.fullName },
+    });
+    user = await prisma.storeUser.findFirstOrThrow({
+      where: { storeId: world.storeId, email: spec.email, deletedAt: null },
+      select: { id: true },
+    });
+    log(`  · ${spec.fullName} accepted an invitation as an associate`);
+  }
+
+  // Force the password and clear the pause on every run, exactly as
+  // `ensureSeller` and `ensureStoreSession` do: a recording cannot wait
+  // on a password that drifted, and a pause is invisible until the one
+  // step that needs it fails.
+  await prisma.storeUser.update({
+    where: { id: user.id },
+    data: {
+      passwordHash: await hash(spec.password),
+      emailVerifiedAt: new Date(),
+      ordersPausedAt: null,
+    },
+  });
+
+  const roles = await prisma.storeUserRoleAssignment.findMany({
+    where: { storeUserId: user.id },
+    select: { role: { select: { key: true, orderScope: true, deletedAt: true } } },
+  });
+  const live = roles.filter((r) => r.role.deletedAt === null);
+  const wide = live.filter((r) => r.role.orderScope !== 'OWN');
+  if (live.length === 0) {
+    throw new Error(
+      `${spec.email} holds no live role — zero roles grants nothing and the sign-in is refused.`,
+    );
+  }
+  if (wide.length > 0) {
+    throw new Error(
+      `${spec.email} also holds ${wide.map((r) => r.role.key).join(', ')}, whose order scope is ` +
+        'not OWN — roles compose to the WIDEST, so the associate portal would show the whole ' +
+        'store and the videos would prove the opposite of what they say.',
+    );
+  }
+
+  return { id: user.id, ...spec };
+}
+
+/**
+ * The associate's price list, with the one hole in it.
+ *
+ * Through `PUT /store/associates/:id/prices/:variantId` as the STORE,
+ * because that is who decides it (ASSOC-1: the price is the store's own
+ * decision about its own associate, which is why it is not on the
+ * catalogue row) and because the endpoint is what checks the price
+ * against the seller's live range.
+ *
+ * `LONG_UNPRICED_SKU` is DELETED rather than skipped: a row left from a
+ * previous run, or from the reseller video's own `prices` scene, would
+ * take the "Waiting for a price" notice off the screen the associate
+ * video's `unpriced` step is entirely about.
+ */
+async function ensureAssociatePrices(world, associate, log) {
+  let set = 0;
+  for (const row of LONG_ASSOCIATE_PRICES) {
+    const variant = await prisma.productVariant.findFirst({
+      where: { skuCode: row.sku, deletedAt: null },
+      select: { id: true },
+    });
+    if (variant === null) continue;
+    await call(`/store/associates/${associate.id}/prices/${variant.id}`, {
+      method: 'PUT',
+      token: world.storeToken,
+      body: { retailPriceInr: row.retail },
+    });
+    set += 1;
+  }
+
+  const unpriced = await prisma.productVariant.findFirst({
+    where: { skuCode: LONG_UNPRICED_SKU, deletedAt: null },
+    select: { id: true },
+  });
+  if (unpriced !== null) {
+    const gone = await prisma.associatePrice.deleteMany({
+      where: { storeUserId: associate.id, variantId: unpriced.id },
+    });
+    if (gone.count > 0) {
+      log(`  · took the price off ${LONG_UNPRICED_SKU} for ${associate.fullName}`);
+    }
+  }
+  log(`  · ${associate.fullName} is priced for ${set} product(s), and one deliberately not`);
+}
+
+/**
+ * An invitation NOBODY ACCEPTS, and its plaintext token in the fixture.
+ *
+ * `associate-everything` OPENS on the invitation page — it is the first
+ * thing the video shows — and PREVIEWS it without submitting, so the
+ * row has to survive the take and be there again for the re-shoot.
+ *
+ * `associate.mjs`'s seed list says the token "is stored in the clear and
+ * reads straight back off the row". IT IS NOT: `store_user_invitations.token`
+ * holds a SHA-256 and the plaintext exists only in the email (the
+ * schema's own docblock says so, and `ensureStoreSession` is built
+ * around it). So the plaintext is MINTED HERE and its hash written onto
+ * the row — which gives the fixture a link that really works and is the
+ * only way to get one.
+ *
+ * ONE open invitation, re-used across runs when its token is still in
+ * the fixture; re-minted when it is not, because a row whose plaintext
+ * nobody holds is a row no link opens.
+ */
+async function ensurePendingAssociateInvitation(world, log) {
+  const spec = LONG_STORE_PEOPLE.invitee;
+  const existing = await prisma.storeUserInvitation.findFirst({
+    where: {
+      storeId: world.storeId,
+      email: spec.email,
+      usedAt: null,
+      deletedAt: null,
+    },
+    select: { id: true },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  let invitationId = existing?.id ?? null;
+  if (invitationId === null) {
+    const created = await call(`/seller/reseller-stores/${world.storeId}/invitations`, {
+      method: 'POST',
+      token: world.sellerTok,
+      body: { email: spec.email, fullName: spec.fullName, roleKeys: ['associate'] },
+    });
+    invitationId = created.id;
+    log(`  · invited ${spec.fullName} as an associate (nobody accepts it)`);
+  }
+
+  // RE-MINTED EVERY RUN, deliberately. The take never submits the form,
+  // so the row survives — but the expiry does not, and a seed that
+  // re-used a token minted a fortnight ago would hand the camera a link
+  // the page refuses as expired. A fresh plaintext and a fresh seven
+  // days costs nothing and cannot be stale.
+  const plaintext = randomBytes(32).toString('base64url');
+  await prisma.storeUserInvitation.update({
+    where: { id: invitationId },
+    data: {
+      token: createHash('sha256').update(plaintext, 'utf8').digest('hex'),
+      expiresAt: new Date(Date.now() + 7 * 86_400_000),
+    },
+  });
+  return { id: invitationId, token: plaintext };
+}
+
+/**
+ * Kiran must not exist, and must have nothing open.
+ *
+ * `reseller-everything` invites him ON CAMERA. A second pending
+ * invitation to one address is refused as `INVITATION_ALREADY_PENDING`
+ * — correct product behaviour, and a refusal filmed under narration
+ * about sending an invitation.
+ *
+ * The USER goes too, not only the invitation: a take that was re-shot
+ * from a stack where somebody accepted it would otherwise leave a
+ * `store_users` row, and the invite is then refused for a different
+ * reason with a different message.
+ */
+async function clearCameraInvitation(storeId, log) {
+  const email = LONG_STORE_PEOPLE.cameraInvitee.email;
+  const invitations = await prisma.storeUserInvitation.deleteMany({ where: { storeId, email } });
+  if (invitations.count > 0) {
+    log(`  · withdrew ${invitations.count} invitation(s) to ${email} from a previous take`);
+  }
+  const user = await prisma.storeUser.findFirst({
+    where: { storeId, email },
+    select: { id: true },
+  });
+  if (user === null) return;
+  const placed = await prisma.order.count({ where: { placedByStoreUserId: user.id } });
+  if (placed > 0) {
+    log(`  · leaving ${email} alone — ${placed} order(s) were placed by them`);
+    return;
+  }
+  /*
+    `reseller_store_terms_acceptances.store_user_id` is RESTRICT and the
+    table is APPEND-ONLY (RS-4): an acceptance is the record that a named
+    person agreed to a version, and it is not ours to remove to tidy a
+    video. In practice an associate cannot accept — the role does not
+    hold `terms.view` — so this is the guard for a camera invitee who was
+    given a wider role by hand, and it names the reason rather than
+    failing on the key.
+  */
+  const accepted = await prisma.resellerStoreTermsAcceptance.count({
+    where: { storeUserId: user.id },
+  });
+  if (accepted > 0) {
+    log(`  · leaving ${email} alone — they accepted ${accepted} terms version(s)`);
+    return;
+  }
+  await prisma.$transaction([
+    prisma.storeUserRoleAssignment.deleteMany({ where: { storeUserId: user.id } }),
+    prisma.associatePrice.deleteMany({ where: { storeUserId: user.id } }),
+    prisma.storeUser.delete({ where: { id: user.id } }),
+  ]);
+  log(`  · removed the ${email} account a previous take created`);
+}
+/**
+ * The associate's own orders, driven to the statuses the list needs.
+ *
+ * PLACED AS THEM, through `/store/orders` with their own token, because
+ * `orders.placed_by_store_user_id` is what `order_scope = OWN` filters
+ * on and it is set from the PLACER — an order inserted with that column
+ * written by hand would be one the product never made, and the scope is
+ * the whole subject of these two videos.
+ *
+ * `retailUnitPriceInr` IS DELIBERATELY ABSENT. An associate's line is
+ * priced from their own `associate_prices` row, which WINS over
+ * anything sent — and a figure that disagrees is refused by name
+ * (`ASSOCIATE_PRICE_FIXED`). So the price is left to the product and
+ * the COD is computed from it, which is also what makes the collectable
+ * on screen agree with the line above it.
+ *
+ * FORWARD-ONLY AND IDEMPOTENT, the D0 rule: a family already in the
+ * state it wants is left alone; one that reached a DIFFERENT terminal
+ * is named and a fresh one is placed beside it (a spent order keeps its
+ * number and its history and simply stops being this video's order).
+ * The families carry a counter for that reason.
+ */
+async function ensureAssociateOrders(sellerId, associate, specs, staffToken, log) {
+  const prices = new Map(LONG_ASSOCIATE_PRICES.map((p) => [p.sku, p.retail]));
+  for (const spec of specs) {
+    const variant = await prisma.productVariant.findFirst({
+      where: { skuCode: spec.sku, product: { sellerId }, deletedAt: null },
+      select: { id: true },
+    });
+    if (variant === null) {
+      log(`  · no ${spec.sku} for this seller — skipping ${spec.family}`);
+      continue;
+    }
+
+    let order = await newestStoreOrder(sellerId, spec.family);
+    if (order !== null && order.status !== spec.want && SETTLED_UNREACHABLE.has(order.status)) {
+      log(`  · ${order.sellerOrderRef} is ${order.status}, not ${spec.want} — a fresh one follows`);
+      order = null;
+    }
+    if (order === null) {
+      order = await placeAssociateOrder(
+        sellerId,
+        associate,
+        spec,
+        variant.id,
+        prices.get(spec.sku) ?? null,
+        log,
+      );
+    }
+    if (order.status === spec.want) continue;
+    if (spec.stages.length === 0 && spec.want === 'PENDING_CONFIRMATION') continue;
+
+    console.log(`\nDriving ${spec.family} to ${spec.want} (this takes a minute)…`);
+    const out = await driveOrderThrough({
+      orderId: order.id,
+      staffToken,
+      log,
+      want: spec.want,
+      stages: spec.stages,
+      disposition: spec.disposition ?? null,
+    });
+    if (out.status !== spec.want) {
+      log(`  · ${spec.family} is ${out.status}, not ${spec.want} — left as it stands`);
+      continue;
+    }
+    log(`  · ${order.orderNumber} → ${out.status}`);
+  }
+}
+
+/** One order, placed BY the associate so the OWN scope can see it. */
+async function placeAssociateOrder(sellerId, associate, spec, variantId, retail, log) {
+  const placed = await prisma.order.count({
+    where: { sellerId, sellerOrderRef: { startsWith: `${spec.family}-` } },
+  });
+  const token = await associateToken(associate);
+  const quantity = spec.quantity ?? 1;
+  const order = await call('/store/orders', {
+    method: 'POST',
+    token,
+    body: {
+      recipientName: spec.customer.name,
+      recipientPhoneE164: spec.customer.phone,
+      recipientAddressLine1: spec.line1,
+      // ORD-5: line two is the LANDMARK and is required.
+      recipientAddressLine2: spec.line2,
+      recipientPostalCode: spec.postalCode,
+      paymentMode: 'COD',
+      // From the ASSOCIATE's own price, so the collectable agrees with
+      // the line. A figure of our own would be a total the order's own
+      // arithmetic contradicts.
+      codAmountInr: String(Number(retail ?? 0) * quantity),
+      sellerOrderRef: `${spec.family}-${placed + 1}`,
+      // No `retailUnitPriceInr` — see the docblock above.
+      items: [{ variantId, quantity }],
+      // The repeat customers are the POINT, so the duplicate guard is
+      // acknowledged rather than designed around.
+      //
+      // `/store/orders` refuses a second order for a customer who still
+      // has one unpacked (`DUPLICATE_ORDER_SUSPECTED`) — right for a
+      // shop typing orders in, where the usual cause is somebody
+      // submitting the same one twice. This world wants four customers
+      // with two orders each, because the associate's "My customers"
+      // screen shows how many orders each has placed and a column of
+      // ones proves nothing. Giving every order its own customer would
+      // make the seed pass and the screen meaningless.
+      acknowledgeDuplicate: true,
+    },
+  });
+  log(`  · ${associate.fullName} placed ${order.orderNumber} (${spec.family}-${placed + 1})`);
+  return { id: order.id, orderNumber: order.orderNumber, status: order.status };
+}
+
+/**
+ * A token to act AS one associate, cached for the run.
+ *
+ * Store login is throttled at five per fifteen minutes per email + IP
+ * and this is called once per order, so a login per call would refuse
+ * the sixth parcel and look like a product fault. The counter is
+ * cleared at the end of the store pass anyway (both videos film a
+ * sign-in); this keeps the pass itself from spending the allowance.
+ */
+const ASSOCIATE_TOKENS = new Map();
+
+async function associateToken(associate) {
+  const held = ASSOCIATE_TOKENS.get(associate.email);
+  if (held !== undefined) return held;
+  const body = { email: associate.email, password: associate.password };
+  let session;
+  try {
+    session = await call('/auth/store/login', { method: 'POST', body });
+  } catch (e) {
+    if (!/429|too many|ThrottlerException/i.test(String(e))) throw e;
+    await clearLoginThrottle({ log: () => {} });
+    session = await call('/auth/store/login', { method: 'POST', body });
+  }
+  ASSOCIATE_TOKENS.set(associate.email, session.accessToken);
+  return session.accessToken;
+}
+
+/**
+ * Put back what an ASSOCIATE take leaves behind.
+ *
+ * Two things, both of which make the second take a different video:
+ *
+ *  · the DELIVERY-ACTION REQUEST the `reattempt` step files. With
+ *    `reattempt: ASK_SELLER` the ask is a held row, and a second one on
+ *    the same parcel is refused as `DELIVERY_ACTION_ALREADY_OPEN` —
+ *    mid-scene, with the dialog open. `clearDeliveryTakeArtefacts`
+ *    deliberately leaves a reseller store's asks alone (they are G6's
+ *    seeded world), so these go by the PERSON who asked instead, which
+ *    is narrow enough to be safe and wide enough to catch both.
+ *  · the TICKET the `issue` step raises. Left behind, the register
+ *    opens on a list already holding the sentence the video is about to
+ *    type.
+ *
+ * The seeded ticket below is NOT swept: it is re-made by name, and
+ * sweeping it would mean re-raising a conversation on every run.
+ */
+async function clearAssociateTakeArtefacts(sellerId, associates, log) {
+  const ids = associates.map((a) => a.id);
+  if (ids.length === 0) return;
+
+  const theirs = await prisma.order.findMany({
+    where: { sellerId, placedByStoreUserId: { in: ids } },
+    select: { id: true },
+  });
+  if (theirs.length > 0) {
+    const orderIds = theirs.map((o) => o.id);
+    const asks = await prisma.orderDeliveryActionRequest.deleteMany({
+      where: { orderId: { in: orderIds } },
+    });
+    if (asks.count > 0) {
+      log(`  · removed a previous take's ${asks.count} delivery ask(s) from the associate`);
+    }
+    const requests = await prisma.storeOrderRequest.deleteMany({
+      where: { orderId: { in: orderIds }, status: 'PENDING' },
+    });
+    if (requests.count > 0) {
+      log(`  · removed a previous take's ${requests.count} waiting store request(s)`);
+    }
+  }
+
+  // The ticket the take raises, told from the seeded one by its SUBJECT:
+  // both are `SELLER_RAISED_ISSUE` opened by a store user, so the type
+  // and the actor say nothing, and the seeded one has to survive.
+  const raised = await prisma.ticket.findMany({
+    where: {
+      sellerId,
+      openedByStoreUserId: { in: ids },
+      NOT: { subject: LONG_ASSOCIATE_TICKET.subject },
+    },
+    select: { id: true, ticketNumber: true },
+  });
+  if (raised.length === 0) return;
+  const ticketIds = raised.map((t) => t.id);
+  await prisma.$transaction([
+    prisma.ticketEvent.deleteMany({ where: { ticketId: { in: ticketIds } } }),
+    prisma.ticket.deleteMany({ where: { id: { in: ticketIds } } }),
+  ]);
+  log(`  · removed a previous take's ${raised.length} associate-raised ticket(s)`);
+}
+
+/**
+ * One issue the associate raised, with OUR reply on it.
+ *
+ * `/store/issues`, NOT `/store/tickets`, and the difference is the
+ * whole meaning of the row: `/store/tickets` raises a DISPUTE WITH THE
+ * SELLER that Skydrop referees and that a settlement moves money for
+ * (`STORE_DISPUTE`), while `/store/issues` raises something WITH
+ * SKYDROP (`STORE_ISSUE`) — damaged, lost or stuck with us. The
+ * narration says "Skydrop and your store both reply, on one thread",
+ * which is the second one; a seeded dispute would sit on a list the
+ * video calls Issues and be about a different argument entirely.
+ *
+ * Raised AS THE ASSOCIATE, because who opened it is what the detail
+ * page draws the opening bubble from (TKT-1's `openedBy`) — a thread
+ * Skydrop opened against itself reads as a different thing, and the
+ * `issue` step opens on this list before adding to it.
+ *
+ * The REPLY is as load-bearing as the ticket: a thread with nothing in
+ * it reads as a message nobody answered, which is the opposite of the
+ * sentence over it. It goes on as STAFF through the admin endpoint, so
+ * the conversation has two sides.
+ *
+ * IT SURVIVES EVERY SEED RUN. `clearDeliveryTakeArtefacts` sweeps
+ * `SELLER_RAISED_ISSUE` and `COURIER_NDR_ESCALATION` on every run and
+ * deliberately not these, so the idempotency check below really does
+ * hit — and `clearAssociateTakeArtefacts` is what removes the one the
+ * TAKE raises, told from this one by its subject.
+ */
+async function ensureAssociateTicket(sellerId, world, associate, staffToken, log) {
+  const existing = await prisma.ticket.findFirst({
+    where: { sellerId, ticketType: 'STORE_ISSUE', subject: LONG_ASSOCIATE_TICKET.subject },
+    select: { id: true, ticketNumber: true },
+  });
+  if (existing !== null) {
+    await ensureStaffReply(existing.id, staffToken, log);
+    return;
+  }
+
+  // On one of THEIR OWN orders, because a store ticket is scoped to the
+  // store's own order and an associate's to their own (`tickets.view`
+  // under an OWN scope). Newest delivered, so the thread is about a
+  // parcel that really arrived.
+  const order = await prisma.order.findFirst({
+    where: { sellerId, placedByStoreUserId: associate.id, status: 'DELIVERED' },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, orderNumber: true },
+  });
+  if (order === null) {
+    log('  · no delivered order of the associate’s yet — no ticket raised');
+    return;
+  }
+  const outcome = await call('/store/issues', {
+    method: 'POST',
+    token: await associateToken(associate),
+    body: {
+      orderId: order.id,
+      subject: LONG_ASSOCIATE_TICKET.subject,
+      description: LONG_ASSOCIATE_TICKET.body,
+    },
+  });
+  /*
+    THE REPLY IS A UNION, and reading the wrong arm of it is silent. On
+    `chaseSkydrop: ASK_SELLER` the raise is HELD for seller staff and
+    answers `{ applied: false, request }` — no ticket, nothing to reply
+    on, and the `issue` step would open on an empty register. The
+    policy above sets DIRECT for this slug precisely so this is the
+    `applied: true` arm; saying so here is what makes a future change to
+    that policy fail loudly rather than quietly.
+  */
+  if (outcome.applied !== true || outcome.ticket == null) {
+    log(
+      '  · the issue was HELD for seller staff rather than opened — `chaseSkydrop` is not DIRECT ' +
+        'for this store, so the associate video has no thread to film',
+    );
+    return;
+  }
+  log(`  · ${associate.fullName} raised ${outcome.ticket.ticketNumber} on ${order.orderNumber}`);
+  await ensureStaffReply(outcome.ticket.id, staffToken, log);
+}
+
+/** Our side of that conversation, once. */
+async function ensureStaffReply(ticketId, staffToken, log) {
+  const mine = await prisma.ticketEvent.count({
+    where: { ticketId, actorType: 'STAFF' },
+  });
+  if (mine > 0) return;
+  await call(`/admin/tickets/${ticketId}/notes`, {
+    method: 'POST',
+    token: staffToken,
+    body: { note: LONG_ASSOCIATE_TICKET.reply },
+  });
+  log('  · and we answered it');
+}
+
+/**
+ * Yesterday's digest in the associate's inbox.
+ *
+ * See `LONG_DIGEST` for why this one row is written by hand and what
+ * that costs. In short: `DailyDigestService` is a scheduled BullMQ
+ * worker with no endpoint, it only ever reports YESTERDAY, and the
+ * message is IN-APP ONLY by NOTIF-23 — so there is no path through the
+ * product and nowhere else to film it.
+ *
+ * The shape is `NotificationDispatchService`'s in-app leg exactly:
+ * `template_code` is the TOPIC (that service uses `templateCode ??
+ * topic` and the digest passes no template for a leg with none),
+ * `status` is SENT with a `sent_at` because the in-app row IS the
+ * delivery, and the title is the sentence `DailyDigestService.send`
+ * composes.
+ *
+ * The `event_id` carries the digest's own key, so the NOTIF-2 partial
+ * unique dedups a second seed run on the same day rather than this
+ * function having to remember.
+ */
+async function ensureAssociateDigest(world, associate, log) {
+  const day = new Date();
+  day.setUTCDate(day.getUTCDate() - 1);
+  const label = day.toISOString().slice(0, 10);
+  const eventId = `daily-digest:associate:${associate.id}:${label}`;
+
+  const already = await prisma.notificationLog.findFirst({
+    where: { eventId, channel: 'IN_APP' },
+    select: { id: true },
+  });
+  if (already !== null) {
+    // Put it back in the inbox if a take read or dismissed it: the
+    // `digest` step opens on the unread bell.
+    await prisma.notificationLog.update({
+      where: { id: already.id },
+      data: { readAt: null, dismissedAt: null },
+    });
+    log('  · yesterday’s digest is in the associate’s inbox');
+    return;
+  }
+
+  /*
+    THE ORDER NUMBERS ARE THIS PERSON'S REAL ONES, read back off the
+    rows this pass just placed.
+
+    A hard-coded `SD-2026-26-000181` is the tell the top-up reference
+    already taught this file about: the digest is on camera and the
+    order list is two scenes away, so a number on one that appears on
+    neither the other nor anywhere in the database is the thing that
+    makes a viewer stop believing the rest of it. Only their OWN orders,
+    because an associate's digest is only ever what THEY sold.
+  */
+  const theirs = await prisma.order.findMany({
+    where: { placedByStoreUserId: associate.id },
+    select: { orderNumber: true, status: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const lines = [];
+  const counts = { delivered: 0, returned: 0, notDelivered: 0 };
+  for (const [heading, statuses] of LONG_DIGEST.buckets) {
+    const numbers = theirs.filter((o) => statuses.includes(o.status)).map((o) => o.orderNumber);
+    if (heading === 'Delivered') counts.delivered = numbers.length;
+    if (heading === 'Came back') counts.returned = numbers.length;
+    if (heading === 'Not delivered') counts.notDelivered = numbers.length;
+    if (numbers.length === 0) continue;
+    const shown = numbers.slice(0, LONG_DIGEST.maxListed).join(', ');
+    const rest = numbers.length - LONG_DIGEST.maxListed;
+    lines.push(
+      rest > 0
+        ? `${heading} (${numbers.length}): ${shown} and ${rest} more`
+        : `${heading} (${numbers.length}): ${shown}`,
+    );
+  }
+  if (lines.length === 0) {
+    log(
+      '  · no finished orders of the associate’s yet — no digest written (the `digest` step has ' +
+        'nothing to film until the parcels above have moved)',
+    );
+    return;
+  }
+
+  const title = `Yesterday: ${counts.delivered} delivered, ${counts.returned} back, ${counts.notDelivered} not delivered`;
+  const body = lines.join('\n');
+  await prisma.notificationLog.create({
+    data: {
+      templateCode: LONG_DIGEST.topic,
+      templateVersion: 1,
+      channel: 'IN_APP',
+      recipientType: 'STORE_USER',
+      recipientId: associate.id,
+      toInAppUserId: associate.id,
+      toStoreId: world.storeId,
+      subject: title,
+      body,
+      variables: { title, body, name: associate.fullName },
+      triggerEvent: 'daily_digest.sent',
+      status: 'SENT',
+      sentAt: new Date(),
+      eventId,
+    },
+  });
+  log(`  · wrote yesterday’s digest into ${associate.fullName}’s inbox — ${title}`);
+}
+/**
+ * THE THREE STORE BULK SHEETS, written fresh on every run.
+ *
+ * ── WHY NOT A COMMITTED FIXTURE ─────────────────────────────────────
+ * A store's repeated CSV reference is an ERROR ROW and never a patch
+ * (ORD-9 for stores). The committed `fixtures/pune-store-bulk-orders.csv`
+ * carries constant `External Ref` values, so R4's take imported four
+ * orders the FIRST time it ran and produced six error rows on every run
+ * after — under narration saying "Import 4 orders". `flows.mjs` already
+ * reads that file from `GENERATED_DIR` for exactly that reason and
+ * NOTHING WROTE IT, which is why R4 is unfilmable until this runs. The
+ * fixture stays in the repo as the readable example of the SHAPE.
+ *
+ * ── SIX ROWS, FOUR ORDERS ───────────────────────────────────────────
+ * Two of the four orders are two-line orders SHARING A REFERENCE —
+ * ORD-9's "one row is one line, and rows sharing a reference are one
+ * order". The preview's "making four orders" clause only renders when
+ * the row count and the order count DIFFER, so the shape is what makes
+ * that sentence appear at all.
+ *
+ * ── THE BAD ROW, AND WHY IT IS BAD THE WAY IT IS ────────────────────
+ * The preview's `rowsWithProblems` comes from the importer's own
+ * `groupRows`, so it sees PARSE-LEVEL problems: a missing required
+ * field, a reference whose rows contradict each other. It does NOT see
+ * a retail price outside the seller's range — that is a service
+ * decision at create time, and it lands on the error report AFTER the
+ * import rather than in the preview.
+ *
+ * `reseller.mjs`'s seed list asks for "ONE row priced under the
+ * seller's minimum so the preview names a row that will not import",
+ * and those are two different things. So the bad row does BOTH: it is
+ * priced under the minimum (true of the file, and what the narration
+ * says) AND it leaves the LANDMARK blank, which is a required field
+ * (ORD-5's 2026-08-07 amendment — it is the field that decides whether
+ * a rural address is findable) and is therefore what the preview
+ * actually names. One row, honest on camera either way.
+ *
+ * ── THE ASSOCIATE'S SHEET HAS NO PRICE COLUMN ───────────────────────
+ * An associate does not set one: their lines are priced from their own
+ * `associate_prices` row, which WINS over anything sent, and a figure
+ * that disagrees is refused by name. `Retail Price` is optional on the
+ * store template for that reason, so leaving the column out is not a
+ * degraded file — it is the right one for this person.
+ */
+const STORE_BULK_HEADERS = [
+  'Product SKU',
+  'Quantity',
+  'Retail Price',
+  'Customer Name',
+  'Customer Phone',
+  'Customer Email',
+  'Address Line1',
+  'Address Line2',
+  'City',
+  'State',
+  'Pin Code',
+  'COD Amount',
+  'External Ref',
+];
+
+/**
+ * The four customers, and the two of them who buy two things.
+ *
+ * `line2` is the LANDMARK. The LAST one's is blank on purpose and is
+ * the row that will not import — see the docblock above.
+ */
+const STORE_BULK_CUSTOMERS = [
+  {
+    name: 'Sneha Kulkarni',
+    phone: '+919822014477',
+    email: 'sneha.kulkarni@example.in',
+    line1: '14 Law College Road, Erandwane',
+    line2: 'Beside the Nal Stop metro entrance',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pin: '411004',
+    /** Two lines, one reference — one order. */
+    lines: [
+      { sku: 'RSH-JAMDANI-IVORY', qty: 1, retail: '2800' },
+      { sku: 'RSH-KANTHA-BLUE', qty: 1, retail: '2200' },
+    ],
+  },
+  {
+    name: 'Rohan Deshmukh',
+    phone: '+919822035512',
+    email: '',
+    line1: 'Flat 7B, Sai Residency, Baner Road',
+    line2: 'Opposite the Balewadi stadium gate',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pin: '411045',
+    lines: [
+      { sku: 'RSH-JAMDANI-IVORY', qty: 2, retail: '2900' },
+      { sku: 'RSH-KANTHA-BLUE', qty: 1, retail: '2100' },
+    ],
+  },
+  {
+    name: 'Farida Shaikh',
+    phone: '+919822046690',
+    email: '',
+    line1: '22 Shivaji Nagar, near the old post office',
+    line2: 'Above the Bhandari sweet shop',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pin: '411005',
+    lines: [{ sku: 'RSH-KANTHA-BLUE', qty: 1, retail: '2200' }],
+  },
+  {
+    name: 'Imran Qureshi',
+    phone: '+919822057703',
+    email: '',
+    line1: '9 Koregaon Park Lane 5',
+    /** BLANK — the landmark is required, and this is the row that fails. */
+    line2: '',
+    city: 'Pune',
+    state: 'Maharashtra',
+    pin: '411001',
+    /** ALSO under the seller's ₹2,400 minimum for the jamdani. */
+    lines: [{ sku: 'RSH-JAMDANI-IVORY', qty: 1, retail: '1900' }],
+  },
+];
+
+{
+  const rows = STORE_BULK_CUSTOMERS.reduce((n, c) => n + c.lines.length, 0);
+  if (rows !== 6 || STORE_BULK_CUSTOMERS.length !== 4) {
+    throw new Error(
+      `The store bulk sheet must be SIX rows making FOUR orders — the preview's "making four ` +
+        `orders" clause only renders when the two differ. Got ${rows} rows, ` +
+        `${STORE_BULK_CUSTOMERS.length} orders.`,
+    );
+  }
+  const blanks = STORE_BULK_CUSTOMERS.filter((c) => c.line2 === '');
+  if (blanks.length !== 1) {
+    throw new Error(
+      `Exactly ONE row must leave the landmark blank — it is what the preview names as "will not ` +
+        `import", and \`associate.mjs\`'s csv-check step waits for that notice. Got ${blanks.length}.`,
+    );
+  }
+}
+
+/**
+ * A reference nobody has used, per run and per file.
+ *
+ * The minute, not the millisecond: it is on camera in the preview and
+ * in the error report, and `PSS-2610081432-1` reads like a shop's own
+ * numbering where a thirteen-digit epoch reads like a fixture.
+ */
+function bulkRefStem() {
+  const d = new Date();
+  const two = (n) => String(n).padStart(2, '0');
+  return `${two(d.getFullYear() % 100)}${two(d.getMonth() + 1)}${two(d.getDate())}${two(d.getHours())}${two(d.getMinutes())}`;
+}
+
+/**
+ * One store bulk sheet.
+ *
+ * `prefix` is the reference family (and reads as the shop's own order
+ * numbering on camera); `priced` false drops the `Retail Price` column
+ * entirely — which is the associate's file, for the reason in the
+ * docblock above — and prices the COD from `codFor` instead.
+ */
+async function writeOneStoreBulkCsv({ file, prefix, priced, codFor }) {
+  const stem = bulkRefStem();
+  const headers = priced
+    ? STORE_BULK_HEADERS
+    : STORE_BULK_HEADERS.filter((h) => h !== 'Retail Price');
+  const rows = [];
+  for (const [i, c] of STORE_BULK_CUSTOMERS.entries()) {
+    const ref = `${prefix}-${stem}-${i + 1}`;
+    const cod = c.lines.reduce((n, l) => n + Number(codFor(l)) * l.qty, 0);
+    for (const line of c.lines) {
+      rows.push({
+        'Product SKU': line.sku,
+        Quantity: String(line.qty),
+        'Retail Price': line.retail,
+        'Customer Name': c.name,
+        'Customer Phone': c.phone,
+        'Customer Email': c.email,
+        'Address Line1': c.line1,
+        'Address Line2': c.line2,
+        City: c.city,
+        State: c.state,
+        'Pin Code': c.pin,
+        'COD Amount': String(cod),
+        'External Ref': ref,
+      });
+    }
+  }
+  const lines = [
+    headers.join(','),
+    ...rows.map((r) => headers.map((h) => csvCell(r[h])).join(',')),
+  ];
+  await fs.mkdir(GENERATED_DIR, { recursive: true });
+  await fs.writeFile(path.join(GENERATED_DIR, file), `${lines.join('\n')}\n`, 'utf8');
+  return rows.length;
+}
+
+/**
+ * All three sheets.
+ *
+ * `pune-store-bulk-orders.csv` is R4's — one of the 87 short videos,
+ * not a long one — and it is written HERE rather than in a world of its
+ * own because the file, the store and the references are the same three
+ * facts. `flows.mjs` already reads it from `GENERATED_DIR` and nothing
+ * wrote it, so R4 cannot be filmed until this runs.
+ *
+ * The associate's COD is its own arithmetic: their price list is the
+ * authority (`ASSOCIATE_PRICE_FIXED` refuses a figure that disagrees),
+ * so a sheet carrying the store's retail would import four orders whose
+ * collectable contradicts their own lines. A product the associate has
+ * no price for falls back to the store's retail, which is what the
+ * refusal then names — and that is correct: `LONG_UNPRICED_SKU` is
+ * deliberately not in this sheet.
+ */
+async function writeStoreBulkCsvs(log) {
+  const storePrice = (line) => line.retail;
+  const associatePrices = new Map(LONG_ASSOCIATE_PRICES.map((p) => [p.sku, p.retail]));
+
+  const r4 = await writeOneStoreBulkCsv({
+    file: 'pune-store-bulk-orders.csv',
+    prefix: 'PSS',
+    priced: true,
+    codFor: storePrice,
+  });
+  const long = await writeOneStoreBulkCsv({
+    file: 'reseller-long-bulk-orders.csv',
+    prefix: 'PSS-LONG',
+    priced: true,
+    codFor: storePrice,
+  });
+  const assoc = await writeOneStoreBulkCsv({
+    file: 'associate-bulk-orders.csv',
+    prefix: 'RAVI',
+    priced: false,
+    codFor: (line) => associatePrices.get(line.sku) ?? line.retail,
+  });
+  log(
+    `  · wrote the three store sheets — ${r4}/${long}/${assoc} rows, fresh references, ` +
+      'one row in each that will not import',
+  );
+}
+
 async function main() {
   assertStack();
   console.log(`Seeding tutorial demo data against ${API}`);
@@ -8200,6 +10741,13 @@ async function main() {
   await clearCatalogueImport(sellerId);
   await clearTutorialConsignments(sellerId);
   await clearTutorialSettings(sellerId);
+  // THE LONG VIDEOS' take artefacts, unconditionally — see
+  // `clearLongTakeArtefacts`. Every one of the six creates something
+  // whose key is permanent (a product reference, three SKUs, a
+  // consignment number), and a clear gated on the slug that made the
+  // row is a clear that misses the run where somebody filmed two of
+  // them in a row.
+  await clearLongTakeArtefacts(sellerId);
 
   // Per-video tailoring, AFTER the clearing. The slug is optional: with
   // none, this is the shared world every video that needs nothing extra
@@ -8234,10 +10782,19 @@ async function main() {
   await walletWorldFor(slug, sellerId, sellerToken, staffToken);
   await integrationsWorldFor(slug, sellerId);
   await resellingWorldFor(slug, sellerId, sellerToken);
+  // THE LONG VIDEOS' catalogue — four products the store videos put on
+  // Pune Silk Studio's shelf, so it runs BEFORE the store world below.
+  await longWorldFor(slug, sellerId, sellerToken, staffToken, binId);
   // G6's world — a SECOND reseller store with orders on it. Expensive
   // (one of its three parcels goes the whole way to out-for-delivery) and
   // so, like D0, only for the videos that need it.
   await storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken);
+  // The long store videos' world, on top of the same `tradingStoreWorld`
+  // sections G and R film. AFTER `longWorldFor` above, because it puts
+  // that pass's four products on the store's shelf and prices one of
+  // them for an associate — and after `storeRequestsWorldFor`, so the
+  // two never build the store twice in one run.
+  await longStoreWorldFor(slug, sellerId, sellerToken, staffToken);
   // P5's three — a bank change waiting, a month frozen, and (through D0
   // below) a return standing at the door.
   await dangerousActsWorldFor(slug, sellerId, sellerToken, staffToken);

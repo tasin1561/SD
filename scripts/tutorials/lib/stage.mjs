@@ -104,14 +104,52 @@ export function stageInitScript(markerStrip) {
 
     const marker = document.createElement('div');
     marker.id = 'tut-marker';
+    /*
+      THE COLOUR SURVIVES A NAVIGATION, and that is not a nicety.
+
+      This script is an init script, so it RE-RUNS on every full page
+      load. The colour used to live only in the element's inline style,
+      so a step that navigated came back with a BLACK marker and the
+      scene's own colour was never painted again — the composer then
+      never saw it.
+
+      That is not a lost frame, it is a lost SCENE, and the damage
+      compounds: the reader scans forward for the next match, the
+      palette repeats every 16 scenes, so a missed marker is silently
+      matched against the SAME colour sixteen scenes later and every
+      scene after it is placed against the wrong picture. On a 43-scene
+      video it consumed the whole recording and failed on the last
+      colour it could not find — twice, identically, which is what
+      proved it was the rig and not a capture wobble.
+
+      sessionStorage is per tab and per origin and survives a
+      navigation, which is exactly the lifetime of one take.
+    */
+    const saved = (() => {
+      try {
+        return sessionStorage.getItem('tut-marker');
+      } catch {
+        return null;
+      }
+    })();
+    if (saved !== null) marker.style.background = saved;
     document.body.appendChild(marker);
   }
 
   const api = {
     marker(r, g, b) {
       mount();
+      const css = 'rgb(' + r + ',' + g + ',' + b + ')';
       const el = document.getElementById('tut-marker');
-      if (el !== null) el.style.background = 'rgb(' + r + ',' + g + ',' + b + ')';
+      if (el !== null) el.style.background = css;
+      // Remembered so a navigation inside this scene repaints it rather
+      // than coming back black. See the note in mount() above.
+      try {
+        sessionStorage.setItem('tut-marker', css);
+      } catch {
+        /* A page that refuses storage still records; it just cannot
+           survive a navigation, which is where this started. */
+      }
     },
     halo(box) {
       mount();

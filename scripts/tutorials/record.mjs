@@ -92,7 +92,36 @@ const APPS = {
       password: process.env.DEMO_STORE_PASSWORD ?? 'Store-Demo-2026',
     },
   },
+  /**
+   * The associate portal (ASSOC-1) — a THIRD person again, not a third
+   * view.
+   *
+   * This is somebody who sells FOR Pune Silk Studio: the same `store`
+   * identity the reseller app uses, signed in as a person whose role is
+   * `associate`, so `order_scope` is OWN and the app shows only what
+   * they sold. Filming it as Anjali would show a store owner's screens
+   * and prove nothing — the whole point of this app is what it does NOT
+   * show, and an owner sees all of it.
+   *
+   * `landing` is here because this app has no `/dashboard`: its root
+   * redirects to `/orders` on purpose (there is no figure an associate
+   * may see that would belong on a dashboard — every one is the store's
+   * cost or the store's earnings). A sign-in helper that waits for
+   * `/dashboard` therefore times out here, which is a thirty-second
+   * failure with no error worth reading, so the wait is per app.
+   */
+  associate: {
+    baseUrl: process.env.ASSOCIATE_APP_URL ?? STACK.associate.url,
+    landing: /\/orders/,
+    identity: {
+      email: process.env.DEMO_ASSOCIATE_EMAIL ?? 'ravi@punesilkstudio.test',
+      password: process.env.DEMO_ASSOCIATE_PASSWORD ?? 'Assoc-Demo-2026',
+    },
+  },
 };
+
+/** Where a signed-in session lands, per app. */
+export const DEFAULT_LANDING = /\/dashboard/;
 
 /**
  * Drive a flow and record it — or, with `{ check: true }`, drive it and
@@ -223,7 +252,19 @@ export async function record(slug, { check = false } = {}) {
       assigns is visible to the steps after it, which is the same shape
       the prologue already had with `page` and `stage`.
     */
-    const ctx = { page, stage, baseUrl: BASE_URL, seller: SELLER };
+    // `landing` travels in the context because WHERE a signed-in
+    // session lands is a property of the APP, and the app table above
+    // is the one place that knows it. A prologue that hard-codes
+    // `/dashboard` works for three apps and times out for thirty
+    // seconds on the associate portal, which has none (ASSOC-1) — and
+    // a timeout there reads as a broken login rather than a wrong wait.
+    const ctx = {
+      page,
+      stage,
+      baseUrl: BASE_URL,
+      seller: SELLER,
+      landing: app.landing ?? DEFAULT_LANDING,
+    };
     await flow.prologue(ctx);
     await stage.marker(MARKER_IDLE);
     await page.waitForTimeout(700);

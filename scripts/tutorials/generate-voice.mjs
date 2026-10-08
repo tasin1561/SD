@@ -29,6 +29,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { VIDEOS, videoBySlug } from './narration.mjs';
 import { AUDIO_DIR, MIN_CLIP_SECONDS, MAX_CLIP_SECONDS } from './lib/paths.mjs';
+import { assertReady, language, sayFor } from './lib/languages.mjs';
 import {
   KeyRing,
   QuotaExhaustedError,
@@ -50,10 +51,25 @@ const TRANSIENT_BACKOFF_MS = [2000, 5000, 12000];
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Cache key — every input that changes the audio is in it. */
-function fingerprint(text) {
+/**
+ * Cache key — every input that changes the audio is in it.
+ *
+ * `lang` defaults to English and English resolves to the ORIGINAL voice
+ * and model, so the key an existing clip was cached under is reproduced
+ * byte for byte. That is load-bearing: the 87 finished videos represent
+ * ~199,000 characters already paid for, and a changed key re-buys every
+ * one of them silently — no error, just a bill.
+ */
+function fingerprint(text, lang = language('en')) {
   return createHash('sha256')
-    .update(JSON.stringify({ text, VOICE_ID, MODEL_ID, VOICE_SETTINGS }))
+    .update(
+      JSON.stringify({
+        text,
+        VOICE_ID: lang.voice,
+        MODEL_ID: lang.model,
+        VOICE_SETTINGS,
+      }),
+    )
     .digest('hex')
     .slice(0, 16);
 }
@@ -209,21 +225,26 @@ export async function assertSameVoice(ring, { fetchImpl = fetch, log = console.l
  * would leave a hole in the middle of a video at exactly the moment the
  * run looked like it had recovered.
  */
-export async function synthesise(ring, text, outFile, { fetchImpl = fetch, sleep = wait } = {}) {
+export async function synthesise(
+  ring,
+  text,
+  outFile,
+  { fetchImpl = fetch, sleep = wait, lang = language('en') } = {},
+) {
   for (;;) {
     let transientAttempts = 0;
 
     for (;;) {
       let res;
       try {
-        res = await fetchImpl(`${API}/text-to-speech/${VOICE_ID}`, {
+        res = await fetchImpl(`${API}/text-to-speech/${lang.voice}`, {
           method: 'POST',
           headers: {
             'xi-api-key': ring.current,
             'content-type': 'application/json',
             accept: 'audio/mpeg',
           },
-          body: JSON.stringify({ text, model_id: MODEL_ID, voice_settings: VOICE_SETTINGS }),
+          body: JSON.stringify({ text, model_id: lang.model, voice_settings: VOICE_SETTINGS }),
         });
       } catch (e) {
         // A thrown fetch is the network, never the account.
@@ -326,9 +347,17 @@ export async function budgetFor(ring, characters, { fetchImpl = fetch, log = con
   return { balances, total, allKnown, characters };
 }
 
-export async function voiceFor(video, { adopt = false, fetchImpl = fetch, ring = null } = {}) {
+export async function voiceFor(
+  video,
+  { adopt = false, fetchImpl = fetch, ring = null, lang = language('en') } = {},
+) {
+  assertReady(lang);
   const keyRing = ring ?? new KeyRing(await readKeys());
-  const dir = path.join(AUDIO_DIR, video.slug);
+  // Each language keeps its own directory — `<slug>` for English,
+  // `<slug>-bn`, `<slug>-hi` for the others — so one language's clips and
+  // manifest can never be mistaken for another's, and re-cutting Hindi
+  // cannot touch English audio that is already paid for.
+  const dir = path.join(AUDIO_DIR, `${video.slug}${lang.suffix}`);
   await fs.mkdir(dir, { recursive: true });
 
   const manifestFile = path.join(dir, 'clips.json');
@@ -343,9 +372,20 @@ export async function voiceFor(video, { adopt = false, fetchImpl = fetch, ring =
   // Work out what is actually going to be BOUGHT before asking whether
   // there is money for it: a re-take of one line must not be refused for
   // want of the whole video's credits.
+  // The text THIS language speaks. A step with no translation is a hole
+  // in the video, so it is refused here rather than filmed silent.
+  const untranslated = video.steps.filter((step) => sayFor(step, lang) === null);
+  if (untranslated.length > 0) {
+    throw new Error(
+      `${video.slug}: ${lang.label} is missing "${lang.field}" on ${untranslated.length} step(s): ` +
+        `${untranslated.map((s) => s.id).join(', ')}. Translate them before generating — a step ` +
+        `with no line records as a silent scene, which only watching the finished video reveals.`,
+    );
+  }
+
   const toBuy = [];
   for (const step of video.steps) {
-    const fp = fingerprint(step.say);
+    const fp = fingerprint(sayFor(step, lang), lang);
     const file = path.join(dir, `${step.id}.mp3`);
     const hit = cached[step.id];
     const exists = await fs
@@ -360,7 +400,7 @@ export async function voiceFor(video, { adopt = false, fetchImpl = fetch, ring =
   if (toBuy.length > 0) {
     await budgetFor(
       keyRing,
-      toBuy.reduce((a, s) => a + s.say.length, 0),
+      toBuy.reduce((a, s) => a + sayFor(s, lang).length, 0),
       { fetchImpl },
     );
   }
@@ -368,7 +408,7 @@ export async function voiceFor(video, { adopt = false, fetchImpl = fetch, ring =
   const clips = {};
   let bought = 0;
   for (const [index, step] of video.steps.entries()) {
-    const fp = fingerprint(step.say);
+    const fp = fingerprint(sayFor(step, lang), lang);
     const file = path.join(dir, `${step.id}.mp3`);
     const hit = cached[step.id];
     const exists = await fs
@@ -400,7 +440,10 @@ export async function voiceFor(video, { adopt = false, fetchImpl = fetch, ring =
     }
 
     try {
-      const { keyPosition } = await synthesise(keyRing, step.say, file, { fetchImpl });
+      const { keyPosition } = await synthesise(keyRing, sayFor(step, lang), file, {
+        fetchImpl,
+        lang,
+      });
       bought += 1;
       const seconds = await probeDuration(file);
       clips[step.id] = { fingerprint: fp, seconds, file };
@@ -472,6 +515,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`\nVoice ${VOICE_ID} across ${ring.size} key(s):`);
     await assertSameVoice(ring);
   } else {
+    // `--lang=bn`. Absent means English, so every command that already
+    // worked keeps producing the same English audio from the cache.
+    const langArg = args.find((a) => a.startsWith('--lang='));
+    const lang = assertReady(language(langArg?.slice('--lang='.length) ?? 'en'));
     const named = args.find((a) => !a.startsWith('--'));
     const wanted = named === undefined ? VIDEOS : [videoBySlug(named)];
     // Checked ONCE for the whole run, not per video: it is a property of
@@ -480,8 +527,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     console.log(`\nVoice ${VOICE_ID} across ${ring.size} key(s):`);
     await assertSameVoice(ring);
     for (const video of wanted) {
-      console.log(`\n${video.title} (${video.slug})`);
-      const { clips, bought, lastKey } = await voiceFor(video, { adopt, ring });
+      console.log(`\n${video.title} (${video.slug}) — ${lang.label}`);
+      const { clips, bought, lastKey } = await voiceFor(video, { adopt, ring, lang });
       const total = Object.values(clips).reduce((a, c) => a + c.seconds, 0);
       console.log(
         `  total narration ${total.toFixed(1)}s across ${Object.keys(clips).length} clips ` +
