@@ -56,10 +56,25 @@ export interface AssociateSummary {
   readonly outOfRangePrices: number;
 }
 
+/**
+ * Invited onto the associate role, not accepted yet. Shown on the roster
+ * because that is the screen somebody invites FROM, and so the screen
+ * they come back to in order to see whether it worked — "No associates
+ * yet" under a fresh invitation reads as "it failed".
+ */
+export interface AssociateInviteSummary {
+  readonly invitationId: string;
+  readonly fullName: string;
+  readonly email: string;
+  readonly invitedAt: string;
+  readonly expiresAt: string;
+}
+
 export interface AssociateListView {
   /** What the store may sell at all — every person's denominator. */
   readonly sellableProducts: number;
   readonly associates: readonly AssociateSummary[];
+  readonly pendingInvitations: readonly AssociateInviteSummary[];
 }
 
 export interface AssociatePriceRow {

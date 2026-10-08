@@ -2,7 +2,17 @@
 
 import Link from 'next/link';
 import { useMemo, useState, type FormEvent, type ReactElement } from 'react';
-import { BarChart3, CircleAlert, Mail, SearchX, Tags, User, UserPlus, Users } from 'lucide-react';
+import {
+  BarChart3,
+  CircleAlert,
+  Mail,
+  MailCheck,
+  SearchX,
+  Tags,
+  User,
+  UserPlus,
+  Users,
+} from 'lucide-react';
 import { useStoreIdentity } from '@skydrop/auth/client';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Button, buttonClassName } from '@skydrop/ui/app/button';
@@ -112,7 +122,11 @@ export default function AssociatesPage(): ReactElement {
     );
   }
 
-  const none = associates.data.associates.length === 0;
+  const invited = associates.data.pendingInvitations;
+  // "Nobody yet" is only true when nobody is EXPECTED either. An
+  // invitation sent minutes ago and a page saying there is nobody is the
+  // app telling somebody their invite failed.
+  const none = associates.data.associates.length === 0 && invited.length === 0;
   // The denominator is stated ONCE for the whole list by the server,
   // rather than repeated on every person's row.
   const sellable = associates.data.sellableProducts;
@@ -133,7 +147,24 @@ export default function AssociatesPage(): ReactElement {
             placeholder: 'Search name or email',
           }}
         />
-        {rows.length === 0 ? (
+        {invited.length > 0 ? (
+          <ul className="as-invited" aria-label="Invitations waiting to be accepted">
+            {invited.map((i) => (
+              <li key={i.invitationId} className="as-invited__row">
+                <MailCheck size={15} aria-hidden />
+                <span className="as-invited__who">
+                  <strong>{i.fullName}</strong>
+                  <span className="as-invited__email">{i.email}</span>
+                </span>
+                <span className="as-invited__state">
+                  Invited {new Date(i.invitedAt).toLocaleDateString()} — waiting for them to accept.
+                  Set their prices once they are in.
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {rows.length === 0 && invited.length === 0 ? (
           <EmptyState
             icon={none ? <Users size={22} /> : <SearchX size={22} />}
             title={none ? 'No associates yet' : 'Nobody matches that search'}

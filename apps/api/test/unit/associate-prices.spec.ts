@@ -114,6 +114,7 @@ function setup(
     resellerStoreVariant: {
       findMany: async () => Object.keys(ranges).map((variantId) => ({ variantId })),
     },
+    storeUserInvitation: { findMany: async () => pendingInvites },
     storeUser: {
       findFirst: async (args: any) =>
         members.includes(args.where.id) && args.where.storeId === STORE
@@ -212,6 +213,16 @@ async function refusal(run: Promise<unknown>): Promise<Record<string, unknown>> 
   throw new Error('expected a refusal');
 }
 
+/**
+ * ASSOC-1 — invitations waiting to be accepted, which the roster now
+ * carries. Mutable so one test can put somebody in it; every other test
+ * sees an empty list, which is the state they were written against.
+ */
+let pendingInvites: Array<Record<string, unknown>> = [];
+beforeEach(() => {
+  pendingInvites = [];
+});
+
 describe('associate prices (ASSOC-1)', () => {
   it('refuses a price BELOW the seller’s minimum, and writes nothing', async () => {
     const { svc, table } = setup();
@@ -267,6 +278,45 @@ describe('associate prices (ASSOC-1)', () => {
     await expect(
       svc.pricesOf(STORE, '0190f7a0-0000-7000-8000-00000000bfff'),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('shows somebody INVITED and not yet accepted — "no associates" must not mean "your invite failed"', async () => {
+    /*
+      Found by the owner on the real screen, not by a test. An invitation
+      had been sent twenty minutes earlier; the page read "No associates
+      yet" and showed no trace of it. Nothing on the page disagreed —
+      `roster()` reads accepted MEMBERS, and an invitation is not one
+      until it is used.
+
+      But the roster is the screen somebody invites FROM, so it is the
+      screen they return to in order to find out whether it worked, and
+      the only place a store would think to look for the person they are
+      waiting on. Telling them there is nobody is telling them it failed.
+    */
+    const future = new Date(Date.now() + 7 * 86_400_000);
+    pendingInvites = [
+      {
+        id: 'inv-1',
+        fullName: 'Waiting Wendy',
+        email: 'wendy@store.test',
+        createdAt: new Date('2026-10-08T10:34:53.000Z'),
+        expiresAt: future,
+      },
+    ];
+    const { svc } = setup();
+    const view = await svc.list(STORE);
+    expect(view.pendingInvitations).toEqual([
+      {
+        invitationId: 'inv-1',
+        fullName: 'Waiting Wendy',
+        email: 'wendy@store.test',
+        invitedAt: '2026-10-08T10:34:53.000Z',
+        expiresAt: future.toISOString(),
+      },
+    ]);
+    // And they are NOT counted as an associate: no prices, nothing to
+    // switch off, nothing to put in the table.
+    expect(view.associates.map((a) => a.fullName)).not.toContain('Waiting Wendy');
   });
 
   it('counts what each person is priced for, and what the SELLER’s range left behind', async () => {
@@ -450,6 +500,7 @@ function analysisSetup(orders: readonly FakeOrder[]): {
     associatePrice: table.delegate(),
     sellerStore: { findFirst: async () => ({ id: STORE, sellerId: 'seller-1' }) },
     resellerStoreVariant: { findMany: async () => [{ variantId: V1 }, { variantId: V2 }] },
+    storeUserInvitation: { findMany: async () => pendingInvites },
     storeUser: {
       findMany: async () =>
         [ANNA, BRIJ].map((id) => ({

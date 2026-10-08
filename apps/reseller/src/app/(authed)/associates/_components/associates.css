@@ -231,3 +231,55 @@
 .as-report__list li {
   overflow-wrap: anywhere;
 }
+
+/*
+  ASSOC-1 — invitations waiting to be accepted, on the roster.
+
+  Found on the real screen: an invitation sent minutes earlier, and the
+  page reading "No associates yet" with nothing to say otherwise. This is
+  deliberately a quiet strip rather than a second table — the person is
+  not an associate yet, has no prices, nothing to sort and nothing to
+  switch off, so a row with empty cells would invite exactly the actions
+  that cannot work.
+*/
+.as-invited {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  list-style: none;
+}
+
+.as-invited__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--blue-line);
+  border-radius: var(--radius-md);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+
+.as-invited__who {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
+}
+
+.as-invited__email {
+  color: var(--blue-on-tint);
+  opacity: 0.85;
+  overflow-wrap: anywhere;
+}
+
+.as-invited__state {
+  flex: 1 1 14rem;
+  min-width: 0;
+  font-size: var(--text-sm);
+  color: var(--blue-on-tint);
+}

@@ -99,10 +99,34 @@ export interface AssociateSummary {
   readonly outOfRangePrices: number;
 }
 
+/**
+ * Somebody invited onto the associate role who has not accepted yet.
+ *
+ * ── WHY THE ROSTER CARRIES THESE AT ALL ──────────────────────────────
+ * Found by the owner, on production, looking at the real screen: an
+ * invitation had been sent twenty minutes earlier and the page said "No
+ * associates yet". Nothing on it disagreed — the roster read accepted
+ * MEMBERS, and an invitation is not one until it is used.
+ *
+ * But the screen is where somebody invites, so it is where they come
+ * back to see whether it worked; telling them there is nobody is telling
+ * them it failed. Worse, it is the only place a store would think to
+ * resend or revoke, and neither was reachable.
+ */
+export interface AssociateInviteSummary {
+  readonly invitationId: string;
+  readonly fullName: string;
+  readonly email: string;
+  readonly invitedAt: string;
+  readonly expiresAt: string;
+}
+
 export interface AssociateListView {
   /** The denominator for every person's counts: what the store may sell at all. */
   readonly sellableProducts: number;
   readonly associates: readonly AssociateSummary[];
+  /** Invited, not yet accepted — see `AssociateInviteSummary`. */
+  readonly pendingInvitations: readonly AssociateInviteSummary[];
 }
 
 export interface AssociatePriceRow {
@@ -273,9 +297,14 @@ export class AssociateService {
   // ── reads ──────────────────────────────────────────────────────────
 
   async list(storeId: string): Promise<AssociateListView> {
-    const [people, tally] = await Promise.all([this.roster(storeId), this.priceTally(storeId)]);
+    const [people, tally, invited] = await Promise.all([
+      this.roster(storeId),
+      this.priceTally(storeId),
+      this.pendingInvites(storeId),
+    ]);
     return {
       sellableProducts: tally.sellableProducts,
+      pendingInvitations: invited,
       associates: people.map((p) => ({
         storeUserId: p.id,
         fullName: p.fullName,
@@ -761,6 +790,34 @@ export class AssociateService {
   }
 
   /** The people on this store's `associate` role, live ones only. */
+  /**
+   * Live invitations onto the associate role: unused, not revoked, not
+   * expired. An EXPIRED one is deliberately left out — it is not waiting
+   * on anybody, and a list that keeps growing with dead rows is a list
+   * people stop reading. Revoking or resending is the Team screen's, so
+   * this is a statement that somebody is expected, not a second console.
+   */
+  private async pendingInvites(storeId: string): Promise<AssociateInviteSummary[]> {
+    const rows = await this.prisma.client.storeUserInvitation.findMany({
+      where: {
+        storeId,
+        usedAt: null,
+        deletedAt: null,
+        expiresAt: { gt: new Date() },
+        roles: { some: { role: { key: ASSOCIATE_ROLE_KEY, deletedAt: null } } },
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      select: { id: true, fullName: true, email: true, createdAt: true, expiresAt: true },
+    });
+    return rows.map((r) => ({
+      invitationId: r.id,
+      fullName: r.fullName,
+      email: r.email,
+      invitedAt: r.createdAt.toISOString(),
+      expiresAt: r.expiresAt.toISOString(),
+    }));
+  }
+
   private roster(storeId: string): Promise<
     Array<{
       id: string;
