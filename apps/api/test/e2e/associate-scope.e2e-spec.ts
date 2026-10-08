@@ -407,10 +407,23 @@ describe('associate scope (e2e)', () => {
 
     // A price the SELLER's range no longer admits stops them selling, and
     // says whose problem it is. The seller moves the floor above it.
+    //
+    // Through the PRICE LIST, not the store catalogue: `SaveStoreTermsDto`
+    // has no top-level retail range — the range lives inside
+    // `priceOverride`, and the API runs `forbidNonWhitelisted`, so a
+    // top-level `minRetailInr` is a 400 rather than a no-op. This store
+    // has no override, so RS-3's "override ?? default, decided per ROW"
+    // means raising the default raises the effective floor, which is also
+    // the honest version of "the seller moves the floor".
     await request(h.baseUrl)
-      .put(`/seller/reseller-stores/${storeId}/catalogue/${variantId}`)
+      .put(`/seller/reseller-price-list/${variantId}`)
       .set(sellerAuth)
-      .send({ enabled: true, stockMode: 'SHARED', hiddenPercent: 0, minRetailInr: '500.00' })
+      .send({
+        transferPriceInr: '300.00',
+        minRetailInr: '500.00',
+        maxRetailInr: '600.00',
+        suggestedRetailInr: '550.00',
+      })
       .expect(200);
     const outOfRange = await request(h.baseUrl).post('/store/orders').set(a.auth).send(order());
     expect(outOfRange.status).toBe(409);
@@ -491,14 +504,33 @@ describe('associate scope (e2e)', () => {
     const ownerList = await request(h.baseUrl).get('/store/customers').set(ownerAuth).expect(200);
     expect((ownerList.body as { total: number }).total).toBe(2);
 
-    // A colleague's customer by id is a 404, and so is editing them.
+    // A colleague's customer BY ID is a 404 that says nothing more — the
+    // scoping, which is what this test is about.
     const bCustomerId = (bList.body as { items: Array<{ id: string }> }).items[0]!.id;
     await request(h.baseUrl).get(`/store/customers/${bCustomerId}`).set(a.auth).expect(404);
-    await request(h.baseUrl)
+
+    /*
+      EDITING is 403, and that is a different refusal for a better reason.
+
+      An associate holds `customers.view` and deliberately NOT
+      `customers.manage` (ASSOC-1): a store's customer row is shared —
+      identity is per OWNER, so two associates selling to one phone share
+      it — and letting one rename somebody the other also sold to is how
+      two people's records collide. So the permission gate refuses before
+      the scoped lookup runs, and the question "is this row theirs?" never
+      arises: they may not edit ANY customer, their own included.
+
+      Asserted as 403 rather than 404 on purpose. The first draft of this
+      test expected 404 and CI was right to refuse it — writing the
+      broader refusal down is what stops somebody later "fixing" the code
+      to make a 404 appear, which would mean granting the permission.
+    */
+    const edit = await request(h.baseUrl)
       .patch(`/store/customers/${bCustomerId}`)
       .set(a.auth)
-      .send({ name: 'Renamed by somebody else' })
-      .expect(404);
+      .send({ name: 'Renamed by somebody else' });
+    expect(edit.status).toBe(403);
+    expect(edit.body.code).toBe('INSUFFICIENT_PERMISSION');
   });
 
   it('TWO associates selling to ONE phone share the customer row, and both see it', async () => {

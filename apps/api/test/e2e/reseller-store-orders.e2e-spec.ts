@@ -393,7 +393,21 @@ describe('reseller store orders (e2e)', () => {
       .set(store.auth)
       .expect(200);
     expect(own.body.recipient.name).toBe('Asha V. Verma');
-    expect(own.body.totals).toEqual({ retailInr: '998.00', transferInr: '600.00' });
+    /*
+      ASSOC-1 moved the store's cost into a SCOPE-DISCRIMINATED UNION, so
+      `totals.transferInr` became `totals.cost.transferInr` behind a
+      `visible` discriminant. This caller is the store's OWNER — ALL scope
+      — so they see it, which is the whole point: the cost is theirs.
+
+      This assertion had to change in the commit that changed the shape,
+      and it is the one place typecheck could not help: an e2e reads a raw
+      JSON body, so it is a consumer the compiler cannot see. CI caught
+      it. Worth remembering the next time a response shape moves.
+    */
+    expect(own.body.totals).toEqual({
+      retailInr: '998.00',
+      cost: { visible: true, transferInr: '600.00' },
+    });
   });
 
   it('a PAUSED store places nothing; its in-flight order carries on', async () => {
