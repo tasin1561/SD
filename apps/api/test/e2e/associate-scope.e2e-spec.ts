@@ -1,9 +1,12 @@
 import { createHash, randomBytes } from 'node:crypto';
 import request from 'supertest';
-import { ProductStatus, SellerStatus, StaffRoleKey } from '@skydrop/db';
+import { ActorType, OrderStatus, ProductStatus, SellerStatus, StaffRoleKey } from '@skydrop/db';
+import { OrderWriteService } from '../../src/modules/order/services/order-write.service';
+import { ResellerOrderMoneyService } from '../../src/modules/reseller-order-money/services/reseller-order-money.service';
 import {
   bootTestApp,
   createTestStaff,
+  drainAll,
   flushTestRedis,
   resetAuthState,
   type AppHarness,
@@ -28,6 +31,7 @@ import {
 describe('associate scope (e2e)', () => {
   let h: AppHarness;
   let staffAuth: { Authorization: string };
+  let staffId: string;
   let sellerId: string;
   let sellerAuth: { Authorization: string };
   let variantId: string;
@@ -145,6 +149,7 @@ describe('associate scope (e2e)', () => {
       .send({ email: staff.email, password: staff.password })
       .expect(200);
     staffAuth = { Authorization: `Bearer ${login.body.accessToken}` };
+    staffId = staff.id;
 
     const sellerEmail = `assoc-${Date.now()}-${Math.random().toString(36).slice(2)}@scope.test`;
     const invite = await request(h.baseUrl)
@@ -591,6 +596,94 @@ describe('associate scope (e2e)', () => {
     // Its owner reads it, and so does the store's owner.
     await request(h.baseUrl).get(`/store/order-imports/${bUpload.id}`).set(b.auth).expect(200);
     await request(h.baseUrl).get(`/store/order-imports/${bUpload.id}`).set(ownerAuth).expect(200);
+  });
+
+  it('an associate’s order is MONEY like any other — planned for both parties, and still invisible to them', async () => {
+    /*
+      THE GAP THIS CLOSES. `reseller-order-money.e2e-spec.ts` drives
+      confirm → deliver → settle thoroughly, and every order in it is
+      placed by the store's OWNER. Nothing took an ASSOCIATE's order past
+      creation — which is precisely what `reseller.orders_enabled` gates,
+      and the point at which real money starts moving between the seller
+      and the store.
+
+      Two things have to hold at once, and they pull in opposite
+      directions: the money must be worked out EXACTLY as it is for an
+      owner-placed order (the associate is a seller, not a different
+      commercial arrangement — RS-6 phase 3c plans from the order's
+      snapshotted TERMS, which know nothing about who typed it), and the
+      associate must still not be able to see a figure of it afterwards.
+      A credit row existing is the first case; `cost.visible: false`
+      surviving CONFIRMATION is the second, and that is the one a
+      projection written per-request rather than per-scope would lose.
+    */
+    const a = await makeAssociate('Associate A', `a9-${Date.now()}@scope.test`);
+    await priceFor(a.storeUserId, '450.00');
+    const id = await place(a.auth);
+
+    // The order carries the ASSOCIATE as its placer, which is what every
+    // scope and every scorecard reads. Nothing about the money does.
+    const row = await h.prisma.order.findUniqueOrThrow({
+      where: { id },
+      select: { placedByStoreUserId: true, resellerTermsVersionId: true },
+    });
+    expect(row.placedByStoreUserId).toBe(a.storeUserId);
+    expect(row.resellerTermsVersionId).not.toBeNull();
+
+    await h.app.get(OrderWriteService).transitionStatus({
+      orderId: id,
+      to: OrderStatus.CONFIRMED,
+      actor: { type: ActorType.STAFF, id: staffId },
+    });
+    await drainAll(h.app);
+
+    // Planned at confirmation: one row per party, nothing credited yet.
+    // Sorted by NAME, not `orderBy: { party }` — Postgres orders an enum by
+    // DECLARATION order and ResellerMoneyParty declares STORE first, which
+    // read as a money bug the first time the money spec did it positionally.
+    const credits = [
+      ...(await h.prisma.resellerOrderCredit.findMany({ where: { orderId: id } })),
+    ].sort((x, y) => x.party.localeCompare(y.party));
+    expect(credits.map((c) => `${c.party} ${c.status}`)).toEqual([
+      'SELLER WAITING',
+      'STORE WAITING',
+    ]);
+    // The seller is owed the transfer price; the store the retail less it.
+    const [seller, store] = credits;
+    expect(seller?.grossInr.toFixed(2)).toBe('300.00');
+    expect(store?.transferInr.toFixed(2)).toBe('300.00');
+
+    // AND THE ASSOCIATE STILL SEES NONE OF IT, after confirmation.
+    const mine = await request(h.baseUrl).get(`/store/orders/${id}`).set(a.auth).expect(200);
+    const body = mine.body as {
+      totals: { cost: { visible: boolean } };
+      lines: Array<{ cost: { visible: boolean } }>;
+    };
+    expect(body.totals.cost).toEqual({ visible: false });
+    expect(body.lines[0]!.cost).toEqual({ visible: false });
+    expect(JSON.stringify(mine.body)).not.toContain('300.00');
+    await request(h.baseUrl).get(`/store/orders/${id}/money`).set(a.auth).expect(403);
+
+    // The OWNER, on the same confirmed order, sees the cost and the money.
+    const asOwner = await request(h.baseUrl).get(`/store/orders/${id}`).set(ownerAuth).expect(200);
+    expect(
+      (asOwner.body as { totals: { cost: { visible: boolean; transferInr: string } } }).totals.cost,
+    ).toEqual({ visible: true, transferInr: '300.00' });
+    await request(h.baseUrl).get(`/store/orders/${id}/money`).set(ownerAuth).expect(200);
+
+    // Delivery runs the money listener. Still planned, still unpaid — and
+    // still nothing an associate can read.
+    await h.prisma.order.update({ where: { id }, data: { status: OrderStatus.DELIVERED } });
+    await h.app.get(ResellerOrderMoneyService).onDelivered(id, new Date(), true);
+    expect(
+      (await h.prisma.resellerOrderCredit.findMany({ where: { orderId: id } })).map(
+        (c) => c.status,
+      ),
+    ).toEqual(['WAITING', 'WAITING']);
+    const after = await request(h.baseUrl).get(`/store/orders/${id}`).set(a.auth).expect(200);
+    expect((after.body as { totals: { cost: { visible: boolean } } }).totals.cost).toEqual({
+      visible: false,
+    });
   });
 
   it('a ticket an associate raises carries no settlement figures, and a colleague’s is a 404', async () => {

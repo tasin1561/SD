@@ -80,7 +80,13 @@ export function ResetPasswordForm({ token }: { readonly token: string }): ReactE
   ];
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form
+      // A refusal belongs to the value that earned it: any edit retires
+      // it, so a stale error cannot sit under a field that already fixed it.
+      onInput={() => setError(null)}
+      onSubmit={handleSubmit}
+      className="space-y-3"
+    >
       <PasswordField
         id="pw"
         label="New password"

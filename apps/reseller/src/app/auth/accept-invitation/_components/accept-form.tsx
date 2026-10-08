@@ -101,7 +101,13 @@ export function AcceptForm(): ReactElement {
   }
 
   return (
-    <form onSubmit={submit} className="rd-auth-form">
+    <form
+      // A refusal belongs to the value that earned it: any edit retires
+      // it, so a stale error cannot sit under a field that already fixed it.
+      onInput={() => setError(null)}
+      onSubmit={submit}
+      className="rd-auth-form"
+    >
       <dl className="rd-auth-facts">
         <dt>Store</dt>
         <dd>{preview.storeName}</dd>

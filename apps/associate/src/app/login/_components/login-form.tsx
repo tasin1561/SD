@@ -60,7 +60,14 @@ export function LoginForm(): ReactElement {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="as-auth-form" noValidate>
+    <form
+      // A refusal belongs to the value that earned it: any edit retires
+      // it, so a stale error cannot sit under a field that already fixed it.
+      onInput={() => setError(null)}
+      onSubmit={handleSubmit}
+      className="as-auth-form"
+      noValidate
+    >
       <TextField
         id="email"
         type="email"

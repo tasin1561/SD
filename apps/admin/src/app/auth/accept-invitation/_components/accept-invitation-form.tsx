@@ -176,7 +176,13 @@ export function AcceptInvitationForm({
       title="Set up your staff account"
       note="Choose a password of at least 12 characters. You will be signed in straight after."
     >
-      <form onSubmit={(e) => void onSubmit(e)} className="space-y-3">
+      <form
+        // A refusal belongs to the value that earned it: any edit retires
+        // it, so a stale error cannot sit under a field that already fixed it.
+        onInput={() => setError(null)}
+        onSubmit={(e) => void onSubmit(e)}
+        className="space-y-3"
+      >
         <PasswordField
           id="password"
           label="Password"
