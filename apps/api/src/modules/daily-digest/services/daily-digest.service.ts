@@ -247,7 +247,20 @@ export class DailyDigestService {
           audience: [{ kind: 'STORE_USER', storeUserId: person.id }],
           eventKey: `associate:${person.id}:${day.label}`,
           who: storeName,
-          appUrl: this.env.resellerAppUrl,
+          /*
+            ASSOC-1 — the ASSOCIATE's app, not the store's. A narrow
+            person signs in at `portal.skydrop.global`, and
+            `__Host-storeRefresh` is bound to the origin that set it —
+            the same reason `invitationAppUrl` exists in
+            `store-team.service.ts`. A reseller-origin link lands them on
+            an app where almost every page refuses them.
+
+            Inert on the day it was written: this send is IN_APP only and
+            `appUrl` is read inside the emailed branch — so it was a trap
+            armed for whoever gives this digest an email leg, not a live
+            defect. Fixed while it cost one line.
+          */
+          appUrl: this.env.associateAppUrl,
           day,
           body,
           topic: ASSOCIATE_DAILY_DIGEST_TOPIC,

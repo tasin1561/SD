@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType } from '@nestjs/common';
+import { BadRequestException, ValidationPipe, VersioningType } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import cookieParser from 'cookie-parser';
@@ -11,6 +11,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { SystemIssueService } from './modules/system-issues/services/system-issue.service';
 import { EnvService } from './config/env.service';
+import { validationMessages } from './common/validation/validation-messages';
 
 /** The three courier document pushes — the only routes that may be big. */
 const DOCUMENT_WEBHOOK_PREFIX = '/public/tracking/documents';
@@ -118,7 +119,14 @@ async function bootstrap(): Promise<void> {
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: false },
+      // Every failed constraint, not just the first: a form should learn
+      // all of its problems at once.
       stopAtFirstError: false,
+      // …except on a field that was never sent, where every constraint
+      // fails and the default joins them in decorator order — which is
+      // bottom-up, so the sentence that LEADS is whichever decorator sits
+      // last in the file. See `validationMessages`.
+      exceptionFactory: (errors) => new BadRequestException(validationMessages(errors)),
     }),
   );
 
