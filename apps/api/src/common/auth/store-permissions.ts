@@ -66,6 +66,17 @@ export const STORE_PERMISSIONS = [
     sensitive: true,
   },
   {
+    // ASSOC-1 — the store's own sales people. Who they are, what each
+    // sells a product at, how each is performing, and whether each may
+    // still place orders.
+    key: 'associates.manage',
+    label: 'Manage associates',
+    description:
+      'Invite an associate, set what they sell each product at, see how each is performing, and switch their order creation on or off.',
+    group: 'Team',
+    sensitive: true,
+  },
+  {
     // RS-3. Every role holds it by default (the owner implicitly): the
     // products a store may sell and their prices are what the whole team
     // works from. It shows the store's OWN terms only — never the
@@ -74,6 +85,26 @@ export const STORE_PERMISSIONS = [
     label: 'See the catalogue',
     description:
       'The products this store may sell, the price it pays for each, the retail range, and how many are available.',
+    group: 'Catalogue',
+  },
+  {
+    /*
+      ASSOC-1 — what an ASSOCIATE sees of the catalogue, and the reason it
+      is a SECOND key rather than a filter inside `catalogue.view`.
+
+      `catalogue.view` carries `transferPriceInr` — what the STORE pays
+      its seller. An associate who can see that knows the store's cost,
+      and therefore the spread the store is making on them; it is the
+      same fact RS-3 keeps from the store about the seller, one level
+      down. A filter is something somebody has to remember on every new
+      field; a separate permission opens a DIFFERENT endpoint with a
+      narrower projection, so an associate cannot reach the one carrying
+      the cost at all.
+    */
+    key: 'catalogue.sell',
+    label: 'See what I may sell',
+    description:
+      'The products this person may sell, the price they sell each at, and how many are available. Never what the store pays for them.',
     group: 'Catalogue',
   },
   // RS-4 — the seller's terms: who pays which Skydrop fee on the store's
@@ -255,6 +286,14 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
   readonly name: string;
   readonly description: string;
   readonly isOwner?: true;
+  /*
+    ASSOC-1 — which of the store's orders this role may see. Absent means
+    ALL, which is what every role meant before associates existed and
+    what the migration stamped on the five of them; only `associate` is
+    OWN. It is a property of the ROLE and not of the person, so somebody
+    holding two roles sees the wider of the two (`storeOrderScope`).
+  */
+  readonly orderScope?: 'OWN';
   readonly permissions: readonly StorePermissionKey[];
 }> = [
   {
@@ -336,9 +375,61 @@ export const DEFAULT_STORE_ROLES: ReadonlyArray<{
       'tickets.view',
     ],
   },
+  {
+    /*
+      ASSOC-1 — a person who SELLS for the store.
+
+      Three things are deliberately ABSENT, and each is absent for a
+      reason about the FIELD rather than about seniority:
+
+      · `catalogue.view` — it carries `transferPriceInr`, what the store
+        pays its seller. `catalogue.sell` is the same catalogue with the
+        store's cost removed and the associate's own price in its place.
+      · `terms.view` — the terms say which Skydrop fee each side pays and
+        when each is credited. That is the store's arrangement with its
+        seller, and an associate reading it can work out the store's
+        margin on them.
+      · `reports.view` / `wallet.*` — the store's money.
+
+      What is PRESENT is everything needed to sell and to look after what
+      they sold: place an order, call it off, ask for another delivery
+      attempt, raise an issue, and see the customers they sold to. The
+      ORDERS and the CUSTOMERS are narrowed to their own by `orderScope`,
+      not by withholding the permission — an associate genuinely needs
+      the order screen, just not somebody else's rows.
+    */
+    key: 'associate',
+    name: 'Associate',
+    description:
+      'Sells for the store. Places orders and follows the ones they placed; never sees another associate’s orders, what the store pays for a product, or the store’s money.',
+    orderScope: 'OWN',
+    permissions: [
+      'store.profile.view',
+      'catalogue.sell',
+      'orders.view',
+      'orders.create',
+      'orders.cancel',
+      'orders.actions',
+      'customers.view',
+      'tickets.view',
+      'tickets.manage',
+    ],
+  },
 ];
 
-export const STORE_ROLE_KEYS = ['owner', 'admin', 'ops', 'finance', 'viewer'] as const;
+/*
+  ASSOC-1 adds `associate` — somebody who SELLS for the store and sees
+  only what they sold.
+
+  A sixth FIXED key rather than letting a store invent roles: the store
+  side is key-based on purpose (`@IsIn(STORE_ROLE_KEYS)` is the complete
+  vocabulary because `provisionDefaultStoreRoles` is the only writer),
+  and RBAC-1b records that the day store-role CREATION lands, that
+  binding becomes exactly the staff bug where nobody could be invited
+  onto a role their own team had made. A fixed sixth role keeps it
+  honest in the meantime.
+*/
+export const STORE_ROLE_KEYS = ['owner', 'admin', 'ops', 'finance', 'viewer', 'associate'] as const;
 export type StoreRoleKey = (typeof STORE_ROLE_KEYS)[number];
 
 export function isStoreRoleKey(value: string): value is StoreRoleKey {

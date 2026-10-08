@@ -44,6 +44,8 @@ function user(storeId = 'store-1'): AuthenticatedStoreUser {
     roleName: 'Finance',
     roleKeys: ['finance'],
     roleNames: ['Finance'],
+    orderScope: 'ALL',
+    ordersPausedAt: null,
     permissions: ['expenses.manage'],
   };
 }

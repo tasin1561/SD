@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
-import { ResellerStoreActionMode, StoreOrderRequestKind } from '@skydrop/db';
+import { ResellerStoreActionMode, StoreOrderRequestKind, type StoreOrderScope } from '@skydrop/db';
 import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
 import {
   StoreOrderRequestService,
@@ -39,6 +39,13 @@ export class StoreIssueService {
   async raise(input: {
     storeId: string;
     storeUserId: string;
+    /**
+     * ASSOC-1 — OWN confines the issue to an order this person placed.
+     * A HELD one (ASK_SELLER) is run for the store by the seller's
+     * approval path, which is not narrowed: seller staff may answer an
+     * associate's ask.
+     */
+    orderScope?: StoreOrderScope;
     orderId: string;
     subject: string;
     description: string | null;
@@ -65,6 +72,7 @@ export class StoreIssueService {
     const ticket = await this.tickets.openStoreIssue({
       storeId: input.storeId,
       storeUserId: input.storeUserId,
+      ...(input.orderScope === undefined ? {} : { orderScope: input.orderScope }),
       orderId: input.orderId,
       subject: input.subject,
       description: input.description,

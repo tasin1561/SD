@@ -18,7 +18,15 @@ import type { ResellerStoreStatusValue } from '@skydrop/api-client';
  */
 
 export type WalletManager = 'SELLER' | 'SKYDROP';
-export type StoreRoleKey = 'owner' | 'admin' | 'ops' | 'finance' | 'viewer';
+/**
+ * ASSOC-1 added `associate` — a store's own sales person. A SIXTH key,
+ * and the reason this union is worth keeping accurate rather than
+ * widening to `string`: the seller's screens name a role here (the
+ * invite form's starting value), and the server's own DTO binds to
+ * `STORE_ROLE_KEYS`, so the two drifting is a picker offering a role the
+ * API refuses, or refusing one the store really has.
+ */
+export type StoreRoleKey = 'owner' | 'admin' | 'ops' | 'finance' | 'viewer' | 'associate';
 
 export interface ResellerStoreView {
   readonly id: string;

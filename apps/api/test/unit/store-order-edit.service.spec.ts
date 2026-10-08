@@ -1,4 +1,4 @@
-import { ResellerStoreActionMode } from '@skydrop/db';
+import { ResellerStoreActionMode, StoreOrderScope } from '@skydrop/db';
 import { StoreOrderEditService } from '../../src/modules/reseller-order/services/store-order-edit.service';
 import type { OrderService } from '../../src/modules/order/services/order.service';
 import type { StoreOrdersService } from '../../src/modules/reseller-order/services/store-orders.service';
@@ -11,6 +11,8 @@ const CTX: ClientContext = { ipAddress: '1.1.1.1', userAgent: 'test', requestId:
 const INPUT = {
   storeId: 'store-1',
   storeUserId: 'su-1',
+  // ASSOC-1 — the ordinary store user: the whole store's orders.
+  orderScope: StoreOrderScope.ALL,
   sellerId: 'seller-1',
   orderId: 'order-1',
   patch: { recipientAddressLine1: '12 MG Road' },
@@ -28,7 +30,11 @@ const WITH_REASON = {
 
 function make(mode: ResellerStoreActionMode) {
   const orders = { edit: jest.fn().mockResolvedValue({ id: 'order-1' }) };
-  const storeOrders = { detail: jest.fn().mockResolvedValue({ id: 'order-1' }) };
+  const storeOrders = {
+    detail: jest.fn().mockResolvedValue({ id: 'order-1' }),
+    // ASSOC-1 — the scoped ownership check every store act runs first.
+    assertOwned: jest.fn().mockResolvedValue(undefined),
+  };
   const policies = {
     forStore: jest.fn().mockResolvedValue({ storeId: 'store-1', orderChange: mode }),
   };
@@ -64,7 +70,11 @@ describe('a store changing its own order (2026-09-16, widened 2026-09-18)', () =
     expect(call[3]).toEqual({ type: 'STORE', id: 'su-1' });
     expect(call[5]).toEqual({ storeId: 'store-1' });
     // Read back through the store's own projection.
-    expect(storeOrders.detail).toHaveBeenCalledWith('store-1', 'order-1');
+    expect(storeOrders.detail).toHaveBeenCalledWith(
+      'store-1',
+      { kind: 'STORE_USER', storeUserId: 'su-1', scope: StoreOrderScope.ALL },
+      'order-1',
+    );
     expect(out.applied).toBe(true);
     expect(holds.hold).not.toHaveBeenCalled();
   });
@@ -152,7 +162,9 @@ describe('a store changing its own order (2026-09-16, widened 2026-09-18)', () =
     // A capability set to OFF is not shown at all; ASK_SELLER has to say
     // so before somebody types a correction expecting it to take effect.
     const { svc } = make(ResellerStoreActionMode.ASK_SELLER);
-    await expect(svc.listAddressChanges('store-1', 'order-1')).resolves.toEqual({
+    await expect(
+      svc.listAddressChanges('store-1', { kind: 'STORE_API_KEY' }, 'order-1'),
+    ).resolves.toEqual({
       items: [],
       mode: ResellerStoreActionMode.ASK_SELLER,
     });

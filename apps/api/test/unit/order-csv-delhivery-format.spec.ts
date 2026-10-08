@@ -33,6 +33,7 @@ function buildStoreTemplateForTest(): string {
     UNUSED,
     UNUSED,
     UNUSED,
+    UNUSED,
   ).buildTemplate();
 }
 

@@ -146,6 +146,20 @@ export interface StoreMe {
    * — a courtesy, not a control (FE-2): the API refuses regardless.
    */
   readonly permissions: readonly string[];
+  /**
+   * ASSOC-1 — 'OWN' when this person sees only the orders and customers
+   * they placed (an associate), 'ALL' for the whole store. Rendering
+   * only (FE-2): the WHERE clause is what narrows the rows.
+   */
+  readonly orderScope: 'OWN' | 'ALL';
+  /**
+   * ASSOC-1 — set when the store has switched this person's order
+   * creation off. Everything already placed carries on, so this gates
+   * only the "place an order" surface; the API refuses it anyway with
+   * `ASSOCIATE_ORDERS_PAUSED`, and this is here so the form can say so
+   * before somebody fills it in.
+   */
+  readonly ordersPausedAt: string | null;
   readonly store: {
     readonly id: string;
     readonly name: string;

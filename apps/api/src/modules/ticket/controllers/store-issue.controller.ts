@@ -42,6 +42,7 @@ export class StoreIssueController {
     return this.issues.raise({
       storeId: user.storeId,
       storeUserId: user.id,
+      orderScope: user.orderScope,
       orderId: body.orderId,
       subject: body.subject,
       description: body.description ?? null,

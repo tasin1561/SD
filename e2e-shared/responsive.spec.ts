@@ -56,6 +56,12 @@ const PUBLIC_ENTRY: Record<string, readonly string[]> = {
   track: ['/'],
   marketing: ['/', '/request-invite', '/privacy'],
   reseller: ['/login', '/password-reset'],
+  // ASSOC-1. Listed rather than left to the `?? ['/']` fallback: `/`
+  // here redirects twice (to /orders, then to /login for a visitor with
+  // no session), so the fallback would sweep the login page by accident
+  // and the password-reset form — the only other public page, and the
+  // one with a field on it — not at all.
+  associate: ['/login', '/password-reset'],
 };
 
 /**
@@ -67,6 +73,13 @@ const AUTHED_ROUTES: Record<string, readonly string[]> = {
   admin: ['/dashboard', '/orders', '/settings', '/staff', '/fx', '/reports'],
   seller: ['/dashboard', '/orders', '/orders/new', '/wallet', '/settings', '/products'],
   reseller: ['/dashboard', '/team', '/settings', '/account'],
+  // `associate` is deliberately ABSENT, and adding it needs one more
+  // change than it looks: the sign-in below waits for `/dashboard`, and
+  // the associate portal has no dashboard — it lands on `/orders`,
+  // because every figure a dashboard would carry there is either the
+  // store's money or the store's margin (ASSOC-1). So the wait has to
+  // become per-project first, or the sweep hangs for 30s and then fails
+  // on a URL that was never coming. Its public half runs as normal.
 };
 
 const WIDTHS = [320, 360, 414, 768] as const;

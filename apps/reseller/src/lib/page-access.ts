@@ -52,6 +52,13 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   // RS-7 — the store's disputes with its seller.
   ['/tickets', 'tickets.view'], // GET /store/tickets
   ['/tickets/new', 'tickets.manage'], // POST /store/tickets
+  // ASSOC-1 — the store's own sales people: who they are, what each of
+  // them sells at, and how each is doing. One key covers all three
+  // pages, because every endpoint behind them needs exactly it; the
+  // "Invite an associate" button is the EXISTING store invitation and
+  // needs `team.manage`, which the list page gates in its own code
+  // (cosmetic, FE-2 — the API refuses regardless).
+  ['/associates', 'associates.manage'],
 ];
 
 export function permissionForPath(pathname: string | null): string | null {

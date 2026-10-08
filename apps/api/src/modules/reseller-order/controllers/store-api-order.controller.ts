@@ -25,10 +25,19 @@ import { StoreOrderListQueryDto } from '../dto/store-order-query.dto';
 import {
   StoreOrdersService,
   type StoreOrderListItem,
+  type StoreOrderViewer,
   type StoreOrderView,
 } from '../services/store-orders.service';
 
 const uuid = (): ParseUUIDPipe => new ParseUUIDPipe({ version: '7' });
+
+/**
+ * ASSOC-1 — a key carries NO person, so it reads the whole store's
+ * orders. Narrowing it to "what this key placed" would hide the store's
+ * own portal orders from its integration, which is not what switching an
+ * associate's scope to OWN was asked to do.
+ */
+const KEY_VIEWER: StoreOrderViewer = { kind: 'STORE_API_KEY' };
 
 /**
  * RS-5 — a reseller store's integration, by API key
@@ -62,7 +71,7 @@ export class StoreApiOrderController {
       ctx,
       { source: OrderSource.API },
     );
-    return this.orders.detail(key.storeId, created.id);
+    return this.orders.detail(key.storeId, KEY_VIEWER, created.id);
   }
 
   @Get()
@@ -71,7 +80,7 @@ export class StoreApiOrderController {
     @CurrentStoreApiKey() key: AuthenticatedStoreApiKey,
     @Query() query: StoreOrderListQueryDto,
   ): Promise<{ items: StoreOrderListItem[]; total: number; page: number; pageSize: number }> {
-    return this.orders.list(key.storeId, query);
+    return this.orders.list(key.storeId, KEY_VIEWER, query);
   }
 
   @Get(':id')
@@ -80,6 +89,6 @@ export class StoreApiOrderController {
     @CurrentStoreApiKey() key: AuthenticatedStoreApiKey,
     @Param('id', uuid()) id: string,
   ): Promise<StoreOrderView> {
-    return this.orders.detail(key.storeId, id);
+    return this.orders.detail(key.storeId, KEY_VIEWER, id);
   }
 }

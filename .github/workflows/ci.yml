@@ -94,7 +94,7 @@ jobs:
           # change can break an API test and a frontend build equally.
           API=false; FE=false
           match '^(apps/api/|packages/db/|\.github/)' && API=true
-          match '^(apps/(admin|seller|track|marketing|reseller)/|packages/(ui|api-client|auth|db)/|e2e-shared/|playwright\.config|\.github/)' && FE=true
+          match '^(apps/(admin|seller|track|marketing|reseller|associate)/|packages/(ui|api-client|auth|db)/|e2e-shared/|playwright\.config|\.github/)' && FE=true
           # The dependency graph feeds BOTH, and is the riskiest change of
           # all: a lockfile or override edit swaps the code every app runs
           # without touching one app's source. 029584ec (sharp/multer/qs/
@@ -206,6 +206,12 @@ jobs:
 
       - name: Unit tests — reseller (vitest)
         run: pnpm --filter @skydrop/reseller test
+
+      # ASSOC-1 — the associate portal. An app missing from this list is
+      # an app whose unit tests never run, which looks exactly like an
+      # app that has none.
+      - name: Unit tests — associate (vitest)
+        run: pnpm --filter @skydrop/associate test
 
       - name: Unit tests — packages
         run: pnpm --filter './packages/*' --if-present test
@@ -545,12 +551,13 @@ jobs:
             apps/track/.next/cache
             apps/marketing/.next/cache
             apps/reseller/.next/cache
+            apps/associate/.next/cache
           key: next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/*/src/**', 'packages/ui/src/**') }}
           restore-keys: |
             next-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
             next-${{ runner.os }}-
 
-      - name: Build the API and the five frontends
+      - name: Build the API and the six frontends
         run: |
           pnpm --filter @skydrop/api build
           pnpm --filter @skydrop/admin build
@@ -559,6 +566,10 @@ jobs:
           # RS-2 — the reseller store portal. This build IS its build
           # check; nothing else in CI builds it.
           pnpm --filter @skydrop/reseller build
+          # ASSOC-1 — the associate portal. Same rule: an app left off
+          # this list is an app whose build is checked NOWHERE, and the
+          # first sign would be a deploy failing on the droplet.
+          pnpm --filter @skydrop/associate build
           # Marketing is a static export; its `start` serves out/ via
           # scripts/serve-static.mjs, so the build must run first here
           # even though nothing else in this job consumes it.

@@ -36,6 +36,7 @@ import {
   TICKET_SELLER_OPENED_TOPIC,
   TICKET_SELLER_REPLIED_TOPIC,
 } from '../../src/modules/ticket/services/ticket-notification-plan';
+import { ASSOCIATE_DAILY_DIGEST_TOPIC } from '../../src/modules/daily-digest/services/daily-digest.service';
 import { RECEIPT_SURPLUS_TOPIC } from '../../src/modules/inventory-receipt/services/receipt-shortfall-ticket.service';
 import { GOODS_RECEIPT_DISCREPANCY_TOPIC } from '../../src/modules/inventory-receipt/services/goods-receipt.service';
 import { ORDER_NEEDS_ATTENTION_TOPIC } from '../../src/modules/order-attention/services/order-attention.service';
@@ -90,6 +91,11 @@ const STORE_SENDERS = [
   STORE_TERMS_PUBLISHED_TOPIC,
   STORE_TICKET_REPLY_TOPIC,
   STORE_TICKET_RESOLVED_TOPIC,
+  // ASSOC-1 — the per-person daily digest. Named by the digest's own
+  // constant for the same reason as every other entry here: a topic on
+  // the store's settings page that no notifier sends is a switch with
+  // nothing behind it.
+  ASSOCIATE_DAILY_DIGEST_TOPIC,
 ];
 
 /** Seller topics sent by something other than the lifecycle listener,

@@ -91,6 +91,21 @@ APPS = [
         "decorator": "RequireStorePermissions",
         "self_service": "StoreSelfService",
     },
+    # ASSOC-1: the associate portal. The SAME guard and decorators as the
+    # reseller portal — it is the same `store` identity, read through a
+    # narrower role — so it needs no new entry shape, only this one. An
+    # app missing from this list is an app whose pages are checked
+    # NOWHERE, and the check looks just as green for it either way, which
+    # is exactly how the reseller portal went unchecked between RS-2 and
+    # whenever somebody noticed. Adding a frontend with an access table
+    # means adding it here, in the same change.
+    {
+        "name": "associate",
+        "app": "apps/associate",
+        "guard": "StoreJwtGuard",
+        "decorator": "RequireStorePermissions",
+        "self_service": "StoreSelfService",
+    },
 ]
 
 HTTP = "Get|Post|Patch|Put|Delete"

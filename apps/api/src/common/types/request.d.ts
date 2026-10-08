@@ -139,6 +139,19 @@ export interface AuthenticatedStoreUser {
   roleNames: readonly string[];
   /** The UNION of every role held. */
   permissions: readonly string[];
+  /**
+   * ASSOC-1 — 'OWN' narrows every order and customer read to the rows
+   * this person placed; 'ALL' is the whole store, which is what every
+   * role meant before associates existed. Resolved by `storeOrderScope`,
+   * applied in the WHERE clause, never compared to a role key.
+   */
+  orderScope: 'OWN' | 'ALL';
+  /**
+   * ASSOC-1 — set when the store has switched this person's order
+   * creation off. Everything already placed carries on and they keep
+   * reading and tracking it; only placing a NEW order is refused.
+   */
+  ordersPausedAt: Date | null;
 }
 
 export interface AuthenticatedApiKey {

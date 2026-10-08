@@ -9,7 +9,9 @@ import {
   DeliveryActionStatus,
   ResellerStoreActionMode,
   SellerStoreKind,
+  type StoreOrderScope,
 } from '@skydrop/db';
+import { storeOrderOwnerFilter } from '../../../common/auth/store-order-scope';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import type { ClientInfoPayload } from '../../../common/decorators/client-info.decorator';
 import {
@@ -67,12 +69,24 @@ export class StoreDeliveryActionService {
   async request(input: {
     storeId: string;
     storeUserId: string | null;
+    /**
+     * ASSOC-1 — OWN narrows this to the orders this person placed. An
+     * associate turning a COLLEAGUE's parcel round is worse than reading
+     * one: it is physical, it costs the seller money and it cannot be
+     * undone. An APPROVED held request runs through
+     * `DeliveryActionService.runApproved`, not through here, so seller
+     * staff can still answer an associate's ask.
+     */
+    orderScope?: StoreOrderScope;
     orderId: string;
     action: DeliveryActionKind;
     reason: string;
     ctx: ClientInfoPayload;
   }): Promise<StoreActionOutcome> {
-    const order = await this.ownOrder(input.storeId, input.orderId);
+    const order = await this.ownOrder(input.storeId, input.orderId, {
+      storeUserId: input.storeUserId,
+      ...(input.orderScope === undefined ? {} : { orderScope: input.orderScope }),
+    });
     const policy = await this.policies.forStore(input.storeId);
     const mode = policy[CAPABILITY_OF[input.action]];
 
@@ -121,11 +135,14 @@ export class StoreDeliveryActionService {
   async listForOrder(
     storeId: string,
     orderId: string,
+    viewer: { storeUserId: string | null; orderScope?: StoreOrderScope } = {
+      storeUserId: null,
+    },
   ): Promise<{
     items: DeliveryActionRequestView[];
     allowed: Record<ActionCapability, ResellerStoreActionMode>;
   }> {
-    await this.ownOrder(storeId, orderId);
+    await this.ownOrder(storeId, orderId, viewer);
     const [rows, policy] = await Promise.all([
       this.prisma.client.orderDeliveryActionRequest.findMany({
         where: { orderId, resellerStoreId: storeId },
@@ -151,6 +168,7 @@ export class StoreDeliveryActionService {
   private async ownOrder(
     storeId: string,
     orderId: string,
+    viewer: { storeUserId: string | null; orderScope?: StoreOrderScope },
   ): Promise<{ sellerId: string; orderNumber: string; storeName: string }> {
     const order = await this.prisma.client.order.findFirst({
       where: {
@@ -158,6 +176,15 @@ export class StoreDeliveryActionService {
         storeId,
         storeKind: SellerStoreKind.RESELLER,
         deletedAt: null,
+        // ASSOC-1 — in the WHERE clause, so a colleague's order is the
+        // same 404 as an order that does not exist. `storeUserId` null
+        // (an approved request being run for the store) adds nothing.
+        ...(viewer.orderScope === undefined || viewer.storeUserId === null
+          ? {}
+          : storeOrderOwnerFilter({
+              scope: viewer.orderScope,
+              storeUserId: viewer.storeUserId,
+            })),
       },
       // The store's name AS PLACED (ORD-6): what the notice calls them is
       // what they were called when the order was taken.

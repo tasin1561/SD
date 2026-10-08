@@ -161,6 +161,11 @@ pnpm --filter @skydrop/admin build
 pnpm --filter @skydrop/seller build
 pnpm --filter @skydrop/track build
 pnpm --filter @skydrop/reseller build
+# ASSOC-1 — the associate portal. In the build list EVERY deploy, like
+# every other app: step 7 restarts all of them unconditionally, and the
+# two halves have to agree or a restarted process serves HTML naming
+# chunks the build it was not given deleted.
+pnpm --filter @skydrop/associate build
 pnpm --filter @skydrop/marketing build
 
 # ── 6b. Publish marketing static export ─────────────────────────────
@@ -312,6 +317,18 @@ done
 check_next_chunk http://127.0.0.1:3002 /login || exit 1
 check_next_chunk http://127.0.0.1:3003 /login || exit 1
 check_next_chunk http://127.0.0.1:3004 / || exit 1
+
+# ASSOC-1 — the associate portal, polled only once pm2 knows it, for the
+# same reason as the reseller one below: its first start is a manual
+# `pm2 start ecosystem.config.cjs --only skydrop-associate && pm2 save`,
+# and until that has happened a missing process must not fail the deploy
+# that is building the app it needs.
+if pm2 jlist 2>/dev/null | grep -q '"name":"skydrop-associate"'; then
+  check_url http://127.0.0.1:3007/login || exit 1
+  check_next_chunk http://127.0.0.1:3007 /login || exit 1
+else
+  echo "  skydrop-associate not registered with pm2 yet — skipping its health check"
+fi
 
 # RS-12 — the reseller portal is polled only once pm2 knows it. Its first
 # start is an owner step on the droplet (`pm2 start ecosystem.config.cjs

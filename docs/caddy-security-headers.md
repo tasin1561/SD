@@ -8,13 +8,29 @@ against `.global` after the reload.
 
 ## Who needs this, and who does not
 
-`apps/admin`, `apps/seller` and `apps/track` set their own headers in Next
+`apps/admin`, `apps/seller`, `apps/track`, `apps/reseller` and
+`apps/associate` set their own headers in Next
 (`packages/config/security-headers.mjs`) plus a per-request nonce CSP in
-middleware. Caddy reverse-proxies those three and passes upstream headers
+middleware. Caddy reverse-proxies those five and passes upstream headers
 through untouched, so **do not add a `header` block to their site blocks** —
 in particular never a second `Content-Security-Policy`. A browser enforces
 every CSP header it receives, and the intersection of a nonce policy and a
 static one blocks Next's own scripts.
+
+So the answer for `portal.skydrop.global` (ASSOC-1, the associate portal,
+added 2026-10-08) is that **it gets no block in this file at all**, and the
+same for `reseller.skydrop.global`. Their Caddy site blocks are the plain
+reverse-proxy ones in `docs/infrastructure.md`; this is written down
+because "the new hostname needs a security-headers block" is the obvious
+assumption, and acting on it is how a working app starts serving a page
+whose every script tag is refused. The way to check a new console is the
+`curl -sI` proof below run against ITS hostname: exactly one
+`content-security-policy`, carrying a nonce, and no `'unsafe-inline'`.
+`e2e-shared/csp.spec.ts` asserts the same thing from inside a browser for
+every Playwright project, which is the gate a new console should join.
+
+The list above is the thing that goes stale: **adding a Next-server
+frontend means editing this paragraph.**
 
 `apps/marketing` is different. It is `output: 'export'`, so there is no Node
 process in front of it — Caddy serves the files from

@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import {
   ALL_STORE_PERMISSION_KEYS,
   DEFAULT_STORE_ROLES,
+  STORE_PERMISSIONS,
+  type StorePermissionDef,
 } from '../../src/common/auth/store-permissions';
 
 /**
@@ -171,13 +173,17 @@ describe('store permission surface (RS-2)', () => {
     }
   });
 
-  it('the five RS-2 roles, one owner, and only real keys', () => {
+  it('the six store roles, one owner, and only real keys', () => {
+    // ASSOC-1 added a SIXTH fixed key. Named in full rather than counted:
+    // a role is a bundle of standing permissions, and a seventh appearing
+    // without anybody arguing for it is the thing this pins.
     expect(DEFAULT_STORE_ROLES.map((r) => r.key)).toEqual([
       'owner',
       'admin',
       'ops',
       'finance',
       'viewer',
+      'associate',
     ]);
     expect(DEFAULT_STORE_ROLES.filter((r) => r.isOwner === true)).toHaveLength(1);
     const known = new Set<string>(ALL_STORE_PERMISSION_KEYS);
@@ -193,8 +199,29 @@ describe('store permission surface (RS-2)', () => {
     // The products a store may sell and their prices are what the whole
     // team works from, so every starting role holds catalogue.view (the
     // owner implicitly). The seller sets the terms; a store has no write.
-    for (const r of DEFAULT_STORE_ROLES.filter((role) => role.isOwner !== true)) {
+    //
+    // ASSOC-1 is the ONE exception, and it is the whole of boundary 2:
+    // `catalogue.view` carries `transferPriceInr` — what the STORE pays
+    // its seller — so an associate holding it could work out the spread
+    // the store makes on them. They get `catalogue.sell` instead, which
+    // is the same catalogue with the store's cost removed and their own
+    // selling price in its place. A SECOND PERMISSION OPENING A NARROWER
+    // ENDPOINT beats a filter inside the wide one: a filter is something
+    // somebody has to remember on every new field.
+    for (const r of DEFAULT_STORE_ROLES.filter(
+      (role) => role.isOwner !== true && role.key !== 'associate',
+    )) {
       expect(r.permissions).toContain('catalogue.view');
+    }
+    // The narrow projection is the ASSOCIATE's, and only theirs — except
+    // `admin`, whose set IS `ALL_STORE_PERMISSION_KEYS` by construction,
+    // so it picks up every key added anywhere. The pair that matters
+    // (associate holds `sell` and NOT `view`) is asserted in the ASSOC-1
+    // block below, where the reason for it is written down.
+    for (const r of DEFAULT_STORE_ROLES.filter(
+      (role) => role.isOwner !== true && role.key !== 'associate' && role.key !== 'admin',
+    )) {
+      expect(r.permissions).not.toContain('catalogue.sell');
     }
     const catalogue = HANDLERS.filter((h) => h.file === 'store-catalogue.controller.ts');
     expect(catalogue.map((h) => `${h.method} ${h.name}`)).toEqual(['Get list']);
@@ -293,6 +320,87 @@ describe('store permission surface (RS-2)', () => {
       'Post record → expenses.manage',
       'Post remove → expenses.manage',
     ]);
+  });
+
+  it('ASSOC-1: an associate sells, and the three things they cannot see are absent by PERMISSION', () => {
+    const associate = DEFAULT_STORE_ROLES.find((r) => r.key === 'associate');
+    expect(associate).toBeDefined();
+    const held = associate?.permissions ?? [];
+
+    // What is PRESENT is everything needed to sell and to look after what
+    // they sold. The orders and the customers are narrowed to their own by
+    // `orderScope`, NOT by withholding the permission — an associate
+    // genuinely needs the order screen, just not somebody else's rows.
+    expect([...held].sort()).toEqual(
+      [
+        'store.profile.view',
+        'catalogue.sell',
+        'orders.view',
+        'orders.create',
+        'orders.cancel',
+        'orders.actions',
+        'customers.view',
+        'tickets.view',
+        'tickets.manage',
+      ].sort(),
+    );
+
+    // Each absence is about the FIELD, not about seniority:
+    //   catalogue.view — carries `transferPriceInr`, the store's cost.
+    //   terms.view     — the fee split and the credit timing, from which
+    //                    the store's margin on them is derivable.
+    //   reports.view / expenses.* / wallet.* — the store's money.
+    //   associates.manage — setting other people's selling prices.
+    for (const withheld of [
+      'catalogue.view',
+      'terms.view',
+      'terms.accept',
+      'reports.view',
+      'expenses.view',
+      'expenses.manage',
+      'wallet.view',
+      'wallet.topups.manage',
+      'wallet.withdrawals.manage',
+      'associates.manage',
+      'team.view',
+      'team.manage',
+      'integrations.manage',
+      'store.profile.manage',
+      'customers.manage',
+    ]) {
+      expect(held).not.toContain(withheld);
+    }
+
+    // A stronger form of the same, so a permission added to the role
+    // later cannot quietly be a money one: nothing the associate holds
+    // is marked sensitive except the two that are unavoidably so — the
+    // order list (it carries customers' delivery details) and the
+    // customer list itself.
+    // Read through the DECLARED interface, not the `as const` literal
+    // union: `sensitive` is optional, so on the union it exists only on
+    // the members that set it and the property access does not compile.
+    const defs: readonly StorePermissionDef[] = STORE_PERMISSIONS;
+    const sensitive = new Set(defs.filter((p) => p.sensitive === true).map((p) => p.key));
+    expect(held.filter((k) => sensitive.has(k)).sort()).toEqual(
+      ['customers.view', 'orders.view'].sort(),
+    );
+  });
+
+  it('ASSOC-1: only the associate role is narrow, and the other five say ALL out loud', () => {
+    // The migration states ALL on the five that predate associates rather
+    // than leaving them to the column default (which is OWN) — defaulting
+    // them would have silently narrowed every existing store login to
+    // "only orders I placed myself", and since no order placed before
+    // ASSOC-1 records a store user at all, that reads as every store
+    // suddenly having no orders.
+    for (const r of DEFAULT_STORE_ROLES) {
+      if (r.key === 'associate') expect(r.orderScope).toBe('OWN');
+      else expect(r.orderScope).toBeUndefined();
+    }
+    // And the narrow role is not ALSO the owner, which would make it wide
+    // again — `storeOrderScope` is widest-wins, and `isOwner` is ALL
+    // whatever the column says.
+    expect(DEFAULT_STORE_ROLES.find((r) => r.key === 'associate')?.isOwner).toBeUndefined();
   });
 
   it('no store controller reaches for a seller or staff guard', () => {

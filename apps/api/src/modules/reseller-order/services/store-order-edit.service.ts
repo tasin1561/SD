@@ -1,11 +1,16 @@
-import { ActorType, ResellerStoreActionMode } from '@skydrop/db';
+import { ActorType, ResellerStoreActionMode, type StoreOrderScope } from '@skydrop/db';
 import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import type { UpdateOrderDto } from '../../order/dto/update-order.dto';
 import type { StoreEditRecipientDto } from '../dto/address-change.dto';
 import { OrderService } from '../../order/services/order.service';
 import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
-import { StoreOrdersService, type StoreOrderView } from './store-orders.service';
+import {
+  StoreOrdersService,
+  viewerFor,
+  type StoreOrderView,
+  type StoreOrderViewer,
+} from './store-orders.service';
 import {
   StoreAddressChangeService,
   fieldsFromPatch,
@@ -82,11 +87,28 @@ export class StoreOrderEditService {
   async editRecipient(input: {
     storeId: string;
     storeUserId: string;
+    orderScope: StoreOrderScope;
     sellerId: string;
     orderId: string;
     patch: StoreEditRecipientDto;
     ctx: ClientContext;
   }): Promise<StoreRecipientEditOutcome> {
+    /*
+      ASSOC-1 — whose order is this? Asked FIRST, before the seller's
+      policy and before anything is held, and asked in the WHERE clause:
+      an order of a colleague's is a 404 that says nothing, not a refusal
+      that confirms it exists. Asked here rather than inside `apply`,
+      because `apply` is also what an APPROVED held change runs — by
+      then seller staff have agreed to it, and re-asking "did the
+      associate place this" at that point would refuse a change the
+      store's owner was entitled to approve.
+    */
+    const viewer: StoreOrderViewer = viewerFor({
+      id: input.storeUserId,
+      orderScope: input.orderScope,
+    });
+    await this.storeOrders.assertOwned(input.storeId, viewer, input.orderId);
+
     const policy = await this.policies.forStore(input.storeId);
 
     if (policy.orderChange === ResellerStoreActionMode.OFF) {
@@ -139,7 +161,7 @@ export class StoreOrderEditService {
 
     // Read it back through the store's own projection, so the portal gets
     // the same shape it renders everywhere else.
-    const order = await this.storeOrders.detail(input.storeId, input.orderId);
+    const order = await this.storeOrders.detail(input.storeId, viewer, input.orderId);
     return { applied: true, order, request: null };
   }
 
@@ -188,11 +210,13 @@ export class StoreOrderEditService {
    */
   async listAddressChanges(
     storeId: string,
+    viewer: StoreOrderViewer,
     orderId: string,
   ): Promise<{
     items: readonly AddressChangeRequestView[];
     mode: ResellerStoreActionMode;
   }> {
+    await this.storeOrders.assertOwned(storeId, viewer, orderId);
     const [items, policy] = await Promise.all([
       this.holds.listForOrder(storeId, orderId),
       this.policies.forStore(storeId),

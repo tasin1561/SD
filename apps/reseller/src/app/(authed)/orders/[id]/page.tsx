@@ -95,6 +95,17 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
   // What the seller lets this store do, and how. Cosmetic (FE-2): each
   // action is still refused by name on the server.
   const policy = useStoreActionPolicy();
+  /*
+    ASSOC-1 — whether this response CARRIES the store's cost, read off
+    the response itself rather than off the signed-in person's role.
+    The server decided it (it is the boundary, FE-2); asking the role
+    here would be a second copy of that decision, and the copy that
+    drifted would be the one rendering somebody else's margin.
+
+    Every line of one order is decided together server-side, so the
+    first line answers for the table's column.
+  */
+  const showsCost = o.totals.cost.visible;
   const cancelMode: StoreActionMode | undefined = policy.data?.cancel;
   const cancelNeedsSeller = cancelMode === 'ASK_SELLER';
   const [confirming, setConfirming] = useState(false);
@@ -213,10 +224,18 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
                   label: 'You sold it for',
                   value: <Money amount={o.totals.retailInr} convert={false} />,
                 },
-                {
-                  label: 'You pay the seller',
-                  value: <Money amount={o.totals.transferInr} convert={false} />,
-                },
+                // ASSOC-1 — withheld from an associate, who is not a
+                // party to what the store pays its seller. The row is
+                // left out rather than shown as "—", which would say
+                // "nothing" about a figure that exists.
+                ...(o.totals.cost.visible
+                  ? [
+                      {
+                        label: 'You pay the seller',
+                        value: <Money amount={o.totals.cost.transferInr} convert={false} />,
+                      },
+                    ]
+                  : []),
                 {
                   label: 'Terms',
                   value: o.termsVersion === null ? '—' : `Version ${o.termsVersion}`,
@@ -237,7 +256,8 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
               <Th>Product</Th>
               <Th align="right">Qty</Th>
               <Th align="right">Sold at</Th>
-              <Th align="right">You pay</Th>
+              {/* ASSOC-1 — the column itself goes for an associate. */}
+              {showsCost ? <Th align="right">You pay</Th> : null}
             </Tr>
           </THead>
           <TBody>
@@ -265,13 +285,15 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
                     <Money amount={l.retailUnitInr} convert={false} />
                   )}
                 </Td>
-                <Td align="right">
-                  {l.transferPriceInr === null ? (
-                    '—'
-                  ) : (
-                    <Money amount={l.transferPriceInr} convert={false} />
-                  )}
-                </Td>
+                {l.cost.visible ? (
+                  <Td align="right">
+                    {l.cost.transferPriceInr === null ? (
+                      '—'
+                    ) : (
+                      <Money amount={l.cost.transferPriceInr} convert={false} />
+                    )}
+                  </Td>
+                ) : null}
               </Tr>
             ))}
           </TBody>
@@ -345,7 +367,15 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
 
       <HeldRequests orderId={o.id} />
 
-      <OrderMoney orderId={o.id} />
+      {/*
+        ASSOC-1 — the money plan is refused outright for an associate
+        (403 `STORE_MONEY_NOT_FOR_ASSOCIATE`), so the panel is not
+        mounted rather than mounted and left to render its own refusal.
+        Read off the SAME flag the response carried: the server decided
+        it, and asking the role here would be a second copy of that
+        decision. Cosmetic either way (FE-2).
+      */}
+      {showsCost ? <OrderMoney orderId={o.id} /> : null}
 
       {can(me, 'tickets.manage') ? (
         <RaiseTicketLinks orderId={o.id} chase={policy.data?.chaseSkydrop} />

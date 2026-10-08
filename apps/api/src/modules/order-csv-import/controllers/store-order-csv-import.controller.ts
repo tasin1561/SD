@@ -91,7 +91,11 @@ export class StoreOrderCsvImportController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Query() query: ListOrderCsvUploadsQueryDto,
   ): Promise<{ items: BulkOrderUploadView[]; total: number; page: number; pageSize: number }> {
-    return this.svc.listUploads(user.storeId, query.page ?? 1, query.pageSize ?? 20);
+    // ASSOC-1 — an associate sees the imports THEY ran.
+    return this.svc.listUploads(user.storeId, query.page ?? 1, query.pageSize ?? 20, {
+      storeUserId: user.id,
+      orderScope: user.orderScope,
+    });
   }
 
   @Get(':id')
@@ -100,7 +104,10 @@ export class StoreOrderCsvImportController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
   ): Promise<BulkOrderUploadView> {
-    return this.svc.getUpload(user.storeId, id);
+    return this.svc.getUpload(user.storeId, id, {
+      storeUserId: user.id,
+      orderScope: user.orderScope,
+    });
   }
 
   @Get(':id/error-report')
@@ -110,7 +117,12 @@ export class StoreOrderCsvImportController {
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
     @Res() res: Response,
   ): Promise<void> {
-    const { buffer, fileName } = await this.svc.getErrorReport(user.storeId, id);
+    // The rejected rows carry customers' names, phones and addresses —
+    // a colleague's file is a 404 here (ASSOC-1).
+    const { buffer, fileName } = await this.svc.getErrorReport(user.storeId, id, {
+      storeUserId: user.id,
+      orderScope: user.orderScope,
+    });
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(buffer);

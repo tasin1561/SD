@@ -24,6 +24,7 @@ import {
   ShoppingBag,
   UserRound,
   Users,
+  UsersRound,
   Wallet,
 } from 'lucide-react';
 import { can, canSeePath } from '@/lib/page-access';
@@ -94,6 +95,11 @@ export function AuthedShell({
         },
         { href: '/customers', label: 'Customers', icon: <Contact size={15} /> },
         { href: '/catalogue', label: 'Catalogue', icon: <Package size={15} /> },
+        // ASSOC-1 — the store's own sales people. Under "Store" rather
+        // than "Setup": an associate is not a one-off configuration
+        // step, they are somebody whose prices and performance are
+        // looked at as often as the orders they place.
+        { href: '/associates', label: 'Associates', icon: <UsersRound size={15} /> },
         { href: '/terms', label: 'Terms', icon: <FileSignature size={15} /> },
         { href: '/wallet', label: 'Wallet', icon: <Wallet size={15} /> },
         { href: '/reports', label: 'Reports', icon: <BarChart3 size={15} /> },

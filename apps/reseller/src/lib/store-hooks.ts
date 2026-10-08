@@ -17,22 +17,32 @@ import type { ResellerStoreStatusValue } from '@skydrop/api-client';
  */
 
 /**
- * The five roles every store is created with.
+ * The six roles every store is created with.
  *
  * It is the WHOLE vocabulary today, and not by luck: `store_roles` is a
  * per-store table, but `provisionDefaultStoreRoles` is its only writer
  * — there is no store role editor — so every store has exactly these
- * five and the server's own DTO binds to the same list.
+ * six and the server's own DTO binds to the same list.
  *
- * Kept as a union for the one place a role is named in code (the invite
- * form opens on `ops`), but deliberately NOT what the pickers are typed
- * on: they are built from the `roles` list `GET /store/team` returns and
+ * The sixth is ASSOC-1's `associate`: a store's own sales person, who
+ * places orders and sees only the ones they placed, at prices the store
+ * sets for them product by product. A FIXED key like the other five
+ * rather than a role the store invents, for the same reason — the one
+ * writer is what makes `@IsIn(STORE_ROLE_KEYS)` on the server a
+ * complete vocabulary rather than a guess.
+ *
+ * Kept as a union for the two places a role is named in code (the team
+ * invite form opens on `ops`; the associates page invites onto
+ * `associate`), but deliberately NOT what the pickers are typed on:
+ * they are built from the `roles` list `GET /store/team` returns and
  * send those keys back unchanged. Narrowing a server-supplied key to
- * this union would need a cast that starts lying the day a sixth role
+ * this union would need a cast that starts lying the day a seventh role
  * can be made, and the screen would refuse a role the store really has
- * — which is a worse failure than letting the server answer.
+ * — which is a worse failure than letting the server answer. That is
+ * also why adding `associate` here was a one-line change and the team
+ * page's picker offered it with no edit at all.
  */
-export type StoreRoleKey = 'owner' | 'admin' | 'ops' | 'finance' | 'viewer';
+export type StoreRoleKey = 'owner' | 'admin' | 'ops' | 'finance' | 'viewer' | 'associate';
 
 export interface StoreProfileView {
   readonly name: string;

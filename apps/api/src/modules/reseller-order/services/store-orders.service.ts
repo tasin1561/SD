@@ -10,7 +10,9 @@ import {
   ResellerStoreActionMode,
   SellerStoreKind,
   StoreOrderRequestKind,
+  StoreOrderScope,
 } from '@skydrop/db';
+import { storeOrderOwnerFilter } from '../../../common/auth/store-order-scope';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { OrderReadService } from '../../order/services/order-read.service';
@@ -44,6 +46,48 @@ export interface StoreOrderListItem {
   readonly itemCount: number;
 }
 
+/**
+ * ASSOC-1 — what the STORE pays its seller, and the range the seller
+ * permits it to sell inside. An ASSOCIATE sees NEITHER.
+ *
+ * ── WHY A DISCRIMINATED UNION AND NOT NULLABLE FIELDS ────────────────
+ * The owner's constraint is that "the associate shouldn't be able to see
+ * how much the reseller is getting paid and what's the cost" — the same
+ * fact `catalogue.sell` exists to withhold, which reached them on the
+ * order by a longer route. Three ways to close it, and only one of them
+ * stays closed:
+ *
+ *   - make the fields optional: every ALL-scope reader then narrows for
+ *     no reason, and the next cost field somebody adds lands in the
+ *     leaky shape BY DEFAULT, which is how this leak happened;
+ *   - a second whole order view: thirty fields duplicated that have
+ *     nothing to do with cost, and two shapes to keep in step;
+ *   - this. A reader must narrow on `visible` before it can touch any
+ *     of it, so a cost field added to the `visible: true` arm later is
+ *     UNREACHABLE at OWN scope by the type system rather than by
+ *     somebody remembering a filter.
+ *
+ * What stays visible at OWN scope is everything an associate needs to
+ * answer their own customer: the product, the quantity, the retail the
+ * customer agreed and the money the customer owes. It is the store's
+ * cost and the store's permitted range that go.
+ */
+export type StoreLineCost =
+  | {
+      readonly visible: true;
+      /** What the store pays the seller per unit, as placed. */
+      readonly transferPriceInr: string | null;
+      /** The range the SELLER set for this product (RS-3). */
+      readonly minRetailInr: string | null;
+      readonly maxRetailInr: string | null;
+    }
+  | { readonly visible: false };
+
+/** The same split on the order's totals — the two halves of its margin. */
+export type StoreTotalsCost =
+  | { readonly visible: true; readonly transferInr: string }
+  | { readonly visible: false };
+
 export interface StoreOrderLineView {
   readonly id: string;
   readonly variantId: string;
@@ -52,13 +96,11 @@ export interface StoreOrderLineView {
   readonly variantLabel: string | null;
   readonly imageUrl: string | null;
   readonly quantity: number;
-  /** What the store pays the seller per unit, as placed. */
-  readonly transferPriceInr: string | null;
   /** What the store sells one unit for, as placed. */
   readonly retailUnitInr: string | null;
-  readonly minRetailInr: string | null;
-  readonly maxRetailInr: string | null;
   readonly stockMode: ResellerStockMode | null;
+  /** The store's cost and the seller's range — withheld at OWN scope. */
+  readonly cost: StoreLineCost;
 }
 
 export interface StoreOrderView {
@@ -117,7 +159,7 @@ export interface StoreOrderView {
   /** The terms version the order was placed under (RS-4). */
   readonly termsVersion: number | null;
   readonly lines: readonly StoreOrderLineView[];
-  readonly totals: { readonly retailInr: string; readonly transferInr: string };
+  readonly totals: { readonly retailInr: string; readonly cost: StoreTotalsCost };
   readonly shipments: ReadonlyArray<{
     readonly awbNumber: string | null;
     readonly courierCode: string;
@@ -138,9 +180,58 @@ function money(d: Prisma.Decimal | null): string | null {
   return d === null ? null : d.toFixed(2);
 }
 
-/** Every store query carries both: the store off the caller's token, and the kind. */
-function ownedBy(storeId: string): Prisma.OrderWhereInput {
-  return { storeId, storeKind: SellerStoreKind.RESELLER, deletedAt: null };
+/**
+ * ASSOC-1 — WHO is reading, so the WHERE clause can narrow to them.
+ *
+ * A union rather than an optional scope, because the two callers are
+ * genuinely different things and a new one must say which it is. An
+ * API KEY has no person behind it (`placed_by_store_user_id` is null on
+ * every order it places), so it reads the whole store — narrowing a key
+ * to "the orders this key placed" would be a different rule nobody asked
+ * for, and it would hide from an integration the orders its own portal
+ * users put in.
+ */
+export type StoreOrderViewer =
+  | { readonly kind: 'STORE_USER'; readonly storeUserId: string; readonly scope: StoreOrderScope }
+  | { readonly kind: 'STORE_API_KEY' };
+
+/**
+ * ASSOC-1 — is this caller narrowed to their own work?
+ *
+ * THE one predicate, because it answers two different questions that
+ * must never diverge: which orders they may read, and whether the
+ * store's cost is on them. A machine key is NOT narrowed — it placed
+ * none of the orders itself and it is the store's own integration.
+ */
+export function isOwnScoped(viewer: StoreOrderViewer): boolean {
+  return viewer.kind === 'STORE_USER' && viewer.scope === StoreOrderScope.OWN;
+}
+
+/** The viewer off an authenticated portal user — resolved by the guard, never here. */
+export function viewerFor(user: {
+  readonly id: string;
+  readonly orderScope: StoreOrderScope;
+}): StoreOrderViewer {
+  return { kind: 'STORE_USER', storeUserId: user.id, scope: user.orderScope };
+}
+
+/**
+ * Every store query carries all three: the store off the caller's token,
+ * the kind, and — for a person with OWN scope — the orders they placed.
+ *
+ * ONE function, because this predicate is the whole of ASSOC-1's reading
+ * half and a screen that builds its own `where` is a screen that will
+ * eventually be built without it.
+ */
+function ownedBy(storeId: string, viewer: StoreOrderViewer): Prisma.OrderWhereInput {
+  return {
+    storeId,
+    storeKind: SellerStoreKind.RESELLER,
+    deletedAt: null,
+    ...(viewer.kind === 'STORE_API_KEY'
+      ? {}
+      : storeOrderOwnerFilter({ scope: viewer.scope, storeUserId: viewer.storeUserId })),
+  };
 }
 
 /**
@@ -159,6 +250,14 @@ export type StoreCancelOutcome =
  * it with `storeKind: RESELLER`, so an id from another store — or the
  * seller's own channel order — is a 404 that says nothing about whether
  * the row exists.
+ *
+ * ── AND ONE PERSON MAY SEE LESS OF IT (ASSOC-1) ──────────────────────
+ * An ASSOCIATE — a store user whose roles resolve to OWN scope — reads
+ * only the orders they placed themselves. The narrowing is the same
+ * `ownedBy` fragment every query here already carries, so it cannot be
+ * applied to the list and forgotten on the detail; and it is in the
+ * WHERE clause, so an order of a colleague's is a 404 rather than a row
+ * fetched and then hidden.
  *
  * ── THE STORE SEES ITS CUSTOMERS IN FULL ─────────────────────────────
  * The store sold to them, so their name, phone and address are its to
@@ -179,11 +278,12 @@ export class StoreOrdersService {
 
   async list(
     storeId: string,
+    viewer: StoreOrderViewer,
     query: { page?: number; pageSize?: number; status?: OrderStatus; search?: string },
   ): Promise<{ items: StoreOrderListItem[]; total: number; page: number; pageSize: number }> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const where: Prisma.OrderWhereInput = { ...ownedBy(storeId) };
+    const where: Prisma.OrderWhereInput = { ...ownedBy(storeId, viewer) };
     if (query.status !== undefined) where.status = query.status;
     const search = query.search?.trim();
     if (search !== undefined && search !== '') {
@@ -245,9 +345,13 @@ export class StoreOrdersService {
     };
   }
 
-  async detail(storeId: string, orderId: string): Promise<StoreOrderView> {
+  async detail(
+    storeId: string,
+    viewer: StoreOrderViewer,
+    orderId: string,
+  ): Promise<StoreOrderView> {
     const o = await this.prisma.client.order.findFirst({
-      where: { id: orderId, ...ownedBy(storeId) },
+      where: { id: orderId, ...ownedBy(storeId, viewer) },
       select: {
         id: true,
         orderNumber: true,
@@ -314,6 +418,14 @@ export class StoreOrdersService {
       (s, i) => s.add((i.resellerTransferPriceInr ?? new Prisma.Decimal(0)).mul(i.quantity)),
       new Prisma.Decimal(0),
     );
+    /*
+      ASSOC-1 — decided ONCE for the whole response, off the same
+      predicate that decided which orders this caller may read. Deciding
+      it per line would be the same judgement written twice, and a
+      response whose lines disagreed with its totals about whether the
+      cost is shown is worse than either answer.
+    */
+    const showCost = !isOwnScoped(viewer);
     return {
       id: o.id,
       orderNumber: o.orderNumber,
@@ -356,13 +468,21 @@ export class StoreOrdersService {
         variantLabel: i.variantLabel,
         imageUrl: thumbs.get(i.variantId) ?? null,
         quantity: i.quantity,
-        transferPriceInr: money(i.resellerTransferPriceInr),
         retailUnitInr: money(i.resellerRetailUnitInr),
-        minRetailInr: money(i.resellerMinRetailInr),
-        maxRetailInr: money(i.resellerMaxRetailInr),
         stockMode: i.resellerStockMode,
+        cost: showCost
+          ? {
+              visible: true,
+              transferPriceInr: money(i.resellerTransferPriceInr),
+              minRetailInr: money(i.resellerMinRetailInr),
+              maxRetailInr: money(i.resellerMaxRetailInr),
+            }
+          : { visible: false },
       })),
-      totals: { retailInr: retail.toFixed(2), transferInr: transfer.toFixed(2) },
+      totals: {
+        retailInr: retail.toFixed(2),
+        cost: showCost ? { visible: true, transferInr: transfer.toFixed(2) } : { visible: false },
+      },
       shipments: o.orderShipments
         .map((s) => s.shipment)
         .filter((s): s is NonNullable<typeof s> => s !== null)
@@ -371,14 +491,12 @@ export class StoreOrdersService {
   }
 
   /** The store's timeline: the same seller-visible events the seller sees. */
-  async events(storeId: string, orderId: string): Promise<StoreOrderEventView[]> {
-    const owned = await this.prisma.client.order.findFirst({
-      where: { id: orderId, ...ownedBy(storeId) },
-      select: { id: true },
-    });
-    if (owned === null) {
-      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
-    }
+  async events(
+    storeId: string,
+    viewer: StoreOrderViewer,
+    orderId: string,
+  ): Promise<StoreOrderEventView[]> {
+    await this.assertOwned(storeId, viewer, orderId);
     const rows = await this.prisma.client.orderEvent.findMany({
       where: { orderId, isVisibleToSeller: true },
       orderBy: { createdAt: 'asc' },
@@ -409,13 +527,14 @@ export class StoreOrdersService {
    * 404 that says nothing about whether it exists.
    */
   async cancel(
-    user: { readonly id: string; readonly storeId: string },
+    user: { readonly id: string; readonly storeId: string; readonly orderScope: StoreOrderScope },
     orderId: string,
     body: { readonly reason?: OrderCancellationReason; readonly note?: string },
     ctx: ClientContext,
   ): Promise<StoreCancelOutcome> {
+    const viewer = viewerFor(user);
     const order = await this.prisma.client.order.findFirst({
-      where: { id: orderId, ...ownedBy(user.storeId) },
+      where: { id: orderId, ...ownedBy(user.storeId, viewer) },
       select: { id: true, sellerId: true },
     });
     if (order === null) {
@@ -451,11 +570,40 @@ export class StoreOrdersService {
       note: body.note ?? 'Cancelled by the reseller store',
       ctx,
     });
-    return { applied: true, order: await this.detail(user.storeId, order.id), request: null };
+    return {
+      applied: true,
+      order: await this.detail(user.storeId, viewer, order.id),
+      request: null,
+    };
   }
 
   /** What this store has sent seller staff to approve on one of its orders. */
-  async heldRequests(storeId: string, orderId: string): Promise<readonly StoreOrderRequestView[]> {
+  async heldRequests(
+    storeId: string,
+    viewer: StoreOrderViewer,
+    orderId: string,
+  ): Promise<readonly StoreOrderRequestView[]> {
+    await this.assertOwned(storeId, viewer, orderId);
     return this.requests.listForStoreOrder(storeId, orderId);
+  }
+
+  /**
+   * THE ownership check every store-side ACT on an order runs first —
+   * scoped in the WHERE clause, never fetched and then compared, so a
+   * miss is a 404 that says nothing about whether the row exists or
+   * whose it is (RS-2's discipline, and ASSOC-1's narrowing inside it).
+   *
+   * Public because the acts live in sibling services (the edit, the held
+   * change) that must not each write this predicate for themselves —
+   * that is how one of them comes to be written without the scope.
+   */
+  async assertOwned(storeId: string, viewer: StoreOrderViewer, orderId: string): Promise<void> {
+    const owned = await this.prisma.client.order.findFirst({
+      where: { id: orderId, ...ownedBy(storeId, viewer) },
+      select: { id: true },
+    });
+    if (owned === null) {
+      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'Order not found' });
+    }
   }
 }

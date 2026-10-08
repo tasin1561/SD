@@ -317,6 +317,27 @@ export const FORBIDDEN_WHILE_IMPERSONATING: readonly ForbiddenRoute[] = [
     prefix: '/seller/reseller-stores/:storeId/terms',
     why: 'Publishing terms sets the fee split and when each side is paid, for every order after it. That is money, and it is their signature.',
   },
+
+  // ── ASSOC-1 — a store's own sales people ──────────────────────────
+  // The sweep forced this decision when the three routes landed, which
+  // is what it is for. All three are REFUSED, by the same reasoning as
+  // the terms entry above, one level down: an associate's price decides
+  // what every later order of that person sells at, and whether their
+  // order creation is on decides whether a third party can trade at all.
+  // Those are the STORE's commercial decisions about their own staff,
+  // each has a store-side equivalent one click away, and each affects
+  // somebody who is not in the room — so refusing costs support nothing
+  // and keeps the record honest about who decided.
+  //
+  // The READS are untouched and deliberately so: support must be able to
+  // see the roster, the prices and the performance to help with a
+  // question about them. The sweep covers mutating routes only, so a
+  // prefix here never blinds a GET.
+  {
+    method: '*',
+    prefix: '/store/associates',
+    why: 'An associate’s price sets what every later order of theirs sells at, and the pause switch decides whether they may trade at all. Both are the store’s own commercial decisions about their staff, both outlast this session, and both are one click away on their own screen.',
+  },
 ];
 
 /** Methods that CHANGE something. Everything else is a read. */

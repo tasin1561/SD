@@ -107,7 +107,36 @@ function Outcome({ t }: { t: StoreTicketView }): ReactElement | null {
  */
 function Correction({ t }: { t: StoreTicketView }): ReactElement | null {
   if (t.disputeKind !== 'FIGURE_CORRECTION') return null;
-  const f = t.disputedFigures;
+  /*
+    ASSOC-1 — an associate is not a party to what the store and the
+    seller settle between them, so the server withholds the whole block
+    and the panel says so rather than rendering an empty card. The claim
+    itself stays: it is what the ticket is ABOUT, and the conversation
+    below would otherwise make no sense.
+  */
+  if (!t.figures.visible) {
+    return (
+      <section className="rc-tkt-section">
+        <SectionHeading
+          title="The figures"
+          note="What was claimed. The settlement between the store and the seller is not shown to an associate."
+        />
+        <div className="rc-tkt-card">
+          {t.disputeClaimAmountInr !== null ? (
+            <p>
+              Claimed: <Money amount={t.disputeClaimAmountInr} convert={false} />
+            </p>
+          ) : null}
+          {t.figures.codInr === null ? null : (
+            <p className="rc-tkt-card__as-at">
+              The customer pays <Money amount={t.figures.codInr} convert={false} />
+            </p>
+          )}
+        </div>
+      </section>
+    );
+  }
+  const f = t.figures.snapshot;
   return (
     <section className="rc-tkt-section">
       <SectionHeading

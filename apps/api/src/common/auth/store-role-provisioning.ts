@@ -1,8 +1,8 @@
-import type { Prisma } from '@skydrop/db';
+import { StoreOrderScope, type Prisma } from '@skydrop/db';
 import { DEFAULT_STORE_ROLES, type StoreRoleKey } from './store-permissions';
 
 /**
- * Create a reseller store's five starting roles, in the caller's tx.
+ * Create a reseller store's starting roles, in the caller's tx.
  *
  * Runs in the SAME transaction that creates the store: a user with no
  * role rows cannot sign in, so a store without roles is a store whose
@@ -24,6 +24,11 @@ export async function provisionDefaultStoreRoles(
         description: def.description,
         isSystem: true,
         isOwner: def.isOwner === true,
+        // ASSOC-1 — stated rather than left to the column default. The
+        // default is what a role gets when nobody decided; here somebody
+        // did, and a new store relying on the fail-closed default would
+        // hide its own owner's orders from them.
+        orderScope: def.orderScope === 'OWN' ? StoreOrderScope.OWN : StoreOrderScope.ALL,
       },
       update: {},
       select: { id: true },

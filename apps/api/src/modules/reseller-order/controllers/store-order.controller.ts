@@ -27,6 +27,7 @@ import { ResellerOrderService } from '../../order/services/reseller-order.servic
 import { StoreOrderListQueryDto } from '../dto/store-order-query.dto';
 import {
   StoreOrdersService,
+  viewerFor,
   type StoreCancelOutcome,
   type StoreOrderEventView,
   type StoreOrderListItem,
@@ -59,7 +60,7 @@ export class StoreOrderController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Query() query: StoreOrderListQueryDto,
   ): Promise<{ items: StoreOrderListItem[]; total: number; page: number; pageSize: number }> {
-    return this.orders.list(user.storeId, query);
+    return this.orders.list(user.storeId, viewerFor(user), query);
   }
 
   @Post()
@@ -80,7 +81,7 @@ export class StoreOrderController {
       ctx,
       { source: OrderSource.MANUAL },
     );
-    return this.orders.detail(user.storeId, created.id);
+    return this.orders.detail(user.storeId, viewerFor(user), created.id);
   }
 
   @Get(':id')
@@ -89,7 +90,7 @@ export class StoreOrderController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('id', uuid()) id: string,
   ): Promise<StoreOrderView> {
-    return this.orders.detail(user.storeId, id);
+    return this.orders.detail(user.storeId, viewerFor(user), id);
   }
 
   @Get(':id/events')
@@ -98,7 +99,7 @@ export class StoreOrderController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('id', uuid()) id: string,
   ): Promise<StoreOrderEventView[]> {
-    return this.orders.events(user.storeId, id);
+    return this.orders.events(user.storeId, viewerFor(user), id);
   }
 
   @Post(':id/cancel')
@@ -126,6 +127,6 @@ export class StoreOrderController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('id', uuid()) id: string,
   ): Promise<readonly StoreOrderRequestView[]> {
-    return this.orders.heldRequests(user.storeId, id);
+    return this.orders.heldRequests(user.storeId, viewerFor(user), id);
   }
 }

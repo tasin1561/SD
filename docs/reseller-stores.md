@@ -4,6 +4,14 @@ Owner decisions, 14 Sep 2026. This file is the spec every phase builds
 against; when code and this doc disagree, fix one of them in the same
 change.
 
+**A store's own sales people are ASSOCIATES, and they are specified in
+`docs/associates.md` (ASSOC-1, 8 Oct 2026), not here.** An associate is a
+STORE USER with a narrow role and a scope — not a third level of the
+two-party arrangement this file describes, which is exactly why none of
+RS-4's `splitFee`, TRE-8c's bank invariant or RS-3's visible stock had to
+move. Read that file before adding anything that sounds like a level
+below a store.
+
 ## The idea
 
 A **seller** owns stock physically in our Indian warehouse. A **reseller

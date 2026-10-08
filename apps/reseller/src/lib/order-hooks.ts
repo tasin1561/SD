@@ -41,12 +41,34 @@ export interface StoreOrderLine {
   readonly variantLabel: string | null;
   readonly imageUrl: string | null;
   readonly quantity: number;
-  readonly transferPriceInr: string | null;
   readonly retailUnitInr: string | null;
-  readonly minRetailInr: string | null;
-  readonly maxRetailInr: string | null;
   readonly stockMode: 'SHARED' | 'SET_ASIDE' | null;
+  /** ASSOC-1 — `visible: false` for an associate: the store's cost is not theirs to see. */
+  readonly cost: StoreLineCost;
 }
+
+/**
+ * ASSOC-1 — the store's own cost, which the server WITHHOLDS from an
+ * associate rather than blanking.
+ *
+ * A union, not optional fields, and it mirrors the server's type: a
+ * screen must narrow on `visible` before it can render any of it, so a
+ * cost figure added here later cannot be rendered to an associate by
+ * somebody forgetting a check. The server is the boundary (FE-2); this
+ * is how the screen is honest about what it was handed.
+ */
+export type StoreLineCost =
+  | {
+      readonly visible: true;
+      readonly transferPriceInr: string | null;
+      readonly minRetailInr: string | null;
+      readonly maxRetailInr: string | null;
+    }
+  | { readonly visible: false };
+
+export type StoreTotalsCost =
+  | { readonly visible: true; readonly transferInr: string }
+  | { readonly visible: false };
 
 export interface StoreOrderView {
   readonly id: string;
@@ -84,7 +106,7 @@ export interface StoreOrderView {
   readonly notes: string | null;
   readonly termsVersion: number | null;
   readonly lines: readonly StoreOrderLine[];
-  readonly totals: { readonly retailInr: string; readonly transferInr: string };
+  readonly totals: { readonly retailInr: string; readonly cost: StoreTotalsCost };
   readonly shipments: ReadonlyArray<{
     readonly awbNumber: string | null;
     readonly courierCode: string;

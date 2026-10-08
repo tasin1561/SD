@@ -18,6 +18,7 @@ import {
   STORE_SELF_SERVICE_KEY,
 } from '../auth/require-store-permissions.decorator';
 import { resolveRoles, roleNamesFor } from '../auth/role-union';
+import { storeOrderScope } from '../auth/store-order-scope';
 import {
   currentImpersonation,
   type ImpersonationContext,
@@ -32,6 +33,10 @@ const STORE_ROLE_ASSIGNMENTS = {
         key: true,
         name: true,
         isOwner: true,
+        // ASSOC-1 — read here with the permissions because it is resolved
+        // the same way and from the same rows; a second query for it is
+        // how the two would come to disagree about which roles are live.
+        orderScope: true,
         deletedAt: true,
         permissions: { select: { permission: true } },
       },
@@ -145,6 +150,10 @@ export class StoreJwtGuard implements CanActivate {
         email: true,
         fullName: true,
         emailVerifiedAt: true,
+        // ASSOC-1 — re-read per request, like the roles, so switching an
+        // associate's order creation off takes effect on their next call
+        // rather than when their token expires.
+        ordersPausedAt: true,
         roles: STORE_ROLE_ASSIGNMENTS,
         store: {
           select: {
@@ -266,6 +275,11 @@ export class StoreJwtGuard implements CanActivate {
       roleKeys: resolved.roles.map((r) => r.key),
       roleNames: resolved.roles.map((r) => r.name),
       permissions: held,
+      // ASSOC-1. Resolved over the SAME live roles the permissions came
+      // from, so a role removed mid-session narrows the scope on the next
+      // request exactly as it narrows the permissions.
+      orderScope: storeOrderScope(resolved.live),
+      ordersPausedAt: user.ordersPausedAt,
     };
     return true;
   }

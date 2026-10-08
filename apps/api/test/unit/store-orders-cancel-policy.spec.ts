@@ -1,4 +1,4 @@
-import { ResellerStoreActionMode } from '@skydrop/db';
+import { ResellerStoreActionMode, StoreOrderScope } from '@skydrop/db';
 import { StoreOrdersService } from '../../src/modules/reseller-order/services/store-orders.service';
 import type { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
@@ -8,7 +8,9 @@ import type { ResellerStoreActionPolicyService } from '../../src/modules/reselle
 import type { StoreOrderRequestService } from '../../src/modules/store-order-request/services/store-order-request.service';
 import type { ClientContext } from '../../src/modules/seller-auth/seller-auth.service';
 
-const USER = { id: 'su-1', storeId: 'store-1' };
+// ASSOC-1 — an ordinary store user: ALL scope, so the cancel reads the
+// whole store exactly as it did before associates existed.
+const USER = { id: 'su-1', storeId: 'store-1', orderScope: StoreOrderScope.ALL };
 const CTX = { ipAddress: '1.1.1.1', userAgent: 'test' } as unknown as ClientContext;
 
 function make(mode: ResellerStoreActionMode, order: { id: string; sellerId: string } | null) {

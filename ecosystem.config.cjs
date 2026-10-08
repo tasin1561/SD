@@ -118,11 +118,21 @@ module.exports = {
     // Caddy reverse-proxies that host to 127.0.0.1:3005 (see
     // docs/infrastructure.md). Loopback like the others.
     nextApp('skydrop-reseller', 3005),
+    // ASSOC-1 (2026-10-08) — the ASSOCIATE portal, portal.skydrop.global.
+    // A reseller store's own sales people: they place orders, follow the
+    // ones they placed, and see neither the store's cost nor its money.
+    //
+    // 3007, NOT 3006. 3006 is apps/marketing's local dev/serve port and
+    // MARKETING_PORT in the root playwright.config.ts; two apps on one
+    // port collide in `pnpm dev` and, worse, in Playwright's webServer
+    // array, where the second to boot finds the first already answering
+    // and silently runs every spec against the wrong site.
+    nextApp('skydrop-associate', 3007),
     // NO marketing process, and do not add one back. apps/marketing is
     // `output: 'export'`; `next start` refuses to run that build and
     // exits, so an entry here does nothing but respawn forever. Caddy
     // file-serves the export from /var/www/skydrop-marketing (published
-    // by scripts/deploy.sh). Port 3005 now belongs to skydrop-reseller;
-    // marketing's LOCAL dev/serve port is 3006.
+    // by scripts/deploy.sh). Port 3005 belongs to skydrop-reseller and
+    // 3007 to skydrop-associate; marketing's LOCAL dev/serve port is 3006.
   ],
 };

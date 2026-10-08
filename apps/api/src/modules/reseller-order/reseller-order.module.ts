@@ -22,6 +22,7 @@ import { ResellerStoreModule } from '../reseller-store/reseller-store.module';
 import { StoreOrderRequestModule } from '../store-order-request/store-order-request.module';
 import { ResellerOrderReadService } from './services/reseller-order-read.service';
 import { StoreApiKeyService } from './services/store-api-key.service';
+import { StoreCustomersService } from './services/store-customers.service';
 import { StoreOrdersService } from './services/store-orders.service';
 import { StoreWebhookService } from './services/store-webhook.service';
 
@@ -76,6 +77,9 @@ import { StoreWebhookService } from './services/store-webhook.service';
   ],
   providers: [
     StoreOrdersService,
+    // ASSOC-1 — the store's customer reads, narrowed to one person's
+    // when their roles resolve to OWN scope.
+    StoreCustomersService,
     StoreOrderEditService,
     StoreAddressChangeService,
     SellerAddressChangeDecisionService,

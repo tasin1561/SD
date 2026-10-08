@@ -56,6 +56,13 @@ export const envSchema = z.object({
   // yet (CI, a dev machine, the droplet before the owner sets it) still
   // boots; production should set it explicitly.
   RESELLER_APP_URL: z.string().url().default('https://reseller.skydrop.global'),
+  // ASSOC-1 — the associate portal (portal.skydrop.global). A SECOND url
+  // and not a path under the reseller one, because it is a separate app
+  // on a separate origin: the `__Host-storeRefresh` cookie is bound to
+  // the origin that set it, so an associate who accepted their
+  // invitation at the reseller origin would hold a session the portal
+  // cannot read. Defaulted for the same reason as the line above.
+  ASSOCIATE_APP_URL: z.string().url().default('https://portal.skydrop.global'),
   // Module 11: base URL of the customer-facing tracking page (the
   // future apps/track SSR; the M10 GET /public/tracking/:awb endpoint
   // is the API side). M11 customer notifications template

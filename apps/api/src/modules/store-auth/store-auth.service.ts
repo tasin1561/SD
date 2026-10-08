@@ -12,6 +12,7 @@ import {
   NotificationRecipientType,
   type ResellerStoreStatus,
   type ResellerWalletManager,
+  type StoreOrderScope,
 } from '@skydrop/db';
 import { EnvService } from '../../config/env.service';
 import {
@@ -22,6 +23,7 @@ import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../infrastructure/spaces/spaces.service';
 import { ALL_STORE_PERMISSION_KEYS } from '../../common/auth/store-permissions';
 import { resolveRoles } from '../../common/auth/role-union';
+import { storeOrderScope } from '../../common/auth/store-order-scope';
 import { rolesOnCreate } from '../../common/auth/role-assignment';
 import { storeMayBeUsed } from '../../common/guards/store-jwt.guard';
 import { AuditLogService } from '../auth-common/services/audit-log.service';
@@ -74,6 +76,23 @@ export interface StoreMe {
    * FE-2: rendering, never permission.
    */
   readonly permissions: readonly string[];
+  /**
+   * ASSOC-1 — 'OWN' when this person sees only what they placed, 'ALL'
+   * for the whole store. Sent so the portal can say "You see the orders
+   * you placed" ONCE rather than on every row, and so an associate's app
+   * never renders a store-wide screen it would then be refused.
+   *
+   * FE-2: rendering, never permission. The WHERE clause is what narrows
+   * the rows, and it does so whatever the portal believes.
+   */
+  readonly orderScope: StoreOrderScope;
+  /**
+   * ASSOC-1 — set when the store has switched this person's order
+   * creation off. The create call refuses it anyway
+   * (`ASSOCIATE_ORDERS_PAUSED`); this is here so the order form can say
+   * so BEFORE somebody fills the whole thing in to be refused at the end.
+   */
+  readonly ordersPausedAt: Date | null;
   readonly store: {
     readonly id: string;
     readonly name: string;
@@ -703,6 +722,8 @@ export class StoreAuthService {
         emailDisplay: true,
         fullName: true,
         emailVerifiedAt: true,
+        // ASSOC-1 — read with the roles, as the guard does.
+        ordersPausedAt: true,
         roles: {
           orderBy: [{ grantedAt: 'asc' as const }, { roleId: 'asc' as const }],
           select: {
@@ -711,6 +732,10 @@ export class StoreAuthService {
                 key: true,
                 name: true,
                 isOwner: true,
+                // ASSOC-1 — resolved by the SAME function the guard uses,
+                // over the same live rows, so `/me` and the guard cannot
+                // come to disagree about what somebody sees.
+                orderScope: true,
                 deletedAt: true,
                 permissions: { select: { permission: true } },
               },
@@ -763,6 +788,8 @@ export class StoreAuthService {
       roleKeys: resolved.roles.map((r) => r.key),
       roleNames: resolved.roles.map((r) => r.name),
       permissions: resolved.permissions,
+      orderScope: storeOrderScope(resolved.live),
+      ordersPausedAt: user.ordersPausedAt,
       store: {
         id: user.store.id,
         name: user.store.name,

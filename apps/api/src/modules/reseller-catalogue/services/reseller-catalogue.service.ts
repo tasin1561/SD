@@ -23,6 +23,7 @@ import {
 } from '../../catalog-read/services/catalog-read.service';
 import { StockReadService } from '../../inventory-stock/services/stock-read.service';
 import { ResellerStockGateService } from '../../reseller-order-gate/services/reseller-stock-gate.service';
+import { AssociatePriceService } from '../../reseller-associates/services/associate-price.service';
 import { checkPrice, normaliseAmount, type PriceInput } from './reseller-price-rules';
 import {
   MAX_HIDDEN_PERCENT,
@@ -149,6 +150,44 @@ export interface StoreCatalogueView {
   readonly items: readonly StoreCatalogueItem[];
 }
 
+/**
+ * ASSOC-1 — what an ASSOCIATE is shown of a product. A type of its OWN,
+ * never `StoreCatalogueItem` with fields removed.
+ *
+ * Nothing here says what the store PAYS for the product, what range it
+ * was given, what it was advised to charge, how much of the stock is
+ * hidden from it, or how much is set aside — the associate must not be
+ * able to work out the store's cost or the spread the store is making on
+ * them (docs/associates.md, boundary 2). A projection written as a
+ * SUBTRACTION from the wider one would gain every field added to it
+ * later, in a commit about something else; written as an addition, a new
+ * field has to be put here deliberately.
+ */
+export interface StoreSellCatalogueItem {
+  readonly variantId: string;
+  readonly skuCode: string;
+  /** The store's own name for it where it set one, else the product's. */
+  readonly title: string;
+  readonly variantLabel: string | null;
+  readonly description: string | null;
+  readonly imageUrls: readonly string[];
+  /**
+   * What THIS person sells it at — their own `associate_prices` row.
+   * Null when nobody has set one: there is no fallback and no markup
+   * rule, so an unpriced product is shown as unpriced rather than at a
+   * figure nobody chose.
+   */
+  readonly retailPriceInr: string | null;
+  /** RS-3's visible stock, unchanged — the same figure the store sees. */
+  readonly availableQuantity: number;
+}
+
+export interface StoreSellCatalogueView {
+  readonly items: readonly StoreSellCatalogueItem[];
+  /** How many of them this person has no price for, and so cannot sell. */
+  readonly unpricedCount: number;
+}
+
 export interface SellerActor {
   readonly sellerId: string;
   readonly sellerUserId: string;
@@ -231,6 +270,10 @@ export class ResellerCatalogueService {
     // RS-5: a store's consumption of its set-aside, from its own orders'
     // ACTIVE reservations — the answer to phase 2's `consumedByStore` seam.
     private readonly gate: ResellerStockGateService,
+    // ASSOC-1: the price ONE associate sells at, for `sellCatalogue`.
+    // Read-only here; `associate_prices` is written only by that service,
+    // behind the seller's-range check its own module holds.
+    private readonly associatePrices: AssociatePriceService,
   ) {}
 
   // ── The seller's default price list ────────────────────────────────
@@ -860,6 +903,112 @@ export class ResellerCatalogueService {
     }
     items.sort((a, b) => a.title.localeCompare(b.title) || a.skuCode.localeCompare(b.skuCode));
     return { items };
+  }
+
+  /**
+   * ASSOC-1 — `GET /store/catalogue/sell`: what ONE ASSOCIATE sees.
+   *
+   * ── THIS IS THE PRIVACY BOUNDARY, AND IT IS A SEPARATE PROJECTION ───
+   * `StoreCatalogueItem` above carries `transferPriceInr` — what the
+   * STORE pays its seller — and the retail range and suggestion it was
+   * given. An associate who can read those knows the store's cost and
+   * therefore the spread the store is making on them; it is the same
+   * fact RS-3 keeps from the store about the seller, one level down.
+   *
+   * `StoreSellCatalogueItem` is built FIELD BY FIELD out of a type of its
+   * own. It is deliberately NOT `StoreCatalogueItem` with the money
+   * deleted: a projection written as a subtraction gains every field
+   * somebody adds to the original, silently, in a commit that is about
+   * something else entirely. Written as an addition, a new field has to
+   * be put here on purpose — which is the moment to ask whether an
+   * associate should see it.
+   *
+   * ── THE PRICE IS THIS CALLER'S OWN ─────────────────────────────────
+   * From `associate_prices`, keyed on the store user id from the TOKEN —
+   * never one in the request, which would let anybody read anybody's
+   * commercial terms. There is NO fallback and NO markup rule: a product
+   * nobody has priced for this person comes back `null`, counted in
+   * `unpricedCount`, so they can see what to ask their store for rather
+   * than being shown a figure nobody chose.
+   *
+   * Everything else is the store's own presentation — its overlay title,
+   * description and pictures where it set them, the product's otherwise
+   * (rule 5b, fail-open) — because an associate selling a product the
+   * store describes differently is a divergence the customer hears.
+   */
+  async sellCatalogue(input: {
+    readonly storeId: string;
+    readonly storeUserId: string;
+  }): Promise<StoreSellCatalogueView> {
+    const store = await this.prisma.client.sellerStore.findFirst({
+      where: { id: input.storeId, kind: SellerStoreKind.RESELLER, deletedAt: null },
+      select: { id: true, sellerId: true },
+    });
+    if (store === null) {
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such store' });
+    }
+    const rows = await this.prisma.client.resellerStoreVariant.findMany({
+      where: { storeId: store.id, enabled: true },
+      include: {
+        images: { where: { deletedAt: null }, orderBy: [{ position: 'asc' }, { id: 'asc' }] },
+      },
+    });
+    if (rows.length === 0) return { items: [], unpricedCount: 0 };
+    const rowBy = new Map(rows.map((r) => [r.variantId, r]));
+    const { variants } = await this.catalog.listResellableVariants(
+      store.sellerId,
+      rows.map((r) => r.variantId),
+    );
+    const ids = variants.map((v) => v.variantId);
+    const [defaults, stock, thumbs, others, consumed, mine] = await Promise.all([
+      this.prisma.client.resellerPriceListItem.findMany({
+        where: { sellerId: store.sellerId, variantId: { in: ids } },
+      }),
+      this.stock.getSellableStockLive(store.sellerId, ids),
+      this.thumbnails(ids),
+      this.otherStoresSetAside(store.sellerId, store.id, ids),
+      this.gate.consumption(store.sellerId, ids),
+      this.associatePrices.pricesFor(this.prisma.client, input.storeUserId, ids),
+    ]);
+    const defaultBy = new Map(defaults.map((p) => [p.variantId, p]));
+
+    const items: StoreSellCatalogueItem[] = [];
+    let unpricedCount = 0;
+    for (const v of variants) {
+      const row = rowBy.get(v.variantId);
+      if (row === undefined) continue;
+      /*
+        The store must still HAVE a price with its seller for this
+        product, or it may not sell it at all — the same gate the store's
+        own catalogue applies. The figure itself never leaves this block:
+        only whether one exists decides anything here.
+      */
+      if (priceView(row) === null && priceView(defaultBy.get(v.variantId)) === null) continue;
+      const overlay = (
+        await Promise.all(row.images.map((img) => this.presignSafe(img.storageKey)))
+      ).filter((u): u is string => u !== null);
+      const thumb = thumbs.get(v.variantId);
+      const retail = mine.get(v.variantId) ?? null;
+      if (retail === null) unpricedCount += 1;
+      items.push({
+        variantId: v.variantId,
+        skuCode: v.skuCode,
+        title: row.overlayTitle ?? v.productName,
+        variantLabel: v.variantLabel,
+        description: row.overlayDescription ?? v.productDescription,
+        imageUrls: overlay.length > 0 ? overlay : thumb === undefined ? [] : [thumb],
+        retailPriceInr: retail === null ? null : retail.toFixed(2),
+        availableQuantity: this.visibleFor(store.id, v.variantId, consumed, {
+          stockMode: row.stockMode,
+          setAsideQty: row.setAsideQty,
+          hiddenPercent: row.hiddenPercent,
+          available: stock.get(v.variantId)?.available ?? 0,
+          otherRows: others.get(v.variantId) ?? [],
+        }),
+      });
+    }
+    items.sort((a, b) => a.title.localeCompare(b.title) || a.skuCode.localeCompare(b.skuCode));
+    return { items, unpricedCount };
   }
 
   // ── internals ──────────────────────────────────────────────────────

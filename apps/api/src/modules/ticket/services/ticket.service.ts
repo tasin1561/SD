@@ -12,11 +12,13 @@ import {
   type RtoItemCondition,
   SellerStoreKind,
   StoreDisputeKind,
+  StoreOrderScope,
   TicketHandling,
   TicketStatus,
   TicketType,
   WalletEntryDirection,
 } from '@skydrop/db';
+import { storeOrderOwnerFilter } from '../../../common/auth/store-order-scope';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { WalletService } from '../../seller-wallet/services/wallet.service';
@@ -333,6 +335,43 @@ export interface DisputedFiguresSnapshot {
 }
 
 /**
+ * ASSOC-1 — the store-versus-seller settlement arithmetic on a dispute,
+ * which an ASSOCIATE does not see.
+ *
+ * RS-7 stamps the order's money plan onto a figure correction so the
+ * store and the seller argue from the same numbers. That is reasoning
+ * about the two PARTIES, and it is right for a store user who holds
+ * `terms.view`. An associate holds `tickets.view` + `tickets.manage` so
+ * they can raise an issue about their own parcel, and `parties[].netInr`
+ * is the most direct possible answer to "how much is the reseller
+ * getting paid" — the same fact the catalogue and the order view
+ * withhold, by a third route.
+ *
+ * A union for the reason the order view uses one: a figure added to the
+ * `visible: true` arm — or to `DisputedFiguresSnapshot`, which can only
+ * be reached THROUGH it — is unreachable at OWN scope by the type system
+ * rather than by somebody remembering a filter. `snapshot` stays nullable
+ * inside the arm because most tickets are not figure corrections and
+ * carry none.
+ *
+ * What survives the withholding is the COD: the customer's money is the
+ * associate's business, and they are the one answering the customer.
+ */
+export type StoreDisputeFigures =
+  | { readonly visible: true; readonly snapshot: DisputedFiguresSnapshot | null }
+  | { readonly visible: false; readonly codInr: string | null };
+
+/**
+ * ASSOC-1 — which of a store's people is reading, for the ticket reads.
+ * Optional at every call site: absent means the whole store, which is
+ * what every caller meant before associates existed.
+ */
+export interface StoreTicketViewer {
+  readonly storeUserId: string;
+  readonly orderScope: StoreOrderScope;
+}
+
+/**
  * RS-7 — what a reseller store is shown of its OWN dispute.
  *
  * Narrower than `TicketView` on purpose: no wallet entry ids (the seller
@@ -364,7 +403,12 @@ export interface StoreTicketView {
   readonly disputeKind: StoreDisputeKind | null;
   readonly disputeClaimAmountInr: string | null;
   readonly disputeClaimPayer: ResellerMoneyParty | null;
-  readonly disputedFigures: DisputedFiguresSnapshot | null;
+  /**
+   * ASSOC-1 — RENAMED from `disputedFigures` on purpose: a consumer
+   * still reading the old key gets `undefined` rather than a type error,
+   * and this one has to be narrowed before it can be rendered.
+   */
+  readonly figures: StoreDisputeFigures;
 }
 
 export interface SettleStoreDisputeInput {
@@ -480,7 +524,13 @@ export class TicketService {
      * read, and letting it land silently is worse than saying no —
      * the seller thinks they have asked, and nobody has been asked.
      */
-    scope?: { sellerId?: string; storeId?: string; openOnly?: boolean },
+    scope?: {
+      sellerId?: string;
+      storeId?: string;
+      openOnly?: boolean;
+      /** ASSOC-1 — which of the store's people is replying. */
+      storeViewer?: StoreTicketViewer;
+    },
     /**
      * The caller's transaction — the RTO inspection says a corrected
      * finding in the same transaction as the correction, so the seller is
@@ -503,7 +553,7 @@ export class TicketService {
         // RS-7 — a store's reply: only on a dispute it raised.
         ...(scope?.storeId === undefined
           ? {}
-          : { storeId: scope.storeId, ticketType: { in: [...STORE_READABLE_TICKET_TYPES] } }),
+          : this.storeTicketWhere(scope.storeId, scope.storeViewer)),
       },
       select: { id: true, status: true, resolvedAt: true },
     });
@@ -1293,6 +1343,8 @@ export class TicketService {
   async openForStore(input: {
     storeId: string;
     storeUserId: string;
+    /** ASSOC-1 — OWN confines the dispute to an order this person placed. */
+    orderScope?: StoreOrderScope;
     orderId: string;
     subject: string;
     description?: string | null;
@@ -1300,12 +1352,14 @@ export class TicketService {
     claimAmountInr?: string;
     claimPayer?: ResellerMoneyParty;
   }): Promise<StoreTicketView> {
-    const { storeId, storeUserId, ...rest } = input;
+    const { storeId, storeUserId, orderScope, ...rest } = input;
+    const viewer =
+      orderScope === undefined ? undefined : ({ storeUserId, orderScope } as StoreTicketViewer);
     const opened = await this.openStoreDispute({
       ...rest,
-      raiser: { kind: 'STORE', storeId, storeUserId },
+      raiser: { kind: 'STORE', storeId, storeUserId, ...(viewer === undefined ? {} : { viewer }) },
     });
-    return this.getForStore(storeId, opened.id);
+    return this.getForStore(storeId, opened.id, viewer);
   }
 
   /**
@@ -1370,7 +1424,13 @@ export class TicketService {
    */
   private async openStoreDispute(input: {
     raiser:
-      | { kind: 'STORE'; storeId: string; storeUserId: string }
+      | {
+          kind: 'STORE';
+          storeId: string;
+          storeUserId: string;
+          /** ASSOC-1 — set when the raiser reads only their own orders. */
+          viewer?: StoreTicketViewer;
+        }
       | { kind: 'SELLER'; sellerId: string; sellerUserId: string };
     orderId: string;
     subject: string;
@@ -1386,6 +1446,15 @@ export class TicketService {
         storeKind: SellerStoreKind.RESELLER,
         deletedAt: null,
         ...(raiser.kind === 'STORE' ? { storeId: raiser.storeId } : { sellerId: raiser.sellerId }),
+        // ASSOC-1 — and whose order within the store, in the same WHERE
+        // clause, so a colleague's order is the 404 below rather than a
+        // dispute raised on a sale that was not theirs.
+        ...(raiser.kind === 'STORE' && raiser.viewer !== undefined
+          ? storeOrderOwnerFilter({
+              scope: raiser.viewer.orderScope,
+              storeUserId: raiser.viewer.storeUserId,
+            })
+          : {}),
       },
       select: { id: true, sellerId: true, storeId: true },
     });
@@ -1591,16 +1660,28 @@ export class TicketService {
   async openStoreIssue(input: {
     storeId: string;
     storeUserId: string;
+    /** ASSOC-1 — OWN confines the issue to an order this person placed. */
+    orderScope?: StoreOrderScope;
     orderId: string;
     subject: string;
     description?: string | null;
   }): Promise<StoreTicketView> {
+    const viewer =
+      input.orderScope === undefined
+        ? undefined
+        : ({ storeUserId: input.storeUserId, orderScope: input.orderScope } as StoreTicketViewer);
     const order = await this.prisma.client.order.findFirst({
       where: {
         id: input.orderId,
         storeId: input.storeId,
         storeKind: SellerStoreKind.RESELLER,
         deletedAt: null,
+        ...(viewer === undefined
+          ? {}
+          : storeOrderOwnerFilter({
+              scope: viewer.orderScope,
+              storeUserId: viewer.storeUserId,
+            })),
       },
       select: { id: true, sellerId: true },
     });
@@ -1629,12 +1710,12 @@ export class TicketService {
   async listForStore(
     storeId: string,
     filters: { status?: TicketStatus; stage?: TicketStage; page?: number; pageSize?: number },
+    viewer?: StoreTicketViewer,
   ): Promise<{ items: StoreTicketView[]; total: number; page: number; pageSize: number }> {
     const page = Math.max(1, filters.page ?? 1);
     const pageSize = Math.min(100, Math.max(1, filters.pageSize ?? 20));
     const where: Prisma.TicketWhereInput = {
-      storeId,
-      ticketType: { in: [...STORE_READABLE_TICKET_TYPES] },
+      ...this.storeTicketWhere(storeId, viewer),
       ...(filters.status !== undefined
         ? { status: filters.status }
         : filters.stage === undefined
@@ -1651,25 +1732,30 @@ export class TicketService {
       }),
       this.prisma.client.ticket.count({ where }),
     ]);
-    return { items: rows.map((r) => this.toStoreView(r)), total, page, pageSize };
+    return { items: rows.map((r) => this.toStoreView(r, viewer)), total, page, pageSize };
   }
 
   /** One of the store's own disputes — another store's is a 404. */
-  async getForStore(storeId: string, ticketId: string): Promise<StoreTicketView> {
+  async getForStore(
+    storeId: string,
+    ticketId: string,
+    viewer?: StoreTicketViewer,
+  ): Promise<StoreTicketView> {
     const row = await this.prisma.client.ticket.findFirst({
-      where: { id: ticketId, storeId, ticketType: { in: [...STORE_READABLE_TICKET_TYPES] } },
+      where: { id: ticketId, ...this.storeTicketWhere(storeId, viewer) },
       include: TICKET_NAMES,
     });
     if (row === null) {
       throw new NotFoundException({ code: 'TICKET_NOT_FOUND', message: 'No such ticket' });
     }
-    return this.toStoreView(row);
+    return this.toStoreView(row, viewer);
   }
 
   /** The dispute's timeline, oldest first, for the store that raised it. */
   async eventsForStore(
     storeId: string,
     ticketId: string,
+    viewer?: StoreTicketViewer,
   ): Promise<
     ReadonlyArray<{
       id: string;
@@ -1680,7 +1766,7 @@ export class TicketService {
     }>
   > {
     const ticket = await this.prisma.client.ticket.findFirst({
-      where: { id: ticketId, storeId, ticketType: { in: [...STORE_READABLE_TICKET_TYPES] } },
+      where: { id: ticketId, ...this.storeTicketWhere(storeId, viewer) },
       select: { id: true },
     });
     if (ticket === null) {
@@ -1706,12 +1792,18 @@ export class TicketService {
     storeUserId: string,
     ticketId: string,
     note: string,
+    /** ASSOC-1 — OWN confines the reply to their own order's ticket. */
+    orderScope?: StoreOrderScope,
   ): Promise<{ ticketId: string; at: Date }> {
     return this.addNote(
       ticketId,
       note,
       { type: ActorType.STORE, storeUserId },
-      { storeId, openOnly: true },
+      {
+        storeId,
+        openOnly: true,
+        ...(orderScope === undefined ? {} : { storeViewer: { storeUserId, orderScope } }),
+      },
     );
   }
 
@@ -1859,8 +1951,12 @@ export class TicketService {
     return this.toView(row);
   }
 
-  private toStoreView(row: Parameters<TicketService['toView']>[0]): StoreTicketView {
+  private toStoreView(
+    row: Parameters<TicketService['toView']>[0],
+    viewer?: StoreTicketViewer,
+  ): StoreTicketView {
     const v = this.toView(row);
+    const settlementVisible = viewer === undefined || viewer.orderScope !== StoreOrderScope.OWN;
     return {
       id: v.id,
       ticketNumber: v.ticketNumber,
@@ -1879,7 +1975,37 @@ export class TicketService {
       disputeKind: v.disputeKind,
       disputeClaimAmountInr: v.disputeClaimAmountInr,
       disputeClaimPayer: v.disputeClaimPayer,
-      disputedFigures: v.disputedFigures,
+      figures: settlementVisible
+        ? { visible: true, snapshot: v.disputedFigures }
+        : // The customer's money survives; the two parties' does not.
+          { visible: false, codInr: v.disputedFigures?.codInr ?? null },
+    };
+  }
+
+  /**
+   * ASSOC-1 — the order-side scope for a store's tickets.
+   *
+   * Both store-readable types (STORE_DISPUTE, STORE_ISSUE) are raised
+   * against an order, so narrowing through the ORDER relation is exact.
+   * A future store-readable type with no order would vanish for an
+   * associate — which should then be a conscious decision here, not a
+   * surprise.
+   */
+  private storeTicketWhere(
+    storeId: string,
+    viewer: StoreTicketViewer | undefined,
+  ): Prisma.TicketWhereInput {
+    return {
+      storeId,
+      ticketType: { in: [...STORE_READABLE_TICKET_TYPES] },
+      ...(viewer === undefined || viewer.orderScope !== StoreOrderScope.OWN
+        ? {}
+        : {
+            order: storeOrderOwnerFilter({
+              scope: viewer.orderScope,
+              storeUserId: viewer.storeUserId,
+            }),
+          }),
     };
   }
 

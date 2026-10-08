@@ -1,12 +1,13 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Skydrop Playwright config — root-level, four projects:
+ * Skydrop Playwright config — root-level, six projects:
  *   - admin     (port 3002, apps/admin)
  *   - seller    (port 3003, apps/seller)
  *   - track     (port 3004, apps/track)
- *   - marketing (port 3006, apps/marketing)
  *   - reseller  (port 3005, apps/reseller — RS-2)
+ *   - marketing (port 3006, apps/marketing)
+ *   - associate (port 3007, apps/associate — ASSOC-1)
  *
  * Each project's specs live under apps/<name>/e2e/. Specs under
  * `e2e-shared/` run against EVERY project — that is where checks which
@@ -43,6 +44,12 @@ const TRACK_PORT = 3004;
 // so no process ever held 3005 for it there.
 const RESELLER_PORT = 3005;
 const MARKETING_PORT = 3006;
+// ASSOC-1 (2026-10-08): the associate portal. 3007 and NOT 3006 — that is
+// marketing's, and two apps on one port means the second to boot finds the
+// first already answering, so `reuseExistingServer` keeps it and every spec
+// of one project runs against the other site. Nothing fails; the wrong
+// assertions simply pass.
+const ASSOCIATE_PORT = 3007;
 
 /** Specs that must hold for every frontend, not just one. */
 const SHARED = 'e2e-shared/**/*.spec.ts';
@@ -70,6 +77,7 @@ export default defineConfig({
     'apps/track/e2e/**/*.spec.ts',
     'apps/marketing/e2e/**/*.spec.ts',
     'apps/reseller/e2e/**/*.spec.ts',
+    'apps/associate/e2e/**/*.spec.ts',
     SHARED,
   ],
   fullyParallel: false,
@@ -134,6 +142,19 @@ export default defineConfig({
         baseURL: `http://localhost:${RESELLER_PORT}`,
       },
     },
+    {
+      // ASSOC-1 — the associate portal. A project, so the shared nonce
+      // CSP and responsive specs run against it by construction. That is
+      // the whole reason to add it here rather than running its own specs
+      // alone: apps/track shipped a blocked inline script because the
+      // browser job covered only admin and seller.
+      name: 'associate',
+      testMatch: ['apps/associate/e2e/**/*.spec.ts', SHARED],
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: `http://localhost:${ASSOCIATE_PORT}`,
+      },
+    },
   ],
   webServer: [
     {
@@ -170,6 +191,13 @@ export default defineConfig({
     {
       command: APP_COMMAND('reseller'),
       url: `http://localhost:${RESELLER_PORT}/login`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      env: { API_ORIGIN },
+    },
+    {
+      command: APP_COMMAND('associate'),
+      url: `http://localhost:${ASSOCIATE_PORT}/login`,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
       env: { API_ORIGIN },

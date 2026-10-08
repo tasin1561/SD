@@ -45,12 +45,18 @@ export class StoreTicketController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Query() query: StoreTicketListQueryDto,
   ): Promise<{ items: StoreTicketView[]; total: number; page: number; pageSize: number }> {
-    return this.tickets.listForStore(user.storeId, {
-      ...(query.status === undefined ? {} : { status: query.status }),
-      ...(query.stage === undefined ? {} : { stage: query.stage }),
-      ...(query.page === undefined ? {} : { page: query.page }),
-      ...(query.pageSize === undefined ? {} : { pageSize: query.pageSize }),
-    });
+    // ASSOC-1 — an associate sees the tickets on their own orders, and
+    // the settlement figures on none of them.
+    return this.tickets.listForStore(
+      user.storeId,
+      {
+        ...(query.status === undefined ? {} : { status: query.status }),
+        ...(query.stage === undefined ? {} : { stage: query.stage }),
+        ...(query.page === undefined ? {} : { page: query.page }),
+        ...(query.pageSize === undefined ? {} : { pageSize: query.pageSize }),
+      },
+      { storeUserId: user.id, orderScope: user.orderScope },
+    );
   }
 
   @Post()
@@ -65,6 +71,7 @@ export class StoreTicketController {
     @Body() body: CreateStoreDisputeDto,
   ): Promise<StoreTicketView> {
     return this.tickets.openForStore({
+      orderScope: user.orderScope,
       storeId: user.storeId,
       storeUserId: user.id,
       orderId: body.orderId,
@@ -84,7 +91,10 @@ export class StoreTicketController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('ticketId', uuid()) ticketId: string,
   ): Promise<StoreTicketView> {
-    return this.tickets.getForStore(user.storeId, ticketId);
+    return this.tickets.getForStore(user.storeId, ticketId, {
+      storeUserId: user.id,
+      orderScope: user.orderScope,
+    });
   }
 
   @Get(':ticketId/events')
@@ -93,7 +103,10 @@ export class StoreTicketController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('ticketId', uuid()) ticketId: string,
   ): ReturnType<TicketService['eventsForStore']> {
-    return this.tickets.eventsForStore(user.storeId, ticketId);
+    return this.tickets.eventsForStore(user.storeId, ticketId, {
+      storeUserId: user.id,
+      orderScope: user.orderScope,
+    });
   }
 
   @Post(':ticketId/notes')
@@ -108,6 +121,12 @@ export class StoreTicketController {
     @Param('ticketId', uuid()) ticketId: string,
     @Body() body: AddTicketNoteDto,
   ): Promise<{ ticketId: string; at: Date }> {
-    return this.tickets.addNoteForStore(user.storeId, user.id, ticketId, body.note);
+    return this.tickets.addNoteForStore(
+      user.storeId,
+      user.id,
+      ticketId,
+      body.note,
+      user.orderScope,
+    );
   }
 }

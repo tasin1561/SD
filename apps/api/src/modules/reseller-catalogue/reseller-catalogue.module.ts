@@ -6,11 +6,13 @@ import { AuthCommonModule } from '../auth-common/auth-common.module';
 import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { NotificationAudienceModule } from '../notification-audience/notification-audience.module';
+import { ResellerAssociatesModule } from '../reseller-associates/reseller-associates.module';
 import { ResellerOrderGateModule } from '../reseller-order-gate/reseller-order-gate.module';
 import { AdminResellerCatalogueController } from './controllers/admin-reseller-catalogue.controller';
 import { SellerResellerPriceListController } from './controllers/seller-reseller-price-list.controller';
 import { SellerResellerStoreCatalogueController } from './controllers/seller-reseller-store-catalogue.controller';
 import { StoreCatalogueController } from './controllers/store-catalogue.controller';
+import { StoreSellCatalogueController } from './controllers/store-sell-catalogue.controller';
 import { ResellerSetAsideWorker } from './queue/reseller-set-aside.worker';
 import { ResellerCatalogueService } from './services/reseller-catalogue.service';
 import { ResellerSetAsideNotifier } from './services/reseller-set-aside-notifier.service';
@@ -36,11 +38,16 @@ import { ResellerSetAsideSweepService } from './services/reseller-set-aside-swee
     InventoryStockModule,
     NotificationAudienceModule,
     ResellerOrderGateModule,
+    // ASSOC-1: `AssociatePriceService`, for the associate's own price on
+    // `GET /store/catalogue/sell`. That module imports neither this one
+    // nor the order module, so nothing closes a loop.
+    ResellerAssociatesModule,
   ],
   controllers: [
     SellerResellerPriceListController,
     SellerResellerStoreCatalogueController,
     StoreCatalogueController,
+    StoreSellCatalogueController,
     AdminResellerCatalogueController,
   ],
   providers: [

@@ -573,6 +573,15 @@ export async function resetPhase1bState(prisma: PrismaClient): Promise<void> {
         'reseller_store_variant_images',
         'reseller_store_variants',
         'reseller_price_list_items',
+        // ASSOC-1 — what one associate sells one product at. FK
+        // product_variants (RESTRICT), so it MUST go before
+        // resetCatalogState truncates variants, and store_users /
+        // seller_stores (CASCADE) — named rather than left to the
+        // cascade (MUST #12), because a leftover row would price a
+        // later suite's variant for a store user id it happens to
+        // reuse, and an order refused for a price nobody set in that
+        // test is the cross-suite ghost that takes a day to find.
+        'associate_prices',
         'store_refresh_tokens',
         'store_password_reset_tokens',
         'store_email_verification_tokens',

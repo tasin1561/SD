@@ -43,6 +43,18 @@ export interface ResellerCreateContext {
   readonly storeId: string;
   /** What the customer sees: `display_name ?? name` at create (RS-10 reads it). */
   readonly storeName: string;
+  /**
+   * ASSOC-1 — the store PERSON who placed it; null for the store's API
+   * key, which carries nobody.
+   *
+   * Written inside the create transaction rather than stamped onto the
+   * order afterwards. A second write that can fail on its own leaves a
+   * committed order saying "no store user placed this" — a true sentence
+   * about a seller's own order and a silent lie about an associate's,
+   * whose own list is read off exactly this column and would not contain
+   * the order they had just placed.
+   */
+  readonly placedByStoreUserId: string | null;
   /** One per `CreateOrderDto.items` entry, in the same order. */
   readonly lines: readonly ResellerLineTerms[];
   readonly lockAndReadTerms: (tx: Prisma.TransactionClient) => Promise<ResellerOrderTerms>;

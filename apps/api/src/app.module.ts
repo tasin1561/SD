@@ -102,6 +102,7 @@ import { BackupWatchModule } from './modules/backup-watch/backup-watch.module';
 import { SellerStoreModule } from './modules/seller-store/seller-store.module';
 import { StoreAuthModule } from './modules/store-auth/store-auth.module';
 import { ResellerStoreModule } from './modules/reseller-store/reseller-store.module';
+import { ResellerAssociatesModule } from './modules/reseller-associates/reseller-associates.module';
 import { ResellerCatalogueModule } from './modules/reseller-catalogue/reseller-catalogue.module';
 import { ResellerStoreTermsModule } from './modules/reseller-store-terms/reseller-store-terms.module';
 import { ResellerStoreWalletModule } from './modules/reseller-store-wallet/reseller-store-wallet.module';
@@ -257,6 +258,7 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     ResellerStoreModule,
     // RS-3 — reseller catalogue, prices and stock (phase 2).
     ResellerCatalogueModule,
+    ResellerAssociatesModule,
     ResellerStoreTermsModule,
     ResellerStoreWalletModule,
     // RS-5 — reseller store orders (portal, API key, webhooks).

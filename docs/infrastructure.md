@@ -92,8 +92,79 @@ to reason from is the zone and the droplet, never this file.
 | `track.skydrop.global` | Branded public tracking (Indian customers) | `apps/track` |
 | `api.skydrop.global` | Backend API (consumed by all front-ends + B2B clients) | `apps/api` |
 | `reseller.skydrop.global` | Reseller store portal (RS-2) — pm2 `skydrop-reseller`, 127.0.0.1:3005 | `apps/reseller` |
+| `portal.skydrop.global` | Associate portal (ASSOC-1) — pm2 `skydrop-associate`, 127.0.0.1:3007 | `apps/associate` |
 
-All six subdomains terminate at Cloudflare → forwarded to Caddy on the droplet → routed to the appropriate Node process on internal port.
+All seven subdomains terminate at Cloudflare → forwarded to Caddy on the droplet → routed to the appropriate Node process on internal port.
+
+**pm2 runs SEVEN processes** once both portals are started: `skydrop-api`,
+`skydrop-portal` (the courier-portal browser worker — a different thing
+entirely from `skydrop-associate`, and the two names are close enough to be
+worth saying so), `skydrop-admin`, `skydrop-seller`, `skydrop-track`,
+`skydrop-reseller` and `skydrop-associate`. `ecosystem.config.cjs` is the
+list; `pm2 list` is the truth.
+
+### `portal.skydrop.global` (ASSOC-1, added 2026-10-08)
+
+**The hostname needs the owner's confirmation before the DNS record is
+created.** `portal` is their own choice of subdomain; the TLD is `.global`
+here because §Domain cutover retires `skydrop.online` once `.global`
+serves, and standing a new app up on the domain being retired would mean
+doing the DNS, the Caddy block and the certificate twice. Nothing in the
+app is baked to it — the hostname lives in exactly two places, one Caddy
+block and one DNS record, so changing it costs a reload.
+
+The repo side ships with the code (`apps/associate`, the
+`skydrop-associate` entry in `ecosystem.config.cjs`, the build / restart /
+health lines in `scripts/deploy.sh`, and the build in CI's `browser` job).
+The three owner steps, modelled exactly on RS-12's above:
+
+1. **DNS** — a Cloudflare A record `portal` → the droplet, **proxied** like
+   the others, behind the firewall + `CF-Connecting-IP` arrangement in
+   `docs/cloudflare-proxy.md`. **ufw needs no new rule**: 3007 is bound to
+   loopback (`-H 127.0.0.1` in the ecosystem entry), so it is not on the
+   droplet's public or VPC address at all and there is nothing to filter.
+   The firewall rules that matter are the existing 80/443 ones restricted
+   to Cloudflare's ranges.
+2. **Caddy** — a block beside `reseller.skydrop.global`'s, identical except
+   for the host and the port. It proxies to loopback; the app sets its own
+   security headers and nonce CSP (`packages/config`), so **Caddy adds
+   none** — a CSP from both places is intersected by the browser and blocks
+   Next's own scripts:
+
+   ```caddy
+   portal.skydrop.global {
+     encode zstd gzip
+     reverse_proxy 127.0.0.1:3007 {
+       header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+     }
+   }
+   ```
+
+   (Copy the `header_up` / `trusted_proxies` lines exactly as the live
+   `app.skydrop.global` block has them rather than this sketch — the live
+   block is the one that has been verified against the login throttle.)
+   Then `sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
+3. **pm2** — after a deploy has built `apps/associate`:
+   `pm2 start ecosystem.config.cjs --only skydrop-associate && pm2 save`.
+   `deploy.sh` health-checks `127.0.0.1:3007/login` only once pm2 knows the
+   process, so deploys before this step do not fail on it. **And
+   `deploy.sh` changes apply ONE DEPLOY LATE** — the running script is the
+   one that was on disk when the deploy started — so the first deploy after
+   this lands will neither build nor health-check the app. Build it by hand
+   once, then start it (the commands are in that section's runbook).
+
+**Port 3007, not 3006.** 3006 is `apps/marketing`'s local dev/serve port
+and `MARKETING_PORT` in the root `playwright.config.ts`. Two apps on one
+port collide in `pnpm dev` and, worse, in Playwright's `webServer` array,
+where the second to boot finds the first already answering and every spec
+then runs against the wrong site, passing.
+
+**Env:** the associate app itself needs only `API_ORIGIN`, which the
+ecosystem entry already sets. If the API ever gains an `ASSOCIATE_APP_URL`
+— for the links in an associate's invitation and password-reset mail —
+set it in `~/app/.env` beside `RESELLER_APP_URL`; until then those mails
+link to the reseller portal, which is the wrong front door for an
+associate and is worth checking before the first invitation goes out.
 
 ### `reseller.skydrop.global` (RS-12, added 2026-09-14)
 

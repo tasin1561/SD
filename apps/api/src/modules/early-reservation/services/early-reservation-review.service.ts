@@ -6,7 +6,10 @@ import {
   ReservationReleaseReason,
   ReservationStatus,
   SellerStoreKind,
+  type Prisma,
+  type StoreOrderScope,
 } from '@skydrop/db';
+import { storeOrderOwnerFilter } from '../../../common/auth/store-order-scope';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { StockReservationService } from '../../inventory-stock/services/stock-reservation.service';
@@ -65,6 +68,39 @@ const ORDER_NUMBER = { order: { select: { orderNumber: true } } } as const;
  * durably recorded and their stock stays held, which is the part that
  * would otherwise cost them money.
  */
+/**
+ * ASSOC-1 — who is asking, when a reseller store asks.
+ *
+ * Optional because the seller's own paths call these methods too and
+ * have no store user at all; absent means "the whole store", which is
+ * what every caller meant before associates existed.
+ */
+export interface StoreOrderViewerRef {
+  readonly storeUserId: string;
+  readonly orderScope: StoreOrderScope;
+}
+
+/**
+ * The order-side scope for a store's reviews. A review row carries no
+ * store id — it is keyed on the order — so BOTH the store and the person
+ * are scoped through the order, in the WHERE clause: another store's
+ * review, the seller's own channel orders and now a colleague's order
+ * are all the same 404 that says nothing about whether the row exists.
+ */
+function storeOrderWhere(
+  storeId: string,
+  viewer: StoreOrderViewerRef | undefined,
+): Prisma.OrderWhereInput {
+  return {
+    storeId,
+    storeKind: SellerStoreKind.RESELLER,
+    deletedAt: null,
+    ...(viewer === undefined
+      ? {}
+      : storeOrderOwnerFilter({ scope: viewer.orderScope, storeUserId: viewer.storeUserId })),
+  };
+}
+
 @Injectable()
 export class EarlyReservationReviewService {
   constructor(
@@ -84,11 +120,12 @@ export class EarlyReservationReviewService {
   async listForStore(
     storeId: string,
     status?: EarlyReservationReviewStatus,
+    viewer?: StoreOrderViewerRef,
   ): Promise<readonly ReviewView[]> {
     const rows = await this.prisma.client.earlyReservationReview.findMany({
       where: {
         ...(status === undefined ? {} : { status }),
-        order: { storeId, storeKind: SellerStoreKind.RESELLER, deletedAt: null },
+        order: storeOrderWhere(storeId, viewer),
       },
       orderBy: { createdAt: 'desc' },
       include: ORDER_NUMBER,
@@ -97,11 +134,15 @@ export class EarlyReservationReviewService {
   }
 
   /** This store's own review, or null — used to scope a decision. */
-  async findForStore(storeId: string, reviewId: string): Promise<{ sellerId: string } | null> {
+  async findForStore(
+    storeId: string,
+    reviewId: string,
+    viewer?: StoreOrderViewerRef,
+  ): Promise<{ sellerId: string } | null> {
     return this.prisma.client.earlyReservationReview.findFirst({
       where: {
         id: reviewId,
-        order: { storeId, storeKind: SellerStoreKind.RESELLER, deletedAt: null },
+        order: storeOrderWhere(storeId, viewer),
       },
       select: { sellerId: true },
     });

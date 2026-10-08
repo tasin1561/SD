@@ -956,6 +956,10 @@ model ProductVariant {
   resellerPriceListItems  ResellerPriceListItem[]
   resellerStoreVariants   ResellerStoreVariant[]
 
+  /// ASSOC-1 — what associates of a reseller store sell this at.
+
+  associatePrices AssociatePrice[]
+
   @@unique([sellerId, skuCode])
   @@index([productId])
   @@index([sellerId])
@@ -2991,6 +2995,10 @@ model SellerStore {
   /// Support sessions opened against this store.
   impersonationSessions ImpersonationSession[]
 
+  /// ASSOC-1 — the per-associate prices set inside this store.
+
+  associatePrices AssociatePrice[]
+
   @@unique([sellerId, name])
   /// RS-5 — the target of `orders (store_id, store_kind)`: an order's kind
   /// is its store's kind, by foreign key, never by convention.
@@ -3043,6 +3051,18 @@ model StoreUser {
   fullName        String    @map("full_name")
   emailVerifiedAt DateTime? @map("email_verified_at") @db.Timestamptz
   lastLoginAt     DateTime? @map("last_login_at") @db.Timestamptz
+  /// ASSOC-1 — when order CREATION was switched off for this person.
+  ///
+  /// The same semantics `seller_stores.status = PAUSED` has one level up
+  /// (RS-1): no NEW orders, everything already placed carries on, and
+  /// they keep reading and tracking it. Switching an associate off is
+  /// not removing them, and their history stays theirs.
+  ///
+  /// A nullable timestamp rather than a boolean: it answers "since when"
+  /// for free, and reads as a state rather than a setting. Enforced at
+  /// the create boundary SERVER-SIDE — hiding the button is cosmetic
+  /// (FE-2), and a stale tab or an API key walks straight past it.
+  ordersPausedAt  DateTime? @map("orders_paused_at") @db.Timestamptz
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz
   deletedAt       DateTime? @map("deleted_at") @db.Timestamptz
@@ -3058,6 +3078,10 @@ model StoreUser {
   termsAcceptances        ResellerStoreTermsAcceptance[]
   /// RS-7 — disputes this person raised for the store.
   ticketsOpened           Ticket[]                       @relation("TicketOpenedByStoreUser")
+  /// ASSOC-1 — the orders this person placed.
+  ordersPlaced            Order[]                        @relation("OrderPlacedByStoreUser")
+  /// ASSOC-1 — what this associate sells each product at.
+  associatePrices         AssociatePrice[]
 
   @@index([storeId])
   @@map("store_users")
@@ -3067,18 +3091,31 @@ model StoreUser {
 /// store. Five created with every store (OWNER/ADMIN/OPS/FINANCE/VIEWER);
 /// the permission KEYS are code (apps/api/src/common/auth/store-permissions.ts).
 model StoreRoleDefinition {
-  id          String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
-  storeId     String    @map("store_id") @db.Uuid
+  id          String          @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  storeId     String          @map("store_id") @db.Uuid
   key         String
   name        String
   description String?
-  isSystem    Boolean   @default(false) @map("is_system")
+  isSystem    Boolean         @default(false) @map("is_system")
   /// Holds every permission implicitly; its last holder cannot be moved
   /// off it or removed.
-  isOwner     Boolean   @default(false) @map("is_owner")
-  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz
+  isOwner     Boolean         @default(false) @map("is_owner")
+  /// ASSOC-1 — how much of the store's work this role sees.
+  ///
+  /// OWN is the DEFAULT so a role added later is narrow until somebody
+  /// widens it (the fail-closed posture the guards already take); the
+  /// migration sets ALL explicitly on the five roles that predate this,
+  /// because defaulting them would have silently narrowed every existing
+  /// login.
+  ///
+  /// It composes like a permission: a person holding several roles gets
+  /// the WIDEST, because adding a role must only ever grant more
+  /// (RBAC-1b). Resolved in ONE place — `storeOrderScope` — and applied
+  /// in the WHERE clause.
+  orderScope  StoreOrderScope @default(OWN) @map("order_scope")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt   DateTime?       @map("deleted_at") @db.Timestamptz
 
   store           SellerStore               @relation(fields: [storeId], references: [id], onDelete: Cascade)
   permissions     StoreRolePermission[]
@@ -3102,6 +3139,65 @@ model StoreRolePermission {
   @@unique([roleId, permission])
   @@index([roleId])
   @@map("store_role_permissions")
+}
+
+/// ASSOC-1 — what ONE associate sells ONE product at.
+///
+/// ── WHY THE PRICE LIVES HERE AND NOT ON THE CATALOGUE ROW ───────────
+/// `reseller_store_variants` is the SELLER's terms FOR a store — the
+/// transfer price, the retail range, the hidden share, the set-aside.
+/// This is the STORE's own decision about its own associate, and mixing
+/// two parties' decisions into one row is how nobody can later say whose
+/// number changed. The seller's default price list and a store's
+/// override are already two separate tables for the same reason.
+///
+/// ── PER ASSOCIATE, AND SET BY HAND (owner, 2026-10-08) ──────────────
+/// Keyed on the STORE USER, not the store, so two associates may sell
+/// the same product at different prices. There is deliberately no markup
+/// rule and no fallback: a product with no row here cannot be sold by
+/// that associate, and the order is refused BY NAME rather than priced
+/// at something nobody chose. RS-5 already takes that line for a line
+/// added to a reseller order with no price in the store's catalogue —
+/// "refused by name when it has no price there, never given one we made
+/// up" — and a guessed price is a sale at a figure the reseller did not
+/// agree to.
+///
+/// ── THE SELLER'S RANGE IS STILL THE AUTHORITY ───────────────────────
+/// This price is checked against the seller's live [min, max] at ORDER
+/// TIME, not only when it is set, because the seller may narrow the
+/// range afterwards. That is what makes "no associate can break the
+/// seller's terms" true by construction. The consequence is designed
+/// for rather than discovered: a price that falls outside the range is
+/// surfaced to the RESELLER, whose decision it is, instead of reaching
+/// the associate as a refusal about a number they never chose.
+model AssociatePrice {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+
+  /// Carried as well as derivable through the user, because every read
+  /// here is scoped by store and a join for it on each one is a join
+  /// that will eventually be forgotten.
+  storeId     String @map("store_id") @db.Uuid
+  storeUserId String @map("store_user_id") @db.Uuid
+  variantId   String @map("variant_id") @db.Uuid
+
+  /// What this associate's customer pays per unit.
+  retailPriceInr Decimal @map("retail_price_inr") @db.Decimal(12, 2)
+
+  /// Who set it and when — a price is a commercial decision and "who
+  /// changed this" is asked afterwards.
+  setByStoreUserId String?  @map("set_by_store_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  store     SellerStore    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  storeUser StoreUser      @relation(fields: [storeUserId], references: [id], onDelete: Cascade)
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  /// One price per associate per product.
+  @@unique([storeUserId, variantId])
+  @@index([storeId])
+  @@index([variantId])
+  @@map("associate_prices")
 }
 
 /// One role a reseller store's team member holds. The staff shape
@@ -3299,6 +3395,19 @@ model Order {
   /// makes a RESELLER order carry every snapshot column below and a
   /// CHANNEL order none of them.
   storeKind                             SellerStoreKind        @default(CHANNEL) @map("store_kind")
+  /// ASSOC-1 — the STORE USER who placed it, when a store user did.
+  ///
+  /// NULLABLE, and it stays nullable: every order placed before
+  /// associates existed genuinely has no answer, and a backfilled guess
+  /// would be a claim about who sold something. An order placed by the
+  /// seller, by staff, by CSV on the seller's side or through a seller
+  /// API key carries null too — null means "no store user placed this",
+  /// not "unknown".
+  ///
+  /// This is what an ASSOCIATE's order scope filters on. The scope is
+  /// applied in the WHERE clause, never fetched and compared, so a miss
+  /// is a 404 that says nothing about whether the row exists.
+  placedByStoreUserId                   String?                @map("placed_by_store_user_id") @db.Uuid
   /// The terms version the order was placed under (RS-4). Versions are
   /// append-only, so the id alone pins the terms; the columns after it
   /// copy the split and both timings so 3c and reports never join back.
@@ -3414,6 +3523,7 @@ model Order {
   bulkUpload             BulkOrderUpload?             @relation(fields: [bulkUploadId], references: [id])
   confirmedBy            StaffUser?                   @relation("OrderConfirmedBy", fields: [confirmedById], references: [id])
   cancelledBy            StaffUser?                   @relation("OrderCancelledBy", fields: [cancelledById], references: [id])
+  placedByStoreUser      StoreUser?                   @relation("OrderPlacedByStoreUser", fields: [placedByStoreUserId], references: [id], onDelete: Restrict)
   items                  OrderItem[]
   events                 OrderEvent[]
   reservations           StockReservation[]
@@ -3471,6 +3581,9 @@ model Order {
   @@index([bulkUploadId])
   @@index([confirmedById])
   @@index([cancelledById])
+  /// ASSOC-1 — an associate's own order list, and the per-associate
+  /// scorecard: both are "this store user's orders, newest first".
+  @@index([placedByStoreUserId, createdAt])
   @@map("orders")
 }
 
@@ -5454,6 +5567,22 @@ enum ActorType {
 }
 
 /// RS-1 — what a `seller_stores` row is.
+/// ASSOC-1 — how much of a reseller store's work a role sees.
+///
+/// Two values and no third: a scope that is neither "mine" nor "the
+/// store's" would need a second dimension (whose? which team?) and this
+/// is the one question an associate's portal asks.
+enum StoreOrderScope {
+  /// Only what this person placed. The associate default.
+  OWN @map("own")
+
+  /// Everything the store has. What the five roles that predate
+  /// associates hold, set explicitly by the migration.
+  ALL @map("all")
+
+  @@map("store_order_scope")
+}
+
 enum SellerStoreKind {
   CHANNEL  @map("channel")
   RESELLER @map("reseller")

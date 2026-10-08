@@ -50,7 +50,12 @@ export class StoreDeliveryActionController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('orderId', new ParseUUIDPipe({ version: '7' })) orderId: string,
   ): ReturnType<StoreDeliveryActionService['listForOrder']> {
-    return this.svc.listForOrder(user.storeId, orderId);
+    // ASSOC-1 — the scope comes off the request, resolved by the guard
+    // from the live roles; never a role key read here.
+    return this.svc.listForOrder(user.storeId, orderId, {
+      storeUserId: user.id,
+      orderScope: user.orderScope,
+    });
   }
 
   @Post(':orderId/actions')
@@ -68,6 +73,7 @@ export class StoreDeliveryActionController {
     return this.svc.request({
       storeId: user.storeId,
       storeUserId: user.id,
+      orderScope: user.orderScope,
       orderId,
       action: body.action,
       reason: body.reason,

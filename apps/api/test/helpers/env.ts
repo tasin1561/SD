@@ -21,6 +21,7 @@ const BASE_ENV: Env = {
   SELLER_APP_URL: 'http://localhost:3001',
   ADMIN_APP_URL: 'http://localhost:3002',
   RESELLER_APP_URL: 'http://localhost:3005',
+  ASSOCIATE_APP_URL: 'http://localhost:3007',
   // Module 11 — deterministic test fixture for the customer tracking
   // URL composed by NotificationListener as `${url}/${awb}` in
   // {{ tracking_url }} template variables.

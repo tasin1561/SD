@@ -61,8 +61,19 @@ export interface StoreTicketView {
   readonly disputeKind: 'GENERAL' | 'FIGURE_CORRECTION' | null;
   readonly disputeClaimAmountInr: string | null;
   readonly disputeClaimPayer: 'STORE' | 'SELLER' | null;
-  readonly disputedFigures: DisputedFiguresSnapshot | null;
+  /**
+   * ASSOC-1 — the store-versus-seller settlement arithmetic, which an
+   * associate does not see. Mirrors the server's union: the screen has
+   * to narrow on `visible` before it can render any of it, so a figure
+   * added to the snapshot cannot be shown to an associate by somebody
+   * forgetting a check. The customer's COD survives either way.
+   */
+  readonly figures: StoreDisputeFigures;
 }
+
+export type StoreDisputeFigures =
+  | { readonly visible: true; readonly snapshot: DisputedFiguresSnapshot | null }
+  | { readonly visible: false; readonly codInr: string | null };
 
 export interface StoreTicketEvent {
   readonly id: string;

@@ -8,6 +8,7 @@ import {
   ResellerStockMode,
   ResellerStoreStatus,
   SellerStatus,
+  StoreOrderScope,
 } from '@skydrop/db';
 import {
   ResellerOrderService,
@@ -47,7 +48,20 @@ function makeService(opts: Opts = {}) {
     status: opts.storeStatus ?? ResellerStoreStatus.ACTIVE,
     seller: { status: opts.sellerStatus ?? SellerStatus.APPROVED, deletedAt: null },
   }));
-  const client = { sellerStore: { findFirst: sellerStoreFindFirst } };
+  /*
+    ASSOC-1 — the person placing it. Every store user here is an ordinary
+    one: not paused, ALL scope, so the order goes through the same path
+    it did before associates existed. `associate-order-scope.spec.ts`
+    is where the narrow one is driven.
+  */
+  const storeUserFindFirst = jest.fn(async () => ({
+    ordersPausedAt: null,
+    roles: [{ role: { isOwner: false, orderScope: StoreOrderScope.ALL, deletedAt: null } }],
+  }));
+  const client = {
+    sellerStore: { findFirst: sellerStoreFindFirst },
+    storeUser: { findFirst: storeUserFindFirst },
+  };
   const create = jest.fn(
     async (_sellerId: string, _dto: AnyArgs, _actor: AnyArgs, _ctx: unknown, _o: AnyArgs) => ({
       id: 'o-new',
@@ -142,6 +156,9 @@ function makeService(opts: Opts = {}) {
     gate as never,
     catalog as never,
     { assertPrepaidCovered: prepaidCheck } as never,
+    // ASSOC-1 — nobody here has personal prices (they are all ALL scope,
+    // so it is never asked).
+    { pricesFor: jest.fn(async () => new Map()) } as never,
   );
   return { svc, create, settings, terms, gate, snapshot, prepaidCheck };
 }

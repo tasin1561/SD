@@ -166,6 +166,8 @@ export {
   StoreOrderRequestKind,
   StoreOrderRequestStatus,
 } from '@prisma/client';
+// ASSOC-1 — how much of a reseller store's work one role sees.
+export { StoreOrderScope } from '@prisma/client';
 // RS-6 phase 3c — a reseller order's per-party credits.
 export { ResellerMoneyParty, ResellerCreditStatus } from '@prisma/client';
 // 2026-09-19 — what a reseller STORE, as a whole, is told about. The

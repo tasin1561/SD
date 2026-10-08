@@ -81,9 +81,19 @@ function isSuperuser(role: { isSuperAdmin?: boolean; isOwner?: boolean }): boole
   return role.isSuperAdmin === true || role.isOwner === true;
 }
 
-export interface ResolvedRoles {
+export interface ResolvedRoles<R> {
   /** Live roles only, in the order they came back. */
   readonly roles: readonly { readonly key: string; readonly name: string }[];
+  /**
+   * The same live roles as the caller SELECTED them, so an identity can
+   * read its own extra columns off a role without filtering `deletedAt`
+   * for itself. The store's `order_scope` (ASSOC-1) is the first such
+   * column: resolving it from the raw assignments would mean a second
+   * copy of the live filter, and a guard whose permissions and whose
+   * scope disagree about which roles count is the exact bug this file's
+   * docblock exists to prevent.
+   */
+  readonly live: readonly R[];
   readonly permissions: readonly string[];
   /**
    * One role for a message, an audit row and the legacy single-role
@@ -101,10 +111,10 @@ export interface ResolvedRoles {
  * role is gone; the caller tests `roles.length === 0` and answers
  * UNAUTHORIZED rather than carrying on with nothing.
  */
-export function resolveRoles<K extends string>(
-  assignments: readonly RoleAssignmentRow[],
+export function resolveRoles<K extends string, R extends RoleAssignmentRow['role']>(
+  assignments: readonly { readonly role: R }[],
   allKeys: readonly K[],
-): ResolvedRoles {
+): ResolvedRoles<R> {
   const live = assignments.map((a) => a.role).filter((r) => r.deletedAt === null);
   const permissions = unionPermissions(
     live.map((r) => ({
@@ -114,7 +124,7 @@ export function resolveRoles<K extends string>(
     allKeys,
   );
   const roles = live.map((r) => ({ key: r.key, name: r.name }));
-  return { roles, permissions, primary: roles[0] ?? null };
+  return { roles, live, permissions, primary: roles[0] ?? null };
 }
 
 /** "Call agent and Support" — for a refusal message a person reads. */

@@ -137,9 +137,47 @@ export interface PendingInvitationEmail {
   readonly email: string;
   readonly fullName: string;
   readonly roleName: string;
+  /**
+   * ASSOC-1 — the role KEYS offered, so the link can point at the app the
+   * invitee will actually be able to use. Carried rather than re-read:
+   * `sendInvitationEmail` runs post-commit and outside the transaction
+   * that chose them, and a second read is a second chance to disagree.
+   */
+  readonly roleKeys: readonly string[];
   readonly storeName: string;
   readonly inviterName: string;
   readonly expiresAt: Date;
+}
+
+/**
+ * ASSOC-1 — which app an invitation sends somebody to.
+ *
+ * ── WHY THIS IS A DECISION AND NOT ONE CONSTANT ──────────────────────
+ * An associate works in `apps/associate`; everybody else at a store works
+ * in `apps/reseller`. They are separate ORIGINS, and the
+ * `__Host-storeRefresh` cookie is bound to the origin that set it — so an
+ * associate who accepted at the reseller origin would hold a session the
+ * portal cannot read, and would land on an app where almost every page
+ * refuses them. The invitation is the one chance to get this right: the
+ * link is in an email somebody clicks once.
+ *
+ * ── WIDEST WINS, AS EVERYWHERE ELSE ─────────────────────────────────
+ * An invitation offers a SET of roles (RBAC-1b). Anything beyond
+ * `associate` means the person needs the wide app, so the wide app is
+ * where they go — the same rule `storeOrderScope` applies to scope, for
+ * the same reason: adding a role must never take something away. Only an
+ * invitation that is associate AND NOTHING ELSE goes to the portal.
+ *
+ * An empty set cannot reach here (`NO_ROLES` is refused long before), and
+ * it answers the reseller app anyway: sending somebody to the narrow app
+ * on a set we could not read is how an invitation becomes unusable.
+ */
+export function invitationAppUrl(
+  roleKeys: readonly string[],
+  env: { readonly resellerAppUrl: string; readonly associateAppUrl: string },
+): string {
+  const associateOnly = roleKeys.length > 0 && roleKeys.every((k) => k === 'associate');
+  return associateOnly ? env.associateAppUrl : env.resellerAppUrl;
 }
 
 /**
@@ -288,6 +326,7 @@ export class StoreTeamService {
       email: input.email.trim(),
       fullName: input.fullName.trim(),
       roleName: roles.map((r) => r.name).join(', '),
+      roleKeys: roles.map((r) => r.key),
       storeName: input.storeName,
       inviterName: input.actor.name,
       expiresAt,
@@ -305,7 +344,7 @@ export class StoreTeamService {
           store_name: p.storeName,
           inviter_name: p.inviterName,
           role: p.roleName,
-          invite_url: `${this.env.resellerAppUrl}/auth/accept-invitation?token=${p.plaintext}`,
+          invite_url: `${invitationAppUrl(p.roleKeys, this.env)}/auth/accept-invitation?token=${p.plaintext}`,
           expires_at_display: p.expiresAt.toLocaleString('en-IN', {
             dateStyle: 'medium',
             timeStyle: 'short',
@@ -373,7 +412,10 @@ export class StoreTeamService {
         usedAt: true,
         deletedAt: true,
         store: { select: { name: true, displayName: true, status: true } },
-        roles: { select: { role: { select: { name: true, deletedAt: true } } } },
+        // ASSOC-1 — `key` as well as `name`: a RESEND must point at the
+        // same app the original did, and `invitationAppUrl` decides that
+        // from the keys.
+        roles: { select: { role: { select: { key: true, name: true, deletedAt: true } } } },
       },
     });
     if (existing === null || existing.deletedAt !== null) {
@@ -425,6 +467,7 @@ export class StoreTeamService {
         .filter((r) => r.role.deletedAt === null)
         .map((r) => r.role.name)
         .join(', '),
+      roleKeys: existing.roles.filter((r) => r.role.deletedAt === null).map((r) => r.role.key),
       storeName: existing.store.displayName ?? existing.store.name,
       // Whoever is sending it NOW. The original inviter may have left
       // the team since, and an email signed by somebody who can no

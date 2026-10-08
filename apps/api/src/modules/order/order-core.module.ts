@@ -20,6 +20,7 @@ import { SellerWalletAccrualModule } from '../seller-wallet-accrual/seller-walle
 import { LifecycleEventsModule } from '../lifecycle-events/lifecycle-events.module';
 import { ShipmentProvisionModule } from '../shipment-provision/shipment-provision.module';
 import { SettingsModule } from '../settings/settings.module';
+import { ResellerAssociatesModule } from '../reseller-associates/reseller-associates.module';
 import { ResellerOrderGateModule } from '../reseller-order-gate/reseller-order-gate.module';
 import { ResellerStoreTermsModule } from '../reseller-store-terms/reseller-store-terms.module';
 import { ResellerOrderMoneyModule } from '../reseller-order-money/reseller-order-money.module';
@@ -90,6 +91,12 @@ import { ResellerOrderRetermService } from './services/reseller-order-reterm.ser
     // gate). Neither imports this module back, so no cycle.
     ResellerStoreTermsModule,
     ResellerOrderGateModule,
+    // ASSOC-1 — `AssociatePriceService.pricesFor`: what ONE of a store's
+    // people sells a product at, which `ResellerOrderService` reads
+    // before it prices a line. That module imports the order-gate
+    // primitive and the catalogue read, never the order module, so this
+    // is one-way.
+    ResellerAssociatesModule,
     // 2026-09-17 — seller staff correcting a reseller store's recipient
     // close the store's waiting correction and email the store. An R3
     // primitive that imports nothing order-shaped, so no cycle.

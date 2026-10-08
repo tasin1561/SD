@@ -95,6 +95,11 @@ export class EnvService {
     return this.env.RESELLER_APP_URL;
   }
 
+  /** ASSOC-1 — the associate portal (portal.skydrop.global). */
+  get associateAppUrl(): string {
+    return this.env.ASSOCIATE_APP_URL;
+  }
+
   get publicTrackingUrl(): string {
     return this.env.PUBLIC_TRACKING_URL;
   }

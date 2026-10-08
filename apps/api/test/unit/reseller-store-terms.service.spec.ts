@@ -187,6 +187,8 @@ function storeUser(storeId = STORE_ID): AuthenticatedStoreUser {
     roleName: 'Owner',
     roleKeys: ['owner'],
     roleNames: ['Owner'],
+    orderScope: 'ALL',
+    ordersPausedAt: null,
     permissions: ['terms.view', 'terms.accept'],
   };
 }

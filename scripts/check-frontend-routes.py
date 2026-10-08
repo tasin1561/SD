@@ -123,6 +123,10 @@ SOURCES = [
     ('track', REPO / 'apps/track/src'),
     # RS-2: the reseller store portal (reseller.skydrop.global).
     ('reseller', REPO / 'apps/reseller/src'),
+    # ASSOC-1: the associate portal (portal.skydrop.global). An app left
+    # off this list has its calls checked NOWHERE, and the routes only it
+    # calls read as dead in the other direction.
+    ('associate', REPO / 'apps/associate/src'),
     ('api-client', REPO / 'packages/api-client/src'),
     ('auth', REPO / 'packages/auth/src'),
 ]

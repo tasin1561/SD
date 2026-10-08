@@ -1,4 +1,4 @@
-import { ResellerStoreActionMode } from '@skydrop/db';
+import { ResellerStoreActionMode, StoreOrderScope } from '@skydrop/db';
 import { StoreReviewDecisionService } from '../../src/modules/early-reservation-decision/services/store-review-decision.service';
 import type { EarlyReservationDecisionService } from '../../src/modules/early-reservation-decision/services/early-reservation-decision.service';
 import type { EarlyReservationReviewService } from '../../src/modules/early-reservation/services/early-reservation-review.service';
@@ -114,7 +114,19 @@ describe('a store answering the call-cap question (2026-09-16)', () => {
   it('ASK_SELLER still lets the store see what is waiting', async () => {
     const { svc, decisions } = make(ResellerStoreActionMode.ASK_SELLER);
     await svc.listOpen('store-1');
-    expect(decisions.listOpenForStore).toHaveBeenCalledWith('store-1');
+    // ASSOC-1 — no viewer stated is the whole store, which is what this
+    // call meant before associates existed.
+    expect(decisions.listOpenForStore).toHaveBeenCalledWith('store-1', undefined);
+  });
+
+  it('ASSOC-1 — an associate is asked about their OWN orders only', async () => {
+    // The narrowing travels to the read rather than being applied after
+    // it: a review on a colleague's order must not be answerable, and
+    // answering one either sends a van again or gives up their customer.
+    const { svc, decisions } = make(ResellerStoreActionMode.DIRECT);
+    const viewer = { storeUserId: 'su-9', orderScope: StoreOrderScope.OWN };
+    await svc.listOpen('store-1', viewer);
+    expect(decisions.listOpenForStore).toHaveBeenCalledWith('store-1', viewer);
   });
 
   it('the open list is gated the same way', async () => {

@@ -62,7 +62,11 @@ export class StoreShipmentAddressController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('orderId', new ParseUUIDPipe({ version: '7' })) orderId: string,
   ): ReturnType<ShipmentAddressService['editability']> {
-    return this.svc.editability(orderId, user.sellerId, user.storeId);
+    // ASSOC-1 — an associate asks about their own parcels only.
+    return this.svc.editability(orderId, user.sellerId, user.storeId, {
+      storeUserId: user.id,
+      orderScope: user.orderScope,
+    });
   }
 
   @Get(':orderId/consignee/history')
@@ -73,7 +77,10 @@ export class StoreShipmentAddressController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('orderId', new ParseUUIDPipe({ version: '7' })) orderId: string,
   ): ReturnType<ShipmentAddressService['history']> {
-    return this.svc.history(orderId, user.sellerId, user.storeId);
+    return this.svc.history(orderId, user.sellerId, user.storeId, {
+      storeUserId: user.id,
+      orderScope: user.orderScope,
+    });
   }
 
   @Post(':orderId/consignee')
@@ -112,6 +119,7 @@ export class StoreShipmentAddressController {
       orderId,
       sellerId: user.sellerId,
       storeId: user.storeId,
+      placedBy: { storeUserId: user.id, orderScope: user.orderScope },
       ...(body.name === undefined ? {} : { name: body.name }),
       ...(body.phone === undefined ? {} : { phone: body.phone }),
       ...(body.addressLine1 === undefined ? {} : { addressLine1: body.addressLine1 }),

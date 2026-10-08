@@ -4,11 +4,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActorType, BulkUploadStatus, type Prisma } from '@skydrop/db';
+import { ActorType, BulkUploadStatus, StoreOrderScope, type Prisma } from '@skydrop/db';
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { ResellerOrderService } from '../../order/services/reseller-order.service';
 import { ORDER_CSV_STORE_REQUIRED_FIELDS, type OrderCsvField } from '../order-csv-fields';
 import { buildStoreOrderCsvKey, parseStoreOrderCsvKey } from '../order-csv-key';
 import { OrderCsvImportQueue } from '../queue/order-csv-import.queue';
@@ -65,6 +66,34 @@ const UPLOAD_VIEW_SELECT = {
 type StoreUserRef = { readonly id: string; readonly storeId: string; readonly sellerId: string };
 
 /**
+ * ASSOC-1 — whose imports this caller may read.
+ *
+ * `bulk_order_uploads.uploaded_by_store_user_id` has always recorded who
+ * pressed Import, so this is a filter rather than a schema change. It
+ * matters for the ERROR REPORT above all: that file is the rejected rows
+ * of somebody's upload, customer names, phones and addresses included,
+ * so a store-wide scope let an associate download a colleague's
+ * customers — "only his customers" breached by a different door.
+ *
+ * Absent means the whole store, which is what every caller meant before
+ * associates existed.
+ */
+function ownUploads(storeId: string, viewer?: StoreUploadViewer): Prisma.BulkOrderUploadWhereInput {
+  return {
+    resellerStoreId: storeId,
+    deletedAt: null,
+    ...(viewer === undefined || viewer.orderScope !== StoreOrderScope.OWN
+      ? {}
+      : { uploadedByStoreUserId: viewer.storeUserId }),
+  };
+}
+
+export interface StoreUploadViewer {
+  readonly storeUserId: string;
+  readonly orderScope: StoreOrderScope;
+}
+
+/**
  * RS-5 — a reseller store's order CSV, on the SAME machinery as a
  * seller's: the parser, the `order-csv-import` queue and worker, and the
  * processor, which places each row through `ResellerOrderService` (every
@@ -82,6 +111,10 @@ export class StoreOrderCsvImportService {
     private readonly parser: OrderCsvParserService,
     private readonly audit: AuditLogService,
     private readonly queue: OrderCsvImportQueue,
+    // ASSOC-1 — the one create path owns "may this person place orders";
+    // this service asks it rather than reading `orders_paused_at` itself,
+    // or the two would eventually disagree about what a pause means.
+    private readonly orders: ResellerOrderService,
   ) {}
 
   buildTemplate(): string {
@@ -132,6 +165,19 @@ export class StoreOrderCsvImportService {
     user: StoreUserRef,
     input: ProcessOrderCsvDto,
   ): Promise<BulkOrderUploadView> {
+    /*
+      ASSOC-1 — a person whose order creation is switched off is refused
+      HERE, before the upload row exists.
+
+      The worker refuses every row anyway (`ResellerOrderService.create`
+      is the one create boundary and the pause lives there), so this is
+      not what makes the rule true — it is what makes it legible. Without
+      it a paused associate uploads a file, waits, and is handed an error
+      report in which all two hundred rows failed for the same reason,
+      which reads as a broken import rather than as a switch somebody
+      turned off.
+    */
+    await this.orders.assertMayPlaceOrders({ storeId: user.storeId, storeUserId: user.id });
     const buffer = await this.loadOwnedCsv(user, input.spacesKey);
     const head = await this.spaces.headObject(input.spacesKey);
     const parsed = this.parser.parse(buffer);
@@ -189,8 +235,9 @@ export class StoreOrderCsvImportService {
     storeId: string,
     page = 1,
     pageSize = 20,
+    viewer?: StoreUploadViewer,
   ): Promise<{ items: BulkOrderUploadView[]; total: number; page: number; pageSize: number }> {
-    const where: Prisma.BulkOrderUploadWhereInput = { resellerStoreId: storeId, deletedAt: null };
+    const where: Prisma.BulkOrderUploadWhereInput = ownUploads(storeId, viewer);
     const [items, total] = await Promise.all([
       this.prisma.client.bulkOrderUpload.findMany({
         where,
@@ -204,9 +251,13 @@ export class StoreOrderCsvImportService {
     return { items, total, page, pageSize };
   }
 
-  async getUpload(storeId: string, id: string): Promise<BulkOrderUploadView> {
+  async getUpload(
+    storeId: string,
+    id: string,
+    viewer?: StoreUploadViewer,
+  ): Promise<BulkOrderUploadView> {
     const row = await this.prisma.client.bulkOrderUpload.findFirst({
-      where: { id, resellerStoreId: storeId, deletedAt: null },
+      where: { id, ...ownUploads(storeId, viewer) },
       select: UPLOAD_VIEW_SELECT,
     });
     if (row === null) {
@@ -218,9 +269,13 @@ export class StoreOrderCsvImportService {
     return row;
   }
 
-  async getErrorReport(storeId: string, id: string): Promise<{ buffer: Buffer; fileName: string }> {
+  async getErrorReport(
+    storeId: string,
+    id: string,
+    viewer?: StoreUploadViewer,
+  ): Promise<{ buffer: Buffer; fileName: string }> {
     const upload = await this.prisma.client.bulkOrderUpload.findFirst({
-      where: { id, resellerStoreId: storeId, deletedAt: null },
+      where: { id, ...ownUploads(storeId, viewer) },
       select: { fileName: true, errorReportKey: true },
     });
     if (upload === null) {

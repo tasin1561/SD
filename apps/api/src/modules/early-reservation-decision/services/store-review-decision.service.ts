@@ -9,12 +9,14 @@ import {
   ResellerStoreActionMode,
   StoreCallCapProposal,
   StoreOrderRequestKind,
+  type StoreOrderScope,
 } from '@skydrop/db';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import {
   EarlyReservationReviewService,
   type ReviewDecision,
   type ReviewView,
+  type StoreOrderViewerRef,
 } from '../../early-reservation/services/early-reservation-review.service';
 import { ResellerStoreActionPolicyService } from '../../reseller-store/services/reseller-store-action-policy.service';
 import {
@@ -62,14 +64,22 @@ export class StoreReviewDecisionService {
   ) {}
 
   /** The open reviews on this store's own orders. */
-  async listOpen(storeId: string): Promise<readonly ReviewView[]> {
+  async listOpen(storeId: string, viewer?: StoreOrderViewerRef): Promise<readonly ReviewView[]> {
     await this.policyMode(storeId);
-    return this.decisions.listOpenForStore(storeId);
+    return this.decisions.listOpenForStore(storeId, viewer);
   }
 
   async decide(input: {
     storeId: string;
     storeUserId: string;
+    /**
+     * ASSOC-1 — OWN narrows the review to the orders this person placed.
+     * Answering the call-cap question on a colleague's order either
+     * sends a van again or gives their customer up; neither is theirs
+     * to decide. Seller staff approving a HELD answer still runs the
+     * decision for the store, through the request's own path.
+     */
+    orderScope?: StoreOrderScope;
     reviewId: string;
     decision: ReviewDecision;
     note?: string | null;
@@ -80,7 +90,13 @@ export class StoreReviewDecisionService {
     // The review must be on one of THIS store's orders. Scoped through
     // the order, because the review row carries no store id — so another
     // store's review is a 404 that says nothing about whether it exists.
-    const owned = await this.reviews.findForStore(input.storeId, input.reviewId);
+    const owned = await this.reviews.findForStore(
+      input.storeId,
+      input.reviewId,
+      input.orderScope === undefined
+        ? undefined
+        : { storeUserId: input.storeUserId, orderScope: input.orderScope },
+    );
     if (owned === null) {
       throw new NotFoundException({
         code: 'EARLY_RESERVATION_REVIEW_NOT_FOUND',

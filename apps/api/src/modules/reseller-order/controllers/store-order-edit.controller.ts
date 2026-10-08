@@ -26,6 +26,7 @@ import {
   type StoreRecipientEditOutcome,
 } from '../services/store-order-edit.service';
 import type { AddressChangeRequestView } from '../services/store-address-change.service';
+import { viewerFor } from '../services/store-orders.service';
 
 /**
  * 2026-09-16 — a reseller store changing its OWN order. Widened from
@@ -72,6 +73,9 @@ export class StoreOrderEditController {
     return this.edits.editRecipient({
       storeId: user.storeId,
       storeUserId: user.id,
+      // ASSOC-1 — resolved by the guard off the live roles, never from
+      // a role key read here.
+      orderScope: user.orderScope,
       sellerId: user.sellerId,
       orderId,
       patch: body,
@@ -88,6 +92,6 @@ export class StoreOrderEditController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('orderId', new ParseUUIDPipe({ version: '7' })) orderId: string,
   ): Promise<{ items: readonly AddressChangeRequestView[]; mode: ResellerStoreActionMode }> {
-    return this.edits.listAddressChanges(user.storeId, orderId);
+    return this.edits.listAddressChanges(user.storeId, viewerFor(user), orderId);
   }
 }

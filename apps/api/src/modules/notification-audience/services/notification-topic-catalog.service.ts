@@ -628,6 +628,29 @@ export const STORE_TOPICS: readonly StoreTopicDef[] = [
     group: 'Tickets',
     category: StoreNotificationCategory.SUPPORT,
   },
+  // ── Your day ───────────────────────────────────────────────────────
+  {
+    /*
+      ASSOC-1 capability 6 — the once-a-day summary, for somebody who
+      sees only what they sold.
+
+      Its OWN key, NOT the store-wide digest's `daily_digest`: that one
+      goes to whoever may see the store's orders and lists the whole
+      store's day, and sharing a key would mean one person's mute
+      silenced both, with the NOTIF-2 dedup gate letting whichever went
+      first consume the other's slot.
+
+      Silenceable, unlike the store's locked topics: it is a summary of
+      things that already have their own notice, so switching it off
+      loses nobody anything they have to act on.
+    */
+    topic: 'store.daily_digest',
+    label: 'Your day, once a morning',
+    description:
+      'What happened yesterday to the orders you placed — delivered, came back, and the ones the courier could not deliver. Nothing is sent on a day nothing moved.',
+    group: 'Your orders',
+    category: StoreNotificationCategory.ORDER_UPDATES,
+  },
   // ── The seller's terms ─────────────────────────────────────────────
   {
     topic: 'store.terms_published',

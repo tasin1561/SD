@@ -5,6 +5,7 @@ import {
   EarlyReservationReviewService,
   type ReviewDecision,
   type ReviewView,
+  type StoreOrderViewerRef,
 } from '../../early-reservation/services/early-reservation-review.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 
@@ -111,9 +112,15 @@ export class EarlyReservationDecisionService {
     return this.reviews.listForSeller(sellerId, EarlyReservationReviewStatus.OPEN);
   }
 
-  /** Reviews on this STORE's own orders that nobody has answered yet. */
-  async listOpenForStore(storeId: string): Promise<readonly ReviewView[]> {
-    return this.reviews.listForStore(storeId, EarlyReservationReviewStatus.OPEN);
+  /**
+   * Reviews on this STORE's own orders that nobody has answered yet —
+   * or, for an associate, on the orders THEY placed (ASSOC-1).
+   */
+  async listOpenForStore(
+    storeId: string,
+    viewer?: StoreOrderViewerRef,
+  ): Promise<readonly ReviewView[]> {
+    return this.reviews.listForStore(storeId, EarlyReservationReviewStatus.OPEN, viewer);
   }
 
   /**

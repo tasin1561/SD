@@ -1,5 +1,6 @@
 import { BadRequestException, ConflictException, Injectable, Logger } from '@nestjs/common';
-import { ActorType, SellerStoreKind, ShipmentStatus } from '@skydrop/db';
+import { ActorType, SellerStoreKind, ShipmentStatus, type StoreOrderScope } from '@skydrop/db';
+import { storeOrderOwnerFilter } from '../../../common/auth/store-order-scope';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CourierOpsDispatchService } from '../../courier-ops/services/courier-ops-dispatch.service';
@@ -68,6 +69,16 @@ export interface ChangeResult {
  * the portal worker goes and looks; until it has, the seller is told
  * the change was sent, not that it landed.
  */
+/**
+ * ASSOC-1 — which of a store's people is asking. Absent means the whole
+ * store, which is what the seller's own paths and an ALL-scope store
+ * user mean.
+ */
+export interface StorePlacerRef {
+  readonly storeUserId: string;
+  readonly orderScope: StoreOrderScope;
+}
+
 @Injectable()
 export class ShipmentAddressService {
   private readonly logger = new Logger(ShipmentAddressService.name);
@@ -87,8 +98,9 @@ export class ShipmentAddressService {
     orderId: string,
     sellerId: string | null,
     storeId?: string,
+    placedBy?: StorePlacerRef,
   ): Promise<AddressEditability> {
-    const s = await this.liveShipment(orderId, sellerId, storeId);
+    const s = await this.liveShipment(orderId, sellerId, storeId, placedBy);
     const editable = EDITABLE_STATUSES.has(s.status);
     return {
       editable,
@@ -113,6 +125,14 @@ export class ShipmentAddressService {
     sellerId: string | null;
     /** RS-5: set when a reseller STORE is correcting its own parcel. */
     storeId?: string;
+    /**
+     * ASSOC-1: set when a STORE USER with OWN scope is asking — the
+     * parcel must be on an order they placed themselves. A change here
+     * goes to the courier immediately (there is no held form of it at
+     * this stage), so a colleague's address would be rewritten with
+     * nobody in a position to notice.
+     */
+    placedBy?: StorePlacerRef;
     name?: string;
     phone?: string;
     addressLine1?: string;
@@ -123,7 +143,7 @@ export class ShipmentAddressService {
       storeUserId?: string | null;
     };
   }): Promise<ChangeResult> {
-    const s = await this.liveShipment(input.orderId, input.sellerId, input.storeId);
+    const s = await this.liveShipment(input.orderId, input.sellerId, input.storeId, input.placedBy);
 
     if (!EDITABLE_STATUSES.has(s.status)) {
       throw new ConflictException({
@@ -378,8 +398,9 @@ export class ShipmentAddressService {
     orderId: string,
     sellerId: string | null,
     storeId?: string,
+    placedBy?: StorePlacerRef,
   ): Promise<readonly AddressChangeRow[]> {
-    const s = await this.liveShipment(orderId, sellerId, storeId);
+    const s = await this.liveShipment(orderId, sellerId, storeId, placedBy);
     const rows = await this.prisma.client.shipmentAddressChange.findMany({
       where: { shipmentId: s.id },
       orderBy: { createdAt: 'asc' },
@@ -403,7 +424,12 @@ export class ShipmentAddressService {
     return rows;
   }
 
-  private async liveShipment(orderId: string, sellerId: string | null, storeId?: string) {
+  private async liveShipment(
+    orderId: string,
+    sellerId: string | null,
+    storeId?: string,
+    placedBy?: StorePlacerRef,
+  ) {
     const link = await this.prisma.client.orderShipment.findFirst({
       where: {
         orderId,
@@ -416,6 +442,13 @@ export class ShipmentAddressService {
               order: {
                 ...(sellerId === null ? {} : { sellerId }),
                 ...(storeId === undefined ? {} : { storeId, storeKind: SellerStoreKind.RESELLER }),
+                // ASSOC-1 — and whose order within that store.
+                ...(placedBy === undefined
+                  ? {}
+                  : storeOrderOwnerFilter({
+                      scope: placedBy.orderScope,
+                      storeUserId: placedBy.storeUserId,
+                    })),
               },
             }),
       },

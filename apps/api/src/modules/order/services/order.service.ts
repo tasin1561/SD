@@ -592,6 +592,12 @@ export class OrderService {
             // RS-5: the composite FK makes this the store's own kind; the
             // CHECK then demands the whole snapshot on a reseller order.
             storeKind: reseller === null ? SellerStoreKind.CHANNEL : SellerStoreKind.RESELLER,
+            // ASSOC-1 — WHO placed it. Null is "no store user placed
+            // this": a seller's own order, staff, a CSV on the seller
+            // side, or a store's API key. Never "unknown", and never
+            // backfilled — a guess here is a claim about who sold
+            // something.
+            placedByStoreUserId: reseller?.placedByStoreUserId ?? null,
             ...(resellerTerms === null ? {} : resellerOrderColumns(resellerTerms)),
             // ORD-6: the NAME as it was. Renaming the store later must
             // not rewrite what a past customer was told, and the live

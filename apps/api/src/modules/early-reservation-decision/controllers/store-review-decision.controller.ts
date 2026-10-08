@@ -45,7 +45,11 @@ export class StoreReviewDecisionController {
   @Get()
   @ApiOperation({ summary: 'Orders of this store waiting on a keep-trying-or-release answer' })
   list(@CurrentStoreUser() user: AuthenticatedStoreUser): Promise<readonly ReviewView[]> {
-    return this.reviews.listOpen(user.storeId);
+    // ASSOC-1 — an associate is asked about their OWN orders only.
+    return this.reviews.listOpen(user.storeId, {
+      storeUserId: user.id,
+      orderScope: user.orderScope,
+    });
   }
 
   @Patch(':reviewId')
@@ -63,6 +67,7 @@ export class StoreReviewDecisionController {
     return this.reviews.decide({
       storeId: user.storeId,
       storeUserId: user.id,
+      orderScope: user.orderScope,
       reviewId,
       decision: body.decision,
       note: body.note ?? null,
