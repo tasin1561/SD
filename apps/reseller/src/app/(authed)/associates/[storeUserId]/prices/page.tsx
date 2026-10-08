@@ -3,7 +3,15 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMemo, useState, type FormEvent, type ReactElement, type ReactNode } from 'react';
-import { ArrowLeft, Check, CircleAlert, Copy, PackageOpen, SearchX } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  CircleAlert,
+  Copy,
+  PackageOpen,
+  SearchX,
+  TriangleAlert,
+} from 'lucide-react';
 import { Money } from '@skydrop/ui/components';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Button, buttonClassName } from '@skydrop/ui/app/button';
@@ -309,12 +317,18 @@ function PriceRow({
             />
           </div>
           {row.retailPriceInr === null ? (
-            <p className="as-price__note">No price yet — they cannot sell this.</p>
+            <p className="as-price__note">
+              <TriangleAlert size={12} aria-hidden />
+              No price yet — they cannot sell this.
+            </p>
           ) : null}
           {row.outOfRange ? (
             <p className="as-price__note">
-              Outside what your seller now allows. Orders at this price are refused — set one{' '}
-              {rangeWords(row.minRetailInr, row.maxRetailInr)}.
+              <TriangleAlert size={12} aria-hidden />
+              <span>
+                Outside what your seller now allows. Orders at this price are refused — set one{' '}
+                {rangeWords(row.minRetailInr, row.maxRetailInr)}.
+              </span>
             </p>
           ) : null}
           {error !== null ? (
@@ -429,7 +443,8 @@ function CopyPricesDialog({
                 variantId: c.variantId,
                 text: (
                   <>
-                    <span className="sk-ident">{c.skuCode}</span> — ₹{c.retailPriceInr}
+                    <span className="sk-ident">{c.skuCode}</span> —{' '}
+                    <Money amount={c.retailPriceInr} convert={false} />
                   </>
                 ),
               }))}
@@ -440,7 +455,9 @@ function CopyPricesDialog({
                 variantId: o.variantId,
                 text: (
                   <>
-                    <span className="sk-ident">{o.skuCode}</span> — ₹{o.fromInr} → ₹{o.toInr}
+                    <span className="sk-ident">{o.skuCode}</span> —{' '}
+                    <Money amount={o.fromInr} convert={false} /> →{' '}
+                    <Money amount={o.toInr} convert={false} />
                   </>
                 ),
               }))}
@@ -451,7 +468,8 @@ function CopyPricesDialog({
                 variantId: u.variantId,
                 text: (
                   <>
-                    <span className="sk-ident">{u.skuCode}</span> — ₹{u.retailPriceInr}
+                    <span className="sk-ident">{u.skuCode}</span> —{' '}
+                    <Money amount={u.retailPriceInr} convert={false} />
                   </>
                 ),
               }))}

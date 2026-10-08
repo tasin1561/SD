@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type ReactElement } from 'react';
-import { PackageSearch, Search, Tag } from 'lucide-react';
+import { PackageSearch, PackageX, Search, Tag, TriangleAlert } from 'lucide-react';
 import { Money, ProductThumb } from '@skydrop/ui/components';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { Table, TableToolbar, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
@@ -164,15 +164,30 @@ export default function CataloguePage(): ReactElement {
                         </span>
                       </span>
                     </Td>
+                    {/* The two facts somebody reads out mid-call, and the
+                        two states that end the sale. Both were the page's
+                        quietest text in a numeric column; a blocking state
+                        has to read as one. Only ZERO is named — a "low
+                        stock" line would be a threshold nobody set. */}
                     <Td align="right">
                       {i.retailPriceInr === null ? (
-                        <span className="as-sub">No price set — ask your store</span>
+                        <span className="as-flag" data-tone="warn">
+                          <TriangleAlert size={12} aria-hidden />
+                          No price — ask your store
+                        </span>
                       ) : (
                         <Money amount={i.retailPriceInr} convert={false} />
                       )}
                     </Td>
                     <Td align="right">
-                      <span className="sk-figure">{i.availableQuantity}</span>
+                      {i.availableQuantity === 0 ? (
+                        <span className="as-flag" data-tone="bad">
+                          <PackageX size={12} aria-hidden />
+                          None left
+                        </span>
+                      ) : (
+                        <span className="sk-figure">{i.availableQuantity}</span>
+                      )}
                     </Td>
                   </Tr>
                 ))}

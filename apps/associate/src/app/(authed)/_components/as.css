@@ -158,6 +158,50 @@
   font-weight: var(--fw-medium);
 }
 
+/* ── A flag: one short fact that STOPS this person selling ─────────────
+ *
+ * "No price set" and "None left" are the two states that end a sale, and
+ * both were drawn as `.as-sub` — `--fg-faint` at 12px, the quietest text
+ * on the page, in a right-aligned numeric column with nothing to mark
+ * them out. A blocking state has to read as one.
+ *
+ * Over its own `-tint` with its `-on-tint` colour, which is the pair the
+ * brand designed for a tinted chip and measures 4.84:1 (saffron) and
+ * 5.84:1 (red) at worst across both themes — including on the
+ * `--surface-3` a table row takes on hover, where plain `--saffron-text`
+ * falls to 4.31:1 in light while staying at 8.73:1 in dark. The icon is
+ * what keeps it from being colour alone; the words carry the meaning. */
+.as-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  /* So a grid parent sizes it to its words rather than stretching it
+     across the column — the table cell and the line note do not, but the
+     next caller might. */
+  justify-self: start;
+  padding: 2px var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.as-flag svg {
+  flex: none;
+}
+.as-flag[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
+.as-flag[data-tone='bad'] {
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+
 /* ── Fact list (label / value) ────────────────────────────────────────── */
 .as-facts {
   display: grid;
@@ -286,8 +330,12 @@
   color: var(--fg-muted);
   font-size: var(--fs-xs);
 }
+/* A size up from the rest of the row. This is the figure somebody reads
+   out to a customer mid-call, on a phone, and it was set in the same
+   12px as the two facts beside it. */
 .as-line__price {
   color: var(--fg-strong);
+  font-size: var(--fs-sm);
   font-weight: var(--fw-semibold);
 }
 
@@ -546,15 +594,44 @@
   color: var(--fg-strong);
   font-weight: var(--fw-semibold);
 }
+/* UNREAD, as an OUTLINED chip rather than a solid fill.
+ *
+ * It was a fill of `--as-ntf-fg` carrying `var(--fg-inverse, #fff)` — and
+ * `--fg-inverse` is declared in no theme block, so the fallback WAS the
+ * value: a hardcoded white that cannot follow a theme (FE-6), the only
+ * hex in this app. `--as-ntf-fg` is a `--st-<kind>-fg`, which is an
+ * ON-TINT colour: the 700/800 steps in light but the 400 steps in DARK,
+ * so white on it measured 1.67:1 (Warehouse) to 2.77:1 (System, Returns)
+ * against the 4.5:1 a 600-weight label needs. The badge was legible in
+ * light and a smear in dark, on the most-seen element in the app.
+ *
+ * The chip uses the pair the brand actually designed for this — the
+ * on-tint colour as TEXT, over the card ground — which measures 5.02:1
+ * (Warehouse) to 9.73:1 (Orders) in BOTH themes. It is also the quieter
+ * answer: the unread row is already tinted `--st-<kind>-bg`, and a solid
+ * fill inside it was a second loud layer. The dot carries SHAPE, so
+ * "unread" survives without colour.
+ */
 .as-ntf-item__new {
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--as-ntf-fg, var(--blue-text));
-  color: var(--fg-inverse, #fff);
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 7px;
+  border: 1px solid var(--as-ntf-line, var(--blue-line));
+  border-radius: var(--r-pill);
+  background: var(--surface-2);
+  color: var(--as-ntf-fg, var(--blue-on-tint));
+  font-size: var(--fs-2xs);
   font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+.as-ntf-item__new::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: currentColor;
 }
 .as-ntf-item__when {
   margin-left: auto;

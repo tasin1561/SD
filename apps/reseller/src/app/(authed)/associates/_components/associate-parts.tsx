@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactElement, ReactNode } from 'react';
+import { CircleAlert, TriangleAlert } from 'lucide-react';
 import { Switch } from '@skydrop/ui/app/switch';
 import { useToast } from '@skydrop/ui/app/toast';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -71,7 +72,12 @@ export function AssociateCoverage({
 }): ReactElement {
   return (
     <div className="as-product">
+      {/* The icon is not decoration: the chip's colour is the only other
+          thing saying "some of these are missing", and colour alone is
+          never a signal. It is aria-hidden because the sentence below
+          says the same thing in words. */}
       <span className="as-count sk-figure" data-tone={missing > 0 ? 'warn' : undefined}>
+        {missing > 0 ? <TriangleAlert size={12} className="as-count__icon" aria-hidden /> : null}
         {priced} of {sellable}
       </span>
       <span className="as-coverage">
@@ -86,6 +92,7 @@ export function AssociateCoverage({
       </span>
       {outOfRange > 0 ? (
         <span className="as-count" data-tone="bad">
+          <CircleAlert size={12} className="as-count__icon" aria-hidden />
           {outOfRange} price{outOfRange === 1 ? '' : 's'} outside the seller’s range
         </span>
       ) : null}

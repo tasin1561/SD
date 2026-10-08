@@ -97,14 +97,44 @@
   font-weight: var(--fw-regular);
 }
 
-/* ── The two counts that silently stop somebody selling ───────────────── */
-.as-count[data-tone='warn'] {
-  color: var(--saffron-text);
+/* ── The two counts that silently stop somebody selling ─────────────────
+ *
+ * CHIPS, over their own tint, rather than coloured text over whatever is
+ * behind them. These sit in table cells, and `data-table.css` paints a
+ * row `--surface-3` on hover: `--saffron-text` measures 8.73:1 there in
+ * dark and 4.31:1 in LIGHT, so hovering the row quietly dropped a 12px
+ * figure below AA in one theme and not the other. No saffron token in
+ * the system clears 4.5:1 on `--surface-3` in light, so the fix is to
+ * stop the row's ground reaching the text: the `-tint` / `-on-tint` pair
+ * is what the brand designed for exactly this and measures 4.84:1 light
+ * / 8.97:1 dark whatever the row is doing. The chip also gives the count
+ * a SHAPE and an icon slot, so neither reads as colour alone. */
+.as-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  justify-self: start;
+  overflow-wrap: anywhere;
+}
+.as-count[data-tone] {
+  padding: 1px var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
   font-weight: var(--fw-semibold);
 }
+.as-count[data-tone='warn'] {
+  border-color: var(--saffron-line);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
+}
 .as-count[data-tone='bad'] {
-  color: var(--red-text);
-  font-weight: var(--fw-semibold);
+  border-color: var(--red-line);
+  background: var(--red-tint);
+  color: var(--red-on-tint);
+}
+.as-count__icon {
+  flex: none;
 }
 
 /* ── The inline price editor, one per row ─────────────────────────────── */
@@ -131,10 +161,26 @@
   font-size: var(--fs-xs);
   overflow-wrap: anywhere;
 }
+/* Over its own tint, for the reason `.as-count[data-tone]` is: this sits
+ * in a table cell and `--saffron-text` falls to 4.31:1 on the row's
+ * `--surface-3` hover in light while staying at 8.73:1 in dark. */
 .as-price__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  justify-self: start;
   margin: 0;
-  color: var(--saffron-text);
+  padding: 1px var(--sp-2);
+  border: 1px solid var(--saffron-line);
+  border-radius: var(--r-pill);
+  background: var(--saffron-tint);
+  color: var(--saffron-on-tint);
   font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+.as-price__note svg {
+  flex: none;
 }
 
 /* ── Row actions ──────────────────────────────────────────────────────── */
@@ -147,6 +193,15 @@
 }
 
 /* ── What a copy actually did ─────────────────────────────────────────── */
+/* An inset WELL, not a panel the same colour as what it sits in.
+ *
+ * This renders inside a `Dialog`, whose own panel is `--surface-2` — so
+ * painting the report `--surface-2` too made it 1.00:1 against its
+ * parent in BOTH themes, with its bounds carried solely by `--line` at
+ * 1.23:1. skydrop-design exempts a hairline from 1.4.11 only "between
+ * surfaces already distinguishable by value", which these were not.
+ * `--surface-3` is the system's raised/recessed step and is what every
+ * other nested block in this area already uses. */
 .as-report {
   display: grid;
   gap: var(--sp-2);
@@ -155,7 +210,7 @@
   padding: var(--sp-3);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
-  background: var(--surface-2);
+  background: var(--surface-3);
   font-size: var(--fs-sm);
 }
 .as-report__list {

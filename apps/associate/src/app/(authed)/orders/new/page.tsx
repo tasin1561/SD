@@ -7,6 +7,7 @@ import {
   Banknote,
   OctagonX,
   PackageSearch,
+  PackageX,
   PauseCircle,
   Plus,
   Send,
@@ -221,7 +222,7 @@ export default function NewOrderPage(): ReactElement {
         </Notice>
       ) : null}
 
-      <Section title="What they are buying">
+      <Section title="What they are buying" note="Your store sets these prices">
         <div className="as-stack as-stack--tight">
           <ul className="as-lines">
             {lines.map((l) => {
@@ -264,14 +265,25 @@ export default function NewOrderPage(): ReactElement {
                     ) : null}
                   </div>
                   {item !== undefined && item.retailPriceInr !== null ? (
-                    // STATED, never a field: the price is your store's to set.
+                    // STATED, never a field: the price is your store's to
+                    // set — said ONCE on the section heading rather than
+                    // on every line. It was a fourth item on this row, and
+                    // at 360px four 12px facts wrap into a block of grey
+                    // with the one figure somebody reads down a phone
+                    // buried inside it.
                     <p className="as-line__note">
                       <ProductThumb src={itemThumb(item)} size={32} alt="" />
                       <span className="as-line__price">
                         <Money amount={item.retailPriceInr} convert={false} /> each
                       </span>
-                      <span>{item.availableQuantity} available</span>
-                      <span>Your store sets this price</span>
+                      {item.availableQuantity === 0 ? (
+                        <span className="as-flag" data-tone="bad">
+                          <PackageX size={12} aria-hidden />
+                          None left
+                        </span>
+                      ) : (
+                        <span>{item.availableQuantity} available</span>
+                      )}
                     </p>
                   ) : null}
                 </li>
