@@ -26,8 +26,19 @@
      past the card. Twelve settings did it at 320px. */
   min-width: 0;
 }
-.sss-name__line > * {
+/* THE NAME GIVES WAY, NOT THE ICON. `min-width: 0` on every child was
+   the first attempt and it moved the problem rather than fixing it: the
+   tooltip anchor is an `inline-block` around a fixed 28px button, and
+   letting IT shrink squeezed it to 16px so the button — hover background
+   and all — stuck out into the text beside it. A label can truncate and
+   still be read; an icon cannot be 16px wide. */
+.sss-name__line > .ac-cell-main {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sss-name__line > .sk-tipcard {
+  flex: none;
 }
 .sss-name__meta {
   color: var(--fg-faint);
