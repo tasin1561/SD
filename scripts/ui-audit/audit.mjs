@@ -774,6 +774,7 @@ async function main() {
   let checked = 0;
   let withFindings = 0;
   let unmeasured = 0;
+  let reSignIns = 0;
   const unresolved = new Set();
 
   try {
@@ -913,12 +914,43 @@ async function main() {
           // describing it — a sweep that did not run must never read as a
           // sweep that passed.
           if (cfg.email !== null && !route.startsWith('/login') && /\/login/.test(page.url())) {
-            unmeasured += 1;
-            report.push({ route, width, loggedOut: true });
-            console.log(
-              `  ${String(width).padStart(4)}px ${route}  NOT MEASURED — bounced to /login`,
-            );
-            continue;
+            // SIGN IN AGAIN AND TRY ONCE MORE. The session can still be
+            // lost mid-sweep even with no handover: the client refreshes
+            // silently, and over eighty navigations a refresh in flight
+            // when the next document boots presents the same token twice
+            // — which the API reads as replay and answers by burning the
+            // family (FE-4). Every page after that is a sign-in screen.
+            // Recovering is honest where ignoring it is not: a route
+            // that fails TWICE is still counted and named, so the guard
+            // keeps its teeth, and `reSignIns` bounds the retries so a
+            // genuinely broken login cannot spend the 5-per-15-minutes
+            // throttle on a loop.
+            if (reSignIns < 3) {
+              reSignIns += 1;
+              console.log(
+                `  ${String(width).padStart(4)}px ${route}  session lost — signing in again`,
+              );
+              try {
+                await signIn(page);
+                await page.goto(`${cfg.baseUrl}${route}`, {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 25_000,
+                });
+                await page.waitForLoadState('networkidle').catch(() => {});
+                await page.waitForTimeout(350);
+                result = await page.evaluate(probe);
+              } catch {
+                /* fall through to the count below */
+              }
+            }
+            if (/\/login/.test(page.url())) {
+              unmeasured += 1;
+              report.push({ route, width, loggedOut: true });
+              console.log(
+                `  ${String(width).padStart(4)}px ${route}  NOT MEASURED — bounced to /login`,
+              );
+              continue;
+            }
           }
           // Signed in, not a login route, and yet no app shell: whatever
           // was measured, it was not the page. Counted with the bounces

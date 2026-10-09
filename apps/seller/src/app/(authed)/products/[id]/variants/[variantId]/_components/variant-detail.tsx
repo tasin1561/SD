@@ -209,7 +209,12 @@ export function VariantDetailView({
                 the sticker until the seller fills in a real EAN.
               */
               figure={
-                <span className="sk-ident" style={{ overflowWrap: 'anywhere' }}>
+                /* `sk-ident--wrap`, not an inline `overflowWrap`: that
+                   cannot act on a `nowrap` run, which is what
+                   `.sk-ident` sets, so the code stayed on one line and
+                   ran 47px out of its card at 768px. The shared modifier
+                   turns the nowrap off as well. */
+                <span className="sk-ident sk-ident--wrap">
                   {detail.data.barcode ?? detail.data.skuCode}
                 </span>
               }

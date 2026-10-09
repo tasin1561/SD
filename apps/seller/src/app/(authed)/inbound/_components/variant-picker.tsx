@@ -146,9 +146,7 @@ export function VariantPicker({
                     {/* Wraps rather than truncates — the variant label is
                         the end of the string and the whole point of it. */}
                     <span className="inv-combo__name">{shown}</span>
-                    <span className="sk-ident inv-muted" style={{ overflowWrap: 'anywhere' }}>
-                      {h.skuCode}
-                    </span>
+                    <span className="sk-ident sk-ident--wrap inv-muted">{h.skuCode}</span>
                   </span>
                 </button>
               );
