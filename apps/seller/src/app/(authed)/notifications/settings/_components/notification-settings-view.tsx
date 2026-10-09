@@ -300,7 +300,7 @@ function YourTopics({
                                 code. It is what a support conversation
                                 needs to name, and what the mute is
                                 actually stored against. */}
-                            <span className="set-code sk-ident">{d.topic}</span>
+                            <span className="set-code sk-ident sk-ident--wrap">{d.topic}</span>
                           </div>
                           <p className="set-row__desc">{d.description}</p>
                           {d.mutable === false ? (

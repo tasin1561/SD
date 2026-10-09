@@ -128,3 +128,6 @@ reference/
 
 # ----- Apps restyle before/after screenshots (local only, large) -----
 screenshots/apps-restyle/
+
+# The UI audit is a diagnostic run, not a build artefact.
+scripts/ui-audit/out/

@@ -8,6 +8,16 @@
   display: inline-flex;
   align-items: flex-start;
   gap: var(--sp-3);
+  /* An inline-flex box is shrink-to-fit, which sounds like "never wider
+     than its parent" and is not: the floor is the content's MIN-content
+     width, so an unbreakable label makes the row that wide and it leaves
+     the card. This caps it — but ONLY where `.sk-check` is an ordinary
+     block. If `.sk-check` is a grid or flex container the row is a grid
+     item, `100%` resolves against the grid AREA rather than the parent,
+     and the area is the thing that was blown out, so this does nothing;
+     there the cure is to give the text somewhere to break. Measured, not
+     assumed — reseller /integrations at 320px. */
+  max-width: 100%;
   min-height: var(--tap);
   padding: calc((var(--tap) - 20px) / 2) 0;
   cursor: pointer;
@@ -90,14 +100,21 @@
   min-width: 0;
   padding-top: 1px;
 }
+/* `anywhere` rather than `break-word`: it is the one that also lowers the
+   MIN-CONTENT width, which is what the flex floor above is measured
+   against — `break-word` breaks the glyphs and still reports the whole
+   unbroken word as the minimum, so the row would keep overflowing. Same
+   choice, for the same reason, as `.rc-ntf-item__text`. */
 .sk-check__label {
   color: var(--fg-strong);
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .sk-check__desc {
   color: var(--fg-muted);
   font-size: var(--fs-sm);
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 .sk-check__error {
   display: flex;

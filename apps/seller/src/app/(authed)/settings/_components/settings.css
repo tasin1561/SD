@@ -490,12 +490,31 @@ tr[data-dead] > td {
     box-shadow: var(--elev-2);
   }
 }
+/*
+  `min-width: 0` ON THE CHILDREN, not only on the card.
+
+  `.set-endpoint` already carries it, which reads as enough and is not:
+  a grid ITEM defaults to `min-width: auto`, so each of these three
+  refuses to shrink below its own min-content width however narrow the
+  card gets. A webhook URL is one long unbreakable token, so at 320px
+  the head was 385px wide — 94px past the viewport and 106px outside
+  its own <li>, which is the card's border crossing the text.
+
+  The children wrap and the URL already sets `overflow-wrap: anywhere`;
+  both were powerless while the item could not be made narrower than
+  its content in the first place.
+*/
 .set-endpoint__head {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-3);
+  min-width: 0;
+}
+/* The flex children of the head, for the same reason one level down. */
+.set-endpoint__head > * {
+  min-width: 0;
 }
 .set-endpoint__name {
   display: flex;
@@ -531,6 +550,7 @@ tr[data-dead] > td {
   margin: 0;
   padding-top: var(--sp-3);
   border-top: 1px solid var(--line);
+  min-width: 0;
 }
 .set-endpoint__facts dt {
   margin-bottom: 2px;
@@ -554,6 +574,9 @@ tr[data-dead] > td {
   border-top: 1px solid var(--line);
   color: var(--red-text);
   font-size: var(--fs-xs);
+  min-width: 0;
+  /* The reason text names an endpoint, and an endpoint is a URL. */
+  overflow-wrap: anywhere;
 }
 
 /* ── Profile logo ─────────────────────────────────────────────────────── */

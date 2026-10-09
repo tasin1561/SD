@@ -460,6 +460,12 @@
   align-items: center;
   justify-content: flex-end;
   gap: var(--sp-2);
+  /* A flex ITEM defaults to `min-width: auto`, which is its content's
+     minimum — so without this the identity block and the bell refuse to
+     give ground and spill LEFT out of this box, over whatever the
+     centre holds. Measured at 1440: the bell landed on top of the
+     seller's search field on every page. */
+  min-width: 0;
   margin-left: auto;
 }
 @media (max-width: 379.98px) {
@@ -489,13 +495,25 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* The centre keeps its natural width while there is room and gives
+     ground before anything is pushed off the edge; whatever it holds
+     caps itself with `max-width: 100%`. `flex: none` here meant a
+     fixed-width search box squeezed the two sides until they
+     overflowed. */
   .sk-top__center {
     display: flex;
-    flex: none;
+    flex: 0 1 22rem;
     justify-content: center;
+    min-width: 0;
   }
+  /* The right side KEEPS ITS CONTENT. It was `flex: 1 1 0`, which hands
+     it the smallest share of the row and therefore starves it first —
+     backwards, because it holds who you are signed in as and the way
+     out, and neither is something to cut. The order things give way in
+     is: the section label (basis 0, so it goes to nothing first), then
+     the search, then nothing. */
   .sk-top__right {
-    flex: 1 1 0;
+    flex: none;
     margin-left: 0;
   }
   .sk-top__desktop {
@@ -503,6 +521,7 @@
     flex: none;
     align-items: center;
     gap: var(--sp-2);
+    min-width: 0;
   }
 }
 

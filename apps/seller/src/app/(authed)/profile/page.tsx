@@ -194,7 +194,9 @@ export default function ProfilePage(): ReactElement {
         <KpiCard
           label="Sign-in email"
           icon={<Mail size={14} />}
-          figure={<span className="set-kpi-text sk-ident">{detail.data.emailDisplay}</span>}
+          figure={
+            <span className="set-kpi-text sk-ident sk-ident--wrap">{detail.data.emailDisplay}</span>
+          }
           tone={detail.data.emailVerifiedAt === null ? 'pending' : 'neutral'}
           hint={detail.data.emailVerifiedAt === null ? 'Not verified yet.' : 'Verified.'}
         />
@@ -374,7 +376,7 @@ function CompanyInfoSection({ profile }: { readonly profile: SellerProfileView }
             <dt>Contact person</dt>
             <dd>{profile.contactPersonName}</dd>
             <dt>Email</dt>
-            <dd className="sk-ident">{profile.emailDisplay}</dd>
+            <dd className="sk-ident sk-ident--wrap">{profile.emailDisplay}</dd>
             <dt>Phone</dt>
             <dd className="sk-ident">{profile.phone}</dd>
             <dt>WhatsApp</dt>

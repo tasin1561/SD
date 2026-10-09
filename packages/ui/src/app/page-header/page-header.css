@@ -31,6 +31,19 @@
   color: var(--fg-strong);
   background: var(--surface-3);
 }
+/* A breadcrumb link is a standalone affordance, so on a touch screen it
+   takes the estate's 30px anchor floor (`a { min-height }` in
+   `brand/legacy.css`) — which the 28px above silently beat, a class
+   selector outranking a bare element one. That floor's own comment names
+   "a breadcrumb" as a case it exists for, so this restores the decision
+   rather than making a new one; 28px stays the desktop height, where the
+   pointer is a mouse and the only thing the height sets is the hover
+   background. Keep the two numbers in step. */
+@media (pointer: coarse) {
+  .sk-crumbs__link {
+    min-height: 30px;
+  }
+}
 .sk-crumbs__here {
   padding: 0 6px;
   color: var(--fg-body);

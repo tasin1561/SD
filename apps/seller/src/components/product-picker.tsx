@@ -140,11 +140,15 @@ export function ProductCatalogue({
                       {h.variantLabel === null ? '' : ` — ${h.variantLabel}`}
                     </p>
                     <p className="text-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-xs">
-                      <span className="truncate">{h.skuCode}</span>
+                      {/* `min-w-0` on both: a flex ITEM's automatic
+                          minimum is its content, so `truncate` cannot
+                          shrink the SKU and the stock line refuses to
+                          wrap — at 320px it ran 26px past this row. */}
+                      <span className="min-w-0 truncate">{h.skuCode}</span>
                       <span aria-hidden className="text-text-faint">
                         ·
                       </span>
-                      <span className={none ? 'text-[var(--status-failed-fg)]' : ''}>
+                      <span className={`min-w-0 ${none ? 'text-[var(--status-failed-fg)]' : ''}`}>
                         {none ? 'out of stock' : `${available} in stock`}
                         {inTransit > 0 ? ` (+${inTransit} coming)` : ''}
                       </span>

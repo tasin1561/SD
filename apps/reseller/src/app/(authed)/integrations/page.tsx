@@ -417,7 +417,9 @@ function WebhooksSection(): ReactElement {
                   ) : null}
                   <span className="rd-cell-sub rd-cell-ident sk-ident">{h.url}</span>
                 </Td>
-                <Td className="rd-cell-ident sk-ident">{h.subscribedEvents.join(', ')}</Td>
+                <Td className="rd-cell-ident sk-ident sk-ident--wrap">
+                  {h.subscribedEvents.join(', ')}
+                </Td>
                 <Td className="rd-cell-muted">
                   {h.autoDisabledAt !== null ? (
                     <span className="rd-cell-warn">

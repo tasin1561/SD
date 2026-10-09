@@ -143,7 +143,7 @@ export function SecurityIndex(): ReactElement {
                 <dd>{identity.fullName}</dd>
                 <dt>Email</dt>
                 <dd>
-                  <span className="sk-ident">{identity.emailDisplay}</span>
+                  <span className="sk-ident sk-ident--wrap">{identity.emailDisplay}</span>
                   {identity.emailVerifiedAt === null && (
                     <span className="set-faint"> — not verified</span>
                   )}

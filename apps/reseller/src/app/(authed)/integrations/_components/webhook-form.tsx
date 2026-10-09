@@ -47,7 +47,10 @@ export function EventPicker({
           <Checkbox
             key={e.code}
             checked={chosen.has(e.code)}
-            label={<span className="sk-ident">{e.code}</span>}
+            // A topic key is machine text and NOT one token: 30 dotted
+            // characters in a 228px cell at 320px, where `.sk-ident`'s
+            // nowrap pushed the row past the card.
+            label={<span className="sk-ident sk-ident--wrap">{e.code}</span>}
             description={e.description}
             onChange={(ev) => {
               const next = new Set(chosen);

@@ -97,7 +97,7 @@ export function OrderOmnisearch(): ReactElement | null {
   }
 
   return (
-    <div ref={boxRef} className="relative w-[22rem] max-w-[34vw]">
+    <div ref={boxRef} className="relative w-[22rem] max-w-full min-w-0">
       <div className="relative">
         <Search
           className="text-text-faint pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2"

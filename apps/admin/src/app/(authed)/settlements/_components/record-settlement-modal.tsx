@@ -375,8 +375,10 @@ export function RecordSettlementModal({
               // the reference and amount from the latter.
               <p className="mk-body">
                 The file says: UTR{' '}
-                <span className="sk-ident">{fileNotes.summary.references.join(', ') || '—'}</span> ·
-                collected <Money amount={fileNotes.summary.codInr} /> · kept back{' '}
+                <span className="sk-ident sk-ident--wrap">
+                  {fileNotes.summary.references.join(', ') || '—'}
+                </span>{' '}
+                · collected <Money amount={fileNotes.summary.codInr} /> · kept back{' '}
                 <Money amount={fileNotes.summary.deductedInr} /> · remitted{' '}
                 <Money amount={fileNotes.summary.remittedInr} />
               </p>

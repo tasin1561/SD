@@ -137,7 +137,17 @@ function OrdersList(): ReactElement {
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 trail={
-                  <button type="submit" aria-label="Search" title="Search" className="as-link">
+                  <button
+                    type="submit"
+                    aria-label="Search"
+                    title="Search"
+                    /* `skydrop-hit` gives a hand-rolled icon button the same 44px
+                       coarse-pointer tap area the Button primitive has: a ::after
+                       box that changes the hit target and not the layout. Without
+                       it this renders 16×32 — under the 30px floor the responsive
+                       sweep enforces, on an app whose entire audience is a phone. */
+                    className="as-link skydrop-hit"
+                  >
                     <Search size={16} aria-hidden />
                   </button>
                 }

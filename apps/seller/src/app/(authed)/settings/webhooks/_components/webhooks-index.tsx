@@ -300,7 +300,8 @@ function EndpointRow({
       <dl className="set-endpoint__facts">
         <div>
           <dt>Subscribed events</dt>
-          <dd className="sk-ident">
+          {/* A LIST of event names, not one id — so it wraps. */}
+          <dd className="sk-ident sk-ident--wrap">
             {endpoint.subscribedEvents.length === 0 ? (
               <span className="set-faint">none</span>
             ) : (

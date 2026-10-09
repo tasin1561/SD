@@ -325,6 +325,10 @@
   font-size: var(--fs-xs);
   overflow-wrap: anywhere;
 }
+/* …which cannot act on its own, because the label IS a `.sk-ident` and
+   that primitive is `white-space: nowrap`. The opt-out is the shared
+   `.sk-ident--wrap`, applied on the label in `webhook-form.tsx` — not a
+   local `white-space: normal` here, so there is one thing to find. */
 
 /* ── Logo ─────────────────────────────────────────────────────────────── */
 .rd-logo {

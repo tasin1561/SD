@@ -374,7 +374,9 @@ export function TeamManagementIndex(): ReactElement {
                           <StatusChip kind="cancelled" label="Deactivated" size="sm" />
                         )}
                       </div>
-                      <span className="team-member__email sk-ident">{m.emailDisplay}</span>
+                      <span className="team-member__email sk-ident sk-ident--wrap">
+                        {m.emailDisplay}
+                      </span>
                       <span className="team-member__times">
                         <span>
                           Last login{' '}
@@ -486,7 +488,7 @@ export function TeamManagementIndex(): ReactElement {
                     return (
                       <Tr key={inv.id}>
                         <Td>
-                          <span className="sk-ident">{inv.email}</span>
+                          <span className="sk-ident sk-ident--wrap">{inv.email}</span>
                         </Td>
                         <Td>
                           {/* An invitation offers a SET of roles, so
