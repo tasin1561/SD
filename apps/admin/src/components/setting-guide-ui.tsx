@@ -185,7 +185,11 @@ export function SettingName({
       </div>
       <span className="sss-name__meta">
         {showGroup && guide !== null && <span>{guide.group} · </span>}
-        <code className="sk-ident">{settingKey}</code>
+        {/* A setting key is machine text nobody dictates, so it may
+            break. `.sss-name__meta` around it already asks for
+            `overflow-wrap: anywhere`, which `.sk-ident`'s nowrap was
+            quietly overriding. */}
+        <code className="sk-ident sk-ident--wrap">{settingKey}</code>
       </span>
     </div>
   );

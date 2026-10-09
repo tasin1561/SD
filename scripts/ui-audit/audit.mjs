@@ -78,6 +78,93 @@ const WIDTHS = [320, 360, 414, 768, 1024, 1440];
 
 /** Routes from the file system, because a hand-kept list goes stale. */
 /**
+ * Turn `/orders/[id]` into `/orders/<a real id>` by READING THE APP'S OWN
+ * LIST PAGE, segment by segment. The parent of a dynamic segment is the
+ * list that links to it, so `/orders` is visited and the first link one
+ * level deeper gives the id; a nested param (`/products/[id]/variants/
+ * [variantId]`) resolves left to right, each step visiting the concrete
+ * parent the previous step produced.
+ *
+ * Read from the page rather than from the database on purpose: it needs
+ * no credentials beyond the session the sweep already holds, it cannot
+ * drift from the schema, and — the part that matters — it can only ever
+ * pick a record this signed-in user is actually allowed to open, so a
+ * resolved page is one a real person could reach.
+ *
+ * A STATIC SIBLING IS NOT AN ID. `/orders/new` and `/orders/import` are
+ * real routes, and a list page links to them, so they are excluded by
+ * name from the app's own route table. An unresolved route is REPORTED,
+ * never silently dropped — a sweep that quietly skipped a page must not
+ * read as a sweep that passed it.
+ */
+function templateOf(concrete, route) {
+  const want = route.split('/');
+  const got = concrete.split('/');
+  return got.map((seg, i) => (want[i]?.startsWith('[') === true ? want[i] : seg)).join('/');
+}
+
+async function resolveDynamic(page, baseUrl, route, staticRoutes, allRoutes) {
+  const segments = route.split('/').filter((x) => x !== '');
+  let prefix = '';
+  for (const seg of segments) {
+    if (!seg.startsWith('[')) {
+      prefix = `${prefix}/${seg}`;
+      continue;
+    }
+    // `[...slug]` can be any depth and is not worth guessing at.
+    if (seg.startsWith('[...')) return null;
+    // THE NEAREST ANCESTOR THAT IS A PAGE, not blindly the parent path.
+    // `/products/[id]/variants/[variantId]` would otherwise visit
+    // `/products/<id>/variants`, which is no route at all — the variant
+    // links live on the product page one level up. Walk up until a page
+    // is found; the href match below still uses the FULL prefix, so a
+    // link from the wrong depth cannot be mistaken for the right one.
+    let list = prefix === '' ? '/' : prefix;
+    // `allRoutes`, not `staticRoutes`: `/products/[id]` is where the
+    // variant links live and it IS a page — just a dynamic one. Testing
+    // against the static list alone walked straight past it up to
+    // `/products`, where no variant link exists, and the route came back
+    // unresolvable with nothing to say why.
+    while (list !== '/' && !allRoutes.includes(templateOf(list, route))) {
+      const up = list.slice(0, list.lastIndexOf('/'));
+      list = up === '' ? '/' : up;
+    }
+    try {
+      await page.goto(`${baseUrl}${list}`, { waitUntil: 'domcontentloaded', timeout: 25_000 });
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await page.waitForTimeout(500);
+    } catch {
+      return null;
+    }
+    const taken = new Set(
+      staticRoutes
+        .filter((r) => r.startsWith(`${prefix}/`))
+        .map((r) => r.slice(prefix.length + 1).split('/')[0]),
+    );
+    const found = await page
+      .evaluate(
+        ({ pre: _pre, taken }) => {
+          const pre = _pre;
+          for (const a of Array.from(document.querySelectorAll('a[href]'))) {
+            const href = a.getAttribute('href') ?? '';
+            if (!href.startsWith(pre)) continue;
+            const rest = href.slice(pre.length).split(/[?#]/)[0];
+            if (rest === '' || rest.includes('/')) continue;
+            if (taken.includes(rest)) continue;
+            return rest;
+          }
+          return null;
+        },
+        { pre: prefix === '' ? '/' : `${prefix}/`, taken: [...taken] },
+      )
+      .catch(() => null);
+    if (found === null) return null;
+    prefix = `${prefix}/${found}`;
+  }
+  return prefix === '' ? '/' : prefix;
+}
+
+/**
  * Every page route of an app, and which of them sit inside the `(authed)`
  * route group. That second half decides whether a page is EXPECTED to
  * render the app shell: a sign-in screen, a password reset and the
@@ -151,6 +238,18 @@ export function probe() {
       const rect = el.getBoundingClientRect();
       if (rect.width <= 0 || rect.right <= vw + 2) continue;
       if (clippedOnX(el)) continue;
+      // A FIXED ELEMENT SIZED BY ITS INSETS IS A CONSEQUENCE, NEVER THE
+      // CAUSE. `.sk-toasts` is `position: fixed; left: 16px; right:
+      // 16px`, so its width is whatever the layout viewport is — and in
+      // mobile emulation the browser WIDENS that viewport to fit an
+      // overflowing document. It therefore grew to `document width −
+      // 32` on every page that overflowed for some other reason, and
+      // reported itself as the widest offender. Measured across two
+      // apps: toast width was always exactly `scrollWidth − 32`. A
+      // fixed element with an explicit width can still overflow, so
+      // only the inset-sized case is skipped.
+      const fx = getComputedStyle(el);
+      if (fx.position === 'fixed' && fx.left !== 'auto' && fx.right !== 'auto') continue;
       const parent = el.parentElement;
       if (parent && parent.getBoundingClientRect().right > vw + 2) continue;
       const cls = (el.className?.toString() ?? '').split(' ').slice(0, 4).join('.');
@@ -307,12 +406,67 @@ export function probe() {
 
     // C. SPILLING PAST ITS PARENT while the parent is not scrollable,
     //    so the overlap is visible rather than reachable.
+    //
+    // A NEGATIVE MARGIN IS THE AUTHOR SAYING "extend past my box", so a
+    // spill it fully explains is not a finding. The admin dashboard is
+    // the worked example: the (i) beside a tip card carries
+    // `margin: -14px -8px` on a coarse pointer — the standard way to
+    // grow a 28px control to a 44px tap area WITHOUT moving the layout —
+    // and therefore sticks exactly 8px out, 78 times in one sweep, every
+    // one of them correct.
+    //
+    // It is the MARGIN and not the parent's appearance: a first attempt
+    // skipped any parent that painted no border or background, which
+    // would have silently thrown away the reseller finding this sweep
+    // had already proved (a topic key 10px past `.sk-check`, whose CSS
+    // is three lines and draws nothing). A spill LARGER than the margin
+    // explains is still reported, so the exemption cannot cover for a
+    // real one hiding behind it.
     const parent = el.parentElement;
     if (parent !== null && !isOut(st)) {
       const pst = getComputedStyle(parent);
       const prect = parent.getBoundingClientRect();
       const scrollable = /auto|scroll/.test(pst.overflowX) || /auto|scroll/.test(pst.overflowY);
-      if (!scrollable && prect.width > 8 && rect.right > prect.right + 2) {
+      // The BUDGET is both negative inline margins, not just the right
+      // one. A 44px tap box with `margin: -14px -8px` spills exactly 8px
+      // out of an anchor that fits it — but when the anchor is itself
+      // compressed (its own parent is tight) the same deliberate box
+      // spills 9, 10, 11px, and measuring against the right margin alone
+      // reported 18 of those on one screen. Measured on admin
+      // `/settings`: button 44px fixed, anchor squeezed to 26px, nothing
+      // visibly outside anything — the icon is 28px and centred. A real
+      // break still shows, because a spill wider than the margins the
+      // author wrote is not explained by them.
+      const pull =
+        -Math.min(0, Number.parseFloat(st.marginRight) || 0) -
+        Math.min(0, Number.parseFloat(st.marginLeft) || 0);
+      const spill = rect.right - prect.right;
+      // TWO author signals together, and only together: a negative
+      // inline margin ("my box extends past my parent") AND a parent
+      // that paints no boundary ("there is no edge here to cross"). The
+      // case is a fixed 44px tap box whose anchor is a transparent
+      // positioning span the layout squeezed to 19px — so the spill is
+      // unbounded by the margin, while the only thing a reader SEES is a
+      // 28px icon centred inside it.
+      //
+      // Each signal alone was tried and was wrong. The margin alone
+      // cannot cover an anchor compressed arbitrarily far. The parent's
+      // appearance alone would have thrown away a finding this sweep had
+      // already proved — a topic key 10px past `.sk-check`, whose CSS is
+      // three lines and draws nothing — and that child has no negative
+      // margin, which is exactly what tells the two apart.
+      const parentPaintsEdge =
+        pst.backgroundImage !== 'none' ||
+        !/^rgba\(0, 0, 0, 0\)$|^transparent$/.test(pst.backgroundColor) ||
+        Number.parseFloat(pst.borderTopWidth) > 0 ||
+        Number.parseFloat(pst.borderRightWidth) > 0 ||
+        Number.parseFloat(pst.borderBottomWidth) > 0 ||
+        Number.parseFloat(pst.borderLeftWidth) > 0 ||
+        pst.boxShadow !== 'none' ||
+        pst.overflowX === 'hidden' ||
+        pst.overflowX === 'clip';
+      const deliberate = pull > 0 && !parentPaintsEdge;
+      if (!scrollable && prect.width > 8 && spill > 2 && !deliberate && spill > pull + 1) {
         findings.push({
           kind: 'escapes-parent',
           detail: `<${tag} class="${cls}"> "${label}" ends ${Math.round(rect.right - prect.right)}px past its <${parent.tagName.toLowerCase()} class="${(parent.className?.toString() ?? '').split(' ').slice(0, 3).join('.')}">`,
@@ -604,54 +758,34 @@ async function main() {
   const only = args.find((a) => a.startsWith('--route='))?.slice('--route='.length);
 
   const { routes: all, authed } = await routesFor(app);
-  // A dynamic segment needs a real id, which this sweep does not have.
-  // They are REPORTED rather than silently dropped, so nobody reads a
-  // clean run as "every page is fine".
   const dynamic = all.filter((r) => r.includes('['));
-  const routes = only !== undefined ? [only] : all.filter((r) => !r.includes('['));
+  const staticRoutes = all.filter((r) => !r.includes('['));
+  const routes = only !== undefined ? [only] : staticRoutes;
 
   const outDir = path.join(ROOT, 'scripts', 'ui-audit', 'out', app);
   await fs.mkdir(outDir, { recursive: true });
 
-  console.log(`\n${app} — ${routes.length} static routes × ${widths.length} widths`);
-  if (dynamic.length > 0) {
-    console.log(`  (${dynamic.length} dynamic route(s) not swept: ${dynamic.join(', ')})`);
-  }
+  console.log(
+    `\n${app} — ${routes.length} static + ${only === undefined ? dynamic.length : 0} dynamic route(s) × ${widths.length} widths`,
+  );
 
   const browser = await chromium.launch();
   const report = [];
   let checked = 0;
   let withFindings = 0;
   let unmeasured = 0;
+  const unresolved = new Set();
 
   try {
-    // Sign in ONCE and reuse the storage state: a fresh login per width
-    // is 24 sign-ins, and seller login is throttled 5 per 15 minutes.
-    //
-    // ── THE STATE MUST BE CARRIED FORWARD, NOT RE-USED ────────────────
-    // The client refreshes silently, which ROTATES the refresh cookie
-    // (FE-4). A storage state captured before that holds the SUPERSEDED
-    // cookie, so handing the same snapshot to a second context presents
-    // a rotated token — the API reads that as replay and burns the whole
-    // family (`security.refresh_replay_detected`). The second context
-    // and every one after it is bounced to /login.
-    //
-    // It is silent: the sweep walks 29 sign-in pages per width, finds
-    // nothing wrong with them, and reports a clean run. Measured on
-    // reseller 2026-10-09 — only the FIRST width was ever testing the
-    // app, so five of six widths (360 included) were never swept at all.
-    // Each context's state is therefore re-captured at close and passed
-    // to the next; contexts run in series, so the last jar is current.
-    let storageState;
+    /*
+      CLEAR THE LOGIN THROTTLE FIRST. Sign-in is 5 per 15 minutes per
+      email+IP, and auditing four apps — each a sign-in, each re-run
+      after every fix — exhausts that in an afternoon. A refused attempt
+      also renews its own block, so retrying makes it worse. The sweep
+      then fails at the login screen and reads as a broken app rather
+      than as its own tenth visit.
+    */
     if (cfg.email !== null) {
-      /*
-        CLEAR THE LOGIN THROTTLE FIRST. Sign-in is 5 per 15 minutes per
-        email+IP, and auditing four apps — each a sign-in, each re-run
-        after every fix — exhausts that in an afternoon. A refused
-        attempt also renews its own block, so retrying makes it worse.
-        The sweep then fails at the login screen and reads as a broken
-        app rather than as its own tenth visit.
-      */
       await new Promise((resolve) => {
         const { spawn } = require('node:child_process');
         const c = spawn(
@@ -662,11 +796,34 @@ async function main() {
         c.on('close', () => resolve());
         c.on('error', () => resolve());
       });
-      const ctx = await browser.newContext({
-        baseURL: cfg.baseUrl,
-        viewport: { width: 1280, height: 900 },
-      });
-      const page = await ctx.newPage();
+    }
+
+    /**
+     * Sign in INSIDE the context that will use the session — never by
+     * capturing a cookie jar and handing it to another context.
+     *
+     * ── WHY NOT HAND IT OVER ──────────────────────────────────────────
+     * The client refreshes silently, which ROTATES the refresh cookie
+     * (FE-4). A jar captured before that holds the SUPERSEDED token, so
+     * a second context presents a cookie the first already spent, the
+     * API reads it as replay and burns the whole family
+     * (`security.refresh_replay_detected`) — and every page after it is
+     * bounced to /login while the sweep happily reports no findings.
+     *
+     * It was six contexts and five handovers; then two contexts and one
+     * handover with a settle before capture, which NARROWED the race and
+     * did not close it — admin lost its session 25 routes into the
+     * second context, 103 page-widths unmeasured. A fresh sign-in has no
+     * handover to lose, and two logins per app is well inside the
+     * throttle the capture was invented to avoid.
+     */
+    const signIn = async (page) => {
+      if (cfg.email === null) return;
+      // WARM THE ROUTE FIRST, untimed. A Next app that has just been
+      // restarted compiles its first request, and on admin that took the
+      // 30s sign-in wait with it — reported as a sign-in failure, which
+      // reads as a broken app rather than as a cold start.
+      await page.goto(`${cfg.baseUrl}/login`, { waitUntil: 'load', timeout: 90_000 });
       await page.goto(`${cfg.baseUrl}/login`, { waitUntil: 'domcontentloaded' });
       await page.getByLabel(/email/i).first().fill(cfg.email);
       await page
@@ -677,20 +834,14 @@ async function main() {
         .getByRole('button', { name: /sign in|log in/i })
         .first()
         .click();
-      await page.waitForURL(cfg.landing, { timeout: 30_000 });
-      storageState = await ctx.storageState();
-      await ctx.close();
-      console.log('  signed in');
-    }
+      await page.waitForURL(cfg.landing, { timeout: 60_000 });
+    };
 
     // ONE CONTEXT PER POINTER KIND, resized between widths — not one per
-    // width. Each handover of the cookie jar between contexts is a chance
-    // to present a refresh token the previous context had already spent,
-    // and the API reads that as replay and burns the family (FE-4). Six
-    // contexts meant five handovers; two mean one. `setViewportSize`
-    // changes the width without a new jar, and the pointer kind is the
-    // only thing that genuinely needs its own context, because `hasTouch`
-    // and `isMobile` are context options Playwright cannot change later.
+    // width. `setViewportSize` changes the width without a new session,
+    // and the pointer kind is the only thing that genuinely needs its own
+    // context, because `hasTouch` and `isMobile` are context options
+    // Playwright cannot change afterwards. Each one signs in for itself.
     const groups = [
       { touch: true, widths: widths.filter((w) => w <= 768) },
       { touch: false, widths: widths.filter((w) => w > 768) },
@@ -705,15 +856,36 @@ async function main() {
         hasTouch: group.touch,
         isMobile: group.touch,
         deviceScaleFactor: 2,
-        ...(storageState === undefined ? {} : { storageState }),
       });
       const page = await ctx.newPage();
       page.setDefaultTimeout(20_000);
+      await signIn(page);
+      if (cfg.email !== null) console.log(`  signed in (${group.touch ? 'touch' : 'pointer'})`);
+
+      // Resolve the dynamic routes ONCE per context, then sweep them
+      // beside the static ones. Once per context rather than once per
+      // width because the ids do not change with the viewport, and each
+      // resolution costs a list-page load.
+      const resolved = new Map();
+      if (only === undefined && dynamic.length > 0) {
+        for (const d of dynamic) {
+          const real = await resolveDynamic(page, cfg.baseUrl, d, staticRoutes, all);
+          if (real === null) {
+            unresolved.add(d);
+          } else {
+            resolved.set(real, d);
+          }
+        }
+        const got = [...resolved.keys()];
+        if (got.length > 0)
+          console.log(`  resolved ${got.length}/${dynamic.length} dynamic route(s)`);
+      }
+      const sweep = [...routes, ...resolved.keys()];
 
       for (const width of group.widths) {
         await page.setViewportSize({ width, height: 780 });
 
-        for (const route of routes) {
+        for (const route of sweep) {
           checked += 1;
           let result;
           try {
@@ -754,7 +926,8 @@ async function main() {
           // Belt AND braces: the route group says this page should be the
           // signed-in app, and the page itself says it rendered neither
           // frame. Both have to agree before a result is thrown away.
-          if (cfg.email !== null && authed.has(route) && result.shell !== true) {
+          const template = resolved.get(route) ?? route;
+          if (cfg.email !== null && authed.has(template) && result.shell !== true) {
             unmeasured += 1;
             report.push({ route, width, noShell: true });
             console.log(
@@ -779,17 +952,6 @@ async function main() {
         }
         console.log(`  ${width}px done`);
       }
-      // Carry the (possibly rotated) cookies forward — see above. The
-      // settle is load-bearing: a refresh in flight when the jar is read
-      // means the NEXT context presents the cookie this one just spent,
-      // and the family burns. Seen on a complete run that then reported
-      // 116 page-widths unmeasured. It narrows the race rather than
-      // closing it; the guard above is what makes a loss visible.
-      if (storageState !== undefined) {
-        await page.waitForLoadState('networkidle').catch(() => {});
-        await page.waitForTimeout(1_500);
-        storageState = await ctx.storageState();
-      }
       await ctx.close();
     }
   } finally {
@@ -806,6 +968,16 @@ async function main() {
     for (const f of r.findings ?? []) byKind[f.kind] = (byKind[f.kind] ?? 0) + 1;
   console.log(`\n${app}: ${checked} page-widths checked, ${withFindings} with findings`);
   for (const [k, n] of Object.entries(byKind)) console.log(`  ${k}: ${n}`);
+  // A route whose id could not be read off a list page is NAMED. It is
+  // not a finding and not a failure — most often the list is simply
+  // empty in this seed — but a page nobody looked at must never be
+  // invisible in the result.
+  if (unresolved.size > 0) {
+    console.log(
+      `\n  ${unresolved.size} dynamic route(s) NOT SWEPT — no record to open:\n` +
+        `     ${[...unresolved].join(', ')}`,
+    );
+  }
   if (unmeasured > 0) {
     console.log(
       `\n  !! ${unmeasured} page-width(s) NOT MEASURED — the page threw, was bounced\n` +

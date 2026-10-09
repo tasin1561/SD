@@ -7,6 +7,11 @@
   position: relative;
   isolation: isolate;
   display: grid;
+  /* An implicit `auto` track floors at its widest item's min-content, so
+     `min-width: 0` alone cannot make this card narrower than its longest
+     label. See `.sss-name` in admin's setting guide for the same fix and
+     the same reasoning. */
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--sp-1);
   min-width: 0;
   padding: var(--sp-4) var(--sp-4) var(--sp-4);
@@ -70,6 +75,13 @@
   display: flex;
   align-items: flex-start;
   gap: var(--sp-2);
+  /* `.sk-kpi` sets `min-width: 0` on itself, which is NOT the same thing:
+     this row is a grid ITEM of it, and an item's automatic minimum is its
+     own content. So a long label beside a `flex: none` chip made the row
+     wider than the card and spilled 8px past it at 360px, on five admin
+     screens. The label already carries `min-width: 0` and truncates; this
+     is what lets it. */
+  min-width: 0;
 }
 .sk-kpi__label {
   flex: 1;

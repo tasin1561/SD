@@ -279,7 +279,12 @@ export function SellerTicketsIndex(): ReactElement {
                     selected={openThread === t.id}
                   >
                     <Td>
-                      <span className="tkt-number sk-ident">{t.ticketNumber}</span>
+                      {/* A LINK, not a span — see the admin list: a row that
+                          only responds to a mouse click is reachable by
+                          nobody using a keyboard. */}
+                      <Link href={`/tickets/${t.id}`} className="tkt-number sk-ident">
+                        {t.ticketNumber}
+                      </Link>
                     </Td>
                     <Td>
                       {/* Three answers, not two: a reseller store's

@@ -360,6 +360,13 @@ a.mk-name:hover {
 }
 .mk-cell {
   display: grid;
+  /* `minmax(0, 1fr)` AND NOT just `min-width: 0`. With no explicit
+     track the implicit column is `auto`, whose minimum is its widest
+     item's min-content — so one `nowrap` id floored the track at 248px
+     inside a 224px cell, and then every OTHER child, sized to that same
+     track, escaped by the identical 24px. Three findings, one cause,
+     and the two innocent children read as the broken ones. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
   min-width: 0;
 }
@@ -392,6 +399,17 @@ a.mk-name:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  /* An `inline-flex` box is shrink-to-fit, which sounds like "never
+     wider than its parent" and is not: its floor is its content's
+     MIN-content width, so a long company name pushed it 24px past the
+     cell at 320px. */
+  min-width: 0;
+  max-width: 100%;
+}
+.mk-seller__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mk-seller__mark[data-tone='bad'] {
   color: var(--red-text);

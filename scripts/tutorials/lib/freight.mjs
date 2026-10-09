@@ -409,10 +409,28 @@ export async function ensureFreightWorld({ sellerId, sellerToken, staffToken, lo
   await recordTheBill(arrival, staffToken, log);
   const orderId = await shipSomeOfIt(sellerId, sellerToken, staffToken, log);
   await letTheClockRun(orderId, log);
-  await waitFor('the freight share to be charged', async () => {
-    const [bill] = await freightReport(sellerId);
-    return bill !== undefined && bill.unitsSettled > 0 ? bill : null;
-  });
+  /*
+    NINETY SECONDS, not thirty.
+    
+    The charge is a BullMQ job in the API process, and the default wait
+    assumed a quiet machine. It is not quiet when it matters: two stacks
+    film at once and each take runs an ffmpeg render beside a headless
+    Chromium, which is exactly when this seed is being asked for. Under
+    that load the sweep took longer than thirty seconds and the seed
+    failed on a job that was simply still queued — a timeout reported
+    as if the freight had not been charged at all.
+    
+    Waiting longer costs nothing when the job is quick, because the
+    check returns as soon as it lands.
+  */
+  await waitFor(
+    'the freight share to be charged',
+    async () => {
+      const [bill] = await freightReport(sellerId);
+      return bill !== undefined && bill.unitsSettled > 0 ? bill : null;
+    },
+    { tries: 90, everyMs: 1000 },
+  );
 
   /*
     THE ONE THING WORTH ASSERTING, because it is the one thing that can

@@ -245,7 +245,19 @@ export function TicketsIndex(): ReactElement {
               {items.map((t) => (
                 <Tr key={t.id} onActivate={() => router.push(`/tickets/${t.id}`)}>
                   <Td>
-                    <span className="tk-number sk-ident">{t.ticketNumber}</span>
+                    {/* A LINK, not a span. `Tr`'s `onActivate` is a pointer
+                        convenience on top of a real link — its own docblock
+                        says so — and without one there was no keyboard or
+                        screen-reader path to a ticket at all, nor any way to
+                        open one in a new tab. */}
+                    {/* A LINK, not a span. `Tr`'s `onActivate` is a pointer
+                        convenience on top of a real link — its own docblock
+                        says so — and without one there was no keyboard or
+                        screen-reader path to a ticket at all, nor any way to
+                        open one in a new tab. */}
+                    <Link href={`/tickets/${t.id}`} className="tk-number sk-ident af-link">
+                      {t.ticketNumber}
+                    </Link>
                   </Td>
                   <Td>
                     <span className="tk-type">{ticketTypeLabel(t.ticketType)}</span>

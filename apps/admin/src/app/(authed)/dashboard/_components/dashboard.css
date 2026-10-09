@@ -127,11 +127,22 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--sp-2);
+  /* The card sets `min-width: 0`; this row is a grid ITEM of it and has
+     its own automatic minimum, which an area name plus a `nowrap` badge
+     pushed past the card by 20px at 320px. */
+  min-width: 0;
 }
 .db-attn__area {
+  /* The name gives way, not the badge: "Escrow" is three words at most
+     and reads as nothing when clipped, whereas an area name truncates
+     and is still recognisable. */
+  min-width: 0;
+  overflow: hidden;
   color: var(--fg-muted);
   font-size: var(--fs-xs);
   font-weight: var(--fw-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .db-attn__badge {
   padding: 1px var(--sp-2);

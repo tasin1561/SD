@@ -71,12 +71,42 @@ console.log(`\nframe on /dashboard   : ${onApp}      (want true — the app shel
 console.log(`frame on /login       : ${onLogin}      (want true — the sign-in frame)`);
 console.log(`frame on a bare page  : ${onNothing}     (want false — neither)`);
 
+// ── `escapes-parent` vs a negative margin ─────────────────────────────
+//
+// A negative margin is the author saying "extend past my box", and the
+// admin dashboard's (i) uses one to grow a 28px control to a 44px tap
+// area without moving the layout — 78 correct findings in one sweep.
+// The exemption must cover exactly that and nothing wider, so this
+// builds both: a child pulled out by its own margin (skip) and the same
+// child pulled out FURTHER than its margin explains (report).
+await p.setContent(`<!doctype html><title>t</title><body style="margin:0">
+  <div id="wrap" style="display:inline-block;width:120px">
+    <button id="tap" style="width:136px;height:44px;margin:0 -8px">i</button>
+  </div>
+  <div id="wrap2" style="display:inline-block;width:40px;border:1px solid #333">
+    <button id="over" style="width:200px;height:44px;margin:0 -8px">spills</button>
+  </div>
+  <div id="wrap3" style="display:inline-block;width:40px">
+    <span id="text" style="white-space:nowrap">no margin, nowrap, spills out</span>
+  </div>
+</body>`);
+const esc = (await p.evaluate(probe)).findings.filter((f) => f.kind === 'escapes-parent');
+const onTap = esc.filter((f) => f.detail.includes('"i"')).length;
+const onOver = esc.filter((f) => f.detail.includes('"spills"')).length;
+const onText = esc.filter((f) => f.detail.includes('no margin')).length;
+console.log(`\nescapes-parent, tap box past a bare anchor : ${onTap} finding(s)  (want 0)`);
+console.log(`escapes-parent, past a parent WITH an edge : ${onOver} finding(s)  (want 1)`);
+console.log(`escapes-parent, no margin, bare parent     : ${onText} finding(s)  (want 1)`);
+
 const ok =
   cleanOverlaps.length === 0 &&
   brokenOverlaps.length > 0 &&
   onApp === true &&
   onLogin === true &&
-  onNothing === false;
+  onNothing === false &&
+  onTap === 0 &&
+  onOver === 1 &&
+  onText === 1;
 console.log(
   ok
     ? '\nPASS — the overlap rule is quiet because the bug is gone, not because it\n' +

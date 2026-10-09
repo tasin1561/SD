@@ -351,7 +351,13 @@ export function BinOpsPanel({
         title="Apply a list of moves"
         subtitle="All of it commits or none of it does. A half-applied re-shelving is worse than none, because nobody can tell which half went through."
       >
-        <Table responsive={false}>
+        {/* CARDS ON A PHONE, like the other 98 tables. `responsive={false}`
+            crammed four columns of form controls into a 314px table at
+            320px: the From and To selects came out 12px and 16px wide,
+            which is not a control anybody can use. The card layout was
+            written for exactly this — its own comment names "a role
+            <select>" as a value that drops to its own line. */}
+        <Table>
           <THead>
             <Tr>
               <Th>From</Th>

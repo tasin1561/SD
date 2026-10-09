@@ -442,7 +442,10 @@ function WalletRow({
           </span>
           <div className="mk-cell">
             <Link href={`/seller-wallets/${row.sellerId}`} className="mk-name mk-seller__name">
-              {row.companyName}
+              {/* The NAME is what gives way — its own element so it can
+                  truncate; the mark beside it is the status signal and
+                  stays whole. A bare text node cannot be ellipsised. */}
+              <span className="mk-seller__label">{row.companyName}</span>
               {inDebt ? (
                 <AlertTriangle size={14} className="mk-seller__mark" data-tone="bad" aria-hidden />
               ) : row.status === 'APPROVED' ? (
@@ -450,7 +453,7 @@ function WalletRow({
               ) : null}
             </Link>
             <span className="mk-small mk-wrap">{row.email}</span>
-            <span className="mk-faint sk-ident mk-wrap">{row.sellerId}</span>
+            <span className="mk-faint sk-ident sk-ident--wrap">{row.sellerId}</span>
           </div>
         </div>
       </Td>

@@ -338,14 +338,59 @@ kill_tree() {
 if [ "$CMD" = "restart" ]; then
   shift 2
   WHICH=("$@")
-  [ ${#WHICH[@]} -gt 0 ] || WHICH=(api sim seller admin)
+  [ ${#WHICH[@]} -gt 0 ] || WHICH=(api sim seller admin reseller associate)
   if [ ! -d "$RUN_DIR" ]; then
     echo "Stack \"$STACK_NAME\" was not started by this script (no $RUN_DIR) — nothing to restart."
     exit 0
   fi
   for what in "${WHICH[@]}"; do
     pidfile="$RUN_DIR/$what.pid"
-    [ -e "$pidfile" ] || { say "$what has no pidfile here — leaving it alone"; continue; }
+    if [ ! -e "$pidfile" ]; then
+      # STARTED BY HAND, so there is no pidfile — which used to print
+      # "leaving it alone" and return, while the old process kept the
+      # port and kept serving the build it loaded at boot. `status` would
+      # then say STALE and tell you to run this command, which did
+      # nothing: a remedy that reads as applied and is not. Measured on
+      # admin 2026-10-09 — a 42-minute-old process serving HTML for
+      # chunks that no longer existed, so the page never hydrated and the
+      # sign-in simply timed out.
+      #
+      # Adopting it off the PORT is safe here in a way `down` is right to
+      # refuse: the port belongs to this stack by definition
+      # (`lib/stacks.mjs`), and the cwd is checked against this repo's own
+      # app directory before anything is signalled. Anything else keeps
+      # the port and is reported rather than killed.
+      adopt_url=""
+      case "$what" in
+        seller) adopt_url="$SELLER_URL" ;;
+        admin) adopt_url="$ADMIN_URL" ;;
+        reseller) adopt_url="$RESELLER_URL" ;;
+        associate) adopt_url="$ASSOCIATE_URL" ;;
+        api) adopt_url="$API_URL" ;;
+      esac
+      adopt_port="${adopt_url##*:}"
+      adopt_pid=""
+      if [ -n "$adopt_port" ]; then
+        adopt_pid="$(ss -ltnpH "sport = :$adopt_port" 2>/dev/null \
+          | grep -oP 'pid=\K[0-9]+' | head -1)"
+      fi
+      if [ -z "$adopt_pid" ]; then
+        say "$what has no pidfile here and nothing is on port $adopt_port — leaving it alone"
+        continue
+      fi
+      adopt_cwd="$(readlink "/proc/$adopt_pid/cwd" 2>/dev/null || true)"
+      case "$adopt_cwd" in
+        "$ROOT/apps/$what" | "$ROOT")
+          kill_tree "$adopt_pid"
+          say "$what (pid $adopt_pid, started by hand in $adopt_cwd) stopped"
+          ;;
+        *)
+          say "$what on port $adopt_port is pid $adopt_pid in ${adopt_cwd:-an unknown directory} — NOT this stack's, left alone"
+          continue
+          ;;
+      esac
+      continue
+    fi
     pid="$(cat "$pidfile")"
     if kill -0 "$pid" 2>/dev/null; then
       kill_tree "$pid"

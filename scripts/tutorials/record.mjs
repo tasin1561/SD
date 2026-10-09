@@ -20,6 +20,7 @@ import { chromium } from '@playwright/test';
 import { SCENE_TAIL_SECONDS, videoBySlug } from './narration.mjs';
 import { FLOWS } from './flows.mjs';
 import { loadClips } from './generate-voice.mjs';
+import { assertReady, language } from './lib/languages.mjs';
 import { makeStage, markerFor, MARKER_IDLE, stageInitScript } from './lib/stage.mjs';
 import { armMockSpaces } from './lib/spaces-shim.mjs';
 import { CANVAS_HEIGHT, FRAME_WIDTH, MARKER_STRIP, RAW_DIR, VERIFY_DIR } from './lib/paths.mjs';
@@ -138,7 +139,7 @@ export const DEFAULT_LANDING = /\/dashboard/;
  * exist yet, which is how it came to be written: the voice budget ran
  * out mid-library and two finished flows had no way to be exercised.
  */
-export async function record(slug, { check = false } = {}) {
+export async function record(slug, { check = false, lang = language('en') } = {}) {
   const video = videoBySlug(slug);
   const flow = FLOWS[slug];
   // Named rather than defaulted, so a typo in a flow's `app` is a
@@ -169,8 +170,18 @@ export async function record(slug, { check = false } = {}) {
   const CHECK_SECONDS = 0.4;
   const clips = check
     ? Object.fromEntries(video.steps.map((st) => [st.id, { seconds: CHECK_SECONDS }]))
-    : await loadClips(slug);
-  const outDir = path.join(RAW_DIR, slug);
+    : await loadClips(slug, lang);
+  /*
+    THE RAW VIDEO IS PER LANGUAGE, because the takes are different
+    recordings. A Bangla narration of the same scene runs about 1.8×
+    the English one and every scene is held for its own clip, so the
+    two takes have different lengths, different scene boundaries and
+    different sync markers. Sharing a directory would mean the second
+    language overwrote the first's frames while `compose` was still
+    able to read the first's `scenes.json` — a video assembled from one
+    take's pictures and another take's timings.
+  */
+  const outDir = path.join(RAW_DIR, `${slug}${lang.suffix}`);
   // Check mode must not TOUCH the raw directory. It writes no video, so
   // wiping it would throw away a recording the composer still needs —
   // running a check to see whether a flow still works would silently
@@ -352,9 +363,13 @@ export async function record(slug, { check = false } = {}) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
   const check = args.includes('--check');
+  const langArg = args.find((a) => a.startsWith('--lang='));
+  // `assertReady` refuses a language whose voice or model is not
+  // configured, here rather than after a ten-minute take.
+  const lang = assertReady(language(langArg?.slice('--lang='.length) ?? 'en'));
   const slug = args.find((a) => !a.startsWith('--'));
   if (slug === undefined) {
-    throw new Error('usage: node scripts/tutorials/record.mjs [--check] <slug>');
+    throw new Error('usage: node scripts/tutorials/record.mjs [--check] [--lang=bn] <slug>');
   }
   const where = (APPS[FLOWS[slug]?.app ?? 'seller'] ?? APPS.seller).baseUrl;
   if (check) {
@@ -362,8 +377,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const result = await record(slug, { check: true });
     console.log(`\n  every step reached: ${result.scenes.join(', ')}`);
   } else {
-    console.log(`Recording ${slug} against ${where}`);
-    const manifest = await record(slug);
+    console.log(`Recording ${slug} against ${where} — ${lang.label}`);
+    const manifest = await record(slug, { lang });
     console.log(`\n  raw video ${manifest.rawVideo}`);
     console.log(`  wall clock ${manifest.wallSeconds.toFixed(1)}s`);
   }

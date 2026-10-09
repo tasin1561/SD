@@ -146,7 +146,13 @@ export function ResellerMoneyPanel({
               label: 'Transfer total',
               value: <Money amount={v.transferTotalInr} convert={false} />,
             },
-            { label: 'Terms version', value: <span className="sk-ident">{v.termsVersionId}</span> },
+            {
+              label: 'Terms version',
+              // A uuid is machine text nobody dictates, so it may break;
+              // `.sk-ident` alone kept it on one line and pushed the page
+              // 104px sideways at 320px.
+              value: <span className="sk-ident sk-ident--wrap">{v.termsVersionId}</span>,
+            },
             {
               label: 'Store pays',
               value: (

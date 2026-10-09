@@ -25,10 +25,20 @@ cd "$ROOT"
 SRC="$ROOT/scripts/tutorials/out"
 DEST="${SKYDROP_DELIVER_DIR:-/mnt/c/Users/User/Downloads}"
 
+# The FULL set, in the order somebody would watch them. The three
+# tutorials exist in three languages; the promos are English only —
+# the owner asked for translations of the tutorials and not the promos,
+# and a promo is the one film most likely to be re-cut anyway.
 SLUGS=(
   seller-everything
   reseller-everything
   associate-everything
+  seller-everything-bn
+  reseller-everything-bn
+  associate-everything-bn
+  seller-everything-hi
+  reseller-everything-hi
+  associate-everything-hi
   promo-seller
   promo-reseller
   promo-associate
@@ -47,6 +57,15 @@ pretty() {
     seller-everything) echo "Skydrop - 1 - Seller - everything.mp4" ;;
     reseller-everything) echo "Skydrop - 2 - Reseller - everything.mp4" ;;
     associate-everything) echo "Skydrop - 3 - Associate - everything.mp4" ;;
+    # The LANGUAGE leads on the translated ones, so the three Bangla
+    # files sit together in a folder sorted by name rather than being
+    # scattered between the English ones.
+    seller-everything-bn) echo "Skydrop - Bangla - 1 - Seller.mp4" ;;
+    reseller-everything-bn) echo "Skydrop - Bangla - 2 - Reseller.mp4" ;;
+    associate-everything-bn) echo "Skydrop - Bangla - 3 - Associate.mp4" ;;
+    seller-everything-hi) echo "Skydrop - Hindi - 1 - Seller.mp4" ;;
+    reseller-everything-hi) echo "Skydrop - Hindi - 2 - Reseller.mp4" ;;
+    associate-everything-hi) echo "Skydrop - Hindi - 3 - Associate.mp4" ;;
     promo-seller) echo "Skydrop - Promo - Seller.mp4" ;;
     promo-reseller) echo "Skydrop - Promo - Reseller.mp4" ;;
     promo-associate) echo "Skydrop - Promo - Associate.mp4" ;;
@@ -92,7 +111,7 @@ while true; do
       pending=$((pending + 1))
     fi
   done
-  [ "$pending" = "0" ] && { echo "ALL SIX DELIVERED to $DEST"; break; }
+  [ "$pending" = "0" ] && { echo "EVERY VIDEO DELIVERED to $DEST"; break; }
   [ "$once" = "1" ] && { echo "$pending still to come"; break; }
   sleep 20
 done

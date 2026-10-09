@@ -488,8 +488,16 @@ async function writeManifest(manifestFile, slug, clips) {
 }
 
 /** Read a previously generated manifest — the recorder and composer use this. */
-export async function loadClips(slug) {
-  const file = path.join(AUDIO_DIR, slug, 'clips.json');
+/**
+ * The clips a take plays, for ONE language.
+ *
+ * `lang` is a `LANGUAGES` entry, not a code, because the suffix and the
+ * voice travel together — reading `<slug>-bn` while believing it is
+ * English is a video whose narration is in the wrong language and whose
+ * scene lengths are all wrong, and nothing about it fails.
+ */
+export async function loadClips(slug, lang = language('en')) {
+  const file = path.join(AUDIO_DIR, `${slug}${lang.suffix}`, 'clips.json');
   const parsed = JSON.parse(await fs.readFile(file, 'utf8'));
   return parsed.clips;
 }

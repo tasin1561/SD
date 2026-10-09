@@ -408,7 +408,7 @@ export function RecordFreightModal({
                           <td>
                             <div className="mk-cell">
                               <span className="mk-body">{l.variant.product.name}</span>
-                              <span className="mk-faint sk-ident mk-wrap">
+                              <span className="mk-faint sk-ident sk-ident--wrap">
                                 {l.variant.skuCode}
                                 {l.variant.variantLabel === null
                                   ? ''

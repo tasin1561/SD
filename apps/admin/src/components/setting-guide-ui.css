@@ -5,6 +5,14 @@
  */
 .sss-name {
   display: grid;
+  /* `minmax(0, 1fr)` AND NOT just `min-width: 0`. A single-column grid
+     with no declared track gets an implicit `auto` one, whose minimum is
+     its WIDEST ITEM's min-content — so `min-width: 0` here says "I may
+     be narrow" while the track inside it refuses. A long setting label
+     and a 36-character key floored it, and then the row, the key and the
+     (i) button all spilled out of a card that was never allowed to be
+     narrower. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 2px;
   min-width: 0;
 }
@@ -12,6 +20,14 @@
   display: flex;
   align-items: center;
   gap: var(--sp-1);
+  /* `.sss-name` sets `min-width: 0` on itself; this line is a grid ITEM
+     of it and carries its own automatic minimum, so a long setting
+     label ("Alert when a courier payout is short by…") pushed the row
+     past the card. Twelve settings did it at 320px. */
+  min-width: 0;
+}
+.sss-name__line > * {
+  min-width: 0;
 }
 .sss-name__meta {
   color: var(--fg-faint);

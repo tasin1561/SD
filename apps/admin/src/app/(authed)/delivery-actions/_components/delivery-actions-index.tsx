@@ -20,7 +20,13 @@ import {
 } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
-import { AgeChip, Notice, OoCard, OoSection } from '../../orders/_components/order-ops-parts';
+import {
+  AgeChip,
+  Notice,
+  OoCard,
+  OoSection,
+  elapsedSince,
+} from '../../orders/_components/order-ops-parts';
 
 /**
  * The operator gate for failed deliveries (CUR-10).
@@ -191,8 +197,8 @@ export function DeliveryActionsIndex(): ReactElement {
                           kind={statusKind(r.status)}
                           label={r.status.toLowerCase()}
                         />
-                        <AgeChip title="When the seller asked">
-                          {new Date(r.createdAt).toLocaleString('en-IN')}
+                        <AgeChip title={`Asked ${new Date(r.createdAt).toLocaleString('en-IN')}`}>
+                          {elapsedSince(r.createdAt)}
                         </AgeChip>
                       </span>
                       {r.executionError !== null && (

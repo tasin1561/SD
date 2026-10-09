@@ -178,7 +178,14 @@ export function ManifestDetailView({ id }: { readonly id: string }): ReactElemen
             <TBody>
               {m.shipments.map((s) => (
                 <Tr key={s.id} onActivate={() => router.push(`/orders/${s.orderId}`)}>
-                  <Td className="sk-ident">{s.shipmentNumber}</Td>
+                  <Td className="sk-ident">
+                    {/* The row pushes to the order on click; this is the
+                        same destination as a real link, so a keyboard can
+                        reach it too. */}
+                    <Link href={`/orders/${s.orderId}`} className="af-link">
+                      {s.shipmentNumber}
+                    </Link>
+                  </Td>
                   <Td>
                     <StatusChip
                       size="sm"

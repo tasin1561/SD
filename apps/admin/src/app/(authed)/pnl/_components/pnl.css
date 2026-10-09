@@ -25,7 +25,14 @@
 }
 .pl-figs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* A COLUMN COUNT THE FIGURES FIT IN, rather than a fixed two. A money
+     figure may not wrap (a total split over two lines is misread) and
+     may not be clipped, so the column has to be wide enough for it —
+     and at 320px two columns left ~53px each, so `₹5,688.89` ran 17px
+     past its own cell. `auto-fit` drops to one column exactly when two
+     will not fit and takes two back by 414px; `min(100%, …)` is what
+     stops the track itself overflowing at the narrowest width. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr));
   gap: var(--sp-1) var(--sp-4);
   min-width: 0;
 }

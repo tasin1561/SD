@@ -23,6 +23,20 @@ cd "$ROOT"
 STACK="${1:-a}"
 shift || true
 
+# `--lang=bn` anywhere after the stack. English is the default, so every
+# command that already worked keeps producing the same English video.
+LANG_CODE=en
+REST=()
+for a in "$@"; do
+  case "$a" in
+    --lang=*) LANG_CODE="${a#--lang=}" ;;
+    *) REST+=("$a") ;;
+  esac
+done
+set -- "${REST[@]+"${REST[@]}"}"
+LANG_SUFFIX=""
+[ "$LANG_CODE" != "en" ] && LANG_SUFFIX="-$LANG_CODE"
+
 ALL=(
   seller-everything
   reseller-everything
@@ -48,7 +62,7 @@ SLUGS=("$@")
 # deliverable and a `promo-seller-b.mp4` would be a worse thing to hand
 # somebody. Give each stack different SLUGS instead — that is what makes
 # the shared output safe.
-LOGS="$ROOT/scripts/tutorials/out/filmlogs-$STACK"
+LOGS="$ROOT/scripts/tutorials/out/filmlogs-$STACK$LANG_SUFFIX"
 mkdir -p "$LOGS"
 
 eval "$(bash scripts/tutorials/stack.sh env "$STACK")"
@@ -56,7 +70,7 @@ eval "$(bash scripts/tutorials/stack.sh env "$STACK")"
 made=0
 failed=0
 for slug in "${SLUGS[@]}"; do
-  printf '=== %s ===\n' "$slug"
+  printf '=== %s (%s) ===\n' "$slug" "$LANG_CODE"
   log="$LOGS/$slug.log"
 
   # Each stage appends, so one log holds the whole story of a take.
@@ -65,9 +79,29 @@ for slug in "${SLUGS[@]}"; do
     case "$stage" in
       throttle) cmd=(node scripts/tutorials/lib/clear-login-throttle.mjs) ;;
       seed) cmd=(node scripts/tutorials/seed-demo-data.mjs "$slug") ;;
-      voice) cmd=(node scripts/tutorials/generate-voice.mjs "$slug") ;;
-      record) cmd=(node scripts/tutorials/record.mjs "$slug") ;;
-      compose) cmd=(node scripts/tutorials/compose.mjs "$slug") ;;
+      # The SEED takes no language — the world a take films is the same
+      # whatever is being said over it. The other three do.
+      voice)
+        if [ "$LANG_CODE" = "en" ]; then
+          cmd=(node scripts/tutorials/generate-voice.mjs "$slug")
+        else
+          cmd=(node scripts/tutorials/generate-voice.mjs "--lang=$LANG_CODE" "$slug")
+        fi
+        ;;
+      record)
+        if [ "$LANG_CODE" = "en" ]; then
+          cmd=(node scripts/tutorials/record.mjs "$slug")
+        else
+          cmd=(node scripts/tutorials/record.mjs "--lang=$LANG_CODE" "$slug")
+        fi
+        ;;
+      compose)
+        if [ "$LANG_CODE" = "en" ]; then
+          cmd=(node scripts/tutorials/compose.mjs "$slug")
+        else
+          cmd=(node scripts/tutorials/compose.mjs "--lang=$LANG_CODE" "$slug")
+        fi
+        ;;
     esac
     printf -- '--- %s ---\n' "$stage" >>"$log"
     if ! timeout 3600 "${cmd[@]}" >>"$log" 2>&1; then
@@ -80,7 +114,7 @@ for slug in "${SLUGS[@]}"; do
   done
 
   made=$((made + 1))
-  out="$ROOT/scripts/tutorials/out/$slug.mp4"; [ -f "$out" ] || out=""
+  out="$ROOT/scripts/tutorials/out/$slug$LANG_SUFFIX.mp4"; [ -f "$out" ] || out=""
   if [ -n "$out" ]; then
     printf '    MADE  %s  (%s)\n' "$slug" "$(du -h "$out" | cut -f1)"
   else

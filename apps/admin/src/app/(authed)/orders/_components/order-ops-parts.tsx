@@ -210,6 +210,25 @@ export function BackLink({
 export type AgeTone = 'fresh' | 'aging' | 'late' | 'neutral';
 
 /**
+ * Rough elapsed time — precision past "hours" is noise on a worklist.
+ *
+ * Exported BESIDE the chip that shows it, so a caller reaching for one
+ * finds the other. It lived privately in the call-centre queue while
+ * `/delivery-actions` passed a full `toLocaleString('en-IN')` into the
+ * same chip — 21 characters in a `nowrap` pill, which ran 71px past its
+ * row at 768px. The chip's own docblock already said the content is
+ * "3h" or "2 days"; what was missing was somewhere to get it from.
+ */
+export function elapsedSince(fromIso: string, toIso?: string): string {
+  const ms = new Date(toIso ?? new Date().toISOString()).getTime() - new Date(fromIso).getTime();
+  const mins = Math.max(0, Math.round(ms / 60_000));
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.round(mins / 60);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
+}
+
+/**
  * How long something has waited, as a small chip: a clock icon + the
  * caller's own words ("3h", "2 days"). The tone is the caller's existing
  * judgement (its own `waitTone`), never recomputed here, and the word is

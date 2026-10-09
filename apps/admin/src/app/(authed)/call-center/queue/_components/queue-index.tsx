@@ -17,7 +17,12 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Pagination } from '@skydrop/ui/app/pagination';
 import { Table, TBody, Td, THead, Th, Tr } from '@skydrop/ui/app/data-table';
-import { AgeChip, LinkButton, OoCard } from '../../../orders/_components/order-ops-parts';
+import {
+  AgeChip,
+  LinkButton,
+  OoCard,
+  elapsedSince,
+} from '../../../orders/_components/order-ops-parts';
 import '../../_components/call-center.css';
 import {
   useAgents,
@@ -198,11 +203,11 @@ export function QueueIndex(): ReactElement {
                     )}
                   </Td>
                   <Td>
-                    <AgeChip>{waitedFor(e.createdAt)}</AgeChip>
+                    <AgeChip>{elapsedSince(e.createdAt)}</AgeChip>
                   </Td>
                   <Td className="sk-figure">
                     {new Date(e.availableAt) > new Date()
-                      ? `in ${waitedFor(new Date().toISOString(), e.availableAt)}`
+                      ? `in ${elapsedSince(new Date().toISOString(), e.availableAt)}`
                       : 'now'}
                   </Td>
                   <Td align="right">
@@ -286,16 +291,6 @@ function agentEmail(
 ): ReactElement {
   const found = agents?.find((a) => a.agentId === id);
   return found === undefined ? <Ident value={id} /> : <span>{found.email}</span>;
-}
-
-/** Rough elapsed time — precision past "hours" is noise on a queue. */
-function waitedFor(fromIso: string, toIso?: string): string {
-  const ms = new Date(toIso ?? new Date().toISOString()).getTime() - new Date(fromIso).getTime();
-  const mins = Math.max(0, Math.round(ms / 60_000));
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.round(mins / 60);
-  if (hours < 48) return `${hours}h`;
-  return `${Math.round(hours / 24)}d`;
 }
 
 function queueKind(status: string): 'pending' | 'confirmed' | 'delivered' | 'failed' {

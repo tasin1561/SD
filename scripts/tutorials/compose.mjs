@@ -24,6 +24,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { SCENE_TAIL_SECONDS, videoBySlug } from './narration.mjs';
 import { loadClips } from './generate-voice.mjs';
+import { assertReady, language } from './lib/languages.mjs';
 import { findSceneStarts, readMarkerTrack } from './lib/markers.mjs';
 import { cardFilter, INTRO_SECONDS, OUTRO_SECONDS } from './lib/title-card.mjs';
 import {
@@ -67,12 +68,16 @@ async function duration(file) {
   return Number(stdout.trim());
 }
 
-export async function compose(slug) {
+export async function compose(slug, { lang = language('en') } = {}) {
   const video = videoBySlug(slug);
-  const rawDir = path.join(RAW_DIR, slug);
+  // Raw frames, clips and scratch all carry the language: the takes are
+  // different recordings of different lengths, and mixing one take's
+  // pictures with another's timings produces a video that renders
+  // cleanly and is wrong throughout.
+  const rawDir = path.join(RAW_DIR, `${slug}${lang.suffix}`);
   const manifest = JSON.parse(await fs.readFile(path.join(rawDir, 'scenes.json'), 'utf8'));
-  const clips = await loadClips(slug);
-  const work = path.join(WORK_DIR, slug);
+  const clips = await loadClips(slug, lang);
+  const work = path.join(WORK_DIR, `${slug}${lang.suffix}`);
   await fs.rm(work, { recursive: true, force: true });
   await fs.mkdir(work, { recursive: true });
   await fs.mkdir(OUT_DIR, { recursive: true });
@@ -189,7 +194,19 @@ export async function compose(slug) {
   const graphFile = path.join(work, 'filtergraph.txt');
   await fs.writeFile(graphFile, [...parts, ...audioFilters].join(';\n'));
 
-  const outFile = path.join(OUT_DIR, `${slug}.mp4`);
+  /*
+    THE TITLE CARD STAYS ENGLISH, deliberately.
+
+    `cardFilter` draws with DejaVu, which carries no Bengali and no
+    Devanagari glyph — a translated title would render as a row of
+    boxes, which is worse than an English one. It is also consistent
+    with the whole design: the INTERFACE stays English in every
+    language (see `long/TRANSLATING.md`), so a card naming the product
+    and the video in English is the same decision, not an omission.
+    Translating it needs a Noto Bengali / Devanagari face installed and
+    picked per language, which is a change to make deliberately.
+  */
+  const outFile = path.join(OUT_DIR, `${slug}${lang.suffix}.mp4`);
   console.log('  rendering…');
   await ffmpeg(
     [
@@ -260,9 +277,14 @@ export async function compose(slug) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const slug = process.argv[2];
-  if (slug === undefined) throw new Error('usage: node scripts/tutorials/compose.mjs <slug>');
-  console.log(`Composing ${slug}`);
-  const timeline = await compose(slug);
+  const args = process.argv.slice(2);
+  const langArg = args.find((a) => a.startsWith('--lang='));
+  const lang = assertReady(language(langArg?.slice('--lang='.length) ?? 'en'));
+  const slug = args.find((a) => !a.startsWith('--'));
+  if (slug === undefined) {
+    throw new Error('usage: node scripts/tutorials/compose.mjs [--lang=bn] <slug>');
+  }
+  console.log(`Composing ${slug} — ${lang.label}`);
+  const timeline = await compose(slug, { lang });
   console.log(`\n  ${timeline.outFile}  ${timeline.totalSeconds.toFixed(1)}s`);
 }
