@@ -132,7 +132,24 @@ async function resolveDynamic(page, baseUrl, route, staticRoutes, allRoutes) {
     try {
       await page.goto(`${baseUrl}${list}`, { waitUntil: 'domcontentloaded', timeout: 25_000 });
       await page.waitForLoadState('networkidle').catch(() => {});
-      await page.waitForTimeout(500);
+      // WAIT FOR THE LINK, not for a guessed delay. A list fetches its
+      // rows after the document is ready, and a fixed 500ms resolved
+      // seven routes on one run and four on the next — the same seed,
+      // the same pages, a different moment. A route that reports as "no
+      // record to open" when there IS one is a quiet loss of coverage.
+      await page
+        .waitForFunction(
+          (pre) =>
+            Array.from(document.querySelectorAll('a[href]')).some((a) => {
+              const href = a.getAttribute('href') ?? '';
+              if (!href.startsWith(pre)) return false;
+              const rest = href.slice(pre.length).split(/[?#]/)[0];
+              return rest !== '' && !rest.includes('/');
+            }),
+          prefix === '' ? '/' : `${prefix}/`,
+          { timeout: 8_000 },
+        )
+        .catch(() => undefined);
     } catch {
       return null;
     }
