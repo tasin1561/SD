@@ -216,7 +216,15 @@ export interface AssociateAnalysisView {
   readonly rows: readonly AssociateAnalysisRow[];
 }
 
-const ASSOCIATES = ['store-associates'] as const;
+/**
+ * Exported so `useInviteStoreMember` can invalidate it BY NAME. An
+ * invitation sent from the Associates page is a new associate, and that
+ * page reads this key — a second copy of the string in the other file
+ * is how the two come to disagree, which is the whole reason the roster
+ * went stale in the first place.
+ */
+export const ASSOCIATES_QUERY_KEY = ['store-associates'] as const;
+const ASSOCIATES = ASSOCIATES_QUERY_KEY;
 
 export function useAssociates(enabled = true): UseQueryResult<AssociateListView> {
   const client = useApiClient();

@@ -1,32 +1,43 @@
 # The tutorial library
 
-Every screen in `apps/seller` and `apps/admin`, sorted into tutorials, in the
-order a person meets them. Derived from the code — the 47 seller pages under
-`apps/seller/src/app/(authed)/`, the 84 admin pages under
-`apps/admin/src/app/(authed)/`, both `page-access.ts` tables, and the flows the
-components actually perform — not from the sidebar and not from memory.
+Every screen in all FOUR consoles, sorted into tutorials, in the order a
+person meets them. Derived from the code — the 47 seller pages, the 86 admin
+pages, the 26 reseller pages and the 11 associate pages under each app's
+`(authed)/`, every `page-access.ts` table, and the flows the components
+actually perform — not from the sidebar and not from memory.
 
-**90 tutorials. 87 filmed — sections A to G, which is the WHOLE SELLER APP,
-plus the whole of H, I, J, K, L, O and P, M1–M2, M4, M6 and N1–N9.** The 3 left are all in the admin app and all
-`impractical locally`. Sections A–G are the seller app, H–P the admin app; the
-pages deliberately left unfilmed are listed at the end, each with a reason.
+**118 tutorials. 115 filmed.** The 3 left are all in the admin app and all
+`impractical locally`; each is named at the end with its reason.
 
-**Ninety is a large number and it is meant to be read as one.** It is what
-"every kind of task in both apps" actually comes to, and seeing it written down
-is the point of this document. Do not commit to the whole thing — see
-[the recommendation](#the-recommendation).
+| Sections | App | Reader | Tutorials |
+| --- | --- | --- | --- |
+| A–G | `apps/seller` | the seller who owns the stock | 42, all filmed |
+| H–P | `apps/admin` | Skydrop's own staff | 45, 42 filmed |
+| R | `apps/reseller` | the shopkeeper selling it | 21, all filmed |
+| S | `apps/associate` | the shopkeeper's salesperson | 7, all filmed |
+
+**FOUR APPS, FOUR READERS, and the split is the point.** Section G teaches a
+seller to open a store and set its terms; R is the person who then has to USE
+it; S is the person THAT person hires to sell. Each section is filmed as its
+own reader, never as somebody senior looking at their screen — a store user
+cannot see unit cost or real stock, and an associate cannot see what the store
+pays or earns, so filming either from above would quietly show figures the
+boundary exists to withhold.
+
+**One hundred and eighteen is a large number and it is meant to be read as
+one.** It is what "every kind of task in every console" actually comes to, and
+seeing it written down is the point of this document.
 
 Read ["What this costs"](#what-this-costs) before committing to the whole thing.
 
-**A third app is out of scope, and somebody should decide whether it stays
-that way.** `apps/reseller` — the portal a reseller store's own staff sign into
-at `reseller.skydrop.online` — has **23 gated pages** of its own (orders,
-catalogue, wallet, tickets, reports, expenses, team, terms, integrations). This
-curriculum covers the seller and admin apps, as asked. But section G teaches a
-seller how to set a store up, and the people who then have to USE it get
-nothing: the videos here are addressed to the seller who owns the stock, never
-to the shopkeeper selling it. If reseller stores become a real channel, that is
-a third section and roughly another fifteen tutorials.
+**That decision was taken: sections R and S exist.** This paragraph used to
+say a third app was out of scope and somebody should decide whether it stayed
+that way — the argument it made against itself ("the people who then have to
+USE it get nothing") is the one that settled it. R came to 21 rather than the
+fifteen estimated here, because `/associates` landed in the reseller portal
+the day after R was planned and added three screens nobody had counted. S came
+to 7, which is small because the long `associate-everything` walkthrough had
+already seeded that world.
 
 ---
 
@@ -4987,18 +4998,469 @@ search, and a filter that survives a reload because it lives in the address.
 **Covers** `/orders/[id]` — the tracker, the recipient snapshot, the charges,
 and what a store is shown as against what the seller is shown.
 
-### R7–R18 · `planned`
+**DAYS 2 AND 3 ARE WRITTEN AND NOT YET FILMED (2026-10-10).** R7–R18 have
+their narration, their flows and their seeding; what is missing is a run. No
+clip has been bought — narration costs characters only when it is GENERATED.
 
-Day 2 — **R7** what to do when a delivery goes wrong (the seven capabilities and
-the Directly / Needs my approval policy), **R8** "keep trying?"
-(`/orders/call-reviews`), **R9** your customers, **R10** raising it with Skydrop
-(`/tickets`), **R11** the terms you are trading under, **R12** your team.
+Measured: **27,933 characters across the twelve**, 2,328 each against the
+2,621 budgeted, so the section comes in about 3,500 characters under. Day 1's
+10,112 plus these 27,933 is **38,045 for the whole of section R**, against the
+~39,000 it was planned on.
 
-Day 3 — **R13** your wallet, **R14** your expenses, **R15** how the shop is
-doing (`/reports`), **R16** month by month (`/reports/analysis`), **R17** your
-inbox and your own login, **R18** keys and webhooks.
+**R15 and R16 swapped their titles against the plan, and the ROUTES decided
+it.** The placeholder line read "R15 how the shop is doing (`/reports`), R16
+month by month (`/reports/analysis`)" — which is backwards: `/reports` IS the
+month-by-month P&L with its closed months and its carry-forward tables, and
+`/reports/analysis` is the performance screen (confirmation and return rates,
+return on ad spend, profit per product, returns by pincode, the cash-flow
+forecast). Each is named for what is on it.
 
-Each gets its own entry here as it is filmed, in the same shape as R1–R6.
+What days 2 and 3 added that is worth knowing before a re-take:
+
+- **Four more selector rules**, written down in `flows.mjs` above the day-2
+  block. A `ConfirmDialog` IS a `Dialog`, so when one opens on top of another
+  — which R7's asks, R8's answer and R12's invite all do by design — there are
+  TWO `role="dialog"` nodes and every unscoped reach is a strict-mode failure;
+  `confirmBox` reaches the one carrying `.sk-confirm`. A `KpiCard` has no role
+  and its label is an ordinary div, so `kpiCard` finds a tile through
+  `getByText(label, { exact: true })` — `hasText` is a substring and "Balance"
+  is inside three of the wallet's own strings. `TableToolbar`'s search is a
+  WRAPPING `<label>` with a visually-hidden span, so `getByLabel` reaches the
+  input — but on `/customers` and `/orders` the box is a FORM and commits on
+  Enter (the H2 trap). And `/reports/analysis` and `/notifications/settings`
+  have no nav entry, so they are reached by clicking the link ON the page above
+  them: FE-1 keeps the token in memory and a full load under recording loses
+  the race (O4).
+- **R8's seeding overrides ONE column of the action policy, and that is the
+  video.** `tradingStoreWorld` leaves `callCapDecision` at `ASK_SELLER`, which
+  is right for G6 (whose queue is built out of exactly that) and collapses both
+  of R8's answers into one button reading "Send to your seller to approve" —
+  while the whole lesson is that the two answers are NOT symmetrical. So R8's
+  seeding writes `DIRECT` for that one capability, and G6's next seed run puts
+  it back, because `tradingStoreWorld` writes the whole policy every time.
+- **R15 is the only one that needed the CLOCK moved.** Everything else in the
+  store world happens today, so `/reports` has one month on it, open, with both
+  carry tables empty — and three of R15's thirteen lines are about a month
+  being frozen. `ensureStoreMonths` pulls the store's `created_at` back three
+  months (the one lever: the month list is `monthsBetween(store.createdAt,
+  now)` and the expense service refuses a day before the store's own first
+  month), records an expense into last month, enqueues `store-pnl-close`, then
+  records a SECOND expense into that month after it closed and enqueues
+  `store-pnl-detect`. Every step is the product's own endpoint or its own cron
+  job by name — the same `letTheClockRun` argument `lib/freight.mjs` makes, and
+  for the same reason: a snapshot is the ENGINE's output and a hand-written one
+  would be a figure nobody computed.
+
+### R7. When a delivery goes wrong · `planned` — `store-delivery-gone-wrong.mp4`
+
+**Promise** — the parcel is out and something is wrong; here is what you can
+ask for, and which asks happen on your click.
+**Covers** `/orders/[id]`'s whole act-on-it half: the three delivery asks and
+the "Happens as soon as you ask" / "The seller approves this one" strip beside
+each, the reason dialog and the confirm that restates it, the asks history with
+the seller's own words on a refusal, the cancel in the header (which reads
+differently per arrangement), the order-change panel, and "Sent to your seller
+to approve" with its few-days expiry. Hands R8 and R10 their own decisions by
+name.
+**Presses nothing irreversible**: the recall dialog is opened, filled, taken to
+its confirm and backed out of. The parcel is G6's, which is the expensive one
+in the store world — a real waybill, a warehouse run and two simulator scans —
+and this video leaves it exactly as it found it.
+
+### R8. When we cannot reach your customer · `planned` — `store-unreachable-customers.mp4`
+
+**Promise** — the order has stopped and only you can decide what happens to it.
+**Covers** `/orders/call-reviews` — why the page leads with UNITS HELD rather
+than a row count, the Waiting column, and then the dialog: "keep trying" against
+"give up on this order", the warning that says the order is rejected too, the
+reason the release branch insists on, and the button that names the destruction
+rather than saying Confirm. Ends on the same question appearing on the order
+itself, because a store arrives both ways.
+**Never answered on camera** — Never mind closes it. An answered review is never
+reopened, so pressing either would make the video un-re-takeable; the seeding
+rebuilds the order when a take HAS answered it, which is safe only because it
+was never confirmed (no waybill, no reservation, no wallet entry).
+
+### R9. Your customers · `planned` — `store-your-customers.mp4`
+
+**Promise** — your book of business, built from your own orders.
+**Covers** `/customers` and one customer: the order count beside a name, the
+search on part of a phone number, the phone that never changes and has no field
+on the edit form, their orders found BY that number, and the fact worth saying
+out loud — your supplier sees these people too, can correct a record, and each
+of you is told when the other does.
+**The shortest of the twelve** (9 steps, 1,738 characters) and deliberately so.
+The SELLER's equivalent was dropped from this curriculum as "genuinely thin";
+for a store it is not, because the privacy boundary and the immutable phone are
+both facts a shopkeeper acts on — but it is thinner than its neighbours and
+padding it would show.
+
+### R10. Raising a problem · `planned` — `store-raise-it-with-skydrop.mp4`
+
+**Promise** — two different people you might be raising it with, and the page
+keeps them apart.
+**Covers** `/tickets`, `/tickets/new` and one thread: the With column as the
+first thing to read, a thread with both sides on it, the two choice cards and
+what each actually does, the "correct the money on this order" claim with its
+figures frozen as they stood, an issue for Skydrop that may need the seller's
+approval first, a SETTLED one reading back who paid whom, and the same figure as
+a line in the wallet ledger. Ends on the rule that makes it a dispute rather
+than a request: a settlement never comes out of Skydrop's pocket.
+
+### R11. The terms you are trading under · `planned` — `store-the-terms.mp4`
+
+**Promise** — the arrangement you agreed to before you could place an order,
+read out.
+**Covers** `/terms` — the version and whether it is accepted (an unaccepted one
+is the single thing that stops new orders), the fee shares as sentences, the
+credit timing as the half that decides cash flow, the same thing worked in
+rupees, the rounding line and why it is not small print, the seller's own note,
+the history and why a published version is never changed, and what accepting
+records.
+
+### R12. Your team · `planned` — `store-your-team.mp4`
+
+**Promise** — one login each, and what each of them may do.
+**Covers** `/team` — the last-signed-in column as the one to glance at, several
+roles adding up rather than replacing, Change roles sending the WHOLE set, owner
+as the role that protects itself (and the last owner who cannot be moved off),
+removing somebody taking their open sessions with them, inviting a colleague, a
+resend killing the link already sent, and the two things the page will not let
+you do to yourself.
+**Every dialog is opened and cancelled.** Nothing is granted, removed or
+invited on camera; the seeding provides the colleague and the pending
+invitation, because every lesson on that page is about somebody other than you
+and a team of one films a table with no buttons in it.
+
+### R13. Your wallet · `planned` — `store-your-wallet.mp4`
+
+**Promise** — where the money arrives, where it is taken, and the record of all
+of it.
+**Covers** `/wallet` — who manages it (and that it decides what the rest of the
+page offers), the balance against what is actually withdrawable, the
+below-zero limit as the seller's decision, topping up as two separate acts with
+nothing credited on the strength of a form, both request tables, and then the
+ledger a line at a time: order margin, the goods at the transfer price, the fee
+shares, the COD tax share, and the balance-after recorded at the moment it
+happened.
+
+### R14. Your own costs · `planned` — `store-your-expenses.mp4`
+
+**Promise** — your own spending, which is what turns sales into a profit figure.
+**Covers** `/expenses` — that it moves no money and the seller never sees it,
+the form dated by when the money was spent, the reference as the only thing that
+matches a line to a piece of paper, the confirmation reading it back, the
+breakdown by category, the window as Indian days, and removal with a reason that
+stays on the record — ending on the sentence that matters: a correction to a
+closed month is carried into this one.
+**It records one expense on camera** (the only write in the twelve besides
+R18's key and webhook). Safe to re-take: the server's own duplicate guard is
+(category, day, description), so the second run is refused rather than doubling
+the book, and the seeding does not have to clean up.
+
+### R15. What you made, month by month · `planned` — `store-month-by-month.mp4`
+
+**Promise** — a closed month is a promise, and later changes are carried
+forward rather than rewritten.
+**Covers** `/reports` — where things stand now, the month select with closed or
+open beside each, net AS REPORTED, the P&L lines opening to the entries behind
+them (which add up to the line, or the month could not have closed), money in
+and out kept deliberately apart from profit, and then the two carry tables with
+one reason read out in full. Ends on a custom range being an answer rather than
+a record.
+**Needs the clock moved** — see the note above. It is the riskiest seeding in
+section R and the one to check first on a fresh stack.
+
+### R16. How the shop is doing · `planned` — `store-how-the-shop-is-doing.mp4`
+
+**Promise** — not what you made, but how the shop is performing.
+**Covers** `/reports/analysis` — the rates and the note that makes them honest
+(an order whose outcome nobody knows is left out), return on ad spend against
+the store's own expense book, MARGIN return on ad spend as the one to trust,
+profit per product with its return rate beside it, returns by pincode, and the
+cash-flow forecast as the store's own terms applied to what it has already sold.
+**Reads the same world as R13 and R9** — `ensureSettledStoreOrders` for the
+outcomes, `ensureStoreExpenses` for the advertising. Without an `AD_SPEND` row
+the whole ROAS panel is dashes, and a dash is indistinguishable from a shop
+that is not advertising.
+
+### R17. Your inbox, and your own login · `planned` — `store-your-inbox-and-login.mp4`
+
+**Promise** — where Skydrop talks to you, and the one page that is about you
+rather than the store.
+**Covers** the whole "You" nav group: `/notifications` (reading one in place IS
+marking it read; the filter is honest about searching only what is loaded;
+clearing hides your copy and keeps the record), `/notifications/settings` (two
+separate decisions — what reaches YOU and what this STORE is told, both only
+ever removing a message, with some locked on and the reason beside them), and
+`/account` (every role you hold rather than the first, and sign out everywhere
+as the thing to reach for when a phone goes missing).
+**Three pages in one video** because they are one task and three navigations;
+the seller's F4 made the same call for the same reason.
+
+### R18. Letting your own systems in · `planned` — `store-keys-and-webhooks.mp4`
+
+**Promise** — your own website can place these orders and hear when they move.
+**Covers** `/integrations` — what a key can do and the reassurance that every
+rule the portal applies applies to it too (your catalogue, your range, what is
+available), naming it after what will use it, the expiry, the secret SHOWN ONCE,
+revoked against expired as a decision against a clock, and then the webhook
+half: only your store's orders, the signing secret and what it is for, and
+rotate / switch off / remove.
+**It CREATES both on camera** — the one-time secret is the whole subject — so
+the seeding's job is to clear what the last take left: a key table that grows an
+identical row per run, and a webhook refused on a duplicate URL, both of which
+film as a page that has stopped working. `tutorial-labels.test.mjs` keeps the
+typed name and URL in step with what the seeding clears.
+
+### R19–R21 — the store's own sales people · `filmed 2026-10-10`
+
+**ASSOC-1 landed the day AFTER this section was planned**, against "23 routes
+under `apps/reseller/src/app/(authed)/`". There are 26 now, and R1–R18 covers
+none of the three: `/associates`, `/associates/[storeUserId]/prices` and
+`/associates/analysis`. They are ANJALI's screens, not Ravi's — each is a
+decision she takes about somebody who sells for her — so they belong here
+rather than in section S, which is that person's own side of the same feature.
+
+They join `longStoreWorldFor` rather than seeding a store of their own, for
+the reason section S does: two associates, a price list with a hole in it, an
+unaccepted invitation and a week of orders with their outcomes known. The ONE
+thing they add is `ensureStrandedAssociatePrice` — see R19.
+
+#### R19. Invite a sales person, and pause one — `store-invite-an-associate.mp4`
+
+**Promise** — who sells for you, and whether they still may.
+**Covers** `/associates` — the roster, the priced-for count (which is what
+silently stops somebody selling), the invitation, and the switch.
+**The switch is the lesson**: `orders_paused_at` gates `orders.create` and
+NOTHING else, so everything already placed carries on and they keep reading,
+tracking, cancelling and chasing it. Closed the till, not locked the door.
+**The red "outside the seller's range" chip CANNOT be made on camera** —
+setting such a price is refused, which is R20 — so the only way one exists is
+a seller narrowing the range afterwards, and `ensureStrandedAssociatePrice`
+writes exactly that onto Priya. The scene ASSERTS it rather than failing open:
+an ordinary row filmed under that line would pass a check perfectly.
+**A FOUND DEFECT, reported rather than filmed around**: `useInviteStoreMember`
+invalidates `['store-team']` while this page reads `['store-associates']`, so
+somebody invited here does not join the waiting list until the query goes
+stale (30s). The scene shows the toast and the invitation the seeding already
+has outstanding, both of which are true; filming a reload would teach a
+workaround.
+
+#### R20. Set what each of them sells it for — `store-set-associate-prices.mp4`
+
+**Promise** — a price is per person, typed by hand, and bounded by your
+supplier.
+**Covers** one associate's price list — the four columns, an ordinary save,
+the product with no price, and the two refusals.
+**THE REFUSAL IS THE TEACHING AND IT IS FILMED, not described.** A figure
+outside the seller's range is refused `ASSOCIATE_PRICE_OUT_OF_SELLER_RANGE` at
+the moment it is set, not weeks later at an order, because the person who can
+fix it is looking at the screen now. The other half is `ASSOCIATE_PRICE_NOT_SET`
+— no fallback and no default, so an unpriced product is refused by name rather
+than sold at a figure nobody chose.
+**Filmed on RAVI**, whose prices the seeding puts squarely inside the seller's
+ranges and whose list still carries the products nobody has priced for him — so
+the only refusal on screen is the one made on camera. PRIYA is the one carrying
+a stranded price, and she is where R19 points instead.
+
+#### R21. How your associates are doing — `store-how-associates-are-doing.mp4`
+
+**Promise** — who is selling, what it leaves you, and what to do about it.
+**Covers** `/associates/analysis` — the window, the four totals, and the
+per-person table.
+**Every rate names what it divided by** (RS-9): a rate counts only the orders
+whose outcome is KNOWN and prints the denominator underneath, because a
+delivery rate worked out over parcels still moving reads as a fact and is not
+one. The margin says what it is LEAVING OUT (TRE-6: a missing cost is
+uncovered, never zero), and the heading states the orders nobody on the list
+placed rather than dropping them.
+**Two scenes state a rule the frame cannot show**, and say so rather than
+pretending: both associates in this world have finished orders, so there is no
+dash and no null-sorted row on screen. Each is narrated over the count it
+depends on, and over a sort actually happening.
+
+## S — The associate portal
+
+**A FOURTH app, and a fourth reader.** Sections A–G address the seller who owns
+the stock; H–P address Skydrop's own staff; R addresses the shopkeeper. This
+section addresses **the shopkeeper's salesperson** — a reseller store's own
+sales people, signing in at `portal.skydrop.global` (`apps/associate`,
+ASSOC-1). They are often on a phone, often mid-call with a customer. They own
+nothing, hold no stock, have no wallet, and settle up with their store outside
+Skydrop entirely.
+
+**It is filmed as one of them, not as the store owner looking at their
+screens.** The identity is **Ravi Kulkarni of Pune Silk Studio** — the same
+store section R films as Anjali, so the three store-side sections meet. That is
+not a convenience: the whole point of this app is **what it does not show**, and
+an owner sees all of it. Filming as Anjali would have produced seven videos
+quietly showing a sales person the store's cost and the store's margin, which is
+the one thing ASSOC-1 builds a second endpoint and a second permission to
+prevent.
+
+**7 tutorials**, derived from the app's 11 routes under
+`apps/associate/src/app/(authed)/` and the 7 gated entries in its
+`page-access.ts` — grouped by the task a person does, not one per page.
+
+| | Tutorial | Slug | Screens |
+| --- | --- | --- | --- |
+| S1 | Finding your way around | `assoc-find-your-way-around` | the shell, the rail, the bell |
+| S2 | What you may sell, and for how much | `assoc-what-you-may-sell` | `/catalogue` |
+| S3 | Placing an order for a customer | `assoc-place-an-order` | `/orders/new` |
+| S4 | A day's orders from a spreadsheet | `assoc-upload-bulk-orders` | `/orders/import` |
+| S5 | Finding and reading an order | `assoc-find-an-order` | `/orders`, `/orders/[id]` |
+| S6 | Your customers | `assoc-my-customers` | `/customers` |
+| S7 | Raising an issue, your inbox and your login | `assoc-issues-and-account` | `/tickets`, `/tickets/new`, `/tickets/[id]`, `/notifications`, `/account` |
+
+**THE THREE STRUCTURAL FACTS ARE TAUGHT WHERE EACH ONE BITES, not collected
+into one abstract video about privacy.** Each is deliberate design rather than a
+limitation to apologise for, and each is said plainly at the screen where a
+person actually feels it — somebody who discovers one by poking around concludes
+something is being hidden from them:
+
+1. **Your price is fixed and the store sets it** — S2, where the figure is read
+   out loud, and S3, where *the absence of a price field* is the lesson. A
+   product with no `associate_prices` row is NAMED (`ASSOCIATE_PRICE_NOT_SET`)
+   rather than priced at something nobody chose, so S2 films the notice AND the
+   flag on the row itself.
+2. **You see only your own** — S5 and S6, off the subtitle each page carries.
+   S6 goes one step further, because the screen contains the distinction: who
+   *appears* in the customer list is decided by what you sold, and the **Orders
+   count beside a name is the shop's**, since a customer is one record between
+   everybody who sells there (ORD-7 / RS-5 — the scope is over the ORDERS).
+3. **You never see what the store pays or earns** — S1, because it is why there
+   is no dashboard, no wallet and no report in the rail, and the rail is the
+   first thing anybody reads. The app's root redirects to `/orders` for exactly
+   that reason.
+
+**The world is the long associate video's, not a new one.** `ASSOC_PORTAL_SLUGS`
+in `seed-demo-data.mjs` joins the same three unions `LONG_ASSOCIATE_SLUGS`
+already joined (`ASSOCIATE_WORLD_SLUGS` for the store itself and its action
+policy; `LONG_SLUGS` for the catalogue and the take-artefact clearing), so
+`longStoreWorldFor` builds one Ravi with one price list, one week of orders and
+one ticket. A second associate would be a second place for all four
+preconditions to drift and the first symptom would be a video narrating an empty
+table.
+
+**The seven live in `sections/associate.mjs`, registered by one import and one
+line in each of `narration.mjs` and `flows.mjs`.** `long/` already exists for
+this reason and says it in as many words — "four people writing a video each
+into them is four people editing the same two files" — and section R was being
+written into both of those files on stack A while this section was being written
+on stack B.
+
+### S1. Finding your way around · `filmed` — `assoc-find-your-way-around.mp4`
+
+**Promise** — what this portal is, and where everything lives.
+**Covers** the shell and the rail: three groups, eight links, the store's name
+with the signed-in person's email under it, and the bell. It opens on `/orders`
+because **there is no dashboard**, and the closing three scenes say why: every
+figure one would carry is the store's cost or the store's earnings.
+**Nothing is pressed except the bell**, which is opened and dismissed.
+
+### S2. What you may sell, and for how much · `filmed` — `assoc-what-you-may-sell.mp4`
+
+**Promise** — your catalogue is a list your store decides, at a price your store
+sets *for you*.
+**Covers** `/catalogue` — three columns and that is all of it: the product, what
+you sell it for, how many are left. Then the two things that end a sale: an
+unpriced product (the notice AND the flag on its row, because this is the screen
+somebody checks one price on and a count at the top is not where they are
+looking), and the Available figure, which is what the store SHOWS rather than
+what is in the building.
+**The "None left" line is written conditionally** — nothing is out of stock in
+this world, and emptying a product to produce one would take the shelf out from
+under every other video that shares it.
+**`needsSpacesShim`**, for the thumbnails rather than for an upload: a presigned
+READ is a `mock://` string the browser puts straight into an `<img src>`, which
+renders as a broken image in the middle of a catalogue.
+
+### S3. Placing an order for a customer · `filmed` — `assoc-place-an-order.mp4`
+
+**Promise** — turning a phone call into a parcel.
+**Covers** `/orders/new` — the picker (only products priced for this person;
+anything out of stock cannot be chosen), the line note with the two facts
+somebody reads down a phone, **the absence of a price box**, the customer block,
+the landmark, COD against prepaid, and the confirm.
+**Places a real order**, for a customer of its own (Pooja Deshpande):
+`assertNotDuplicate` refuses a second open order for the same phone carrying the
+same products, so re-using a seeded customer would film the refusal under a line
+about placing an order.
+**Prepaid is dwelt on and never chosen** — it spends the store's wallet, and a
+balance that cannot cover the goods is refused outright.
+
+### S4. A day's orders from a spreadsheet · `filmed` — `assoc-upload-bulk-orders.mp4`
+
+**Promise** — a day's worth at once instead of one at a time.
+**Covers** `/orders/import` — the template, the two-press check-then-import, the
+preview's row-versus-order count, the row that will not import (named by number
+and reason), the parachute, and the uploads register with its error report.
+**The sheet has no price column**, and that is a scene rather than a detail: an
+associate does not set one, so `Retail Price` is simply absent from their file.
+**Seeded per run** (`associate-bulk-orders.csv`, fresh references, six rows
+making three orders, one deliberately missing its landmark).
+
+### S5. Finding and reading an order · `filmed` — `assoc-find-an-order.mp4`
+
+**Promise** — finding any order from whatever the customer gives you, then
+reading it.
+**Covers** `/orders` (search by number, reference, name, part of a phone number
+or waybill; the status filter; a reload proving the filter lives in the address)
+and `/orders/[id]` top to bottom.
+**It opens a DELIVERED order on purpose**, the lesson section R learned: every
+panel on that page that offers an action is conditional on the order not being
+terminal, so a live one would put things to PRESS inside a video whose promise is
+that it presses nothing.
+**And then it ends on a FAILED one, read-only.** The same delivery panel is
+closed on a delivered parcel and open on a failed one, and the two closing scenes
+read the button and *the line beside it* — "your store approves this before
+anything happens" — because whether a van is coming or the store has to answer
+first is the one sentence an associate must not get wrong to a customer.
+**Nothing is clicked on it**; pressing it files a real request and that is the
+long `associate-everything` video's.
+
+### S6. Your customers · `filmed` — `assoc-my-customers.mp4`
+
+**Promise** — the other way into an order: from the person rather than the
+parcel.
+**Covers** `/customers` — the list, the scope, the name as a link into the orders
+already narrowed to that number, and the search committing on Enter.
+**The Orders column is its own scene, and the one worth keeping**: who appears
+is decided by what you sold; the FIGURE is every order that number has given the
+shop, because a customer row belongs to the store and two people selling to one
+number are selling to one person.
+**There is no customer detail page**, deliberately, and the video says so rather
+than leaving somebody looking for it.
+
+### S7. Raising an issue, your inbox and your login · `filmed` — `assoc-issues-and-account.mp4`
+
+**Promise** — the three screens that are about you rather than about one order.
+**Covers** `/tickets` and its stages, one seeded thread read as a conversation,
+`/tickets/new` (raised for real, on a DELIVERED order chosen by the customer's
+name rather than by index — the newest order in this world is a cancelled
+leftover, and a parcel that was never sent is a strange thing to say a piece is
+missing from), `/notifications` with the morning digest opened so the order
+numbers in it are visible, and `/account`.
+**Nothing about money is on the issue form**, which is a scene: an associate has
+no wallet and no business naming a figure in somebody else's settlement.
+**The typed body is kept to about ninety characters** — it is typed on camera
+inside one scene, and a longer one made the composer play the scene back at
+x0.59, which over a moving cursor reads as a fast-forward.
+
+### What section S deliberately does NOT cover
+
+- **Pressing** the two things an associate may do to a live order — asking for
+  another delivery attempt, and cancelling. Both are in the long
+  `associate-everything` video, which films the contrast the store's policy
+  creates (a held re-attempt against a direct cancel). S5 shows the button and
+  reads the line beside it without touching it.
+- **`/auth/accept-invitation` and the password reset.** Signed-out screens an
+  associate meets once; the long video films the invitation.
+- **The orders-paused notice.** It renders only when the store has switched this
+  person's order creation off, and the filming associate must NOT be paused —
+  S3 places a real order and `orders.create` is pause-gated. The notice says
+  plainly on screen what it is when it appears.
 
 ## Pages deliberately not filmed
 

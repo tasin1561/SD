@@ -22,7 +22,7 @@
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { prisma, pdfLib } from './lib/deps.mjs';
 import { MOCK_ROOT, mockObjectPath } from './lib/spaces-shim.mjs';
 import { GENERATED_DIR, TUTORIALS_DIR } from './lib/paths.mjs';
@@ -3334,7 +3334,9 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
     STORE_REPORT_SLUGS.has(slug ?? '') ||
     STORE_DISPUTE_SLUGS.has(slug ?? '') ||
     STORE_DELIVERY_ASK_SLUGS.has(slug ?? '') ||
-    STORE_PORTAL_SLUGS.has(slug ?? '');
+    STORE_PORTAL_SLUGS.has(slug ?? '') ||
+    STORE_PORTAL_DAY2_SLUGS.has(slug ?? '') ||
+    STORE_PORTAL_DAY3_SLUGS.has(slug ?? '');
   if (!wantsStore) return;
   const log = (m) => console.log(m);
   const world = await tradingStoreWorld(sellerId, sellerToken, staffToken, log);
@@ -3358,7 +3360,20 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
     // count teaches nothing about what it is for, and an order detail
     // with no scans is a tracker drawn on nothing.
     await ensureSettledStoreOrders(sellerId, world, staffToken, log);
+    /*
+      R4's sheet. `writeStoreBulkCsvs` builds three and names the first
+      of them `r4` after this very video — but it was only ever called
+      from `longStoreWorldFor`, which no section-R slug reaches, so the
+      file simply did not exist and R4's upload step had nothing to
+      hand `setInputFiles`. Generated per run rather than committed
+      because two agents film at once and must not share one file.
+    */
+    await writeStoreBulkCsvs(log);
   }
+  // Days 2 and 3 — each of the twelve adds only what its own screen
+  // cannot be filmed without. Returns at its first line for any other
+  // slug, so a seller video pays for none of it.
+  await storePortalDay23WorldFor(slug, sellerId, world, staffToken, log);
 }
 
 /**
@@ -3990,6 +4005,861 @@ async function ensureSecondStoreProduct(sellerId, world, log) {
   return variant.id;
 }
 
+/*
+ * ── SECTION R, DAYS 2 AND 3 ──────────────────────────────────────────
+ *
+ * Twelve videos about what a shopkeeper does when something goes wrong
+ * and where their money went. Every one of them stands on
+ * `tradingStoreWorld` — the same store, the same accepted terms, the
+ * same catalogue — and adds exactly the state its own screen cannot be
+ * filmed without.
+ *
+ * WHAT IS DELIBERATELY NOT HERE: a second store, a second seller, a
+ * second set of terms. Day 1 settled that and the reasoning holds — a
+ * second place for the terms, the catalogue, the orders switch and the
+ * action policy to drift, whose first symptom is a video narrating an
+ * empty table.
+ */
+
+/** R7–R12 — day 2, "when something goes wrong". */
+const STORE_PORTAL_DAY2_SLUGS = new Set([
+  'store-delivery-gone-wrong',
+  'store-unreachable-customers',
+  'store-your-customers',
+  'store-raise-it-with-skydrop',
+  'store-the-terms',
+  'store-your-team',
+]);
+
+/** R13–R18 — day 3, money and admin. */
+const STORE_PORTAL_DAY3_SLUGS = new Set([
+  'store-your-wallet',
+  'store-your-expenses',
+  'store-month-by-month',
+  'store-how-the-shop-is-doing',
+  'store-your-inbox-and-login',
+  'store-keys-and-webhooks',
+]);
+
+/**
+ * The colleague R12's team page shows beside Anjali, and the one it has
+ * an open invitation for.
+ *
+ * TWO people and one invitation, because every lesson on that page is
+ * about somebody OTHER than you: the row's actions are hidden on your
+ * own row by construction, so a team of one films a table with no
+ * buttons in it under narration about changing roles.
+ *
+ * Meera holds TWO roles on purpose. "What they may do is everything
+ * their roles allow put together" is the page's own sentence and the one
+ * thing a reader is most likely to get wrong, and a column with one
+ * chip in every cell cannot say it.
+ */
+const STORE_COLLEAGUE = {
+  email: 'meera@punesilkstudio.test',
+  fullName: 'Meera Kulkarni',
+  roleKeys: ['ops', 'finance'],
+};
+
+/** The invitation R12 films waiting — never accepted, re-issued if spent. */
+const STORE_PENDING_INVITE = {
+  email: 'rohan@punesilkstudio.test',
+  fullName: 'Rohan Deshmukh',
+  roleKeys: ['ops'],
+};
+
+/**
+ * R8's order — rung to the cap and never answered.
+ *
+ * Its own family rather than a share of G6's, because the two are spent
+ * differently: G6's orders are answered by a SELLER and this one is
+ * answered by the STORE, and a review resolved by either is never
+ * reopened (`handleNdrCap` upserts with `update: {}`). So this one is
+ * REBUILT when a take has answered it, exactly as D5's parcel is, and
+ * for the same reason — it was never confirmed, so it carries no
+ * waybill, no picked stock and no wallet entry, and the whole of it
+ * costs a phone call that never connected.
+ */
+const STORE_CALLCAP_ORDER = {
+  family: 'RSH-STORE-CALLCAP',
+  recipientName: 'Shruti Kulkarni',
+  phone: '+919845070066',
+  line1: '18, Prabhat Road, Erandwane',
+  line2: 'The cream building opposite the bank',
+  postalCode: '411004',
+};
+
+/**
+ * The dispute R10 reads back SETTLED, and the one line R13 finds in the
+ * ledger carrying a figure Skydrop refereed.
+ *
+ * A SECOND dispute rather than settling P3's: that one is deliberately
+ * left OPEN and is rebuilt if a take ever settles it, so settling it
+ * here would put the two videos in each other's way. This one is
+ * settled once and stands for ever — the matrix has no outbound edge
+ * from a resolution (RS-7), which makes "settled" the one terminal
+ * state in this file that needs no rebuild.
+ *
+ * The seller pays the store, so the entry is a CREDIT in the store's
+ * ledger. A debit would have read as the shop losing an argument, which
+ * is a fine thing to happen and a poor thing to teach from: the line
+ * R13 points at should be the one a viewer wants to understand.
+ */
+const STORE_SETTLED_DISPUTE = {
+  family: 'RSH-STORE-SETTLED',
+  recipientName: 'Prerna Agarwal',
+  phone: '+919845070077',
+  line1: '3, Boat Club Road',
+  line2: 'Beside the tennis courts, the blue gate',
+  postalCode: '411001',
+  subject: 'Two sarees billed, one delivered',
+  body:
+    'The order was for two and the customer received one. We have refunded her for the second ' +
+    'and are asking for the transfer price of it back.',
+  settlement: {
+    amountInr: '1850.00',
+    payer: 'SELLER',
+    notes: 'Short shipment confirmed from the pack record.',
+  },
+};
+
+/**
+ * R14's expense book, and R16's return on ad spend.
+ *
+ * ADVERTISING FIRST AND BY DESIGN: return on ad spend divides by what
+ * is recorded here, so without an `AD_SPEND` row that whole panel reads
+ * as dashes — and a dash is indistinguishable from a shop that is not
+ * advertising. Three categories rather than one, so the breakdown by
+ * category is a breakdown.
+ *
+ * One of them is dated into LAST month, which is what gives R15 a month
+ * with something in it to close. See `ensureStoreMonths`.
+ */
+const STORE_EXPENSES = [
+  {
+    category: 'AD_SPEND',
+    amountInr: '18500.00',
+    description: 'Instagram reels, Navratri push',
+    reference: 'META-2026-09-0188',
+    daysAgo: 6,
+  },
+  {
+    category: 'AD_SPEND',
+    amountInr: '7200.00',
+    description: 'WhatsApp broadcast credits',
+    reference: 'WA-4471',
+    daysAgo: 3,
+  },
+  {
+    category: 'STAFF',
+    amountInr: '12000.00',
+    description: 'Packing help, two Saturdays',
+    reference: null,
+    daysAgo: 9,
+  },
+  {
+    category: 'SOFTWARE',
+    amountInr: '1499.00',
+    description: 'Order sheet subscription',
+    reference: 'INV-9931',
+    daysAgo: 12,
+  },
+];
+
+/**
+ * Everything days 2 and 3 need, per slug.
+ *
+ * Each block is the narrowest thing that video cannot be filmed
+ * without, and every one of them is idempotent and forward-only. Run
+ * for a slug in neither set it returns at its first line, so a seller
+ * video pays for none of it.
+ */
+async function storePortalDay23WorldFor(slug, sellerId, world, staffToken, log) {
+  const day2 = STORE_PORTAL_DAY2_SLUGS.has(slug ?? '');
+  const day3 = STORE_PORTAL_DAY3_SLUGS.has(slug ?? '');
+  if (!day2 && !day3) return;
+
+  /*
+    R7's parcel is the one G6 already pays for — out for delivery, with
+    a send-back ask waiting on the seller. The video presses nothing
+    irreversible on it, so it is re-used rather than remade.
+
+    It also needs ONE `store_order_requests` row so the "Sent to your
+    seller to approve" section renders at all, and an ISSUE is the
+    cheapest kind: one open per kind per order, so this is idempotent,
+    and raising it changes nothing about the parcel.
+  */
+  if (slug === 'store-delivery-gone-wrong') {
+    await ensureHeldDeliveryAsk(sellerId, world.storeToken, staffToken, world.variantId, log);
+    await ensureHeldIssueOnDeliveryOrder(sellerId, world.storeToken, log);
+  }
+
+  if (slug === 'store-unreachable-customers') {
+    await ensureStoreCallCapOrder(sellerId, world, staffToken, log);
+  }
+
+  /*
+    R9 and R16 both want customers with FINISHED orders — R9 for the
+    order count beside a name, R16 because every rate on it divides by
+    outcomes rather than by orders placed. R13 wants the same parcels
+    for a different reason: a delivered order is what writes an order
+    margin, a transfer price and two fee shares into the ledger.
+  */
+  if (
+    slug === 'store-your-customers' ||
+    slug === 'store-your-wallet' ||
+    slug === 'store-how-the-shop-is-doing' ||
+    slug === 'store-month-by-month'
+  ) {
+    await ensureSettledStoreOrders(sellerId, world, staffToken, log);
+  }
+
+  if (slug === 'store-raise-it-with-skydrop') {
+    await ensureStoreDispute(sellerId, world, log);
+    await ensureSettledStoreDispute(sellerId, world, staffToken, log);
+  }
+
+  if (slug === 'store-the-terms') {
+    await ensureSecondTermsVersion(world, log);
+  }
+
+  if (slug === 'store-your-team') {
+    await ensureStoreColleague(world, log);
+    await ensureStorePendingInvite(world, log);
+  }
+
+  /*
+    R13's page is a DIFFERENT page depending on who manages the wallet,
+    and `wallet_managed_by` is nullable — which renders as the seller
+    managing it, so the top-up form, the withdraw card and both request
+    tables are simply absent. SKYDROP is chosen because it is the
+    richer screen and because the narration's own arc (send the money,
+    then tell us) only exists on that half.
+  */
+  if (slug === 'store-your-wallet') {
+    await ensureStoreWalletManagedBySkydrop(world, log);
+  }
+
+  if (slug === 'store-your-expenses' || slug === 'store-how-the-shop-is-doing') {
+    await ensureStoreExpenses(world, log);
+  }
+
+  if (slug === 'store-month-by-month') {
+    await ensureStoreExpenses(world, log);
+    await ensureStoreMonths(world, log);
+  }
+
+  /*
+    R18 CREATES a key and a webhook on camera — the secret shown once is
+    the lesson — so the only thing to seed is the removal of what the
+    last take left. Without it the second run adds "Our website" beside
+    "Our website" and the webhook is refused on a duplicate URL, both
+    of which film as a page that has stopped working.
+  */
+  if (slug === 'store-keys-and-webhooks') {
+    await clearStoreIntegrations(world, log);
+  }
+}
+
+/**
+ * One held ISSUE on R7's delivery order, so its "Sent to your seller to
+ * approve" section exists.
+ *
+ * `ensureHeldChangeAndIssue` does the same thing on a DIFFERENT order
+ * for G6's queue, which is right there and wrong here: R7 reads one
+ * order top to bottom, and a section that renders only on another order
+ * is a section the video cannot show. One open request per kind per
+ * order, so this is a no-op on every run after the first.
+ */
+async function ensureHeldIssueOnDeliveryOrder(sellerId, storeTok, log) {
+  const order = await newestStoreOrder(sellerId, STORE_REQUEST_ORDERS.delivery.family);
+  if (order === null) return;
+  if (await hasPendingRequest(order.id, 'RAISE_ISSUE')) {
+    log(`  · ${order.orderNumber} already has an issue waiting on the seller`);
+    return;
+  }
+  await call('/store/issues', {
+    method: 'POST',
+    token: storeTok,
+    body: {
+      orderId: order.id,
+      subject: 'The driver has not tried the second gate',
+      description:
+        'She has told us twice that the courier rings the wrong bell. Please ask them to use ' +
+        'the second gate past the post office.',
+    },
+  });
+  log(`  · the store has asked to raise an issue on ${order.orderNumber}`);
+}
+
+/**
+ * R8's order: rung to the call cap, parked, with the question still open.
+ *
+ * ── WHY THE POLICY IS SET TO DIRECT FOR THIS ONE VIDEO ───────────────
+ * `tradingStoreWorld` leaves `callCapDecision` at ASK_SELLER, which is
+ * right for G6 (whose queue is built out of exactly that) and wrong
+ * here: with it, both of R8's answers collapse into one button reading
+ * "Send to your seller to approve", and the whole lesson is that the
+ * two answers are NOT symmetrical — one is a few more days on a shelf
+ * and the other ends the sale. So this video's seeding overrides that
+ * one column, and G6's next seed run puts it back, because
+ * `tradingStoreWorld` writes the whole policy every time.
+ *
+ * ── WHY IT IS REBUILT RATHER THAN RESUMED ────────────────────────────
+ * The video may ANSWER the review, and an answered review is never
+ * reopened — so ringing the order back to the cap would park it with
+ * nothing open and the video could not be re-taken. It is the one
+ * order in this file that is safe to rebuild: never confirmed, so no
+ * waybill, no reservation, no wallet entry and no courier booking. The
+ * same argument `rebuildStaleReviewParcel` makes for D5's.
+ */
+async function ensureStoreCallCapOrder(sellerId, world, staffToken, log) {
+  await call(`/seller/reseller-stores/${world.storeId}/action-policy`, {
+    method: 'PUT',
+    token: world.sellerTok,
+    body: {
+      recall: 'DIRECT',
+      orderChange: 'ASK_SELLER',
+      cancel: 'ASK_SELLER',
+      // The ONE column this video changes, and the reason is above.
+      callCapDecision: 'DIRECT',
+      chaseSkydrop: 'ASK_SELLER',
+      reattempt: 'ASK_SELLER',
+      sendBack: 'ASK_SELLER',
+    },
+  });
+
+  const spec = STORE_CALLCAP_ORDER;
+  let order = await newestStoreOrder(sellerId, spec.family);
+  if (order !== null) {
+    const review = await prisma.earlyReservationReview.findFirst({
+      where: { orderId: order.id },
+      select: { status: true },
+    });
+    const parked = order.status === 'AWAITING_SELLER_DECISION';
+    if (parked && review !== null && review.status === 'OPEN') {
+      log(`  · ${order.sellerOrderRef} is parked with its question still open`);
+      return;
+    }
+    // Answered, or stopped part-way through its rings. Retire it by
+    // NAME rather than deleting: the order is a true record of what a
+    // take did, and nothing in it is expensive to leave standing.
+    const spent = await prisma.order.count({
+      where: { sellerId, sellerOrderRef: { startsWith: `${spec.family}-SPENT-` } },
+    });
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { sellerOrderRef: `${spec.family}-SPENT-${spent + 1}` },
+    });
+    log(
+      `  · ${spec.family} was ${order.status}${
+        review === null ? '' : ` with a ${review.status} question`
+      } — retired, and a fresh one follows`,
+    );
+    order = null;
+  }
+
+  order = await placeStoreOrder(sellerId, world.storeToken, world.variantId, spec, log);
+
+  // Ring, ring, ring. NO_ANSWER is one of the six counting outcomes
+  // (CC-5) and the cap is `ops.call_max_attempts_before_ndr`; the loop
+  // reads the order's own status after each attempt rather than
+  // trusting the count, exactly as the lifecycle pass does.
+  const cap = await prisma.systemSetting.findUnique({
+    where: { key: 'ops.call_max_attempts_before_ndr' },
+    select: { valueInt: true },
+  });
+  await ringStoreOrderToCap(order.id, staffToken, cap?.valueInt ?? 3, log);
+
+  const after = await prisma.order.findUniqueOrThrow({
+    where: { id: order.id },
+    select: { status: true, earlyReservationReview: { select: { status: true } } },
+  });
+  if (after.status !== 'AWAITING_SELLER_DECISION') {
+    throw new Error(
+      `${spec.family} is ${after.status}, not AWAITING_SELLER_DECISION — R8's queue would be ` +
+        'empty, and an empty queue films as a page that has stopped working.',
+    );
+  }
+  log(`  · ${order.orderNumber} is parked, waiting on the store to answer`);
+}
+
+/*
+  R11's second terms version is `ensureSecondTermsVersion` — the long
+  store video's, reused rather than written again.
+
+  One version is a history table with one row in it, which cannot teach
+  "a version is never changed once published"; two can. And ACCEPTING
+  the new one is not optional: an unaccepted current version is what
+  stops a store placing orders (`orderReadiness`), so publishing one and
+  walking away would break R3, R5 and G6 on the next run. A video about
+  terms is not a reason to shut the shop.
+
+  Reused and not copied for the ordinary reason: two functions deciding
+  what version two says is two places for them to disagree, and the one
+  that drifted would be whichever nobody re-read.
+*/
+
+/** R12's colleague — invited through the real endpoint, then accepted. */
+async function ensureStoreColleague(world, log) {
+  const existing = await prisma.storeUser.findFirst({
+    where: { storeId: world.storeId, email: STORE_COLLEAGUE.email, deletedAt: null },
+    select: { id: true },
+  });
+  if (existing !== null) {
+    log(`  · ${STORE_COLLEAGUE.fullName} is already on the team`);
+    return;
+  }
+  await call('/store/team/invitations', {
+    method: 'POST',
+    token: world.storeToken,
+    body: {
+      email: STORE_COLLEAGUE.email,
+      fullName: STORE_COLLEAGUE.fullName,
+      roleKeys: STORE_COLLEAGUE.roleKeys,
+    },
+  });
+  /*
+    The invitation TOKEN is not recoverable — the row holds a SHA-256 of
+    it and the plaintext only ever existed in an email — so this mints
+    one, writes its hash on, and goes through the product's own
+    acceptance endpoint with it. Exactly what `ensureStoreSession` does
+    for Anjali, and for the same reason: only the DELIVERY is faked.
+  */
+  const invitation = await prisma.storeUserInvitation.findFirstOrThrow({
+    where: { storeId: world.storeId, email: STORE_COLLEAGUE.email, usedAt: null, deletedAt: null },
+    select: { id: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  const plaintext = randomBytes(32).toString('base64url');
+  await prisma.storeUserInvitation.update({
+    where: { id: invitation.id },
+    data: {
+      token: createHash('sha256').update(plaintext, 'utf8').digest('hex'),
+      expiresAt: new Date(Date.now() + 7 * 86_400_000),
+    },
+  });
+  await call('/auth/store/invitations/accept', {
+    method: 'POST',
+    body: {
+      token: plaintext,
+      password: REQUEST_STORE.password,
+      fullName: STORE_COLLEAGUE.fullName,
+    },
+  });
+  log(`  · ${STORE_COLLEAGUE.fullName} joined the team`);
+}
+
+/**
+ * R12's open invitation.
+ *
+ * NEVER accepted — the video films it waiting, and resending it on
+ * camera issues a new link and kills the old one, which changes nothing
+ * about the row. An invitation that has EXPIRED is re-issued rather
+ * than left: an expired row renders the same shape with the wrong word
+ * on it, and the narration says "with when it expires".
+ */
+async function ensureStorePendingInvite(world, log) {
+  const open = await prisma.storeUserInvitation.findFirst({
+    where: {
+      storeId: world.storeId,
+      email: STORE_PENDING_INVITE.email,
+      usedAt: null,
+      deletedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    select: { id: true },
+  });
+  if (open !== null) {
+    log(`  · ${STORE_PENDING_INVITE.fullName} already has an invitation waiting`);
+    return;
+  }
+  await call('/store/team/invitations', {
+    method: 'POST',
+    token: world.storeToken,
+    body: {
+      email: STORE_PENDING_INVITE.email,
+      fullName: STORE_PENDING_INVITE.fullName,
+      roleKeys: STORE_PENDING_INVITE.roleKeys,
+    },
+  });
+  log(`  · invited ${STORE_PENDING_INVITE.fullName} and left it waiting`);
+}
+
+/** R13 — Skydrop manages this wallet, so the page offers its own half. */
+async function ensureStoreWalletManagedBySkydrop(world, log) {
+  const store = await prisma.sellerStore.findUniqueOrThrow({
+    where: { id: world.storeId },
+    select: { walletManagedBy: true },
+  });
+  if (store.walletManagedBy === 'SKYDROP') {
+    log('  · Skydrop already manages the store’s wallet');
+    return;
+  }
+  /*
+    Through the seller's own endpoint, because it REFUSES while a
+    top-up claim or a withdrawal is open (RS-6) and that refusal is
+    right: the manager deciding who pays a claim must not change under
+    one. A Prisma write would walk past it and leave a claim nobody
+    owns.
+  */
+  await call(`/seller/reseller-stores/${world.storeId}/wallet-manager`, {
+    method: 'PATCH',
+    token: world.sellerTok,
+    body: { walletManagedBy: 'SKYDROP' },
+  });
+  log('  · Skydrop now manages the store’s wallet');
+}
+
+/**
+ * R14's expense book, and R16's advertising.
+ *
+ * Idempotent on (category, day, description) — which is also the
+ * server's own duplicate guard, so a re-run is refused rather than
+ * doubling the book. Dated by `daysAgo` rather than by a fixed date:
+ * a date that fell out of the page's ninety-day window would film an
+ * empty list under a line about a total.
+ */
+async function ensureStoreExpenses(world, log) {
+  const from = istDay(new Date(Date.now() - 120 * 86_400_000));
+  const to = istDay(new Date());
+  const have = await call(`/store/expenses?from=${from}&to=${to}`, {
+    token: world.storeToken,
+  }).catch(() => ({ items: [] }));
+  const already = new Set((have.items ?? []).map((x) => `${x.category}|${x.description}`));
+
+  let added = 0;
+  for (const x of STORE_EXPENSES) {
+    if (already.has(`${x.category}|${x.description}`)) continue;
+    await call('/store/expenses', {
+      method: 'POST',
+      token: world.storeToken,
+      body: {
+        category: x.category,
+        amountInr: x.amountInr,
+        expenseDate: istDay(new Date(Date.now() - x.daysAgo * 86_400_000)),
+        description: x.description,
+        ...(x.reference === null ? {} : { reference: x.reference }),
+        idempotencyKey: randomUUID(),
+      },
+    });
+    added += 1;
+  }
+  log(
+    added === 0
+      ? '  · the store’s expense book already has its rows'
+      : `  · recorded ${added} store expense${added === 1 ? '' : 's'}`,
+  );
+}
+
+/**
+ * R15's CLOSED month, and the change carried out of it.
+ *
+ * ── THE PROBLEM THIS SOLVES ──────────────────────────────────────────
+ * Everything else in this file happens TODAY, so a store's whole ledger
+ * sits in the month that is open and `/reports` has exactly one month
+ * on it, open, with both carry tables empty. Three of R15's thirteen
+ * lines are about a month being frozen and what happens to a change
+ * found afterwards, and none of them can be filmed on that page.
+ *
+ * ── HOW, AND WHY EACH STEP IS THE REAL ENDPOINT ──────────────────────
+ * 1. The store's `created_at` is pulled back three months. It is the
+ *    one lever: the month list is `monthsBetween(store.createdAt, now)`
+ *    and the expense service refuses a day before the store's own first
+ *    month (`EXPENSE_BEFORE_STORE`). A plain column on a row nothing
+ *    has reported against, so there is no ledger to corrupt.
+ * 2. An expense is recorded INTO last month, through the real endpoint.
+ *    That is what gives the month something to freeze.
+ * 3. `store-pnl-close` is enqueued on the module's own queue rather
+ *    than written by hand: a snapshot is the ENGINE's output and a
+ *    hand-written one would be a figure nobody computed. The same
+ *    `letTheClockRun` argument `lib/freight.mjs` makes.
+ * 4. A SECOND expense is recorded into that month AFTER it closed, and
+ *    `store-pnl-detect` is enqueued. The close cannot absorb it, so it
+ *    is carried into the month now open — which is the table R15's
+ *    `carried-in` and `reason` steps read.
+ *
+ * Forward-only and idempotent: a month already closed is left alone
+ * (`close` refuses a closed month), and each expense is guarded on its
+ * own description.
+ */
+async function ensureStoreMonths(world, log) {
+  const store = await prisma.sellerStore.findUniqueOrThrow({
+    where: { id: world.storeId },
+    select: { createdAt: true },
+  });
+  const threeMonthsBack = new Date(Date.now() - 92 * 86_400_000);
+  if (store.createdAt > threeMonthsBack) {
+    await prisma.sellerStore.update({
+      where: { id: world.storeId },
+      data: { createdAt: threeMonthsBack },
+    });
+    log('  · pulled the store’s opening date back three months, so it has months to report');
+  }
+
+  const lastMonthDay = istDay(firstOfLastMonthPlusFive());
+  const beforeClose = {
+    category: 'AD_SPEND',
+    amountInr: '9400.00',
+    description: 'Festive catalogue shoot',
+    reference: 'STU-8812',
+  };
+  const afterClose = {
+    category: 'SOFTWARE',
+    amountInr: '2100.00',
+    description: 'Invoice that arrived late',
+    reference: 'INV-LATE-7',
+  };
+
+  await recordStoreExpenseOnce(world, { ...beforeClose, expenseDate: lastMonthDay }, log);
+
+  const month = lastMonthDay.slice(0, 7);
+  const closed = await prisma.storePnlPeriod.findFirst({
+    where: { storeId: world.storeId, month },
+    select: { month: true },
+  });
+  if (closed === null) {
+    await enqueueResellerReportsJob('store-pnl-close', log);
+    await waitFor(`${month} to close`, async () => {
+      const row = await prisma.storePnlPeriod.findFirst({
+        where: { storeId: world.storeId, month },
+        select: { month: true },
+      });
+      return row?.month;
+    });
+    log(`  · ${month} is closed and frozen`);
+  } else {
+    log(`  · ${month} is already closed`);
+  }
+
+  /*
+    NOW the late one, so it lands after the freeze and has to be
+    carried. Recording it before the close would simply be IN the
+    closed month, which teaches the opposite of what R15 is about.
+  */
+  const late = await recordStoreExpenseOnce(
+    world,
+    { ...afterClose, expenseDate: lastMonthDay },
+    log,
+  );
+  if (late) {
+    await enqueueResellerReportsJob('store-pnl-detect', log);
+    await waitFor('the change to be carried forward', async () => {
+      const row = await prisma.storePnlCarryForward.findFirst({
+        where: { storeId: world.storeId, originMonth: month },
+        select: { id: true },
+      });
+      return row?.id;
+    }).catch(() => {
+      log('  · the carry-forward sweep has not landed yet — R15’s carry tables may be empty');
+    });
+  }
+}
+
+/** The 5th of last month, as a Date — a day no month boundary can move. */
+function firstOfLastMonthPlusFive() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 5, 6, 0, 0));
+}
+
+/** Record one store expense unless its description is already on the book. */
+async function recordStoreExpenseOnce(world, x, log) {
+  const have = await call(`/store/expenses?from=${x.expenseDate}&to=${x.expenseDate}`, {
+    token: world.storeToken,
+  }).catch(() => ({ items: [] }));
+  if ((have.items ?? []).some((r) => r.description === x.description)) return false;
+  await call('/store/expenses', {
+    method: 'POST',
+    token: world.storeToken,
+    body: {
+      category: x.category,
+      amountInr: x.amountInr,
+      expenseDate: x.expenseDate,
+      description: x.description,
+      ...(x.reference === undefined || x.reference === null ? {} : { reference: x.reference }),
+      idempotencyKey: randomUUID(),
+    },
+  });
+  log(`  · recorded "${x.description}" on ${x.expenseDate}`);
+  return true;
+}
+
+/**
+ * Nudge one of the reseller-reports crons rather than waiting for it.
+ *
+ * Both of these run on a schedule measured in hours (RS-8: close hourly,
+ * detect daily at 06:15 IST), which is a fine production cadence and no
+ * use at all to a seed that has to leave the page right before a take.
+ * Adding the job by NAME to the module's own queue is the same move
+ * `letTheClockRun` makes for a pending accrual: the work is the
+ * product's own, only its timing is ours.
+ */
+async function enqueueResellerReportsJob(name, log) {
+  const url = new globalThis.URL(process.env.REDIS_URL ?? 'redis://127.0.0.1:6379');
+  if (!['localhost', '127.0.0.1', '::1', 'redis'].includes(url.hostname)) {
+    throw new Error(
+      `Refusing to drive the reseller-reports queue on "${url.hostname}" — this is a local ` +
+        'recording convenience and that queue freezes a real store’s reported months.',
+    );
+  }
+  /*
+    THE LOGICAL DB INDEX IS PART OF THE CONNECTION, and dropping it is
+    how a stack-B seed enqueues into stack A's keyspace (the README's
+    quietest isolation failure). `ioredis` reads it off the URL path;
+    building the connection field by field does not, so it is read here
+    explicitly rather than inherited.
+  */
+  const BullMQ = await import('bullmq');
+  const queue = new BullMQ.Queue('reseller-reports', {
+    connection: {
+      host: url.hostname,
+      port: Number(url.port === '' ? 6379 : url.port),
+      db: Number(url.pathname.replace('/', '')) || 0,
+      maxRetriesPerRequest: null,
+    },
+  });
+  try {
+    await queue.add(name, {}, { removeOnComplete: true, attempts: 1 });
+    log(`  · asked the ${name} job to run now`);
+  } finally {
+    await queue.close();
+  }
+}
+
+/**
+ * The Indian calendar day of an instant, as `YYYY-MM-DD`.
+ *
+ * The store's expense book and its P&L months are both cut at IST
+ * midnight (RS-8), so a plain `toISOString().slice(0, 10)` puts
+ * anything recorded between midnight and half past five in the morning
+ * India time into the PREVIOUS day — and on the first of a month, into
+ * the previous MONTH, which is the one that has just been frozen.
+ */
+function istDay(at) {
+  return new Date(at.getTime() + 19_800_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Ring one order until the call centre runs out of attempts.
+ *
+ * Through `force-outcome` rather than pull-then-record, because this is
+ * not pretending to be an agent: it wants four identical NO_ANSWERs and
+ * the queue's own FIFO would hand it whatever call is next. NO_ANSWER is
+ * one of the six counting outcomes (CC-5), and the order's OWN STATUS is
+ * the loop's condition — the cap is only the bound that stops a runaway,
+ * because an order whose review was answered re-enters the queue with
+ * its attempts already counted and parks on the very first ring.
+ */
+async function ringStoreOrderToCap(orderId, staffToken, cap, log) {
+  for (let i = 0; i < cap + 1; i += 1) {
+    const order = await prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      select: { status: true },
+    });
+    if (order.status !== 'PENDING_CONFIRMATION') break;
+    const entry = await waitFor(`a call queue entry for ${orderId}`, () =>
+      prisma.callQueueEntry.findFirst({
+        where: { orderId, status: { in: ['PENDING', 'ASSIGNED'] } },
+        select: { id: true },
+      }),
+    );
+    const startedAt = new Date(Date.now() - (cap - i + 1) * 20 * 60_000);
+    await call(`/admin/call-queue/${entry.id}/force-outcome`, {
+      method: 'POST',
+      token: staffToken,
+      body: {
+        outcome: 'NO_ANSWER',
+        startedAt: startedAt.toISOString(),
+        endedAt: new Date(startedAt.getTime() + 45_000).toISOString(),
+        outcomeNotes: 'Rang out — nobody picked up.',
+      },
+    });
+    // The order transition is POST-COMMIT of the attempt (CC-3), so the
+    // status is a heartbeat behind the call that moved it.
+    await new Promise((r) => setTimeout(r, 700));
+  }
+  const rang = await prisma.callAttempt.count({ where: { orderId } });
+  log(`  · rang the customer ${rang} time${rang === 1 ? '' : 's'} without an answer`);
+}
+
+/**
+ * R10's SETTLED dispute, and R13's "Dispute settled" ledger line.
+ *
+ * Settled ONCE and never rebuilt: a resolution has no outbound edge
+ * (RS-7), so the one terminal state in this file that is also the state
+ * the video wants. Both halves are the real endpoints — the store
+ * raises it, staff settle it — because the settlement is what writes
+ * the paired wallet entries, and a hand-written pair would be money
+ * moved by nobody.
+ */
+async function ensureSettledStoreDispute(sellerId, world, staffToken, log) {
+  const spec = STORE_SETTLED_DISPUTE;
+  let order = await newestStoreOrder(sellerId, spec.family);
+  if (order === null) {
+    order = await placeStoreOrder(sellerId, world.storeToken, world.variantId, spec, log);
+  }
+
+  let ticket = await prisma.ticket.findFirst({
+    where: { orderId: order.id, ticketType: 'STORE_DISPUTE' },
+    select: { id: true, ticketNumber: true, resolvedAt: true },
+  });
+  if (ticket === null) {
+    const raised = await call('/store/tickets', {
+      method: 'POST',
+      token: world.storeToken,
+      body: { orderId: order.id, subject: spec.subject, description: spec.body },
+    });
+    ticket = { id: raised.id, ticketNumber: raised.ticketNumber, resolvedAt: null };
+    log(`  · raised ${raised.ticketNumber} on ${order.orderNumber}`);
+  }
+  if (ticket.resolvedAt !== null) {
+    log(`  · ${ticket.ticketNumber} is already settled`);
+    return;
+  }
+  await call(`/admin/tickets/${ticket.id}/store-dispute-settlement`, {
+    method: 'POST',
+    token: staffToken,
+    body: spec.settlement,
+  });
+  log(
+    `  · settled ${ticket.ticketNumber}: the seller paid the store ₹${spec.settlement.amountInr}`,
+  );
+}
+
+/**
+ * Clear what R18's last take created.
+ *
+ * The video MAKES a key and a webhook on camera — the secret shown once
+ * is its whole subject — so there is nothing to build, only the last
+ * run's leavings to remove. Without this the key table grows an
+ * identical row per take and the webhook is refused on a duplicate URL,
+ * which films as a page that has stopped working.
+ *
+ * Revoked and deleted rather than hard-removed: both are the product's
+ * own soft states, and the list filters on them.
+ */
+async function clearStoreIntegrations(world, log) {
+  const keys = await prisma.storeApiKey.updateMany({
+    where: { storeId: world.storeId, name: R18_KEY_NAME, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  const hooks = await prisma.sellerWebhookEndpoint.updateMany({
+    where: { resellerStoreId: world.storeId, url: R18_WEBHOOK_URL, deletedAt: null },
+    data: { deletedAt: new Date() },
+  });
+  if (keys.count > 0 || hooks.count > 0) {
+    log(
+      `  · cleared a previous take’s integrations (${keys.count} key${
+        keys.count === 1 ? '' : 's'
+      }, ${hooks.count} webhook${hooks.count === 1 ? '' : 's'})`,
+    );
+  }
+}
+
+/** What R18 types on camera. Kept in step with `flows.mjs` by the label test. */
+const R18_KEY_NAME = 'Our website';
+const R18_WEBHOOK_URL = 'https://punesilkstudio.example/skydrop';
+
 /**
  * States a settled parcel cannot be carried on from, so a NEW one is
  * built instead.
@@ -4162,7 +5032,31 @@ async function clearPreviousOrders(sellerId) {
     // log whose job is to say what a take left behind.
     where: {
       sellerId,
-      NOT: { OR: PROTECTED_REF_PREFIXES.map((p) => ({ sellerOrderRef: { startsWith: p } })) },
+      /*
+        NULL-SAFE, and that is not tidiness — it is the difference
+        between a video that can be re-shot and one that can be filmed
+        exactly once (2026-10-10).
+
+        `NOT { OR: [startsWith …] }` becomes `NOT (ref LIKE 'x%' OR …)`
+        in SQL, and every one of those comparisons is NULL for an order
+        with NO reference — so the whole predicate is NULL, which is not
+        TRUE, and the row is never selected. An order placed ON CAMERA
+        is exactly that order: none of these forms fills the optional
+        reference field, so every take left its order behind, the next
+        take met `DUPLICATE_ORDER_SUSPECTED` with the confirm dialog
+        open, and the seed reported success the whole way through.
+
+        A NULL reference cannot be in a protected family, so it belongs
+        in the removable set; `REMOVABLE_STATUSES` below still keeps
+        this to pre-dispatch orders of the demo seller, which is what a
+        previous take leaves and nothing else.
+      */
+      OR: [
+        { sellerOrderRef: null },
+        {
+          NOT: { OR: PROTECTED_REF_PREFIXES.map((p) => ({ sellerOrderRef: { startsWith: p } })) },
+        },
+      ],
     },
     select: { id: true, orderNumber: true, status: true },
   });
@@ -8269,14 +9163,77 @@ const LONG_RESELLER_SLUGS = new Set(['reseller-everything', 'promo-reseller']);
 const LONG_ASSOCIATE_SLUGS = new Set(['associate-everything', 'promo-associate']);
 
 /**
+ * SECTION S — the seven SHORT associate-portal tutorials.
+ *
+ * They are not long videos, and they are declared beside the long ones
+ * anyway because they want the SAME WORLD: Ravi of Pune Silk Studio,
+ * his price list with the one hole in it, and his week of orders with
+ * their outcomes known. A second associate (or a second copy of his
+ * prices, his store's terms and its action policy) would be a second
+ * place for all four preconditions to drift, and the first symptom
+ * would be a video narrating an empty table.
+ *
+ * So the only thing this set does is JOIN the three unions below.
+ * Nothing in `longStoreWorldFor` is section-S-specific.
+ */
+const ASSOC_PORTAL_SLUGS = new Set([
+  'assoc-find-your-way-around',
+  'assoc-what-you-may-sell',
+  'assoc-place-an-order',
+  'assoc-upload-bulk-orders',
+  'assoc-find-an-order',
+  'assoc-my-customers',
+  'assoc-issues-and-account',
+]);
+
+/**
+ * Every slug that signs in as Ravi and therefore needs his world.
+ *
+ * Read by `longStoreWorldFor` (whether to build the store at all) and
+ * by `ensureLongStoreActionPolicy` (which picks the cancel-DIRECT,
+ * re-attempt-ASK_SELLER shape the associate videos teach the contrast
+ * from). Both used to ask `LONG_ASSOCIATE_SLUGS` directly, which is why
+ * this set exists rather than seven more entries in a set whose docblock
+ * says "the long video and its promo".
+ */
+const ASSOCIATE_WORLD_SLUGS = new Set([...LONG_ASSOCIATE_SLUGS, ...ASSOC_PORTAL_SLUGS]);
+
+/**
+ * R19–R21 — the STORE OWNER's three screens about her sales people.
+ *
+ * ASSOC-1 landed the day after section R was planned, so R1–R18 covers
+ * none of `/associates`, `/associates/analysis` or one associate's
+ * price list. These three sign in as ANJALI rather than Ravi — they are
+ * her decisions ABOUT him — but they want the identical world, so they
+ * join `longStoreWorldFor` for exactly the reason section S does: two
+ * associates, a price list with a hole in it, an unaccepted invitation
+ * and a week of orders whose outcomes are known. A second copy of any
+ * of that is a second place for it to drift.
+ */
+const STORE_ASSOCIATE_SLUGS = new Set([
+  'store-invite-an-associate',
+  'store-set-associate-prices',
+  'store-how-associates-are-doing',
+]);
+
+/**
  * Every long slug. Used only for the CLEARING, which is unconditional
  * across the six: the seller video's autumn kurti and the store
  * video's bulk references are cheap to remove and expensive to
  * discover left behind, and a clear that only runs for the slug that
  * created the row is a clear that misses the run where somebody filmed
  * two videos in a row.
+ *
+ * Section S is in here too, because it shares the catalogue
+ * (`longWorldFor`) and leaves behind the same take artefacts.
  */
-const LONG_SLUGS = new Set([...LONG_SELLER_SLUGS, ...LONG_RESELLER_SLUGS, ...LONG_ASSOCIATE_SLUGS]);
+const LONG_SLUGS = new Set([
+  ...LONG_SELLER_SLUGS,
+  ...LONG_RESELLER_SLUGS,
+  ...LONG_ASSOCIATE_SLUGS,
+  ...ASSOC_PORTAL_SLUGS,
+  ...STORE_ASSOCIATE_SLUGS,
+]);
 
 /**
  * THE FOUR PRODUCTS THE LONG SELLER VIDEO FOLLOWS.
@@ -8424,6 +9381,25 @@ const LONG_TAKE_ARTEFACTS = {
     // appears in a script because a scene SEARCHES for it does not
     // belong here. Both kinds show up in the same grep, which is
     // exactly how this nearly went in.
+    //
+    // R3 (`store-place-an-order`) — Vaishnavi Joshi. NOT in
+    // `long/*.mjs`, so the grep above does not find her: section R's
+    // take customers live in `flows.mjs` (`STORE_ORDER`). She cost a
+    // take to learn, in the exact shape the docblock above predicts —
+    // the `--check` placed the order, the take twenty minutes later
+    // was refused by the duplicate guard, and the only symptom was
+    // `outro` waiting thirty seconds for a navigation that never came.
+    //
+    //   grep -hoE '\+91[0-9]{10}' scripts/tutorials/flows.mjs | sort -u
+    '+919822078825',
+    //
+    // Section S (`assoc-place-an-order`) — Pooja Deshpande, the
+    // associate's own take customer. A THIRD place these now live
+    // (`sections/associate.mjs`), which is why the function below
+    // derives the bulk sheets' four rather than adding them here: a
+    // list of phone numbers typed out by hand in one file and used in
+    // four is the drift this whole docblock is about.
+    '+919822078841',
   ],
 };
 
@@ -8779,7 +9755,38 @@ async function clearLongTakeArtefacts(sellerId) {
  * duplicate guard does not count it either.
  */
 async function removeTakeCustomerOrders(sellerId) {
-  const phones = LONG_TAKE_ARTEFACTS.takeCustomerPhones;
+  /*
+    THE BULK SHEETS' CUSTOMERS COUNT TOO, and leaving them out was a
+    bug that could only ever be seen by watching a finished video
+    (2026-10-10).
+
+    `assertNotDuplicate` is scoped to the STORE, not to the person who
+    typed the order — so the four customers every store bulk sheet
+    carries are shared by all three of them, and an order one sheet
+    imported refuses the next sheet's row for the same customer. The
+    reference is no help: an imported store order carries `PSS-…` or
+    `PSS-LONG-…`, both inside `PROTECTED_REF_PREFIXES`, so
+    `clearPreviousOrders` deliberately leaves them alone — its own
+    docblock says "the orders those imports CREATED are already gone",
+    which is true of every sheet except these.
+
+    Measured: a clean `--check` of the associate upload imported ZERO
+    of its four orders — three refused as duplicates of the reseller
+    sheet's leftovers and one for its deliberately-blank landmark — and
+    every step still reached, because "Import stopped · 0 orders · 6
+    failed" is a page the flow can find its way around perfectly well.
+
+    DERIVED from `STORE_BULK_CUSTOMERS` rather than restated: the sheets
+    and this sweep must name the same four people, and a second
+    hand-typed list is exactly what the docblock above is about. It is
+    read HERE rather than spread into the object literal because that
+    constant is declared further down the file and would be in its
+    temporal dead zone at module load.
+  */
+  const phones = [
+    ...LONG_TAKE_ARTEFACTS.takeCustomerPhones,
+    ...STORE_BULK_CUSTOMERS.map((c) => c.phone),
+  ];
   const orders = await prisma.order.findMany({
     where: {
       sellerId,
@@ -9512,7 +10519,10 @@ const LONG_DIGEST = {
  * and a week of orders with their outcomes known.
  */
 async function longStoreWorldFor(slug, sellerId, sellerToken, staffToken) {
-  const wantsStore = LONG_RESELLER_SLUGS.has(slug ?? '') || LONG_ASSOCIATE_SLUGS.has(slug ?? '');
+  const wantsStore =
+    LONG_RESELLER_SLUGS.has(slug ?? '') ||
+    ASSOCIATE_WORLD_SLUGS.has(slug ?? '') ||
+    STORE_ASSOCIATE_SLUGS.has(slug ?? '');
   if (!wantsStore) return;
   const log = (m) => console.log(m);
   console.log('\nBuilding the long store videos’ world…');
@@ -9534,6 +10544,8 @@ async function longStoreWorldFor(slug, sellerId, sellerToken, staffToken) {
   const priya = await ensureAssociate(world, LONG_STORE_PEOPLE.secondAssociate, log);
   await ensureAssociatePrices(world, ravi, log);
   await ensureAssociatePrices(world, priya, log);
+  // AFTER the two above, which upsert the in-range figure through the API.
+  await ensureStrandedAssociatePrice(slug, priya, log);
 
   // The store's own settled pair — the delivered and the returned order
   // the scorecards divide by (the same call G7 makes, and the reason is
@@ -9716,7 +10728,7 @@ async function ensureLongStoreActionPolicy(slug, world, log) {
     reattempt: 'ASK_SELLER',
     sendBack: 'ASK_SELLER',
   };
-  const body = LONG_ASSOCIATE_SLUGS.has(slug ?? '')
+  const body = ASSOCIATE_WORLD_SLUGS.has(slug ?? '')
     ? { ...askFirst, cancel: 'DIRECT', chaseSkydrop: 'DIRECT' }
     : askFirst;
   await call(`/seller/reseller-stores/${world.storeId}/action-policy`, {
@@ -9943,6 +10955,54 @@ async function ensureAssociatePrices(world, associate, log) {
     }
   }
   log(`  · ${associate.fullName} is priced for ${set} product(s), and one deliberately not`);
+}
+
+/**
+ * R19's out-of-range chip: ONE price the seller's range has moved out
+ * from under.
+ *
+ * `/associates` shows a red "1 price outside the seller's range" beside
+ * whoever holds one, and R19's `moved` scene is about exactly that
+ * chip. IT CANNOT BE MADE ON CAMERA — setting such a price is refused
+ * (`ASSOCIATE_PRICE_OUT_OF_SELLER_RANGE`, which is R20's whole lesson),
+ * so the only way one exists in the real world is a seller NARROWING
+ * the range after the price was agreed.
+ *
+ * Written straight onto the row rather than by narrowing the range,
+ * because a range belongs to the (store, variant) pair and is shared by
+ * every associate: narrowing it would put the same red chip on RAVI's
+ * row, in the middle of R20, whose page is meant to be three ordinary
+ * prices and one deliberately unpriced.
+ *
+ * It renders identically either way — `outOfRange` is computed on READ
+ * against the current range (`associate.service.ts`), never stored.
+ *
+ * GATED on R19–R21, so the long videos' world does not move under them.
+ */
+const STRANDED_ASSOCIATE_PRICE = { sku: 'RSH-KANTHA-BLUE', retail: '2900' };
+
+async function ensureStrandedAssociatePrice(slug, associate, log) {
+  if (!STORE_ASSOCIATE_SLUGS.has(slug ?? '')) return;
+  const variant = await prisma.productVariant.findFirst({
+    where: { skuCode: STRANDED_ASSOCIATE_PRICE.sku, deletedAt: null },
+    select: { id: true },
+  });
+  if (variant === null) return;
+  // `updateMany` rather than `update`: the row is made by
+  // `ensureAssociatePrices` a line earlier, and a throw here would fail
+  // the whole seed over a decoration if that ever stopped being true.
+  const moved = await prisma.associatePrice.updateMany({
+    where: { storeUserId: associate.id, variantId: variant.id },
+    data: { retailPriceInr: STRANDED_ASSOCIATE_PRICE.retail },
+  });
+  if (moved.count === 0) {
+    log(`  · no ${STRANDED_ASSOCIATE_PRICE.sku} price for ${associate.fullName} to strand`);
+    return;
+  }
+  log(
+    `  · ${associate.fullName}'s ${STRANDED_ASSOCIATE_PRICE.sku} is now ` +
+      `₹${STRANDED_ASSOCIATE_PRICE.retail}, outside the range the seller allows — R19 films it`,
+  );
 }
 
 /**

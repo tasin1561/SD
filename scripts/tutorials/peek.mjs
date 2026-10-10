@@ -18,6 +18,7 @@
  *   node scripts/tutorials/peek.mjs '/orders?search=RSH-LIFE-DELIVERED' out.png
  *   node scripts/tutorials/peek.mjs --admin /system-issues
  *   node scripts/tutorials/peek.mjs --reseller /catalogue
+ *   node scripts/tutorials/peek.mjs --associate --routes /orders /catalogue
  *   node scripts/tutorials/peek.mjs --admin --routes /topups /withdrawals /pnl
  *
  * `--routes` takes SEVERAL and visits them on ONE sign-in, writing each
@@ -57,31 +58,52 @@ if (admin) args.shift();
 // seller's would show figures those videos must never show.
 const reseller = args[0] === '--reseller';
 if (reseller) args.shift();
+// `--associate` drives apps/associate as one of a store's SALES PEOPLE
+// — a third person again, not a third view. Ravi holds the `associate`
+// role alone, so `order_scope` is OWN and he sees only the orders and
+// customers he placed; he is shown neither what the store pays for a
+// product nor what it earns. Section S is written by looking at HIS
+// screens, because looking at the store owner's would show a page with
+// the store's cost on it, and the whole point of this app is what it
+// does not show.
+const associate = args[0] === '--associate';
+if (associate) args.shift();
 
 /** Which stack's console. Required, like everywhere else — see `lib/stacks.mjs`. */
 const STACK = resolveStack();
 
-const APP = reseller
+const APP = associate
   ? {
-      base: process.env.RESELLER_APP_URL ?? STACK.reseller.url,
-      email: process.env.DEMO_STORE_EMAIL ?? 'anjali@punesilkstudio.test',
-      password: process.env.DEMO_STORE_PASSWORD ?? 'Store-Demo-2026',
+      base: process.env.ASSOCIATE_APP_URL ?? STACK.associate.url,
+      email: process.env.DEMO_ASSOCIATE_EMAIL ?? 'ravi@punesilkstudio.test',
+      password: process.env.DEMO_ASSOCIATE_PASSWORD ?? 'Assoc-Demo-2026',
+      // No `/dashboard` in this app: its root redirects to `/orders` on
+      // purpose (every figure a dashboard would carry is the store's
+      // cost or the store's earnings), so a wait for `/dashboard` here
+      // is a thirty-second timeout reported as a failed sign-in.
+      landing: /\/orders/,
     }
-  : admin
+  : reseller
     ? {
-        base: process.env.ADMIN_APP_URL ?? STACK.admin.url,
-        email: process.env.TUTORIAL_OPS_EMAIL ?? 'tutorial-ops@skydrop.local',
-        password: process.env.TUTORIAL_OPS_PASSWORD ?? 'Tutorial-Ops-2026',
+        base: process.env.RESELLER_APP_URL ?? STACK.reseller.url,
+        email: process.env.DEMO_STORE_EMAIL ?? 'anjali@punesilkstudio.test',
+        password: process.env.DEMO_STORE_PASSWORD ?? 'Store-Demo-2026',
       }
-    : {
-        base: process.env.SELLER_APP_URL ?? STACK.seller.url,
-        email: process.env.DEMO_SELLER_EMAIL ?? 'demo@rangpursilk.test',
-        password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
-      };
+    : admin
+      ? {
+          base: process.env.ADMIN_APP_URL ?? STACK.admin.url,
+          email: process.env.TUTORIAL_OPS_EMAIL ?? 'tutorial-ops@skydrop.local',
+          password: process.env.TUTORIAL_OPS_PASSWORD ?? 'Tutorial-Ops-2026',
+        }
+      : {
+          base: process.env.SELLER_APP_URL ?? STACK.seller.url,
+          email: process.env.DEMO_SELLER_EMAIL ?? 'demo@rangpursilk.test',
+          password: process.env.DEMO_SELLER_PASSWORD ?? 'Skydrop-Demo-2026',
+        };
 
 const tour = args[0] === '--routes';
 if (tour) args.shift();
-const routes = tour ? args : [args[0] ?? '/dashboard'];
+const routes = tour ? args : [args[0] ?? (associate ? '/orders' : '/dashboard')];
 if (routes.length === 0) throw new Error('--routes needs at least one route');
 await fs.mkdir(VERIFY_DIR, { recursive: true });
 const tourDir = path.join(VERIFY_DIR, 'peek');
@@ -121,7 +143,7 @@ await page
   .getByRole('button', { name: /sign in|log in/i })
   .first()
   .click();
-await page.waitForURL(/\/dashboard/, { timeout: 30_000 });
+await page.waitForURL(APP.landing ?? /\/dashboard/, { timeout: 30_000 });
 
 for (const route of routes) {
   const out = tour
@@ -129,7 +151,13 @@ for (const route of routes) {
     : (args[1] ??
       path.join(
         VERIFY_DIR,
-        reseller ? 'peek-reseller.png' : admin ? 'peek-admin.png' : 'peek.png',
+        associate
+          ? 'peek-associate.png'
+          : reseller
+            ? 'peek-reseller.png'
+            : admin
+              ? 'peek-admin.png'
+              : 'peek.png',
       ));
   await page.goto(`${APP.base}${route}`, { waitUntil: 'domcontentloaded' });
   await page.waitForLoadState('networkidle').catch(() => {});

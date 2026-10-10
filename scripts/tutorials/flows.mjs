@@ -1540,6 +1540,206 @@ function firstBodyCell(page, nth) {
   return page.locator(`tbody tr:first-child td:nth-child(${nth})`).first();
 }
 
+/*
+  ── SECTION R, DAYS 2 AND 3 — helpers ───────────────────────────────
+
+  Each one is here rather than inline because the same reach is wanted
+  by three or four of the twelve, and a card found by position is a card
+  that silently becomes a different card.
+*/
+
+/**
+ * A `ConfirmDialog`'s own box, when it is open ON TOP of another dialog.
+ *
+ * `ConfirmDialog` IS a `Dialog`, so Radix gives both `role="dialog"` and
+ * `getByRole('dialog')` is a strict-mode failure whenever two are open
+ * — which R7's asks, R8's answer and R12's invite all produce by
+ * design. The confirm is the one whose body is `.sk-confirm`; nothing
+ * else in the estate renders that class.
+ */
+function confirmBox(page) {
+  return page
+    .locator('.sk-dialog')
+    .filter({ has: page.locator('.sk-confirm') })
+    .first();
+}
+
+/**
+ * One `KpiCard`, by the words of its label.
+ *
+ * NOT `hasText`, which is a case-insensitive substring: the wallet's own
+ * tiles include "Balance", "You can withdraw" and "May go below zero
+ * by", and `hasText: 'Balance'` would also take any tile whose hint
+ * mentions a balance. `getByText(..., { exact: true })` means "the
+ * element whose WHOLE text is this", which `.sk-kpi__label` is.
+ */
+function kpiCard(page, label) {
+  return page
+    .locator('.sk-kpi')
+    .filter({ has: page.getByText(label, { exact: true }) })
+    .first();
+}
+
+/** One `RmSection` of the wallet / terms / reports pages, by its heading. */
+function rmSection(page, title) {
+  return page
+    .locator('.rm-section')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+    .first();
+}
+
+/** One `RdSection` of the team / integrations pages, by its heading. */
+function rdSection(page, title) {
+  return page
+    .locator('.rd-section')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+    .first();
+}
+
+/** One half of the terms card — the fee shares, or the credit timing. */
+function termsBlock(page, heading) {
+  return page
+    .locator('.rm-terms__block')
+    .filter({ has: page.getByRole('heading', { name: heading, exact: true }) })
+    .first();
+}
+
+/** One card of the notification settings page, by its title. */
+function ntfCard(page, title) {
+  return page
+    .locator('.rc-ntf-card')
+    .filter({ has: page.getByRole('heading', { name: title, exact: true }) })
+    .first();
+}
+
+/**
+ * One row of the store wallet's ledger, by the words its direction
+ * prints — `storeWalletDirectionLabel`, never a position.
+ *
+ * Rows are newest first and the seeding adds to them, so "the third
+ * row" is a different line every run. A row that is not there yet is
+ * DWELT PAST rather than waited for: every line in R13 describes a kind
+ * of entry, and a world that has not produced one yet should cost the
+ * halo and not the take.
+ */
+async function dwellLedgerRow(page, stage, re, ms) {
+  const row = page.locator('tbody tr').filter({ hasText: re }).first();
+  if ((await row.count()) === 0) {
+    await page.waitForTimeout(ms);
+    return;
+  }
+  await row.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(400);
+  await stage.dwellOn(row, ms);
+}
+
+/**
+ * Choose from a native `<select>`, with the halo on first.
+ *
+ * Not `typeIn`: a select takes no keystrokes, and `fill` on one throws.
+ * The halo still goes on, so a viewer sees which control is being set
+ * — only the typing is given up, exactly as `setDate` does.
+ */
+async function selectBy({ page, stage }, locator, value) {
+  await stage.point(locator, { settle: 400 });
+  await locator.selectOption(value);
+  await page.waitForTimeout(600);
+  await stage.clearHalo();
+}
+
+/**
+ * R7's parcel, found by its CUSTOMER's number rather than by a status.
+ *
+ * `ensureHeldDeliveryAsk` leaves it at OUT_FOR_DELIVERY or at
+ * DELIVERY_FAILED depending on which scan the simulator last applied,
+ * and the video is correct on either — so a status tab would be a coin
+ * toss between runs while the phone number is the one fact that does
+ * not move. Kept in step with the seed by `tutorial-labels.test.mjs`.
+ */
+const STORE_DELIVERY_CUSTOMER_PHONE = '+919845070033';
+
+/**
+ * The part of a number R9 searches on.
+ *
+ * Every customer the store seeding creates is on `+9198450700xx`, so
+ * this matches several — which is the lesson that scene is about ("part
+ * of a phone number is enough"), and it is also why it is a PREFIX
+ * rather than one person: naming a person would tie the flow to
+ * whichever order family created them first, and two of the seeded
+ * orders share a number.
+ */
+const STORE_CUSTOMER_PHONE_PART = '98450700';
+
+/**
+ * The SETTLED dispute R10 reads back and R13 finds in the ledger.
+ *
+ * Settled once by the seeding and never reopened — the matrix has no
+ * outbound edge from a resolution (RS-7) — so it stands from one take
+ * to the next, unlike `STORE_DISPUTE_ORDER`'s, which is deliberately
+ * left open for P3.
+ */
+const STORE_SETTLED_DISPUTE_SUBJECT = 'Two sarees billed, one delivered';
+
+/**
+ * What R18 types on camera.
+ *
+ * Declared rather than inline because the SEED clears exactly these two
+ * before every take — a key table that grows an identical row per run,
+ * and a webhook refused on a duplicate URL, both film as a page that
+ * has stopped working. `tutorial-labels.test.mjs` keeps the pair in
+ * step with the seed's own copy.
+ */
+const R18_KEY_NAME = 'Our website';
+const R18_WEBHOOK_URL = 'https://punesilkstudio.example/skydrop';
+
+/*
+ * R19–R21's people and figures.
+ *
+ * The names are the seeding's own (`LONG_STORE_PEOPLE`), and the SKUs
+ * are how a row is found: the price field's accessible name carries the
+ * PRODUCT name, which the seeding never states, while the SKU is
+ * printed in the row and is what every constant here is keyed on.
+ *
+ * `test/tutorial-labels.test.mjs` is where these are kept in step with
+ * the seeding — each is a row found by exactly these words.
+ */
+const ASSOC_RAVI = 'Ravi Kulkarni';
+const ASSOC_PRIYA = 'Priya Gokhale';
+
+/** Invited ON CAMERA by R19, so the seeding has to clear him first. */
+const ASSOC_INVITEE = { name: 'Kiran Pawar', email: 'kiran.pawar@punesilkstudio.test' };
+
+/** R20's ordinary save. Seller's range ₹2,400–₹3,200, so this is inside. */
+const ASSOC_GOOD_SKU = 'RSH-JAMDANI-IVORY';
+const ASSOC_GOOD_PRICE = '2900';
+
+/*
+ * R20's REFUSAL, and then its fix. Seller's range is ₹2,300–₹3,000, so
+ * ₹4,500 is refused as `ASSOCIATE_PRICE_OUT_OF_SELLER_RANGE` and
+ * ₹2,800 saves — which is the whole lesson of that video, filmed
+ * rather than described.
+ */
+const ASSOC_REFUSED_SKU = 'RSH-JKURTI-ROSE-M';
+const ASSOC_REFUSED_PRICE = '4500';
+const ASSOC_FIXED_PRICE = '2800';
+
+/**
+ * One roster or analysis row, by the person's name.
+ *
+ * Every row of both tables carries a `role="switch"` whose accessible
+ * name is 'Can place orders' and a 'Set prices' link, so neither is
+ * ever reachable except THROUGH its row.
+ */
+function associateRow(page, fullName) {
+  return page.locator('tbody tr').filter({ hasText: fullName }).first();
+}
+
+/** One ASSOCIATE price row, by the SKU printed in it. (`priceRow` is
+ *  taken — it is G5's reseller price list, keyed on one fixed SKU.) */
+function assocPriceRow(page, sku) {
+  return page.locator('tbody tr').filter({ hasText: sku }).first();
+}
+
 /** The CSV the store bulk-upload video uploads. Six rows, four orders, one refused. */
 /*
   R4's sheet is GENERATED per run, not the committed fixture.
@@ -1570,8 +1770,38 @@ const STORE_ORDER = {
   pin: '411038',
   line1: '21 Karve Road, Kothrud',
   landmark: 'Beside the Dashabhuja temple gate',
+  /*
+    THE PRODUCT IS NAMED, not taken by position, and the retail has to
+    be inside ITS range.
+
+    This picked `{ index: 1 }` and typed ₹2,950, which was right when
+    the store's shelf held only the two `REQUEST_STORE` products. The
+    shelf has six on it now (`LONG_STORE_CATALOGUE`), and the first is
+    the leather wallet, whose seller range is ₹1,400–₹1,900 — so the
+    order was refused as `RETAIL_OUT_OF_RANGE`, and the only sign of it
+    was the submit scene passing and the page never navigating. Named
+    by SKU, the figure and the product cannot drift apart again.
+
+    Jamdani's range is ₹2,400–₹3,200 and its suggestion is ₹2,800, so
+    ₹2,950 reads as a choice, which is what the narration calls it.
+  */
+  sku: 'RSH-JAMDANI-IVORY',
   retail: '2950',
 };
+
+/**
+ * The customer R5's search FINDS, and why it is not the one R3 places.
+ *
+ * Kavya is `STORE_REPORT_ORDERS.delivered.phone` in the seeding — a
+ * delivered order the seed builds for every store-portal slug, so the
+ * search has something to find whatever ran before it. R5 used
+ * `STORE_ORDER.phone`, which only exists once R3 has been filmed
+ * against the same world: film R5 on its own and the scene is a search
+ * returning nothing, under a line saying any one of four handles finds
+ * the order. Nothing in a `--check` would have said so — the step
+ * passed, because typing into a box always does.
+ */
+const STORE_SEEDED_CUSTOMER_PHONE = '+919845070044';
 
 export const FLOWS = {
   'place-an-order': {
@@ -7222,7 +7452,7 @@ export const FLOWS = {
       },
 
       async india({ page, stage }) {
-        await stage.dwellOn(await kpi(page, 'India stock'), 3400);
+        await stage.dwellOn(await kpiCard(page, 'India stock'), 3400);
       },
 
       async held({ page, stage }) {
@@ -7230,7 +7460,7 @@ export const FLOWS = {
         // something is genuinely reserved — a zero here would put the
         // narration on a number that proves nothing. Gating on it means
         // a seeding that lost the confirmed parcel fails the check.
-        const card = await kpi(page, 'India stock');
+        const card = await kpiCard(page, 'India stock');
         const held = card.getByText('Held for orders').first();
         await held.waitFor({ state: 'visible', timeout: 20_000 });
         const reserved = await reservedUnits(page);
@@ -7244,11 +7474,11 @@ export const FLOWS = {
       },
 
       async transit({ page, stage }) {
-        await stage.dwellOn(await kpi(page, 'In transit'), 3600);
+        await stage.dwellOn(await kpiCard(page, 'In transit'), 3600);
       },
 
       async value({ page, stage }) {
-        await stage.dwellOn(await kpi(page, 'Stock value at cost'), 3400);
+        await stage.dwellOn(await kpiCard(page, 'Stock value at cost'), 3400);
       },
 
       async uncovered({ page, stage }) {
@@ -7335,20 +7565,20 @@ export const FLOWS = {
       },
 
       async owed({ page, stage }) {
-        await stage.dwellOn(await kpi(page, 'Still owed'), 3400);
+        await stage.dwellOn(await kpiCard(page, 'Still owed'), 3400);
       },
 
       async billed({ page, stage }) {
         // One tile carrying BOTH figures — the total and, in its foot,
         // what has actually been charged. The gap between them is the
         // sentence, so the scene has to hold the two together.
-        const card = await kpi(page, 'Billed to you');
+        const card = await kpiCard(page, 'Billed to you');
         await stage.dwellOn(card, 2200);
         await stage.dwellOn(card.locator('.sk-kpi__foot').first(), 2000);
       },
 
       async units({ page, stage }) {
-        await stage.dwellOn(await kpi(page, 'Units charged'), 3400);
+        await stage.dwellOn(await kpiCard(page, 'Units charged'), 3400);
       },
 
       async terms({ page, stage }) {
@@ -7430,7 +7660,7 @@ export const FLOWS = {
       },
 
       async outro({ page, stage }) {
-        const tile = await kpi(page, 'Inbound freight');
+        const tile = await kpiCard(page, 'Inbound freight');
         await stage.dwellOn(tile, 3600);
       },
     },
@@ -15640,8 +15870,10 @@ export const FLOWS = {
     app: 'reseller',
 
     async prologue(ctx) {
-      await signInAndOpen(ctx, '/catalogue', (page) =>
-        page.getByRole('columnheader', { name: 'Available' }).first().waitFor({ timeout: 15_000 }),
+      await signInAndOpen(
+        ctx,
+        '/catalogue',
+        ctx.page.getByRole('columnheader', { name: 'Available' }).first(),
       );
     },
 
@@ -15717,12 +15949,24 @@ export const FLOWS = {
       },
 
       async product({ page, stage }) {
-        // A native <select> — `selectOption` is the supported path, and
-        // an option whose availability is zero is `disabled`, which is
-        // the fact the narration names.
+        /*
+          A native <select> — `selectOption` is the supported path, and
+          an option whose availability is zero is `disabled`, which is
+          the fact the narration names.
+
+          Chosen by VALUE, read off the option carrying the SKU: the
+          label ends in a live availability count, so it is not a
+          stable handle, and a position is not one either (see
+          `STORE_ORDER.sku`).
+        */
         const picker = page.getByLabel('Product', { exact: true }).first();
         await stage.point(picker, { settle: 600 });
-        await picker.selectOption({ index: 1 });
+        const value = await picker
+          .locator('option', { hasText: STORE_ORDER.sku })
+          .first()
+          .getAttribute('value');
+        if (value === null) throw new Error(`No ${STORE_ORDER.sku} option on the product picker.`);
+        await picker.selectOption(value);
         await page.waitForTimeout(1400);
       },
 
@@ -15740,28 +15984,36 @@ export const FLOWS = {
         await page.waitForTimeout(1200);
       },
 
+      /*
+        EVERY ONE OF THESE IS A REQUIRED FIELD, so `exact: true` matches
+        NOTHING. `FieldShell` renders the asterisk as a sibling span
+        inside the <label> — `aria-hidden`, so it is correctly absent
+        from the accessible name, but `getByLabel` matches the label's
+        own text and that text is "Name *". The plain substring form is
+        no better (it is case-insensitive and would take anything
+        containing the word), so each of these is a regex ANCHORED at
+        the start, which is the only form that says "this field".
+      */
       async customer({ page, stage }) {
-        await stage.typeIn(page.getByLabel('Name', { exact: true }).first(), STORE_ORDER.name, {
+        await stage.typeIn(page.getByLabel(/^Name\b/).first(), STORE_ORDER.name, {
           after: 400,
         });
-        await stage.typeIn(page.getByLabel('Phone', { exact: true }).first(), STORE_ORDER.phone, {
+        await stage.typeIn(page.getByLabel(/^Phone\b/).first(), STORE_ORDER.phone, {
           clear: true,
           after: 400,
         });
-        await stage.typeIn(page.getByLabel('PIN code', { exact: true }).first(), STORE_ORDER.pin, {
+        await stage.typeIn(page.getByLabel(/^PIN code\b/).first(), STORE_ORDER.pin, {
           after: 400,
         });
-        await stage.typeIn(page.getByLabel('Address', { exact: true }).first(), STORE_ORDER.line1, {
+        await stage.typeIn(page.getByLabel(/^Address\b/).first(), STORE_ORDER.line1, {
           after: 600,
         });
       },
 
       async landmark({ page, stage }) {
-        await stage.typeIn(
-          page.getByLabel('Landmark', { exact: true }).first(),
-          STORE_ORDER.landmark,
-          { after: 1400 },
-        );
+        await stage.typeIn(page.getByLabel(/^Landmark\b/).first(), STORE_ORDER.landmark, {
+          after: 1400,
+        });
       },
 
       async payment({ page, stage }) {
@@ -15824,8 +16076,10 @@ export const FLOWS = {
     needsSpacesShim: true,
 
     async prologue(ctx) {
-      await signInAndOpen(ctx, '/orders/import', (page) =>
-        page.getByRole('heading', { name: 'Upload orders' }).first().waitFor({ timeout: 15_000 }),
+      await signInAndOpen(
+        ctx,
+        '/orders/import',
+        ctx.page.getByRole('heading', { name: 'Upload orders' }).first(),
       );
     },
 
@@ -15862,7 +16116,7 @@ export const FLOWS = {
         // Six rows making four orders — the clause only appears when
         // the two numbers differ, which is why the fixture is shaped
         // that way.
-        await withRetry(page, (p) => p.locator('p.ro-body').first().waitFor({ timeout: 25_000 }));
+        await withRetry(page, page.locator('p.ro-body').first());
         await stage.dwellOn(page.locator('p.ro-body').first(), 3400);
       },
 
@@ -15889,11 +16143,9 @@ export const FLOWS = {
       async uploads({ page, stage }) {
         // Auto-refetches every five seconds while the run is live, so
         // this waits for the row rather than snapshotting the table.
-        await withRetry(page, (p) =>
-          p
-            .getByRole('cell', { name: /pune-store-bulk-orders\.csv/i })
-            .first()
-            .waitFor({ timeout: 30_000 }),
+        await withRetry(
+          page,
+          page.getByRole('cell', { name: /pune-store-bulk-orders\.csv/i }).first(),
         );
         await stage.glide(320);
         await stage.dwellOn(page.locator('table').last(), 3600);
@@ -15909,8 +16161,10 @@ export const FLOWS = {
     app: 'reseller',
 
     async prologue(ctx) {
-      await signInAndOpen(ctx, '/orders', (page) =>
-        page.getByRole('columnheader', { name: 'To collect' }).first().waitFor({ timeout: 15_000 }),
+      await signInAndOpen(
+        ctx,
+        '/orders',
+        ctx.page.getByRole('columnheader', { name: 'To collect' }).first(),
       );
     },
 
@@ -15955,10 +16209,13 @@ export const FLOWS = {
         });
         await page.waitForLoadState('networkidle').catch(() => {});
         const box = page.getByLabel('Search orders').first();
-        await stage.typeIn(box, STORE_ORDER.phone.replace('+91', ''), { after: 900 });
+        await stage.typeIn(box, STORE_SEEDED_CUSTOMER_PHONE.replace('+91', ''), { after: 900 });
         await box.press('Enter');
         await page.waitForLoadState('networkidle').catch(() => {});
-        await page.waitForTimeout(1800);
+        // The row has to BE there, or this scene is a search finding
+        // nothing under a line saying any of the four handles finds it.
+        await withRetry(page, page.locator('a.ro-order-link').first());
+        await page.waitForTimeout(1200);
       },
 
       async reset({ page, stage }) {
@@ -15987,15 +16244,15 @@ export const FLOWS = {
      * what it earns, the timeline.
      */
     async prologue(ctx) {
-      await signInAndOpen(ctx, '/orders', (page) =>
-        page.getByRole('columnheader', { name: 'To collect' }).first().waitFor({ timeout: 15_000 }),
+      await signInAndOpen(
+        ctx,
+        '/orders',
+        ctx.page.getByRole('columnheader', { name: 'To collect' }).first(),
       );
       const { page } = ctx;
       await page.getByRole('tab', { name: 'Delivered', exact: true }).first().click();
       await page.waitForLoadState('networkidle').catch(() => {});
-      await withRetry(page, (p) =>
-        p.locator('a.ro-order-link').first().waitFor({ timeout: 25_000 }),
-      );
+      await withRetry(page, page.locator('a.ro-order-link').first());
       await page.locator('a.ro-order-link').first().click();
       await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/i, { timeout: 20_000 });
       await page.waitForLoadState('networkidle').catch(() => {});
@@ -16037,18 +16294,28 @@ export const FLOWS = {
       },
 
       async 'credit-state'({ page, stage }) {
+        /*
+          ASSERTED. This chip carries the whole scene — Waiting, Due or
+          Credited — and a silent `waitForTimeout` would dwell on
+          nothing for three and a half seconds while the narration
+          explained what the three words mean. A terminal reseller
+          order always has one; if it does not, a failed check is the
+          right answer and it costs nothing.
+        */
         const chip = roSection(page, 'What this order earns you').locator('.sk-chip').first();
-        if ((await chip.count()) > 0) await stage.dwellOn(chip, 3400);
-        else await page.waitForTimeout(3400);
+        await chip.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(chip, 3400);
       },
 
       async fees({ page, stage }) {
+        // ASSERTED for the same reason as `credit-state`: the fee split
+        // IS the scene, and an empty frame under it would pass a check.
         const fees = page
           .locator('table')
           .filter({ hasText: /Your share/i })
           .first();
-        if ((await fees.count()) > 0) await stage.dwellOn(fees, 3600);
-        else await page.waitForTimeout(3600);
+        await fees.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(fees, 3600);
       },
 
       async timeline({ page, stage }) {
@@ -16058,6 +16325,1926 @@ export const FLOWS = {
 
       async outro({ page, stage }) {
         await stage.glide(-900);
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2800);
+      },
+    },
+  },
+
+  /*
+   * ── R19–R21 — THE STORE'S OWN SALES PEOPLE ───────────────────────
+   *
+   * ASSOC-1's three screens, which landed the day AFTER section R was
+   * planned against "23 routes" — so R1–R18 covers none of them.
+   *
+   * Filmed as ANJALI, the store owner, because each of these is a
+   * decision she takes about somebody else: who may trade, at what
+   * price, and whether they still may. The associate's own side is
+   * `associate-everything` on the fourth portal.
+   *
+   * FOUR THINGS THESE THREE FORCE, beyond section R's own three rules:
+   *
+   *   · `Switch` is a `role="switch"` button whose accessible name is
+   *     'Can place orders' on EVERY row, so it is only ever reached
+   *     THROUGH its row. Same for 'Set prices' and 'Save'.
+   *   · The price box's handle is its `aria-label` — `What they sell
+   *     <product> at, in rupees` — and an `aria-label` on a control IS
+   *     its accessible name, so the visible '₹' lead is not a handle.
+   *     Reached through the row by SKU, because the product NAME is
+   *     what the label carries and the SKU is what the seeding names.
+   *   · THE OUT-OF-RANGE CHIP CANNOT BE MADE ON CAMERA. Setting such a
+   *     price is refused (R20's whole lesson), so the only way one
+   *     exists is a range the seller narrowed afterwards — which the
+   *     seeding writes directly onto Priya. R19's `moved` scene is
+   *     about her row for that reason, and R20 films RAVI, whose list
+   *     is three ordinary prices and one deliberately unpriced.
+   *   · A toast is read by HALOING THE TOAST — `stage.point` moves the
+   *     pointer onto what it outlines and `usePausableTimer` stops the
+   *     4.5s clock while it is there — but it must settle first, or the
+   *     pointer lands where the sliding toast has already left.
+   */
+
+  'store-invite-an-associate': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(
+        ctx,
+        '/associates',
+        ctx.page.getByRole('columnheader', { name: 'Person' }).first(),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async roster({ page, stage }) {
+        await stage.dwellOn(page.locator('thead tr').first(), 2600);
+        await stage.dwellOn(associateRow(page, ASSOC_RAVI), 2600);
+      },
+
+      async coverage({ page, stage }) {
+        // "3 of 4" over "1 product they cannot sell yet" — the count
+        // the narration calls the one to read.
+        await stage.dwellOn(associateRow(page, ASSOC_RAVI).locator('.as-product').first(), 3600);
+      },
+
+      async moved({ page, stage }) {
+        /*
+          ASSERTED, not fail-open. This chip IS the scene — a silent
+          `waitForTimeout` fallback would film an ordinary row under a
+          line about a price the seller's range has moved out from
+          under, and the check would pass. It is there because
+          `ensureStrandedAssociatePrice` puts it there; if it is not,
+          that seeding did not run and the right outcome is a failed
+          check rather than a plausible video.
+        */
+        const chip = associateRow(page, ASSOC_PRIYA).locator('.as-count[data-tone="bad"]').first();
+        await chip.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(chip, 3800);
+      },
+
+      async invite({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Invite an associate' }).first(), {
+          after: 1200,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.first().waitFor({ timeout: 15_000 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 2600);
+      },
+
+      async form({ page, stage }) {
+        const dialog = page.getByRole('dialog');
+        await stage.typeIn(dialog.locator('#associate-name'), ASSOC_INVITEE.name, { after: 400 });
+        await stage.typeIn(dialog.locator('#associate-email'), ASSOC_INVITEE.email, { after: 700 });
+        await stage.dwellOn(dialog.locator('.as-muted').first(), 2600);
+      },
+
+      async sent({ page, stage }) {
+        /*
+          `AsyncButton` holds all four phase labels in the DOM at once
+          with the accessible name pinned to the idle one, so `role` +
+          name is the only reach that works.
+
+          THE TOAST IS THE CONFIRMATION, and the waiting list is shown
+          through the invitation the seeding already has outstanding —
+          deliberately NOT through the one just sent. `useInviteStoreMember`
+          invalidates `['store-team']` and this page reads
+          `['store-associates']`, so the row for somebody invited from
+          here does not arrive until the list goes stale (30s) or
+          something else invalidates it. That is a real defect, reported
+          rather than papered over: filming a reload would teach a
+          workaround, and waiting half a minute would put a dead scene
+          in the middle of the video. Manisha is a genuine unaccepted
+          invitation, so the list the narration describes is on screen
+          and every word of it is true.
+        */
+        await stage.clickIt(
+          page.getByRole('dialog').getByRole('button', { name: 'Send invitation' }).first(),
+          { after: 1600 },
+        );
+        await page.getByRole('dialog').first().waitFor({ state: 'hidden', timeout: 20_000 });
+        const toast = page.locator('.sk-toast').first();
+        if ((await toast.count()) > 0) {
+          await page.waitForTimeout(800);
+          await stage.dwellOn(toast, 2000);
+        }
+        const waiting = page.locator('ul.as-invited').first();
+        if ((await waiting.count()) > 0) {
+          await waiting.scrollIntoViewIfNeeded();
+          await stage.dwellOn(waiting, 3000);
+        } else {
+          await page.waitForTimeout(3000);
+        }
+      },
+
+      async pause({ page, stage }) {
+        const sw = associateRow(page, ASSOC_RAVI).locator('.sk-switch').first();
+        await stage.dwellOn(sw, 1800);
+        await stage.dwellOn(sw.locator('.sk-switch__desc').first(), 2000);
+      },
+
+      async paused({ page, stage }) {
+        await stage.clickIt(
+          associateRow(page, ASSOC_RAVI).getByRole('switch', { name: 'Can place orders' }).first(),
+          { after: 1600 },
+        );
+        // The toast says what it really did; haloing the toast itself
+        // is what stops its 4.5s clock, and the settle is what makes
+        // the hover actually arm.
+        const toast = page.locator('.sk-toast').first();
+        if ((await toast.count()) > 0) {
+          await page.waitForTimeout(800);
+          await stage.dwellOn(toast, 3600);
+        } else {
+          await stage.dwellOn(associateRow(page, ASSOC_RAVI).locator('.sk-switch').first(), 3600);
+        }
+      },
+
+      async resume({ page, stage }) {
+        await stage.clickIt(
+          associateRow(page, ASSOC_RAVI).getByRole('switch', { name: 'Can place orders' }).first(),
+          { after: 1800 },
+        );
+        await page.waitForTimeout(600);
+        await stage.dwellOn(associateRow(page, ASSOC_RAVI).locator('.sk-switch').first(), 2600);
+      },
+
+      async outro({ page, stage }) {
+        // The section's own note states the rule in the page's words.
+        await stage.dwellOn(page.locator('.sk-sh__note').first(), 3200);
+      },
+    },
+  },
+
+  'store-set-associate-prices': {
+    app: 'reseller',
+
+    /*
+      RAVI's list on purpose: three ordinary prices inside the seller's
+      range and one deliberately unpriced, so the refusal this video is
+      about is the one made ON CAMERA rather than one already sitting
+      there when the page opens.
+    */
+    async prologue(ctx) {
+      await signInAndOpen(
+        ctx,
+        '/associates',
+        ctx.page.getByRole('columnheader', { name: 'Person' }).first(),
+      );
+      const { page } = ctx;
+      await associateRow(page, ASSOC_RAVI)
+        .getByRole('link', { name: 'Set prices' })
+        .first()
+        .click();
+      await page.waitForURL(/\/associates\/[0-9a-f-]{36}\/prices$/i, { timeout: 20_000 });
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await withRetry(page, page.getByRole('columnheader', { name: 'They sell at' }).first());
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        // The heading is the PERSON's name — "Ravi Kulkarni's prices".
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2200);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2000);
+      },
+
+      async columns({ page, stage }) {
+        for (const col of ['Product', 'Sell between', 'Suggested', 'They sell at']) {
+          await stage.dwellOn(page.getByRole('columnheader', { name: col }).first(), 900);
+        }
+      },
+
+      async range({ page, stage }) {
+        await stage.dwellOn(assocPriceRow(page, ASSOC_GOOD_SKU).locator('td').nth(1), 3600);
+      },
+
+      async save({ page, stage }) {
+        const row = assocPriceRow(page, ASSOC_GOOD_SKU);
+        await stage.typeIn(row.getByLabel(/in rupees$/).first(), ASSOC_GOOD_PRICE, {
+          clear: true,
+          after: 900,
+        });
+        await stage.clickIt(row.getByRole('button', { name: 'Save' }).first(), { after: 1600 });
+        const toast = page.locator('.sk-toast').first();
+        if ((await toast.count()) > 0) {
+          await page.waitForTimeout(800);
+          await stage.dwellOn(toast, 2400);
+        } else {
+          await page.waitForTimeout(2400);
+        }
+      },
+
+      async unpriced({ page, stage }) {
+        /*
+          "No price yet — they cannot sell this." The seeding leaves
+          exactly one product in this state (`LONG_UNPRICED_SKU`), and
+          that is what makes this scene possible at all — so it is
+          ASSERTED rather than skipped past: a world where everything
+          is priced has nothing here to film, and the narration would
+          be describing an empty row.
+        */
+        const note = page
+          .locator('p.as-price__note')
+          .filter({ hasText: /No price yet/i })
+          .first();
+        await note.waitFor({ state: 'visible', timeout: 15_000 });
+        await note.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(note, 3800);
+      },
+
+      async refuse({ page, stage }) {
+        const row = assocPriceRow(page, ASSOC_REFUSED_SKU);
+        await row.scrollIntoViewIfNeeded();
+        await stage.dwellOn(row.locator('td').nth(1), 1400);
+        await stage.typeIn(row.getByLabel(/in rupees$/).first(), ASSOC_REFUSED_PRICE, {
+          clear: true,
+          after: 1200,
+        });
+      },
+
+      async refused({ page, stage }) {
+        const row = assocPriceRow(page, ASSOC_REFUSED_SKU);
+        await stage.clickIt(row.getByRole('button', { name: /^Save$|^Not saved$/ }).first(), {
+          after: 1600,
+        });
+        // FE-2: the server owns the refusal and its words are shown
+        // where the figure that earned them is.
+        const verdict = row.locator('p.as-price__verdict').first();
+        await verdict.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(verdict, 4000);
+      },
+
+      async fix({ page, stage }) {
+        const row = assocPriceRow(page, ASSOC_REFUSED_SKU);
+        await stage.typeIn(row.getByLabel(/in rupees$/).first(), ASSOC_FIXED_PRICE, {
+          clear: true,
+          after: 900,
+        });
+        await stage.clickIt(row.getByRole('button', { name: /^Save$|^Not saved$/ }).first(), {
+          after: 1600,
+        });
+        const toast = page.locator('.sk-toast').first();
+        if ((await toast.count()) > 0) {
+          await page.waitForTimeout(800);
+          await stage.dwellOn(toast, 2600);
+        } else {
+          await page.waitForTimeout(2600);
+        }
+      },
+
+      async copy({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Copy prices from…' }).first(), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog');
+        await dialog.first().waitFor({ timeout: 15_000 });
+        await stage.point(dialog.locator('#copy-from'), { settle: 500 });
+        await dialog.locator('#copy-from').selectOption({ label: ASSOC_PRIYA });
+        await page.waitForTimeout(1000);
+      },
+
+      async replace({ page, stage }) {
+        // The dialog states what it REPLACES before it runs, and that
+        // sentence is the whole scene. Nothing is copied on camera.
+        await stage.dwellOn(page.getByRole('dialog').locator('.as-muted').first(), 4000);
+      },
+
+      async outro({ page, stage }) {
+        await stage.clickIt(
+          dialogActions(page).getByRole('button', { name: 'Cancel', exact: true }).first(),
+          { after: 1400 },
+        );
+        await page.getByRole('dialog').first().waitFor({ state: 'hidden', timeout: 20_000 });
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2800);
+      },
+    },
+  },
+
+  'store-how-associates-are-doing': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(
+        ctx,
+        '/associates',
+        ctx.page.getByRole('columnheader', { name: 'Person' }).first(),
+      );
+      const { page } = ctx;
+      await page.getByRole('link', { name: 'How they are doing' }).first().click();
+      await page.waitForURL((u) => u.pathname === '/associates/analysis', { timeout: 20_000 });
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await withRetry(page, page.locator('.as-kpis').first());
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2200);
+      },
+
+      async window({ page, stage }) {
+        await stage.dwellOn(page.locator('.as-filters').first(), 2600);
+      },
+
+      async totals({ page, stage }) {
+        await stage.dwellOn(page.locator('.as-kpis').first(), 3600);
+      },
+
+      async margin({ page, stage }) {
+        // The hint is what the figure is NOT counting (TRE-6: a missing
+        // cost is UNCOVERED, never zero), so the shot is the margin
+        // card rather than the row of four.
+        await stage.dwellOn(page.locator('.as-kpis > *').last(), 4000);
+      },
+
+      async others({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-sh__note').first(), 4000);
+      },
+
+      async table({ page, stage }) {
+        await stage.glide(320);
+        await stage.dwellOn(page.locator('thead tr').first(), 2600);
+        await stage.dwellOn(page.locator('tbody tr').first(), 2000);
+      },
+
+      async money({ page, stage }) {
+        /*
+          BY COLUMN, not by `.as-coverage` first: a row carries five of
+          those — under the priced-for count, under the margin, and
+          under each of the three rates — and the first is the one in
+          the priced-for cell, which is the NEXT scene but one. The
+          fourteen columns are Person, Can place orders, Priced for,
+          Placed, Confirmed, Delivered, Called off, Failed delivery,
+          Came back, Retail sold, Your margin, Confirmation, Delivery,
+          Returns.
+        */
+        const row = page.locator('tbody tr').first();
+        await stage.dwellOn(row.locator('td').nth(9), 1600);
+        await stage.dwellOn(row.locator('td').nth(10), 3200);
+      },
+
+      async rates({ page, stage }) {
+        // EXACT: there are two columns containing the word "Delivery"
+        // — "Failed delivery" comes first, and a substring match takes
+        // it, which would film the wrong column under a line about the
+        // three rates.
+        for (const col of ['Confirmation', 'Delivery', 'Returns']) {
+          await stage.dwellOn(
+            page.getByRole('columnheader', { name: col, exact: true }).first(),
+            1000,
+          );
+        }
+      },
+
+      async denominator({ page, stage }) {
+        // The Confirmation cell: the rate over "of N decided".
+        await stage.dwellOn(page.locator('tbody tr').first().locator('td').nth(11), 3800);
+      },
+
+      async dash({ page, stage }) {
+        /*
+          The Returns cell, which carries the count the narration is
+          about ("of N finished"). NOT a row showing an actual dash —
+          both associates in this world have finished orders, so there
+          is none on screen, and the narration states the rule over the
+          count it depends on rather than claiming to show it.
+        */
+        await stage.dwellOn(page.locator('tbody tr').last().locator('td').nth(13), 3600);
+      },
+
+      async blocked({ page, stage }) {
+        await stage.dwellOn(page.locator('tbody tr').first().locator('.as-product').first(), 3800);
+      },
+
+      async switch({ page, stage }) {
+        await stage.dwellOn(page.locator('tbody tr').first().locator('.sk-switch').first(), 3400);
+      },
+
+      async sort({ page, stage }) {
+        // `SortableTh` renders a <button class="sk-th__sort"> whose
+        // accessible name is exactly the label, so this is the one
+        // handle that cannot take "Failed delivery" instead.
+        await stage.clickIt(page.getByRole('button', { name: 'Delivery', exact: true }).first(), {
+          after: 1600,
+        });
+        await page.waitForTimeout(1400);
+        await stage.dwellOn(page.locator('tbody tr').last(), 2800);
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-360);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3000);
+      },
+    },
+  },
+  /*
+   * ── SECTION R, DAYS 2 AND 3 ───────────────────────────────────────
+   *
+   * Same three selector rules as day 1 (see the block above section R's
+   * first flow), plus four this half forces:
+   *
+   *   · A `ConfirmDialog` IS a `Dialog`, so when one opens on top of
+   *     another — which R7's asks and R8's answer both do — there are
+   *     TWO `role="dialog"` nodes and every unscoped reach is a
+   *     strict-mode failure. The confirm is the one carrying
+   *     `.sk-confirm`; `confirmBox` is the reach that says so.
+   *   · A `KpiCard` has no role and its label is an ordinary div, so a
+   *     tile is found through `getByText(label, { exact: true })` —
+   *     `hasText` is a substring and "Balance" is inside three of the
+   *     wallet's own strings.
+   *   · `TableToolbar`'s search is a WRAPPING `<label>` with a
+   *     visually-hidden span, so `getByLabel` reaches the input and the
+   *     magnifier is `aria-hidden` — but on `/customers` and `/orders`
+   *     the box is a FORM and commits on Enter (the H2 trap).
+   *   · `/reports/analysis` and `/notifications/settings` have no nav
+   *     entry, so they are reached by clicking the link ON the page
+   *     above them rather than by `goto` — FE-1 keeps the token in
+   *     memory and a full load under recording loses the race (O4).
+   */
+
+  'store-delivery-gone-wrong': {
+    app: 'reseller',
+
+    /*
+     * The parcel out for delivery, found by its CUSTOMER rather than by
+     * a status tab. `ensureHeldDeliveryAsk` leaves it at
+     * OUT_FOR_DELIVERY or at DELIVERY_FAILED depending on which scan
+     * the simulator last applied, and both are correct for this video —
+     * so a tab would be a coin toss while the phone number is the one
+     * fact that does not move.
+     */
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/orders', (page) =>
+        page.getByRole('columnheader', { name: 'To collect' }).first().waitFor({ timeout: 15_000 }),
+      );
+      const { page } = ctx;
+      const box = page.getByLabel('Search orders').first();
+      await box.fill(STORE_DELIVERY_CUSTOMER_PHONE.replace('+91', ''));
+      await box.press('Enter');
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await withRetry(page, (p) =>
+        p.locator('a.ro-order-link').first().waitFor({ timeout: 25_000 }),
+      );
+      await page.locator('a.ro-order-link').first().click();
+      await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/i, { timeout: 20_000 });
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await roSection(page, 'Something wrong with the delivery?').waitFor({ timeout: 25_000 });
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(1000);
+        await stage.dwellOn(page.locator('.sk-ph__meta').first(), 2200);
+      },
+
+      async where({ page, stage }) {
+        await stage.glide(1400);
+        const tl = page.locator('ol.sk-tl__steps').first();
+        if ((await tl.count()) > 0) await stage.dwellOn(tl, 3200);
+        else await page.waitForTimeout(3200);
+        await stage.glide(-1400);
+      },
+
+      async section({ page, stage }) {
+        const sec = roSection(page, 'Something wrong with the delivery?');
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(sec.locator('.sk-sh__note').first(), 3400);
+      },
+
+      async three({ page, stage }) {
+        const sec = roSection(page, 'Something wrong with the delivery?');
+        for (const name of ['Call the customer again', 'Try delivering again', 'Send it back']) {
+          const b = sec.getByRole('button', { name, exact: true }).first();
+          if ((await b.count()) > 0) await stage.dwellOn(b, 1100);
+        }
+      },
+
+      async strip({ page, stage }) {
+        // The note BESIDE each button — "Happens as soon as you ask" or
+        // "The seller approves this one…". The whole list, because the
+        // sentence is about the difference between them.
+        const notes = roSection(page, 'Something wrong with the delivery?')
+          .locator('ul.ro-offers')
+          .first();
+        if ((await notes.count()) > 0) await stage.dwellOn(notes, 3600);
+        else await page.waitForTimeout(3600);
+      },
+
+      async dialog({ page, stage }) {
+        const sec = roSection(page, 'Something wrong with the delivery?');
+        await stage.clickIt(
+          sec.getByRole('button', { name: 'Call the customer again', exact: true }).first(),
+          { after: 1400 },
+        );
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.typeIn(
+          dialog.getByRole('textbox').first(),
+          'She has not picked up for the driver twice. Please ask whether she wants it left ' +
+            'with the neighbour on the ground floor.',
+          { delay: 12, after: 700 },
+        );
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('dialog').first().getByRole('button', { name: 'Send it' }).first(),
+          { after: 1600 },
+        );
+        const box = confirmBox(page);
+        await box.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(box.locator('.sk-confirm__consequence').first(), 3200);
+      },
+
+      async back({ page, stage }) {
+        await stage.clickIt(
+          confirmBox(page).getByRole('button', { name: 'Back', exact: true }).first(),
+          { after: 1200 },
+        );
+        await dismiss(page);
+        await page.waitForTimeout(900);
+        const sec = roSection(page, 'Something wrong with the delivery?');
+        const back = sec.getByRole('button', { name: 'Send it back', exact: true }).first();
+        if ((await back.count()) > 0) await stage.dwellOn(back, 2600);
+        else await page.waitForTimeout(2600);
+      },
+
+      async history({ page, stage }) {
+        const table = roSection(page, 'Something wrong with the delivery?')
+          .locator('table')
+          .first();
+        if ((await table.count()) > 0) {
+          await table.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(table, 3600);
+        } else {
+          await page.waitForTimeout(3600);
+        }
+      },
+
+      async cancel({ page, stage }) {
+        await stage.glide(-1200);
+        const btn = page
+          .locator('.sk-ph')
+          .getByRole('button', { name: /^(Cancel order|Ask the seller to cancel)$/ })
+          .first();
+        if ((await btn.count()) > 0) await stage.dwellOn(btn, 3200);
+        else await page.waitForTimeout(3200);
+      },
+
+      async change({ page, stage }) {
+        const sec = roSection(page, 'Something wrong with this order?');
+        if ((await sec.count()) > 0) {
+          await sec.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(sec, 3800);
+        } else {
+          await page.waitForTimeout(3800);
+        }
+      },
+
+      async held({ page, stage }) {
+        const sec = roSection(page, 'Sent to your seller to approve');
+        if ((await sec.count()) > 0) {
+          await sec.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(sec.locator('.sk-sh__note').first(), 3600);
+        } else {
+          await page.waitForTimeout(3600);
+        }
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-2400);
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2800);
+      },
+    },
+  },
+
+  'store-unreachable-customers': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/orders/call-reviews', (page) =>
+        page.getByRole('columnheader', { name: 'Units held' }).first().waitFor({ timeout: 20_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2600);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(kpiCard(page, 'Units held waiting on you'), 2800);
+        await stage.dwellOn(kpiCard(page, 'Orders waiting on an answer'), 1600);
+      },
+
+      async table({ page, stage }) {
+        await stage.dwellOn(page.locator('thead tr').first(), 2200);
+        await stage.dwellOn(page.locator('tbody tr').first(), 2000);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(
+          page
+            .locator('tbody tr')
+            .first()
+            .getByRole('button', { name: /^(Answer|Propose an answer)$/ })
+            .first(),
+          { after: 1600 },
+        );
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 3000);
+      },
+
+      async keep({ page, stage }) {
+        await stage.dwellOn(choiceCard(page, 'REQUEST_MORE_ATTEMPTS'), 3400);
+      },
+
+      async give({ page, stage }) {
+        await chooseCard({ page, stage }, 'RELEASE', { after: 1200 });
+        // `Notice` is `.ro-notice`; `.ro-callout` belongs to the wallet
+        // pages and matches nothing inside this dialog.
+        const warn = page
+          .getByRole('dialog')
+          .first()
+          .locator('.ro-notice[data-tone="bad"]')
+          .first();
+        if ((await warn.count()) > 0) await stage.dwellOn(warn, 2600);
+        else await page.waitForTimeout(2600);
+      },
+
+      async why({ page, stage }) {
+        const warn = page
+          .getByRole('dialog')
+          .first()
+          .locator('.ro-notice[data-tone="bad"]')
+          .first();
+        if ((await warn.count()) > 0) await stage.dwellOn(warn, 3400);
+        else await stage.dwellOn(choiceCard(page, 'RELEASE'), 3400);
+      },
+
+      async reason({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        await stage.typeIn(
+          dialog.getByRole('textbox').first(),
+          'Rang her myself twice as well and the number is dead. She is not expecting it any more.',
+          { delay: 12, after: 700 },
+        );
+      },
+
+      async button({ page, stage }) {
+        const commit = page
+          .getByRole('dialog')
+          .first()
+          .getByRole('button', {
+            name: /Release the stock and reject the order|Send to your seller to approve/,
+          })
+          .first();
+        await commit.waitFor({ state: 'visible', timeout: 10_000 });
+        await stage.dwellOn(commit, 3400);
+      },
+
+      async never({ page, stage }) {
+        await stage.clickIt(
+          page
+            .getByRole('dialog')
+            .first()
+            .getByRole('button', { name: 'Never mind', exact: true })
+            .first(),
+          { after: 1400 },
+        );
+        await dismiss(page);
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.locator('tbody tr').first(), 2400);
+      },
+
+      async order({ page, stage }) {
+        await stage.clickIt(page.locator('a.ro-order-link').first(), { after: 1600 });
+        await page.waitForURL(/\/orders\/[0-9a-f-]{36}$/i, { timeout: 20_000 }).catch(() => {});
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const sec = roSection(page, 'We could not reach your customer');
+        if ((await sec.count()) > 0) {
+          await sec.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(500);
+          await stage.dwellOn(sec, 3400);
+        } else {
+          await page.waitForTimeout(3400);
+        }
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2600);
+      },
+    },
+  },
+
+  'store-your-customers': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/customers', (page) =>
+        page.getByRole('columnheader', { name: 'Last order' }).first().waitFor({ timeout: 15_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2600);
+      },
+
+      async list({ page, stage }) {
+        await stage.dwellOn(page.locator('thead tr').first(), 2200);
+        await stage.dwellOn(page.locator('tbody tr td:nth-child(4)').first(), 2200);
+      },
+
+      async search({ page, stage }) {
+        // A FORM: it commits on Enter, so filling without pressing it
+        // films an unfiltered list under a line about searching.
+        const box = page.getByLabel('Search customers').first();
+        await stage.typeIn(box, STORE_CUSTOMER_PHONE_PART, { after: 700 });
+        await box.press('Enter');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1600);
+      },
+
+      async open({ page, stage }) {
+        await stage.clickIt(page.locator('a.rc-cst-name').first(), { after: 1600 });
+        await page.waitForURL(/\/customers\/[0-9a-f-]{36}$/i, { timeout: 20_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(700);
+      },
+
+      async facts({ page, stage }) {
+        await stage.dwellOn(page.locator('.rc-cst-facts').first(), 3600);
+      },
+
+      async orders({ page, stage }) {
+        await stage.glide(320);
+        await stage.dwellOn(page.locator('.rc-cst-section table').first(), 3400);
+      },
+
+      async edit({ page, stage }) {
+        await stage.glide(-320);
+        const btn = page.getByRole('button', { name: 'Edit details', exact: true }).first();
+        if ((await btn.count()) === 0) {
+          await page.waitForTimeout(3400);
+          return;
+        }
+        await stage.clickIt(btn, { after: 1600 });
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 2800);
+      },
+
+      async seller({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        if ((await dialog.count()) > 0) {
+          await stage.clickIt(
+            dialogActions(page).getByRole('button', { name: 'Cancel', exact: true }).first(),
+            { after: 1200 },
+          );
+          await dismiss(page);
+        }
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3400);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2400);
+      },
+    },
+  },
+
+  'store-raise-it-with-skydrop': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/tickets', (page) =>
+        page.getByRole('columnheader', { name: 'With' }).first().waitFor({ timeout: 20_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2600);
+      },
+
+      async list({ page, stage }) {
+        await stage.dwellOn(page.getByRole('columnheader', { name: 'With' }).first(), 1800);
+        await stage.dwellOn(page.locator('tbody tr td:nth-child(2)').first(), 2200);
+      },
+
+      async tabs({ page, stage }) {
+        await stage.dwellOn(page.getByRole('tablist').first(), 3200);
+      },
+
+      async open({ page, stage }) {
+        /*
+          The OPEN tab first, then the newest row under it.
+
+          The list is newest-first across every stage, and the seeding
+          leaves a SETTLED dispute as well as an open one — so `.first()`
+          on the unfiltered list is a coin toss, and landing on the
+          settled one puts the next line ("you can keep replying while it
+          is open") over a thread with no reply box on it at all.
+        */
+        await page.getByRole('tab', { name: 'Open', exact: true }).first().click();
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        await stage.clickIt(page.locator('a.rc-tkt-cell').first(), { after: 1800 });
+        await page.waitForURL(/\/tickets\/[0-9a-f-]{36}$/i, { timeout: 20_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(800);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 1600);
+        await stage.glide(300);
+        /*
+          The thread, or the opening message when nothing has been said
+          back yet — `<ol class="rc-tkt-thread">` is conditional on there
+          being events, and a comma selector would otherwise hand
+          `.first()` whichever `.rc-tkt-section` sits highest in the DOM,
+          which is the figures block.
+        */
+        const thread = page.locator('ol.rc-tkt-thread').first();
+        const target =
+          (await thread.count()) > 0 ? thread : page.locator('.rc-tkt-opening').first();
+        if ((await target.count()) > 0) await stage.dwellOn(target, 2400);
+        else await page.waitForTimeout(2400);
+      },
+
+      async reply({ page, stage }) {
+        const box = page.getByRole('textbox').first();
+        if ((await box.count()) > 0) await stage.dwellOn(box, 3200);
+        else await page.waitForTimeout(3200);
+      },
+
+      async new({ page, stage, baseUrl }) {
+        // The nav link by HREF: "Tickets" is both a nav item and this
+        // page's own breadcrumb, so a name reach is a strict-mode failure.
+        await page.locator('a[href="/tickets"]').first().click();
+        await page.waitForURL(/\/tickets(\?|$)/, { timeout: 20_000 }).catch(() => {});
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(600);
+        const raise = page.getByRole('link', { name: /Raise a ticket/ }).first();
+        if ((await raise.count()) > 0) {
+          await stage.clickIt(raise, { after: 1600 });
+        } else {
+          await page.goto(`${baseUrl}/tickets/new`, { waitUntil: 'domcontentloaded' });
+        }
+        await page.waitForURL(/\/tickets\/new/, { timeout: 20_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(800);
+      },
+
+      async choose({ page, stage }) {
+        await stage.dwellOn(choiceCard(page, 'seller'), 2000);
+        const skydrop = choiceCard(page, 'skydrop');
+        if ((await skydrop.count()) > 0) await stage.dwellOn(skydrop, 2400);
+      },
+
+      async money({ page, stage }) {
+        const box = page.locator('.rc-tkt-correction').first();
+        if ((await box.count()) > 0) await stage.dwellOn(box, 3600);
+        else await page.waitForTimeout(3600);
+      },
+
+      async figures({ page, stage }) {
+        const check = page.locator('.rc-tkt-correction input[type="checkbox"]').first();
+        if ((await check.count()) > 0) {
+          await stage.point(check, { settle: 500 });
+          await check.check();
+          await page.waitForTimeout(900);
+          const claim = page.locator('.rc-tkt-claim').first();
+          if ((await claim.count()) > 0) await stage.dwellOn(claim, 2600);
+          await check.uncheck();
+        } else {
+          await page.waitForTimeout(3400);
+        }
+      },
+
+      async approval({ page, stage }) {
+        const submit = page
+          .getByRole('button', { name: /Raise it with|Send it to your seller to approve/ })
+          .first();
+        if ((await submit.count()) > 0) await stage.dwellOn(submit, 3400);
+        else await page.waitForTimeout(3400);
+      },
+
+      async settled({ page, stage }) {
+        // The SETTLED thread, by the words its seeding wrote. Reached
+        // through the list rather than by url: its id is minted per run.
+        await page.locator('a[href="/tickets"]').first().click();
+        await page.waitForURL(/\/tickets(\?|$)/, { timeout: 20_000 }).catch(() => {});
+        await page.waitForLoadState('networkidle').catch(() => {});
+        // ALL stages: the list opens on All, but a reload could land it
+        // anywhere and a settled thread is not under Open.
+        await page.getByRole('tab', { name: 'All', exact: true }).first().click();
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(900);
+        const row = page
+          .locator('a.rc-tkt-cell')
+          .filter({ hasText: STORE_SETTLED_DISPUTE_SUBJECT })
+          .first();
+        if ((await row.count()) === 0) {
+          await page.waitForTimeout(3400);
+          return;
+        }
+        await stage.clickIt(row, { after: 1800 });
+        await page.waitForURL(/\/tickets\/[0-9a-f-]{36}$/i, { timeout: 20_000 }).catch(() => {});
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const card = page.locator('.rc-tkt-card[data-tone="settled"]').first();
+        if ((await card.count()) > 0) await stage.dwellOn(card, 3400);
+        else await page.waitForTimeout(3400);
+      },
+
+      async ledger({ page, stage }) {
+        await page.locator('a[href="/wallet"]').first().click();
+        await page.waitForURL(/\/wallet/, { timeout: 20_000 }).catch(() => {});
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const row = page
+          .locator('tbody tr')
+          .filter({ hasText: /Dispute settled/ })
+          .first();
+        if ((await row.count()) > 0) {
+          await row.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(500);
+          await stage.dwellOn(row, 3400);
+        } else {
+          await page.waitForTimeout(3400);
+        }
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-1200);
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2600);
+      },
+    },
+  },
+
+  'store-the-terms': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/terms', (page) =>
+        page.locator('.rm-card__title').first().waitFor({ timeout: 20_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2800);
+      },
+
+      async head({ page, stage }) {
+        await stage.dwellOn(page.locator('.rm-card__title').first(), 1600);
+        await stage.dwellOn(page.locator('.rm-card__sub').first(), 2400);
+      },
+
+      async fees({ page, stage }) {
+        await stage.dwellOn(termsBlock(page, 'Who pays which fee'), 3800);
+      },
+
+      async credit({ page, stage }) {
+        await stage.dwellOn(termsBlock(page, 'When each of you is credited'), 3800);
+      },
+
+      async example({ page, stage }) {
+        const table = page.locator('.rm-card table').first();
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.dwellOn(page.locator('thead tr').first(), 1600);
+        await stage.dwellOn(table, 2600);
+      },
+
+      async rounding({ page, stage }) {
+        const line = page.locator('.rm-faint').first();
+        if ((await line.count()) > 0) await stage.dwellOn(line, 3200);
+        else await page.waitForTimeout(3200);
+      },
+
+      async note({ page, stage }) {
+        const callout = page.locator('.rm-callout').first();
+        if ((await callout.count()) > 0) await stage.dwellOn(callout, 3400);
+        else await page.waitForTimeout(3400);
+      },
+
+      async history({ page, stage }) {
+        await stage.glide(500);
+        const sec = rmSection(page, 'Every version');
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.dwellOn(sec.locator('.sk-sh__note').first(), 1800);
+        await stage.dwellOn(sec.locator('table').first(), 2600);
+      },
+
+      async accept({ page, stage }) {
+        await stage.glide(-500);
+        // On an ACCEPTED version there is no button — the card says who
+        // accepted it and when, which is the fact the line is about.
+        const btn = page.getByRole('button', { name: /^Accept version/ }).first();
+        if ((await btn.count()) > 0) await stage.dwellOn(btn, 3600);
+        else await stage.dwellOn(page.locator('.rm-card__sub').first(), 3600);
+      },
+
+      async consequence({ page, stage }) {
+        const btn = page.getByRole('button', { name: /^Accept version/ }).first();
+        if ((await btn.count()) > 0) {
+          await stage.clickIt(btn, { after: 1600 });
+          const box = confirmBox(page);
+          await box.waitFor({ state: 'visible', timeout: 15_000 });
+          await page.waitForTimeout(400);
+          await stage.dwellOn(box.locator('.sk-confirm__consequence').first(), 3000);
+          await stage.clickIt(box.getByRole('button', { name: 'Cancel', exact: true }).first(), {
+            after: 900,
+          });
+          await dismiss(page);
+        } else {
+          await stage.dwellOn(page.locator('.rm-card').first(), 3400);
+        }
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2600);
+      },
+    },
+  },
+
+  'store-your-team': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/team', (page) =>
+        page
+          .getByRole('columnheader', { name: 'Last signed in' })
+          .first()
+          .waitFor({ timeout: 20_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2600);
+      },
+
+      async members({ page, stage }) {
+        await stage.dwellOn(page.locator('thead tr').first(), 2000);
+        await stage.dwellOn(
+          page.getByRole('columnheader', { name: 'Last signed in' }).first(),
+          2000,
+        );
+      },
+
+      async union({ page, stage }) {
+        await stage.dwellOn(rdSection(page, 'Members').locator('.sk-sh__note').first(), 3600);
+      },
+
+      async roles({ page, stage }) {
+        const btn = page.getByRole('button', { name: 'Change roles', exact: true }).first();
+        if ((await btn.count()) === 0) {
+          await page.waitForTimeout(3600);
+          return;
+        }
+        await stage.clickIt(btn, { after: 1600 });
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc, .sk-dialog__body').first(), 3200);
+      },
+
+      async owner({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        if ((await dialog.count()) > 0) {
+          const owner = dialog.getByText('Owner', { exact: true }).first();
+          if ((await owner.count()) > 0) await stage.dwellOn(owner, 2600);
+          else await page.waitForTimeout(2600);
+          await stage.clickIt(
+            dialogActions(page)
+              .getByRole('button', { name: /^(Cancel|Never mind)$/ })
+              .first(),
+            { after: 1000 },
+          );
+          await dismiss(page);
+        } else {
+          await page.waitForTimeout(3200);
+        }
+      },
+
+      async remove({ page, stage }) {
+        const btn = page.getByRole('button', { name: 'Remove', exact: true }).first();
+        if ((await btn.count()) === 0) {
+          await page.waitForTimeout(3400);
+          return;
+        }
+        await stage.clickIt(btn, { after: 1500 });
+        const box = confirmBox(page);
+        await box.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(400);
+        await stage.dwellOn(box.locator('.sk-confirm__consequence').first(), 3000);
+        await stage.clickIt(box.getByRole('button', { name: 'Cancel', exact: true }).first(), {
+          after: 900,
+        });
+        await dismiss(page);
+      },
+
+      async invite({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: 'Invite a colleague', exact: true }).first(),
+          { after: 1600 },
+        );
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(500);
+        await stage.typeIn(dialog.getByRole('textbox').first(), 'Nikhil Pawar', { after: 500 });
+        await stage.dwellOn(dialog.locator('.sk-dialog__desc, .sk-dialog__body').first(), 2200);
+        await stage.clickIt(
+          dialogActions(page)
+            .getByRole('button', { name: /^(Cancel|Never mind)$/ })
+            .first(),
+          { after: 1000 },
+        );
+        await dismiss(page);
+      },
+
+      async pending({ page, stage }) {
+        const sec = rdSection(page, 'Pending invitations');
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.dwellOn(sec, 3400);
+      },
+
+      async resend({ page, stage }) {
+        const resend = page.getByRole('button', { name: /^Resend/ }).first();
+        if ((await resend.count()) > 0) await stage.dwellOn(resend, 3400);
+        else await page.waitForTimeout(3400);
+      },
+
+      async yourself({ page, stage }) {
+        await stage.glide(-400);
+        const you = page.locator('.rd-you').first();
+        if ((await you.count()) > 0) {
+          await you.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(
+            page
+              .locator('tbody tr')
+              .filter({ has: page.locator('.rd-you') })
+              .first(),
+            3600,
+          );
+        } else {
+          await page.waitForTimeout(3600);
+        }
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2600);
+      },
+    },
+  },
+
+  'store-your-wallet': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/wallet', (page) =>
+        // The BALANCE tile, not the ledger's header: the header exists
+        // only once there are entries, and a prologue that dies on a
+        // quiet ledger costs a take for a reason the video is not about.
+        // The tile renders only after `useStoreWallet` resolves, so it
+        // proves the same thing — that the token landed (O4).
+        kpiCard(page, 'Balance').waitFor({ timeout: 25_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2200);
+      },
+
+      async manager({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(kpiCard(page, 'Balance'), 2000);
+        const w = kpiCard(page, 'You can withdraw');
+        if ((await w.count()) > 0) await stage.dwellOn(w, 2400);
+        else await page.waitForTimeout(2400);
+      },
+
+      async negative({ page, stage }) {
+        await stage.dwellOn(kpiCard(page, 'May go below zero by'), 3600);
+      },
+
+      async topup({ page, stage }) {
+        const card = page
+          .locator('.rm-card')
+          .filter({ has: page.getByRole('heading', { name: 'Top up', exact: true }) })
+          .first();
+        if ((await card.count()) > 0) {
+          await card.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(card.locator('.rm-card__sub').first(), 3600);
+        } else {
+          // Seller-managed: there is no form, and the subtitle says why.
+          await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3600);
+        }
+      },
+
+      async requests({ page, stage }) {
+        const sec = rmSection(page, 'Top-ups you told us about');
+        if ((await sec.count()) > 0) {
+          await sec.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(sec, 3200);
+        } else {
+          await page.waitForTimeout(3200);
+        }
+      },
+
+      async withdrawals({ page, stage }) {
+        const sec = rmSection(page, 'Withdrawals you asked for');
+        if ((await sec.count()) > 0) {
+          await sec.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(sec, 3000);
+        } else {
+          await page.waitForTimeout(3000);
+        }
+      },
+
+      async ledger({ page, stage }) {
+        const sec = rmSection(page, 'Every movement');
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(sec.locator('thead tr').first(), 1800);
+        await stage.dwellOn(sec.locator('.rm-dir').first(), 1800);
+      },
+
+      async credit({ page, stage }) {
+        await dwellLedgerRow(page, stage, /Order margin/, 3400);
+      },
+
+      async transfer({ page, stage }) {
+        await dwellLedgerRow(page, stage, /transfer price/i, 3400);
+      },
+
+      async fees({ page, stage }) {
+        await dwellLedgerRow(page, stage, /Share of (a Skydrop fee|the COD tax)/, 3600);
+      },
+
+      async balance({ page, stage }) {
+        await stage.dwellOn(
+          page.getByRole('columnheader', { name: 'Balance after' }).first(),
+          1800,
+        );
+        await stage.dwellOn(page.locator('tbody tr td:last-child').first(), 2000);
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-2000);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2800);
+      },
+    },
+  },
+
+  'store-your-expenses': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/expenses', (page) =>
+        // Not the date fields — they render before any fetch, so they
+        // prove nothing about the token. "Recorded" renders only once
+        // the list has answered.
+        rmSection(page, 'Recorded').waitFor({ timeout: 20_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2200);
+      },
+
+      async why({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+
+      async nobody({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+
+      async form({ page, stage }) {
+        const form = page.locator('form.rm-form').first();
+        if ((await form.count()) === 0) {
+          await page.waitForTimeout(3600);
+          return;
+        }
+        await form.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await selectBy({ page, stage }, page.getByLabel('Category').first(), 'AD_SPEND');
+        await stage.typeIn(page.getByLabel(/Amount/).first(), '4800', { after: 500 });
+        await stage.typeIn(page.getByLabel('What it was for').first(), 'Diwali reels, week one', {
+          delay: 26,
+          after: 500,
+        });
+      },
+
+      async reference({ page, stage }) {
+        const ref = page.getByLabel('Invoice or receipt number').first();
+        if ((await ref.count()) > 0) {
+          await stage.typeIn(ref, 'META-2026-10-0441', { delay: 28, after: 600 });
+        } else {
+          await page.waitForTimeout(3000);
+        }
+      },
+
+      async confirm({ page, stage }) {
+        const btn = page.getByRole('button', { name: /^Record$/ }).first();
+        if ((await btn.count()) === 0) {
+          await page.waitForTimeout(3400);
+          return;
+        }
+        await stage.clickIt(btn, { after: 1600 });
+        const box = confirmBox(page);
+        await box.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(400);
+        await stage.dwellOn(box.locator('.sk-confirm__consequence').first(), 3000);
+      },
+
+      async recorded({ page, stage }) {
+        const box = confirmBox(page);
+        if ((await box.count()) > 0) {
+          await stage.clickIt(box.getByRole('button', { name: 'Record', exact: true }).first(), {
+            after: 2400,
+          });
+          await page.waitForLoadState('networkidle').catch(() => {});
+        }
+        await page.waitForTimeout(900);
+        const row = page.locator('tbody tr').filter({ hasText: 'Diwali reels' }).first();
+        if ((await row.count()) > 0) {
+          await row.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(row, 3200);
+        } else {
+          await page.waitForTimeout(2000);
+        }
+        await stage.dwellOn(rmSection(page, 'Recorded').locator('.sk-sh__note').first(), 1800);
+      },
+
+      async window({ page, stage }) {
+        await stage.dwellOn(page.locator('.rm-filters').first(), 3200);
+      },
+
+      async remove({ page, stage }) {
+        const btn = page.getByRole('button', { name: 'Remove', exact: true }).first();
+        if ((await btn.count()) === 0) {
+          await page.waitForTimeout(3600);
+          return;
+        }
+        await stage.clickIt(btn, { after: 1600 });
+        const dialog = page.getByRole('dialog').first();
+        await dialog.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(400);
+        await stage.typeIn(dialog.getByRole('textbox').first(), 'Logged against the wrong month', {
+          delay: 26,
+          after: 600,
+        });
+      },
+
+      async closed({ page, stage }) {
+        const dialog = page.getByRole('dialog').first();
+        if ((await dialog.count()) > 0) {
+          await stage.dwellOn(dialog.locator('.sk-dialog__desc').first(), 3400);
+          await stage.clickIt(
+            dialogActions(page).getByRole('button', { name: 'Keep it', exact: true }).first(),
+            { after: 1000 },
+          );
+          await dismiss(page);
+        } else {
+          await page.waitForTimeout(3400);
+        }
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2600);
+      },
+    },
+  },
+
+  'store-month-by-month': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/reports', (page) =>
+        page.getByLabel('Month').first().waitFor({ timeout: 25_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2800);
+      },
+
+      async position({ page, stage }) {
+        await stage.dwellOn(kpiCard(page, 'Wallet balance'), 1600);
+        await stage.dwellOn(kpiCard(page, 'You are owed'), 1600);
+        await stage.dwellOn(kpiCard(page, 'You owe your seller'), 1600);
+      },
+
+      async period({ page, stage }) {
+        const select = page.getByLabel('Month').first();
+        await select.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.dwellOn(select, 3400);
+      },
+
+      async tiles({ page, stage }) {
+        await stage.dwellOn(kpiCard(page, 'Revenue'), 1400);
+        await stage.dwellOn(kpiCard(page, 'Costs'), 1400);
+        const net = page.locator('.sk-kpi').filter({ hasText: /^Net/ }).first();
+        if ((await net.count()) > 0) await stage.dwellOn(net, 2200);
+      },
+
+      async lines({ page, stage }) {
+        const acc = page.locator('.sk-acc').first();
+        await acc.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.dwellOn(acc, 3600);
+      },
+
+      async open({ page, stage }) {
+        const trigger = page.locator('.sk-acc__trigger').first();
+        await stage.clickIt(trigger, { after: 1800 });
+        const panel = page.locator('.sk-acc__item[data-open] .sk-acc__panel').first();
+        if ((await panel.count()) > 0) {
+          await panel.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(500);
+          await stage.dwellOn(panel, 2800);
+        } else {
+          await page.waitForTimeout(2000);
+        }
+        const meta = page.locator('.sk-acc__item[data-open] .sk-acc__meta').first();
+        if ((await meta.count()) > 0) await stage.dwellOn(meta, 2000);
+        await stage.clickIt(page.locator('.sk-acc__trigger').first(), { after: 700 });
+      },
+
+      async cash({ page, stage }) {
+        const sec = rmSection(page, 'Money in and out');
+        if ((await sec.count()) > 0) {
+          await sec.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(sec.locator('.sk-sh__note').first(), 3400);
+        } else {
+          await page.waitForTimeout(3400);
+        }
+      },
+
+      async frozen({ page, stage }) {
+        await stage.glide(-1400);
+        await stage.dwellOn(page.getByLabel('Month').first(), 3400);
+      },
+
+      async 'carried-in'({ page, stage }) {
+        const sec = rmSection(page, 'Carried into this month');
+        if ((await sec.count()) > 0) {
+          await sec.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(500);
+          await stage.dwellOn(sec, 3600);
+        } else {
+          await page.waitForTimeout(3600);
+        }
+      },
+
+      async reason({ page, stage }) {
+        const cell = rmSection(page, 'Carried into this month')
+          .locator('tbody tr td:nth-child(3)')
+          .first();
+        if ((await cell.count()) > 0) await stage.dwellOn(cell, 3400);
+        else await page.waitForTimeout(3400);
+      },
+
+      async 'carried-out'({ page, stage }) {
+        const sec = rmSection(page, 'Carried out of this month');
+        if ((await sec.count()) > 0) {
+          await sec.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(sec.locator('.sk-sh__note').first(), 3200);
+        } else {
+          await page.waitForTimeout(3200);
+        }
+      },
+
+      async custom({ page, stage }) {
+        await stage.glide(-1800);
+        await selectBy({ page, stage }, page.getByLabel('Month').first(), 'custom');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(1400);
+        const note = page.locator('.rm-faint').first();
+        if ((await note.count()) > 0) await stage.dwellOn(note, 2800);
+        else await page.waitForTimeout(2800);
+      },
+
+      async outro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2600);
+      },
+    },
+  },
+
+  'store-how-the-shop-is-doing': {
+    app: 'reseller',
+
+    /*
+     * `/reports/analysis` has NO nav entry, so it is reached by clicking
+     * the Analysis link ON `/reports` — a `goto` after a sign-in throws
+     * the in-memory token away and loses the race under recording (O4).
+     */
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/reports', (page) =>
+        page.getByLabel('Month').first().waitFor({ timeout: 25_000 }),
+      );
+      const { page } = ctx;
+      await page
+        .getByRole('link', { name: /^Analysis$/ })
+        .first()
+        .click();
+      await page.waitForURL(/\/reports\/analysis/, { timeout: 20_000 });
+      await page.waitForLoadState('networkidle').catch(() => {});
+      await withRetry(page, (p) => p.getByLabel('From').first().waitFor({ timeout: 20_000 }));
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await page.waitForTimeout(900);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2800);
+      },
+
+      async window({ page, stage }) {
+        await stage.dwellOn(page.locator('.rm-filters').first(), 3200);
+      },
+
+      async rates({ page, stage }) {
+        await stage.dwellOn(kpiCard(page, 'Placed'), 1400);
+        await stage.dwellOn(kpiCard(page, 'Confirmed'), 1500);
+        await stage.dwellOn(kpiCard(page, 'Cancelled'), 1400);
+        await stage.dwellOn(kpiCard(page, 'Returned'), 1500);
+      },
+
+      async denominator({ page, stage }) {
+        await stage.dwellOn(
+          rmSection(page, 'Orders placed in the window').locator('.sk-sh__note').first(),
+          3400,
+        );
+      },
+
+      async roas({ page, stage }) {
+        const sec = rmSection(page, 'Return on ad spend');
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.dwellOn(kpiCard(page, 'Ad spend'), 1600);
+        await stage.dwellOn(kpiCard(page, 'Delivered sales'), 1800);
+      },
+
+      async 'margin-roas'({ page, stage }) {
+        await stage.dwellOn(kpiCard(page, 'ROAS'), 1400);
+        await stage.dwellOn(kpiCard(page, 'Margin ROAS'), 2400);
+      },
+
+      async products({ page, stage }) {
+        const sec = rmSection(page, 'Profit per product');
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(sec.locator('.sk-sh__note').first(), 1800);
+        await stage.dwellOn(sec.locator('table').first(), 2200);
+      },
+
+      async 'returns-col'({ page, stage }) {
+        const col = rmSection(page, 'Profit per product')
+          .getByRole('columnheader', { name: 'Returned' })
+          .first();
+        if ((await col.count()) > 0) await stage.dwellOn(col, 1800);
+        const cell = rmSection(page, 'Profit per product')
+          .locator('tbody tr td:nth-child(3)')
+          .first();
+        if ((await cell.count()) > 0) await stage.dwellOn(cell, 2000);
+        else await page.waitForTimeout(2000);
+      },
+
+      async pincodes({ page, stage }) {
+        const sec = rmSection(page, 'Returns by pincode');
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(sec, 3600);
+      },
+
+      async forecast({ page, stage }) {
+        const sec = rmSection(page, 'Cash-flow forecast');
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(sec.locator('.sk-sh__note').first(), 3600);
+      },
+
+      async overdue({ page, stage }) {
+        const sec = rmSection(page, 'Cash-flow forecast');
+        const overdue = sec.locator('.rm-overdue').first();
+        if ((await overdue.count()) > 0) {
+          await overdue.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(overdue, 3400);
+        } else {
+          const table = sec.locator('table').last();
+          if ((await table.count()) > 0) await stage.dwellOn(table, 3400);
+          else await page.waitForTimeout(3400);
+        }
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-2400);
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2600);
+      },
+    },
+  },
+
+  'store-your-inbox-and-login': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/notifications', (page) =>
+        // Either outcome of the feed's own fetch — the list, or the
+        // empty state. The tablist renders whatever happened, including
+        // on a 401, so it is not a probe (O4).
+        page.locator('.rc-ntf-list, .sk-empty').first().waitFor({ timeout: 20_000 }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(navGroup(page, 'You'), 2600);
+      },
+
+      async inbox({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2600);
+      },
+
+      async open({ page, stage }) {
+        const item = page.locator('.rc-ntf-item, .rc-ntf-row, li').filter({ hasText: /./ }).first();
+        const row = page.locator('.rc-ntf-list li, .rc-ntf-feed li').first();
+        const target = (await row.count()) > 0 ? row : item;
+        if ((await target.count()) > 0) {
+          await stage.clickIt(target, { after: 1800 });
+          await page.waitForTimeout(700);
+          await stage.dwellOn(target, 2200);
+        } else {
+          await page.waitForTimeout(3600);
+        }
+      },
+
+      async filters({ page, stage }) {
+        await stage.dwellOn(page.getByRole('tablist').first(), 1800);
+        const only = page.locator('.rc-ntf-filters').first();
+        if ((await only.count()) > 0) await stage.dwellOn(only, 2200);
+        else await page.waitForTimeout(2200);
+      },
+
+      async dismiss({ page, stage }) {
+        const clearAll = page.getByRole('button', { name: 'Clear all', exact: true }).first();
+        if ((await clearAll.count()) > 0) await stage.dwellOn(clearAll, 3400);
+        else await page.waitForTimeout(3400);
+      },
+
+      async settings({ page, stage }) {
+        await stage.clickIt(page.locator('a[href="/notifications/settings"]').first(), {
+          after: 1800,
+        });
+        await page.waitForURL(/\/notifications\/settings/, { timeout: 20_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await withRetry(page, (p) =>
+          p.locator('.rc-ntf-card').first().waitFor({ timeout: 20_000 }),
+        );
+        await page.waitForTimeout(600);
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 3200);
+      },
+
+      async you({ page, stage }) {
+        const card = ntfCard(page, 'What reaches you');
+        await card.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await stage.dwellOn(card.locator('.rc-ntf-card__sub').first(), 1800);
+        await stage.dwellOn(card.locator('.rc-ntf-row').first(), 2000);
+      },
+
+      async store({ page, stage }) {
+        const card = ntfCard(page, 'What this store is told');
+        if ((await card.count()) > 0) {
+          await card.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(card.locator('.rc-ntf-card__sub').first(), 3400);
+        } else {
+          await page.waitForTimeout(3400);
+        }
+      },
+
+      async locked({ page, stage }) {
+        const lock = page.locator('.rc-ntf-row__lock').first();
+        if ((await lock.count()) > 0) {
+          await lock.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(lock, 3400);
+        } else {
+          await stage.dwellOn(kpiCard(page, 'Always sent'), 3400);
+        }
+      },
+
+      async account({ page, stage }) {
+        await stage.clickIt(page.locator('a[href="/account"]').first(), { after: 1800 });
+        await page.waitForURL(/\/account/, { timeout: 20_000 });
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(700);
+        await stage.dwellOn(page.locator('.rd-dl').first(), 2600);
+      },
+
+      async roles({ page, stage }) {
+        const row = page.locator('.rd-dl > div, .rd-dl').filter({ hasText: /Roles/ }).first();
+        if ((await row.count()) > 0) await stage.dwellOn(row, 3400);
+        else await page.waitForTimeout(3400);
+      },
+
+      async sessions({ page, stage }) {
+        const card = page
+          .locator('.rd-card')
+          .filter({ has: page.getByRole('heading', { name: 'Sessions', exact: true }) })
+          .first();
+        if ((await card.count()) > 0) {
+          await card.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(400);
+          await stage.dwellOn(card, 3400);
+        } else {
+          await page.waitForTimeout(3400);
+        }
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-600);
+        await stage.dwellOn(page.locator('.sk-ph__title').first(), 2600);
+      },
+    },
+  },
+
+  'store-keys-and-webhooks': {
+    app: 'reseller',
+
+    async prologue(ctx) {
+      await signInAndOpen(ctx, '/integrations', (page) =>
+        // The keys list's own outcome — a table or an empty state. The
+        // create form above it renders before any fetch.
+        rdSection(page, 'API keys').locator('table, .sk-empty').first().waitFor({
+          timeout: 20_000,
+        }),
+      );
+    },
+
+    steps: {
+      async intro({ page, stage }) {
+        await stage.dwellOn(page.locator('.sk-ph__subtitle').first(), 2400);
+      },
+
+      async 'keys-note'({ page, stage }) {
+        await stage.dwellOn(rdSection(page, 'API keys').locator('.sk-sh__note').first(), 3800);
+      },
+
+      async create({ page, stage }) {
+        await stage.typeIn(page.getByLabel('Name the key').first(), R18_KEY_NAME, {
+          delay: 30,
+          after: 600,
+        });
+        await selectBy({ page, stage }, page.getByLabel('Works for').first(), '365');
+      },
+
+      async confirm({ page, stage }) {
+        await stage.clickIt(page.getByRole('button', { name: 'Create key', exact: true }).first(), {
+          after: 1600,
+        });
+        const box = confirmBox(page);
+        await box.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(400);
+        await stage.dwellOn(box.locator('.sk-confirm__consequence').first(), 3000);
+      },
+
+      async shown({ page, stage }) {
+        await stage.clickIt(
+          confirmBox(page).getByRole('button', { name: 'Create key', exact: true }).first(),
+          { after: 2600 },
+        );
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const secret = page.locator('.rd-reveal').first();
+        await secret.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(secret, 3400);
+      },
+
+      async table({ page, stage }) {
+        const table = rdSection(page, 'API keys').locator('table').first();
+        await table.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(table.locator('thead tr').first(), 1800);
+        await stage.dwellOn(table.getByRole('columnheader', { name: 'Last used' }).first(), 2000);
+      },
+
+      async revoke({ page, stage }) {
+        const btn = rdSection(page, 'API keys')
+          .getByRole('button', { name: 'Revoke', exact: true })
+          .first();
+        if ((await btn.count()) === 0) {
+          await page.waitForTimeout(3400);
+          return;
+        }
+        await stage.clickIt(btn, { after: 1600 });
+        const box = confirmBox(page);
+        await box.waitFor({ state: 'visible', timeout: 15_000 });
+        await page.waitForTimeout(400);
+        await stage.dwellOn(box.locator('.sk-confirm__consequence').first(), 2600);
+        await stage.clickIt(box.getByRole('button', { name: 'Cancel', exact: true }).first(), {
+          after: 900,
+        });
+        await dismiss(page);
+      },
+
+      async webhooks({ page, stage }) {
+        const sec = rdSection(page, 'Webhooks');
+        await sec.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        await stage.dwellOn(sec.locator('.sk-sh__note').first(), 3600);
+      },
+
+      async add({ page, stage }) {
+        await stage.typeIn(page.getByLabel(/Your https URL/).first(), R18_WEBHOOK_URL, {
+          delay: 22,
+          after: 600,
+        });
+        await stage.typeIn(page.getByLabel(/^Name/).first(), 'Order sync', {
+          delay: 30,
+          after: 500,
+        });
+        const picker = page.locator('.rd-events, fieldset').last();
+        if ((await picker.count()) > 0) await stage.dwellOn(picker, 1800);
+      },
+
+      async secret({ page, stage }) {
+        await stage.clickIt(
+          page.getByRole('button', { name: 'Add webhook', exact: true }).first(),
+          {
+            after: 2600,
+          },
+        );
+        await page.waitForLoadState('networkidle').catch(() => {});
+        const secret = page.locator('.rd-reveal').last();
+        await secret.waitFor({ state: 'visible', timeout: 20_000 });
+        await page.waitForTimeout(500);
+        await stage.dwellOn(secret, 3400);
+      },
+
+      async rotate({ page, stage }) {
+        const table = rdSection(page, 'Webhooks').locator('table').first();
+        if ((await table.count()) > 0) {
+          await table.scrollIntoViewIfNeeded();
+          await page.waitForTimeout(500);
+          await stage.dwellOn(table.locator('tbody tr').first(), 3600);
+        } else {
+          await page.waitForTimeout(3600);
+        }
+      },
+
+      async outro({ page, stage }) {
+        await stage.glide(-1600);
         await stage.dwellOn(page.locator('.sk-ph__title').first(), 2800);
       },
     },
@@ -16641,3 +18828,8 @@ function allocationAmount(dialog) {
 import { LONG_FLOWS } from './long/index.mjs';
 
 Object.assign(FLOWS, LONG_FLOWS);
+
+/* Section S — the associate portal; see the note in `narration.mjs`. */
+import { FLOWS as ASSOCIATE_SECTION_FLOWS } from './sections/associate.mjs';
+
+Object.assign(FLOWS, ASSOCIATE_SECTION_FLOWS);

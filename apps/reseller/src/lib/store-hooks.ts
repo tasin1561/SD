@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-query';
 import { useApiClient } from '@skydrop/auth/client';
 import type { ResellerStoreStatusValue } from '@skydrop/api-client';
+import { ASSOCIATES_QUERY_KEY } from '@/lib/associate-hooks';
 
 /**
  * The reseller portal's API hooks (RS-2). Every path is the store's OWN
@@ -203,7 +204,16 @@ export function useInviteStoreMember(): UseMutationResult<
   return useMutation({
     mutationFn: (body) =>
       client.request<StoreInvitationView>('/api/store/team/invitations', { method: 'POST', body }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: TEAM }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: TEAM });
+      // AND THE ASSOCIATES ROSTER. The same invitation form is on
+      // `/associates`, which reads its own key — so inviting a sales
+      // person from that page left them off the waiting list until the
+      // query went stale 30 seconds later, or until some other action
+      // happened to invalidate it. Found in a tutorial's check frames,
+      // where the invitee appeared only once the pause switch fired.
+      void qc.invalidateQueries({ queryKey: ASSOCIATES_QUERY_KEY });
+    },
   });
 }
 

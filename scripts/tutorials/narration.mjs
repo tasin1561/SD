@@ -5470,6 +5470,837 @@ export const VIDEOS = [
       },
     ],
   },
+  /*
+   * R19–R21 — THE STORE'S OWN SALES PEOPLE.
+   *
+   * ASSOC-1 landed the day after section R was planned, so R1–R18
+   * covers none of these three screens. Filmed as Anjali, the store
+   * OWNER, because every one of these is a decision she takes ABOUT
+   * somebody — who may trade, at what price, and whether they are
+   * still allowed to. The associate's own side of it is the
+   * `associate-everything` video on the other portal.
+   */
+  {
+    slug: 'store-invite-an-associate',
+    title: 'Invite a sales person, and pause one',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'An associate is somebody who sells for your shop — in your showroom, or out on the road. They get their own login, they see only the orders they placed themselves, and they sell at a price you set for them.',
+      },
+      {
+        id: 'roster',
+        say: 'This is everybody who sells for you. Their name and the email they sign in with, whether they can place new orders at all, and how many of your products each of them is actually priced for.',
+      },
+      {
+        id: 'coverage',
+        say: 'That middle count is the one to read. Until you give somebody a price for a product they cannot sell it — the order is refused and names the product, rather than being quietly priced at something nobody chose.',
+      },
+      {
+        id: 'moved',
+        say: 'And if your supplier later narrows what a product may be sold between, a price you set months ago can fall outside it. That shows up here too, because an order at that price is refused as surely as one with no price at all.',
+      },
+      {
+        id: 'invite',
+        say: 'Inviting somebody is the same invitation you would send anybody on your team, with the role already fixed. You are not creating a login for them and you never see their password.',
+      },
+      {
+        id: 'form',
+        say: 'Their name, and the email the link goes to. It works for seven days and they set themselves up with it. Read the line underneath: until you price something for them, they cannot sell it.',
+      },
+      {
+        id: 'sent',
+        say: 'Sent — and the confirmation names the one thing left to do, which is price them. Above the table sits everyone invited and not yet accepted, with the date you asked. Nobody becomes a row below until they have set their own login up.',
+      },
+      {
+        id: 'pause',
+        say: 'Now the switch beside each person, and it is worth being exact about this one. It stops new orders. That is all it stops.',
+      },
+      {
+        id: 'paused',
+        say: 'Everything they have already placed carries on exactly as before — still confirmed, still picked, still delivered — and they can still open it, follow it, cancel it and chase us about it. You have closed the till, not locked the door.',
+      },
+      {
+        id: 'resume',
+        say: 'Switching it back on takes effect on their very next click rather than when they next sign in, so somebody you stood down by mistake is trading again straight away.',
+      },
+      {
+        id: 'outro',
+        say: 'So: an associate sees only their own orders, cannot sell a product you have not priced for them, and switching one off stops new orders without touching a single order already placed. Next, those prices.',
+      },
+    ],
+  },
+  {
+    slug: 'store-set-associate-prices',
+    title: 'Set what each of them sells it for',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'These are one person’s prices. Set by hand, product by product — two of your people can sell the same sari at different prices, and there is no rule underneath doing it for you.',
+      },
+      {
+        id: 'columns',
+        say: 'Four columns. The product, what your supplier allows it to be sold between, what they suggest, and the only one you type: what this person sells it at.',
+      },
+      {
+        id: 'range',
+        say: 'That range is your supplier’s, out of the terms you are trading under. It is printed beside the box rather than discovered when something goes wrong, which is the difference between a form you fill in and one you guess at.',
+      },
+      {
+        id: 'save',
+        say: 'Type a figure inside the range and save it. One row at a time, and Save only wakes up on the row you have actually changed.',
+      },
+      {
+        id: 'unpriced',
+        say: 'A product with no figure says so plainly: they cannot sell this. Nothing falls back to the suggested price — if this person tries to sell it, the order is refused and tells you which product by name.',
+      },
+      {
+        id: 'refuse',
+        say: 'Now the part worth watching. Put in a figure your supplier does not allow — well above the top of that range — and press Save.',
+      },
+      {
+        id: 'refused',
+        say: 'Refused, in Skydrop’s own words, at the moment you set it. Not next week when somebody tries to sell at it. The person who can fix this is you, and you are looking at the screen right now.',
+      },
+      {
+        id: 'fix',
+        say: 'Put it back inside the range and it saves. No associate of yours can break the deal your supplier set, and you find that out here rather than from a customer whose order would not go through.',
+      },
+      {
+        id: 'copy',
+        say: 'And if you have taken somebody new on, you need not type the whole list again — copy the prices from somebody already set up.',
+      },
+      {
+        id: 'replace',
+        say: 'Read it before you press it, though. It replaces every price this person already has that the other one also has, and the old figures are not kept. The reply afterwards names each one, so you can put a figure back by hand.',
+      },
+      {
+        id: 'outro',
+        say: 'So: a price is per person and typed by hand, a product with no price simply cannot be sold, and your supplier’s range is enforced here — when you set the figure, not when somebody tries to use it.',
+      },
+    ],
+  },
+  {
+    slug: 'store-how-associates-are-doing',
+    title: 'How your associates are doing',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'This is where you find out which of your people is actually selling, and what it is leaving you. The same screen is where you do something about it.',
+      },
+      {
+        id: 'window',
+        say: 'It opens on the last thirty days. Both dates are yours to change, and every figure below moves with them.',
+      },
+      {
+        id: 'totals',
+        say: 'Everybody together first. How many orders your people placed, how many of those were delivered, what they sold it all for, and what that left you after your supplier’s price.',
+      },
+      {
+        id: 'margin',
+        say: 'And the margin says exactly what it is: retail less what you pay your supplier, on every delivered line, before your share of Skydrop’s fees. A line with no cost recorded behind it is left out of that figure rather than counted as free.',
+      },
+      {
+        id: 'others',
+        say: 'And read the line under the heading. Orders nobody on this list placed — your own, a spreadsheet upload, a shop system plugged in through a key — are counted separately and sit on none of the rows below.',
+      },
+      {
+        id: 'table',
+        say: 'Then person by person, best-selling first. What each of them placed, and then how those orders ended: confirmed, delivered, called off, failed delivery, came back.',
+      },
+      {
+        id: 'money',
+        say: 'Beside that, the retail each of them sold and what it left you. The small line under the margin says how many of their delivered lines had a cost behind them, so you can see how much of the figure is measured.',
+      },
+      {
+        id: 'rates',
+        say: 'The last three columns are the rates, and they are the easiest numbers on this page to misread if nobody tells you the rule they follow.',
+      },
+      {
+        id: 'denominator',
+        say: 'A rate here divides only by the orders whose outcome is actually known, and the figure underneath says how many that was. A delivery rate worked out over parcels still moving reads like a fact and is not one.',
+      },
+      {
+        id: 'dash',
+        say: 'And when that count is nought — nobody has finished anything yet — the rate itself shows a dash rather than nought per cent. Nought per cent would read as somebody who delivers nothing. A dash says we do not know, which is a different thing.',
+      },
+      {
+        id: 'blocked',
+        say: 'The priced-for count follows them here, next to the performance, because it is usually the explanation. Somebody with products they cannot sell is not a poor salesman — they are a salesman nobody finished setting up.',
+      },
+      {
+        id: 'switch',
+        say: 'And the switch is on the row itself. You read how somebody is doing and you act on it in the same place, rather than reading it here and going somewhere else to do anything about it.',
+      },
+      {
+        id: 'sort',
+        say: 'Any column with an arrow sorts the list. And a figure we do not know sorts to the bottom whichever way you point it, deliberately — somebody with no finished orders must never come out reading as your best performer, or as your worst.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the window is yours, every rate names what it divided by, a dash means unknown rather than nought, and the two things that would explain a low number — missing prices, and that switch — are on the row beside it.',
+      },
+    ],
+  },
+  {
+    slug: 'store-delivery-gone-wrong',
+    title: 'When a delivery goes wrong',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'A parcel is out for delivery and something is wrong — the customer is not answering, or the address was not quite right. This is what you can do about it from here.',
+      },
+      {
+        id: 'where',
+        say: 'Start by reading where the parcel actually is. The timeline at the bottom is the courier’s own scans, so it is the same information their driver’s app has, and it is what tells you which of these asks is worth making.',
+      },
+      {
+        id: 'section',
+        say: 'Then this panel. Read the line under the heading, because it is the whole shape of this screen: what you can ask for is set by your supplier, and some of it happens straight away while some goes to them first.',
+      },
+      {
+        id: 'three',
+        say: 'Three asks about a parcel on the road. Ring the customer again — our call centre does that. Try delivering again — that sends a van out a second time. Or send it back, which stops it going to the customer at all.',
+      },
+      {
+        id: 'strip',
+        say: 'And beside each one, the part people miss. Happens as soon as you ask means exactly that. The seller approves this one means nothing moves until a person at your supplier has read it and said yes.',
+      },
+      {
+        id: 'dialog',
+        say: 'Open one and it asks what happened, in a sentence. That is not a formality — somebody reads it before they act on it, and on a re-attempt it is the only thing telling the driver what to do differently.',
+      },
+      {
+        id: 'confirm',
+        say: 'Then it asks once more, quoting the order, what you wrote, and whether this is being done now or sent to your supplier. The second confirmation exists because these three cost real money in different places.',
+      },
+      {
+        id: 'back',
+        say: 'Back, and nothing was sent. Worth knowing which one is the sharp edge: send it back reaches the courier on your click and turns the parcel round. The other two put work in front of a person first.',
+      },
+      {
+        id: 'history',
+        say: 'Underneath, everything you have already asked for on this order and where each got to. If your supplier turned one down you see their reason in their own words, and if the courier refused one you see that too.',
+      },
+      {
+        id: 'cancel',
+        say: 'Calling the order off entirely is up at the top, and it reads differently depending on the arrangement — Cancel order, or ask the seller to cancel. Either way it only works until the parcel is packed.',
+      },
+      {
+        id: 'change',
+        say: 'And correcting the order itself is its own panel. What is in the parcel can only change until the customer confirms it on our call; the customer’s details can be corrected later, and once a courier has it, only if they accept the change.',
+      },
+      {
+        id: 'held',
+        say: 'Anything waiting on your supplier collects here. Nothing on these happens until they answer — and one nobody answers closes itself after a few days, so if a row sits here, chase them rather than waiting.',
+      },
+      {
+        id: 'outro',
+        say: 'So: read the scans first, know which asks happen on your click and which wait, and write the reason as if a stranger has to act on it. Two more decisions have screens of their own.',
+      },
+    ],
+  },
+  {
+    slug: 'store-unreachable-customers',
+    title: 'When we cannot reach your customer',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Before anything ships, our call centre rings your customer to confirm the order. Sometimes nobody ever answers — and then the order stops, and the only person who can decide what happens to it is you.',
+      },
+      {
+        id: 'tiles',
+        say: 'Notice what the page leads with. Not how many orders are waiting, but how many units of your supplier’s stock are being held for them — because doing nothing here is not free, and a list of rows does not say so.',
+      },
+      {
+        id: 'table',
+        say: 'One row per order: the customer, the stock held, how many times we rang, and how long it has been sitting here. That last column is the one to work from — the customer has heard nothing in all that time.',
+      },
+      {
+        id: 'open',
+        say: 'Open one and the question is put plainly, with the two facts behind it: how many times we tried, and how much stock is held while it waits.',
+      },
+      {
+        id: 'keep',
+        say: 'Keep trying puts the order back in the call queue and we ring them again. The stock stays held. This is the one you can change your mind about — if nobody ever answers it comes straight back here tomorrow.',
+      },
+      {
+        id: 'give',
+        say: 'The other one is not like that. Give up on this order hands the stock back so other orders can use it — and read the warning that appears, because it says the other half: the order is rejected too.',
+      },
+      {
+        id: 'why',
+        say: 'Nobody will ring your customer again and nothing is sent to them. If you still want to try them yourself first, choose keep trying instead. The two look like a pair and only one of them can be undone.',
+      },
+      {
+        id: 'reason',
+        say: 'Giving up asks why, and insists on it. That line stays on the order, and it is what your supplier reads when they ask why a sale they had stock held for was rejected.',
+      },
+      {
+        id: 'button',
+        say: 'And the button names what it does rather than saying confirm — release the stock and reject the order. A button that said yes could be pressed by somebody who had read only the first half.',
+      },
+      {
+        id: 'never',
+        say: 'Never mind, and nothing is decided. Depending on your arrangement, your answer here may itself go to your supplier to approve — in which case the dialog says so and the button says send to your seller.',
+      },
+      {
+        id: 'order',
+        say: 'The same question also appears on the order itself, because you arrive both ways: from this queue in the morning, or from the order after a customer has rung you asking where their parcel is.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the count that matters is units held, not orders. Keep trying costs a few more days on a shelf. Giving up cannot be taken back, and it ends the sale as well as freeing the stock.',
+      },
+    ],
+  },
+  {
+    slug: 'store-your-customers',
+    title: 'Your customers',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Everybody you have sold to, in one list. These are your customers: no other store sees them, and they are built up for you as you place orders rather than being something you keep separately.',
+      },
+      {
+        id: 'list',
+        say: 'Name, phone, email, how many orders they have had from you, and when the last one was. That order count is the quickest read on this page — somebody buying from you for the fourth time is a different conversation.',
+      },
+      {
+        id: 'search',
+        say: 'The search takes a name, a number or an email, and it commits when you press Enter. Part of a phone number is enough, which is usually all somebody gives you when they ring.',
+      },
+      {
+        id: 'open',
+        say: 'Open one for everything we hold about them and every order you have placed for them, newest first.',
+      },
+      {
+        id: 'facts',
+        say: 'The phone number is first for a reason. It is how one customer is told from another, so it never changes — there is no field for it on the edit form, and a different number is a different person.',
+      },
+      {
+        id: 'orders',
+        say: 'Then their orders. These are found by that phone number rather than by a link you have to maintain, which is why the number being fixed matters more than it looks: it is what holds their history together.',
+      },
+      {
+        id: 'edit',
+        say: 'Edit details takes a correction — a misspelt name, an email, a second number to try. Everything except the phone. And whoever did not make the change is told about it, which brings us to the part worth saying out loud.',
+      },
+      {
+        id: 'seller',
+        say: 'Your supplier sees these people too. It is their stock in the parcel and their money at risk, and somebody who cannot see who a parcel is going to cannot help you when a delivery fails.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the list builds itself from your orders, the phone number is the thing that never moves, and corrections flow both ways between you and your supplier with each of you told what the other did.',
+      },
+    ],
+  },
+  {
+    slug: 'store-raise-it-with-skydrop',
+    title: 'Raising a problem',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Something has gone wrong with an order and it is not something you can fix from the order itself. There are two different people you might be raising it with, and this page keeps them apart.',
+      },
+      {
+        id: 'list',
+        say: 'Every conversation about your orders. The column to read first is With — your seller, or Skydrop. That is the difference between arguing with your supplier and talking to your logistics provider.',
+      },
+      {
+        id: 'tabs',
+        say: 'Open means nobody has answered yet, being reviewed means somebody is on it, and closed means it ended — with or without money changing hands. The tabs are shortcuts to each.',
+      },
+      {
+        id: 'open',
+        say: 'Open one and it is a thread. Your messages on one side, theirs on the other, oldest first, with the order it is about linked at the top so you can check the facts without losing your place.',
+      },
+      {
+        id: 'reply',
+        say: 'You can keep replying while it is open. Everything said is kept — nothing on a thread is edited or removed later, which is the point of arguing in here rather than over the phone.',
+      },
+      {
+        id: 'new',
+        say: 'Raising a new one normally starts from the order, so it arrives already knowing which order and which of the two you meant. From here you choose.',
+      },
+      {
+        id: 'choose',
+        say: 'With your seller is about the goods, the price, or what was sent — they read it and Skydrop referees. With Skydrop is for something in our hands: damaged, lost, or sitting in our warehouse, and your supplier is not told.',
+      },
+      {
+        id: 'money',
+        say: 'On a dispute with your supplier there is one more option worth knowing. Say the money worked out on the order is wrong, how much you think is owed, and which way — and Skydrop settles it between the two wallets.',
+      },
+      {
+        id: 'figures',
+        say: 'The figures are frozen as they stood when you raised it. That is deliberate: the ledger keeps moving afterwards, and what you were arguing about is a different question from what the numbers say today.',
+      },
+      {
+        id: 'approval',
+        say: 'Raising one with Skydrop may itself need your supplier’s approval first, depending on the arrangement. The form says so before you send it, and it reaches us only once they have agreed.',
+      },
+      {
+        id: 'settled',
+        say: 'A settled one reads back what happened in one line — who paid whom, how much, and Skydrop’s note on why. There is nothing to work out from it; that figure has already moved.',
+      },
+      {
+        id: 'ledger',
+        say: 'And it moved through the wallet, so it is a line in your ledger like any other. A settlement never comes out of Skydrop’s pocket — it moves between your wallet and your supplier’s, which is why it is argued rather than asked for.',
+      },
+      {
+        id: 'outro',
+        say: 'So: choose who you are talking to before you write anything, keep it on the thread, and if it is about money say the figure and which way it goes. Everything said and every settlement stays on the record.',
+      },
+    ],
+  },
+  {
+    slug: 'store-the-terms',
+    title: 'The terms you are trading under',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Your supplier and Skydrop have an arrangement about who pays which delivery charge and when each of you gets paid. This is that arrangement, written out, and it is the thing you agreed to before you could place an order.',
+      },
+      {
+        id: 'head',
+        say: 'It has a version number, who published it and when, and whether your store has accepted it. A version that has not been accepted is the one thing that stops you placing new orders, so that chip is worth reading.',
+      },
+      {
+        id: 'fees',
+        say: 'Who pays which fee, as sentences rather than a rate card. Skydrop charges your supplier for carrying a parcel and for a parcel that comes back, and these lines say what share of each one lands on you.',
+      },
+      {
+        id: 'credit',
+        say: 'Then when each of you is credited. This is the half people forget and the half that decides your cash flow: the money on a delivered order does not arrive the moment it is delivered, it arrives when this says it does.',
+      },
+      {
+        id: 'example',
+        say: 'And because a percentage is hard to picture, the same thing in rupees. For each fee: what Skydrop charges, what you pay, and what your supplier pays. Read down the You pay column — that is the real arrangement.',
+      },
+      {
+        id: 'rounding',
+        say: 'With a line underneath about rounding, which sounds like small print and is not. Every split is worked out to the paisa and the two halves always add up to the fee exactly, so nothing is ever lost between you.',
+      },
+      {
+        id: 'note',
+        say: 'Your supplier can leave a note with a version, and it is usually the most useful thing on the page — why this changed, or what they are trying to do. It is their words, kept with the version it belongs to.',
+      },
+      {
+        id: 'history',
+        say: 'Every version is kept, and a published one is never changed. That is not tidiness: an order you placed last month is priced and paid under the version that was in force then, whatever has been agreed since.',
+      },
+      {
+        id: 'accept',
+        say: 'When a new one is published you are asked to accept it, and accepting is an act with a record — your name, the time, and where you accepted from. Not everybody at your store can do it; it takes an owner or an admin.',
+      },
+      {
+        id: 'consequence',
+        say: 'And the confirmation says what accepting means: every order you place from then on is priced and paid under these terms. Orders already placed are untouched, which is why there is no hurry to read it badly.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the fee shares and the credit timing are the two halves, the worked example is the honest way to read them, and an unaccepted version is a door shut until somebody senior at your store opens it.',
+      },
+    ],
+  },
+  {
+    slug: 'store-your-team',
+    title: 'Your team',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Everybody with a login for your store. Giving somebody their own login rather than sharing yours is worth the two minutes — every order, every reply and every decision is recorded against the person who made it.',
+      },
+      {
+        id: 'members',
+        say: 'Name, email, what they may do, and when they last signed in. That last column is the one to glance at: a login nobody has used for months is a door left open rather than a colleague.',
+      },
+      {
+        id: 'union',
+        say: 'Somebody can hold more than one role, and when they do, what they may do is everything those roles allow put together. Adding a role never takes anything away, so the safe way to widen somebody is to add rather than swap.',
+      },
+      {
+        id: 'roles',
+        say: 'Change roles sends the whole set, not a difference — so what the ticks say when you save is exactly what that person ends up with. Untick everything and it is refused: a login that may do nothing is just a loose end.',
+      },
+      {
+        id: 'owner',
+        say: 'Owner is the one role that is handled differently. Only an owner can grant it, only an owner can touch somebody who already holds it, and the last owner cannot be moved off it — otherwise nobody could ever get back in.',
+      },
+      {
+        id: 'remove',
+        say: 'Removing somebody is immediate and includes any session they have open right now, which is the point when a laptop has gone missing. The confirmation says so rather than leaving you to hope.',
+      },
+      {
+        id: 'invite',
+        say: 'Inviting a colleague takes their name, their email and the roles they start with. They set their own password — you never know it, which is also why you can never look it up for them.',
+      },
+      {
+        id: 'pending',
+        say: 'Until they accept, the invitation sits here with when it expires. Resend if the email went astray, and revoke if it went to the wrong person — a revoked invitation cannot be accepted afterwards.',
+      },
+      {
+        id: 'resend',
+        say: 'One thing about resending: it issues a new link and kills the one already sent. So if somebody is halfway through accepting, resending is what breaks it — ask them to finish first.',
+      },
+      {
+        id: 'yourself',
+        say: 'And there are two things this page will not let you do to yourself: change your own roles, and remove your own access. Both for the same reason — nobody should be able to lock themselves out by accident.',
+      },
+      {
+        id: 'outro',
+        say: 'So: one login each, roles add up rather than replacing, owner is the role that protects itself, and the invitation link is single-use — resending it is a decision and not a nudge.',
+      },
+    ],
+  },
+  {
+    slug: 'store-your-wallet',
+    title: 'Your wallet',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Your store’s money, and every movement of it. This is where what you earn on an order arrives and where what you owe your supplier is taken, and the ledger at the bottom is the record of all of it.',
+      },
+      {
+        id: 'manager',
+        say: 'Read the line under the heading first, because it decides what the rest of this page offers. Either Skydrop manages the wallet — you pay us and withdraw through us — or your supplier does, and then you deal with them directly.',
+      },
+      {
+        id: 'tiles',
+        say: 'The balance, and beside it what you can actually withdraw, which is the balance less anything you have already asked for. Asking twice for the same money is the mistake that figure exists to stop.',
+      },
+      {
+        id: 'negative',
+        say: 'Then the one tile people are surprised by. Your wallet is allowed to go below zero, by this much, and the limit is your supplier’s decision — it is what lets you keep placing orders while money is still on its way to you.',
+      },
+      {
+        id: 'topup',
+        say: 'Topping up is two separate things, in this order: send the money to the account shown, then tell us here with the reference or a receipt. Nothing is credited on the strength of the form — a person has to see it arrive on our statement.',
+      },
+      {
+        id: 'requests',
+        say: 'Which is why there is a list of what you have told us about, with where each one got to. Waiting for Skydrop to see it is the normal state for a few hours; credited means it is in the balance above.',
+      },
+      {
+        id: 'withdrawals',
+        say: 'And a list of what you have asked to take out, with the account it is going to and the bank reference once it has been paid. A request that was turned down carries the reason it was.',
+      },
+      {
+        id: 'ledger',
+        say: 'Then every movement, newest first. Three things say which way each one went — an arrow, the sign, and the colour of the figure — so the direction is never something you have to work out from the words.',
+      },
+      {
+        id: 'credit',
+        say: 'Order margin is the good one: what a delivered order earned you. It is written when your terms say it is, not when the parcel arrived, which is why a delivery today may not be money today.',
+      },
+      {
+        id: 'transfer',
+        say: 'Against it, the goods at your supplier’s transfer price — what you owe them for what was sold. The gap between those two lines on one order is your margin before anything else is taken.',
+      },
+      {
+        id: 'fees',
+        say: 'Then your share of a Skydrop fee, and your share of the tax taken out of a cash-on-delivery payment. Both are the terms you accepted, applied to one parcel — and each names the order it came from.',
+      },
+      {
+        id: 'balance',
+        say: 'The last column is the balance after that line, recorded at the moment it happened. It is not worked out when you look at it, so the history reads the same next month as it does today.',
+      },
+      {
+        id: 'outro',
+        say: 'So: who manages the wallet decides what this page lets you do, withdrawable is not the same as the balance, going below zero is allowed up to a limit your supplier sets, and every figure is a line you can trace to an order.',
+      },
+    ],
+  },
+  {
+    slug: 'store-your-expenses',
+    title: 'Your own costs',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'What your store spends. Not what you pay your supplier — that is in the wallet already — but your own costs: advertising, somebody packing, the software you run the shop on.',
+      },
+      {
+        id: 'why',
+        say: 'Two reasons to bother. It is what turns your sales into an actual profit figure, and it is the denominator of your return on ad spend. Without it a busy month and a profitable month look identical.',
+      },
+      {
+        id: 'nobody',
+        say: 'Read the subtitle, because it settles two worries at once. This moves no money anywhere — it is a note, not a payment — and your supplier never sees it. It is your book.',
+      },
+      {
+        id: 'form',
+        say: 'A category, the amount, the day it was spent, and what it was for. The date is the day of the spending rather than the day you typed it, which is what puts an invoice you are catching up on in the right month.',
+      },
+      {
+        id: 'reference',
+        say: 'The invoice or receipt number is optional and worth filling in. It is the only thing on the row that lets somebody match this line against a piece of paper months later.',
+      },
+      {
+        id: 'confirm',
+        say: 'It reads the entry back before recording it — the category, the day, what it was for, and the amount. Short forms are where a decimal point goes missing, and a confirmation is cheaper than a correction.',
+      },
+      {
+        id: 'recorded',
+        say: 'Recorded, and it lands in the list below with the window’s total and a breakdown by category across the top. That split is the quickest way to see where the money actually went.',
+      },
+      {
+        id: 'window',
+        say: 'The two dates decide what is counted, and they are Indian days with the last one included. It opens on the last ninety, which is usually too wide for a check and about right for a quarter.',
+      },
+      {
+        id: 'remove',
+        say: 'A mistake is removed with a reason, and it insists on one. Nothing here is ever edited — the wrong row stays, struck through, with your reason beside it, because the record of what you believed at the time is part of the record.',
+      },
+      {
+        id: 'closed',
+        say: 'And read the last sentence of that dialog. If the month it belonged to has already closed, the change does not reopen it — it is carried into the month that is open now, where you will see it on your reports.',
+      },
+      {
+        id: 'outro',
+        say: 'So: your own costs only, dated by when they were spent, with a reference if you have one. Nothing is edited and nothing is deleted, and a correction to a closed month lands in this one.',
+      },
+    ],
+  },
+  {
+    slug: 'store-month-by-month',
+    title: 'What you made, month by month',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Your profit and loss, a month at a time. Everything on it comes from your wallet ledger and your own expense book — nothing here is estimated, and nothing here is worked out twice.',
+      },
+      {
+        id: 'position',
+        say: 'Across the top, where things stand right now rather than in any month: the balance, what you are owed, what you owe your supplier, and what is waiting to be paid either way.',
+      },
+      {
+        id: 'period',
+        say: 'Then the month, and beside each one whether it is closed or open. That word is the most important thing on this screen, and the next three minutes are mostly about what it means.',
+      },
+      {
+        id: 'tiles',
+        say: 'Revenue, costs and what is left. On a closed month it says net as reported — the figure that was true when the month closed, and the figure it will still say a year from now.',
+      },
+      {
+        id: 'lines',
+        say: 'Underneath, the lines it is made of. Order credits and prepaid sales on one side; what you paid for goods, your fee shares, your COD tax share and your own expenses on the other.',
+      },
+      {
+        id: 'open',
+        say: 'Open any line and you get every entry behind it, with the order it belongs to linked. The entries add up to the line exactly — if they did not, the month could not have been closed at all.',
+      },
+      {
+        id: 'cash',
+        say: 'Money in and out is kept deliberately apart. A top-up is not profit and a withdrawal is not a cost — both are just cash moving — so they are counted here and nowhere near the figure above.',
+      },
+      {
+        id: 'frozen',
+        say: 'Now the part that is unusual. When a month closes it is frozen and never changes again. That is a promise worth having: the figure you told somebody in October is the figure this page shows in March.',
+      },
+      {
+        id: 'carried-in',
+        say: 'But things do keep moving — a delivery credits late, an expense is recorded for a day gone by. Those changes are not written back. They are carried into whichever month was open when they were found, and listed here with the reason.',
+      },
+      {
+        id: 'reason',
+        say: 'Read one of those reasons, because it is the whole mechanism in a sentence: which month it really belonged to, which month it landed in, and what it did to the figure.',
+      },
+      {
+        id: 'carried-out',
+        say: 'And the mirror image — changes to this month that were found after it closed, counted in the month named. Between the two tables you can always get from what was reported to what is true.',
+      },
+      {
+        id: 'custom',
+        say: 'A custom range is a different kind of thing and the page says so. It is worked out now, from today’s ledger, so it is never frozen and it moves if something changes. Useful for a question; not a figure to quote.',
+      },
+      {
+        id: 'outro',
+        say: 'So: a closed month is a promise, later changes are carried forward rather than rewritten, every line opens to the entries behind it, and a custom range is an answer rather than a record.',
+      },
+    ],
+  },
+  {
+    slug: 'store-how-the-shop-is-doing',
+    title: 'How the shop is doing',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'The other half of the reports. Not what you made, but how the shop is performing — what gets confirmed, what comes back, which products earn, and what you can expect to be paid.',
+      },
+      {
+        id: 'window',
+        say: 'Everything on this page is a window, set by these two dates, and it opens on the last thirty days. Worth widening when you are judging a product and worth narrowing when you are judging a change you just made.',
+      },
+      {
+        id: 'rates',
+        say: 'How many orders you placed, and then three rates: confirmed on the phone, called off, and come back. For most reseller shops those second and third figures are the whole business.',
+      },
+      {
+        id: 'denominator',
+        say: 'And read the note, because it is what makes the rates honest. An order whose outcome nobody knows yet is left out of them entirely — a parcel still in transit is not a delivery and it is not a return.',
+      },
+      {
+        id: 'roas',
+        say: 'Return on ad spend: what you were paid for parcels that actually arrived in this window, against the advertising you recorded in your own expense book. If you do not record the ads, this is blank rather than wrong.',
+      },
+      {
+        id: 'margin-roas',
+        say: 'Beside it, the one to trust. Margin return on ad spend takes out what you paid your supplier for the goods, so it is profit per rupee of advertising rather than turnover per rupee. They can tell very different stories.',
+      },
+      {
+        id: 'products',
+        say: 'Profit per product, on units that were actually delivered — what you sold them for, less what you paid for them. Fee shares are per order rather than per product, so they sit in the profit and loss and not here.',
+      },
+      {
+        id: 'returns-col',
+        say: 'With a return rate against each one, which is the column that changes decisions. A product with a good margin and a bad return rate is often worse than a thin one that stays delivered.',
+      },
+      {
+        id: 'pincodes',
+        say: 'Then returns by pincode. Delivery failures cluster geographically far more than people expect, and this is where you find out which fifty postcodes are costing you — and whether to stop advertising into them.',
+      },
+      {
+        id: 'forecast',
+        say: 'Last, what is coming. Every cash-on-delivery order not yet credited to you, grouped by when your terms say it lands — so this is the forecast your own terms produce rather than a guess about them.',
+      },
+      {
+        id: 'overdue',
+        say: 'Order by order underneath, and anything past its date is marked due since. A row that says waiting for the order to move on is not late — it is a parcel that has not finished its journey yet.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the rates only count orders whose fate is known, margin return on ad spend is the number worth watching, returns cluster by pincode, and the forecast is your own terms applied to what you have already sold.',
+      },
+    ],
+  },
+  {
+    slug: 'store-your-inbox-and-login',
+    title: 'Your inbox, and your own login',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'Everything Skydrop and your supplier send you, and then your own account. Both live under You in the sidebar, because both are about you rather than about the store.',
+      },
+      {
+        id: 'inbox',
+        say: 'The inbox is where answers land — a decision on something you asked, a change somebody made to one of your orders, a reply on a dispute. This is the place to look rather than a mailbox.',
+      },
+      {
+        id: 'open',
+        say: 'Open one in place and that is what reading it means. Unread is a genuine count of what you have not looked at, so it is worth keeping honest rather than clearing out of habit.',
+      },
+      {
+        id: 'filters',
+        say: 'The tabs group them by what they are about, and unread only narrows it to what is left. The filter box is honest about its reach — it searches what is loaded and tells you when there is more behind it.',
+      },
+      {
+        id: 'dismiss',
+        say: 'Clearing one hides it from your list and nothing more: the record of what was sent is kept, and clearing yours leaves everybody else’s copy alone. Mark all read and clear all each say how many they will touch before they do it.',
+      },
+      {
+        id: 'settings',
+        say: 'Then the settings, and these are two separate decisions on one page. What reaches YOU, and what this STORE is told at all. Both can only ever remove a message — neither can switch on something the other switched off.',
+      },
+      {
+        id: 'you',
+        say: 'Yours first. One switch per topic, with the real topic name beside it so a support conversation can name the thing. Nobody else at your store sees these, and changing one does not change what a colleague receives.',
+      },
+      {
+        id: 'store',
+        say: 'The store-wide half is the other way round, and the page says so plainly: it applies to everybody here. Switching a category off stops it reaching your colleagues too, which is a bigger decision than it looks.',
+      },
+      {
+        id: 'locked',
+        say: 'And some are locked on, with the reason beside them. Answers to what you asked, money, and changes somebody else made to your orders — none of those can be silenced, by you or by anybody at your store.',
+      },
+      {
+        id: 'account',
+        say: 'Your own account is the last page. Your name, your email, and whether it has been confirmed — with a button to send yourself the link again if it has not.',
+      },
+      {
+        id: 'roles',
+        say: 'It lists every role you hold rather than one of them, which matters if you have two: what you may do is all of them put together, and seeing only the first would tell you something untrue about your own access.',
+      },
+      {
+        id: 'sessions',
+        say: 'And sign out everywhere, which ends every session of yours including the one you are in. That is the thing to reach for when a phone goes missing — changing a password alone leaves the old sessions alive.',
+      },
+      {
+        id: 'outro',
+        say: 'So: the inbox is where Skydrop talks to you, clearing hides your copy and keeps the record, the settings are two decisions and not one, and some messages are never silenced.',
+      },
+    ],
+  },
+  {
+    slug: 'store-keys-and-webhooks',
+    title: 'Letting your own systems in',
+    subtitle: 'Skydrop for reseller stores',
+    steps: [
+      {
+        id: 'intro',
+        say: 'If you sell through a website or a shop system of your own, it can place orders here directly and hear about them as they move. Two halves to that, and they are independent.',
+      },
+      {
+        id: 'keys-note',
+        say: 'A key lets a system place and read your orders. Read the line under the heading, because it is the reassuring part: every rule the portal applies applies to a key too — your catalogue, your price range, what is actually available.',
+      },
+      {
+        id: 'create',
+        say: 'Name it after the thing that will use it, so revoking the right one later is obvious. And decide how long it works for — a key that expires is a key you cannot forget about.',
+      },
+      {
+        id: 'confirm',
+        say: 'It restates both before making it, and warns you about the next screen: the key is shown once, straight after. Not stored anywhere you can look it up — shown once.',
+      },
+      {
+        id: 'shown',
+        say: 'There it is. Copy it into whatever is going to use it now, because closing this page is the end of it. If you lose it there is no recovery, only a new key and a revoked old one.',
+      },
+      {
+        id: 'table',
+        say: 'Afterwards the list shows you the first few characters, when it was last used, when it expires and whether it is live. Last used is the useful column — a key nothing has touched for months is one to revoke.',
+      },
+      {
+        id: 'revoke',
+        say: 'Revoking stops anything using it at once and cannot be undone. Note that revoked and expired are shown as different things: one of them was a decision and the other was a clock.',
+      },
+      {
+        id: 'webhooks',
+        say: 'The other half is us telling you. We send a signed message to a URL of yours when one of your orders moves, so your own system finds out without having to ask us every few minutes.',
+      },
+      {
+        id: 'add',
+        say: 'An https address, a name so the list reads well, and the events you want. Only your store’s orders are ever sent — a webhook on this page can never hear about your supplier’s other business.',
+      },
+      {
+        id: 'secret',
+        say: 'And a signing secret, shown once like the key. Your system uses it to check that a message really came from us: without that check, anybody who learns your URL can post anything they like to it.',
+      },
+      {
+        id: 'rotate',
+        say: 'Rotating issues a new secret, switching one off stops the sending without losing the configuration, and removing it is permanent. Switching off is the one to reach for while you are fixing something at your end.',
+      },
+      {
+        id: 'outro',
+        say: 'So: a key places orders under exactly your own rules, a webhook tells you when they move, both carry a secret shown once, and the honest habit is to name them well and revoke what nothing is using.',
+      },
+    ],
+  },
 ];
 
 /** Look one up by slug — the scripts take a slug on the command line. */
@@ -5498,3 +6329,16 @@ export function videoBySlug(slug) {
 import { LONG_VIDEOS } from './long/index.mjs';
 
 VIDEOS.push(...LONG_VIDEOS);
+
+/*
+  ── SECTION S — THE ASSOCIATE PORTAL ────────────────────────────────
+  Seven SHORT videos, registered the same way the long ones are and for
+  the same reason stated above: two agents were filming at once when
+  they were written — section R into this file, section S on another
+  stack — and four authors editing one 5,500-line file is the cost the
+  module seam exists to avoid. The words live in
+  `sections/associate.mjs`; these two lines are the only shared ones.
+*/
+import { VIDEOS as ASSOCIATE_SECTION_VIDEOS } from './sections/associate.mjs';
+
+VIDEOS.push(...ASSOCIATE_SECTION_VIDEOS);
