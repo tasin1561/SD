@@ -375,6 +375,14 @@ async function letTheClockRun(orderId, log) {
     connection: {
       host: host.hostname,
       port: Number(host.port === '' ? 6379 : host.port),
+      // THE LOGICAL DB INDEX, which `ioredis` reads off the URL PATH and
+      // which building the connection field by field therefore drops.
+      // Without it this defaults to 0 — stack A's keyspace — so a seed
+      // run on stack B asked STACK A's worker to sweep, and stack A
+      // swept the wrong database. Exactly the failure SCALE-1 is about,
+      // and the quietest one in the rig: both stacks carry on looking
+      // healthy. `seed-demo-data.mjs` has always read it this way.
+      db: Number(host.pathname.replace('/', '')) || 0,
       maxRetriesPerRequest: null,
     },
   });

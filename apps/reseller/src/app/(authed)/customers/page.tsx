@@ -13,9 +13,22 @@ import { useStoreCustomers } from '@/lib/order-hooks';
 import './_components/customers.css';
 
 /**
- * RS-5 (ORD-7 generalised) — the people THIS store has sold to. They are
- * the store's customers: the seller whose stock you sell never sees their
- * names or numbers, and no other store does either.
+ * RS-5 (ORD-7 generalised) — the people THIS store has sold to.
+ *
+ * NO OTHER STORE sees them, and that half is enforced: a store's list is
+ * `listForStore`, scoped to its own id. **The SELLER does see them**, by
+ * the owner's decision of 2026-09-16 — `CustomerService.list` filters on
+ * `{ sellerId }` alone, "their own and their reseller stores'", because
+ * the order is the seller's (their stock, their warehouse slot, their
+ * courier, their money at risk) and a seller who cannot see who a parcel
+ * is going to cannot ring about a failed delivery or answer the call
+ * centre.
+ *
+ * This file said the opposite for weeks — "the seller whose stock you
+ * sell never sees their names or numbers" — on the subtitle AND here,
+ * while `customers/[id]` one click away said "Your seller sees them too".
+ * A promise the platform deliberately does not make is worse than no
+ * promise: the shopkeeper acts on it. The detail page was right.
  *
  * The search still COMMITS on Enter (the form's submit), exactly as it
  * did: the box holds what is being typed, the list reads what was asked.
@@ -31,7 +44,7 @@ export default function CustomersPage(): ReactElement {
     <div className="rc-cst-page">
       <PageHeader
         title="Customers"
-        subtitle="Everyone your store has sold to. They are your customers — the seller does not see them."
+        subtitle="Everyone your store has sold to. No other store sees them. Your seller does, and each of you is told when the other changes their details."
       />
       <section className="rc-cst-section">
         <SectionHeading title="Your customers" />
