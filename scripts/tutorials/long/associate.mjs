@@ -713,6 +713,37 @@ export const flow = {
           page,
           page.getByRole('cell', { name: /associate-bulk-orders\.csv/i }).first(),
         );
+        /*
+          THEN WAIT FOR THE RUN TO SETTLE, and the reason is a bug that
+          hid behind another bug for two days.
+
+          The row above appears the moment the upload exists, which is
+          seconds before the import has placed anything — so "the row is
+          there" is not "the import is done". That never showed, because
+          the store sheets' duplicate guard was refusing every row: the
+          job finished instantly with nothing created, and the terminal
+          state was on screen before the camera got there. With the
+          guard fixed the run does REAL work (three orders, ~10s) and
+          the table polls every FIVE seconds, so the scene ended on
+          "Importing · 0% · 0 of 6 rows handled" under a line about
+          every row becoming one of your orders. Measured, not guessed:
+          the 2026-10-11 Bangla take, last frame of the scene.
+
+          `data-state` on the parachute rather than its words: the
+          status string appears twice (the head and the aria-live
+          region), so a text locator is a strict-mode failure waiting to
+          happen. Either terminal state is accepted — if an import
+          really did stop, the honest frame is the one that says so.
+
+          It is deliberately NOT caught. A run that has not settled in
+          forty-five seconds is a broken box, and failing the take is
+          cheaper than a perfectly plausible video of an import that
+          never finishes.
+        */
+        await page
+          .locator('.sk-chute[data-state="done"], .sk-chute[data-state="failed"]')
+          .first()
+          .waitFor({ timeout: 45_000 });
         await stage.glide(300);
         await stage.dwellOn(section(page, 'Recent uploads'), 3000);
       },

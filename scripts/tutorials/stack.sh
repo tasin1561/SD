@@ -142,7 +142,17 @@ status() {
     local what="${pair%%:*}" url="${pair#*:}"
     if up "$url"; then
       case "$what" in
-        seller | admin)
+        # ALL FOUR consoles, not just the first two. The two lines below
+        # setting `base` for reseller and associate were already here —
+        # inside a pattern that could never match them, so they were dead
+        # code that read as coverage. `status` therefore printed
+        # `associate UP` for a process serving a build that had been
+        # replaced, which presents as a REFUSED PASSWORD rather than a
+        # stale server: every `_next/static` chunk 400s, the page never
+        # hydrates, and the login form does a native GET back to
+        # `/login?`. Found while re-filming, after a sign-in "failed"
+        # against correct credentials.
+        seller | admin | reseller | associate)
           local base="$SELLER_URL"
           [ "$what" = admin ] && base="$ADMIN_URL"
           [ "$what" = reseller ] && base="$RESELLER_URL"
