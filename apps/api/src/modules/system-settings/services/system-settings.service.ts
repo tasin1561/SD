@@ -9,6 +9,7 @@ import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { WITHHELD_VALUE } from '../../../common/crypto/credential-redaction';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import {
+  urlSettingRefusal,
   assertCodFeesWithinLimit,
   COD_FEE_KEYS,
 } from '../../settings/services/settings-resolver.service';
@@ -313,9 +314,22 @@ export class SystemSettingsService {
     };
 
     switch (type) {
-      case SettingValueType.STRING:
+      case SettingValueType.STRING: {
         if (typeof input !== 'string') return reject('expected a string');
+        // A URL-VALUED setting is the destination of an outbound call,
+        // and three of them carry a credential there — Delhivery's
+        // static API token, Shiprocket's account password, and the
+        // unguarded egress probe. "Any string" meant a settings edit
+        // could redirect our courier credentials to a host of the
+        // caller's choosing, which is a read of plaintext that no route
+        // offers to anybody, SUPER_ADMIN included. See
+        // `URL_VALUED_STRING_KEYS` for why this is a host allowlist and
+        // not `assertPublicHttpsUrl` (these keys legitimately point at
+        // loopback for the simulator and the VPN control server).
+        const urlRefusal = urlSettingRefusal(key, input);
+        if (urlRefusal !== null) return reject(urlRefusal);
         return input;
+      }
       case SettingValueType.INT:
         if (typeof input === 'number') {
           if (!Number.isInteger(input)) return reject('expected an integer');

@@ -66,6 +66,128 @@ export const JSON_VALUED_ENUM_LIST_KEYS: Readonly<Record<string, readonly string
 };
 
 /**
+ * Hosts a URL-VALUED setting may name — the third member of the family
+ * above, and the one where getting it wrong hands our credentials away.
+ *
+ * ── WHY THIS EXISTS ──────────────────────────────────────────────────
+ * `parseValue`'s STRING arm accepted any string at all, and three of
+ * those strings are the base URL of an outbound call that CARRIES A
+ * CREDENTIAL:
+ *
+ *   - `courier.delhivery_api_base_url` — every request to it is sent
+ *     with `Authorization: Token <token>`, and Delhivery's token is
+ *     static, never expires, authorises manifesting and cancelling real
+ *     parcels, and can only be rotated by Delhivery.
+ *   - `courier.shiprocket_api_base_url` — a cold token cache makes the
+ *     next call `POST ${base}/v1/external/auth/login` with
+ *     `{ email, password }` in cleartext, for the account that also
+ *     handles COD remittance.
+ *   - `courier.shiprocket_portal_egress_check_url` — fetched with no
+ *     SSRF guard at all, and its four distinguishable failure reasons
+ *     are returned to the caller, so it reads as a port scanner from
+ *     inside the droplet.
+ *
+ * Nothing else in the estate can read courier plaintext: there are two
+ * `decryptCredential` call sites and neither returns it, there is no
+ * reveal route, and that holds against SUPER_ADMIN too. So an edit to
+ * one of these keys obtained something the strongest role cannot get
+ * through any API — which is the definition of an invariant bypass, and
+ * `system.settings.manage` sits in the ADMIN tier by a deployed
+ * migration while the five known bypasses are withheld from it.
+ *
+ * A private-range host made it worse rather than safer: the write guard
+ * classifies `10.*`, `192.168.*`, `172.16-31.*`, `*.local` and loopback
+ * as a SIMULATOR and then passes those writes with NO audit row, so the
+ * same edit that redirected the credential also switched off the one
+ * HIGH `live_write_to_production` row that would have named the host.
+ *
+ * ── WHY A HOST ALLOWLIST AND NOT THE SSRF GUARD ──────────────────────
+ * `assertPublicHttpsUrl` demands https and a PUBLIC address, and these
+ * settings are legitimately pointed at loopback — `apps/delhivery-sim`
+ * and `scripts/tutorials/provision-stack.mjs` both do it, and the
+ * egress check's own seeded description is a `127.0.0.1` gluetun URL.
+ * Routing these through that guard would refuse dev, CI and the real
+ * egress check while still permitting any public host, which is the
+ * wrong answer twice over.
+ *
+ * ── WHY THE PATTERNS ARE RESTATED ────────────────────────────────────
+ * The loopback/private set is `SIMULATOR_HOST_PATTERNS` in
+ * `courier-write-guard.service.ts`, and this service is dependency-free
+ * by design (R0/R3) and must not reach into a courier module — the same
+ * reason `JSON_VALUED_ENUM_LIST_KEYS` restates the NDR vocabulary. The
+ * guarantee is `settings-url-allowlist.spec.ts`, which pins this list
+ * against the guard's own in BOTH directions, so a host the guard calls
+ * a simulator and this list refuses is a build failure rather than a
+ * confusing 400 months later.
+ */
+const COURIER_SIM_HOSTS: readonly RegExp[] = [
+  /^localhost$/i,
+  /^127\./,
+  /^\[?::1\]?$/,
+  /^10\./,
+  /^192\.168\./,
+  /^172\.(1[6-9]|2\d|3[01])\./,
+  /\.local$/i,
+  /(^|\.)delhivery-sim(\.|$)/i,
+  /(^|\.)shiprocket-sim(\.|$)/i,
+];
+
+export const URL_VALUED_STRING_KEYS: Readonly<Record<string, readonly RegExp[]>> = {
+  // Their real hosts, plus a local simulator for dev/CI/tutorials.
+  'courier.delhivery_api_base_url': [
+    /^track\.delhivery\.com$/i,
+    /^staging-express\.delhivery\.com$/i,
+    /^one\.delhivery\.com$/i,
+    ...COURIER_SIM_HOSTS,
+  ],
+  'courier.shiprocket_api_base_url': [
+    /^apiv2\.shiprocket\.in$/i,
+    /^apiv2\.shiprocket\.co$/i,
+    /^app\.shiprocket\.in$/i,
+    ...COURIER_SIM_HOSTS,
+  ],
+  // LOOPBACK ONLY. This one names the VPN's own control server on the
+  // same host; there is no legitimate remote value, and it is the one
+  // fetched with no guard and its result reported back.
+  'courier.shiprocket_portal_egress_check_url': [/^localhost$/i, /^127\./, /^\[?::1\]?$/],
+};
+
+/**
+ * `null` when the value is acceptable, else the reason to refuse it.
+ *
+ * EMPTY IS ALWAYS ALLOWED, and that is load-bearing: all three keys are
+ * seeded `''`, and empty is what each consumer reads as "not configured"
+ * — Delhivery's client treats it as stub mode and Shiprocket's refuses
+ * the call outright. Refusing empty would make the settings screen
+ * unable to save the state they ship in.
+ */
+export function urlSettingRefusal(key: string, value: string): string | null {
+  const allowed = URL_VALUED_STRING_KEYS[key];
+  if (allowed === undefined) return null;
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  let host: string;
+  let protocol: string;
+  try {
+    const parsed = new URL(trimmed);
+    host = parsed.hostname;
+    protocol = parsed.protocol;
+  } catch {
+    return 'expected an absolute http(s) URL';
+  }
+  if (protocol !== 'https:' && protocol !== 'http:') {
+    return `expected an http(s) URL, not ${protocol.replace(':', '')}`;
+  }
+  if (!allowed.some((re) => re.test(host))) {
+    // The host is NAMED back, because the operator legitimately switches
+    // this between a courier and a local simulator and needs to see
+    // which spelling was refused; it is their own input, not a secret.
+    return `host '${host}' is not an allowed destination for this setting`;
+  }
+  return null;
+}
+
+/**
  * Overrides whose consequence is PHYSICAL, so setting one is audited
  * HIGH rather than the ordinary MEDIUM.
  *
