@@ -18,6 +18,8 @@ import {
   SellerStoreKind,
   StoreWalletEntryDirection,
   WalletEntryDirection,
+  SystemIssueKind,
+  SystemIssueSeverity,
 } from '@skydrop/db';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
@@ -54,6 +56,7 @@ import {
   type PartyCreditPlan,
 } from '../plan/reseller-money-plan';
 import { readResellerOrderSnapshot } from '../reseller-order-snapshot.read';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 type Tx = Prisma.TransactionClient;
 type Db = Prisma.TransactionClient;
@@ -189,6 +192,7 @@ export class ResellerOrderMoneyService {
     private readonly pricing: PricingEngineService,
     private readonly orderCharges: OrderChargesService,
     private readonly audit: AuditLogService,
+    private readonly issues: SystemIssueService,
   ) {}
 
   // ── What order is this ─────────────────────────────────────────────
@@ -443,8 +447,28 @@ export class ResellerOrderMoneyService {
    * so a side billed early (a prepaid order's store share, taken at
    * confirmation) is not billed again, and "lost then found" re-bills both
    * after both were refunded. Returns whether anything was written.
+   *
+   * `skipSellerWrite` is the caller's answer to a question only it can
+   * answer: the seller's half lands in `seller_wallet_entries` under
+   * `seller_wallet_entries_once_per_order_uq`, so in the "charged once,
+   * refunded once" state the database REFUSES it — and a P2002 aborts the
+   * whole surrounding transaction, so it cannot be caught here and
+   * carried on from. `OrderChargesAccrualService` counts the pairing
+   * before delegating, raises the worklist entry on the same dedupe key
+   * the channel uses, and passes the verdict down.
+   *
+   * The STORE's half is written either way, and that is the point of
+   * splitting the decision rather than refusing both: `store_wallet_entries`
+   * carries no once-per-order unique, so a store share genuinely can be
+   * charged, refunded and charged again — netting to one debit, which is
+   * correct. Refusing it alongside the seller's would turn a correct
+   * re-bill into a silent skip.
    */
-  async chargeDeliveryFee(tx: Tx, orderId: string): Promise<boolean> {
+  async chargeDeliveryFee(
+    tx: Tx,
+    orderId: string,
+    opts: { readonly skipSellerWrite?: boolean } = {},
+  ): Promise<boolean> {
     const head = await this.head(tx, orderId);
     if (head === null) return false;
     await this.lock(tx, head.sellerId);
@@ -452,7 +476,11 @@ export class ResellerOrderMoneyService {
     if (total.lessThanOrEqualTo(0)) return false;
     const split = splitFee(total, head.deliveryFeeStorePercent);
     let wrote = false;
-    if (split.sellerInr.greaterThan(0) && !(await this.sellerFeeOutstanding(tx, orderId))) {
+    if (
+      opts.skipSellerWrite !== true &&
+      split.sellerInr.greaterThan(0) &&
+      !(await this.sellerFeeOutstanding(tx, orderId))
+    ) {
       await this.wallet.applyEntry(tx, {
         sellerId: head.sellerId,
         currency: Currency.INR,
@@ -1279,6 +1307,26 @@ export class ResellerOrderMoneyService {
   }
 
   /**
+   * The once-per-order deductions a re-credit would try to write AGAIN,
+   * and which the database will refuse.
+   *
+   * `seller_wallet_entries_once_per_order_uq` covers `(linked_order_id,
+   * direction)` for `gst_withholding`, `cod_collection_fee` and
+   * `instant_pay_fee`. A courier reversal does NOT remove them — the
+   * ledger is append-only, so `reverseRow` writes a
+   * `COD_DEDUCTION_REFUND` beside each and leaves the original standing.
+   * So on a reversal-then-re-payment the originals are still there and a
+   * second write raises P2002.
+   */
+  private async refusedDeductions(tx: Tx, orderId: string): Promise<WalletEntryDirection[]> {
+    const rows = await tx.sellerWalletEntry.findMany({
+      where: { linkedOrderId: orderId, direction: { in: [...COD_DEDUCTION_DIRECTIONS] } },
+      select: { direction: true },
+    });
+    return [...new Set(rows.map((r) => r.direction))];
+  }
+
+  /**
    * A courier payout line for a reseller order — INSIDE the settlement's
    * transaction, which already holds the seller's WALLET lock and has
    * booked the whole line's cash as capital's. ON_PAYOUT credits arm
@@ -1296,6 +1344,76 @@ export class ResellerOrderMoneyService {
     if (head === null) return;
     await this.lock(tx, head.sellerId);
     const rows = await this.ensurePlan(tx, input.orderId);
+
+    // ONE ORDER MUST NOT DESTROY THE WHOLE PAYOUT.
+    //
+    // A courier may pay an order, take the money back when the parcel
+    // returns, and pay again later. The re-arm below is deliberate —
+    // WAL-6's "a COD reversed by mistake and paid again is credited
+    // again" — but the re-credit then rewrites the COD deductions, and
+    // three of them are under a once-per-order unique that a reversal
+    // does not clear (the ledger is append-only). The second write
+    // raises P2002.
+    //
+    // `CourierSettlementService.record` wraps the WHOLE payout in one
+    // transaction with no catch, so that single refusal used to roll back
+    // the settlement row, every line, EVERY OTHER SELLER's credit on that
+    // payout, and the bank entry for cash that really landed — and the
+    // operator's obvious response, re-uploading the file, reproduced it
+    // exactly. There was no way through from any screen.
+    //
+    // So this order is skipped and NAMED, and the rest of the payout
+    // commits. Deliberately the whole order rather than half of it: the
+    // store's ledger has no such index, so crediting the store while the
+    // seller waits would leave one order's money half-applied across two
+    // parties, which is harder to settle by hand than leaving it alone.
+    //
+    // THIS DECIDES NO MONEY, and that is the point. Skipping the
+    // deduction and crediting anyway would pay the seller MORE than the
+    // plan says; refusing the re-credit for ever would pay them LESS.
+    // Both are wrong — the right end state is the one the first payment
+    // produced — so this leaves the row REVERSED, says so loudly, and
+    // lets a person settle it on /wallet-transfers. The lasting fix is
+    // for those directions to be allowed to recur, with the existing
+    // credits-minus-reversals count as the authority; that weakens a
+    // money index CLAUDE.md forbids weakening, so it is an owner's
+    // decision and its own change, not a side-effect of this one.
+    const rearmable = rows.filter(
+      (r) =>
+        r.status === ResellerCreditStatus.REVERSED ||
+        (r.status === ResellerCreditStatus.SKIPPED &&
+          r.skippedReason !== null &&
+          REARM_ON_PAYOUT_REASONS.has(r.skippedReason)),
+    );
+    if (rearmable.length > 0) {
+      const refused = await this.refusedDeductions(tx, input.orderId);
+      if (refused.length > 0) {
+        await this.issues.raise({
+          kind: SystemIssueKind.MONEY,
+          severity: SystemIssueSeverity.HIGH,
+          title: 'A reseller order could not be re-credited after a courier reversal',
+          detail:
+            `The courier reversed its payment on this order and has now paid it again, so ` +
+            `the credit is owed again. The database allows only ONE of each COD deduction ` +
+            `per order (${refused.join(', ')}), and a courier reversal does not clear them, ` +
+            `so the credit cannot be re-written automatically and nothing further will try.\n\n` +
+            `THE REST OF THE PAYOUT WAS RECORDED NORMALLY — this order alone is outstanding. ` +
+            `Settle it by hand on /wallet-transfers as a credit to this seller (and to the ` +
+            `store, if its share is also owed), with the order number in the reason.`,
+          source: 'ResellerOrderMoneyService',
+          dedupeKey: `reseller-credit-not-rewritable:${input.orderId}`,
+          metadata: {
+            orderId: input.orderId,
+            sellerId: head.sellerId,
+            storeId: head.storeId,
+            refusedDirections: refused,
+            rearmableRows: rearmable.length,
+          },
+        });
+        return;
+      }
+    }
+
     for (const row of rows) {
       const anchor = anchorOf(row.trigger, head.paymentMode);
       if (row.status === ResellerCreditStatus.WAITING && anchor !== 'CONFIRMATION') {

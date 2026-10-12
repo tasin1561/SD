@@ -18,6 +18,8 @@ function makeService(
     existingEntry?: AnyArgs | null;
     /** A charge that was taken and then REFUNDED (a lost parcel). */
     refunded?: boolean;
+    /** Treat the order as a reseller-store order (RS-6 phase 3c). */
+    reseller?: boolean;
     charges?: AnyArgs[];
   } = {},
 ) {
@@ -48,12 +50,19 @@ function makeService(
     orderCharge: { findMany: orderChargeFindMany },
   };
   const raise = jest.fn<Promise<void>, [AnyArgs]>(async () => undefined);
-  const svc = new OrderChargesAccrualService(
-    wallet as unknown as WalletService,
-    NO_RESELLER_MONEY,
-    { raise } as never,
+  // RS-6 phase 3c — a reseller order delegates the split to this, and
+  // the caller tells it whether the SELLER half may be written.
+  const chargeDeliveryFee = jest.fn<Promise<boolean>, [unknown, string, AnyArgs?]>(
+    async () => true,
   );
-  return { svc, tx, findFirst, orderChargeFindMany, applyEntry, raise };
+  const resellerMoney =
+    opts.reseller === true
+      ? ({ isResellerOrder: async () => true, head: async () => null, chargeDeliveryFee } as never)
+      : NO_RESELLER_MONEY;
+  const svc = new OrderChargesAccrualService(wallet as unknown as WalletService, resellerMoney, {
+    raise,
+  } as never);
+  return { svc, tx, findFirst, orderChargeFindMany, applyEntry, raise, chargeDeliveryFee };
 }
 
 describe('OrderChargesAccrualService.debitIfNeeded', () => {
@@ -214,5 +223,58 @@ describe('OrderChargesAccrualService.debitIfNeeded', () => {
     );
     expect(result).toBe(false);
     expect(applyEntry).not.toHaveBeenCalled();
+  });
+
+  // ── RS-6 phase 3c: the reseller split obeys the same index ──────────
+  //
+  // The reseller branch used to be the FIRST thing `debitIfNeeded` did,
+  // so it reached neither the pairing gate nor the raise-and-skip, and
+  // its own gate said "bill it" at one charge and one refund. The write
+  // then raised P2002 and aborted the whole delivered-money transaction,
+  // taking the inbound-freight share with it — silently, on the default
+  // accrual tier, for ever.
+
+  it('reseller + charged-then-refunded: skips the SELLER write, still bills the STORE, and is LOUD', async () => {
+    const { svc, tx, chargeDeliveryFee, raise } = makeService({
+      reseller: true,
+      existingEntry: { id: 'e1' },
+      refunded: true,
+    });
+    const out = await svc.debitIfNeeded(tx as never, 'order-1', 'seller-1');
+
+    // Delegated — the store's share must still be taken, because its
+    // ledger carries no once-per-order unique and a store share really
+    // can be charged, refunded and charged again (netting to one debit).
+    expect(chargeDeliveryFee).toHaveBeenCalledTimes(1);
+    expect(chargeDeliveryFee).toHaveBeenCalledWith(tx, 'order-1', { skipSellerWrite: true });
+    expect(out).toBe(true);
+
+    // And the seller's outstanding share is on the worklist, under the
+    // SAME dedupe key the channel path uses — one fact, one entry.
+    expect(raise).toHaveBeenCalledTimes(1);
+    const issue = raise.mock.calls[0]?.[0] as { dedupeKey: string; metadata: AnyArgs };
+    expect(issue.dedupeKey).toContain('order-1');
+    expect(issue.metadata.reseller).toBe(true);
+  });
+
+  it('reseller + never charged: bills both halves and raises nothing', async () => {
+    const { svc, tx, chargeDeliveryFee, raise } = makeService({ reseller: true });
+    await svc.debitIfNeeded(tx as never, 'order-1', 'seller-1');
+    expect(chargeDeliveryFee).toHaveBeenCalledWith(tx, 'order-1', { skipSellerWrite: false });
+    expect(raise).not.toHaveBeenCalled();
+  });
+
+  it('reseller + already billed and NOT refunded: delegates without raising', async () => {
+    // The seller half is skipped by `sellerFeeOutstanding` inside the
+    // reseller service, as it always was; nothing is owed, so nothing is
+    // raised. Passing `skipSellerWrite: false` here is correct — the two
+    // gates answer the same way and the inner one is the authority.
+    const { svc, tx, chargeDeliveryFee, raise } = makeService({
+      reseller: true,
+      existingEntry: { id: 'e1' },
+    });
+    await svc.debitIfNeeded(tx as never, 'order-1', 'seller-1');
+    expect(chargeDeliveryFee).toHaveBeenCalledWith(tx, 'order-1', { skipSellerWrite: false });
+    expect(raise).not.toHaveBeenCalled();
   });
 });

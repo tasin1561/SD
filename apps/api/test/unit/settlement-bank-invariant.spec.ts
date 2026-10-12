@@ -811,6 +811,7 @@ function makeWorld(
     ledger as never,
     attribution,
   );
+  const resellerIssues = jest.fn(async () => undefined);
   // RS-6 phase 3c — the REAL reseller order money, over the same book.
   const resellerMoney = new ResellerOrderMoneyService(
     { client: tx } as never,
@@ -821,6 +822,10 @@ function makeWorld(
     {} as never,
     { persistForOrderSystem: jest.fn(async () => undefined) } as never,
     audit as never,
+    // SystemIssueService. REAL enough to be asserted on: an order whose
+    // credit cannot be re-written must be NAMED rather than taking the
+    // whole payout down with it, and this book is where that is proved.
+    { raise: resellerIssues } as never,
   );
   const svc = new CourierSettlementService(
     { client: tx } as never,

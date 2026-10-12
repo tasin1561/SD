@@ -46,6 +46,46 @@ export class OrderChargesAccrualService {
     private readonly issues: SystemIssueService,
   ) {}
 
+  /**
+   * ONE worklist entry for "the fee is owed and the ledger will not take
+   * it", on the same dedupe key for a channel and a reseller order.
+   *
+   * Deliberately NOT two keys: it is the same fact about the same order,
+   * a person settles it the same way, and two entries for one rupee is
+   * how a worklist stops being read.
+   */
+  private async raiseNotRebillable(
+    orderId: string,
+    sellerId: string,
+    charged: number,
+    refunded: number,
+    reseller: boolean,
+  ): Promise<void> {
+    await this.issues.raise({
+      kind: SystemIssueKind.MONEY,
+      severity: SystemIssueSeverity.HIGH,
+      title: reseller
+        ? "A reseller order's delivery fee could not be re-billed to the seller"
+        : 'A delivery fee could not be re-billed',
+      detail:
+        `This order was billed its delivery fee, refunded it (lost in transit, or called ` +
+        `off), and has now been delivered — so the fee is owed again. The database allows ` +
+        `only ONE order-charges entry per order, so it cannot be taken automatically and ` +
+        `nothing further will try.\n\n` +
+        `Take it by hand on /wallet-transfers as a debit on this seller, with the order ` +
+        `number in the reason. ` +
+        (reseller
+          ? `The STORE's share of the same fee was billed normally — its ledger carries no ` +
+            `such limit — so only the seller's share is outstanding. Everything else the ` +
+            `delivery owed was charged normally.`
+          : `Everything else the delivery owed (the COD credit, the inbound-freight share) ` +
+            `was charged normally.`),
+      source: 'OrderChargesAccrualService',
+      dedupeKey: chargesNotRebillableKey(orderId),
+      metadata: { orderId, sellerId, chargeEntries: charged, refundEntries: refunded, reseller },
+    });
+  }
+
   async debitIfNeeded(
     tx: Prisma.TransactionClient,
     orderId: string,
@@ -55,18 +95,15 @@ export class OrderChargesAccrualService {
     // concurrent one, or both see "not charged" and both charge.
     await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${sellerId}|${Currency.INR}`);
 
-    // RS-6 phase 3c: a reseller store's order splits the fee between the
-    // store and the seller by its snapshot — the SAME moment, the same
-    // total, two wallets. A channel order never enters this branch.
-    if (await this.resellerMoney.isResellerOrder(tx, orderId)) {
-      return this.resellerMoney.chargeDeliveryFee(tx, orderId);
-    }
-
     // Billed means MORE charges than refunds (2026-09-12). A charge that
     // was refunded — the parcel was lost, or the order called off — and
     // the order then delivered after all ("lost then found", god mode)
     // owes the fee again; a plain "a charge exists" gate left it refunded
     // AND unbilled. `OrderChargesRefundService` pairs them the same way.
+    //
+    // COUNTED BEFORE THE RESELLER BRANCH, because the seller's half of a
+    // reseller order's fee lands in the SAME column under the SAME index
+    // and is therefore unbillable in exactly the same state — see below.
     const [charged, refunded] = await Promise.all([
       tx.sellerWalletEntry.count({
         where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES },
@@ -75,6 +112,45 @@ export class OrderChargesAccrualService {
         where: { linkedOrderId: orderId, direction: WalletEntryDirection.ORDER_CHARGES_REFUND },
       }),
     ]);
+
+    // RS-6 phase 3c: a reseller store's order splits the fee between the
+    // store and the seller by its snapshot — the SAME moment, the same
+    // total, two wallets. A channel order never enters this branch.
+    //
+    // THE SELLER'S HALF OBEYS THE INDEX; THE STORE'S HALF DOES NOT, AND
+    // THAT ASYMMETRY IS WHY THIS DECISION IS MADE HERE.
+    //
+    // This branch used to be the FIRST thing the method did, so a
+    // reseller order reached neither the pairing gate above nor the
+    // raise-and-skip below. Its own `sellerFeeOutstanding` is the
+    // pre-2026-09-27 gate (`charged > refunded`), which answers "bill it"
+    // at one charge and one refund — and the write then raised P2002 and
+    // aborted the whole delivered-money transaction, taking the
+    // inbound-freight share with it. On the default `T_PLUS_N` tier that
+    // recurs in the hourly sweep for ever with NOTHING raised, because
+    // the sweep catches per row and only logs.
+    //
+    // The fix is NOT to move this branch below the guard: that guard
+    // `return`s, and the STORE's share must still be billed. The store's
+    // ledger has no once-per-order unique (deliberately — a store share
+    // really can be charged, refunded and charged again, and nets to one
+    // debit), so stopping both halves would convert a correct store
+    // re-bill into a silent skip and cost more than the bug.
+    //
+    // So: decide the seller half here, where the issue and its dedupe key
+    // already live, and let the store half proceed untouched. Importing
+    // the key into the reseller service instead would close a real
+    // require cycle — that module is imported BY this one.
+    const sellerHalfUnbillable = charged > 0 && charged <= refunded;
+    if (await this.resellerMoney.isResellerOrder(tx, orderId)) {
+      if (sellerHalfUnbillable) {
+        await this.raiseNotRebillable(orderId, sellerId, charged, refunded, true);
+      }
+      return this.resellerMoney.chargeDeliveryFee(tx, orderId, {
+        skipSellerWrite: sellerHalfUnbillable,
+      });
+    }
+
     if (charged > refunded) return false;
 
     // …but the DATABASE refuses the second charge, and the index WINS.
@@ -97,22 +173,7 @@ export class OrderChargesAccrualService {
     // fee really is owed and only a person can take it now (TRE-8b's
     // staff wallet transfer is exactly that instrument).
     if (charged > 0) {
-      await this.issues.raise({
-        kind: SystemIssueKind.MONEY,
-        severity: SystemIssueSeverity.HIGH,
-        title: 'A delivery fee could not be re-billed',
-        detail:
-          `This order was billed its delivery fee, refunded it (lost in transit, or called ` +
-          `off), and has now been delivered — so the fee is owed again. The database allows ` +
-          `only ONE order-charges entry per order, so it cannot be taken automatically and ` +
-          `nothing further will try.\n\n` +
-          `Take it by hand on /wallet-transfers as a debit on this seller, with the order ` +
-          `number in the reason. Everything else the delivery owed (the COD credit, the ` +
-          `inbound-freight share) was charged normally.`,
-        source: 'OrderChargesAccrualService',
-        dedupeKey: chargesNotRebillableKey(orderId),
-        metadata: { orderId, sellerId, chargeEntries: charged, refundEntries: refunded },
-      });
+      await this.raiseNotRebillable(orderId, sellerId, charged, refunded, false);
       return false;
     }
 

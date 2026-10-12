@@ -76,6 +76,9 @@ describe('ResellerOrderMoneyService.assertEditKeepsMoneyCorrectable', () => {
       {} as never,
       {} as never,
       {} as never,
+      // SystemIssueService — the payout path names an order whose credit
+      // the once-per-order index will not let it re-write.
+      { raise: jest.fn(async () => undefined) } as never,
     );
     return { svc, client };
   }
