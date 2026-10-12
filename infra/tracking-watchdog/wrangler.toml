@@ -1,0 +1,46 @@
+name = "skydrop-tracking-watchdog"
+main = "src/worker.ts"
+compatibility_date = "2026-09-01"
+
+# EVERY 15 MINUTES, not 30.
+#
+# Two consecutive bad ticks are required before anyone is emailed (one
+# failed request is a blip), so the alert lands 15–30 minutes after the
+# endpoint turns — still faster than the 30-minute GitHub cron this
+# replaced, which needed a single run and could be delayed under load.
+[triggers]
+crons = ["*/15 * * * *"]
+
+[vars]
+HEALTH_URL = "https://api.skydrop.global/health/tracking"
+
+# Any address on the Resend-VERIFIED domain works; Resend verifies the
+# domain, not the local part. Replies go to the support inbox, matching
+# what the app itself does (`sender-resolver.ts`).
+ALERT_FROM = "Skydrop Alerts <alerts@skydrop.global>"
+ALERT_REPLY_TO = "Skydrop Support <support@skydrop.global>"
+
+# Warn once a cycle has plainly been missed, BEFORE the API flips to 503
+# at 45. The poller runs every 20 minutes, so 35 is past one missed cycle
+# and clear of ordinary jitter. Set to "" to disable the early warning
+# and alert only on a real outage.
+WARN_MINUTES = "35"
+
+# Secrets — NEVER put these here. Set them with:
+#   wrangler secret put RESEND_API_KEY
+#   wrangler secret put ALERT_TO
+#
+# ALERT_TO is comma-separated for more than one recipient.
+
+[[kv_namespaces]]
+binding = "WATCHDOG_STATE"
+# Replace with the id printed by:
+#   wrangler kv namespace create WATCHDOG_STATE
+id = "REPLACE_ME"
+
+# Observability on, because the one thing this design cannot tolerate is
+# the watchdog failing silently. A refused Resend call THROWS (see
+# `email()`), which surfaces here as an errored invocation — and that is
+# what the Cloudflare notification below watches for.
+[observability]
+enabled = true
