@@ -38,7 +38,12 @@ const CRUMBS = [{ label: 'Sellers', href: '/sellers' }] as const;
 // the button should ask about.
 export function SellerDetailView({ sellerId }: { sellerId: string }): ReactElement {
   const detail = useSellerDetail(sellerId);
-  const canChangeStatus = usePermission('sellers.approve', 'sellers.suspend');
+  // `sellers.suspend` only — matching the route, which dropped
+  // `sellers.approve`. `usePermission` is OR like the server's decorator,
+  // so offering both keys showed the control to an onboarding-only role
+  // AND it worked; a visibly-offered control that 403s is the worse
+  // failure of the two (FE-2), so these move together.
+  const canChangeStatus = usePermission('sellers.suspend');
   // Cosmetic (FE-2): the transfer page and its endpoints refuse without it.
   const canTransfer = usePermission('money.wallet.transfer');
   // Going INSIDE this account. `support.impersonate` is the key that

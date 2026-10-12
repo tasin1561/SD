@@ -424,8 +424,34 @@ export function refusalFor(method: string, path: string, mayWrite: boolean): str
     return 'This is a read-only support session. Nothing in their account can be changed from it.';
   }
   const verb = method.toUpperCase();
+  // ONE TRAILING SLASH IS STRIPPED, because Express routes with one.
+  //
+  // `path-to-regexp` appends `(?:\/$)?` whenever `trailing` is true, and
+  // `router` passes `trailing: !opts.strict` while Express never enables
+  // `strict routing` — so `POST /seller/reseller-stores/` reaches the
+  // very same handler as `POST /seller/reseller-stores`. The ONE entry
+  // carrying `exact: true` compiles with a `$`, so its regexp alone did
+  // not follow: `/^\/seller\/reseller-stores$/i` does not match the
+  // slashed form, and creating a reseller store — which opens one ACTIVE
+  // under the seller and can mail an invitation granting a standing
+  // store login that outlives the session — was reachable by typing one
+  // extra character. Every other entry is a prefix with no `$`, so each
+  // already matched its slashed form; the gap was exactly one route.
+  //
+  // THIS IS THE SAFE DIRECTION, and that is the whole reason it is the
+  // fix. Stripping a trailing slash can only ever ADD refusals: no
+  // prefix in the list ends in `/` (pinned below), and `[^/]+` for a
+  // `:param` segment cannot match `/`, so no entry needs a trailing
+  // slash to match. Every path refused before is still refused.
+  //
+  // DO NOT instead loosen the matcher's tail to `(/|$)` — this file
+  // records that exact change silently reopening `bank-details` and both
+  // `password-reset` routes — and do not drop `exact`, which exists so
+  // `POST /seller/reseller-stores` does not swallow the writable
+  // `/:id/catalogue/:variantId` beneath it.
+  const candidate = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
   const hit = COMPILED.find(
-    ({ route, re }) => (route.method === '*' || route.method === verb) && re.test(path),
+    ({ route, re }) => (route.method === '*' || route.method === verb) && re.test(candidate),
   );
   return hit?.route.why ?? null;
 }

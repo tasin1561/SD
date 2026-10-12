@@ -243,6 +243,16 @@ describe('refusalFor: what a support session may never do', () => {
         const last = parts.pop() ?? '';
         return [...parts, last.toUpperCase()].join('/');
       },
+      // A TRAILING SLASH, because Express routes with one and the deny
+      // list did not. `path-to-regexp` appends `(?:\/$)?` whenever
+      // `trailing` is true, `router` passes `trailing: !opts.strict`,
+      // and Express never enables `strict routing` — so the slashed form
+      // reaches the identical handler. Every prefix entry matched it
+      // already (no `$`), but the one `exact: true` entry compiled with
+      // a `$` and did not, which left creating a reseller store — and
+      // the standing store login its invitation grants — reachable by
+      // typing one extra character.
+      (p) => `${p}/`,
     ];
 
     for (const route of FORBIDDEN_WHILE_IMPERSONATING) {

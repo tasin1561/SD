@@ -69,7 +69,27 @@ export class AdminSellerController {
   }
 
   @Patch(':id/status')
-  @RequirePermissions('sellers.approve', 'sellers.suspend')
+  // `sellers.suspend` ALONE, and `sellers.approve` is deliberately gone.
+  //
+  // `@RequirePermissions(a, b)` is OR, so listing the two meant the
+  // non-dangerous onboarding key was sufficient for an act the catalogue
+  // describes under the dangerous one: this route's entire reachable
+  // behaviour is APPROVED→SUSPENDED and SUSPENDED→APPROVED (the service
+  // 400s anything else, and each transition refuses any other `from`),
+  // and suspending revokes EVERY session of EVERY user at that company
+  // in the same transaction while reapprove undoes a compliance hold.
+  //
+  // `sellers.approve` has no legitimate use here at all: registration is
+  // invite-only and auto-approves, so there is no admin PENDING→APPROVED
+  // route for that key to serve. Its real surface is the onboarding
+  // handlers below (`:id/initials`, `:id/identity`, the step override).
+  //
+  // This takes nothing from anybody today — both seeded roles that hold
+  // `sellers.approve` also hold `sellers.suspend` — it closes the gap a
+  // custom "Onboarding" role would open the moment somebody granted the
+  // obvious three keys, which is what the roles screen is for. Same
+  // shape, and same reasoning, as `assert-may-grant-role.ts`.
+  @RequirePermissions('sellers.suspend')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Suspend or reapprove a seller (delegates to SellerAccountStatusService)',
