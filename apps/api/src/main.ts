@@ -91,9 +91,71 @@ async function bootstrap(): Promise<void> {
     }
     next();
   });
-  // A chunked request declares no length, so the guard above cannot see
-  // it; the parser limit is the backstop that bounds it either way.
-  app.useBodyParser('json', { limit: DOCUMENT_BODY_LIMIT });
+  // THE CHECK ABOVE IS NOT THE LIMIT, AND THE COMMENT HERE USED TO SAY
+  // IT WAS. It reads `content-length`, and two ordinary request shapes
+  // declare a length that is not the number of bytes we end up holding:
+  //
+  //   - `Transfer-Encoding: chunked` declares none at all, so
+  //     `Number(undefined ?? '0')` is 0 and the check passes.
+  //   - `Content-Encoding: gzip|deflate|br` declares the COMPRESSED
+  //     size. body-parser inflates by default, and on a non-identity
+  //     encoding it stops setting `req.length`, so its own `limit` is
+  //     measured against the decompressed stream while this check saw
+  //     the compressed header. ~1 KB of brotli reaches 12 MB.
+  //
+  // The old text said "the parser limit is the backstop that bounds it
+  // either way", which was true only because it believed that limit was
+  // GENERAL_BODY_LIMIT. It is DOCUMENT_BODY_LIMIT — `useBodyParser`
+  // registers one parser for the whole app — so every route in the
+  // estate, including an unmatched path that reaches no guard and no
+  // throttler, could be made to buffer 12 MB by an anonymous caller,
+  // then spend it again decoding to a string and parsing. Against
+  // `max_memory_restart: '512M'` and all 17 BullMQ workers sharing this
+  // process (SCALE-1), ~20 concurrent requests restart the estate.
+  //
+  // So the general limit is enforced in `verify`, which body-parser
+  // calls with the complete raw buffer BEFORE the string decode and
+  // `JSON.parse` — so it bounds the real decompressed byte count on
+  // every transfer shape, and spends none of the multiplier. It
+  // REPLACES the hook `rawBody: true` installs, so it sets `req.rawBody`
+  // itself: four HMAC paths read those exact bytes (the tracking scan
+  // webhook, the document webhook, the ChatWoot webhook and the courier
+  // inbound-email guard), and dropping it would fail authentication
+  // rather than merely lose a field.
+  //
+  // KNOWN RESIDUAL, deliberately not fixed here: the bytes are still
+  // read before `verify` sees them, so a general-path request can cost
+  // 12 MB transiently rather than being aborted mid-stream at 1 MB.
+  // Closing that needs a SECOND json parser scoped to the two big
+  // prefixes, and `express`/`body-parser` are not resolvable from
+  // apps/api (only `@nestjs/platform-express` is), so it needs a new
+  // direct dependency — an owner's call, not a silent one.
+  const rawBodyWithGeneralLimit = (
+    req: IncomingMessage & { rawBody?: Buffer },
+    _res: ServerResponse,
+    buf: Buffer,
+  ): void => {
+    if (!Buffer.isBuffer(buf)) return;
+    const url = req.url ?? '';
+    const mayBeBig =
+      url.startsWith(DOCUMENT_WEBHOOK_PREFIX) || url.startsWith(WALLET_IMPORT_PREFIX);
+    if (!mayBeBig && buf.length > GENERAL_BODY_LIMIT_BYTES) {
+      // `entity.too.large` is what `AllExceptionsFilter.isPayloadTooLarge`
+      // already keys on, so this surfaces as the same 413 body the check
+      // above writes rather than as a 500 a courier would retry forever.
+      const err = Object.assign(new Error('request entity too large'), {
+        type: 'entity.too.large',
+        status: 413,
+        statusCode: 413,
+      });
+      throw err;
+    }
+    req.rawBody = buf;
+  };
+  app.useBodyParser('json', {
+    limit: DOCUMENT_BODY_LIMIT,
+    verify: rawBodyWithGeneralLimit,
+  });
   app.useBodyParser('urlencoded', { extended: true, limit: GENERAL_BODY_LIMIT });
 
   app.use(helmet({ contentSecurityPolicy: false }));

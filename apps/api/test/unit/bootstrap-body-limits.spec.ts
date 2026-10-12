@@ -48,6 +48,47 @@ describe('main.ts — courier document body limits', () => {
     expect(g).toBeLessThan(d);
   });
 
+  // THE THREE ASSERTIONS ABOVE COMPARE TWO SOURCE CONSTANTS, AND THAT IS
+  // NOT THE INVARIANT THE COMMENT DESCRIBES. `useBodyParser` registers
+  // ONE parser for the whole app, so for as long as the only `limit`
+  // handed to it was DOCUMENT_BODY_LIMIT, the general limit was enforced
+  // nowhere — and this file went green the entire time, because `g < d`
+  // held perfectly while `g` bounded nothing. A spec that reads two
+  // declarations and compares them can pass against any wiring.
+  //
+  // These assert the general limit is ENFORCED, which is the claim.
+  it('enforces the general limit on the bytes, not on content-length alone', () => {
+    // The header check cannot see a chunked body (no length declared) or
+    // a compressed one (the length is the COMPRESSED size while
+    // body-parser inflates), so the byte count has to be checked
+    // somewhere that sees the real buffer.
+    expect(src).toContain('GENERAL_BODY_LIMIT_BYTES');
+    const verify = /verify:\s*rawBodyWithGeneralLimit/.exec(src);
+    expect(verify).not.toBeNull();
+    // The hook must compare the BUFFER's length against the general
+    // limit, and must exempt only the two big prefixes.
+    expect(src).toMatch(/buf\.length > GENERAL_BODY_LIMIT_BYTES/);
+    expect(src).toMatch(/mayBeBig[\s\S]{0,200}DOCUMENT_WEBHOOK_PREFIX/);
+  });
+
+  it('keeps req.rawBody set by the hook that replaces Nest’s', () => {
+    // Supplying our own `verify` REPLACES the one `rawBody: true`
+    // installs. Four HMAC paths read those exact bytes — the tracking
+    // scan webhook, the document webhook, the ChatWoot webhook and the
+    // courier inbound-email guard — so losing this assignment fails
+    // AUTHENTICATION rather than merely dropping a field, and it fails
+    // it for couriers whose scans we would then never receive.
+    expect(src).toMatch(/req\.rawBody = buf/);
+  });
+
+  it('rejects an oversized general body as 413, not 500', () => {
+    // A courier reading 500 retries forever; 413 says plainly that they
+    // sent more than we accept. `AllExceptionsFilter.isPayloadTooLarge`
+    // keys on exactly these, so the thrown error has to carry them.
+    expect(src).toContain("type: 'entity.too.large'");
+    expect(src).toMatch(/status(Code)?: 413/);
+  });
+
   it('exempts the hand upload of a courier wallet export, and ONLY the admin route', () => {
     // `WalletSyncService` tells an operator — at the moment the nightly
     // sync has already failed — that the ledger can be uploaded by hand.
