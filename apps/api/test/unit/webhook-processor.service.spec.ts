@@ -42,6 +42,13 @@ interface FakeWebhook {
 interface FakeShipment {
   id: string;
   awbNumber: string;
+  /**
+   * WHICH COURIER IS CARRYING IT. The resolution read is scoped on this
+   * as well as the waybill: the webhook endpoint and its shared secret
+   * are both per courier, and without this column in the fake a
+   * cross-courier scan is indistinguishable from the courier's own.
+   */
+  courierCode: string;
   status: ShipmentStatus;
   orderId: string;
   /** Set by the bench when somebody receives the return (WMS-8). */
@@ -128,6 +135,7 @@ function defaultShipment(over: Partial<FakeShipment> = {}): FakeShipment {
   return {
     id: SHIPMENT_ID,
     awbNumber: AWB,
+    courierCode: COURIER,
     status: ShipmentStatus.IN_TRANSIT,
     orderId: ORDER_ID,
     rtoReceivedAt: null,
@@ -179,14 +187,42 @@ function makeProcessor(setup: Setup = {}) {
     },
   );
 
-  const shipmentFindUnique = jest.fn(async () =>
-    ship.awbNumber === AWB
-      ? {
-          id: ship.id,
-          status: ship.status,
-          orderShipments: [{ order: orderState }],
-        }
-      : null,
+  /**
+   * THE RESOLUTION READ, AND IT APPLIES THE WHERE CLAUSE.
+   *
+   * This used to answer on `ship.awbNumber === AWB` alone and ignore
+   * the `where` entirely — so it returned the parcel for ANY query,
+   * which is precisely the shape that cannot tell a scoped read from an
+   * unscoped one. The processor resolved the shipment by waybill with
+   * no courier predicate for months, and these tests passed throughout,
+   * because the fake answered every query alike. The comment below
+   * about the two WRITERS applying their where clause was already here;
+   * the read was the one that mattered and did not.
+   */
+  const shipmentFindFirst = jest.fn(
+    async (args: { where: { awbNumber: string; courierCode?: unknown } }) => {
+      if (args.where.awbNumber !== ship.awbNumber) return null;
+      const wanted = args.where.courierCode;
+      if (typeof wanted === 'string') {
+        if (ship.courierCode !== wanted) return null;
+      } else if (
+        wanted !== undefined &&
+        typeof wanted === 'object' &&
+        wanted !== null &&
+        'not' in wanted
+      ) {
+        // The miss-path probe that decides COURIER_MISMATCH vs
+        // NO_MATCHING_SHIPMENT: "is this waybill carried by somebody
+        // else?"
+        if (ship.courierCode === (wanted as { not: string }).not) return null;
+        return { courierCode: ship.courierCode };
+      }
+      return {
+        id: ship.id,
+        status: ship.status,
+        orderShipments: [{ order: orderState }],
+      };
+    },
   );
 
   /**
@@ -303,7 +339,7 @@ function makeProcessor(setup: Setup = {}) {
       updateMany: courierWebhookUpdateMany,
     },
     shipment: {
-      findUnique: shipmentFindUnique,
+      findFirst: shipmentFindFirst,
       update: shipmentUpdate,
       updateMany: shipmentUpdateMany,
     },
@@ -842,6 +878,70 @@ describe('WebhookProcessorService.process — terminal-ignore branches', () => {
     expect(state.webhooks[0]?.status).toBe(WebhookStatus.IGNORED);
     expect(mocks.fakeAppend.append).not.toHaveBeenCalled();
     expect(mocks.orderWrite.transitionStatus).not.toHaveBeenCalled();
+  });
+
+  /**
+   * THE RESOLUTION READ IS SCOPED TO THE SENDING COURIER.
+   *
+   * The endpoint is `/webhooks/:courierCode` and the shared secret is
+   * that courier's, so a push establishes WHO is speaking twice over —
+   * and the shipment was then resolved by waybill alone, with
+   * `courierCode` not even in the `select`. `awbNumber` is globally
+   * unique, so one courier's static token moved ANY courier's parcel,
+   * and three posts walk a dispatched parcel IN_TRANSIT →
+   * OUT_FOR_DELIVERY → DELIVERED without tripping the monotonic guard.
+   * DELIVERED is not a label: it runs the delivered-money accrual, tells
+   * the customer their parcel arrived, and then silences the real
+   * parcel's own scans, which arrive at an order already past them.
+   *
+   * The POLL path always scoped by courier. This is the webhook half of
+   * a rule the estate already kept, and the 2026-09-19 per-courier audit
+   * fixed the NORMALISER in this same file and left the resolution read,
+   * which is why its suite went green over an open gap.
+   */
+  it('COURIER_MISMATCH: a courier cannot move a parcel another courier carries', async () => {
+    const { svc, state, mocks } = makeProcessor({
+      // Authenticated as `delhivery` (the webhook's own courierCode),
+      // naming a waybill that Shiprocket is carrying.
+      shipment: defaultShipment({ courierCode: 'shiprocket' }),
+    });
+    const out = await svc.process(WH_ID);
+
+    expect(out.kind).toBe('COURIER_MISMATCH');
+    // NOT the routine "the scan beat the booking" outcome — the two are
+    // deliberately distinct so this one is visible.
+    expect(out.kind).not.toBe('NO_MATCHING_SHIPMENT');
+    expect(state.webhooks[0]?.status).toBe(WebhookStatus.IGNORED);
+    expect(state.webhooks[0]?.errorMessage).toContain('COURIER_MISMATCH');
+
+    // Nothing moved: no timeline row, no delivery attempt, and above
+    // all no order transition — the money hangs off that last one.
+    expect(mocks.fakeAppend.append).not.toHaveBeenCalled();
+    expect(mocks.orderWrite.transitionStatus).not.toHaveBeenCalled();
+
+    // And it is reported, because a courier claiming a parcel it is not
+    // carrying is a signal in itself rather than a dropped scan.
+    expect(mocks.auditLog.log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'tracking.webhook_courier_mismatch',
+        severity: 'HIGH',
+      }),
+    );
+  });
+
+  it('the courier’s OWN parcel still resolves (the predicate cannot refuse a genuine scan)', async () => {
+    // The guard against over-fixing: `awb-generation.service.ts` writes
+    // `courierCode` in the same transaction that persists `awbNumber`,
+    // so after a CUR-14 failover the row names whoever actually issued
+    // the waybill — the scoped read must therefore never reject the
+    // courier that really is carrying it.
+    const { svc, mocks } = makeProcessor({
+      shipment: defaultShipment({ courierCode: COURIER }),
+    });
+    const out = await svc.process(WH_ID);
+    expect(out.kind).not.toBe('COURIER_MISMATCH');
+    expect(out.kind).not.toBe('NO_MATCHING_SHIPMENT');
+    expect(mocks.fakeAppend.append).toHaveBeenCalled();
   });
 
   it('PARSE_FAILED: marks IGNORED', async () => {

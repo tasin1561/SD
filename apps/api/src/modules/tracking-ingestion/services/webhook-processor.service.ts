@@ -33,6 +33,17 @@ export type ProcessOutcome =
   | { kind: 'IGNORED'; webhookId: string; reason: string }
   | { kind: 'PARSE_FAILED'; webhookId: string }
   | { kind: 'NO_MATCHING_SHIPMENT'; webhookId: string; awbNumber: string }
+  // Distinct from NO_MATCHING_SHIPMENT on purpose: "the scan arrived
+  // before the booking" is routine, "a courier reported on a parcel
+  // another courier is carrying" is a signal, and filing the second as
+  // the first is how it would go unnoticed.
+  | {
+      kind: 'COURIER_MISMATCH';
+      webhookId: string;
+      awbNumber: string;
+      sentBy: string;
+      carriedBy: string;
+    }
   | { kind: 'UNMAPPABLE'; webhookId: string; reason: string; trackingEventId: string }
   | { kind: 'REJECT'; webhookId: string; reason: string; trackingEventId: string }
   | { kind: 'INFORMATIONAL'; webhookId: string; reason: string; trackingEventId: string }
@@ -244,9 +255,32 @@ export class WebhookProcessorService {
       failureReason: parsed.failureReason,
     });
 
-    // §4 — resolve shipment by AWB.
-    const ship = await this.prisma.client.shipment.findUnique({
-      where: { awbNumber: parsed.awbNumber },
+    // §4 — resolve shipment by AWB, SCOPED TO THE COURIER THAT SENT IT.
+    //
+    // The courier is established twice over before we get here — the
+    // endpoint is `/webhooks/:courierCode` and the shared secret is that
+    // courier's — and §3 above spends twenty lines arguing that a scan
+    // must be normalised by the courier that sent it rather than guessed.
+    // That argument applies verbatim to WHICH PARCEL the scan may move,
+    // and it used to stop at the normaliser: this was a bare
+    // `findUnique({ where: { awbNumber } })`, and `awbNumber` is globally
+    // unique (schema.prisma `awbNumber String? @unique`), so one courier's
+    // token moved ANY courier's parcel. Three posts walk a dispatched
+    // parcel IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED without tripping
+    // TRK-4's monotonic guard, and DELIVERED is not a label: it runs the
+    // WAL-8 accrual, so the seller is credited and the customer is told
+    // their parcel arrived. The real parcel then goes dark, because its
+    // genuine scans arrive at an order already past them and are skipped
+    // at debug level by design.
+    //
+    // The POLL path has always had this right — `TrackingPollService`
+    // filters `{ courierCode, awbNumber: { not: null } }` and re-checks
+    // `s.courierCode !== source.courierCode` per row — so this is the
+    // webhook half of a rule the estate already keeps. `findFirst`
+    // rather than `findUnique` because the unique key is `awbNumber`
+    // alone and must stay that way; it is doing useful work elsewhere.
+    const ship = await this.prisma.client.shipment.findFirst({
+      where: { awbNumber: parsed.awbNumber, courierCode: wh.courierCode },
       select: {
         id: true,
         status: true,
@@ -256,6 +290,50 @@ export class WebhookProcessorService {
       },
     });
     if (!ship || ship.orderShipments.length === 0) {
+      // A COURIER REPORTING ON A PARCEL IT IS NOT CARRYING IS A SIGNAL,
+      // and it must not be filed as the ordinary "the scan beat the
+      // booking" case. The probe below decides WHICH of the two this is
+      // and is deliberately used for nothing else — the scoped read
+      // above is the only row anything acts on.
+      const elsewhere =
+        parsed.awbNumber === ''
+          ? null
+          : await this.prisma.client.shipment.findFirst({
+              where: { awbNumber: parsed.awbNumber, courierCode: { not: wh.courierCode } },
+              select: { courierCode: true },
+            });
+      if (elsewhere !== null) {
+        this.logger.error(
+          {
+            webhookId,
+            sentBy: wh.courierCode,
+            carriedBy: elsewhere.courierCode,
+            awbNumber: parsed.awbNumber,
+          },
+          'Courier reported a scan for a waybill carried by a different courier — refusing it',
+        );
+        await this.audit.log({
+          actorType: ActorType.SYSTEM,
+          action: 'tracking.webhook_courier_mismatch',
+          entityType: 'courier_webhook',
+          entityId: webhookId,
+          severity: 'HIGH',
+          metadata: {
+            sentBy: wh.courierCode,
+            carriedBy: elsewhere.courierCode,
+            awbNumber: parsed.awbNumber,
+            rawStatus: parsed.rawStatus,
+          },
+        });
+        await this.markIgnored(webhookId, `COURIER_MISMATCH:${wh.courierCode}`);
+        return {
+          kind: 'COURIER_MISMATCH',
+          webhookId,
+          awbNumber: parsed.awbNumber,
+          sentBy: wh.courierCode,
+          carriedBy: elsewhere.courierCode,
+        };
+      }
       await this.markIgnored(webhookId, 'NO_MATCHING_SHIPMENT');
       return { kind: 'NO_MATCHING_SHIPMENT', webhookId, awbNumber: parsed.awbNumber };
     }
