@@ -35,6 +35,41 @@ export interface DispatchInput {
   readonly orderId?: string | null;
   readonly broadcastId?: string | null;
   /**
+   * A last narrowing of the resolved audience, applied per person.
+   *
+   * ── WHY THE AUDIENCE ALONE IS NOT ENOUGH ─────────────────────────────
+   * A selector answers "who at this company holds this permission", which
+   * is the right question for most messages and the WRONG one for a
+   * message about ONE ORDER at a reseller store. A store's associates
+   * hold the order permissions — they place orders — but ASSOC-1 says
+   * each sees only the orders they placed, and that rule lives in a
+   * `where` clause on every screen. The notification path had never heard
+   * of it, so a notice about a colleague's order reached them anyway.
+   *
+   * The audience cannot express this itself: `resolveMany` has no order
+   * in hand, and dropping narrow-scope people there would suppress the
+   * notices an associate SHOULD get about their own sales — which
+   * inverts the rule rather than applying it. So the caller that knows
+   * the order does the narrowing, and does it once for all of its
+   * messages.
+   *
+   * Returning `true` keeps the person. Absent means keep everyone, so
+   * every existing caller is unchanged.
+   */
+  readonly recipientFilter?: (person: ResolvedRecipient) => boolean;
+  /**
+   * The in-app body, per person, when one recipient may be told less
+   * than another.
+   *
+   * Same shape and same reason as `email.variables` below: the store's
+   * and the seller's net credit on an order is refused to a narrow-scope
+   * store user by an explicit 403 on `GET /store/orders/:id/money`, so a
+   * notification carrying that arithmetic must not hand them what the
+   * route withholds. `body` stays as the default for everyone this does
+   * not single out.
+   */
+  readonly bodyFor?: (person: ResolvedRecipient) => string;
+  /**
    * Send the EMAIL leg through a real TEMPLATE instead of the generic
    * title/body (2026-09-19).
    *
@@ -130,7 +165,12 @@ export class NotificationDispatchService {
 
   async dispatch(input: DispatchInput): Promise<DispatchResult> {
     const groupId = randomUUID();
-    const people = await this.audience.resolveMany(input.audience);
+    const resolved = await this.audience.resolveMany(input.audience);
+    // The caller's own narrowing, BEFORE the mute and store-preference
+    // queries — so a person this message was never for does not appear
+    // in either lookup, and `recipients` counts who it was actually for.
+    const people =
+      input.recipientFilter === undefined ? resolved : resolved.filter(input.recipientFilter);
     if (people.length === 0) {
       return { groupId, recipients: 0, delivered: 0, skipped: 0, failures: 0 };
     }
@@ -270,6 +310,10 @@ export class NotificationDispatchService {
     const isEmail = channel === NotificationChannel.EMAIL;
     if (isEmail && person.email.trim() === '') return false;
 
+    // What THIS person is told. `bodyFor` exists so one recipient can be
+    // told less than another — see its docblock on `DispatchInput`.
+    const body = input.bodyFor === undefined ? input.body : input.bodyFor(person);
+
     // A TEMPLATED email leg goes through the ledger exactly as its own
     // notifier used to, so the message the recipient reads is unchanged:
     // same template code, same variables, same store-then-send row, same
@@ -306,8 +350,8 @@ export class NotificationDispatchService {
       // together with the person's own id, both taken from the token.
       toStoreId: person.storeId,
       subject: input.title,
-      body: input.body,
-      variables: { title: input.title, body: input.body, name: person.name ?? '' },
+      body,
+      variables: { title: input.title, body, name: person.name ?? '' },
       triggerEvent: input.triggerEvent,
       groupId,
       // The in-app row IS the delivery; email waits for its worker.
@@ -338,7 +382,7 @@ export class NotificationDispatchService {
           id: person.recipientId,
           email: person.email,
         },
-        variables: { title: input.title, body: input.body, name: person.name ?? '' },
+        variables: { title: input.title, body, name: person.name ?? '' },
         triggerEvent: input.triggerEvent,
         existingNotificationLogId: logId,
       });

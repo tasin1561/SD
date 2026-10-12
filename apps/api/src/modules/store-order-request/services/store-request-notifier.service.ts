@@ -336,11 +336,16 @@ export class StoreRequestNotifier {
       title: `${input.sellerName} changed order ${input.orderNumber}`,
       body:
         `${input.sellerName} changed one of your orders. What moved:\n${input.changes}` +
-        (input.money === '' ? '' : `\n\n${input.money}`) +
         (input.supersededRequest
           ? '\n\nThe change you had sent them for approval on this order has been closed — ' +
             'what is above is what the order now carries.'
           : ''),
+      // SEPARATE from the body so a narrow-scope store user is told the
+      // change without the store's and the seller's net credit — the
+      // figure `GET /store/orders/:id/money` refuses them outright, and
+      // the `associate` role's own description promises they never see
+      // "the store's money" (ASSOC-1).
+      moneyLine: input.money === '' ? undefined : input.money,
       orderId: input.orderId,
       triggerEvent: 'reseller_store.order_changed_by_seller',
       variables: {
@@ -385,9 +390,13 @@ export class StoreRequestNotifier {
       templateCode: STORE_ORDER_CHANGED_BY_ADMIN_TEMPLATE,
       eventId: `store_order_changed_by_admin:${input.eventKey}`,
       title: `Skydrop changed order ${input.orderNumber}`,
-      body:
-        `Skydrop changed order ${input.orderNumber} directly. What moved:\n${input.changes}` +
-        (input.money === '' ? '' : `\n\n${input.money}`),
+      body: `Skydrop changed order ${input.orderNumber} directly. What moved:\n${input.changes}`,
+      // SEPARATE from the body — and this is the path that matters most,
+      // because it is the ONLY one that can carry a real figure (an
+      // ordinary seller edit cannot change money after confirmation, so
+      // its `money` is always empty) AND the only one whose email
+      // template is not retired, so the figure left the building too.
+      moneyLine: input.money === '' ? undefined : input.money,
       orderId: input.orderId,
       triggerEvent: 'reseller_store.order_changed_by_admin',
       variables: {
@@ -468,6 +477,8 @@ export class StoreRequestNotifier {
     eventId: string;
     title: string;
     body: string;
+    /** Withheld from a narrow-scope reader — see `TellStoreInput`. */
+    moneyLine?: string | undefined;
     orderId: string | null;
     triggerEvent: string;
     variables: Record<string, string>;
@@ -479,6 +490,7 @@ export class StoreRequestNotifier {
       eventId: input.eventId,
       title: input.title,
       body: input.body,
+      moneyLine: input.moneyLine,
       variables: input.variables,
       orderId: input.orderId,
       triggerEvent: input.triggerEvent,
