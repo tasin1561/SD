@@ -200,12 +200,30 @@ async function email(env: Env, subject: string, text: string): Promise<void> {
   });
 
   if (!res.ok) {
-    // Throwing is deliberate: a failed send marks the invocation as
-    // errored in the Cloudflare dashboard, which is the only place left
-    // that can tell us the watchdog itself is broken. Swallowing it
-    // would make a mute watchdog look healthy.
-    throw new Error(`Resend refused the alert: HTTP ${res.status} ${await res.text()}`);
+    const why = `Resend refused the alert: HTTP ${res.status} ${await res.text()}`;
+    // RECORDED, so the failure is visible to something OUTSIDE Cloudflare.
+    //
+    // The original plan was Cloudflare's own "Script errors" notification
+    // — a throw marks the invocation errored and the dashboard mails you.
+    // That alert type is not offered on every Workers plan, and ours does
+    // not have it, so the throw alone would be a tree falling in an empty
+    // forest: a REAL alert that could not be sent would be completely
+    // silent, which is the one failure this whole arrangement exists to
+    // prevent.
+    //
+    // So the outcome is written to KV and `?dry=1` turns 503 while it
+    // stands (see the fetch handler). An uptime monitor already watching
+    // that URL therefore reports "the watchdog cannot reach you" through
+    // a channel that does not depend on Resend, on Cloudflare alerts, or
+    // on anybody remembering to look.
+    await env.WATCHDOG_STATE.put('send-failed', JSON.stringify({ at: Date.now(), why })).catch(
+      () => undefined,
+    );
+    throw new Error(why);
   }
+  // A success clears it: the channel demonstrably works again, and a
+  // stale flag would make the monitor cry wolf for ever.
+  await env.WATCHDOG_STATE.delete('send-failed').catch(() => undefined);
 }
 
 async function readState(env: Env): Promise<State> {
@@ -289,6 +307,29 @@ export default {
     if (url.searchParams.get('dry') === '1') {
       const p = await probe(env);
       const s = await readState(env);
+      // A FAILED SEND MAKES THIS ENDPOINT UNHEALTHY, on purpose.
+      //
+      // This URL is what an uptime monitor watches to answer "is the
+      // watchdog itself alive". Answering 200 while the watchdog cannot
+      // actually reach anybody would make the monitor agree with a
+      // broken system — so a recorded send failure turns it 503 until a
+      // send succeeds again. That is the only path by which "the alert
+      // leg is dead" reaches a human on a Workers plan with no
+      // script-error alerts, and it travels over the monitor's wires
+      // rather than ours.
+      const failed = await env.WATCHDOG_STATE.get('send-failed', 'json');
+      if (failed !== null && typeof failed === 'object') {
+        const f = failed as { at?: number; why?: string };
+        return Response.json(
+          {
+            level: p.level,
+            summary: 'THE WATCHDOG CANNOT SEND ALERTS',
+            detail: `Last send failed: ${f.why ?? 'unknown'}\nSince: ${f.at === undefined ? 'unknown' : new Date(f.at).toISOString()}\n\nThe tracking check itself says: ${p.summary}\n${p.detail}`,
+            state: s,
+          },
+          { status: 503 },
+        );
+      }
       return Response.json({ level: p.level, summary: p.summary, detail: p.detail, state: s });
     }
 
