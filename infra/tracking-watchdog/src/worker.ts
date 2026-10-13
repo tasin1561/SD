@@ -285,11 +285,73 @@ export default {
    */
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
+
     if (url.searchParams.get('dry') === '1') {
       const p = await probe(env);
       const s = await readState(env);
       return Response.json({ level: p.level, summary: p.summary, detail: p.detail, state: s });
     }
+
+    // ── PROVE THE ALERT CHANNEL, WITHOUT BREAKING ANYTHING ───────────
+    //
+    // A watchdog is only worth what its alert is worth, and the alert
+    // leg is the half that can rot silently: a rotated Resend key, a
+    // domain that fell out of verification, a mailbox rule. None of that
+    // shows up in the health check — it shows up the one night it
+    // matters.
+    //
+    // The alternative was the README's "point HEALTH_URL at a 503,
+    // redeploy, wait two ticks, remember to put it back", which tests
+    // the real path but needs two deploys and leaves the watchdog
+    // pointed at a fake endpoint if the last step is forgotten. This
+    // sends through the SAME `email()` — same key, same from address,
+    // same Resend call — so a success here means the channel genuinely
+    // works, and nothing is left mis-configured afterwards.
+    //
+    // It sends ONLY to the configured ALERT_TO, so it cannot be used to
+    // mail anybody else; the cooldown is so it cannot be used to flood
+    // the owner either.
+    if (url.searchParams.get('selftest') === '1') {
+      const COOLDOWN_MS = 10 * 60_000;
+      const last = await env.WATCHDOG_STATE.get('selftest-at');
+      const since = last === null ? Infinity : Date.now() - Number(last);
+      if (since < COOLDOWN_MS) {
+        return Response.json(
+          {
+            ok: false,
+            reason: 'cooldown',
+            retryInSeconds: Math.ceil((COOLDOWN_MS - since) / 1000),
+          },
+          { status: 429 },
+        );
+      }
+      await env.WATCHDOG_STATE.put('selftest-at', String(Date.now()));
+      const p = await probe(env);
+      try {
+        await email(
+          env,
+          '[Skydrop] Watchdog self-test — the alert channel works',
+          `This is a TEST, sent because somebody asked for one. Nothing is wrong.\n\n` +
+            `It proves the part that cannot be checked any other way: that this\n` +
+            `watchdog can actually reach you. It went through the same code, key\n` +
+            `and sender a real alert uses.\n\n` +
+            `What it sees right now:\n${p.detail}\n\n` +
+            `Re-run this after rotating the Resend key, changing the sender, or\n` +
+            `touching your mail rules:\n` +
+            `  curl "<this-worker-url>/?selftest=1"\n\n` +
+            `For reference, a REAL alert carries this:\n\n${RUNBOOK}\n`,
+        );
+      } catch (err) {
+        // Reported rather than thrown: the caller asked a question and
+        // the answer — "no, it cannot reach you" — is the useful reply.
+        return Response.json(
+          { ok: false, sent: false, error: err instanceof Error ? err.message : String(err) },
+          { status: 502 },
+        );
+      }
+      return Response.json({ ok: true, sent: true, to: 'the configured ALERT_TO', saw: p.summary });
+    }
+
     await tick(env);
     return Response.json({ ok: true, ran: new Date().toISOString() });
   },

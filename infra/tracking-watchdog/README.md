@@ -103,26 +103,60 @@ for; this one only has to say *something is wrong*.
 
 ## 4. Prove it works, THEN delete the workflow
 
-An untested replacement is the same failure in new clothes. Do all four.
+An untested replacement is the same failure in new clothes.
+
+A watchdog has TWO halves and they rot differently. The check breaks
+loudly — it starts answering wrong and you can see it. The ALERT breaks
+silently: a rotated key, a domain that fell out of verification, a
+mailbox rule, and nothing looks any different until the one night it
+matters. So both are tested separately.
 
 ```bash
-# a) It can see a healthy system, and sends nothing.
-curl -s "https://skydrop-tracking-watchdog.<your-subdomain>.workers.dev/?dry=1"
-#    expect: {"level":0,"summary":"tracking is moving",...}
+WD=https://skydrop-tracking-watchdog.bagscosmic.workers.dev
 
-# b) It can send. Point it at a URL that is always 503, deploy, wait two
-#    ticks, confirm the ALERT arrives with the runbook in it.
-#    In wrangler.toml:  HEALTH_URL = "https://httpstat.us/503"
-npx wrangler deploy
-#    …then put HEALTH_URL back and redeploy. Expect a RECOVERED email.
+# a) THE CHECK. Reads the live endpoint, sends nothing.
+curl -s "$WD/?dry=1"
+# {"level":0,"summary":"tracking is moving",
+#  "detail":"...HTTP 200\nlast cycle completed 16 minutes ago (counted stale after 45)",
+#  "state":{"consecutive":0,"notified":0}}
 
-# c) UptimeRobot can send: use its "Test notification", or point the
-#    monitor at the same 503 URL briefly.
+# b) THE ALERT. Sends a clearly-marked test through the SAME code, key
+#    and sender a real alert uses — so a success here means the channel
+#    genuinely works, and nothing is left mis-configured afterwards.
+curl -s "$WD/?selftest=1"
+# {"ok":true,"sent":true,...}   → then CHECK THE INBOX, and spam.
+#
+# Re-run this after rotating the Resend key, changing the sender, or
+# touching mail rules. Those are exactly when the alert leg dies quietly.
+# 10-minute cooldown; a second call inside it answers 429.
+
+# c) THE STATE STORE, which the "two consecutive bad ticks" rule depends
+#    on. The 429 above IS this test: the cooldown needs a KV write and a
+#    KV read to work. If KV were mis-bound the counter would reset every
+#    tick, never reach two, and the watchdog would NEVER ALERT while
+#    looking perfectly healthy.
+
+# d) UptimeRobot can send: use its "Test notification".
 ```
 
-**d)** Leave all three running in parallel for at least one full day.
+Verified working 2026-10-13: (a) 200 with the body read, (b) accepted by
+Resend, (c) 429 with `retryInSeconds`.
+
+**e)** Leave all three running in parallel for at least one full day.
 Only then delete `.github/workflows/tracking-watchdog.yml` — coverage
 must never have a gap in the middle.
+
+### The deeper end-to-end test, if you want it
+
+The self-test proves the alert channel. It does not prove the
+*decision* — that two bad ticks actually escalate. For that, point
+`HEALTH_URL` at `https://httpstat.us/503`, deploy, hit `$WD/` (no query
+string) twice to force two ticks, and confirm the real ALERT arrives
+with the runbook. Then put `HEALTH_URL` back, deploy, hit it once more
+and confirm the RECOVERED mail.
+
+Worth doing once. Just do not leave it pointed at the fake endpoint —
+which is the whole reason the self-test exists as the everyday check.
 
 ---
 
