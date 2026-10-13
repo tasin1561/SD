@@ -30,7 +30,23 @@ jobs:
 
     steps:
       - name: Trigger deploy on droplet
-        uses: appleboy/ssh-action@v1.2.0
+        # PINNED TO A COMMIT, NOT A TAG — this step is handed the droplet's
+        # SSH private key, and a git tag is MOVABLE by the upstream repo's
+        # owner. `@v1.2.0` is resolved fresh on every run, so whoever
+        # controls that tag controls what reads `secrets.DROPLET_SSH_KEY`.
+        # The replacement would exfiltrate the key and run as our deploy
+        # user, which holds passwordless sudo for the marketing rsync and
+        # can pm2-restart every process on a box that also holds
+        # `~/app/.env` — every courier credential, the JWT signing key and
+        # the Spaces keys. The deploy would still go green, so nothing
+        # would point at it.
+        #
+        # This is the ONLY action in the estate that receives a secret
+        # (ci.yml references none), which is why it is the one pinned.
+        # 7eaf766 IS v1.2.0 as of 2026-10-13 — resolved through the git
+        # refs API, not copied from a README. To upgrade, resolve the new
+        # tag the same way rather than moving back to a tag.
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         env:
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
         with:

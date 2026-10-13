@@ -1,0 +1,45 @@
+Copyright (c) 2026 Syed Talha Islam. All rights reserved.
+
+PROPRIETARY AND CONFIDENTIAL
+
+This software and its accompanying documentation (together, the
+"Software") are the proprietary and confidential property of the
+copyright holder. The Software includes, without limitation, all source
+code, database schemas and migrations, configuration, build and
+deployment tooling, test suites, and all documentation in this
+repository — including CLAUDE.md and the contents of docs/, which
+describe the operational processes, commercial terms and internal
+decision-making of the Skydrop business.
+
+NO LICENCE IS GRANTED. No right or licence, express or implied, is
+granted to any person obtaining a copy of the Software, whether by
+access to this repository, by receipt of a copy, or otherwise. The
+absence of a licence file at any earlier point in this repository's
+history did not and does not constitute a grant of any licence, nor a
+waiver of any right, nor a dedication of the Software to the public
+domain.
+
+Without the prior written permission of the copyright holder, you may
+not copy, reproduce, modify, adapt, translate, merge, publish,
+distribute, sublicense, sell, host, make available, create derivative
+works from, or otherwise exploit the Software or any part of it; nor
+use it to operate, develop or assist any service, product or business;
+nor disclose it to any third party.
+
+Access granted to an employee, contractor, agent or service provider is
+granted solely to perform work for the copyright holder, is limited to
+what that work requires, and ends when the engagement ends. Such access
+confers no ownership and no continuing right of use.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES
+OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+Third-party dependencies are licensed by their respective owners under
+their own terms; nothing here alters those terms.
+
+Enquiries: support@skydrop.global
