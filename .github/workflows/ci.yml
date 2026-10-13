@@ -192,10 +192,25 @@ jobs:
       # No Postgres, no Redis, no migrate. The API unit suite uses mocked
       # Prisma throughout and `app-module-boots` compiles the Nest
       # container without running onModuleInit, so nothing here opens a
-      # connection — the same 1845 tests run locally on a machine with no
-      # Docker at all. DATABASE_URL stays set because the Prisma client is
-      # constructed at import time; it is never dialled.
+      # connection — the same ~7,600 tests (472 files) run locally on a
+      # machine with no Docker at all. DATABASE_URL stays set because the
+      # Prisma client is constructed at import time; it is never dialled.
       - name: Unit tests — API (jest)
+        # HEADROOM, beside the per-worker recycling in jest.config.ts.
+        #
+        # Node's default old-space is ~2 GB and this suite died exactly
+        # there on 2026-10-13 ("Ineffective mark-compacts near heap
+        # limit", exit 134) on a commit that touched only infra/ — no
+        # workspace code and no new tests — forty minutes after the same
+        # suite passed. The runner has far more memory than the default
+        # lets Node use, so raising the ceiling costs nothing and stops a
+        # red build that means nothing.
+        #
+        # The real fix is `workerIdleMemoryLimit` in jest.config.ts,
+        # which bounds growth rather than permitting more of it. This is
+        # the belt to that pair of braces.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm --filter @skydrop/api test
 
       - name: Unit tests — admin (vitest)
