@@ -1,17 +1,19 @@
 # Email DNS for skydrop.global
 
-**Status (2026-10-04): NOTHING on `skydrop.global` is verified yet. This
-document is the arrangement to BUILD, not a measurement.** It mirrors
-exactly what was live on `skydrop.online` — Resend sends, Cloudflare Email
-Routing receives, DMARC at quarantine — because that arrangement was
-verified end to end on 2026-09-09 and the reasoning behind each choice is
-domain-independent. What has happened so far: `skydrop.global` is added to
-Resend (region `ap-northeast-1`), status `not_started` pending DNS.
+**Status (2026-10-14): BUILT AND MEASURED. `skydrop.global` sends through
+TWO providers — Resend for credential mail, Amazon SES for everything
+else — and both authenticate.** Proved end to end against Gmail on
+2026-10-14: `dkim=pass header.i=@skydrop.global`, `spf=pass
+smtp.mailfrom=…@bounce.skydrop.global`, `dmarc=pass (p=QUARANTINE
+sp=REJECT dis=NONE)`, delivered to the inbox. Cloudflare Email Routing
+receives; DMARC sits at quarantine.
 
-Every claim about `.online` in the history section below WAS checked with
-`dig`. Nothing in the tables above it has been. **Verify with `dig`, not
-off a dashboard** — see "Reading it yourself", because the Cloudflare panel
-gets one of these wrong.
+The arrangement mirrors what was live on `skydrop.online` (verified
+2026-09-09) with one addition: our OWN SES account, which is the subject
+of "Amazon SES — the second sender" below.
+
+**Verify with `dig`, not off a dashboard** — see "Reading it yourself",
+because the Cloudflare panel gets one of these wrong.
 
 ---
 
@@ -39,7 +41,10 @@ an outage with a one-hour detection lag.
 | TXT | `resend._domainkey.skydrop.global` | **DKIM.** Signs our mail as `@skydrop.global`. Resend issues the exact value. |
 | TXT | `send.skydrop.global` | **SPF** for the envelope sender: `v=spf1 include:amazonses.com ~all` |
 | MX | `send.skydrop.global` | SES's bounce/complaint collector, so Resend learns about failures |
-| A | root, `admin`, `api`, `app`, `reseller`, `track`, `www` | the droplet, 68.183.190.55, all proxied (`docs/cloudflare-proxy.md`) |
+| CNAME ×3 | `<token>._domainkey.skydrop.global` | **OUR SES's DKIM** (Easy DKIM). Three selectors → `<token>.dkim.amazonses.com`. See the SES section. |
+| MX | `bounce.skydrop.global` | **OUR SES's** bounce collector: `10 feedback-smtp.ap-south-1.amazonses.com` |
+| TXT | `bounce.skydrop.global` | **SPF for OUR SES's envelope**: `v=spf1 include:amazonses.com ~all` |
+| A | root, `admin`, `api`, `app`, `client`, `member`, `associate`, `reseller`, `portal`, `track`, `www` | the droplet, 68.183.190.55, all proxied (`docs/cloudflare-proxy.md`) |
 | CAA | root | Let's Encrypt only |
 
 That is Resend's standard shape and it is the right one: the **root**
@@ -189,6 +194,101 @@ the name of will produce false negatives. `dig` the selector.
 
 ---
 
+## Amazon SES — the second sender (2026-10-14)
+
+Resend carries CREDENTIAL mail; **our own SES account carries everything
+else** (`EmailProviderRouter`, and its docblock is the authority on why
+the category decides). This section is the DNS half.
+
+### The records, and the one that is easy to get wrong
+
+| Type | Name | Value |
+|---|---|---|
+| CNAME | `2mgzlrordvt3ve767ywgd37dffljbwb4._domainkey` | `2mgzlrordvt3ve767ywgd37dffljbwb4.dkim.amazonses.com` |
+| CNAME | `haj5nxwtpdakcbssa64p35ty5p4ty4we._domainkey` | `haj5nxwtpdakcbssa64p35ty5p4ty4we.dkim.amazonses.com` |
+| CNAME | `5ecfkprtvbupf63a6af73wwja2pgj6x6._domainkey` | `5ecfkprtvbupf63a6af73wwja2pgj6x6.dkim.amazonses.com` |
+| MX | `bounce` | `feedback-smtp.ap-south-1.amazonses.com`, priority 10 |
+| TXT | `bounce` | `v=spf1 include:amazonses.com ~all` |
+
+All five **DNS only (grey cloud)**. A proxied DKIM CNAME resolves to
+Cloudflare's addresses instead of `…dkim.amazonses.com`, SES never
+verifies, and everything still *looks* published.
+
+**`send.` IS RESEND'S. `bounce.` IS OURS. They are not interchangeable
+and they look identical.** Both carry `v=spf1 include:amazonses.com ~all`
+and an MX to a `feedback-smtp.*.amazonses.com` host, because **Resend
+resells Amazon SES** — so Resend's records are SES records, for Resend's
+account. The tells are the name and the region: `send.` →
+`ap-north**east**-1` (Tokyo, Resend's), `bounce.` → `ap-south-1` (Mumbai,
+ours, account 328354325534). Pointing our MAIL FROM at `send.` would post
+our bounces into Resend's collector.
+
+### Two silent failures this setup actually hit
+
+**A one-letter typo in a record NAME is invisible.** The SPF TXT was first
+published on `bounch.skydrop.global`. Cloudflare accepted it, the row
+rendered green, nothing errored — and SPF for `bounce.skydrop.global`
+would simply never have resolved, for ever. Caught only by querying the
+name that matters (`dig TXT bounce.skydrop.global`) rather than reading
+the dashboard. **Verify a record by asking DNS for the name the software
+will ask for.**
+
+**An ADDRESS identity is not a DOMAIN identity.** Four SES sends on
+2026-09-27 succeeded through a single-address identity
+(`hello@skydrop.global` verified by clicking a link). That needs no DNS,
+gets no DKIM of its own, and SES then signs `d=amazonses.com` — which
+aligns with nothing under `p=quarantine`. They would have been
+quarantined while `notification_logs` recorded them `sent`, because SES
+accepting an API call says nothing about delivery. **Always verify the
+DOMAIN.**
+
+### What was measured, 2026-10-14
+
+A realistic transactional message sent through the app's own compiled
+SigV4 signer and `buildSesPayload`, from `hello@skydrop.global` to a
+Gmail address:
+
+```
+dkim=pass   header.i=@skydrop.global  header.s=2mgzlrordvt3ve767ywgd37dffljbwb4
+dkim=pass   header.i=@amazonses.com                      (SES's own second signature)
+spf=pass    smtp.mailfrom=…@bounce.skydrop.global        designates 76.223.180.23
+dmarc=pass  (p=QUARANTINE sp=REJECT dis=NONE)            header.from=skydrop.global
+Return-Path: …@bounce.skydrop.global
+Received: from c180-23.smtp-out.ap-south-1.amazonses.com
+```
+
+**Two independent paths to a DMARC pass** — SPF aligned via `bounce.`,
+DKIM aligned via the root — which is the whole reason the custom MAIL
+FROM is worth the two extra records. Delivered to the inbox.
+
+**A perfectly authenticated email can still be filtered.** The first test
+— subject `test`, body `test`, from an identity with no sending history —
+went to spam, and Gmail said "similar to messages that were identified as
+spam in the past". That is the CONTENT/reputation verdict, not the
+authentication one, which reads "has failed skydrop.global's required
+tests for authentication". **Tell the two apart before changing any
+DNS**; the same message with real content landed in the inbox.
+
+### Only one of the three DKIM selectors resolves, and that is fine
+
+`2mgzlrordvt…` carries a key; the other two return nothing. Our three
+CNAMEs are correct and point at the right targets — AWS populates the key
+AT those targets, and signs only with a selector it has published (the
+header above confirms it chose the live one). Nothing to chase; if AWS
+publishes the others they resolve through our records automatically.
+
+### Credentials
+
+`AWS_SES_REGION=ap-south-1` plus an IAM access key, in `~/app/.env` on the
+droplet, read by `SesService` (CUR-1 discipline: the secret is in env,
+never the database). The IAM user `skydrop-ses-sender` carries ONE inline
+policy — `ses:SendEmail` / `ses:SendRawEmail` on
+`arn:aws:ses:ap-south-1:328354325534:identity/skydrop.global` and nothing
+else, so a leaked key can send as `@skydrop.global` and cannot read
+reputation metrics, delete an identity, or send as `skydrop.online`.
+**SES is inert by absence** — remove the three variables and every message
+routes to Resend exactly as before, with no code change.
+
 ## The root SPF, and why it does not mention SES
 
 The root should carry Cloudflare's include only:
@@ -197,10 +297,12 @@ The root should carry Cloudflare's include only:
 skydrop.global  TXT  "v=spf1 include:_spf.mx.cloudflare.net ~all"
 ```
 
-Our Resend mail uses `send.skydrop.global` as the envelope sender, so the
-ROOT SPF is never consulted for it — `send.` has its own. Adding
-`include:amazonses.com` here would authorise every SES customer to send
-with a root envelope, which is a real weakening for no gain.
+Our Resend mail uses `send.skydrop.global` as the envelope sender and our
+own SES mail uses `bounce.skydrop.global`, so the ROOT SPF is never
+consulted for either — each has its own. Adding `include:amazonses.com`
+here would authorise every SES customer on earth to send with a root
+envelope, which is a real weakening for no gain, and it would do so while
+looking like it was helping the very path that does not use it.
 
 `~all` (softfail) rather than `-all` while DMARC sits below enforcement: a
 hard fail on a domain we have not finished measuring can bin legitimate
