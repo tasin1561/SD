@@ -259,8 +259,19 @@ export async function tick(env: Env): Promise<void> {
 }
 
 export default {
-  async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(tick(env));
+  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext): Promise<void> {
+    // AWAITED, not `ctx.waitUntil`, and the difference is the whole
+    // reason the Cloudflare "Script errors" notification can be trusted.
+    //
+    // `email()` throws on purpose when Resend refuses, because an
+    // invocation marked errored in the dashboard is the only thing left
+    // that can report that this watchdog has gone mute. Handing the
+    // promise to `waitUntil` and returning makes the handler resolve
+    // before the work finishes, so the invocation's own outcome no
+    // longer depends on it — which would leave a watchdog that cannot
+    // send mail looking perfectly healthy. A cron handler has nothing
+    // waiting on it, so there is nothing to gain by returning early.
+    await tick(env);
   },
 
   /**
