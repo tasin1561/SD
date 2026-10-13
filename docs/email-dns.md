@@ -157,37 +157,65 @@ keeps SPF and DKIM as two independent ways to pass.
 ### THE REMAINING STEP
 
 Move `p=quarantine` → `p=reject` once one report cycle (Email → DMARC
-Management) shows only Resend and Cloudflare. That is a one-word edit.
+Management) shows only the senders we expect. That is a one-word edit.
 Until then a forged `security@skydrop.global` reaches the spam folder
 rather than being refused outright.
 
-Cloudflare's own collector is used for `rua` so the reports do not need a
-mailbox of their own.
+**THERE ARE THREE EXPECTED SENDERS, NOT TWO (corrected 2026-10-14).** This
+said "only Resend and Cloudflare", which was true when it was written and
+became wrong the night our own SES account went live. The reports will
+show **Resend** (credential mail), **Amazon SES** (everything else,
+NOTIF-24) and **Cloudflare Email Routing** (forwarded inbound). Read
+literally, the old sentence would make a correct report look like a
+compromise — somebody would see `amazonses.com` sending as us, which is
+exactly what an attacker's report looks like, and either panic or stall
+the move to enforcement. All three are ours.
+
+**`rua` was enabled on 2026-10-14** and is Cloudflare's own collector, so
+the reports need no mailbox:
+
+```
+_dmarc  TXT  "v=DMARC1; p=quarantine; sp=reject; fo=1; rua=mailto:<id>@dmarc-reports.cloudflare.net;"
+```
+
+Before that the `.global` record carried the policy but **no `rua` at
+all** — a partial copy of `.online`'s — so for the whole period this
+domain was sending, no authentication failure of any kind was visible to
+anyone. The first reports land about 24 hours after enabling it.
 
 ---
 
 ## The Cloudflare panel is WRONG about DKIM. Do not act on it
 
-`Email → DMARC Management` shows an "Email record overview" reading:
+`Email → DMARC Management` shows an "Email record overview". **As of
+2026-10-14 it reads:**
 
 ```
-DMARC policy: N/A     SPF policy: N/A     DKIM in use: No (Fail)     BIMI in use: No (Fail)
+DMARC policy: Quarantine   SPF policy: Soft fail (Warning)   DKIM in use: Yes   BIMI in use: No (Fail)
 ```
 
-Taken one at a time:
+Two of those four are flagging a DELIBERATE choice, and acting on either
+would make things worse:
 
-- **DMARC N/A** — true until the record above is published. Fix it.
-- **SPF N/A** — true of the ROOT, and expected. Our envelope sender is
-  `send.skydrop.global`, which has its own SPF; a root SPF is only
-  consulted for mail whose envelope is `@skydrop.global`. Not a fault.
-- **DKIM "No / Fail" — FALSE once the record is in.** Our DKIM lives at
-  `resend._domainkey.skydrop.global` and is provably resolvable. A DKIM
-  selector is an arbitrary label, so a scanner cannot enumerate one without
-  being told it; Cloudflare is reporting "I could not find one", not "there
-  is none". **Adding a second DKIM record to satisfy this panel would risk
-  breaking the signing that works.**
-- **BIMI "No"** — a brand logo in the inbox. It needs a paid Verified Mark
-  Certificate and DMARC at enforcement first. Not a priority, not a fault.
+- **DMARC "Quarantine"** — correct and published.
+- **SPF "Soft fail" + Warning — EXPECTED, do not "fix" it.** The root
+  carries `~all` on purpose (see "The root SPF" below): a hard `-all`
+  while DMARC sits below enforcement can bin legitimate mail from a
+  sender nobody remembered. Tighten it in step with the DMARC policy,
+  never ahead of it. The panel cannot know that and flags the softfail
+  on principle.
+- **DKIM "Yes"** — now true. It previously read **"No (Fail)" and that
+  was a FALSE NEGATIVE**, worth keeping on record because the reasoning
+  outlives the reading: a DKIM selector is an arbitrary label, so a
+  scanner cannot enumerate one without being told the name. Cloudflare
+  was reporting "I could not find one", never "there is none". **Adding
+  a DKIM record to satisfy a panel would risk breaking the signing that
+  works** — and with three publishers now (Resend, SES, Cloudflare's own
+  forwarding key) there is more, not less, to break.
+- **BIMI "No (Fail)"** — a brand logo in the inbox. It needs a paid
+  Verified Mark Certificate and DMARC at enforcement first. The word
+  "Fail" is the panel dramatising an optional feature nobody has
+  implemented. Not a priority, not a fault.
 
 The lesson worth keeping: a dashboard reporting on records it has to GUESS
 the name of will produce false negatives. `dig` the selector.
