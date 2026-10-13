@@ -12,6 +12,7 @@ import {
 } from '../../src/modules/email/services/email-dispatch.service';
 import type { TemplateRenderService } from '../../src/modules/email/services/template-render.service';
 import type { EmailProviderRouter } from '../../src/modules/email/services/email-provider-router.service';
+import type { SystemIssueService } from '../../src/modules/system-issues/services/system-issue.service';
 import type {
   SendEmailFailure,
   SendEmailInput,
@@ -27,6 +28,8 @@ interface CapturedCreate {
 
 function makeSut(opts: {
   providerResponse: SendEmailResult | SendEmailFailure;
+  /** NOTIF-25: set to simulate the router having failed over. */
+  failedOverFrom?: string;
   templateHasHtml?: boolean;
   /** Pass null to explicitly produce a template with no subject. Omit to use
    *  the default "Reset your password". */
@@ -87,18 +90,37 @@ function makeSut(opts: {
   );
   const router = {
     send: async (input: SendEmailInput) => ({
-      provider: 'resend',
+      // Whoever CARRIED it: the other provider when we failed over,
+      // and Resend (the default primary) when we did not.
+      provider:
+        opts.failedOverFrom === undefined
+          ? 'resend'
+          : opts.failedOverFrom === 'ses'
+            ? 'resend'
+            : 'ses',
       outcome: await providerSendMock(input),
-      failedOverFrom: null,
+      failedOverFrom: opts.failedOverFrom ?? null,
     }),
   } as unknown as EmailProviderRouter;
 
+  // NOTIF-25: the failover announcement. Captured rather than mocked away
+  // so a test can assert what a person would actually be shown.
+  const raised: Array<Record<string, unknown>> = [];
+  const issues = {
+    raise: jest.fn(async (input: Record<string, unknown>) => {
+      raised.push(input);
+      return { id: 'issue-1', isNew: true };
+    }),
+  } as unknown as SystemIssueService;
+
   return {
-    svc: new EmailDispatchService(prisma, render, router),
+    svc: new EmailDispatchService(prisma, render, router, issues),
     captured,
     capturedUpdates,
     prisma,
     providerSendMock,
+    raised,
+    issues,
     renderMock: render.render as jest.Mock,
   };
 }
@@ -485,6 +507,90 @@ describe('EmailDispatchService', () => {
       expect(String(update.data['body'])).not.toContain(TOKEN);
       expect(String(update.data['body'])).toContain('token=[redacted]');
       expect(String(update.data['htmlBody'])).not.toContain(TOKEN);
+    });
+  });
+
+  /**
+   * NOTIF-25 — a failover delivers the message, so nothing looks wrong.
+   * These pin that somebody is nevertheless told, because the estate can
+   * otherwise run on its reserve provider indefinitely with only a log
+   * line as evidence.
+   */
+  describe('NOTIF-25 — a working failover still announces itself', () => {
+    const INPUT = {
+      templateCode: 'seller.password_reset.email',
+      recipient: { email: 'alex@x.io', type: NotificationRecipientType.SELLER, id: 'u1' },
+      variables: {},
+    };
+
+    it('raises NOTHING when no failover happened', async () => {
+      const { svc, raised } = makeSut({
+        providerResponse: { ok: true, providerMessageId: 'm1' },
+      });
+
+      await svc.send(INPUT);
+
+      expect(raised).toHaveLength(0);
+    });
+
+    it('Resend → SES raises a HIGH issue naming the daily cap', async () => {
+      const { svc, raised } = makeSut({
+        providerResponse: { ok: true, providerMessageId: 'm1' },
+        failedOverFrom: 'resend',
+      });
+
+      await svc.send(INPUT);
+
+      expect(raised).toHaveLength(1);
+      const issue = raised[0]!;
+      expect(issue['severity']).toBe('HIGH');
+      expect(issue['kind']).toBe('INTEGRATION');
+      // Per DIRECTION — a spent quota fails over every message that hour,
+      // and one row each is a list people stop reading.
+      expect(issue['dedupeKey']).toBe('email-failover:resend:ses');
+      expect(String(issue['detail'])).toContain('100 messages a day');
+      // It must say the message got through, or it reads as a lost email.
+      expect(String(issue['detail'])).toContain('WAS delivered');
+    });
+
+    it('SES → Resend raises a DIFFERENT issue, warning the reserve will be exhausted', async () => {
+      const { svc, raised } = makeSut({
+        providerResponse: { ok: true, providerMessageId: 'm1' },
+        failedOverFrom: 'ses',
+      });
+
+      await svc.send(INPUT);
+
+      expect(raised[0]!['dedupeKey']).toBe('email-failover:ses:resend');
+      // The milder-looking direction is the worse one: all the bulk mail
+      // lands on the 100/day free cap.
+      expect(String(raised[0]!['detail'])).toContain('exhaust');
+    });
+
+    it('NEVER raises CRITICAL — that would email about the email system', async () => {
+      // NOTIF-16 makes CRITICAL additionally send mail, through the very
+      // provider that just failed.
+      const { svc, raised } = makeSut({
+        providerResponse: { ok: true, providerMessageId: 'm1' },
+        failedOverFrom: 'ses',
+      });
+
+      await svc.send(INPUT);
+
+      expect(raised[0]!['severity']).not.toBe('CRITICAL');
+    });
+
+    it('a failed raise does NOT fail the send — the email already went', async () => {
+      const { svc, issues } = makeSut({
+        providerResponse: { ok: true, providerMessageId: 'm1' },
+        failedOverFrom: 'resend',
+      });
+      (issues.raise as jest.Mock).mockRejectedValueOnce(new Error('issues table is down'));
+
+      const result = await svc.send(INPUT);
+
+      expect(result.status).toBe('SENT');
+      expect(result.providerMessageId).toBe('m1');
     });
   });
 });

@@ -1,5 +1,13 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { NotificationChannel, NotificationStatus, Prisma } from '@skydrop/db';
+import {
+  NotificationCategory,
+  NotificationChannel,
+  NotificationStatus,
+  Prisma,
+  SystemIssueKind,
+  SystemIssueSeverity,
+} from '@skydrop/db';
+import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { TemplateRenderService } from './template-render.service';
 import { EmailProviderRouter } from './email-provider-router.service';
@@ -49,6 +57,9 @@ export class EmailDispatchService {
     // router decides which provider carries the message (CUR-12). This
     // service does not know Resend or SES exist.
     private readonly router: EmailProviderRouter,
+    // Reached through the @Global SystemIssuesModule, the same way
+    // EmailWorker already does — no import, so no cycle.
+    private readonly issues: SystemIssueService,
   ) {}
 
   async send(input: EmailDispatchInput): Promise<EmailSendResult> {
@@ -110,6 +121,8 @@ export class EmailDispatchService {
       );
     }
 
+    await this.announceFailover(route, rendered.category);
+
     return {
       notificationLogId: log?.id ?? null,
       status: sendResult.ok ? 'SENT' : 'FAILED',
@@ -117,6 +130,93 @@ export class EmailDispatchService {
       failureCode: sendResult.ok ? null : sendResult.code,
       failureMessage: sendResult.ok ? null : sendResult.message,
     };
+  }
+
+  /**
+   * NOTIF-25 — A FAILOVER THAT WORKS IS STILL NEWS, AND IT USED TO BE
+   * SILENT.
+   *
+   * The router falls back to the other provider on a TRANSPORT failure
+   * and the message goes out, so nothing is lost and nothing looks
+   * broken. That is the design working. But it means the estate can run
+   * for weeks on its RESERVE provider with the only trace a `warn` line
+   * nobody reads — and the two directions each hide something worth
+   * acting on:
+   *
+   *  - **Resend → SES** is almost always the free tier's 100/day cap.
+   *    Credential mail is the one category pinned to Resend (NOTIF-24)
+   *    precisely because it has no in-app copy (NOTIF-9), so hitting
+   *    that cap is the signal that we have outgrown the plan. Delivery
+   *    survives; knowing is what lets somebody upgrade before the day
+   *    SES is also unavailable.
+   *
+   *  - **SES → Resend** is worse and reads milder. SES carries the bulk,
+   *    so a sustained outage pushes all of it onto Resend's 100/day,
+   *    which it will exhaust in hours — and THEN credential mail has
+   *    nowhere left to go.
+   *
+   * ── WHY HIGH AND NEVER CRITICAL ──────────────────────────────────
+   * NOTIF-16 makes CRITICAL additionally send an EMAIL. Raising a
+   * CRITICAL from inside the email pipeline would ask the degraded
+   * system to report on itself, through the very provider that just
+   * failed. HIGH is in-app only, reaches the same people, and cannot
+   * feed back into the thing it is describing.
+   *
+   * ── ONE ISSUE PER DIRECTION, NOT PER MESSAGE ─────────────────────
+   * A quota is exhausted once and then every message that hour fails
+   * over. One row per email is a list people stop reading (TRK-11's
+   * rule); the dedupe key carries the direction and the recurrence
+   * count does the counting.
+   *
+   * AWAITED inside a try/catch rather than fired and forgotten. A
+   * failover is rare, so the latency is nil, and awaiting keeps this
+   * from becoming a tenth fire-and-forget DB writer needing its own
+   * drain hook (NOTIF-19). It can never throw: the message has already
+   * been sent, and an alerting layer that fails the operation it is
+   * describing is worse than no alerting at all.
+   */
+  private async announceFailover(
+    route: EmailRouteResult,
+    category: NotificationCategory,
+  ): Promise<void> {
+    if (route.failedOverFrom === null) return;
+
+    const from = route.failedOverFrom;
+    const to = route.provider;
+    const credential = category === NotificationCategory.CREDENTIAL;
+
+    try {
+      await this.issues.raise({
+        kind: SystemIssueKind.INTEGRATION,
+        severity: SystemIssueSeverity.HIGH,
+        title: `Email is failing over from ${from} to ${to}`,
+        detail:
+          `An email could not be sent through ${from} and was carried by ${to} instead. ` +
+          `It WAS delivered — this is the failover working, not a lost message.\n\n` +
+          (from === 'resend'
+            ? `Resend's free tier stops at 100 messages a day. Credential mail — password ` +
+              `resets, invitations, email verification — is pinned to Resend because it is ` +
+              `the one kind with no in-app copy to fall back on, so this is the signal that ` +
+              `the plan needs upgrading. SES has the headroom to carry it meanwhile.`
+            : `SES carries the bulk of our email, so if this persists all of it lands on ` +
+              `Resend's 100/day free cap and will exhaust it within hours — and credential ` +
+              `mail would then have nowhere left to go. Check the SES account dashboard ` +
+              `(sending quota, account health) before that happens.`) +
+          (credential
+            ? `\n\nThis one was CREDENTIAL mail, which is the category that cannot be read ` +
+              `any other way.`
+            : ''),
+        source: 'EmailDispatchService',
+        // Per DIRECTION, not per message or per template.
+        dedupeKey: `email-failover:${from}:${to}`,
+        metadata: { from, to, category, credential },
+      });
+    } catch (err) {
+      this.logger.error(
+        { from, to, err: err instanceof Error ? err.message : String(err) },
+        'Could not raise the email-failover issue (the email itself was sent)',
+      );
+    }
   }
 
   /**
