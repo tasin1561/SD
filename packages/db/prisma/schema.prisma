@@ -7357,20 +7357,43 @@ model SellerWalletEntry {
 
   topupRequest WalletTopupRequest? @relation("TopupWalletEntry")
 
-  /// NINE directions may happen exactly once per order, enforced by a
+  /// FIVE directions may happen exactly once per order, enforced by a
   /// migration-only PARTIAL unique
-  /// (seller_wallet_entries_once_per_order_uq): cod_collection,
-  /// cod_collection_fee, customer_return_fee, gst_withholding,
-  /// inbound_freight, instant_pay_fee, order_charges,
-  /// order_charges_refund, rto_fee.
+  /// (seller_wallet_entries_once_per_order_uq): customer_return_fee,
+  /// inbound_freight, order_charges, order_charges_refund, rto_fee.
   ///
   /// Prisma cannot express a partial unique, and an unconditional one
   /// would be WRONG: an order may carry several tickets and so several
   /// SCRAP_REFUNDs, and an operator may correct the same order more than
   /// once with an ADJUSTMENT. Those are excluded on purpose.
   ///
-  /// It is the second gate, not the first — WAL-7's advisory lock is what
-  /// the callers take. This is what still holds when one of them forgets.
+  /// For these five it is the second gate, not the first — WAL-7's
+  /// advisory lock is what the callers take, and each is additionally
+  /// guarded by a plain existence or pairing query, which is the same
+  /// thing a unique index enforces. So both layers hold.
+  ///
+  /// FOUR DIRECTIONS LEFT THIS INDEX ON 2026-10-13 and are guarded by
+  /// the lock alone: cod_collection, cod_collection_fee,
+  /// gst_withholding, instant_pay_fee. They had to, because WAL-6 says a
+  /// COD reversed and paid again IS credited again, and a re-credit
+  /// needs a second row of each — so the index and the business rule
+  /// contradicted each other, and the contradiction surfaced as a P2002
+  /// that rolled back an ENTIRE courier payout, every other seller's
+  /// credit on it included.
+  ///
+  /// What holds instead is not nothing, but it is weaker in KIND and
+  /// worth stating plainly: the advisory lock serialises every writer
+  /// (applyEntry takes it itself and cannot be called outside a
+  /// transaction), the counting gate — credits greater than reversals —
+  /// refuses the second, and `wallet-guard-locking.spec.ts` fails CI if
+  /// a future method reads the ledger before locking. A database
+  /// guarantee became a lock-plus-CI guarantee.
+  ///
+  /// See `20261013120000_cod_credit_may_recur`. The deductions now carry
+  /// `linkedEntryId` to the COD they were taken from, which that change
+  /// REQUIRED: the refund used to return every unrefunded deduction on
+  /// the order, exact only while this index made a second unrefunded set
+  /// unrepresentable.
   @@index([sellerId, currency, createdAt])
   // Lets applyEntry find the wallet's LAST entry — and therefore its
   // current balance — with a single index seek instead of sorting the

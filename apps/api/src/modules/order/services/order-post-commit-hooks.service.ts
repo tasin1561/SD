@@ -370,8 +370,12 @@ export class OrderPostCommitHooksService {
    *
    * ── AND WHERE IT CANNOT, IT IS LOUD ─────────────────────────────────
    * `recalculateAfterEdit` refuses to re-price a credit that has already
-   * been PAID (`RESELLER_CREDIT_ALREADY_PAID`) — it cannot be rewritten,
-   * because nine wallet directions may occur at most once per order.
+   * been PAID (`RESELLER_CREDIT_ALREADY_PAID`). That refusal now rests on
+   * its own reasoning alone: until WAL-10 (2026-10-13) the database also
+   * forbade it, because the once-per-order unique covered
+   * `cod_collection`. It no longer does — a reversed COD paid again IS
+   * credited again — so the re-write is writable and is refused here
+   * because a half-re-priced plan is worse than an unchanged one.
    * That refusal is reachable ONLY through god mode, and it leaves the
    * order and its money genuinely disagreeing. The edit still stands
    * (that is god mode's whole point), and a HIGH MONEY system issue says

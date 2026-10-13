@@ -212,7 +212,26 @@ export class CodCreditService {
     // entries. Netting them into one credit would hide both the tax and
     // the fee inside a number the seller cannot reconcile against their
     // own order.
-    await this.wallet.applyEntry(tx, {
+    // THE CREDIT'S ID IS KEPT, because each deduction points back at the
+    // COD it was taken from.
+    //
+    // Until `seller_wallet_entries_once_per_order_uq` stopped covering
+    // these four directions, at most one unrefunded deduction set could
+    // exist on an order, so `reverseForOrder` could safely refund every
+    // deduction it found. With a re-credit now permitted (WAL-6 — a COD
+    // reversed and paid again IS credited again) that is no longer true:
+    // an order can carry two credits' worth of deductions, and a
+    // reversal that returned both would hand back tax and fees the
+    // seller is still being charged for. That error is WORSE than the
+    // double credit the index was guarding, because an inflated balance
+    // shows up in a reconciliation while an over-refund leaves the
+    // wallet internally consistent and quietly understates the COD tax
+    // and COD handling fee lines of the P&L.
+    //
+    // The data could not express the pairing before: the deductions
+    // carried `linkedOrderId` alone, so nothing said which credit they
+    // belonged to. They do now, and `reverseForOrder` narrows on it.
+    const credit = await this.wallet.applyEntry(tx, {
       sellerId,
       currency: Currency.INR,
       direction: WalletEntryDirection.COD_COLLECTION,
@@ -256,6 +275,7 @@ export class CodCreditService {
         direction: WalletEntryDirection.GST_WITHHOLDING,
         amount: gst,
         linkedOrderId: orderId,
+        linkedEntryId: credit.id,
         actorType: ActorType.SYSTEM,
         note: `Tax deducted from COD at ${gstPercent.toFixed(2)}%`,
       });
@@ -268,6 +288,7 @@ export class CodCreditService {
         direction: WalletEntryDirection.COD_COLLECTION_FEE,
         amount: collectionFee,
         linkedOrderId: orderId,
+        linkedEntryId: credit.id,
         actorType: ActorType.SYSTEM,
         note: `COD collection fee at ${collectionPercent.toFixed(2)}%`,
       });
@@ -280,6 +301,7 @@ export class CodCreditService {
         direction: WalletEntryDirection.INSTANT_PAY_FEE,
         amount: instantFee,
         linkedOrderId: orderId,
+        linkedEntryId: credit.id,
         actorType: ActorType.SYSTEM,
         note: `Instant Pay fee at ${instantPercent.toFixed(2)}% — credited at delivery rather than at settlement`,
       });
@@ -384,6 +406,24 @@ export class CodCreditService {
             WalletEntryDirection.INSTANT_PAY_FEE,
           ],
         },
+        // THIS CREDIT'S OWN DEDUCTIONS, not the order's.
+        //
+        // The query was order-wide, which was exact only while the
+        // once-per-order index made a second unrefunded credit
+        // unrepresentable. Now that a reversed COD can be paid and
+        // credited again (WAL-6), an order can hold two credits' worth
+        // of deductions, and refunding all of them on one reversal
+        // returns tax and fees the seller is still being charged —
+        // silently, because the wallet stays internally consistent and
+        // only the P&L's COD tax and handling-fee lines understate.
+        //
+        // `linkedEntryId IS NULL` is the pre-2026-10-13 shape: those
+        // rows carry no pointer, and under the old index there could
+        // only ever be ONE unrefunded set, so attributing them to the
+        // credit being reversed is exact rather than a guess. A new row
+        // always carries its credit, so the two cases cannot mix on one
+        // order.
+        OR: [{ linkedEntryId: credit.id }, { linkedEntryId: null }],
       },
       select: { id: true, amount: true, direction: true },
     });

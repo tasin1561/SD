@@ -156,7 +156,7 @@ export class OrderChargesAccrualService {
     // …but the DATABASE refuses the second charge, and the index WINS.
     //
     // `seller_wallet_entries_once_per_order_uq` covers `(linked_order_id,
-    // direction)` for nine directions INCLUDING `order_charges`, so
+    // direction)` for five directions INCLUDING `order_charges`, so
     // "charged once, refunded once" reaches the gate above saying "bill
     // it again" and `applyEntry`'s bare create then raises P2002 —
     // aborting the WHOLE delivered-money transaction, which also carries

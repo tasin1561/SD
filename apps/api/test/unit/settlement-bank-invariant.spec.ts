@@ -2275,13 +2275,16 @@ describe('RS-6 phase 3c — a reseller order keeps held = max(0, seller + Σ sto
       mode can put a paid order back where its lines are changeable. That
       is a bypass, and the answer to a bypass is to stop.
 
-      It could not be written in any case: nine wallet directions may
-      occur at most ONCE per order
-      (`seller_wallet_entries_once_per_order_uq` — the guard against
-      paying an order twice), and a reversal-then-rewrite needs a second
-      `cod_collection` on the same order. This fake book has no such
-      index, which is exactly why the refusal is asserted here rather
-      than left to Postgres to discover.
+      The database USED to refuse it as well: the once-per-order unique
+      covered `cod_collection`, so a reversal-then-rewrite could not be
+      written at all. Since WAL-10 (2026-10-13) it does not — a COD
+      reversed and paid again IS credited again, and the index was
+      aborting whole courier payouts to prevent it.
+
+      So this assertion now carries the whole weight, which is the reason
+      to keep it: the refusal is a PRODUCT rule about half-re-priced
+      plans, and it must hold on its own rather than because Postgres
+      happened to agree.
     */
     const order = cod('r1', ON_PAYOUT, ON_PAYOUT);
     const w = world([order]);

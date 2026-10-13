@@ -29,7 +29,8 @@ import {
  *     parcel was lost, and then delivered after all owes the fee AGAIN,
  *     and a plain "a charge exists" gate left it refunded and unbilled.
  *   - `seller_wallet_entries_once_per_order_uq` covers `(linked_order_id,
- *     direction)` for nine directions INCLUDING `order_charges`. So the
+ *     direction)` for five directions INCLUDING `order_charges` (it
+ *     covered nine until WAL-10 moved the COD-credit family out). So the
  *     second charge is not merely discouraged — it cannot exist.
  *
  * With one charge and one refund the gate therefore said "bill it" and
