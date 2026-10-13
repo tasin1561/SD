@@ -43,7 +43,7 @@ export default async function LoginPage(): Promise<ReactElement> {
            */}
           <span className="as-auth-alt">
             Run the store yourself?{' '}
-            <a href="https://reseller.skydrop.global/login">Sign in to the store portal</a>
+            <a href="https://member.skydrop.global/login">Sign in to the store portal</a>
           </span>
         </>
       }

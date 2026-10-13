@@ -87,14 +87,45 @@ to reason from is the zone and the droplet, never this file.
 | Subdomain | Purpose | App in monorepo |
 |---|---|---|
 | `skydrop.global` | Public marketing site | `apps/marketing` |
-| `app.skydrop.global` | Seller portal (BD merchants) | `apps/seller` |
+| `client.skydrop.global` | Seller portal (BD merchants) | `apps/seller` |
 | `admin.skydrop.global` | Staff portal (admin, call center, warehouse) | `apps/admin` |
 | `track.skydrop.global` | Branded public tracking (Indian customers) | `apps/track` |
 | `api.skydrop.global` | Backend API (consumed by all front-ends + B2B clients) | `apps/api` |
-| `reseller.skydrop.global` | Reseller store portal (RS-2) — pm2 `skydrop-reseller`, 127.0.0.1:3005 | `apps/reseller` |
-| `portal.skydrop.global` | Associate portal (ASSOC-1) — pm2 `skydrop-associate`, 127.0.0.1:3007 | `apps/associate` |
+| `member.skydrop.global` | Reseller store portal (RS-2) — pm2 `skydrop-reseller`, 127.0.0.1:3005 | `apps/reseller` |
+| `associate.skydrop.global` | Associate portal (ASSOC-1) — pm2 `skydrop-associate`, 127.0.0.1:3007 | `apps/associate` |
 
-All seven subdomains terminate at Cloudflare → forwarded to Caddy on the droplet → routed to the appropriate Node process on internal port.
+All ten hostnames (seven subdomains, three of them answering to a
+second, older name — see below) terminate at Cloudflare → forwarded to Caddy on the droplet → routed to the appropriate Node process on internal port.
+
+### The three consoles were RENAMED on 2026-10-13, and the old names still serve
+
+| was | is now | app |
+|---|---|---|
+| `app.skydrop.global` | `client.skydrop.global` | `apps/seller` |
+| `reseller.skydrop.global` | `member.skydrop.global` | `apps/reseller` |
+| `portal.skydrop.global` | `associate.skydrop.global` | `apps/associate` |
+
+**The old hostnames are NOT redirects, and that is deliberate.** A
+`__Host-` cookie is bound to the exact origin that set it, so
+`app.` → `client.` as a redirect would arrive carrying no session: every
+signed-in seller would be logged out at the cutover, and a bookmark would
+land on a login screen rather than where it used to. Both names serve the
+same app instead. An existing session keeps working on the old name, a
+new one starts on the new name, and nothing is lost in between.
+
+What the NEW names are used for: everything the system GENERATES —
+invitation, password-reset and email-verification links, the
+impersonation handoff, the marketing site's sign-in buttons. A generated
+link should point at the name we intend to keep.
+
+`EnvService.corsOrigins` lists both, from `LEGACY_CONSOLE_ORIGINS`. That
+list only ever shrinks: when a name stops seeing traffic it becomes a
+redirect here and its entry comes out of there.
+
+**This is a transition, not an end state.** Decide a date, watch the
+access logs for the old names, and when they are quiet replace each
+block below with a one-line `redir`. Leaving three extra live origins
+forever is the cost of never finishing.
 
 **pm2 runs SEVEN processes** once both portals are started: `skydrop-api`,
 `skydrop-portal` (the courier-portal browser worker — a different thing
@@ -104,6 +135,10 @@ worth saying so), `skydrop-admin`, `skydrop-seller`, `skydrop-track`,
 list; `pm2 list` is the truth.
 
 ### `portal.skydrop.global` (ASSOC-1, added 2026-10-08)
+
+*(Reachable as `associate.skydrop.global` too since the 2026-10-13
+rename above. This section is the record of how the host went live on
+the 8th, so it keeps the name that was true then.)*
 
 **The hostname needs the owner's confirmation before the DNS record is
 created.** `portal` is their own choice of subdomain; the TLD is `.global`
@@ -141,7 +176,7 @@ The three owner steps, modelled exactly on RS-12's above:
    ```
 
    (Copy the `header_up` / `trusted_proxies` lines exactly as the live
-   `app.skydrop.global` block has them rather than this sketch — the live
+   `client.skydrop.global` block has them rather than this sketch — the live
    block is the one that has been verified against the login throttle.)
    Then `sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
 3. **pm2** — after a deploy has built `apps/associate`:
@@ -160,13 +195,24 @@ where the second to boot finds the first already answering and every spec
 then runs against the wrong site, passing.
 
 **Env:** the associate app itself needs only `API_ORIGIN`, which the
-ecosystem entry already sets. If the API ever gains an `ASSOCIATE_APP_URL`
-— for the links in an associate's invitation and password-reset mail —
-set it in `~/app/.env` beside `RESELLER_APP_URL`; until then those mails
-link to the reseller portal, which is the wrong front door for an
-associate and is worth checking before the first invitation goes out.
+ecosystem entry already sets. `ASSOCIATE_APP_URL` on the API side is what
+an associate's invitation and password-reset links point at; it is
+**set explicitly in `~/app/.env`** as of 2026-10-13
+(`https://associate.skydrop.global`) rather than left to the schema
+default, which happens to be the same value — production should state a
+hostname rather than lean on one.
+
+It is load-bearing and not cosmetic: `invitationAppUrl`
+(`store-team.service.ts`) sends an **associate-only** invitee to this
+origin and everyone else to `RESELLER_APP_URL`, because
+`__Host-storeRefresh` is bound to the origin that set it — accept the
+invitation at the reseller origin and the associate console cannot read
+the session. The daily digest picks the same way.
 
 ### `reseller.skydrop.global` (RS-12, added 2026-09-14)
+
+*(Reachable as `member.skydrop.global` too since the 2026-10-13 rename
+above. This section keeps the name that was true on the 14th.)*
 
 The repo side ships with the code (`apps/reseller`, the `skydrop-reseller`
 entry in `ecosystem.config.cjs`, the build/restart/health lines in
@@ -178,7 +224,7 @@ the three owner steps were:
 1. **DNS** — a Cloudflare A record `reseller` → the droplet, **proxied**
    like the others, behind the firewall + `CF-Connecting-IP` arrangement in
    `docs/cloudflare-proxy.md`.
-2. **Caddy** — a block beside `app.skydrop.global`'s, identical except for
+2. **Caddy** — a block beside `client.skydrop.global`'s, identical except for
    the host and port. It proxies to loopback; the app sets its own security
    headers and nonce CSP (`packages/config`), so Caddy adds none:
 
@@ -192,7 +238,7 @@ the three owner steps were:
    ```
 
    (Copy the `header_up` / `trusted_proxies` lines exactly as the live
-   `app.skydrop.global` block has them rather than this sketch — the live
+   `client.skydrop.global` block has them rather than this sketch — the live
    block is the one that has been verified against the login throttle.)
    Then `sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl reload caddy`.
 3. **pm2** — after a deploy has built `apps/reseller`:
@@ -200,7 +246,7 @@ the three owner steps were:
    `deploy.sh` health-checks `127.0.0.1:3005/login` only once pm2 knows the
    process, so deploys before this step do not fail on it.
 
-**Env:** set `RESELLER_APP_URL=https://reseller.skydrop.global` in
+**Env:** set `RESELLER_APP_URL=https://member.skydrop.global` in
 `~/app/.env` (the API's links in store invitation / password-reset /
 verification emails). It defaults to that value when unset, so this is
 belt-and-braces rather than a blocker. The reseller app itself needs only

@@ -3,7 +3,7 @@
  *
  * ── WHO IS WATCHING ─────────────────────────────────────────────────
  * A SALES PERSON who sells for a reseller store: `apps/associate` at
- * `portal.skydrop.global`. Section R addresses the shopkeeper; this
+ * `associate.skydrop.global`. Section R addresses the shopkeeper; this
  * section addresses the shopkeeper's salesperson — often on a phone,
  * often mid-call with a customer. They own nothing, hold no stock, have
  * no wallet, and settle up with their store outside Skydrop.

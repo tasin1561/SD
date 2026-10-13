@@ -236,7 +236,7 @@ refused scan on the pack or handover bench is acknowledged, the scan field
 has focus again (don't trigger a refusal on production to test it; the
 specs pin it).
 
-### Stage 2 — seller (`app.skydrop.global`, as `qa-seller`)
+### Stage 2 — seller (`client.skydrop.global`, as `qa-seller`)
 
 1. `/login`: the new frame with "seller portal", the theme switch works signed out, and a wrong password shows "Invalid email or password." word for word.
 2. Sign in → dashboard: KPI tiles, sidebar, and the notification bell.
@@ -251,7 +251,7 @@ specs pin it).
 
 Check the untouched apps: reseller and admin look as before.
 
-### Stage 3 — reseller (`reseller.skydrop.global`, with a store login you hold)
+### Stage 3 — reseller (`member.skydrop.global`, with a store login you hold)
 
 1. `/login`: "store portal", the theme switch, and the wrong-password verdict word for word.
 2. Dashboard: KPI money tiles and the shortcut cards.

@@ -172,7 +172,7 @@ associate roster; the price routes are "a person at my store".
 
 ## Endpoints
 
-### The associate's own portal — `portal.skydrop.global`
+### The associate's own portal — `associate.skydrop.global`
 
 Every one is an existing `/store/*` route the associate's role reaches, narrowed
 by scope. **Nothing new is invented for them except the catalogue projection.**
@@ -227,7 +227,7 @@ when unpriced), and `availableQuantity` (RS-3's visible stock, unchanged). It
 carries **no** `transferPriceInr`, no suggested retail, no range, no hidden
 share, no set-aside.
 
-### The reseller’s side — `reseller.skydrop.global`
+### The reseller’s side — `member.skydrop.global`
 
 | Route | Permission |
 |---|---|

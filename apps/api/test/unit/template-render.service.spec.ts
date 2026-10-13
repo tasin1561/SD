@@ -52,13 +52,13 @@ describe('TemplateRenderService', () => {
     const r = await svc.render('staff.password_reset.email', {
       company_name: 'Skydrop',
       name: 'Alex',
-      url: 'https://app.skydrop.global/reset?token=xyz',
+      url: 'https://client.skydrop.global/reset?token=xyz',
     });
 
     expect(r.templateId).toBe('t1');
     expect(r.templateVersion).toBe(1);
     expect(r.subject).toBe('Reset your Skydrop password');
-    expect(r.body).toBe('Hi Alex, click https://app.skydrop.global/reset?token=xyz to reset.');
+    expect(r.body).toBe('Hi Alex, click https://client.skydrop.global/reset?token=xyz to reset.');
     expect(r.htmlBody).toBeNull();
   });
 

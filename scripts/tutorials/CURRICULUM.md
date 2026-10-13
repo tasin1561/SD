@@ -4887,7 +4887,7 @@ render an identical page when their world is missing.
 **A third app, and a DIFFERENT READER.** Sections A–G address the seller who
 owns the stock; H–P address Skydrop's own staff. This section addresses the
 **shopkeeper** — a reseller store's own staff, signing in at
-`reseller.skydrop.global`. Section G teaches a seller to open a store and set
+`member.skydrop.global`. Section G teaches a seller to open a store and set
 its terms; the people who then have to USE it had nothing, which is the gap
 this closes.
 
@@ -5285,7 +5285,7 @@ depends on, and over a sort actually happening.
 **A FOURTH app, and a fourth reader.** Sections A–G address the seller who owns
 the stock; H–P address Skydrop's own staff; R addresses the shopkeeper. This
 section addresses **the shopkeeper's salesperson** — a reseller store's own
-sales people, signing in at `portal.skydrop.global` (`apps/associate`,
+sales people, signing in at `associate.skydrop.global` (`apps/associate`,
 ASSOC-1). They are often on a phone, often mid-call with a customer. They own
 nothing, hold no stock, have no wallet, and settle up with their store outside
 Skydrop entirely.

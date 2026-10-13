@@ -1,7 +1,7 @@
 import { staticSecurityHeaders, allRoutes } from '../../packages/config/security-headers.mjs';
 
 /**
- * Next.js 15 config — apps/associate (ASSOC-1, portal.skydrop.global).
+ * Next.js 15 config — apps/associate (ASSOC-1, associate.skydrop.global).
  *
  * Same architecture as the other four consoles: the `/api/*` proxy is a
  * ROUTE HANDLER at src/app/api/[...path]/route.ts (not a rewrite), so

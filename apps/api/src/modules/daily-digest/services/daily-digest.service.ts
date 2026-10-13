@@ -226,7 +226,7 @@ export class DailyDigestService {
             eventKey: `store:${store.id}:${day.label}`,
             who: storeName,
             // The STORE's app, not the seller's — a store user has no login
-            // for app.skydrop.global and a link there is a dead end.
+            // for client.skydrop.global and a link there is a dead end.
             appUrl: this.env.resellerAppUrl,
             day,
             body,
@@ -249,7 +249,7 @@ export class DailyDigestService {
           who: storeName,
           /*
             ASSOC-1 — the ASSOCIATE's app, not the store's. A narrow
-            person signs in at `portal.skydrop.global`, and
+            person signs in at `associate.skydrop.global`, and
             `__Host-storeRefresh` is bound to the origin that set it —
             the same reason `invitationAppUrl` exists in
             `store-team.service.ts`. A reseller-origin link lands them on

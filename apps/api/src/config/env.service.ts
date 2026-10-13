@@ -1,6 +1,24 @@
 import { Injectable } from '@nestjs/common';
 import type { Env } from './env.schema';
 
+/**
+ * The console hostnames in use before the 2026-10-13 rename, which STILL
+ * SERVE rather than redirect.
+ *
+ * A `__Host-` cookie is bound to the exact origin that set it, so
+ * redirecting `app.` to `client.` would carry no session and log out
+ * every signed-in seller at the cutover. Both answer instead; the new
+ * names are what the system generates links to.
+ *
+ * This list only ever shrinks. When a name stops seeing traffic it
+ * becomes a redirect in Caddy and its entry comes out of here.
+ */
+const LEGACY_CONSOLE_ORIGINS = [
+  'https://app.skydrop.global', // → client.skydrop.global
+  'https://reseller.skydrop.global', // → member.skydrop.global
+  'https://portal.skydrop.global', // → associate.skydrop.global
+] as const;
+
 @Injectable()
 export class EnvService {
   constructor(private readonly env: Env) {}
@@ -90,12 +108,12 @@ export class EnvService {
     return this.env.ADMIN_APP_URL;
   }
 
-  /** RS-2 — the reseller store portal (reseller.skydrop.global). */
+  /** RS-2 — the reseller store console (member.skydrop.global). */
   get resellerAppUrl(): string {
     return this.env.RESELLER_APP_URL;
   }
 
-  /** ASSOC-1 — the associate portal (portal.skydrop.global). */
+  /** ASSOC-1 — the associate console (associate.skydrop.global). */
   get associateAppUrl(): string {
     return this.env.ASSOCIATE_APP_URL;
   }
@@ -156,8 +174,40 @@ export class EnvService {
     return this.env.CSV_PRESIGN_TTL_SECONDS;
   }
 
+  /**
+   * Browser origins the API will answer directly.
+   *
+   * FE-3 means this is a backstop rather than the main path: a browser
+   * talks only to its own origin and each console proxies `/api/*`
+   * server-to-server, so an ordinary request arrives with no `Origin`
+   * header at all. This list matters for anything that does reach the
+   * API cross-origin, and for being able to say what is permitted.
+   *
+   * THE ASSOCIATE PORTAL WAS MISSING. It has been its own origin since
+   * ASSOC-1 and was never added here — harmless so far precisely because
+   * of the proxy, but a list that omits a live console is one that
+   * answers the wrong question the first time somebody relies on it.
+   *
+   * BOTH THE OLD AND THE NEW HOSTNAMES ARE LISTED (2026-10-13). The
+   * consoles moved to client. / member. / associate., and the old
+   * app. / reseller. / portal. still serve the same apps rather than
+   * redirecting — a `__Host-` cookie is bound to the exact origin that
+   * set it, so a redirect would carry no session and would log out every
+   * signed-in user at the cutover. Two live origins per console is the
+   * price of that, until the old names go quiet and become redirects.
+   *
+   * The old ones are hard-coded rather than configured because they are
+   * a fixed, finite, closing set — a legacy list that should shrink to
+   * nothing, not a knob somebody can point anywhere.
+   */
   get corsOrigins(): string[] {
-    return [this.env.SELLER_APP_URL, this.env.ADMIN_APP_URL, this.env.RESELLER_APP_URL];
+    const current = [
+      this.env.SELLER_APP_URL,
+      this.env.ADMIN_APP_URL,
+      this.env.RESELLER_APP_URL,
+      this.env.ASSOCIATE_APP_URL,
+    ];
+    return [...new Set([...current, ...LEGACY_CONSOLE_ORIGINS])];
   }
 
   /**

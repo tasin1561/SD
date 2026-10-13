@@ -83,6 +83,11 @@ const CORPUS = [
   '<a href="https://app.skydrop.global/auth/accept-invitation?token=Pp4Qq5Rr6Ss7Tt8Uu9Vv0Ww1Xx2Yy3Zz4Aa5Bb6Cc7D" style="display:inline-block">Accept</a>',
   'Open https://app.skydrop.global/auth/verify-email?token=Ee8Ff9Gg0Hh1Ii2Jj3Kk4Ll5Mm6Nn7Oo8Pp9Qq0Rr-S. This link expires in 30 minutes.',
   'https://app.skydrop.global/auth/accept-team-invitation?token=Tt1Uu2Vv3Ww4Xx5Yy6Zz7Aa8Bb9Cc0Dd1Ee2Ff3Gg4H\n\nThis invitation expires on 5 August.',
+  // The 2026-10-13 console rename: both hostnames reach the seller
+  // console and both therefore appear in real outbound mail, so the
+  // redaction has to hold for either. Kept BESIDE the shapes above
+  // rather than replacing them — those are dated evidence.
+  'Open https://client.skydrop.global/auth/verify-email?token=Zz9Yy8Xx7Ww6Vv5Uu4Tt3Ss2Rr1Qq0Pp9Oo8Nn7Mm-L. This link expires in 30 minutes.',
 ];
 
 describe('Stored-credential redaction: the migration and the code agree (e2e)', () => {

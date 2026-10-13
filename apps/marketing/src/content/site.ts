@@ -22,8 +22,8 @@ export const platform = {
     corridor: 'Bangladesh ⇄ India',
     email: 'hello@skydrop.global',
     apps: {
-      seller: 'https://app.skydrop.global',
-      store: 'https://reseller.skydrop.global',
+      seller: 'https://client.skydrop.global',
+      store: 'https://member.skydrop.global',
       track: 'https://track.skydrop.global',
     },
   },
@@ -36,8 +36,8 @@ export const platform = {
       { href: '/#faq', label: 'FAQ' },
     ],
     signIn: [
-      { href: 'https://app.skydrop.global/login', label: 'Seller sign-in' },
-      { href: 'https://reseller.skydrop.global/login', label: 'Store sign-in' },
+      { href: 'https://client.skydrop.global/login', label: 'Seller sign-in' },
+      { href: 'https://member.skydrop.global/login', label: 'Store sign-in' },
     ],
     cta: { href: '/request-invite', label: 'Request an invite' },
     track: { href: 'https://track.skydrop.global', label: 'Track a parcel' },
@@ -572,8 +572,8 @@ export const platform = {
         title: 'Access',
         links: [
           { href: '/request-invite', label: 'Request an invite' },
-          { href: 'https://app.skydrop.global/login', label: 'Seller sign-in', external: true },
-          { href: 'https://reseller.skydrop.global/login', label: 'Store sign-in', external: true },
+          { href: 'https://client.skydrop.global/login', label: 'Seller sign-in', external: true },
+          { href: 'https://member.skydrop.global/login', label: 'Store sign-in', external: true },
           { href: 'https://track.skydrop.global', label: 'Track a parcel', external: true },
         ],
       },

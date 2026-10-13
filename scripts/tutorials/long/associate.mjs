@@ -1,5 +1,5 @@
 /**
- * THE ASSOCIATE LONG VIDEO — `portal.skydrop.global`, ASSOC-1.
+ * THE ASSOCIATE LONG VIDEO — `associate.skydrop.global`, ASSOC-1.
  *
  * ── WHO IS WATCHING, AND WHY THIS ONE IS DIFFERENT ──────────────────
  * A SALES PERSON who sells for a reseller store. Often on a phone,

@@ -17,9 +17,9 @@ in particular never a second `Content-Security-Policy`. A browser enforces
 every CSP header it receives, and the intersection of a nonce policy and a
 static one blocks Next's own scripts.
 
-So the answer for `portal.skydrop.global` (ASSOC-1, the associate portal,
+So the answer for `associate.skydrop.global` (ASSOC-1, the associate portal,
 added 2026-10-08) is that **it gets no block in this file at all**, and the
-same for `reseller.skydrop.global`. Their Caddy site blocks are the plain
+same for `member.skydrop.global`. Their Caddy site blocks are the plain
 reverse-proxy ones in `docs/infrastructure.md`; this is written down
 because "the new hostname needs a security-headers block" is the obvious
 assumption, and acting on it is how a working app starts serving a page

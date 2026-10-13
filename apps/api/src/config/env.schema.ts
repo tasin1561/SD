@@ -48,6 +48,19 @@ export const envSchema = z.object({
   AWS_SES_ACCESS_KEY_ID: z.string().optional().default(''),
   AWS_SES_SECRET_ACCESS_KEY: z.string().optional().default(''),
 
+  // RENAMED 2026-10-13: the three consoles moved to client. / member. /
+  // associate. The OLD hostnames (app. / reseller. / portal.) STILL
+  // SERVE the same apps and are not redirects, deliberately — a
+  // `__Host-` cookie is bound to the exact origin that set it, so a
+  // redirect would carry no session and every signed-in user would be
+  // logged out at the cutover. Both answer; these URLs name the new one
+  // because they are what the system GENERATES (invitation, reset and
+  // verification links, the impersonation handoff), and a generated link
+  // should point at the name we intend to keep.
+  //
+  // `corsOrigins` in `env.service.ts` lists BOTH for the same reason.
+  // When the old names go quiet they become redirects, which is a Caddy
+  // change and nothing here.
   SELLER_APP_URL: z.string().url(),
   ADMIN_APP_URL: z.string().url(),
   // RS-2 (2026-09-14): the reseller store portal — where a store user's
@@ -55,14 +68,14 @@ export const envSchema = z.object({
   // rather than required so an environment that has not configured it
   // yet (CI, a dev machine, the droplet before the owner sets it) still
   // boots; production should set it explicitly.
-  RESELLER_APP_URL: z.string().url().default('https://reseller.skydrop.global'),
-  // ASSOC-1 — the associate portal (portal.skydrop.global). A SECOND url
-  // and not a path under the reseller one, because it is a separate app
-  // on a separate origin: the `__Host-storeRefresh` cookie is bound to
-  // the origin that set it, so an associate who accepted their
+  RESELLER_APP_URL: z.string().url().default('https://member.skydrop.global'),
+  // ASSOC-1 — the associate portal (associate.skydrop.global). A SECOND
+  // url and not a path under the reseller one, because it is a separate
+  // app on a separate origin: the `__Host-storeRefresh` cookie is bound
+  // to the origin that set it, so an associate who accepted their
   // invitation at the reseller origin would hold a session the portal
   // cannot read. Defaulted for the same reason as the line above.
-  ASSOCIATE_APP_URL: z.string().url().default('https://portal.skydrop.global'),
+  ASSOCIATE_APP_URL: z.string().url().default('https://associate.skydrop.global'),
   // Module 11: base URL of the customer-facing tracking page (the
   // future apps/track SSR; the M10 GET /public/tracking/:awb endpoint
   // is the API side). M11 customer notifications template

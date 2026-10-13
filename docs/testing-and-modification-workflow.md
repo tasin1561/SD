@@ -20,8 +20,8 @@ section.
 | Subdomain | Process | Port | Purpose |
 |---|---|---|---|
 | `skydrop.global` | — (static export, Caddy serves `/var/www/skydrop-marketing`; local dev on 3006) | 3006 | Public marketing landing |
-| `reseller.skydrop.global` | skydrop-reseller | 3005 | Reseller store portal (RS-2) |
-| `app.skydrop.global` | skydrop-seller | 3003 | Seller dashboard |
+| `member.skydrop.global` | skydrop-reseller | 3005 | Reseller store portal (RS-2) |
+| `client.skydrop.global` | skydrop-seller | 3003 | Seller dashboard |
 | `admin.skydrop.global` | skydrop-admin | 3002 | Internal staff |
 | `track.skydrop.global` | skydrop-track | 3004 | Public AWB tracking (EN+HI) |
 | `api.skydrop.global` | skydrop-api | 4000 | NestJS REST API |
@@ -31,7 +31,7 @@ section.
 
 - **Admin/staff** logs in via `admin.skydrop.global/login` with a staff
   email + password. The seeded super-admin is `admin@skydrop.global`.
-- **Seller** logs in via `app.skydrop.global/login`. Sellers are
+- **Seller** logs in via `client.skydrop.global/login`. Sellers are
   **invite-only** — no public signup. Admins create invitations.
 - **Customer** never authenticates. They receive parcels and look up
   tracking on `track.skydrop.global/<AWB>`.
@@ -84,7 +84,7 @@ non-trivial. Takes ~15 minutes.
 1. Open the invitation link in an incognito window.
 2. Fill: full name, password (≥ 12 chars), phone (`+8801XXXXXXXXX`),
    country `BD`. Submit.
-3. You're auto-logged-in on `app.skydrop.global/dashboard`.
+3. You're auto-logged-in on `client.skydrop.global/dashboard`.
 
 ### 1.3. (no manual approval step — the invite IS the approval)
 

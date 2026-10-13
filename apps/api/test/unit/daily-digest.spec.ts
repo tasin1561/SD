@@ -63,8 +63,8 @@ function serviceWith(
       dispatch as never,
       audience as never,
       {
-        sellerAppUrl: 'https://app.skydrop.global',
-        resellerAppUrl: 'https://reseller.skydrop.global',
+        sellerAppUrl: 'https://client.skydrop.global',
+        resellerAppUrl: 'https://member.skydrop.global',
       } as never,
     ),
     prisma,

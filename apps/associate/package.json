@@ -2,7 +2,7 @@
   "name": "@skydrop/associate",
   "version": "0.0.0",
   "private": true,
-  "description": "Skydrop associate portal — portal.skydrop.global — for a reseller store's own sales people (ASSOC-1).",
+  "description": "Skydrop associate portal — associate.skydrop.global — for a reseller store's own sales people (ASSOC-1).",
   "scripts": {
     "dev": "next dev -p 3007",
     "build": "next build",
