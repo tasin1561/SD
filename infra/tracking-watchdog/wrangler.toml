@@ -34,9 +34,16 @@ WARN_MINUTES = "35"
 
 [[kv_namespaces]]
 binding = "WATCHDOG_STATE"
-# Replace with the id printed by:
-#   wrangler kv namespace create WATCHDOG_STATE
-id = "REPLACE_ME"
+# Created with `wrangler kv namespace create WATCHDOG_STATE`. The id is an
+# identifier, not a credential — reaching the namespace still needs the
+# account's own auth — so it belongs in the committed config, unlike the
+# two secrets above.
+#
+# It holds one key, `tracking`: the consecutive-bad count and the worst
+# level already reported. Roughly 96 reads a day and almost no writes
+# (it only writes when the state actually changes), against a free tier
+# of 100,000 reads and 1,000 writes.
+id = "17dd29888f4f4e83965a66d8ff9d1838"
 
 # Observability on, because the one thing this design cannot tolerate is
 # the watchdog failing silently. A refused Resend call THROWS (see
