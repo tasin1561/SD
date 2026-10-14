@@ -4,8 +4,8 @@ import { test, expect } from '@playwright/test';
  * apps/seller login round-trip (M13 CP1.7).
  *
  * The FE-5 identity-parameterization in practice: the same harness
- * shape as apps/admin's login spec, with seller-distinct chrome
- * (Seller portal, companyName surface). Proves the second consumer
+ * shape as apps/admin's login spec, with client-distinct chrome
+ * (Client portal, companyName surface). Proves the second consumer
  * of the M12 frontend foundation works end-to-end.
  *
  * Prereqs: Postgres + Redis + apps/api running. See
@@ -16,13 +16,18 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('seller login (M13 CP1.7 harness)', () => {
-  test('login page renders the Skydrop Seller chrome', async ({ page }) => {
+  test('login page renders the Skydrop Client chrome', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByText('Skydrop', { exact: true })).toBeVisible();
     // The app is named by its strapline, not a bare word — the login
     // chrome was restyled after these specs were written, and nothing
-    // ran them to notice.
-    await expect(page.getByText('seller portal', { exact: true })).toBeVisible();
+    // ran them to notice. It happened AGAIN with CON-2's rename
+    // ("seller portal" → "client portal"), and again only CI saw it:
+    // these specs need the apps and the API running, so no local gate
+    // reaches them. When renaming console copy, grep apps/*/e2e for an
+    // assertion on the words you are changing — it is one grep, and the
+    // alternative is finding out one CI run at a time.
+    await expect(page.getByText('client portal', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'email' })).toBeVisible();
     // NOT getByLabel('Password'): the show/hide toggle carries
