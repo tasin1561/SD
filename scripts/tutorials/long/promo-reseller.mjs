@@ -56,7 +56,7 @@
 export const narration = {
   slug: 'promo-reseller',
   title: 'Sell it before you buy it',
-  subtitle: 'Skydrop for reseller stores',
+  subtitle: 'Skydrop for member stores',
   steps: [
     {
       id: 'problem',

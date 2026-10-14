@@ -42,7 +42,7 @@ screen label into Bengali or Devanagari — the viewer is matching letters.
 | parcel | পার্সেল | पार्सल |
 | courier | কুরিয়ার | कूरियर |
 | customer | ক্রেতা | ग्राहक |
-| seller | বিক্রেতা | विक्रेता |
+| client | বিক্রেতা † | विक्रेता † |
 | order | অর্ডার | ऑर्डर |
 | price | দাম | कीमत |
 | delivery fee | ডেলিভারি চার্জ | डिलीवरी शुल्क |
@@ -52,9 +52,20 @@ screen label into Bengali or Devanagari — the viewer is matching letters.
 
 Fixed on first use so three videos in two languages cannot drift.
 
+† **Needs a decision from somebody who speaks the language.** CON-2 renamed
+the English words: the business shipping the stock is a **client** rather
+than a seller, and a business reselling that stock under its own name is a
+**member store** rather than a reseller store. বিক্রেতা and विक्रेता both say
+*seller*, so the two cells marked † are the OLD wording — left standing only
+so the lines already translated can be found and re-checked, not because
+they are right. **member store** has no row at all for the same reason.
+**Do not invent either one here**: a word guessed in this table is a word
+three videos in two languages then drift from, which is what the table
+exists to stop.
+
 ## Tone
 
-- **Bangla** addresses the seller as **আপনি**. Plain spoken Bangla, not
+- **Bangla** addresses the client as **আপনি**. Plain spoken Bangla, not
   literary — these are instructions, not prose. Avoid Sanskritised
   vocabulary where an everyday word exists.
 - **Hindi** addresses the viewer as **आप**. Everyday Hindustani; where a

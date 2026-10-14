@@ -770,7 +770,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             {openStores.length > 1 && (
               <Select
                 label="Store"
-                hint="Which of your shopfronts this order belongs to. Your reference has to be unique within one shopfront, not across them."
+                hint="Which of your shops this order belongs to. Your reference has to be unique within one shop, not across them."
                 value={form.storeId}
                 onChange={(e) => set('storeId', e.target.value)}
               >

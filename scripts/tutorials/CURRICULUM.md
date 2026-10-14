@@ -1,8 +1,8 @@
 # The tutorial library
 
 Every screen in all FOUR consoles, sorted into tutorials, in the order a
-person meets them. Derived from the code — the 47 seller pages, the 86 admin
-pages, the 26 reseller pages and the 11 associate pages under each app's
+person meets them. Derived from the code — the 47 client pages, the 86 admin
+pages, the 26 member-store pages and the 11 associate pages under each app's
 `(authed)/`, every `page-access.ts` table, and the flows the components
 actually perform — not from the sidebar and not from memory.
 
@@ -11,13 +11,13 @@ actually perform — not from the sidebar and not from memory.
 
 | Sections | App | Reader | Tutorials |
 | --- | --- | --- | --- |
-| A–G | `apps/seller` | the seller who owns the stock | 42, all filmed |
+| A–G | `apps/seller` | the client who owns the stock | 42, all filmed |
 | H–P | `apps/admin` | Skydrop's own staff | 45, 42 filmed |
 | R | `apps/reseller` | the shopkeeper selling it | 21, all filmed |
 | S | `apps/associate` | the shopkeeper's salesperson | 7, all filmed |
 
 **FOUR APPS, FOUR READERS, and the split is the point.** Section G teaches a
-seller to open a store and set its terms; R is the person who then has to USE
+client to open a store and set its terms; R is the person who then has to USE
 it; S is the person THAT person hires to sell. Each section is filmed as its
 own reader, never as somebody senior looking at their screen — a store user
 cannot see unit cost or real stock, and an associate cannot see what the store
@@ -34,7 +34,7 @@ Read ["What this costs"](#what-this-costs) before committing to the whole thing.
 say a third app was out of scope and somebody should decide whether it stayed
 that way — the argument it made against itself ("the people who then have to
 USE it get nothing") is the one that settled it. R came to 21 rather than the
-fifteen estimated here, because `/associates` landed in the reseller portal
+fifteen estimated here, because `/associates` landed in the member store portal
 the day after R was planned and added three screens nobody had counted. S came
 to 7, which is small because the long `associate-everything` walkthrough had
 already seeded that world.
@@ -44,7 +44,7 @@ already seeded that world.
 ## Where to pick up
 
 **Filmed so far (87):** A1–A6, B1–B7, C1–C6, D1–D6, E1–E5, F1–F5, G1–G7 —
-**the whole seller app** — plus **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
+**the whole client app** — plus **H1–H4**, **I1–I4**, **J1–J8**, **K1–K2**,
 **L1–L4**, **M1–M2**, **M4**, **M6**, **N1–N9**, **O1–O5** and **P1–P5**, which is
 **the whole of the dangerous five**.
 Every one has its own entry below saying what it covers and what its seeding
@@ -117,20 +117,20 @@ seeding) — so (a) unless somebody adds a per-advance switch. **Do NOT fake it 
 deleting the applied webhook row afterwards**: the order has already moved by
 then, and rewinding a lifecycle is the one thing this seeding never does.
 M4–M6 each need a parcel staged into a state nothing on this box reaches by
-itself (`PENDING_MANUAL_PLACEMENT`, a MANUAL-policy seller with a confirmed
-parcel, a seller's delivery-action request), which is real work and is why
+itself (`PENDING_MANUAL_PLACEMENT`, a MANUAL-policy client with a confirmed
+parcel, a client's delivery-action request), which is real work and is why
 section O went first.
 
 **TWO THINGS MEASURED FOR WHOEVER TAKES O2 AND O4 (2026-10-01), so neither is a
 surprise.**
 
-- **O2 IS FILMED, against a seller of its own** (`Khulna Handloom`) — the
+- **O2 IS FILMED, against a client of its own** (`Khulna Handloom`) — the
   second of the two answers this note offered, and it turned out to be the one
-  that was needed rather than the safer one. Suspending the demo seller is only
-  half the problem: **an account hold cannot be shown AT ALL on a seller in
+  that was needed rather than the safer one. Suspending the demo client is only
+  half the problem: **an account hold cannot be shown AT ALL on a client in
   credit**, because `activeFor` lifts one in passing the moment the balance
   reaches the clearing figure, and zero is not a low enough figure either
-  (`0 >= 0`). The hold exists for a seller who owes us money, so the seeding
+  (`0 >= 0`). The hold exists for a client who owes us money, so the seeding
   makes one who does. See the entry.
 - **O4's page is SIXTEEN THOUSAND PIXELS TALL.** `/settings` renders every group
   at once, which makes it the longest screen in the console by a factor of
@@ -142,10 +142,10 @@ surprise.**
   thing to demonstrate on: pick one that decides a display or a threshold.
 
 **L4 IS SKIPPED FOR NOW, ON PURPOSE, and it is the one entry out of order.** It
-is `needs demo data` and `dangerous`, and its form asks for NINE ids — seller,
+is `needs demo data` and `dangerous`, and its form asks for NINE ids — client,
 variant, quantity, and a warehouse, bin and batch at each end — which is three
 times L2's fixture and needs stock staged at the Dhaka intake plus a
-destination batch at Kolkata for the same seller and variant, because a batch
+destination batch at Kolkata for the same client and variant, because a batch
 is warehouse-scoped and the form will not invent one (which is the whole point
 of the video). The rest of M is cheaper per minute and two of them are `ready`.
 **Come back to it with the service's own docstring in hand** — the use it names
@@ -170,8 +170,8 @@ filmable is a Shiprocket simulator, which is engineering rather than filming.
 
 **M6's ENTRY WAS STALE, NOT THE PRODUCT**, which is the other way round from
 every previous correction here and worth noticing. It promised "approve or
-reject with a reason" on a screen where no decidable row can exist: a seller's
-ask is created already approved and a store's held one is seller staff's.
+reject with a reason" on a screen where no decidable row can exist: a client's
+ask is created already approved and a store's held one is client staff's.
 `L4` is the only entry left that is neither filmed nor impractical.
 
 **FOUR THINGS SECTIONS M AND P LEFT BEHIND THAT ARE ABOUT THE BOX RATHER THAN A
@@ -184,8 +184,8 @@ asked the question:
 - the **Delhivery simulator answered neither read endpoint in the shape the
   adapter parses**, so every local parcel reported "no TAT available for this
   lane" with a warning blaming the courier (P2);
-- a **reseller store's own words were printed as Skydrop's** in both consoles,
-  including on the screen of the seller being asked to pay (P3);
+- a **member store's own words were printed as Skydrop's** in both consoles,
+  including on the screen of the client being asked to pay (P3);
 - and **a bin collapse would have swept goods still in the air onto the sellable
   floor** (P4) — the one that would have cost money.
 
@@ -329,16 +329,16 @@ no way to show "typed once and never read back" without typing one.
   seconds ago is not history somebody will have to explain — nothing shipped on
   it and nothing was charged to it — and leaving a pile of them is noise on a
   page whose subject is knowing which account carried what. It is removed only
-  when it carries no parcel, no settlement and no seller link, and throws by
+  when it carries no parcel, no settlement and no client link, and throws by
   name if it ever does.
 - **SANDBOX, and never the default.** The form opens on production because that
   is the only live integration; the video changes it, because a video that
   leaves a production-labelled account behind on every take teaches the wrong
   habit. `isDefault` stays unticked and the flow ASSERTS the saved row carries
-  no Default badge — a default re-routes every seller nobody has linked, which
+  no Default badge — a default re-routes every client nobody has linked, which
   is not a thing to do for a camera.
 - **It touches NO master switch.** Turning a courier off diverts every unlinked
-  seller's next parcel; the narration explains what off means (and that it is
+  client's next parcel; the narration explains what off means (and that it is
   not a kill switch — CUR-16) without pressing it.
 
 **THE DEFAULT BADGE IS ON TWO ROWS, and the first draft of the narration said
@@ -412,7 +412,7 @@ both of which it spends on camera and both of which `leadsWorldFor` resets.
 - **The unused invitation is DELETED**, because the drawer renders a different
   card — "Resend", with different words on it — the moment one exists. A USED
   invitation is left alone and the seed throws by name: that row is the evidence
-  of how a real seller got in.
+  of how a real client got in.
 - **`.test` email, deliberately.** Sending really does call the mailer; in dev
   that is a `[DEV] Would send email` line, and a video that types a reachable
   address into a send button is one bad environment variable from mailing a
@@ -583,7 +583,7 @@ H2 **1,044** for 14 and 159 s, H4 **972** for 13 and 148 s, H3 **1,068** for
 14 and 180 s, I1 **1,067** for 14 and 172 s, and I2 **1,185** for 16 and 197 s, I3
 **1,049** for 14 and 169 s, I4 **920** for 13 and 151 s, J1 **1,024** for 14
 and 171 s, J2 **994** for 14 and 163 s, and J3 **937** for 13 and 152 s —
-**12,238 for the twelve, or roughly a third each of the 1,200 the seller videos
+**12,238 for the twelve, or roughly a third each of the 1,200 the client videos
 were costing**, because a tour writes shorter lines than a demonstration. Every
 pre-flight estimate was about 2× the real spend (I2's said 2,695, I3's 2,386,
 I4's 2,087, J1's 2,329, J2's 2,262, J3's 2,129). The `--check` runs and the seed
@@ -592,7 +592,7 @@ runs cost nothing, and there have been fifty-five.
 is seventy-odd more admin videos.
 
 **Every admin video's subtitle is `Skydrop for ops`**, not `Skydrop for
-sellers`. That is the convention for H–P; the title card is the only place it
+clients`. That is the convention for H–P; the title card is the only place it
 shows.
 
 **C1 was re-taken the same evening and nothing is outstanding.** E5 bills the
@@ -634,7 +634,7 @@ Room` is configured on camera by G3–G5 (`standingStoreFor` wipes its terms
   (`tradingStoreWorld`: a signed-in store user, `reseller.orders_enabled`,
   accepted terms, priced products, an action policy and five orders). An order
   pins a terms version through a RESTRICT FK, so a store order on the standing
-  one would break G4 permanently. Anything later needing a reseller store that
+  one would break G4 permanently. Anything later needing a member store that
   trades reuses `tradingStoreWorld` rather than building a third.
 
 ### What the last few rounds learned about cost
@@ -670,7 +670,7 @@ order history, an auto-approval note describing a send-back on a request that
 was not one, a ticket that existed but a panel saying "nothing raised yet" a
 few centimetres below it, an order named by eight characters of a uuid on
 the one screen whose job is to say which order needs you, a return fee printed
-as a literal in the copy over a setting that is per seller and per currency —
+as a literal in the copy over a setting that is per client and per currency —
 beside a second return path that charged a DIFFERENT fee and named no figure at
 all — and a refund's ledger note naming its ticket by uuid, which is the SAME
 defect as the order one, in a second place, found by filming the wallet.
@@ -679,7 +679,7 @@ until that day.** The consignment page's freight tile printed
 `charge.status.toLowerCase()` — which reads perfectly for three of the five
 values and is wrong for the two a bill has to actually REACH: `PARTIALLY_SETTLED`
 came out as "partially_settled", an underscore straight out of the database on a
-seller's own screen, and `VOIDED` came out as "voided" where `statusLabel` and
+client's own screen, and `VOIDED` came out as "voided" where `statusLabel` and
 every sentence beside it say "Withdrawn". It survived because no bill on any box
 had ever been in either state, and the reason nothing could catch it is one
 type: `ConsignmentView.freightCharges[].status` was `string`, so every reader
@@ -690,10 +690,10 @@ never reached. **A seeding pass that puts a row into a status nothing has used
 before is a bug hunt in its own right.**
 
 **And, on 2026-09-30, TWO that had never worked at all.** The order tracker told
-every confirmed seller that picking and packing were "not needed" — a fallback
+every confirmed client that picking and packing were "not needed" — a fallback
 onto the waybill's own timestamp, correct until CUR-2b moved the booking to
 order confirmation two months ago and silently wrong on every confirmed order
-since. And the seller's
+since. And the client's
 "Waiting on you" queue threw the moment any store asked for a change, and
 React's error boundary took the WHOLE page with it — so the two queues beside
 it became unreachable too, while the nav badge carried on counting rows nobody
@@ -708,7 +708,7 @@ caught it.
 time.** `order_events.created_at` really is the scan time on a healthy evening;
 a delivery attempt really is in the same minute as its scan; a uuid really does
 identify an order; `₹200` really is the return fee — on the seeded default, for
-a seller who never negotiated one, until the day somebody changes it. Each is
+a client who never negotiated one, until the day somebody changes it. Each is
 wrong exactly where it matters, and none of them fails loudly.
 
 **A second shape has now appeared twice, and it is about the TESTS rather than
@@ -778,7 +778,7 @@ lint` does. A spec constructing a service with the wrong number of arguments
   **The conclusion it drew is the important half and stands: a re-take to fix a
   line that misreads the screen is nearly free, because only the changed line is
   bought again, and shipping a wrong one is not.** C1's re-take the same evening
-  bought exactly one clip. Balance with the seller app complete: about 89,000 of
+  bought exactly one clip. Balance with the client app complete: about 89,000 of
   121,027 on the one configured key, which is seventy more fresh videos.
 - **Budget time for FIXING as well as filming.** Six real bugs in one session,
   every one on a path nothing else exercises. If a screen behaves oddly during a
@@ -841,11 +841,11 @@ interest is months of accumulated history.
 
 ---
 
-# SELLER APP
+# CLIENT APP
 
 ## A — Day one: before you can sell anything
 
-A brand-new seller, signed in for the first time, with the dashboard's setup
+A brand-new client, signed in for the first time, with the dashboard's setup
 checklist still showing. Film these against a fresh account, in this order:
 the checklist is the tutorial index, and it disappears as they are completed.
 
@@ -854,14 +854,14 @@ the checklist is the tutorial index, and it disappears as they are completed.
 **Promise** — you can find any screen, and you know what the five sidebar
 sections are for.
 **Length** 2 min 14 s. **Prerequisites** none.
-**Needs** a seller with a handful of orders so the dashboard is not all empty
+**Needs** a client with a handful of orders so the dashboard is not all empty
 states — `seed-demo-data.mjs find-your-way-around` places four.
 **Covers** the five collapsible sidebar groups (Selling, Stock, Money,
 Reselling, Account), the header order search, the quick-actions menu, the
 notification bell — the only control that survives on a phone — and the bottom
 status strip. One pass, no clicks that change anything.
 **Note:** an earlier draft of this entry said the groups carry ordinals
-(01–05). The seller shell still passes them and **the `Shell` component ignores
+(01–05). The client shell still passes them and **the `Shell` component ignores
 them** ("Accepted and ignored: no index numbers"), so the narration describes
 what is on screen instead. Worth remembering as the shape of a curriculum
 mistake: a prop that is still being passed is not a thing a viewer can see.
@@ -930,7 +930,7 @@ with it as the default, so a second take would open on a register that already
 has it, fail the add on a duplicate name, and film a store the narration calls
 "not the default" while it is. `clearTutorialSettings` removes it and puts the
 original store back as default — moving the flag BEFORE the delete, because the
-partial unique index allows exactly one default per seller and deleting the
+partial unique index allows exactly one default per client and deleting the
 default first would leave order create with nothing to pre-select.
 
 ### A6. The delivery fee your customer pays · **FILMED** — `set-your-delivery-fee.mp4`
@@ -943,7 +943,7 @@ you chose look identical in the box, and closes on the badge flipping to "Your
 own figure" — which is the proof the save landed and the only visible
 difference the page makes.
 
-The seed clears the seller's override before every take, or the second one
+The seed clears the client's override before every take, or the second one
 films a page that already says "Your own figure" while the narration is
 explaining what "Skydrop default" means.
 
@@ -982,7 +982,7 @@ state.
 **Covers** `/orders/pending`, which the nav never links — the only way in is
 the "N pending" button on `/orders`, which renders only when the count is
 non-zero, so the video shows that rather than explaining it. Then the three
-tiles, the band headed by the spreadsheet's own row number and the seller's
+tiles, the band headed by the spreadsheet's own row number and the client's
 reference, the marked field and the sentence under it, the fix typed in, the
 three things you can do with a row, the Discard confirmation BACKED OUT OF, and
 Import — which saves what was typed before it imports. Ends on the order in the
@@ -991,7 +991,7 @@ list with the rest of the file.
 **Three bugs, and the last one is the kind this library exists to find** — see
 [Bugs found](#bugs-found-while-establishing-feasibility). A raw Prisma error,
 absolute server path and source excerpt included, was written verbatim into a
-seller-facing field; every "X is required" message named our internal key under
+client-facing field; every "X is required" message named our internal key under
 a field labelled something else; and **a row fixed on this page became a DRAFT**
 — so nobody ever rang that customer, while the dialog said "it becomes an
 order" and the row left the queue.
@@ -1035,7 +1035,7 @@ its own, and this is the map.
 
 **It reaches the order through the UI rather than by URL**, which is not fussiness:
 the camera records the page and never the address bar, so a `goto` reads as the
-screen changing for no reason. Clicking Orders and searching the seller's own
+screen changing for no reason. Clicking Orders and searching the client's own
 reference is also the path B4 has just taught.
 
 **`ordSection` scrolls a section to the CENTRE, not merely into view.**
@@ -1107,7 +1107,7 @@ by `cancelWorldFor` on every seed run and sits in the call queue;
 retires the cancelled one and builds another. A `--check` pass spends them too,
 so seed-check-seed-check-seed-take is three of each; the confirmed one costs a
 real courier booking each time (about twenty seconds on the simulator).
-**Covers** the Cancel action on both, its reason, and the sentence the seller
+**Covers** the Cancel action on both, its reason, and the sentence the client
 actually needs: **the dialog says something different at each stage, and that is
 the video.** Before confirmation it names the call queue and nothing is released,
 because nothing was ever held (ORD-10). After it, "the stock held for this order
@@ -1117,13 +1117,13 @@ driver, which has no Cancel button at all, and on the button it has instead.
 **Its seeding retires rather than deletes, and that is forced rather than
 chosen.** `clearPreviousOrders` sweeps PENDING_CONFIRMATION but not CANCELLED,
 and a cancelled order cannot simply be deleted either — the cancel emails the
-seller, and `notification_logs.order_id` refuses the row. So the spent one keeps
+client, and `notification_logs.order_id` refuses the row. So the spent one keeps
 everything and only its NAME moves aside (D4's `retireSpentParcel` rule), which
-it must: `sellerOrderRef` is unique per seller and store.
+it must: `sellerOrderRef` is unique per client and store.
 
 **`needsLiveCourier` is new on `LIFECYCLE_PARCELS` and exists because of this
 one.** D4's two parcels are retired when the SIMULATOR has forgotten their
-waybill, since D4 calls the courier on it. A seller cancel calls the courier
+waybill, since D4 calls the courier on it. A client cancel calls the courier
 NOTHING (CUR-10 amendment #4 — it voids our shipment and a person closes the
 waybill on Delhivery's desk afterwards), so that test would have bought a
 courier booking after every sim restart for nothing. Only the two parcels whose
@@ -1131,7 +1131,7 @@ video makes a live call carry the flag.
 
 **Three bugs, and one of them had been on screen for two months** — see
 [Bugs found](#bugs-found-while-establishing-feasibility): the tracker told every
-confirmed seller that picking and packing were "not needed"; the cancel dialog's
+confirmed client that picking and packing were "not needed"; the cancel dialog's
 money line had nothing supplying it; and `AWAITING_COURIER` was missing from the
 server's own cancellable set while the button was offered on it.
 
@@ -1156,7 +1156,7 @@ three sides. The same shape as D0 for section D, and it took about two minutes.
 
 **Its counts DISAGREE twice, for two different reasons**, because a page
 showing two counts that match explains nothing. One line is counted SHORT in
-Dhaka against what the seller declared (16 declared, 15 found — ours to take up
+Dhaka against what the client declared (16 declared, 15 found — ours to take up
 with THEM); the same line is then counted short again in India against what
 Bangladesh dispatched (15 sent, 14 found — ours to take up with the FORWARDER,
 and CNS-4 posts it as an `IN_TRANSIT_LOSS` out of the transit bin rather than
@@ -1184,7 +1184,7 @@ them is filmed.
 
 **The freight bill it does NOT build is now `lib/freight.mjs` (E5, 2026-09-30),
 and it deliberately does not live here.** Route (a) won — the consignment's
-batches are given an expiry so FEFO reaches them ahead of the seller's older
+batches are given an expiry so FEFO reaches them ahead of the client's older
 stock — but it is applied to the BATCHES after the fact rather than declared in
 `TUTORIAL_CONSIGNMENTS`, because C0 is BUILD-ONCE and never rewinds: on every
 box that has already filmed C1 the consignment is counted, its batches exist,
@@ -1199,7 +1199,7 @@ which is worse.
 
 **One bug, on the page C1 films** — see
 [Bugs found](#bugs-found-while-establishing-feasibility): a consignment that had
-landed and been counted short told its seller the missing unit was "still to
+landed and been counted short told its client the missing unit was "still to
 come — in Dhaka or in the air".
 
 ### C1. Following a consignment from Dhaka to the shelf · **FILMED** — `follow-a-consignment.mp4`
@@ -1215,7 +1215,7 @@ labelled by what each step **means** rather than by a status word, both count
 cards with their per-product differences, and the freight section.
 
 **The two differences are the video, and they are different KINDS of thing.**
-The Dhaka count is short against what the SELLER declared — a conversation
+The Dhaka count is short against what the CLIENT declared — a conversation
 between them and whoever packed it. The India count is short against what
 BANGLADESH dispatched — ours to take up with the forwarder. Narrating them as
 one thing ("a count went wrong") would lose the only distinction the page
@@ -1286,7 +1286,7 @@ and a weight override that beats the inherited one.
 **The sentence that earns the tutorial is the last one.** Archiving a product
 CASCADES to its variants (`CatalogProductService.archive` updates them in the
 same transaction); restoring does NOT (`unarchive` audits the note "variants
-left as-is"). So a seller who archives and then restores has a live product
+left as-is"). So a client who archives and then restores has a live product
 whose every SKU is still archived — and the dialog says so in one line nobody
 reads. The video archives and restores on camera so that line is read out.
 
@@ -1304,7 +1304,7 @@ would fail the next run's stock top-up rather than the video.
 
 **Promise** — your products have pictures, in the app and on the picking sheet.
 **Length** 2 min 20 s. **Prerequisites** C3.
-**Covers** the presign → upload → register sequence as the seller sees it, one
+**Covers** the presign → upload → register sequence as the client sees it, one
 file and then two at once, which picture stands for the rest, and removing one.
 `needsSpacesShim: true` on the flow.
 
@@ -1313,7 +1313,7 @@ screenshots.** `SellerVariantImageView` in `packages/api-client` declared four
 fields the API has never returned — `displayUrl`, `thumbnailSpacesKey`,
 `contentType`, `sortOrder` against the API's `url`, `mimeType` and
 `displayOrder`. The gallery renders `thumbnailUrl ?? displayUrl`, so until the
-thumbnail worker caught up the `src` was `undefined` and the seller was shown a
+thumbnail worker caught up the `src` was `undefined` and the client was shown a
 BROKEN IMAGE — on every freshly uploaded picture, and permanently if that job
 ever failed. Nothing failed loudly: the upload succeeded, the row existed, only
 the frame was wrong. Fixed by naming the fields the API actually sends and
@@ -1326,13 +1326,13 @@ exactly this: it writes the end of every scene to
 `out/verify/<slug>-check/`, which is the cheapest way to look before spending
 a credit. **Use it on every new flow.**
 
-**A gap worth a decision, NOT a bug:** the seller cannot choose which picture
+**A gap worth a decision, NOT a bug:** the client cannot choose which picture
 stands for the rest. Ordering is `isPrimary desc, displayOrder asc, createdAt
 asc`; the UI sends neither of the first two and there is no update endpoint at
 all (`presign`, `register`, `list`, `delete` is the whole surface), so the
 earliest registered picture wins — and within one drop the uploads race, so
 "earliest" is only decidable when a file is dropped on its own. The video says
-so out loud and tells the seller to upload the good shot first, which is the
+so out loud and tells the client to upload the good shot first, which is the
 honest advice while it stays this way.
 
 **Seeding:** `clearVariantPhotos` hard-deletes the rows and removes the whole
@@ -1354,12 +1354,12 @@ Filmed ahead of C3 and C4, which it nominally depends on — the dependency is
 "has seen a product page", and the seeded catalogue supplies that without C3
 having been made.
 
-The seed clears BOTH thresholds (the seller's default and every per-SKU
+The seed clears BOTH thresholds (the client's default and every per-SKU
 override) before each take. Null is not tidiness here, it is the state being
 filmed: `StockAlertService` resolves `variant.lowStockThreshold ??
 seller.defaultLowStockThreshold ?? null` and returns SKIPPED_NO_THRESHOLD on
 null, which is exactly what the "Off — nothing alerts by default" badge means
-and exactly what a new seller has.
+and exactly what a new client has.
 
 ### C6. Uploading a catalogue from a spreadsheet · **FILMED** — `upload-a-catalogue.mp4`
 
@@ -1369,7 +1369,7 @@ rename your own column headers again.
 **Covers** `/products/import` — a **different importer with different columns**
 from the order import — and the feature no tutorial touched: **saved column
 mappings**. The arc is auto-detection getting three columns, the import being
-BLOCKED because the seller's sheet calls the product name `Item`, a mapping
+BLOCKED because the client's sheet calls the product name `Item`, a mapping
 being saved and made default, the same untouched file being uploaded again, and
 the import running.
 
@@ -1391,19 +1391,19 @@ sentences that differ are chosen by `kind`.
 only when the caller passed a `mappingId`; the panel has never passed one and no
 screen lets one be picked. A mapping could be saved, marked default, listed with
 a chip reading "default", and change nothing about any import — which is the
-whole feature. It now falls back to the seller's default for the import type,
+whole feature. It now falls back to the client's default for the import type,
 laid OVER auto-detection so a header we already recognise keeps working, and
 stamps `lastUsedAt` on whichever mapping drove it.
 `csv-default-mapping-applies.spec.ts` pins all three properties.
 
 **Also removed: a dead column in the template Skydrop hands out.** `HS Code`
 was still in `TEMPLATE_COLUMNS` although `hsCode` left the schema on
-2026-08-18 and is not a `CsvTargetField` — so a seller who downloaded the
+2026-08-18 and is not a `CsvTargetField` — so a client who downloaded the
 official template, filled it in and uploaded it was told one of OUR OWN columns
 would be ignored.
 
 **Fixture:** `fixtures/rangpur-catalogue.csv`, 12 rows over 5 products, with the
-SELLER's headers (`Item`, `Style code`, `Net wt (g)`, `MRP`, `Box L/W/H`) —
+CLIENT's headers (`Item`, `Style code`, `Net wt (g)`, `MRP`, `Box L/W/H`) —
 none of which is in an alias list, which is what makes the mapping the lesson
 rather than a detail. Committed, because the preview's figures are narrated.
 
@@ -1426,7 +1426,7 @@ node scripts/tutorials/seed-demo-data.mjs --lifecycle
 ```
 
 TEN parcels, driven the whole way by the real path: an order placed by the
-seller, confirmed on a CALL, a waybill booked against the local Delhivery
+client, confirmed on a CALL, a waybill booked against the local Delhivery
 simulator, picked, packed at the bench with the box ritual, scanned at handover,
 then advanced by the simulator — which fires the same signed webhooks the real
 courier does. Takes about two and a half minutes from cold. **Verified 2026-09-30, all ten
@@ -1502,7 +1502,7 @@ never rewinding.** After D4 was built there were eight
 (`RSH-LIFE-SENDBACK-SPENT-1…4`, `RSH-LIFE-RETURNREQ-SPENT-1…4`). Each is a real
 parcel with stock decremented, money charged and a waybill, which is exactly why
 none of them is deleted. Two consequences to know before they surprise somebody:
-the seller's order list and its status tabs grow by two per take (every D-section
+the client's order list and its status tabs grow by two per take (every D-section
 video finds its parcel BY CUSTOMER NAME, so no scene is aimed at a row that
 moves), and **a retired SENDBACK sits at OUT_FOR_DELIVERY for ever** — so three
 nights later the NSA sweep will start flagging it onto `/needs-attention`'s
@@ -1522,7 +1522,7 @@ not need it. `--lifecycle` forces it, which is how it is built the first time.
 `inventory.early_reservation_ndr_action` (MANUAL_REVIEW by default) and nothing
 else — it never reads `inventory.early_reservation_enabled`. The enable switch
 governs whether stock is booked AT PLACEMENT; the pause at the cap is a
-question about whether to keep CALLING, and every seller gets to answer it. The
+question about whether to keep CALLING, and every client gets to answer it. The
 seeded review carries `heldQty: 0`, which is the honest number.
 
 #### What the build found, and what it refuses to do
@@ -1552,7 +1552,7 @@ reschedules had accumulated on it, it OUTRANKED every genuine call. Releasing
 it put it straight back at the front. **Nothing on the box could be confirmed
 through the call centre at all.** `reconcileStaleCallQueue` closes entries
 whose order is no longer PENDING_CONFIRMATION — the rule itself, which is why
-it is safe across every seller. **Worth considering as a real background
+it is safe across every client. **Worth considering as a real background
 sweep**: on production the same leak would quietly starve the call queue.
 
 **A crash between `pick_started_at` and the PENDING_PICK transition makes a
@@ -1615,7 +1615,7 @@ parcels are never rebuilt, so anything written on one survives into every later
 take.
 
 **Consequence for every OTHER video:** once this has been run on a box, the
-demo seller has delivered and returned parcels for good — `clearPreviousOrders`
+demo client has delivered and returned parcels for good — `clearPreviousOrders`
 excludes the lifecycle refs deliberately, because rebuilding one costs a real
 courier booking and a warehouse run. A re-take of an earlier video therefore
 films a fuller order list than the first take did. That is an improvement, not
@@ -1630,12 +1630,12 @@ ringing anyone.
 `LIFECYCLE_SLUGS`.
 **Covers** `/tracking`: every parcel carrying a waybill, the three tiles and
 the small print under them (they count the parcels SHOWN, not the fleet), the
-two filters a seller actually comes for, the scan history, the search, and the
+two filters a client actually comes for, the scan history, the search, and the
 fact that nothing on the screen is a button. **The history opens BENEATH the
 table, not inside the row** — this entry said "expanding in place" and it does
 not.
 
-**FILMING FOUND A 500 ON THE ONE FILTER A SELLER COMES HERE FOR.** The
+**FILMING FOUND A 500 ON THE ONE FILTER A CLIENT COMES HERE FOR.** The
 component's `FILTERS` list said `DELIVERY_FAILED`, which is an ORDER status;
 the shipment enum's value is `DELIVERY_ATTEMPTED`. So the tab sent Prisma a
 value the column cannot hold and the whole screen came back `API 500
@@ -1674,7 +1674,7 @@ opened.
 send-back reaches the courier on the click (CUR-10's seller amendment) and
 would turn D0's failed parcel into a returning one — D4 owns that. A
 re-attempt opens a COURIER escalation with a thread hanging off it; a recall
-opens a plain seller issue and queues a call, both of which the seeding clears.
+opens a plain client issue and queues a call, both of which the seeding clears.
 
 **FILMING FOUND THREE.** (a) A delivery attempt was drawn against EVERY scan
 in the order's Full history — the identical defect D1 fixed on the tracking
@@ -1683,8 +1683,8 @@ parcel moves fast enough to put several scans in one minute. The simulator does
 exactly that, so "In transit — Delivery attempt 1 — could not reach the
 customer" appeared three times on a parcel that was plainly still moving. (b)
 Every auto-approved request replied with ONE hard-coded sentence — "returning
-their own parcel is the seller to decide" — which is true of a send-back and
-false of the other two, so a seller who asked us to RING their customer read
+their own parcel is the client to decide" — which is true of a send-back and
+false of the other two, so a client who asked us to RING their customer read
 back a note about returning a parcel as our reply to them. (c) Asking opens a
 ticket, and the mutation invalidated only the actions list — so "Issues raised
 on this order", a few centimetres below the reply, went on saying "Nothing
@@ -1698,7 +1698,7 @@ on you.
 **Covers** `/needs-attention` and its two lists, which are two different jobs:
 orders the call centre could not confirm (**you owe a decision**) and parcels
 out for delivery three nights or more (**you are waiting on a courier**). The
-page has no buttons at all and says why: the seller cannot make a courier
+page has no buttons at all and says why: the client cannot make a courier
 deliver, and offering an action there would be theatre.
 
 ### D4. Asking for a parcel back · **FILMED** — `ask-for-a-parcel-back.mp4`
@@ -1706,7 +1706,7 @@ deliver, and offering an action there would be theatre.
 **Promise** — you can turn a parcel round, and you know the fee before you do.
 **Length** 2 min 52 s (15 scenes). **Prerequisites** D1. **Needs** D0, and it is
 in `LIFECYCLE_SLUGS`.
-**Covers** the seller's own "send it back" on an in-flight parcel — **the one
+**Covers** the client's own "send it back" on an in-flight parcel — **the one
 customer-facing action that calls the courier directly, with no operator in the
 loop** (CUR-10's seller amendment) — and then "Request return" on a delivered
 one. **Both are PRESSED.** The send-back goes through the ask dialog (the choice
@@ -1736,16 +1736,16 @@ presses the button — so "check twice with a seed in between" is three parcels,
 about twenty seconds each on the simulator.
 
 **FILMING FOUND THE FEE ON SCREEN WAS A LITERAL.** `RequestReturnDialog`'s copy
-carried `₹200`, and `pricing.customer_return_fee` is per seller with its own
+carried `₹200`, and `pricing.customer_return_fee` is per client with its own
 currency key beside it (PRC-8) — so the sentence was right for the seeded
 default and wrong for anybody who negotiated one, and wrong for everybody the
 day the default moves. Which has happened: the DELIVERY fee's default became
 ৳200 on 2026-09-20 and no screen changed. The send-back half was worse — it said
 "a return fee applies" and named no figure at all, while charging a **different**
-fee (`pricing.flat_rto_fee`, ৳30 ≈ ₹22), so a seller who read the ₹200 in one
+fee (`pricing.flat_rto_fee`, ৳30 ≈ ₹22), so a client who read the ₹200 in one
 dialog and pressed the other paid something else.
 
-And **not one of the three flat fees was readable anywhere in the seller app**:
+And **not one of the three flat fees was readable anywhere in the client app**:
 `/wallet/limits` (E4) lists the wallet's terms and deliberately names only the
 TIMING of the delivery fee, never the amount. E4's narration is honest about
 that and needs no re-take.
@@ -1773,7 +1773,7 @@ AWAITING_SELLER_DECISION order, and it is in `LIFECYCLE_SLUGS`.
 two choices — **let it go**, which rejects the order and returns any held units,
 behind its own second confirmation, and **keep trying**, which puts it back in
 the call queue. One scene is about the tile that is NOT there: the held-units
-figure is absent rather than zero unless the seller has opted into
+figure is absent rather than zero unless the client has opted into
 at-placement holds, and the page says why.
 
 **It presses KEEP TRYING and cancels out of the confirm.** Letting the order go
@@ -1791,7 +1791,7 @@ and no other, because it was never confirmed: no waybill, no picked stock, no
 wallet entry, no courier booking.
 
 **FILMING FOUND ONE, and the seeding three.** The register identified an order
-by the first eight characters of its uuid — which a seller cannot read down a
+by the first eight characters of its uuid — which a client cannot read down a
 phone, match against their order list, or search for, and which
 `/needs-attention` prints as a proper order number two clicks away. `ReviewView`
 carried no `orderNumber` at all. Now it does, on every read.
@@ -1811,14 +1811,14 @@ the refund landing in your wallet.
 which the lifecycle pass now REPLIES TO and SETTLES WITH A REFUND, and it is in
 `LIFECYCLE_SLUGS`.
 **Covers** both halves of `/tickets`: the ticket **Skydrop raised** when a
-returned parcel was inspected, and one the **seller raises**. Then
+returned parcel was inspected, and one the **client raises**. Then
 `/tickets/[id]` — the conversation, which opens with what the bench actually
 found unit by unit (WMS-8d's own wording), and the resolution leading with the
 money — followed through to the `Damage settlement` credit sitting in the
 wallet ledger.
 
 **The issue is raised FROM THE ORDER, not from `/tickets`.** That is the path a
-seller uses, and it is the one that works: the modal's own order field is a
+client uses, and it is the one that works: the modal's own order field is a
 paste box for a UUID whose hint says "copy the ID from the order page", and the
 order page shows an order NUMBER. From the order the field is not asked for at
 all. **Reported, not fixed** — `CreateSellerTicketDto.orderId` is `@IsUUID()`
@@ -1891,7 +1891,7 @@ nothing at all.
 
 **FILMING FOUND THE REFUND'S LEDGER NOTE NAMED ITS TICKET BY UUID.**
 `TicketService.transition` wrote "Ticket &lt;uuid&gt; settled" on the
-`SCRAP_REFUND` — the line a seller reads under "Damage settlement", and the only
+`SCRAP_REFUND` — the line a client reads under "Damage settlement", and the only
 pointer from the money back to the claim it settled. A uuid cannot be read down
 a phone, matched against the ticket list or typed into its search box, which is
 precisely why TKT-1 gave tickets a number. **The same defect D5 found on
@@ -1912,7 +1912,7 @@ published material if any video shows the screen that prints it.**
 **Covers** requesting a withdrawal — again **a request, not a movement**, which
 the video proves by going back to the Ledger tab afterwards and showing it
 unchanged — and then the schedule on `/wallet/limits`: the automatic switch,
-the hour in the seller's own timezone, and the balance to keep. All three
+the hour in the client's own timezone, and the balance to keep. All three
 changes are confirmed separately and the video reads each restatement out
 rather than clicking past it.
 
@@ -1927,7 +1927,7 @@ takes them off, and a withdrawal is refused without them —
 claim-and-accept endpoints; for `pay-money-in` it removes the accepted claim
 AND its ledger row together, so no credit is ever left with nothing explaining
 it. **It refuses to touch a wallet carrying anything that is not a top-up** —
-on a dev box an order charge means somebody was using this seller for
+on a dev box an order charge means somebody was using this client for
 something, and rewriting a money ledger to tidy a video would be the worst
 thing in that file.
 
@@ -1983,13 +1983,13 @@ stock_batch → goods_receipt_lines.batchId → inbound_freight_allocations`, so
 only a parcel picked from THIS consignment's batch charges THIS bill. Shipping a
 parcel is not enough: FEFO is `expiresAt ASC NULLS LAST, then receivedAt ASC`,
 every batch on this box has a null expiry, and the consignment's batch is the
-NEWEST thing in the warehouse — so the allocator reaches the seller's standing
+NEWEST thing in the warehouse — so the allocator reaches the client's standing
 stock every time. `giveTheConsignmentAnExpiry` is the fix and it is a real
-field, not a thumb on the scale: a seller may declare a manufacture and expiry
+field, not a thumb on the scale: a client may declare a manufacture and expiry
 date per line, `GoodsReceiptService.complete` copies it onto the batch, and the
 child `<parent>-IN` batch inherits it across the flight. It writes the receipt
 LINES and the BATCHES, only where null, so the data is what it would have been
-had the seller filled that box in.
+had the client filled that box in.
 
 **And then the money is dated the SEVENTH.** The first build produced a perfect
 parcel, a perfect bill, and a page reading "0 of 38 units charged" — because the
@@ -2015,7 +2015,7 @@ rather than on the tile that would contain them.
 freight charge in the wallet, and re-driving it would charge the bill twice.
 
 **Filming it found a bug on the page it clicks through to** — the consignment's
-freight tile printed the raw enum, "partially_settled", on a seller's own
+freight tile printed the raw enum, "partially_settled", on a client's own
 screen. See [Bugs found](#bugs-found-while-establishing-feasibility).
 
 **Its narration names no figure the screen prints.** Not the total, not the
@@ -2033,7 +2033,7 @@ somebody edits the invoice in `lib/freight.mjs`.
 **Length** 2 min 10 s. **Prerequisites** A1.
 **Covers** `/team`: the invite modal, the link revealed **once**, resending
 (which issues a NEW link and kills the one already sent — the video says so,
-because a seller who resends without reading will wonder why the first link
+because a client who resends without reading will wonder why the first link
 stopped working), revoking, and changing somebody's role through the confirm
 that restates who moves from what to what. Ends on the two things the page
 refuses to let you do to yourself, and on deactivation leaving history alone.
@@ -2043,10 +2043,10 @@ begins with, and that a role you BUILT is given after somebody joins.** That is
 true and worth saying: `CreateTeamInvitationDto.role` is the `SellerUserRole`
 enum, `sellerRoleIdForEnum` maps it onto one of the six seeded `seller_roles`
 rows, and a custom role has no enum value to be invited under. F2 teaches that
-roles are data you invent; without this sentence a seller looks for their own
+roles are data you invent; without this sentence a client looks for their own
 role in that box and does not find it.
 
-**Seeding:** the demo seller is ONE person, and that person is `You` — the row
+**Seeding:** the demo client is ONE person, and that person is `You` — the row
 with a chip instead of a role select and no Deactivate button, which is exactly
 the row a video about changing somebody's role cannot use.
 `ensureTeamColleague` adds Shahidul Islam through the REAL invite-and-accept
@@ -2061,14 +2061,14 @@ grow it by a row per take.
 reads `http://localhost:3001/auth/accept-team-invitation?token=…` — the API
 builds it from `SELLER_APP_URL` in `apps/api/.env`, which is a local default
 pointing at a port nothing listens on. It is the only place in the library
-where a viewer reads a localhost URL. Set that variable to the real seller host,
+where a viewer reads a localhost URL. Set that variable to the real client host,
 restart the API, and re-run this ONE video (about 800 credits).
 
 ### F2. Building a role · **FILMED** — `build-a-role.mp4`
 
 Covers `/team/roles` — roles are **data**, so "Warehouse manager" is a thing you
 invent, not a thing we ship. The permissions across seven groups (Orders,
-Catalogue, Inventory, Money, Reseller stores, Support, Company), each with its
+Catalogue, Inventory, Money, Member stores, Support, Company), each with its
 own sentence; the search that also matches the raw key, because somebody reading
 a refusal knows `catalog.manage` and nothing else; and saving a role that
 **loses** permissions asking first and naming exactly which ones go. Ends on the
@@ -2077,7 +2077,7 @@ this screen.
 
 Sensitive permissions are marked and counted, and the count is of what is
 SELECTED, so it moves as you tick. (The two apps name the flag differently:
-`sensitive` on the seller catalogue, `dangerous` on the staff one. Neither is
+`sensitive` on the client catalogue, `dangerous` on the staff one. Neither is
 enforced differently; both exist so a role that quietly acquired six says so
 before it is saved.)
 
@@ -2165,13 +2165,13 @@ href is the unambiguous handle.
 prefix and last-used that survive it, revoke, and revoked beside expired so the
 two words are seen to mean different things — and then `/settings/webhooks`:
 an https endpoint, the signing secret, rotating it with the old one live for a
-day, and **auto-disabled**, which is the state a seller meets at three in the
+day, and **auto-disabled**, which is the state a client meets at three in the
 morning and understands least.
 
 **FILMING FOUND A DEAD END AND IT IS FIXED.** Auto-disable sets `isActive =
 false` AND stamps `autoDisabledAt`; the delivery listener selects on `isActive:
 true AND autoDisabledAt: null`; and `SellerWebhookService.update` wrote
-`isActive` alone. So a seller who fixed their end and switched the endpoint
+`isActive` alone. So a client who fixed their end and switched the endpoint
 back on got a switch reading "on", a chip still reading "Auto-disabled", and
 no events, for ever — nothing in the codebase ever cleared that column. The
 only way out was to delete the endpoint and add it again, which issues a new
@@ -2184,7 +2184,7 @@ The video's fourteenth scene is that switch clearing the chip, and it waits on
 the chip rather than on the switch — before the fix, waiting on the switch
 would have passed while filming the bug.
 
-**Three stale "Phase 1B" claims went with it.** The page subtitle told sellers
+**Three stale "Phase 1B" claims went with it.** The page subtitle told clients
 "the delivery worker will fire once it ships in Phase 1B" long after
 `SellerWebhookDeliveryModule` was registered and sending real signed POSTs.
 
@@ -2201,10 +2201,10 @@ failed deliveries.
 webhook host and FAILS CLOSED on one that does not, so an invented domain is
 refused at create.
 
-**A gap left alone, deliberately:** the seller's subscribed-events box is free
+**A gap left alone, deliberately:** the client's subscribed-events box is free
 text with no vocabulary check (`IsString({each:true})`, `ArrayUnique()`), while
 the store's path runs `assertKnownEvents` against `WEBHOOK_EVENT_CATALOGUE`. A
-typo saves cleanly and then matches nothing, silently. Validating the seller
+typo saves cleanly and then matches nothing, silently. Validating the client
 path too is a two-line change — but it would refuse a save of any existing row
 whose codes are outside the catalogue, which is a decision about live data
 rather than a bug fix, and the better answer is probably the store's
@@ -2218,7 +2218,7 @@ claims nothing about the box being checked.
 Seven tutorials, and the order matters more here than anywhere else: each one
 is the prerequisite for the next being non-empty.
 
-### G1. What a reseller store is · **FILMED** — `open-a-reseller-store.mp4`
+### G1. What a member store is · **FILMED** — `open-a-reseller-store.mp4`
 
 **Promise** — you can open a store for someone who will sell your stock under
 their own name.
@@ -2228,9 +2228,9 @@ the four tabs, the details record, pausing, and the fact that closing for good
 is reachable only from paused.
 
 **Three things the video says because the screens only half say them.** A store
-the SELLER opens is ACTIVE at once — `initialStatusFor` maps SELLER → ACTIVE
+the CLIENT opens is ACTIVE at once — `initialStatusFor` maps SELLER → ACTIVE
 and ADMIN → PENDING_SELLER_APPROVAL, derived from the actor and not from the
-body, so a seller cannot create a pending store and never sees the approve /
+body, so a client cannot create a pending store and never sees the approve /
 reject card. The two names are different things: one is what you call them, the
 other is what a customer reads on a parcel. And the invitation is REQUIRED —
 "a store with nobody able to sign in is a row that looks open and can do
@@ -2239,7 +2239,7 @@ nothing", which is the DTO comment's own reasoning.
 **Closing is named and not clicked.** It is final, and the page states its
 conditions in one sentence the narration follows rather than restates.
 
-**Seeding:** a store name is unique per seller (`STORE_NAME_TAKEN`), so a take
+**Seeding:** a store name is unique per client (`STORE_NAME_TAKEN`), so a take
 left behind refuses the next one. The delete is HARD and safe for a stated
 reason: nearly everything hanging off `seller_stores` is `onDelete: Cascade`
 (roles, invitations, users, events, wallet, terms, tickets, webhooks), and the
@@ -2297,7 +2297,7 @@ actor, never the body), and the price PUT is what applies
 scarf's default price on every run, and a product with no default is the one
 this video must not open on — the form then says "set one on your price list",
 which is a different lesson. Rows are found BY SKU (`storeCatalogueRow`), never
-by position: the table is every active variant the seller has.
+by position: the table is every active variant the client has.
 
 ### G4. The deal · **FILMED** — `the-deal.mp4`
 
@@ -2305,7 +2305,7 @@ by position: the table is every active variant the seller has.
 **Length** 3 min 03 s (15 scenes). **Prerequisites** G3.
 **Covers** the "Terms" tab: the share of each of the six Skydrop fees the store
 pays, each party's credit timing, and the **live worked example the API computes
-as you type** — against the seller's REAL fees, so the table reads ₹148.15
+as you type** — against the client's REAL fees, so the table reads ₹148.15
 delivery and ₹200.00 customer return rather than round numbers. Then publishing
 a version, and the panel saying it is in force but not yet accepted.
 
@@ -2390,7 +2390,7 @@ a teaching one**, and it is what makes the take repeatable at all:
 - the **issue** and the **order change** are read and not answered, so they
   stand from one take to the next.
 
-**It films a SECOND reseller store, `Pune Silk Studio`, and that is not
+**It films a SECOND member store, `Pune Silk Studio`, and that is not
 decoration.** G4's seeding DELETES every terms version of the store it
 configures, so its take can publish "version 1" — and an order snapshots the
 version it was placed under through a RESTRICT foreign key (RS-4). The moment a
@@ -2405,10 +2405,10 @@ nothing.
 **Its seeding is the heaviest in the library**, and every step is a refusal the
 product makes if it is skipped: a store USER who has actually signed in (a store
 whose invitation nobody accepted can do nothing), `reseller.orders_enabled`
-switched on for this seller (SET-1, seeded FALSE, fails closed — it guards
+switched on for this client (SET-1, seeded FALSE, fails closed — it guards
 money), terms PUBLISHED and ACCEPTED (`RESELLER_TERMS_NOT_READY` until both),
 one product enabled in the store's catalogue at a price of its own, and an
-action policy saying the seller wants to see these tasks first. Only then can
+action policy saying the client wants to see these tasks first. Only then can
 the store place anything.
 
 **The invitation token is not recoverable, and the seeding says so out loud.**
@@ -2421,7 +2421,7 @@ faked.
 
 **`clearPreviousOrders` had to learn a second protected prefix.** `RSH-STORE-`
 joins `RSH-LIFE-`, and protecting it is not an economy — it is a REFUSAL: a
-reseller order carries held requests, a terms snapshot and its store's money
+member store order carries held requests, a terms snapshot and its store's money
 rows, none of which that function's delete list knows about, so sweeping one
 would fail on a foreign key half way through some OTHER video's seed run.
 
@@ -2432,7 +2432,7 @@ names in one stack of tables.
 
 ### G7. How your stores are doing · **FILMED** — `how-your-stores-are-doing.mp4`
 
-**Promise** — you can see what each reseller store is doing to your goods and
+**Promise** — you can see what each member store is doing to your goods and
 your money, and stop one that keeps sending them back.
 **Length** 2 min 48 s (14 scenes). **Prerequisites** G6.
 **Covers** `/reseller-stores/reports` — the four figures across every store, the
@@ -2498,9 +2498,9 @@ dispatch real vans and permanently change records, and several are irreversible
 by design. **Every admin tutorial touching one says what it costs to get wrong,
 in the narration, before the click** — not as a disclaimer at the end.
 
-The recorder needs one change first: it is hardcoded to the seller app's URL
+The recorder needs one change first: it is hardcoded to the client app's URL
 and credentials. A flow needs to declare which app it drives, and the staff
-sign-in needs to exist beside the seller one. Half a day; see
+sign-in needs to exist beside the client one. Half a day; see
 [What this costs](#what-this-costs).
 
 ## H — Your first day on the ops desk
@@ -2593,7 +2593,7 @@ word first — a card the narration is not talking about, and a check that passe
 **Observed and deliberately NOT fixed: five event notes on this page name a row
 by its uuid.** "RTO finalize on shipment 01a0ef6c-…", and the same shape on pick
 start, pick complete, pack complete and the call attempt. It is the third and
-fourth place this defect has been found (the seller's order list, then a refund's
+fourth place this defect has been found (the client's order list, then a refund's
 ledger note), and it is worse here only in quantity. These are
 `order_events.description` strings and the table is append-only, so a fix reaches
 future events alone — it wants doing deliberately, at the five write sites, with
@@ -2891,12 +2891,12 @@ which is the cost stated as an act rather than as a warning. It also reads the
 `Confirmed` helper FIRST and then changes the answer, because nothing is written
 until the button at the bottom and the most expensive option is the one worth
 reading aloud. And it leaves exactly the world **I4** needs: a
-customer-rejected order for a seller to ask us to ring again.
+customer-rejected order for a client to ask us to ring again.
 
 **Its seeding is I2's plus one thing: the retire-forward.** A forced
 `CUSTOMER_DECLINED` lands the order in `REJECTED_BY_CUSTOMER`, which is NOT in
 `REMOVABLE_STATUSES` — so the shared clearing correctly leaves it alone and the
-next run's create would collide on `sellerOrderRef`, which is unique per seller.
+next run's create would collide on `sellerOrderRef`, which is unique per client.
 `RSH-QUEUE-1` is renamed `RSH-QUEUE-1-SPENT-<n>` and left exactly as the take
 left it, and a fresh one follows (the D4 / B7 rule, third instance). The
 retire runs for all three seeded orders, not only the one this video spends, so
@@ -2911,7 +2911,7 @@ and the reading scene both outline the toast itself, and the first scene to
 point anywhere else lets it fade. **If a flow needs a toast to survive more than
 one scene, keep the halo on it**; there is no other lever.
 
-### I4. Sellers asking us to call again · **FILMED** — `sellers-asking-to-call-again.mp4`
+### I4. Clients asking us to call again · **FILMED** — `sellers-asking-to-call-again.mp4`
 
 **Promise** — you can decide a re-attempt request.
 **Length** 13 scenes, 2 min 31 s. **Needs**
@@ -2935,7 +2935,7 @@ Calls column.
 placed, submitted, and then put through the very endpoint I3 films —
 `POST /admin/call-queue/:entryId/force-outcome` with `CUSTOMER_DECLINED` — so a
 real `call_attempts` row exists behind the refusal (CC-1) and the order moves by
-the ordinary mapping (CC-2). The request itself is raised through the SELLER's
+the ordinary mapping (CC-2). The request itself is raised through the CLIENT's
 endpoint with a real reason, because the whole point of the screen is that a
 person asked and gave one; a row inserted by hand would film a request nobody
 made.
@@ -3011,7 +3011,7 @@ is a `.stk-section` / `.stk-card` filtered by the words in its own heading —
 `flows.mjs`.
 
 **One observation, not fixed:** "Apply a list of moves" asks an operator to type
-a **seller id, a variant id and a batch id** — three uuids — and no screen in
+a **client id, a variant id and a batch id** — three uuids — and no screen in
 the admin app offers them to copy. It is the uuid-instead-of-a-readable-thing
 shape the rest of this document keeps meeting, in its INPUT form rather than its
 output form, and fixing it is adding three pickers rather than changing one
@@ -3047,7 +3047,7 @@ filmed. A DIRECT_IN consignment's one leg lands PENDING and the whole ritual is
 on camera.
 
 **THE COUNT IS THE POINT, SO THE DECLARATION IS ROUND AND THE COUNT IS NOT.**
-The seller declares twenty and ten; the video counts eighteen good, one damaged
+The client declares twenty and ten; the video counts eighteen good, one damaged
 and ten. One line is short by one and broken by one, the other is exact, because
 a receipt whose numbers all match teaches nothing about the column that exists
 to hold the difference. `received_qty` counts GOOD units, so a damaged unit is
@@ -3068,8 +3068,8 @@ unwinding it is an adjustment, not a tidy-up. One still PENDING is REUSED, so a
 failed check costs nothing.
 
 **The seed asserts the WHOLE BOX holds exactly one PENDING goods receipt**,
-because the list's columns are the receipt number, the consignment, the seller
-and the status — **the seller's own reference is not among them**, so there is
+because the list's columns are the receipt number, the consignment, the client
+and the status — **the client's own reference is not among them**, so there is
 nothing stable to name our row by (both numbers are minted per run) and the flow
 takes the single pending row.
 
@@ -3099,8 +3099,8 @@ what allocates phase-2** — then past batches and marking the batch picked.
 **THE ONE THAT BLOCKED IT, AND IT IS NOT A BUG: no parcel on this box can have
 a stored label.** `DelhiveryLabelService` puts the courier's
 `pdf_download_link` through `assertPublicHttpsUrl` — the same SSRF guard a
-seller-supplied webhook URL goes through, because the bytes end up in our bucket
-and are later presigned for a seller to open — and `apps/delhivery-sim`'s link
+client-supplied webhook URL goes through, because the bytes end up in our bucket
+and are later presigned for a client to open — and `apps/delhivery-sim`'s link
 is `http://127.0.0.1`, refused on the scheme before the address is even looked
 at. So every confirmation logs "AWB persisted but label upload pending", the
 waybill is durable and the label never arrives: **64 shipments carrying a
@@ -3125,9 +3125,9 @@ the right picture, but it is also why the video must not select the top rows:
 among them sit `RSH-LIFE-CONFIRMED`, D0's parcel for B7 whose whole value is
 being at CONFIRMED, and `RSH-CALL-1`, which is I1's. Printing and picking either
 moves it and `lifecycleReport` fails the next seed run naming it. The queue's
-columns are the order number, the seller, the courier, the waybill, the
+columns are the order number, the client, the courier, the waybill, the
 destination, the COD and the item count — both numbers are minted per run and
-the seller is shared with five other parcels — so the pin is the only stable
+the client is shared with five other parcels — so the pin is the only stable
 handle, and the seeding asserts exactly three live parcels carry it.
 
 **The seeding is REUSE-OR-RETIRE, and the retire CANCELS**, which none of the
@@ -3195,7 +3195,7 @@ unaffected — its narration names no line count.
 
 **The SKU code IS the barcode here, and that is the real path rather than a
 workaround.** LBL-2: the scannable code is `variant.barcode ?? skuCode`, nothing
-is minted, and `PackBoxService.scan` accepts both scoped to the order's seller.
+is minted, and `PackBoxService.scan` accepts both scoped to the order's client.
 The demo catalogue has no `barcode` values, so typing the SKU into the scan
 field is precisely what a sticker printed from this catalogue would send.
 **`force-complete` is not touched** — the README's rule, and J5's subject.
@@ -3487,7 +3487,7 @@ is what somebody reads a year later trying to explain a variance.
   per-line override and the form never offered one**, so every "Adjust" link on a
   bin's contents led to a dead end with a verdict naming a field nobody could
   see — and on this box **62 of 64 batches carry no unit cost**, which is an
-  ORDINARY state the product already acknowledges elsewhere (the seller's stock
+  ORDINARY state the product already acknowledges elsewhere (the client's stock
   page leaves those units out of "value at cost" and says why). An R6b child
   batch inherits the parent's cost, so a RETURNED unit lands in exactly such a
   batch, which makes WMS-8d's documented exit for a kept-aside unit unreachable
@@ -3497,7 +3497,7 @@ is what somebody reads a year later trying to explain a variance.
 - **Two uuids printed ON TOP OF EACH OTHER** on the review dialog. `.sk-ident` is
   `white-space: nowrap` on purpose ("an ID is one token: it never breaks at its
   hyphens"), so in a three-column `Facts` grid the warehouse id is wider than its
-  cell and spills over the seller id beside it — unreadable, on the one panel
+  cell and spills over the client id beside it — unreadable, on the one panel
   whose job is to be read carefully before an act that cannot be undone. The CELL
   gives now (`min-width: 0; overflow-x: auto` on `.stk-dl__value`) so the token
   stays whole and selectable. **No spec: jsdom has no layout, so a unit test
@@ -3564,7 +3564,7 @@ named is genuinely theirs: the seed receives one consignment at both buildings
 at the same unit cost, most of it at the hub and four units at the spoke, and
 the video sends the strays to join the rest. **The SKU is
 `RSH-JAMDANI-IVORY` because it is the only one carrying a `costInr`** — the
-other three are deliberately uncosted so the reseller reports can show what
+other three are deliberately uncosted so the member store reports can show what
 partial coverage looks like, and giving one of them a cost would move a figure
 two already-filmed videos narrate.
 
@@ -3735,7 +3735,7 @@ between this box and that, and the third cannot be opened honestly:
 1. **`if (input.courierCode !== 'shiprocket') return BOOK`** — in those words,
    first line of `decide`. Delhivery IS a carrier, so "asking Delhivery which
    Delhivery to use is a category error". Every parcel here is Delhivery's.
-2. The seller's `courier.selection_policy` must be `MANUAL`. Easy — SET-1.
+2. The client's `courier.selection_policy` must be `MANUAL`. Easy — SET-1.
 3. **`listCourierOptions` returns `[]` in stub mode**, and
    `courier.shiprocket_api_base_url` is empty, so Shiprocket is stubbed. With no
    options `CourierOptionSelectionService.select` answers `DEFER_TO_CARRIER`
@@ -3769,13 +3769,13 @@ P2 found was on this video's critical path too — `decide` returns
 M5 would have been unfilmable for a second, quieter reason as well. That is
 fixed (`provision-stack.mjs`).
 
-### M6. When a seller asks about a failed delivery · **FILMED** — `acting-on-a-failed-delivery.mp4`
+### M6. When a client asks about a failed delivery · **FILMED** — `acting-on-a-failed-delivery.mp4`
 
-**Promise** — you can read what a seller has asked us to do about a parcel the
+**Promise** — you can read what a client has asked us to do about a parcel the
 driver could not hand over, and say where each kind of ask actually lands.
 **Length** 2 min 31 s of narration over 13 scenes. **Needs**
 `seed-demo-data.mjs acting-on-a-failed-delivery` — D0, plus three asks.
-**Covers** `/delivery-actions`: the three things a seller can ask and what each
+**Covers** `/delivery-actions`: the three things a client can ask and what each
 costs, the one row that is NOT ours to decide, and then where the work really
 goes — a courier-escalation ticket, the call queue, or straight at the courier.
 
@@ -3786,9 +3786,9 @@ and a customer call are TICKETS: ops works them from the ticket queue and the
 outbox console, which is the approval step — a second one in front of it only
 delayed the work." So:
 
-- a SELLER's ask is created already `APPROVED` and never sits PENDING;
-- a reseller STORE's held ask IS pending, and is marked `waitingOnSeller` — the
-  page renders "Waiting on seller staff" with no buttons, and the server refuses
+- a CLIENT's ask is created already `APPROVED` and never sits PENDING;
+- a member STORE's held ask IS pending, and is marked `waitingOnSeller` — the
+  page renders "Waiting on client staff" with no buttons, and the server refuses
   admin outright with `DELIVERY_ACTION_HELD_FOR_SELLER`;
 - so **no row an admin may decide can exist**.
 
@@ -3799,18 +3799,18 @@ is why this is written up rather than fixed.
 
 **So the video stops promising a decision.** It is a register: who asked, for
 what, in their words, and where it went. The auto-approval note is the hinge —
-it does not say "approved", it names the thing that now exists, and the seller
+it does not say "approved", it names the thing that now exists, and the client
 reads it on their own order. A re-attempt opens a courier escalation, because no
-courier takes one from software (CUR-20). A recall opens a seller issue AND
-queues one of our own agents. A send-back reaches the courier on the seller's
+courier takes one from software (CUR-20). A recall opens a client issue AND
+queues one of our own agents. A send-back reaches the courier on the client's
 own click (CUR-10's seller amendment) — **and the one return on the page is the
 STORE's**, which is the whole distinction.
 
-**Its world is three asks of three kinds**, raised through the sellers' and the
+**Its world is three asks of three kinds**, raised through the clients' and the
 store's OWN endpoints, because the queue prints their words back and an operator
 reads them before deciding — a row written round the back would have nothing to
 read. The store's held one reuses G6's `ensureHeldDeliveryAsk` rather than
-rebuilding it. `clearDeliveryTakeArtefacts` already deletes every seller ask on
+rebuilding it. `clearDeliveryTakeArtefacts` already deletes every client ask on
 every seed run of every video, so this runs after it and leaves nothing behind.
 
 **TWO NARRATION LINES CLAIMED THINGS THE SCREENS DO NOT SHOW**, both caught by
@@ -3822,7 +3822,7 @@ argument for `TUT_CHECK_SHOTS=1`:
   and on no cell. What IS visible is that this one was added minutes ago while
   the rest have been sitting there, so that is what the line says now.
 - *"the third one never appears here at all"* — said over a Return-to-us row
-  that had been on screen since scene three. True of a seller's own send-back,
+  that had been on screen since scene three. True of a client's own send-back,
   plainly false of the store's.
 
 **RETRACTED (verified 2026-10-05): `/call-queue` is not a product bug.** This
@@ -3845,12 +3845,12 @@ misleading about OUR path, not about the product's.
 Ten tutorials, and the tone throughout is that none of these screens is a form.
 Each one moves money that exists.
 
-### N1. How seller money works · **FILMED** — `how-seller-money-works.mp4`
+### N1. How client money works · **FILMED** — `how-seller-money-works.mp4`
 
-**Promise** — you can read a seller's wallet and explain any line in it.
+**Promise** — you can read a client's wallet and explain any line in it.
 **Length** 3 min 1 s of narration over 15 scenes. **Needs** D0 plus
 `moneyDeskWorldFor`.
-**Covers** `/seller-wallets` and one seller's ledger: what a top-up, a COD
+**Covers** `/seller-wallets` and one client's ledger: what a top-up, a COD
 credit, the tax withheld beside it, a delivery charge, a return fee and a
 damage refund each are. Read-only, and deliberately first — every screen after
 this writes to what this one shows.
@@ -3864,7 +3864,7 @@ OWN rows where it does not.
 - **The ledger needs six KINDS of line and D0 only writes three.** The delivery
   charge, the return fee and the damage refund come free with the lifecycle
   parcels; the top-up, the COD credit and the tax line beside it do not. So the
-  seeding tops the wallet up through the REAL two endpoints (a seller's claim,
+  seeding tops the wallet up through the REAL two endpoints (a client's claim,
   then an acceptance) rather than inserting a ledger row — the accepted claim is
   on camera in the Top-ups tab, note and reference in full, and a `TOPUP` entry
   whose claim does not exist is a row the screen cannot explain.
@@ -3883,12 +3883,12 @@ OWN rows where it does not.
 
 ### N2. Accepting a top-up · **FILMED** — `accept-a-top-up.mp4`
 
-**Promise** — you can credit a seller for money that has actually arrived.
+**Promise** — you can credit a client for money that has actually arrived.
 **Length** 2 min 20 s of narration over 13 scenes. **Prerequisites** N1.
 **Needs** D0 plus `moneyDeskWorldFor`.
 **Covers** `/topups`: the claim, its reference and proof, and matching it
 against the bank before accepting.
-**Cost of getting it wrong:** **accepting is the credit.** A seller declaring a
+**Cost of getting it wrong:** **accepting is the credit.** A client declaring a
 transfer is a claim, not a payment — accept one that never landed and you have
 given away money that can then be withdrawn.
 
@@ -3900,7 +3900,7 @@ seed correctly leaves it alone** (it credited real money; deleting it would
 leave a `TOPUP` ledger row whose claim does not exist), so the Credited tab
 grows by one ₹18,000 row per take and `.first()` haloed **a row an earlier take
 credited**. Every step passed, `TUT_CHECK_SHOTS` was the only thing that said
-so, and even the frame looked plausible — same seller, same amount, the same
+so, and even the frame looked plausible — same client, same amount, the same
 note typed by the same flow, a timestamp twenty minutes stale. The lie was the
 REFERENCE, which is the one thing this video is about. So `accept` reads the ref
 off the dialog's own subject line — what the operator reads — into the shared
@@ -3916,7 +3916,7 @@ nothing left for the refusal scene to open a dialog on. A take spends the first
 claim and leaves the second, so seed → check → seed → check → seed → take, as
 for D4 and J2.
 
-### N3. Paying a seller out · **FILMED** — `pay-a-seller-out.mp4`
+### N3. Paying a client out · **FILMED** — `pay-a-seller-out.mp4`
 
 **Promise** — you can take a withdrawal request through to money leaving the
 bank.
@@ -3926,7 +3926,7 @@ bank.
 `/remittances` — the rate, the bank fee, and the reference. Also why a request
 the wallet can no longer cover is rejected automatically.
 **Cost of getting it wrong:** real money to a real account, and the destination
-comes from the seller's bank details — which is why N4 exists.
+comes from the client's bank details — which is why N4 exists.
 
 **FOUR THINGS IT GOT WRONG, AND ONLY ONE WAS A SELECTOR (2026-10-01).** Each is
 a shape worth carrying to N4–N8, and the narration one is the serious one.
@@ -3971,11 +3971,11 @@ table.
 
 ### N4. Approving a change of bank account · **FILMED** — `approve-a-bank-change.mp4`
 
-**Promise** — you can approve a seller's new bank details safely.
+**Promise** — you can approve a client's new bank details safely.
 **Length** 2 min 33 s of narration over 12 scenes. **Prerequisites** N3.
 **Needs** D0 plus `moneyDeskWorldFor`.
 **Covers** `/bank-changes`. Short, and the shortest tutorial with the highest
-stakes in the library: this screen decides **where a seller's money goes**, and
+stakes in the library: this screen decides **where a client's money goes**, and
 approving a change somebody else requested is the whole attack.
 
 **`pendingBankChange` ONLY EVER WORKED FROM NOTHING, and nothing said so
@@ -3997,13 +3997,13 @@ with a properly encrypted one. **A helper whose precondition is "nothing on
 file" should assert or establish it, not hope.**
 
 **Its closing line needed a withdrawal to point at.** The outro says the next
-withdrawal for this seller is typed against the account just approved — and
+withdrawal for this client is typed against the account just approved — and
 after an N3 take there is no request left, so it was spoken over a page reading
 "No pending requests". `moneyDeskWorldFor` raises one for this slug too.
 
 **And the outro originally described the Reject dialog, which the video cannot
 reach**: the take approves the only request there is, and the product allows one
-pending change per seller (a partial unique), so there is nothing left to open
+pending change per client (a partial unique), so there is nothing left to open
 Reject on. The line was rewritten to give the advice without claiming to show
 it. Same class as N3's narration defect — **a sentence about a control that is
 not in the frame**.
@@ -4023,7 +4023,7 @@ which is the guard against recording one bank credit twice — then allocating i
 to orders, the short-payment figure that appears when the courier paid less than
 the order was worth, and the reversal when a parcel came back after they had
 paid.
-**Cost of getting it wrong:** the seller is credited what the **order was
+**Cost of getting it wrong:** the client is credited what the **order was
 worth**, so a mis-recorded payout is money out of Skydrop's pocket, quietly.
 
 **THE FILE IS WRITTEN BY THE SEED AND SO IS THE FIGURE TYPED FROM THE
@@ -4068,20 +4068,20 @@ neighbours were using.**
 rows (prefix `UTR-TUT-`) and the wallet entries its credit wrote, refusing
 rather than guessing if those are no longer the NEWEST entries on the wallet.
 
-### N6. Moving money in or out of a seller's wallet by hand · **FILMED** — `move-money-by-hand.mp4`
+### N6. Moving money in or out of a client's wallet by hand · **FILMED** — `move-money-by-hand.mp4`
 
-**Promise** — you can correct a wallet with a reason the seller will read.
+**Promise** — you can correct a wallet with a reason the client will read.
 **Length** 2 min 41 s of narration over 13 scenes. **Prerequisites** N1.
 **Needs** D0 plus `moneyDeskWorldFor`.
 **Covers** `/wallet-transfers`: a staff debit or credit, the reason of at least
-twenty characters that **the seller sees in their own ledger**, and the separate
+twenty characters that **the client sees in their own ledger**, and the separate
 internal note that only the audit keeps. The distinction to teach: this **moves
 cash**; an adjustment does not.
 
 **THE ONLY ENTRY IN N THAT WAS GREEN ON ITS FIRST CHECK**, and the reason is
 worth naming: this page already says in its own copy every single thing the
 narration says. The subtitle is the intro's line, "Not a correction: this moves
-real money between the seller and us" is the second scene, the direction select
+real money between the client and us" is the second scene, the direction select
 reads as two sentences rather than two words, the debit hint says what happens
 past what they hold, both text areas carry a hint saying who reads them, and the
 preview answers in a SENTENCE before it answers in figures. A video over a screen
@@ -4240,18 +4240,18 @@ writing this one, not filming it**, until there are real closed months.
 
 ---
 
-## O — Sellers, stores and the platform
+## O — Clients, stores and the platform
 
-### O1. Letting a seller in · `ready`
+### O1. Letting a client in · `ready`
 
 **Promise** — you can take someone from asking to signed in.
 **Length** 3 min. **Needs** nothing.
 **Covers** `/leads` (the drawer, notes, status) and inviting them, then
 `/sellers` and the pending-invitations panel — invite, resend, delete.
 
-### O2. Managing a seller · **FILMED** — `managing-a-seller.mp4` · **dangerous**
+### O2. Managing a client · **FILMED** — `managing-a-seller.mp4` · **dangerous**
 
-**Promise** — you can suspend, restrict or correct a seller's account.
+**Promise** — you can suspend, restrict or correct a client's account.
 **Length** 3 min 49 s of narration over 19 scenes. **Prerequisites** O1.
 **Needs** `seed-demo-data.mjs managing-a-seller` (`sellerAccountWorldFor`).
 **Covers** `/sellers/[id]`: the identity correction that sits behind its own
@@ -4262,32 +4262,32 @@ parcels in flight**, placed and then lifted by hand; then suspend and reapprove.
 **Cost of getting it wrong:** the copy says it — blocking those three strands
 goods we are still paying to move.
 
-**IT WORKS A SELLER OF ITS OWN, and that decision is the whole of its safety
-design.** The entry that stood here warned that O2 suspends the one real seller
+**IT WORKS A CLIENT OF ITS OWN, and that decision is the whole of its safety
+design.** The entry that stood here warned that O2 suspends the one real client
 every other video depends on. It does not: `sellerAccountWorldFor` makes
-**Khulna Handloom**, a BD seller who joined in June and owes us money, and the
+**Khulna Handloom**, a BD client who joined in June and owes us money, and the
 video never touches `Rangpur Silk House`. Two separate reasons forced it, and
 either alone would have been enough.
 
-- **Suspending the demo seller is only reversible on the NEXT seed run.**
+- **Suspending the demo client is only reversible on the NEXT seed run.**
   `ensureSeller` forces APPROVED on every run, so the damage heals — but every
   video filmed in between would be running against a portal that has simply
   stopped signing in, and nothing in apps/seller says why in a form a flow would
   notice.
-- **A hold CANNOT BE SHOWN on a seller in credit, and that is correct
+- **A hold CANNOT BE SHOWN on a client in credit, and that is correct
   behaviour.** `SellerRestrictionService.activeFor` lifts a hold in passing the
   moment the balance reaches the clearing figure — applied by a person, cleared
-  by money — so one placed on the demo seller's +₹63,958 with the usual
+  by money — so one placed on the demo client's +₹63,958 with the usual
   threshold of zero is already gone by the time the card refetches, and the
-  scene after the press would film "No hold. This seller can trade normally."
+  scene after the press would film "No hold. This client can trade normally."
   under a line about a hold being placed. **Zero balance is not enough either**
-  (`0 >= 0`): the hold exists for a seller who owes us, so the video needs one
+  (`0 >= 0`): the hold exists for a client who owes us, so the video needs one
   who does.
 
 **The debt is posted through the real staff-transfer endpoint**, not a ledger
-insert — it is the path an operator would use (the seller's own detail page
-links to it), it writes the reason the seller reads, and TRE-8b means a debit on
-a seller holding no cash writes NO bank entry at all: the wallet goes negative
+insert — it is the path an operator would use (the client's own detail page
+links to it), it writes the reason the client reads, and TRE-8b means a debit on
+a client holding no cash writes NO bank entry at all: the wallet goes negative
 and the shortfall is a receivable. One fixed `idempotencyKey` for ever, so the
 figure on the card is the same figure in every take.
 
@@ -4323,9 +4323,9 @@ printed `Blocked: ORDER_CREATE` while the dialog that chose it said "Placing new
 orders", with the map sitting forty lines above the `join`. See
 [Bugs found](#bugs-found-while-establishing-feasibility).
 
-### O3. Per-seller settings and courier routing · **FILMED** — `per-seller-settings.mp4` · **dangerous**
+### O3. Per-client settings and courier routing · **FILMED** — `per-seller-settings.mp4` · **dangerous**
 
-**Promise** — you can change one seller's behaviour without touching anybody
+**Promise** — you can change one client's behaviour without touching anybody
 else's.
 **Length** 2 min 55 s of narration over 15 scenes. **Prerequisites** O2.
 **Needs** `seed-demo-data.mjs per-seller-settings` (`sellerRoutingWorldFor`).
@@ -4336,11 +4336,11 @@ their weights, one link, two, and an unlink. An empty list is normal and means
 each courier's default account.
 
 **ITS WORLD IS O2's, PLUS TWO THINGS PUT BACK.** `sellerRoutingWorldFor` calls
-`sellerAccountWorldFor` rather than building beside it — same seller, same
+`sellerAccountWorldFor` rather than building beside it — same client, same
 state — and then clears every setting override and every courier link, because
 those are the two states the video has to show FIRST and they are the ones a
 previous take spends. Both are sentences the screen writes itself ("Everything
-is on the system default", "No links: this seller's parcels go to each
+is on the system default", "No links: this client's parcels go to each
 courier's default account"), so a take that opened on the last take's override
 would film a line about the default over a row that is not on it.
 
@@ -4348,7 +4348,7 @@ would film a line about the default over a row that is not on it.
 `provision-stack.mjs` provides a SANDBOX and a PRODUCTION account — a pair that
 exists to show the difference between test and live, not two contracts to
 divide real traffic between. A video about weighted routing cannot use them:
-splitting a seller's live parcels into a courier's test API is not something to
+splitting a client's live parcels into a courier's test API is not something to
 put in a tutorial. `Delhivery — Kolkata lane` and `Delhivery — Bengaluru lane`
 are PRODUCTION, neither is the default, both carry the simulator's own token,
 and they are kept between takes — a courier account is a thing somebody signed.
@@ -4367,7 +4367,7 @@ nothing, so that is fine, but it is worth knowing before a re-take.
 2. **`scrollIntoViewIfNeeded` scrolls the MINIMUM**, so a tall section arrives
    with its heading at the bottom of the screen and whatever is above it
    filling the frame — here the orange "Reveal bank account number" card, under
-   a line about per-seller settings. `sectionToTop` is `block: 'start'` plus a
+   a line about per-client settings. `sectionToTop` is `block: 'start'` plus a
    72px nudge for the sticky toolbar, and it is what the section scenes use.
    (It cannot help the LAST section on a page: the document has nothing left to
    scroll, which is why the credit panel still sits low in frame.)
@@ -4376,7 +4376,7 @@ nothing, so that is fine, but it is worth knowing before a re-take.
    filtering `.ac-card` by that heading matches nothing at all.
 
 **The row it overrides is `pricing.flat_delivery_fee`, chosen for two
-reasons.** It is a PRICE, which is what "agreed with this seller" usually means;
+reasons.** It is a PRICE, which is what "agreed with this client" usually means;
 and it has no physical consequence — nothing dispatches a van or holds stock
 differently because of it, which the NDR cap and the auto-pickup switches cannot
 say. **The row beneath it is the lesson**: the fee and the currency it was
@@ -4636,7 +4636,7 @@ a parcel already at DELIVERY_FAILED and the panel says why, which is the scene.
 (`source = MANUAL_ENTRY`) and one `delivery_attempts` row, neither undone by
 anything, both removed by `clearDeliveryTakeArtefacts` — **scoped to that one
 parcel**, because `RSH-LIFE-OVERDUE` is BUILT from back-dated MANUAL_ENTRY scans
-and a sweep of every hand-entered event on this seller would delete the world
+and a sweep of every hand-entered event on this client would delete the world
 instead of a take's leftovers. `webhookId: null` is what tells a hand-recorded
 attempt from the simulator's. Proved by running the check twice with a seed
 between: the second opened on one failed attempt, not two.
@@ -4689,16 +4689,16 @@ gates on the status text, which is the real signal.
 **Promise** — you can close a ticket with money attached.
 **Length** 3 min 2 s of narration over 14 scenes. **Needs**
 `seed-demo-data.mjs refunds-and-disputes`.
-**Covers** `/tickets/[id]`: replying to the seller, and the four outcomes at
-close — where **refund writes a credit to the seller's wallet inside the same
-transaction as the close**. Also settling a reseller-store dispute, which moves
+**Covers** `/tickets/[id]`: replying to the client, and the four outcomes at
+close — where **refund writes a credit to the client's wallet inside the same
+transaction as the close**. Also settling a member store dispute, which moves
 money between two wallets as one pair and refuses the ordinary refund path.
 
 **TWO TICKETS, AND THEY ARE DIFFERENT KINDS OF ARGUMENT rather than two examples
 of one.** `TK-…0003` is a receipt short at the INDIAN end — the leg where the
 goods were in our hands, which is the one case whose own opening message says we
 may settle it (TKT-3 words the two legs differently on purpose). The other is a
-reseller store's dispute with its seller, which we referee and never pay. The
+member store's dispute with its client, which we referee and never pay. The
 settled scrap claim D6 films stays on the list behind them, so the register
 opens on all three kinds.
 
@@ -4719,9 +4719,9 @@ make a negative claim: the flow reads the `<option>` list and throws if it is
 there. **Any future scene about a set of choices behind a native select needs
 both halves.**
 
-**THE ADMIN QUEUE'S ROW IS THE LINK, AND THE SELLER'S IS NOT.** `/tickets`
+**THE ADMIN QUEUE'S ROW IS THE LINK, AND THE CLIENT'S IS NOT.** `/tickets`
 renders the ticket number as a plain `<span>` with `onActivate` on the whole
-`<Tr>` ("the row IS the link now: one way in"); the SELLER's queue puts the
+`<Tr>` ("the row IS the link now: one way in"); the CLIENT's queue puts the
 `<Link>` on the subject cell. Reaching for a link by the ticket number therefore
 waits thirty seconds for something that was never a link — on one of the two
 apps.
@@ -4736,8 +4736,8 @@ changed no status. Every other ticket's history is somebody else's seeded world
 (TK-…0001's refund conversation is D6's whole subject), and a transition deleted
 without its status would leave a state with nothing behind it explaining it.
 
-**AND IT FOUND A BUG THAT SPANNED BOTH CONSOLES** — a reseller store's own words
-printed as Skydrop's, including on the screen of the seller being asked to pay.
+**AND IT FOUND A BUG THAT SPANNED BOTH CONSOLES** — a member store's own words
+printed as Skydrop's, including on the screen of the client being asked to pay.
 See [Bugs found](#bugs-found-while-establishing-feasibility).
 
 **One trap paid for in a wasted check run, and it is the coordinator's warning
@@ -4882,22 +4882,23 @@ render an identical page when their world is missing.
 
 ---
 
-## R — The reseller portal
+## R — The member store portal
 
-**A third app, and a DIFFERENT READER.** Sections A–G address the seller who
+**A third app, and a DIFFERENT READER.** Sections A–G address the client who
 owns the stock; H–P address Skydrop's own staff. This section addresses the
-**shopkeeper** — a reseller store's own staff, signing in at
-`member.skydrop.global`. Section G teaches a seller to open a store and set
+**shopkeeper** — a member store's own staff, signing in at
+`member.skydrop.global`. Section G teaches a client to open a store and set
 its terms; the people who then have to USE it had nothing, which is the gap
 this closes.
 
-**It is filmed as a store user, not as the seller looking at a store.** The
+**It is filmed as a store user, not as the client looking at a store.** The
 identity is Anjali Deshpande of Pune Silk Studio — the store section G already
-films the seller dealing WITH, so the two sections meet. That is not a
+films the client dealing WITH, so the two sections meet. That is not a
 convenience: a store user cannot see unit cost, real stock, the share held back
 from their catalogue, or that any other store exists. Filming this section as
-the seller would have produced videos quietly showing a shopkeeper figures they
-are never shown, which is the one thing the reseller boundary exists to prevent.
+the client would have produced videos quietly showing a shopkeeper figures they
+are never shown, which is the one thing the member-store boundary exists to
+prevent.
 
 **18 tutorials**, derived from the app's 23 routes under
 `apps/reseller/src/app/(authed)/` and the 16 gated entries in its
@@ -4931,7 +4932,7 @@ What day 1 settled that days 2 and 3 inherit:
   user of Pune Silk Studio, which IS `REQUEST_STORE` — the TRADING store.
   `tradingStoreWorld` already gives it the four things the portal cannot open
   without (accepted terms, a priced and enabled catalogue,
-  `reseller.orders_enabled` on for the seller, an action policy), so
+  `reseller.orders_enabled` on for the client, an action policy), so
   `STORE_PORTAL_SLUGS` joins the same union rather than seeding a second
   store. A second would be a second place for all four to drift, and the first
   symptom would be a video narrating an empty table.
@@ -4948,10 +4949,11 @@ What day 1 settled that days 2 and 3 inherit:
 
 **A page's own instruction was wrong and is fixed, not narrated around.**
 `/orders/import` told stores "Re-upload a reference to correct an order you
-have not had confirmed yet." `OrderService.applyBulkPatch` refuses a reseller
-order outright — `RESELLER_ORDER_NOT_EDITABLE`, and BEFORE the status check,
-so the condition the subtitle named never even applies. A store following that
-sentence gets an error row every time. The subtitle now says what happens.
+have not had confirmed yet." `OrderService.applyBulkPatch` refuses a member
+store's order outright — `RESELLER_ORDER_NOT_EDITABLE`, and BEFORE the status
+check, so the condition the subtitle named never even applies. A store
+following that sentence gets an error row every time. The subtitle now says
+what happens.
 
 **The voice budget is the binding constraint**, not the filming. At the
 measured average of 2,162 characters of narration per tutorial, 18 comes to
@@ -4996,7 +4998,7 @@ search, and a filter that survives a reload because it lives in the address.
 
 **Promise** — one order read top to bottom, pressing nothing.
 **Covers** `/orders/[id]` — the tracker, the recipient snapshot, the charges,
-and what a store is shown as against what the seller is shown.
+and what a store is shown as against what the client is shown.
 
 **DAYS 2 AND 3 ARE WRITTEN AND NOT YET FILMED (2026-10-10).** R7–R18 have
 their narration, their flows and their seeding; what is missing is a run. No
@@ -5034,7 +5036,7 @@ What days 2 and 3 added that is worth knowing before a re-take:
 - **R8's seeding overrides ONE column of the action policy, and that is the
   video.** `tradingStoreWorld` leaves `callCapDecision` at `ASK_SELLER`, which
   is right for G6 (whose queue is built out of exactly that) and collapses both
-  of R8's answers into one button reading "Send to your seller to approve" —
+  of R8's answers into one button reading "Send to your client to approve" —
   while the whole lesson is that the two answers are NOT symmetrical. So R8's
   seeding writes `DIRECT` for that one capability, and G6's next seed run puts
   it back, because `tradingStoreWorld` writes the whole policy every time.
@@ -5056,10 +5058,10 @@ What days 2 and 3 added that is worth knowing before a re-take:
 **Promise** — the parcel is out and something is wrong; here is what you can
 ask for, and which asks happen on your click.
 **Covers** `/orders/[id]`'s whole act-on-it half: the three delivery asks and
-the "Happens as soon as you ask" / "The seller approves this one" strip beside
+the "Happens as soon as you ask" / "The client approves this one" strip beside
 each, the reason dialog and the confirm that restates it, the asks history with
-the seller's own words on a refusal, the cancel in the header (which reads
-differently per arrangement), the order-change panel, and "Sent to your seller
+the client's own words on a refusal, the cancel in the header (which reads
+differently per arrangement), the order-change panel, and "Sent to your client
 to approve" with its few-days expiry. Hands R8 and R10 their own decisions by
 name.
 **Presses nothing irreversible**: the recall dialog is opened, filled, taken to
@@ -5090,7 +5092,7 @@ on the edit form, their orders found BY that number, and the fact worth saying
 out loud — your supplier sees these people too, can correct a record, and each
 of you is told when the other does.
 **The shortest of the twelve** (9 steps, 1,738 characters) and deliberately so.
-The SELLER's equivalent was dropped from this curriculum as "genuinely thin";
+The CLIENT's equivalent was dropped from this curriculum as "genuinely thin";
 for a store it is not, because the privacy boundary and the immutable phone are
 both facts a shopkeeper acts on — but it is thinner than its neighbours and
 padding it would show.
@@ -5102,7 +5104,7 @@ keeps them apart.
 **Covers** `/tickets`, `/tickets/new` and one thread: the With column as the
 first thing to read, a thread with both sides on it, the two choice cards and
 what each actually does, the "correct the money on this order" claim with its
-figures frozen as they stood, an issue for Skydrop that may need the seller's
+figures frozen as they stood, an issue for Skydrop that may need the client's
 approval first, a SETTLED one reading back who paid whom, and the same figure as
 a line in the wallet ledger. Ends on the rule that makes it a dispute rather
 than a request: a settlement never comes out of Skydrop's pocket.
@@ -5114,7 +5116,7 @@ read out.
 **Covers** `/terms` — the version and whether it is accepted (an unaccepted one
 is the single thing that stops new orders), the fee shares as sentences, the
 credit timing as the half that decides cash flow, the same thing worked in
-rupees, the rounding line and why it is not small print, the seller's own note,
+rupees, the rounding line and why it is not small print, the client's own note,
 the history and why a published version is never changed, and what accepting
 records.
 
@@ -5138,7 +5140,7 @@ and a team of one films a table with no buttons in it.
 of it.
 **Covers** `/wallet` — who manages it (and that it decides what the rest of the
 page offers), the balance against what is actually withdrawable, the
-below-zero limit as the seller's decision, topping up as two separate acts with
+below-zero limit as the client's decision, topping up as two separate acts with
 nothing credited on the strength of a form, both request tables, and then the
 ledger a line at a time: order margin, the goods at the transfer price, the fee
 shares, the COD tax share, and the balance-after recorded at the moment it
@@ -5147,7 +5149,7 @@ happened.
 ### R14. Your own costs · `planned` — `store-your-expenses.mp4`
 
 **Promise** — your own spending, which is what turns sales into a profit figure.
-**Covers** `/expenses` — that it moves no money and the seller never sees it,
+**Covers** `/expenses` — that it moves no money and the client never sees it,
 the form dated by when the money was spent, the reference as the only thing that
 matches a line to a piece of paper, the confirmation reading it back, the
 breakdown by category, the window as Indian days, and removal with a reason that
@@ -5196,7 +5198,7 @@ ever removing a message, with some locked on and the reason beside them), and
 `/account` (every role you hold rather than the first, and sign out everywhere
 as the thing to reach for when a phone goes missing).
 **Three pages in one video** because they are one task and three navigations;
-the seller's F4 made the same call for the same reason.
+the client's F4 made the same call for the same reason.
 
 ### R18. Letting your own systems in · `planned` — `store-keys-and-webhooks.mp4`
 
@@ -5235,9 +5237,9 @@ silently stops somebody selling), the invitation, and the switch.
 **The switch is the lesson**: `orders_paused_at` gates `orders.create` and
 NOTHING else, so everything already placed carries on and they keep reading,
 tracking, cancelling and chasing it. Closed the till, not locked the door.
-**The red "outside the seller's range" chip CANNOT be made on camera** —
+**The red "outside the client's range" chip CANNOT be made on camera** —
 setting such a price is refused, which is R20 — so the only way one exists is
-a seller narrowing the range afterwards, and `ensureStrandedAssociatePrice`
+a client narrowing the range afterwards, and `ensureStrandedAssociatePrice`
 writes exactly that onto Priya. The scene ASSERTS it rather than failing open:
 an ordinary row filmed under that line would pass a check perfectly.
 **A FOUND DEFECT, reported rather than filmed around**: `useInviteStoreMember`
@@ -5254,12 +5256,12 @@ supplier.
 **Covers** one associate's price list — the four columns, an ordinary save,
 the product with no price, and the two refusals.
 **THE REFUSAL IS THE TEACHING AND IT IS FILMED, not described.** A figure
-outside the seller's range is refused `ASSOCIATE_PRICE_OUT_OF_SELLER_RANGE` at
+outside the client's range is refused `ASSOCIATE_PRICE_OUT_OF_SELLER_RANGE` at
 the moment it is set, not weeks later at an order, because the person who can
 fix it is looking at the screen now. The other half is `ASSOCIATE_PRICE_NOT_SET`
 — no fallback and no default, so an unpriced product is refused by name rather
 than sold at a figure nobody chose.
-**Filmed on RAVI**, whose prices the seeding puts squarely inside the seller's
+**Filmed on RAVI**, whose prices the seeding puts squarely inside the client's
 ranges and whose list still carries the products nobody has priced for him — so
 the only refusal on screen is the one made on camera. PRIYA is the one carrying
 a stranded price, and she is where R19 points instead.
@@ -5282,9 +5284,9 @@ depends on, and over a sort actually happening.
 
 ## S — The associate portal
 
-**A FOURTH app, and a fourth reader.** Sections A–G address the seller who owns
+**A FOURTH app, and a fourth reader.** Sections A–G address the client who owns
 the stock; H–P address Skydrop's own staff; R addresses the shopkeeper. This
-section addresses **the shopkeeper's salesperson** — a reseller store's own
+section addresses **the shopkeeper's salesperson** — a member store's own
 sales people, signing in at `associate.skydrop.global` (`apps/associate`,
 ASSOC-1). They are often on a phone, often mid-call with a customer. They own
 nothing, hold no stock, have no wallet, and settle up with their store outside
@@ -5468,20 +5470,20 @@ Every remaining page, with the reason.
 
 | Page                                                                                                                                                   | Why not                                                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| seller `/dashboard`                                                                                                                                    | Covered inside A1. Read-only; no flow of its own.                                                                                                                                                     |
-| seller `/settings`                                                                                                                                     | A tile hub. Filming navigation to navigation.                                                                                                                                                         |
-| seller `/settings/notifications`                                                                                                                       | A redirect kept for old bookmarks. Nothing happens on it.                                                                                                                                             |
-| seller `/orders/import/[id]`, `/products/import/jobs/[id]`                                                                                             | One import's detail. A ten-second beat inside B2 and C6, not a tutorial.                                                                                                                              |
-| seller `/inventory/units`                                                                                                                              | Needs strict-mode serialised SKUs **and** a real discrepancy — a stuck unit or a count mismatch. Seedable, but it teaches a screen most sellers will never open. Revisit if strict mode is adopted.   |
-| seller `/customers`                                                                                                                                    | Genuinely thin: counts, a risk badge, correct-details, remove. Folded into B5 as a thirty-second aside. Promote it if the risk badge starts driving decisions.                                        |
-| admin `/holds`                                                                                                                                         | Read-only by design — there is deliberately no Release button, because the decision is the seller's. Named inside D5 and H1.                                                                          |
+| client `/dashboard`                                                                                                                                    | Covered inside A1. Read-only; no flow of its own.                                                                                                                                                     |
+| client `/settings`                                                                                                                                     | A tile hub. Filming navigation to navigation.                                                                                                                                                         |
+| client `/settings/notifications`                                                                                                                       | A redirect kept for old bookmarks. Nothing happens on it.                                                                                                                                             |
+| client `/orders/import/[id]`, `/products/import/jobs/[id]`                                                                                             | One import's detail. A ten-second beat inside B2 and C6, not a tutorial.                                                                                                                              |
+| client `/inventory/units`                                                                                                                              | Needs strict-mode serialised SKUs **and** a real discrepancy — a stuck unit or a count mismatch. Seedable, but it teaches a screen most clients will never open. Revisit if strict mode is adopted.   |
+| client `/customers`                                                                                                                                    | Genuinely thin: counts, a risk badge, correct-details, remove. Folded into B5 as a thirty-second aside. Promote it if the risk badge starts driving decisions.                                        |
+| admin `/holds`                                                                                                                                         | Read-only by design — there is deliberately no Release button, because the decision is the client's. Named inside D5 and H1.                                                                          |
 | admin `/nsa`, `/reports`, `/liabilities`, `/bank-accounts/history`, `/system/capacity`, `/margin`, `/inventory-units`                                  | Read-only or single-button screens. Each gets a sentence in the neighbouring tutorial; none carries three minutes. `/system/capacity` in particular is prose already — reading it aloud adds nothing. |
 | admin `/warehouse/pick`                                                                                                                                | The retired per-parcel station, unlinked from the nav. It survives only for serialised stock, which nothing local uses. Film it the day strict mode ships.                                            |
 | admin `/shiprocket`                                                                                                                                    | Stubbed and inactive locally, so every panel would film as an empty state. `impractical locally` until Shiprocket is live in a dev environment.                                                       |
 | admin `/courier-escalation` and its three tabs                                                                                                         | The whole subsystem is manual-by-design against a courier's own support desk. Filming it needs a real courier ticket to point at. Worth a tutorial once escalations are routine; not filmable now.    |
 | admin `/cost-sync` portal runs                                                                                                                         | Browser-driven sign-ins to Delhivery's own portal. `impractical locally` and unwise to demonstrate anywhere else. The read-only half is inside N9.                                                    |
 | admin `/expenses`, `/expenses/categories`, `/courier-wallet`, `/bank-accounts`, `/reseller-store-wallets`, `/stores`, `/reseller-stores*` (admin side) | Real screens, genuinely deferred rather than dismissed — they are a second money wave once N1–N9 exist. Listing them here so the gap is visible rather than forgotten.                                |
-| both apps `/notifications`, `/notifications/settings`                                                                                                  | Seller side is F4. Admin side is the same screens; one cross-reference is cheaper than a second video.                                                                                                |
+| both apps `/notifications`, `/notifications/settings`                                                                                                  | Client side is F4. Admin side is the same screens; one cross-reference is cheaper than a second video.                                                                                                |
 | admin `/account`                                                                                                                                       | The staff equivalent of F3. One sentence in H1.                                                                                                                                                       |
 
 ---
@@ -5511,8 +5513,8 @@ to four months for one person doing nothing else. Plus these one-offs first:
 - **The lifecycle seeding (D0)** — 1–2 days. Unblocks 20+ tutorials and is the
   single highest-leverage thing in this document.
 - **Teaching the recorder the admin app** — half a day. It is hardcoded to the
-  seller URL and the seller credentials; a flow needs to declare its app and a
-  staff sign-in needs to exist beside the seller one. **No admin tutorial can be
+  client URL and the client credentials; a flow needs to declare its app and a
+  staff sign-in needs to exist beside the client one. **No admin tutorial can be
   made until this is done.**
 - **A products CSV fixture** for C6 — an hour.
 
@@ -5539,7 +5541,7 @@ characters, so **roughly 2,000 credits**. That is the unit to plan in, and at
 | ----------------------------- | ------ | -------- | ---------------- |
 | One tutorial                  | 10–16  | ~2,000   | yes, 120× over   |
 | Sections A + B (13, 5 filmed) | ~100   | ~16,000  | yes              |
-| Whole seller app (A–G, 44)    | ~560   | ~88,000  | yes              |
+| Whole client app (A–G, 44)    | ~560   | ~88,000  | yes              |
 | The whole library (90)        | ~1,150 | ~180,000 | yes, once        |
 
 So **the voice is no longer what limits this** — the 14-to-18 working weeks
@@ -5615,7 +5617,7 @@ Two things would cut it, and both are cheap next to the production cost:
   build.
 - **Film the stable things first.** The ordering in this document already does
   some of that — A, F, J1 and M1 are screens whose shape has not changed in
-  months, while the reseller section (G) and the money section (N) are the
+  months, while the reselling section (G) and the money section (N) are the
   newest and most likely to move. **Producing G and N last is a maintenance
   decision, not just a priority one.**
 
@@ -5624,7 +5626,7 @@ Two things would cut it, and both are cheap next to the production cost:
 Do not commit to ninety. Commit to **A and B** — thirteen tutorials, of which
 **five are already filmed** and most of the rest are `ready` — ship them, and
 find out what people actually ask for. That is a fortnight, it covers everything a
-new seller does in their first week, and it is the part of this document least
+new client does in their first week, and it is the part of this document least
 likely to be wrong.
 
 Then decide the next section from support questions rather than from this file.
@@ -5685,7 +5687,7 @@ batch rather than while planning it:
   about uploading a logo, which is the worst possible place for it. The shim
   now serves the bytes back as a `data:` URL.
 
-**And two from filming G6 (2026-09-30), both in the seller's "Waiting on you"
+**And two from filming G6 (2026-09-30), both in the client's "Waiting on you"
 queue — the screen that queue exists to be.**
 
 - **The page CRASHED the moment any store asked for an order or address
@@ -5709,7 +5711,7 @@ queue — the screen that queue exists to be.**
   printed `displayName ?? name`, so `Kolkata Silk Room` and `Silk Room` read as
   two different businesses on one screen. The payload already carried both.
 
-**And one from filming B5 (2026-09-30), on the most-read screen in the seller
+**And one from filming B5 (2026-09-30), on the most-read screen in the client
 app.** A DELIVERED order carried a section heading reading **"Out for
 delivery"**, two inches under a chip saying Delivered. The heading was a
 two-branch ternary on the current order status — DELIVERY_FAILED, or, for
@@ -5717,7 +5719,7 @@ everything else, "Out for delivery" — which is right for the two statuses the
 panel is rendered for WHILE a parcel is moving, and wrong for every order it is
 rendered for afterwards. And it is rendered for most of them: the panel
 deliberately stays on any order carrying a call or a delivery request, so the
-seller can read back what was said. It is the recurring shape again — a FALLBACK
+client can read back what was said. It is the recurring shape again — a FALLBACK
 that is correct most of the time it was written for and wrong everywhere else —
 and a render test asserting "a heading is shown" passes either way, which is why
 `deliveryPanelTitle` is now pure, exported and pinned by its WORDS
@@ -5729,7 +5731,7 @@ SAVED AT ALL.** The check run's very first Save came back
 > `[BAD_REQUEST] packageType must be one of the following values: BOX,
   POLYBAG, ENVELOPE, TUBE, CUSTOM`
 
-The seller app had invented three package types of its own — STANDARD, FRAGILE
+The client app had invented three package types of its own — STANDARD, FRAGILE
 and DOCUMENT — over an enum that has only ever held those five, and a comment
 beside the display mapping said "the enum names the same three things", which was
 simply false. `buildPatch` sends `packageType` on EVERY save, so every save of
@@ -5746,7 +5748,7 @@ wrong, and a test holding one would drift the same way. Proved red.
 **Three from filming B7 (2026-09-30), and the first of them had been on screen
 for two months.**
 
-1. **The order tracker told every confirmed seller that picking and packing were
+1. **The order tracker told every confirmed client that picking and packing were
    "not needed".** The `Ready to dispatch` rung fell back to
    `shipments.awbGeneratedAt`, which was right under the model the ladder was
    written against — a waybill was booked when a supervisor closed the manifest,
@@ -5779,13 +5781,13 @@ for two months.**
    independently would be that drift with the worse symptom.
 3. **`AWAITING_COURIER` was missing from `SELLER_CANCELLABLE_STATES`.** The
    matrix has carried `AWAITING_COURIER → CANCELLED` with RELEASE_STOCK since
-   the state existed, the seller's order page offers the button there citing
+   the state existed, the client's order page offers the button there citing
    CUR-17, and CLAUDE.md says in as many words that the state "is in
-   `SELLER_CANCELLABLE_STATES`". Only the set itself disagreed, so a seller
+   `SELLER_CANCELLABLE_STATES`". Only the set itself disagreed, so a client
    whose parcel was paused for a carrier decision pressed Cancel and read
    `[NOT_CANCELLABLE] An order in AWAITING_COURIER cannot be cancelled` — on the
    one state where cancelling costs least. The same set answers
-   `capabilities.cancel` for a reseller store's order list, so their screens were
+   `capabilities.cancel` for a member store's order list, so their screens were
    wrong in step. Found by reading, not by filming; proved red.
 
 **And a seventh in the seeding**: `raiseOverdueFlags` asked for "our parcel out
@@ -5800,27 +5802,27 @@ that can make a parcel old enough.
 **Three from filming B3 (2026-09-30), and the last of them is the kind this
 library exists to find.**
 
-1. **A raw Prisma error was written into a seller-facing field.** Every failure
+1. **A raw Prisma error was written into a client-facing field.** Every failure
    the import worker caught on one row went into
    `staged_order_rows.problems[].reason` — and into the error-report CSV the
-   seller downloads — as `err.message`, verbatim. A transaction timeout on one
-   row therefore put this on the seller's Pending page: the ABSOLUTE PATH of the
+   client downloads — as `err.message`, verbatim. A transaction timeout on one
+   row therefore put this on the client's Pending page: the ABSOLUTE PATH of the
    file on our server, an excerpt of our source, and the advisory lock it was
    inside. And because those rows carry `field: ''` the page said "1 value to
-   fix" and marked no field, so the seller was asked to correct something no
+   fix" and marked no field, so the client was asked to correct something no
    value they could type would ever fix. `rowFailureForSeller` splits the two:
    a 4xx of our own is a refusal we MEANT to make about their row and is shown
    verbatim (that is the whole value of the screen); anything else is ours, so
    the row is still staged — "Import as order" re-runs it, which is the right
-   recovery for a timeout — the seller is told plainly it is not their data, and
+   recovery for a timeout — the client is told plainly it is not their data, and
    the real error goes to the log. The three `Variant SKU … not found` throws
    became `BadRequestException`s in the same change, because the commonest
-   seller-fixable case was a bare `Error` and would otherwise have been hidden.
+   client-fixable case was a bare `Error` and would otherwise have been hidden.
 2. **Every "is required" message named our internal key.** `addressLine2 is
 required`, under a form field labelled "Address line 2" and over a
    spreadsheet column headed "Address Line2". `orderCsvFieldLabel` reads the
    FIRST alias of each field, which is already its human name and the spelling
-   the seller's own file most likely carries — so there is no second list to
+   the client's own file most likely carries — so there is no second list to
    maintain and a field added to the alias map gets a label by construction.
 3. **A row fixed on the pending page became a DRAFT.**
    `StagedOrderRowService.importRow` passed neither `source` nor
@@ -5837,7 +5839,7 @@ required`, under a form field labelled "Address line 2" and over a
    "waiting on the call centre". Proved red.
 
 **One from building C0 (2026-09-30), on the page C1 will film.** A consignment
-that had LANDED and been counted short told its seller the missing unit was
+that had LANDED and been counted short told its client the missing unit was
 `Still to come: 1 — in Dhaka or in the air, not sellable yet`. It is the
 recurring shape yet again: `stillToCome = countedInDhaka − receivedInIndia` is
 exactly right while the goods are travelling, and becomes a promise of goods
@@ -5879,8 +5881,8 @@ from an unguarded one, and the guards ARE the behaviour under test. Proved red.
 
 **One from filming H2 (2026-09-30): A PARCEL THAT CAME BACK WAS STILL OUT FOR
 DELIVERY.** The order tracker had nine forward rungs and no idea a return leg
-exists. So an order whose goods were back on our shelf and whose seller had
-already been refunded read, on the SELLER's own order page, two inches under a
+exists. So an order whose goods were back on our shelf and whose client had
+already been refunded read, on the CLIENT's own order page, two inches under a
 chip saying "RTO restocked",
 
 >     Current step:  Out for delivery   Courier
@@ -5889,7 +5891,7 @@ chip saying "RTO restocked",
 and the Delivered rung fell back to the courier's ETA, so it printed a delivery
 DATE for a delivery that was never going to happen. **It is the third time this
 one ladder has said something confident that was not so** — after the AWB-time
-fallback that told every confirmed seller picking was "not needed", and the
+fallback that told every confirmed client picking was "not needed", and the
 DELIVERED order carrying an "Out for delivery" heading. A parcel that never
 reached the customer now gets no Delivered rung at all; the return rungs say what
 happened and "Back in your stock" becomes the current step. One DELIVERED and
@@ -5933,24 +5935,24 @@ instead: it is the one act on the list you cannot do from the console.
 read-only "what a collapse would move" half to film either.
 
 **Observed and deliberately NOT fixed:** the order's Full history labels every
-one of OUR events `SKYDROP`, the seller's own cancellation included — so a seller
+one of OUR events `SKYDROP`, the client's own cancellation included — so a client
 reads "Cancelled · SKYDROP · <their own words>". The field is the two-valued
 `MilestoneOwner` and means "our side, not the courier's", which is true and is
 what the section's note says ("Our handling and the courier's scans, together").
-Telling the seller apart from Skydrop staff would be a third value flowing
+Telling the client apart from Skydrop staff would be a third value flowing
 through both apps and the ui package, and a decision about what SYSTEM reads as.
 Worth doing; not worth doing inside a filming session.
 
 **Two curriculum errors, both from trusting a description over the code**: the
-seller roles editor has 41 permissions in seven groups and not 68 in ten (that
+client roles editor has 41 permissions in seven groups and not 68 in ten (that
 is the staff catalogue), and the sidebar's section ordinals are passed by the
-seller shell and IGNORED by the component that renders it. Both were written
+client shell and IGNORED by the component that renders it. Both were written
 into entries above and then corrected against the source. It is the argument
 for deriving a curriculum from code rather than from a tour of the UI — and for
 re-deriving anything in it that is a number.
 
 **THE SIXTH PLACE AN ORDER IS NAMED BY ITS UUID, found by filming the issue
-board (2026-10-01).** `/system-issues` carried "A seller asked to return a parcel
+board (2026-10-01).** `/system-issues` carried "A client asked to return a parcel
 and the courier refused — The cancellation for order
 01a0f016-4863-7b76-85f2-df0e319f1a7f was refused: waybill not found", on the ONE
 screen whose entire job is to say which order needs a person. Not a rendering
@@ -5964,7 +5966,7 @@ falls back to the id rather than losing the issue), with the id left in
 spec covers both branches. **The row already on this box predates the fix and
 still shows the uuid**: the dedupe key is the request, nothing bumps it, and
 `raise` re-states a detail only on a recurrence — so this one will read the old
-way until a seller's send-back is refused again.
+way until a client's send-back is refused again.
 
 **Observed and NOT fixed, same screen:** `AwbGenerationWorker gave up on a job`
 also carries a shipment uuid, but that string is `err.message` from the worker's
@@ -5978,7 +5980,7 @@ places on the board that is genuinely addressed to an engineer.
 
 while the recipient panel a few centimetres below it said SD-2026-26-000365 —
 two identifiers for one order on one card, and the unreadable one on top, where
-the number is what the agent would say to the seller, type into a search box or
+the number is what the agent would say to the client, type into a search box or
 write on a pad. `assignment.order.orderNumber` was already on the payload and
 already rendered lower down; the head simply read `assignment.orderId` because
 that is what the queue entry carries. It falls back to the id only for the case
@@ -6166,7 +6168,7 @@ hold spoke English and the screen that REPORTS one spoke database.** The
 parcels to the courier" since the day it was written. The card that reports a
 standing hold printed `Blocked: ORDER_CREATE` — the raw enum value — to the
 same operator, about the same decision, three inches further down the same
-page. A hold's whole job is to be explicable to the seller on the telephone,
+page. A hold's whole job is to be explicable to the client on the telephone,
 and the ONE line saying what it stops was the one line in database vocabulary.
 
 **The map was already in the file.** `SAFE` and `IN_FLIGHT` carry the
@@ -6181,7 +6183,7 @@ nobody can see is worse than an ugly one.
 
 **The shape: a vocabulary is only as good as its WORST reader.** Nothing failed,
 nothing was wrong, every figure beside it was right — and the sentence an
-operator would have had to read aloud to a seller was the one written for a
+operator would have had to read aloud to a client was the one written for a
 database. Worth checking, whenever a form offers choices in words, what the
 page that reads them back says.
 
@@ -6273,7 +6275,7 @@ answers the same number to every question teaches its reader that the question
 does not matter.**
 
 **AND A FORTY-SEVENTH, found by filming P3 (2026-10-04) and spanning BOTH
-consoles: a reseller store's own words were printed as SKYDROP's.** `openedBy`
+consoles: a member store's own words were printed as SKYDROP's.** `openedBy`
 carries `'STORE'` and the server goes out of its way to say why — "a reseller
 store raising a dispute WITH its seller: neither the seller's words nor ours, so
 it is named for what it is". Every reader in both apps asked
@@ -6282,9 +6284,9 @@ it is named for what it is". Every reader in both apps asked
 - the ADMIN thread labelled the store's complaint **Skydrop**, three inches
   below a subtitle that correctly read "Raised … by Silk Studio" — two halves of
   one page disagreeing about who had spoken;
-- the SELLER's own ticket page said "Raised by Skydrop", drew the store's words
+- the CLIENT's own ticket page said "Raised by Skydrop", drew the store's words
   as ours, and its queue printed "Skydrop" in the "who raised it" column. **That
-  half is materially worse**: the seller is the party being asked to pay, and
+  half is materially worse**: the client is the party being asked to pay, and
   they were being told WE were complaining about their goods when it was their
   own shopkeeper;
 - and `apps/seller`'s hand-written `TicketView` **did not list `'STORE'` at
@@ -6292,7 +6294,7 @@ it is named for what it is". Every reader in both apps asked
 
 Plus two labels that stopped being true the day the store got an inbox: a reply
 on a dispute reaches BOTH parties (the notification plan's own rule since
-RS-7), and the box said "Reply to the seller".
+RS-7), and the box said "Reply to the client".
 
 **The shape is the hand-written client type again** — the same one that declared
 an `invitedAt` the API has never sent — but with a twist worth separating out:
@@ -6333,11 +6335,11 @@ written when the restated list was complete.
 (2026-10-05, filming M6): THE DOCUMENT WAS WRONG, NOT THE CODE.** Every other
 entry in this list is a defect the filming found. This one is the reverse —
 M6's entry promised "`/delivery-actions`: approve or reject with a reason", and
-the product had deliberately stopped working that way on 2026-09-17. A seller's
+the product had deliberately stopped working that way on 2026-09-17. A client's
 ask is now created already approved, because "a re-attempt and a customer call
 are TICKETS: ops works them from the ticket queue and the outbox console, which
 is the approval step — a second one in front of it only delayed the work". A
-reseller store's held ask is the SELLER's to decide and is refused to admin by
+member store's held ask is the CLIENT's to decide and is refused to admin by
 name. So no row an admin may decide can exist, and the approve path survives
 only as a documented drain for rows created in a four-day window last August.
 

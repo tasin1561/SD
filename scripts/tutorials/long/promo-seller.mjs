@@ -69,7 +69,7 @@
 export const narration = {
   slug: 'promo-seller',
   title: 'Sell into India without being in India',
-  subtitle: 'Skydrop for sellers',
+  subtitle: 'Skydrop for clients',
   steps: [
     {
       id: 'problem',

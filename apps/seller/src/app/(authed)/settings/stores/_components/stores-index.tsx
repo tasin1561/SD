@@ -132,7 +132,7 @@ export function StoresIndex(): ReactElement {
       <SetPageHeader
         crumbs={CRUMBS}
         title="Stores"
-        subtitle="The shopfronts you sell under. A store decides which brand an order belongs to — your products, stock, wallet and couriers are shared across all of them."
+        subtitle="The shops you sell under. A store decides which brand an order belongs to — your products, stock, wallet and couriers are shared across all of them."
         meta={
           stores.data === undefined ? undefined : (
             <span className="set-meta">
@@ -173,7 +173,7 @@ export function StoresIndex(): ReactElement {
                 returns, so it is what these say. */}
           <div className="set-kpis">
             <KpiCard
-              label="Shopfronts"
+              label="Shops"
               icon={<StoreIcon size={14} />}
               value={rows.length}
               format={String}
@@ -207,7 +207,7 @@ export function StoresIndex(): ReactElement {
 
           <section className="set-section">
             <SectionHeading
-              title="Your shopfronts"
+              title="Your shops"
               note={`${rows.length} ${rows.length === 1 ? 'store' : 'stores'}`}
             />
             <div className="set-card" data-flush>

@@ -491,7 +491,7 @@ async function openOrderByRef({ page, stage }, ref) {
 export const narration = {
   slug: 'seller-everything',
   title: 'Getting your products to India',
-  subtitle: 'Skydrop for sellers',
+  subtitle: 'Skydrop for clients',
   steps: [
     /* ── what this is ─────────────────────────────────────────────── */
     {
@@ -628,7 +628,7 @@ export const narration = {
     },
     {
       id: 'route-pick',
-      say: 'Via our Bangladesh warehouse means you ship to Dhaka and we move it on. That is the one we charge inbound freight for, and the one most sellers use.',
+      say: 'Via our Bangladesh warehouse means you ship to Dhaka and we move it on. That is the one we charge inbound freight for, and the one most clients use.',
       sayBn:
         'Via our Bangladesh warehouse মানে আপনি ঢাকায় পাঠাচ্ছেন আর আমরা সেটা এগিয়ে দিচ্ছি। এই পথটার জন্যই আমরা inbound ফ্রেইট নিই, আর বেশির ভাগ বিক্রেতা এই পথটাই নেন।',
       sayHi:

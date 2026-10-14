@@ -95,7 +95,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     here and on its own portal, and a fourth value would only change
     where the bubble is drawn. The NAME is what was wrong.
 
-    `storeName` is preferred over a bare "Reseller store" so an operator
+    `storeName` is preferred over a bare "Member store" so an operator
     reading this with the seller on the telephone can say who complained.
   */
   const them = ticket.storeName ?? 'Member store';
@@ -103,7 +103,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
   /*
     On a dispute our reply reaches BOTH parties — the plan's own rule is
     "our words and the seller's words go to the store" since it got an
-    inbox (RS-7, 2026-09-19) — so a box labelled "Reply to the seller" is
+    inbox (RS-7, 2026-09-19) — so a box labelled "Reply to the client" is
     telling an operator the wrong thing about who is listening.
   */
   const isDispute = ticket.ticketType === TicketType.STORE_DISPUTE;

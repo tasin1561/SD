@@ -29,6 +29,7 @@ import {
   ShipmentStatus,
   StockUnitStatus,
   TicketStatus,
+  TicketType,
   TopupRequestStatus,
   WithdrawalRequestStatus,
   LabelReprintRequestStatus,
@@ -231,6 +232,46 @@ export function ticketStatusLabel(status: TicketStatus): string {
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled TicketStatus: ${String(exhaustive)}`);
+    }
+  }
+}
+
+/**
+ * What a ticket's TYPE is called, in one place.
+ *
+ * It was a local function in the admin list and a
+ * `.toLowerCase().replaceAll('_', ' ')` on the admin DETAIL page — two
+ * renderers of one enum, which is the drift CNS-2 and BIN-1 exist to
+ * prevent, and it had already drifted: CON-2 renamed the list's words
+ * and could not touch the derived ones, so the same ticket read
+ * "Client issue" in the list and "seller raised issue" one click later.
+ * A DERIVED label cannot be renamed by any string search, which is
+ * exactly why the words have to be written down.
+ *
+ * F2-exhaustive, so a new TicketType fails to compile until somebody
+ * decides what to call it rather than inheriting a machine-made phrase.
+ */
+export function ticketTypeLabel(type: TicketType): string {
+  switch (type) {
+    case TicketType.SCRAP_DAMAGE:
+      return 'Scrap / damage';
+    case TicketType.SELLER_RAISED_ISSUE:
+      return 'Client issue';
+    case TicketType.COURIER_NDR_ESCALATION:
+      return 'Delivery escalation';
+    case TicketType.RECEIPT_SHORTFALL:
+      return 'Receipt short';
+    case TicketType.STORE_DISPUTE:
+      return 'Member store dispute';
+    // 2026-09-16 — a member store raising something with SKYDROP, not
+    // with its client's staff. Named apart from the dispute for the same
+    // reason the types are apart: one is Skydrop's to answer, the other
+    // Skydrop referees between the client's staff and the store.
+    case TicketType.STORE_ISSUE:
+      return 'Member store issue';
+    default: {
+      const exhaustive: never = type;
+      throw new Error(`Unhandled TicketType: ${String(exhaustive)}`);
     }
   }
 }
@@ -773,6 +814,24 @@ export function statusLabel(
   // single override: `VOIDED` exists on exactly one of these seven
   // enums (InboundFreightStatus).
   if (status === 'VOIDED') return 'Withdrawn';
+  // CON-2: this function DERIVES its words from the enum name, and the
+  // rename deliberately left enum values alone — so three statuses went
+  // on rendering "Seller" to somebody the whole product now calls a
+  // client, and no search for a string could ever have found them,
+  // because there is no string. (The same shape as the settings page's
+  // category heading, which title-cases its key.) Overridden here rather
+  // than renamed in the enum, for the reason CON-2 gives throughout: the
+  // value is protocol, the words are not.
+  //
+  // `RETURNED_TO_SELLER` is NOT in this list, on purpose. A second
+  // renderer — the stock-adjustment reason dropdown — derives its own
+  // label from the same enum with `replace(/_/g,' ').toLowerCase()`, so
+  // overriding only here would make a unit chip say "client" beside a
+  // dropdown still offering "returned to seller". The two have to move
+  // together or not at all.
+  if (status === 'AWAITING_SELLER_DECISION') return 'Awaiting client decision';
+  if (status === 'SELLER_RELEASED') return 'Client released';
+  if (status === 'SELLER_REQUESTED_MORE_ATTEMPTS') return 'Client asked for more attempts';
   return String(status)
     .toLowerCase()
     .split('_')

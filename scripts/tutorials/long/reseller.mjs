@@ -116,7 +116,7 @@ const CUSTOMER = {
  * It is `STORE_REQUEST_ORDERS.delivery` in the seed: a store parcel
  * driven out for delivery with one send-back ask already waiting on
  * seller staff, which is what makes both the three-ask panel and the
- * "sent to your seller" history real rather than empty. The list is
+ * "sent to your client" history real rather than empty. The list is
  * ordered `placedAt: 'desc'`, so `.first()` on the search result is the
  * live one even after a previous take spent an older parcel for the
  * same customer.
@@ -146,24 +146,24 @@ const WITHDRAW_AMOUNT = '5000';
 
 export const narration = {
   slug: 'reseller-everything',
-  title: 'Selling a seller’s stock under your own name',
-  subtitle: 'Skydrop for reseller stores',
+  title: 'Selling a client’s stock under your own name',
+  subtitle: 'Skydrop for member stores',
   steps: [
     {
       id: 'intro',
-      say: 'A reseller store sells somebody else’s stock under its own name. Your seller holds the goods in our Indian warehouse; we ring the customer, pack the parcel and send it. You set the price, and the difference is yours.',
+      say: 'A member store sells somebody else’s stock under its own name. Your client holds the goods in our Indian warehouse; we ring the customer, pack the parcel and send it. You set the price, and the difference is yours.',
       sayBn:
-        'একটা reseller store অন্য কারও স্টক নিজের নামে বিক্রি করে। আপনার বিক্রেতা পণ্য রাখে আমাদের ভারতের গুদামে; আমরা ক্রেতাকে ফোন করি, পার্সেল প্যাক করি আর পাঠিয়ে দিই। দাম আপনি ঠিক করেন, আর পার্থক্যটা আপনার।',
+        'একটা member store অন্য কারও স্টক নিজের নামে বিক্রি করে। আপনার বিক্রেতা পণ্য রাখে আমাদের ভারতের গুদামে; আমরা ক্রেতাকে ফোন করি, পার্সেল প্যাক করি আর পাঠিয়ে দিই। দাম আপনি ঠিক করেন, আর পার্থক্যটা আপনার।',
       sayHi:
-        'एक reseller store किसी और का स्टॉक अपने नाम से बेचता है। आपका विक्रेता माल भारत में हमारे गोदाम में रखता है; हम ग्राहक को फ़ोन करते हैं, पार्सल पैक करते हैं और भेज देते हैं। कीमत आप तय करते हैं, और फ़र्क़ आपका।',
+        'एक member store किसी और का स्टॉक अपने नाम से बेचता है। आपका विक्रेता माल भारत में हमारे गोदाम में रखता है; हम ग्राहक को फ़ोन करते हैं, पार्सल पैक करते हैं और भेज देते हैं। कीमत आप तय करते हैं, और फ़र्क़ आपका।',
     },
     {
       id: 'invitation',
-      say: 'You cannot sign yourself up. Your seller invites you by email and the link sets your password once. Nor is this the seller’s own app — that line at the bottom is where a seller signs in.',
+      say: 'You cannot sign yourself up. Your client invites you by email and the link sets your password once. Nor is this your client’s own app — the links at the bottom go to the other portals.',
       sayBn:
-        'আপনি নিজে থেকে সাইন আপ করতে পারবেন না। আপনার বিক্রেতা আপনাকে ইমেইলে আমন্ত্রণ পাঠায়, আর ওই লিংক দিয়ে একবারই পাসওয়ার্ড বসানো হয়। এটা বিক্রেতার নিজের অ্যাপও নয় — নিচের ওই লাইনটাই বিক্রেতার সাইন ইনের জায়গা।',
+        'আপনি নিজে থেকে সাইন আপ করতে পারবেন না। আপনার বিক্রেতা আপনাকে ইমেইলে আমন্ত্রণ পাঠায়, আর ওই লিংক দিয়ে একবারই পাসওয়ার্ড বসানো হয়। এটা বিক্রেতার নিজের অ্যাপও নয় — নিচের ওই লিংকগুলো বাকি portal-গুলোতে নিয়ে যায়।',
       sayHi:
-        'आप ख़ुद से sign up नहीं कर सकते। आपका विक्रेता आपको ईमेल पर न्योता भेजता है, और उस लिंक से एक ही बार password बैठाया जाता है। यह विक्रेता का अपना ऐप भी नहीं है — नीचे की वह लाइन ही विक्रेता के sign in की जगह है।',
+        'आप ख़ुद से sign up नहीं कर सकते। आपका विक्रेता आपको ईमेल पर न्योता भेजता है, और उस लिंक से एक ही बार password बैठाया जाता है। यह विक्रेता का अपना ऐप भी नहीं है — नीचे के वे लिंक बाकी portal पर ले जाते हैं।',
     },
     {
       id: 'sign-in',
@@ -175,7 +175,7 @@ export const narration = {
     },
     {
       id: 'dashboard',
-      say: 'The heading is your shop’s name as your customers see it, and under it who you resell for. No other store can see you, and you cannot see them.',
+      say: 'The heading is your store’s name as your customers see it, and under it who you resell for. No other store can see you, and you cannot see them.',
       sayBn:
         'উপরের শিরোনামটা আপনার দোকানের নাম — ক্রেতারা যে নামে আপনাকে চেনে — আর তার নিচে আপনি কার হয়ে বিক্রি করছেন। অন্য কোনো store আপনাকে দেখতে পায় না, আপনিও তাদের দেখতে পান না।',
       sayHi:
@@ -191,7 +191,7 @@ export const narration = {
     },
     {
       id: 'terms-why',
-      say: 'Start here, before selling anything. The terms are what your seller and Skydrop agreed about your store: which of Skydrop’s fees you pay, and when each of you is credited.',
+      say: 'Start here, before selling anything. The terms are what your client and Skydrop agreed about your store: which of Skydrop’s fees you pay, and when each of you is credited.',
       sayBn:
         'কিছু বিক্রি করার আগে এখান থেকেই শুরু করুন। Terms হলো আপনার দোকান নিয়ে আপনার বিক্রেতা আর Skydrop যা ঠিক করেছে: Skydrop-এর কোন কোন চার্জ আপনি দেবেন, আর আপনাদের দুজনের কে কখন টাকা পাবেন।',
       sayHi:
@@ -199,7 +199,7 @@ export const narration = {
     },
     {
       id: 'terms-fees',
-      say: 'Who pays which fee, in words. Six of them: delivery, a return, a return the customer caused, cash handling, the tax taken off cash collected, and instant pay. Whatever share you carry, your seller carries the rest.',
+      say: 'Who pays which fee, in words. Six of them: delivery, a return, a return the customer caused, cash handling, the tax taken off cash collected, and instant pay. Whatever share you carry, your client carries the rest.',
       sayBn:
         'কোন চার্জ কে দেয়, কথায় লেখা। ছয়টা: ডেলিভারি চার্জ, ফেরত, ক্রেতার কারণে ফেরত, নগদ টাকা হাতে নেওয়ার চার্জ, আদায় করা নগদ থেকে কাটা কর, আর instant pay। আপনি যতটুকু ভাগ বহন করেন, বাকিটা আপনার বিক্রেতা বহন করে।',
       sayHi:
@@ -223,7 +223,7 @@ export const narration = {
     },
     {
       id: 'catalogue',
-      say: 'Your catalogue is the list your seller lets you sell from. You do not choose what is on it; a product they have not enabled is not here at all.',
+      say: 'Your catalogue is the list your client lets you sell from. You do not choose what is on it; a product they have not enabled is not here at all.',
       sayBn:
         'আপনার Catalogue হলো সেই তালিকা, যেখান থেকে আপনার বিক্রেতা আপনাকে বিক্রি করতে দেয়। এতে কী থাকবে সেটা আপনি বাছেন না; তারা যে পণ্য চালু করেনি, সেটা এখানে একদমই নেই।',
       sayHi:
@@ -231,7 +231,7 @@ export const narration = {
     },
     {
       id: 'you-pay',
-      say: 'Four figures a product. The first is what you pay the seller per unit — the transfer price, set for your store, out of what you collect.',
+      say: 'Four figures a product. The first is what you pay the client per unit — the transfer price, set for your store, out of what you collect.',
       sayBn:
         'প্রতিটা পণ্যের জন্য চারটা সংখ্যা। প্রথমটা হলো প্রতি ইউনিটে আপনি বিক্রেতাকে কত দেবেন — You pay, অর্থাৎ আপনার দোকানের জন্য ঠিক করা transfer price, আপনি যা আদায় করবেন তার ভিতর থেকেই।',
       sayHi:
@@ -239,7 +239,7 @@ export const narration = {
     },
     {
       id: 'range',
-      say: 'Then the range you may sell inside. The bottom protects your seller’s price, the top protects the brand, and an order outside it is refused as you place it rather than weeks later.',
+      say: 'Then the range you may sell inside. The bottom protects your client’s price, the top protects the brand, and an order outside it is refused as you place it rather than weeks later.',
       sayBn:
         'তারপর যে সীমার ভিতরে আপনি বিক্রি করতে পারবেন। নিচের সীমা আপনার বিক্রেতার দাম বাঁচায়, উপরের সীমা ব্র্যান্ড বাঁচায়, আর সীমার বাইরের কোনো অর্ডার কয়েক সপ্তাহ পরে নয়, অর্ডার দেওয়ার সময়েই বাতিল হয়।',
       sayHi:
@@ -247,7 +247,7 @@ export const narration = {
     },
     {
       id: 'stock',
-      say: 'And how many you can sell today, out of the real warehouse. What is NOT here is as deliberate: not what the goods cost your seller, not how much stock there really is.',
+      say: 'And how many you can sell today, out of the real warehouse. What is NOT here is as deliberate: not what the goods cost your client, not how much stock there really is.',
       sayBn:
         'আর আজ আপনি কতগুলো বিক্রি করতে পারবেন, সত্যিকারের গুদাম থেকে। এখানে যা নেই, সেটাও ইচ্ছে করেই নেই: পণ্যটা আপনার বিক্রেতার কত খরচে কেনা, আর গুদামে আসলে কত স্টক আছে — দুটোই নেই।',
       sayHi:
@@ -287,7 +287,7 @@ export const narration = {
     },
     {
       id: 'placed',
-      say: 'Confirm, and it exists: your reference and a Skydrop number to quote to us. From here the call centre rings, the warehouse picks it out of your seller’s stock, and a courier takes it.',
+      say: 'Confirm, and it exists: your reference and a Skydrop number to quote to us. From here the call centre rings, the warehouse picks it out of your client’s stock, and a courier takes it.',
       sayBn:
         'Place order চাপলেই অর্ডারটা তৈরি: আপনার নিজের reference, আর আমাদের বলার জন্য একটা Skydrop নম্বর। এখান থেকে কল সেন্টার ফোন করে, গুদাম আপনার বিক্রেতার স্টক থেকে পণ্যটা তোলে, আর একটা কুরিয়ার সেটা নিয়ে যায়।',
       sayHi:
@@ -303,7 +303,7 @@ export const narration = {
     },
     {
       id: 'bulk-check',
-      say: 'Upload, and it is checked before anything is created: how many orders your rows make, and which will not import, with the reason. One here is under the seller’s minimum. Nothing is placed yet.',
+      say: 'Upload, and it is checked before anything is created: how many orders your rows make, and which will not import, with the reason. One here is under the client’s minimum. Nothing is placed yet.',
       sayBn:
         'আপলোড করলে কিছু তৈরি হওয়ার আগেই ফাইলটা পরীক্ষা করা হয়: আপনার সারিগুলো মিলে কতগুলো অর্ডার হয়, আর কোনটা import হবে না, কারণসহ। এখানে একটা সারি বিক্রেতার সবচেয়ে কম দামের নিচে পড়েছে। এখনো কোনো অর্ডার বসেনি।',
       sayHi:
@@ -327,7 +327,7 @@ export const narration = {
     },
     {
       id: 'order-read',
-      say: 'One order, top to bottom: the customer as they were when it was placed, the money in one place — collected, sold at, paid to the seller — and the products line by line.',
+      say: 'One order, top to bottom: the customer as they were when it was placed, the money in one place — collected, sold at, paid to the client — and the products line by line.',
       sayBn:
         'একটা অর্ডার, উপর থেকে নিচ পর্যন্ত: অর্ডার দেওয়ার সময় ক্রেতা যেমন ছিল ঠিক তেমন, টাকার সব হিসাব এক জায়গায় — কত আদায় হলো, কত দামে বিক্রি হলো, বিক্রেতাকে কত দেওয়া হলো — আর পণ্যগুলো লাইনে লাইনে।',
       sayHi:
@@ -351,7 +351,7 @@ export const narration = {
     },
     {
       id: 'wrong-intro',
-      say: 'Now the part to be clear about. When something goes wrong there are seven things you can ask for, and your seller decides, task by task, whether you do each yourself or whether they see it first.',
+      say: 'Now the part to be clear about. When something goes wrong there are seven things you can ask for, and your client decides, task by task, whether you do each yourself or whether they see it first.',
       sayBn:
         'এবার যে অংশটা পরিষ্কার থাকা দরকার। কিছু ভুল হলে আপনি সাতটা জিনিস চাইতে পারেন, আর আপনার বিক্রেতা কাজ ধরে ধরে ঠিক করে দেয় — কোনটা আপনি নিজে করবেন, আর কোনটা আগে তারা দেখবে।',
       sayHi:
@@ -359,7 +359,7 @@ export const narration = {
     },
     {
       id: 'delivery-asks',
-      say: 'On a parcel out for delivery, or one whose delivery has failed, three of them: ring the customer again, ask for another attempt, or send it back. A lightning mark happens as you ask; a clock goes to your seller, and nothing moves until they answer.',
+      say: 'On a parcel out for delivery, or one whose delivery has failed, three of them: ring the customer again, ask for another attempt, or send it back. A lightning mark happens as you ask; a clock goes to your client, and nothing moves until they answer.',
       sayBn:
         'Out for delivery অবস্থায় থাকা কোনো পার্সেলে, বা যার Delivery failed হয়েছে, তার মধ্যে তিনটা: ক্রেতাকে আবার ফোন করানো, আরেকবার ডেলিভারির চেষ্টা চাওয়া, বা জিনিসটা ফেরত পাঠানো। বিদ্যুতের চিহ্ন মানে আপনি চাওয়ার সঙ্গে সঙ্গেই কাজটা হয়ে যায়; ঘড়ির চিহ্ন মানে অনুরোধটা আপনার বিক্রেতার কাছে যায়, আর তারা উত্তর না দেওয়া পর্যন্ত কিছুই এগোয় না।',
       sayHi:
@@ -367,7 +367,7 @@ export const narration = {
     },
     {
       id: 'ask-dialog',
-      say: 'Open one and it says which of the two it is before you send. What you type is read by whoever acts on it — the agent who rings, or the seller deciding — so write what changed.',
+      say: 'Open one and it says which of the two it is before you send. What you type is read by whoever acts on it — the agent who rings, or the client deciding — so write what changed.',
       sayBn:
         'একটা খুললে পাঠানোর আগেই এটা বলে দেয় দুটোর মধ্যে কোনটা হবে। আপনি যা লিখবেন সেটা পড়বে যে কাজটা করবে — যে এজেন্ট ফোন করবে, বা যে বিক্রেতা সিদ্ধান্ত নেবে — তাই কী বদলেছে সেটাই লিখুন।',
       sayHi:
@@ -383,7 +383,7 @@ export const narration = {
     },
     {
       id: 'chase',
-      say: 'Two conversations. Wrong goods or an unexpected price goes to your seller. Damaged, lost or stuck with Skydrop goes to Skydrop. Both become a ticket with a number.',
+      say: 'Two conversations. Wrong goods or an unexpected price goes to your client. Damaged, lost or stuck with Skydrop goes to Skydrop. Both become a ticket with a number.',
       sayBn:
         'দুটো আলাদা আলাপ। ভুল পণ্য বা হিসাবের বাইরের দাম যায় আপনার বিক্রেতার কাছে। ভাঙা, হারিয়ে যাওয়া, বা Skydrop-এর কাছে আটকে থাকা জিনিস যায় Skydrop-এর কাছে। দুটোই নম্বরসহ একটা ticket হয়ে যায়।',
       sayHi:
@@ -399,7 +399,7 @@ export const narration = {
     },
     {
       id: 'call-it-off',
-      say: 'And calling it off, which works until the parcel is packed. Here the seller sees it first, so a reason is required and nothing is cancelled until they say yes.',
+      say: 'And calling it off, which works until the parcel is packed. Here the client sees it first, so a reason is required and nothing is cancelled until they say yes.',
       sayBn:
         'আর অর্ডার বাতিল করা, যেটা পার্সেল প্যাক হওয়া পর্যন্ত করা যায়। এখানে বিক্রেতা আগে দেখে, তাই একটা কারণ লিখতেই হবে, আর তারা রাজি না হওয়া পর্যন্ত কিছুই বাতিল হয় না।',
       sayHi:
@@ -407,7 +407,7 @@ export const narration = {
     },
     {
       id: 'wallet',
-      say: 'The wallet is the ledger between you and Skydrop: your balance, what you could withdraw today, and how far below zero your seller lets it go — which is them extending you credit.',
+      say: 'The wallet is the ledger between you and Skydrop: your balance, what you could withdraw today, and how far below zero your client lets it go — which is them extending you credit.',
       sayBn:
         'Wallet হলো আপনার আর Skydrop-এর মাঝের হিসাবের খাতা: আপনার ওয়ালেট ব্যালেন্স, আজ আপনি কত টাকা তুলতে পারবেন, আর আপনার বিক্রেতা শূন্যের কত নিচে পর্যন্ত যেতে দেয় — এটাই তাদের দেওয়া ধার।',
       sayHi:
@@ -423,7 +423,7 @@ export const narration = {
     },
     {
       id: 'topup',
-      say: 'Some sellers run this wallet themselves; the line at the top says which. When Skydrop runs it, you send money to our bank and then tell us — which account, how much, your reference. Nothing is credited until a person has seen it arrive.',
+      say: 'Some clients run this wallet themselves; the line at the top says which. When Skydrop runs it, you send money to our bank and then tell us — which account, how much, your reference. Nothing is credited until a person has seen it arrive.',
       sayBn:
         'কিছু বিক্রেতা এই Wallet নিজেরাই চালায়; উপরের লাইনটা বলে দেয় আপনার ক্ষেত্রে কে চালাচ্ছে। Skydrop চালালে আপনি আমাদের ব্যাংকে টাকা পাঠিয়ে তারপর আমাদের জানাবেন — কোন অ্যাকাউন্টে, কত টাকা, আপনার reference কী। একজন মানুষ টাকাটা আসতে না দেখা পর্যন্ত কিছুই জমা হয় না।',
       sayHi:
@@ -455,7 +455,7 @@ export const narration = {
     },
     {
       id: 'assoc-prices',
-      say: 'Their prices, product by product. The figure is fixed, and it must sit inside your seller’s range — refused here while you are looking at it, rather than later at the order. A product with no price is called out.',
+      say: 'Their prices, product by product. The figure is fixed, and it must sit inside your client’s range — refused here while you are looking at it, rather than later at the order. A product with no price is called out.',
       sayBn:
         'তাদের দাম, পণ্য ধরে ধরে। সংখ্যাটা বাঁধা, আর এটা আপনার বিক্রেতার সীমার ভিতরে থাকতে হবে — সীমার বাইরে হলে পরে অর্ডারের সময় নয়, আপনি তাকিয়ে থাকা অবস্থায় এখানেই বাতিল হয়। যে পণ্যের দাম দেওয়া নেই, সেটার নাম বলে দেওয়া হয়।',
       sayHi:
@@ -463,7 +463,7 @@ export const narration = {
     },
     {
       id: 'assoc-doing',
-      say: 'How each is doing over a window you choose, and the switch beside it. Switching somebody off stops new orders only — what is placed carries on. An associate never sees what you pay your seller.',
+      say: 'How each is doing over a window you choose, and the switch beside it. Switching somebody off stops new orders only — what is placed carries on. An associate never sees what you pay your client.',
       sayBn:
         'আপনি যে সময়সীমা বাছবেন, সেই সময়ে প্রত্যেকে কেমন করছে, আর পাশে একটা সুইচ। কাউকে বন্ধ করলে শুধু নতুন অর্ডার বন্ধ হয় — যা আগে দেওয়া হয়ে গেছে সেগুলো চলতেই থাকে। আপনি বিক্রেতাকে কত দেন, একজন associate সেটা কখনোই দেখতে পায় না।',
       sayHi:
@@ -487,7 +487,7 @@ export const narration = {
     },
     {
       id: 'outro',
-      say: 'One thing to end on. Your seller reads every one of these orders in full, your customer’s details included. It is their stock and their money at risk, and somebody who cannot see where a parcel is going cannot help you.',
+      say: 'One thing to end on. Your client reads every one of these orders in full, your customer’s details included. It is their stock and their money at risk, and somebody who cannot see where a parcel is going cannot help you.',
       sayBn:
         'শেষে একটা কথা। এই অর্ডারগুলোর প্রতিটা আপনার বিক্রেতা পুরোপুরি দেখতে পায়, আপনার ক্রেতার তথ্যসহ। স্টক তাদের, ঝুঁকিতে থাকা টাকাও তাদের, আর পার্সেলটা কোথায় যাচ্ছে যে দেখতে পায় না, সে আপনাকে সাহায্যও করতে পারে না।',
       sayHi:
@@ -1119,7 +1119,7 @@ export const flow = {
         /*
           OPENED AND READ, NEVER SENT. These three turn a van round or
           queue a real call at the seller's cost; the dialog's own
-          description — "The seller sees this and decides. Nothing
+          description — "The client sees this and decides. Nothing
           happens to the parcel until they answer." — is the lesson, and
           the one request this video does send is the cancel three
           scenes later, on the order it placed itself.
@@ -1139,7 +1139,7 @@ export const flow = {
     {
       id: 'asked-before',
       async run({ page, stage }) {
-        const sent = roSection(page, 'Sent to your seller to approve');
+        const sent = roSection(page, 'Sent to your client to approve');
         if ((await sent.count()) > 0) {
           await stage.dwellOn(sent, 3200);
           return;
@@ -1205,7 +1205,7 @@ export const flow = {
         */
         const ask = page
           .getByRole('button', {
-            name: /^(Ask the seller to cancel|Cancel order|Cancel this order)/,
+            name: /^(Ask the client to cancel|Cancel order|Cancel this order)/,
           })
           .first();
         if ((await ask.count()) === 0) {
@@ -1241,14 +1241,14 @@ export const flow = {
         // THE CONFIRM'S WORDS, READ OFF THE PAGE.
         //
         // `orders/[id]/page.tsx` sets `cancelLabel` from the store's own
-        // policy: "Send to your seller" when the seller decides
+        // policy: "Send to your client" when the client decides
         // (ASK_SELLER, which is what this video films) and "Cancel the
         // order" when the store may do it itself. The dismiss beside it
         // is "Keep it". Nothing in the dialog says "cancel" when the
-        // seller is being asked, and nothing says "Send it" — two
+        // client is being asked, and nothing says "Send it" — two
         // earlier guesses, each of which cost a thirty-second timeout
         // reported as a missing button.
-        const submit = /^(Send to your seller|Cancel the order)/i;
+        const submit = /^(Send to your client|Cancel the order)/i;
         await stage.clickIt(dialog.getByRole('button', { name: submit }).first(), {
           after: 1200,
         });

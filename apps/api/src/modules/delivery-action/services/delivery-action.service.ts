@@ -44,13 +44,13 @@ export interface DeliveryActionRequestView {
 const REQUESTABLE_FROM = DELIVERY_ACTION_STATUSES;
 
 /**
- * What we tell the seller we did, and WHY, when their own request needs
+ * What we tell the client we did, and WHY, when their own request needs
  * no decision from us.
  *
  * One hard-coded sentence used to answer all three: "Auto-approved —
- * returning their own parcel is the seller to decide". True of a
+ * returning their own parcel is the client to decide". True of a
  * send-back and false of the other two, which do not return anything —
- * so a seller who asked us to ring their customer read back a note about
+ * so a client who asked us to ring their customer read back a note about
  * returning a parcel, on their own order, as OUR reply to them. The note
  * is stored and shown verbatim, so it is not a label: it is the only
  * explanation they get.
@@ -61,7 +61,7 @@ const REQUESTABLE_FROM = DELIVERY_ACTION_STATUSES;
 function autoApprovalNote(action: DeliveryActionKind): string {
   switch (action) {
     case DeliveryActionKind.RTO:
-      return 'Auto-approved — returning their own parcel is the seller to decide';
+      return 'Auto-approved — returning their own parcel is the client to decide';
     case DeliveryActionKind.REATTEMPT:
       return 'Auto-approved — we have opened a ticket and will take the re-attempt up with the courier';
     case DeliveryActionKind.RECALL:

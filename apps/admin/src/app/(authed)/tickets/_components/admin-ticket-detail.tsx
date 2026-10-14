@@ -16,6 +16,7 @@ import { AfCard, AfSection, Facts } from '@/app/(authed)/system/_components/af-p
 import { TicketStatusChip } from './ticket-chips';
 import './tickets.css';
 import { TicketStatus, TicketType } from '@skydrop/db';
+import { ticketTypeLabel } from '@skydrop/ui/status';
 import { useAdminTicket, useTicketEvents, useTransitionTicket } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
@@ -151,7 +152,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               // speaking their vocabulary.
               value: (
                 <span className="tk-type-cell">
-                  <span>{t.ticketType.toLowerCase().replaceAll('_', ' ')}</span>
+                  <span>{ticketTypeLabel(t.ticketType)}</span>
                   <IssueCategoryLine
                     categoryLabel={t.issueCategoryLabel}
                     subcategoryLabel={t.issueSubcategoryLabel}

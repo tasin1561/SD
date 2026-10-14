@@ -37,7 +37,7 @@ export default function SettingsPage(): ReactElement {
       icon: <Store size={16} />,
       title: 'Stores',
       description:
-        'The shopfronts you sell under. A store decides which brand an order belongs to — products, stock, wallet and couriers are shared across all of them.',
+        'The shops you sell under. A store decides which brand an order belongs to — products, stock, wallet and couriers are shared across all of them.',
     },
     {
       href: '/settings/orders',

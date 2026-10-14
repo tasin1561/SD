@@ -596,8 +596,8 @@ export function NewOrderForm(): ReactElement {
 
   const storeHint =
     openStores.length > 1
-      ? 'Which of your shopfronts this order was placed on'
-      : 'Every order is filed under a shopfront. Add another to sell under more than one brand.';
+      ? 'Which of your shops this order was placed on'
+      : 'Every order is filed under a shop. Add another to sell under more than one brand.';
 
   return (
     <form

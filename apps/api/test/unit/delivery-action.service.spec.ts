@@ -316,7 +316,7 @@ describe('DeliveryActionService.request — the manual ticket system', () => {
 
   it('tells the seller what we actually did, not what a send-back would have done', async () => {
     // One hard-coded sentence answered all three — "returning their own
-    // parcel is the seller to decide" — which is true of a send-back and
+    // parcel is the client to decide" — which is true of a send-back and
     // false of the other two. A seller who asked us to RING their
     // customer read back a note about returning a parcel, as our reply
     // to them, stored on their own order.

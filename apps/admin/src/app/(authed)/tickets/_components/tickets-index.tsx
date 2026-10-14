@@ -13,44 +13,13 @@ import { Pagination } from '@skydrop/ui/app/pagination';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { TicketStatus, TicketType } from '@skydrop/db';
+import { ticketTypeLabel } from '@skydrop/ui/status';
 import { useTicketsList } from '@/lib/ops-hooks';
 import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import { TicketHandlingChip, TicketStatusChip } from './ticket-chips';
 import './tickets.css';
 
 const PAGE_SIZE = 25;
-
-/** What an operator calls each kind. F2: a new type fails to compile here. */
-function ticketTypeLabel(type: TicketType): string {
-  switch (type) {
-    case TicketType.SCRAP_DAMAGE:
-      return 'Scrap / damage';
-    case TicketType.SELLER_RAISED_ISSUE:
-      return 'Client issue';
-    case TicketType.COURIER_NDR_ESCALATION:
-      return 'Delivery escalation';
-    case TicketType.RECEIPT_SHORTFALL:
-      return 'Receipt short';
-    case TicketType.STORE_DISPUTE:
-      return 'Member store dispute';
-    // 2026-09-16 — a reseller store raising something with SKYDROP, not
-    // with its seller staff. Named apart from the dispute for the same
-    // reason the types are apart: one is Skydrop's to answer, the other
-    // Skydrop referees between seller staff and the store.
-    case TicketType.STORE_ISSUE:
-      return 'Member store issue';
-    default:
-      // F2: every value above returns, so this is unreachable — but the
-      // compiler cannot see that, and `never` is what makes a FUTURE
-      // ticket type fail to compile here rather than render a blank
-      // label in the Skydrop admin queue.
-      return assertNever(type);
-  }
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unhandled ticket type: ${String(value)}`);
-}
 
 /**
  * The tickets queue (R7).

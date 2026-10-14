@@ -135,7 +135,7 @@ async function capabilityRow(page, label) {
  * when the list's markup moves.
  */
 async function openStandingStore(page, stage) {
-  await stage.clickIt(page.getByRole('link', { name: 'Reseller stores', exact: true }).first(), {
+  await stage.clickIt(page.getByRole('link', { name: 'Member stores', exact: true }).first(), {
     after: 1600,
   });
   await page.waitForURL(/\/reseller-stores$/, { timeout: 30_000 });
@@ -1197,7 +1197,7 @@ async function sectionToTop(page, locator) {
 function settingsSection(page) {
   return page
     .locator('.ac-section')
-    .filter({ has: page.getByRole('heading', { name: 'Settings for this seller', exact: true }) })
+    .filter({ has: page.getByRole('heading', { name: 'Settings for this client', exact: true }) })
     .first();
 }
 
@@ -3601,7 +3601,7 @@ export const FLOWS = {
 
       async 'open-stores'({ page, stage }) {
         await stage.clickIt(
-          page.getByRole('link', { name: 'Reseller stores', exact: true }).first(),
+          page.getByRole('link', { name: 'Member stores', exact: true }).first(),
           { after: 1600 },
         );
         await page.waitForURL(/\/reseller-stores$/, { timeout: 30_000 });
@@ -3613,7 +3613,7 @@ export const FLOWS = {
       async 'open-form'({ page, stage }) {
         // `.first()`: with no stores the empty state carries a second
         // button of the same name, and the header's is the one on screen.
-        await stage.clickIt(page.getByRole('button', { name: 'Open a reseller store' }).first(), {
+        await stage.clickIt(page.getByRole('button', { name: 'Open a member store' }).first(), {
           after: 1200,
         });
         const dialog = page.locator('.sk-dialog').first();
@@ -3723,7 +3723,7 @@ export const FLOWS = {
 
       async 'open-list'({ page, stage }) {
         await stage.clickIt(
-          page.getByRole('link', { name: 'Reseller price list', exact: true }).first(),
+          page.getByRole('link', { name: 'Member store price list', exact: true }).first(),
           { after: 1600 },
         );
         await page.waitForURL(/\/reseller-stores\/price-list/, { timeout: 30_000 });
@@ -5549,7 +5549,7 @@ export const FLOWS = {
 
       async 'open-store'({ page, stage }) {
         await stage.clickIt(
-          page.getByRole('link', { name: 'Reseller stores', exact: true }).first(),
+          page.getByRole('link', { name: 'Member stores', exact: true }).first(),
           { after: 1600 },
         );
         await page.waitForURL(/\/reseller-stores$/, { timeout: 30_000 });
@@ -5756,7 +5756,7 @@ export const FLOWS = {
 
       async 'open-terms'({ page, stage }) {
         await stage.clickIt(
-          page.getByRole('link', { name: 'Reseller stores', exact: true }).first(),
+          page.getByRole('link', { name: 'Member stores', exact: true }).first(),
           { after: 1600 },
         );
         await page.waitForURL(/\/reseller-stores$/, { timeout: 30_000 });
@@ -6032,7 +6032,7 @@ export const FLOWS = {
 
       async 'cancel-off'({ page, stage }) {
         const row = await capabilityRow(page, CAPABILITY.cancel);
-        await stage.clickIt(row.getByLabel('Can the Reseller store do this?').first(), {
+        await stage.clickIt(row.getByLabel('Can the Member store do this?').first(), {
           after: 1200,
         });
         await stage.dwellOn(row, 3200);
@@ -6125,7 +6125,7 @@ export const FLOWS = {
       },
 
       async 'only-held'({ page, stage }) {
-        await stage.dwellOn(page.getByText(/What your Reseller stores have asked/).first(), 3400);
+        await stage.dwellOn(page.getByText(/What your Member stores have asked/).first(), 3400);
       },
 
       async 'cancel-row'({ page, stage }) {
@@ -6263,7 +6263,7 @@ export const FLOWS = {
 
       async 'open-reports'({ page, stage }) {
         await stage.clickIt(
-          page.getByRole('link', { name: 'Reseller reports', exact: true }).first(),
+          page.getByRole('link', { name: 'Member store reports', exact: true }).first(),
           { after: 1800 },
         );
         await page.waitForURL(/\/reseller-stores\/reports$/, { timeout: 30_000 });
@@ -7741,7 +7741,7 @@ export const FLOWS = {
           to say about — and the seeding's own guard is a different
           process.
         */
-        const chip = page.getByText('Awaiting seller decision', { exact: true }).first();
+        const chip = page.getByText('Awaiting client decision', { exact: true }).first();
         await chip.waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(700);
         await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 2600);
@@ -8276,7 +8276,7 @@ export const FLOWS = {
         // this one names a receipt where the others name an order.
         const facts = page.locator('.af-card').first();
         await page
-          .getByText('receipt shortfall', { exact: true })
+          .getByText('Goods receipt', { exact: true })
           .first()
           .waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(600);
@@ -8293,15 +8293,15 @@ export const FLOWS = {
 
       async reply({ page, stage }) {
         await stage.typeIn(
-          page.getByLabel('Reply to the seller'),
+          page.getByLabel('Reply to the client'),
           'We have been through the forwarder’s manifest and the unit is not on it.',
         );
         await page.waitForTimeout(500);
-        await stage.dwellOn(page.getByRole('button', { name: 'Reply to seller' }), 2600);
+        await stage.dwellOn(page.getByRole('button', { name: 'Reply to client' }), 2600);
       },
 
       async sent({ page, stage }) {
-        await stage.clickIt(page.getByRole('button', { name: 'Reply to seller' }), { after: 1600 });
+        await stage.clickIt(page.getByRole('button', { name: 'Reply to client' }), { after: 1600 });
         // The bubble, by its own words — the toast fades and the thread
         // is the durable evidence the reply landed.
         const mine = page.getByText(/forwarder’s manifest/).first();
@@ -8356,7 +8356,7 @@ export const FLOWS = {
         await stage.clickIt(page.getByRole('button', { name: 'Apply' }), { after: 1200 });
         const dialog = page.getByRole('dialog');
         await dialog
-          .getByRole('heading', { name: 'Refund the seller?' })
+          .getByRole('heading', { name: 'Refund the client?' })
           .waitFor({ state: 'visible', timeout: 20_000 });
         await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 4000);
       },
@@ -8389,7 +8389,7 @@ export const FLOWS = {
         const panel = page
           .locator('.af-section')
           .filter({
-            has: page.getByRole('heading', { name: 'Settle between store and seller' }),
+            has: page.getByRole('heading', { name: 'Settle between store and client' }),
           })
           .first();
         await panel.scrollIntoViewIfNeeded();
@@ -8409,7 +8409,7 @@ export const FLOWS = {
           cycle below is for the viewer; this line is the gate.
         */
         const texts = await select.locator('option').allTextContents();
-        if (texts.some((t) => /Refunded the seller/.test(t))) {
+        if (texts.some((t) => /Refunded the client/.test(t))) {
           throw new Error(
             'The refund outcome is offered on a STORE_DISPUTE — the narration says it is not.',
           );
@@ -8664,7 +8664,7 @@ export const FLOWS = {
           and the sentence this scene is about — that it belongs to
           somebody else — is a cell on the row rather than the row.
         */
-        const row = page.getByRole('row').filter({ hasText: 'Waiting on seller staff' }).first();
+        const row = page.getByRole('row').filter({ hasText: 'Waiting on client staff' }).first();
         await row.waitFor({ state: 'visible', timeout: 25_000 });
         await stage.dwellOn(row, 4200);
       },
@@ -9137,7 +9137,7 @@ export const FLOWS = {
         const status = page.getByLabel('Status', { exact: true }).first();
         await status.waitFor({ state: 'visible', timeout: 20_000 });
         await stage.dwellOn(status, 1500);
-        await stage.dwellOn(page.getByLabel('Seller', { exact: true }).first(), 1300);
+        await stage.dwellOn(page.getByLabel('Client', { exact: true }).first(), 1300);
         await stage.dwellOn(page.getByLabel('Placed from', { exact: true }).first(), 2200);
       },
 
@@ -11595,7 +11595,7 @@ export const FLOWS = {
           and that is the field's own hint rather than anything this
           video invented.
         */
-        const hint = page.getByText(/opens a damage ticket to the seller/i).first();
+        const hint = page.getByText(/opens a damage ticket to the client/i).first();
         await hint.waitFor({ state: 'visible', timeout: 15_000 });
         await stage.dwellOn(hint, 3000);
       },
@@ -12228,7 +12228,7 @@ export const FLOWS = {
 
     steps: {
       async intro({ page, stage }) {
-        await page.getByRole('heading', { name: 'Seller wallets', exact: true }).first().waitFor({
+        await page.getByRole('heading', { name: 'Client wallets', exact: true }).first().waitFor({
           state: 'visible',
           timeout: 25_000,
         });
@@ -12237,8 +12237,8 @@ export const FLOWS = {
       },
 
       async owed({ page, stage }) {
-        await stage.dwellOn(moneyKpi(page, 'We owe sellers'), 2400);
-        await stage.dwellOn(moneyKpi(page, 'Sellers owe us'), 2600);
+        await stage.dwellOn(moneyKpi(page, 'We owe clients'), 2400);
+        await stage.dwellOn(moneyKpi(page, 'Clients owe us'), 2600);
       },
 
       async 'not-yet'({ page, stage }) {
@@ -12270,7 +12270,7 @@ export const FLOWS = {
       },
 
       async rules({ page, stage }) {
-        const card = moneyCard(page, 'Wallet rules for this seller');
+        const card = moneyCard(page, 'Wallet rules for this client');
         await card.waitFor({ state: 'visible', timeout: 25_000 });
         await card.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(700);
@@ -12423,7 +12423,7 @@ export const FLOWS = {
 
       async lines({ page, stage }) {
         await stage.glide(520);
-        await stage.dwellOn(pnlLine(page, 'Damage & loss refunds to sellers'), 2400);
+        await stage.dwellOn(pnlLine(page, 'Damage & loss refunds to clients'), 2400);
         await stage.dwellOn(pnlLine(page, 'Courier COD fees'), 2400);
       },
 
@@ -12640,7 +12640,7 @@ export const FLOWS = {
         const dialog = page.getByRole('dialog');
         await dialog.waitFor({ state: 'visible', timeout: 20_000 });
         await page.waitForTimeout(600);
-        await stage.dwellOn(dialog.getByText(/the seller sees this reason/i).first(), 3600);
+        await stage.dwellOn(dialog.getByText(/the client sees this reason/i).first(), 3600);
       },
 
       /*
@@ -12757,7 +12757,7 @@ export const FLOWS = {
         await page.goto(`${baseUrl}/remittances`, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('networkidle').catch(() => {});
         await stage.dwellOn(
-          page.getByText(/debits the seller's wallet|debits the seller’s wallet/i).first(),
+          page.getByText(/debits the client's wallet|debits the client’s wallet/i).first(),
           2600,
         );
         await stage.clickIt(page.getByRole('button', { name: /^Pay$/ }).first(), { after: 1600 });
@@ -12855,7 +12855,7 @@ export const FLOWS = {
         const confirm = page.getByRole('dialog', { name: 'Record this remittance?' });
         await confirm.waitFor({ state: 'visible', timeout: 20_000 });
         await page.waitForTimeout(600);
-        await stage.dwellOn(confirm.getByText(/Debits this seller/i).first(), 2800);
+        await stage.dwellOn(confirm.getByText(/Debits this client/i).first(), 2800);
         await stage.clickIt(
           confirm
             .locator('.sk-dialog__foot')
@@ -13393,17 +13393,17 @@ export const FLOWS = {
         await treasuryRow(page).waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(900);
         await stage.dwellOn(
-          page.getByText(/whether what we owe sellers is covered/i).first(),
+          page.getByText(/whether what we owe clients is covered/i).first(),
           2800,
         );
       },
 
       async owed({ page, stage }) {
-        await stage.dwellOn(moneyKpi(page, 'Owed to sellers'), 3600);
+        await stage.dwellOn(moneyKpi(page, 'Owed to clients'), 3600);
       },
 
       async held({ page, stage }) {
-        await stage.dwellOn(moneyKpi(page, 'Held for sellers'), 4200);
+        await stage.dwellOn(moneyKpi(page, 'Held for clients'), 4200);
       },
 
       /*
@@ -13415,7 +13415,7 @@ export const FLOWS = {
       async covered({ page, stage }) {
         await stage.dwellOn(
           page
-            .getByText(/covered by what we hold|We owe sellers more than we are holding/i)
+            .getByText(/covered by what we hold|We owe clients more than we are holding/i)
             .first(),
           4600,
         );
@@ -13568,7 +13568,7 @@ export const FLOWS = {
       },
 
       async outro({ page, stage }) {
-        await stage.dwellOn(moneyKpi(page, 'Owed to sellers'), 3600);
+        await stage.dwellOn(moneyKpi(page, 'Owed to clients'), 3600);
       },
     },
   },
@@ -14582,7 +14582,7 @@ export const FLOWS = {
       */
       async intro({ page, stage }) {
         await page
-          .getByRole('heading', { name: 'Sellers', exact: true })
+          .getByRole('heading', { name: 'Clients', exact: true })
           .first()
           .waitFor({ state: 'visible', timeout: 25_000 });
         await stage.typeIn(page.getByPlaceholder(/Search by name/), 'Khulna', { after: 900 });
@@ -14755,7 +14755,7 @@ export const FLOWS = {
           after: 2200,
         });
         const gone = holdCard(page)
-          .getByText(/No hold\. This seller can trade normally/i)
+          .getByText(/No hold\. This client can trade normally/i)
           .first();
         await gone.waitFor({ state: 'visible', timeout: 25_000 });
         await page.waitForTimeout(500);
@@ -16911,7 +16911,7 @@ export const FLOWS = {
         await stage.glide(-1200);
         const btn = page
           .locator('.sk-ph')
-          .getByRole('button', { name: /^(Cancel order|Ask the seller to cancel)$/ })
+          .getByRole('button', { name: /^(Cancel order|Ask the client to cancel)$/ })
           .first();
         if ((await btn.count()) > 0) await stage.dwellOn(btn, 3200);
         else await page.waitForTimeout(3200);
@@ -17027,7 +17027,7 @@ export const FLOWS = {
           .getByRole('dialog')
           .first()
           .getByRole('button', {
-            name: /Release the stock and reject the order|Send to your seller to approve/,
+            name: /Release the stock and reject the order|Send to your client to approve/,
           })
           .first();
         await commit.waitFor({ state: 'visible', timeout: 10_000 });
@@ -17254,7 +17254,7 @@ export const FLOWS = {
 
       async approval({ page, stage }) {
         const submit = page
-          .getByRole('button', { name: /Raise it with|Send it to your seller to approve/ })
+          .getByRole('button', { name: /Raise it with|Send it to your client to approve/ })
           .first();
         if ((await submit.count()) > 0) await stage.dwellOn(submit, 3400);
         else await page.waitForTimeout(3400);

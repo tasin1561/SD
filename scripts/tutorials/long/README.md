@@ -14,7 +14,7 @@ beyond that spread, and two authors never touch the same file.
 export const narration = {
   slug: 'seller-everything',          // the file name, and the mp4 name
   title: 'Getting your products to India',
-  subtitle: 'Skydrop for sellers',
+  subtitle: 'Skydrop for clients',
   steps: [{ id: 'intro', say: 'English only — see below.' }, …],
 };
 
@@ -50,7 +50,7 @@ once would have three half-checked scripts instead of one good one.
 - **The long video is the SPINE, not a tour.** The 87 short videos are
   the reference; this is the path through them. When a screen is worth a
   mention but not a minute, say "there is a short video on this" and move.
-- **Nothing is explained twice.** The seller video explains the shell,
+- **Nothing is explained twice.** The client video explains the shell,
   the sidebar and the money once. The others assume it.
 - **Say what the screen is FOR before saying what to click.** A viewer
   who knows why can follow a click they did not see coming; one who only

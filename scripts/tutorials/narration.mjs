@@ -28,11 +28,11 @@ export const VIDEOS = [
   {
     slug: 'place-an-order',
     title: 'Placing an order',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
-        say: "This is the Skydrop seller dashboard. We're going to place an order by hand for a customer in India — who it goes to, what is in it, and what they pay when it arrives.",
+        say: "This is the Skydrop client console. We're going to place an order by hand for a customer in India — who it goes to, what is in it, and what they pay when it arrives.",
       },
       {
         id: 'open-form',
@@ -79,7 +79,7 @@ export const VIDEOS = [
   {
     slug: 'add-a-product-with-variations',
     title: 'Adding a product with variations',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -130,7 +130,7 @@ export const VIDEOS = [
   {
     slug: 'upload-bulk-orders',
     title: 'Uploading orders in bulk',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -177,11 +177,11 @@ export const VIDEOS = [
   {
     slug: 'find-your-way-around',
     title: 'Finding your way around',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
-        say: 'Before anything else, a look at the place itself. This is the Skydrop seller dashboard, and everything you will ever do is reachable from this one screen.',
+        say: 'Before anything else, a look at the place itself. This is the Skydrop client console, and everything you will ever do is reachable from this one screen.',
       },
       {
         id: 'dashboard',
@@ -232,7 +232,7 @@ export const VIDEOS = [
   {
     slug: 'set-up-your-profile',
     title: 'Setting up your company profile',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -275,7 +275,7 @@ export const VIDEOS = [
   {
     slug: 'announce-a-consignment',
     title: 'Telling us stock is coming',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -330,7 +330,7 @@ export const VIDEOS = [
   {
     slug: 'add-a-shopfront',
     title: 'Selling under more than one name',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -350,7 +350,7 @@ export const VIDEOS = [
       },
       {
         id: 'tiles',
-        say: 'Three standing facts. How many shopfronts you have, how many orders are filed across all of them, and the one that matters most — where a new order goes by default.',
+        say: 'Three standing facts. How many shops you have, how many orders are filed across all of them, and the one that matters most — where a new order goes by default.',
       },
       {
         id: 'add',
@@ -381,7 +381,7 @@ export const VIDEOS = [
   {
     slug: 'set-your-delivery-fee',
     title: 'The delivery fee your customer pays',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -420,7 +420,7 @@ export const VIDEOS = [
   {
     slug: 'be-told-before-you-run-out',
     title: 'Being told before you run out',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -467,7 +467,7 @@ export const VIDEOS = [
   {
     slug: 'keep-a-product-up-to-date',
     title: 'Keeping a product up to date',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -530,7 +530,7 @@ export const VIDEOS = [
   {
     slug: 'add-product-photos',
     title: 'Product photos',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -581,7 +581,7 @@ export const VIDEOS = [
   {
     slug: 'invite-a-colleague',
     title: 'Inviting someone',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -636,7 +636,7 @@ export const VIDEOS = [
   {
     slug: 'take-money-out',
     title: 'Taking money out',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -691,7 +691,7 @@ export const VIDEOS = [
   {
     slug: 'keys-and-webhooks',
     title: 'API keys and webhooks',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -757,12 +757,12 @@ export const VIDEOS = [
   },
   {
     slug: 'open-a-reseller-store',
-    title: 'Opening a reseller store',
-    subtitle: 'Skydrop for sellers',
+    title: 'Opening a member store',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
-        say: 'A reseller store is another business selling your stock under its own name. Their customers, their shopfront — your goods, your warehouse, your courier, and your money at risk.',
+        say: 'A member store is another business selling your stock under its own name. Their customers, their brand — your goods, your warehouse, your courier, and your money at risk.',
       },
       {
         id: 'open-stores',
@@ -812,16 +812,16 @@ export const VIDEOS = [
   },
   {
     slug: 'set-a-reseller-price',
-    title: 'The price a reseller store pays',
-    subtitle: 'Skydrop for sellers',
+    title: 'The price a member store pays',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
-        say: 'A reseller store sells your goods, so two prices matter: what they pay you for each one, and what they are allowed to charge their customer for it.',
+        say: 'A member store sells your goods, so two prices matter: what they pay you for each one, and what they are allowed to charge their customer for it.',
       },
       {
         id: 'open-list',
-        say: 'The reseller price list is your whole catalogue with those two answers beside it. The figures at the top say how much of it is priced and how much is actually being sold.',
+        say: 'The member store price list is your whole catalogue with those two answers beside it. The figures at the top say how much of it is priced and how much is actually being sold.',
       },
       {
         id: 'table',
@@ -864,7 +864,7 @@ export const VIDEOS = [
   {
     slug: 'upload-a-catalogue',
     title: 'Uploading a catalogue from a spreadsheet',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -923,7 +923,7 @@ export const VIDEOS = [
   {
     slug: 'where-is-my-parcel',
     title: 'Where is my parcel',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -970,7 +970,7 @@ export const VIDEOS = [
   {
     slug: 'the-customer-was-not-there',
     title: 'The customer was not there',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1025,7 +1025,7 @@ export const VIDEOS = [
   {
     slug: 'what-needs-you-today',
     title: 'What needs you today',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1072,7 +1072,7 @@ export const VIDEOS = [
   {
     slug: 'the-customer-would-not-answer',
     title: 'The customer would not answer',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1127,7 +1127,7 @@ export const VIDEOS = [
   {
     slug: 'something-arrived-damaged',
     title: 'Something arrived damaged',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1186,7 +1186,7 @@ export const VIDEOS = [
   {
     slug: 'what-skydrop-charges',
     title: 'What Skydrop charges, and what it lets you take out',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1225,7 +1225,7 @@ export const VIDEOS = [
   {
     slug: 'pay-money-in',
     title: 'Putting money into your wallet',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1241,7 +1241,7 @@ export const VIDEOS = [
       },
       {
         id: 'pick-bd',
-        say: 'Pick the one you actually used. We hold accounts in both countries, so a Bangladeshi seller transfers taka at home rather than paying to send rupees.',
+        say: 'Pick the one you actually used. We hold accounts in both countries, so a Bangladeshi client transfers taka at home rather than paying to send rupees.',
       },
       {
         id: 'amount',
@@ -1268,7 +1268,7 @@ export const VIDEOS = [
   {
     slug: 'build-a-role',
     title: 'Building a role that fits your team',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1327,7 +1327,7 @@ export const VIDEOS = [
   {
     slug: 'sign-out-everywhere',
     title: 'Sign-in and sessions',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1366,7 +1366,7 @@ export const VIDEOS = [
   {
     slug: 'ask-for-a-parcel-back',
     title: 'Asking for a parcel back',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1433,7 +1433,7 @@ export const VIDEOS = [
   {
     slug: 'read-your-wallet',
     title: 'Reading your wallet',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1504,15 +1504,15 @@ export const VIDEOS = [
   {
     slug: 'what-one-store-sells',
     title: 'What one store sells',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
-        say: 'A reseller store sells your stock under its own name. Which of your products it may sell, at what price, and how much of your stock it can have, are all yours to decide — per store, per product.',
+        say: 'A member store sells your stock under its own name. Which of your products it may sell, at what price, and how much of your stock it can have, are all yours to decide — per store, per product.',
       },
       {
         id: 'open-store',
-        say: 'Open the store from Reseller stores, and go to its Catalogue and stock tab. This is the store you already opened; everything here is about it and no other.',
+        say: 'Open the store from Member stores, and go to its Catalogue and stock tab. This is the store you already opened; everything here is about it and no other.',
       },
       {
         id: 'table',
@@ -1574,12 +1574,12 @@ export const VIDEOS = [
   },
   {
     slug: 'the-deal',
-    title: 'The deal with a reseller store',
-    subtitle: 'Skydrop for sellers',
+    title: 'The deal with a member store',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
-        say: 'A reseller store sells your stock, and Skydrop charges fees on every parcel. Who pays which share of those, and when each of you is paid, is the deal — and you write it.',
+        say: 'A member store sells your stock, and Skydrop charges fees on every parcel. Who pays which share of those, and when each of you is paid, is the deal — and you write it.',
       },
       {
         id: 'open-terms',
@@ -1642,11 +1642,11 @@ export const VIDEOS = [
   {
     slug: 'what-a-store-may-do',
     title: 'What a store may do without asking',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
-        say: 'A reseller store takes the order, but the parcel is your stock and the fees are partly your money. So some of what they might want to do, you may want to see first.',
+        say: 'A member store takes the order, but the parcel is your stock and the fees are partly your money. So some of what they might want to do, you may want to see first.',
       },
       {
         id: 'open-tab',
@@ -1705,7 +1705,7 @@ export const VIDEOS = [
   {
     slug: 'answer-what-a-store-asked',
     title: 'Answering what a store has asked',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1767,16 +1767,16 @@ export const VIDEOS = [
   },
   {
     slug: 'how-your-stores-are-doing',
-    title: 'How your reseller stores are doing',
-    subtitle: 'Skydrop for sellers',
+    title: 'How your member stores are doing',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
-        say: 'A reseller store is somebody else’s business selling your stock. You cannot run it for them — but you can see what it is doing to your goods and your money, and decide.',
+        say: 'A member store is somebody else’s business selling your stock. You cannot run it for them — but you can see what it is doing to your goods and your money, and decide.',
       },
       {
         id: 'open-reports',
-        say: 'Reseller reports, under Reselling. Two facts before anything else: how many stores you have, and the window everything below is measured over.',
+        say: 'Member store reports, under Reselling. Two facts before anything else: how many stores you have, and the window everything below is measured over.',
       },
       {
         id: 'cards',
@@ -1831,7 +1831,7 @@ export const VIDEOS = [
   {
     slug: 'finding-an-order',
     title: 'Finding an order',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1875,7 +1875,7 @@ export const VIDEOS = [
       },
       {
         id: 'store',
-        say: 'And if you have reseller stores, you can look at one shop at a time. An order a store took says so under its number — the goods are yours, the sale was theirs.',
+        say: 'And if you have member stores, you can look at one store at a time. An order a store took says so under its number — the goods are yours, the sale was theirs.',
       },
       {
         id: 'columns',
@@ -1894,7 +1894,7 @@ export const VIDEOS = [
   {
     slug: 'reading-an-order',
     title: 'Reading an order',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -1957,7 +1957,7 @@ export const VIDEOS = [
   {
     slug: 'changing-an-order',
     title: 'Changing an order before it is confirmed',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -2020,7 +2020,7 @@ export const VIDEOS = [
   {
     slug: 'cancelling-an-order',
     title: 'Cancelling an order',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -2087,7 +2087,7 @@ export const VIDEOS = [
   {
     slug: 'fix-the-rows-that-failed',
     title: 'Fixing the rows that would not import',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -2146,7 +2146,7 @@ export const VIDEOS = [
   {
     slug: 'quieten-your-notifications',
     title: 'What Skydrop tells you, and how to quieten it',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -2209,7 +2209,7 @@ export const VIDEOS = [
   {
     slug: 'follow-a-consignment',
     title: 'Following a consignment from Dhaka to the shelf',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -2272,7 +2272,7 @@ export const VIDEOS = [
   {
     slug: 'read-your-stock',
     title: 'Reading your stock',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
@@ -2292,7 +2292,7 @@ export const VIDEOS = [
       },
       {
         id: 'transit',
-        say: 'Then the number that is never added to the others. Goods between Dhaka and India are in neither building, so they cannot be picked, and folding them into a stock figure is how a seller sells something that has not landed.',
+        say: 'Then the number that is never added to the others. Goods between Dhaka and India are in neither building, so they cannot be picked, and folding them into a stock figure is how a client sells something that has not landed.',
       },
       {
         id: 'value',
@@ -2327,11 +2327,11 @@ export const VIDEOS = [
   {
     slug: 'what-the-freight-cost',
     title: 'What the freight cost',
-    subtitle: 'Skydrop for sellers',
+    subtitle: 'Skydrop for clients',
     steps: [
       {
         id: 'intro',
-        say: 'Getting your stock from Dhaka to our warehouse in India costs money, and that cost is yours. This page is the whole of it — and the one idea behind it surprises most sellers.',
+        say: 'Getting your stock from Dhaka to our warehouse in India costs money, and that cost is yours. This page is the whole of it — and the one idea behind it surprises most clients.',
       },
       {
         id: 'open',
@@ -2444,11 +2444,11 @@ export const VIDEOS = [
       },
       {
         id: 'topups',
-        say: 'Accepting a top-up credits a seller’s wallet, and the screen asks you to check it against the statement first. That credit is money they can ask us to send them.',
+        say: 'Accepting a top-up credits a client’s wallet, and the screen asks you to check it against the statement first. That credit is money they can ask us to send them.',
       },
       {
         id: 'bank-change',
-        say: 'Approving a bank change moves where a seller’s money is sent. Until somebody approves it, their withdrawals keep going to the account already on file — which is the whole reason this screen exists.',
+        say: 'Approving a bank change moves where a client’s money is sent. Until somebody approves it, their withdrawals keep going to the account already on file — which is the whole reason this screen exists.',
       },
       {
         id: 'month',
@@ -2490,7 +2490,7 @@ export const VIDEOS = [
       },
       {
         id: 'merchant',
-        say: 'The next is not yours to clear. These rang out until the cap, and the seller has been asked whether to keep trying or let them go — so it waits on them, not on us.',
+        say: 'The next is not yours to clear. These rang out until the cap, and the client has been asked whether to keep trying or let them go — so it waits on them, not on us.',
       },
       {
         id: 'warehouse',
@@ -2502,11 +2502,11 @@ export const VIDEOS = [
       },
       {
         id: 'support',
-        say: 'Support is damage claims and seller issues, and it carries an Action badge because every one of them has somebody at the other end waiting to hear back from us.',
+        say: 'Support is damage claims and client issues, and it carries an Action badge because every one of them has somebody at the other end waiting to hear back from us.',
       },
       {
         id: 'settlements',
-        say: 'And the last is money. Sellers who have asked to be paid out and have not been yet — marked Escrow, because we are holding cash that belongs to somebody else.',
+        say: 'And the last is money. Clients who have asked to be paid out and have not been yet — marked Escrow, because we are holding cash that belongs to somebody else.',
       },
       {
         id: 'performance',
@@ -2518,11 +2518,11 @@ export const VIDEOS = [
       },
       {
         id: 'money',
-        say: 'The third band is the money the last thirty days moved. What the couriers collected, what we charged for carrying it, and what we have actually paid out to sellers.',
+        say: 'The third band is the money the last thirty days moved. What the couriers collected, what we charged for carrying it, and what we have actually paid out to clients.',
       },
       {
         id: 'outstanding',
-        say: 'The last tile is the one to read carefully. It is not revenue — it is seller balances we hold and have not paid out. That is a debt, and the link goes to the ledger behind it.',
+        say: 'The last tile is the one to read carefully. It is not revenue — it is client balances we hold and have not paid out. That is a debt, and the link goes to the ledger behind it.',
       },
       {
         id: 'outro',
@@ -2552,11 +2552,11 @@ export const VIDEOS = [
       },
       {
         id: 'filters',
-        say: 'Four filters over the top. Status is the whole lifecycle, thirty of them; then how the order arrived, which seller it belongs to, and the day it was placed — read in India time, not yours.',
+        say: 'Four filters over the top. Status is the whole lifecycle, thirty of them; then how the order arrived, which client it belongs to, and the day it was placed — read in India time, not yours.',
       },
       {
         id: 'search',
-        say: 'And one search box that takes several things: our order number, the seller’s own reference, the recipient’s name or their phone. Whichever the person on the phone happens to have.',
+        say: 'And one search box that takes several things: our order number, the client’s own reference, the recipient’s name or their phone. Whichever the person on the phone happens to have.',
       },
       {
         id: 'open',
@@ -2580,7 +2580,7 @@ export const VIDEOS = [
       },
       {
         id: 'charges',
-        say: 'Charges are what the seller was billed, line by line, with a visibility column: this is the page that tells you whether the seller can see the same line you are looking at.',
+        say: 'Charges are what the client was billed, line by line, with a visibility column: this is the page that tells you whether the client can see the same line you are looking at.',
       },
       {
         id: 'parcel',
@@ -2759,7 +2759,7 @@ export const VIDEOS = [
       },
       {
         id: 'purpose',
-        say: 'Read this line before you dial. A call to confirm a new order and a call because a seller asked us to chase one open with completely different sentences, and the wrong one loses the customer.',
+        say: 'Read this line before you dial. A call to confirm a new order and a call because a client asked us to chase one open with completely different sentences, and the wrong one loses the customer.',
       },
       {
         id: 'risk',
@@ -2779,7 +2779,7 @@ export const VIDEOS = [
       },
       {
         id: 'note',
-        say: 'Write what they actually said. This is read by other people later — the next agent who rings them, and the seller asking why their order has not moved.',
+        say: 'Write what they actually said. This is read by other people later — the next agent who rings them, and the client asking why their order has not moved.',
       },
       {
         id: 'record',
@@ -2877,7 +2877,7 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'Here is a call nobody is going to make. Somebody picked it up and then went off shift, and we already know how it ends — the seller emailed to say their customer has cancelled.',
+        say: 'Here is a call nobody is going to make. Somebody picked it up and then went off shift, and we already know how it ends — the client emailed to say their customer has cancelled.',
       },
       {
         id: 'why',
@@ -2929,22 +2929,22 @@ export const VIDEOS = [
       },
       {
         id: 'outro',
-        say: 'So: only when you already know, record what actually happened rather than what is convenient, and write down why. There is one way back out of a rejected order, and the seller has to ask for it.',
+        say: 'So: only when you already know, record what actually happened rather than what is convenient, and write down why. There is one way back out of a rejected order, and the client has to ask for it.',
       },
     ],
   },
   {
     slug: 'sellers-asking-to-call-again',
-    title: 'Sellers asking us to call again',
+    title: 'Clients asking us to call again',
     subtitle: 'Skydrop for ops',
     steps: [
       {
         id: 'intro',
-        say: 'Every order here has a customer who was rung, answered, and said no. The seller thinks that was a misunderstanding and is asking us to try once more.',
+        say: 'Every order here has a customer who was rung, answered, and said no. The client thinks that was a misunderstanding and is asking us to try once more.',
       },
       {
         id: 'why',
-        say: 'A refusal is a terminal state on purpose, and approving here is the only way back out of it. That is why it is a request the seller makes rather than a button the seller has.',
+        say: 'A refusal is a terminal state on purpose, and approving here is the only way back out of it. That is why it is a request the client makes rather than a button the client has.',
       },
       {
         id: 'card',
@@ -2952,7 +2952,7 @@ export const VIDEOS = [
       },
       {
         id: 'read',
-        say: 'This one says the customer rang the shop back an hour later and does want it. That is a good reason — it is new information from the customer rather than the seller hoping.',
+        say: 'This one says the customer rang the shop back an hour later and does want it. That is a good reason — it is new information from the customer rather than the client hoping.',
       },
       {
         id: 'approve',
@@ -2964,7 +2964,7 @@ export const VIDEOS = [
       },
       {
         id: 'note',
-        say: 'A note, if the decision needs one. It is optional here because the seller already wrote the reason — this is only for anything you know that they do not.',
+        say: 'A note, if the decision needs one. It is optional here because the client already wrote the reason — this is only for anything you know that they do not.',
       },
       {
         id: 'approved',
@@ -2972,11 +2972,11 @@ export const VIDEOS = [
       },
       {
         id: 'second',
-        say: 'The other one is different. Nothing new has happened — the customer declined over the delivery charge and the seller would simply like another go at them.',
+        say: 'The other one is different. Nothing new has happened — the customer declined over the delivery charge and the client would simply like another go at them.',
       },
       {
         id: 'decline',
-        say: 'So decline it \u2014 and say why, because the seller reads this. The order stays rejected, and they may ask again the moment something actually does change.',
+        say: 'So decline it \u2014 and say why, because the client reads this. The order stays rejected, and they may ask again the moment something actually does change.',
       },
       {
         id: 'declined',
@@ -3003,7 +3003,7 @@ export const VIDEOS = [
       },
       {
         id: 'overview',
-        say: 'The top half is every bin we have, with the product, the seller and the batch on each one. Filter by building, by kind of bin, by seller, or by a SKU you are hunting for.',
+        say: 'The top half is every bin we have, with the product, the client and the batch on each one. Filter by building, by kind of bin, by client, or by a SKU you are hunting for.',
       },
       {
         id: 'holds',
@@ -3070,11 +3070,11 @@ export const VIDEOS = [
       },
       {
         id: 'open',
-        say: 'Open it and you get the declaration — who the seller is, their own reference for it, which building it landed at, and what they say is in the boxes.',
+        say: 'Open it and you get the declaration — who the client is, their own reference for it, which building it landed at, and what they say is in the boxes.',
       },
       {
         id: 'declared',
-        say: 'Two products, and the expected figures are the SELLER’s. Nothing here has been counted by anybody yet, which is why every line says recorded nought.',
+        say: 'Two products, and the expected figures are the CLIENT’s. Nothing here has been counted by anybody yet, which is why every line says recorded nought.',
       },
       {
         id: 'start',
@@ -3102,7 +3102,7 @@ export const VIDEOS = [
       },
       {
         id: 'variance',
-        say: 'And the line that matters most: a variance does not block. We record the gap and the goods carry on, because holding a seller’s stock hostage over a count helps nobody.',
+        say: 'And the line that matters most: a variance does not block. We record the gap and the goods carry on, because holding a client’s stock hostage over a count helps nobody.',
       },
       {
         id: 'written',
@@ -3133,7 +3133,7 @@ export const VIDEOS = [
       },
       {
         id: 'queue',
-        say: 'So here is what is waiting on a label. Order, seller, courier, waybill, where it is going, what the customer owes at the door, and how many things are in it.',
+        say: 'So here is what is waiting on a label. Order, client, courier, waybill, where it is going, what the customer owes at the door, and how many things are in it.',
       },
       {
         id: 'select',
@@ -3447,7 +3447,7 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'A parcel has come back. It opens on the only urgent tab — these are standing at our door, and every hour they do is an hour the seller still thinks their goods are moving.',
+        say: 'A parcel has come back. It opens on the only urgent tab — these are standing at our door, and every hour they do is an hour the client still thinks their goods are moving.',
       },
       {
         id: 'door',
@@ -3506,7 +3506,7 @@ export const VIDEOS = [
       },
       {
         id: 'condition',
-        say: 'Two questions per line, and the first is what you actually found in the box. Damaged or missing opens a claim with the seller, and that is where any money is settled.',
+        say: 'Two questions per line, and the first is what you actually found in the box. Damaged or missing opens a claim with the client, and that is where any money is settled.',
       },
       {
         id: 'choices',
@@ -3530,7 +3530,7 @@ export const VIDEOS = [
       },
       {
         id: 'aside',
-        say: 'The second is the damaged one, and this is the choice people forget exists. Keep it aside: it goes to the damaged bin, stays the seller’s, and is never sold to anybody.',
+        say: 'The second is the damaged one, and this is the choice people forget exists. Keep it aside: it goes to the damaged bin, stays the client’s, and is never sold to anybody.',
       },
       {
         id: 'save',
@@ -3601,7 +3601,7 @@ export const VIDEOS = [
       },
       {
         id: 'prefilled',
-        say: 'It opens filled in. Product, shelf, batch, and the reason already chosen — something on a damaged shelf goes back to the seller or it gets scrapped, and nothing else.',
+        say: 'It opens filled in. Product, shelf, batch, and the reason already chosen — something on a damaged shelf goes back to the client or it gets scrapped, and nothing else.',
       },
       {
         id: 'cost',
@@ -3619,16 +3619,16 @@ export const VIDEOS = [
   },
   {
     slug: 'how-seller-money-works',
-    title: 'How seller money works',
+    title: 'How client money works',
     subtitle: 'Skydrop for ops',
     steps: [
       {
         id: 'intro',
-        say: 'This is the money desk. Seller wallets adds up everything Skydrop owes a seller and everything a seller owes us, and holds every line behind those two numbers.',
+        say: 'This is the money desk. Client wallets adds up everything Skydrop owes a client and everything a client owes us, and holds every line behind those two numbers.',
       },
       {
         id: 'owed',
-        say: 'The first figure is a liability, payable on demand — any seller in credit can ask for it today. The second is the other direction: a wallet that has gone negative is money we are owed.',
+        say: 'The first figure is a liability, payable on demand — any client in credit can ask for it today. The second is the other direction: a wallet that has gone negative is money we are owed.',
       },
       {
         id: 'not-yet',
@@ -3636,7 +3636,7 @@ export const VIDEOS = [
       },
       {
         id: 'row',
-        say: 'One row per seller, with what they can draw and what is waiting on us. Open the ledger behind it.',
+        say: 'One row per client, with what they can draw and what is waiting on us. Open the ledger behind it.',
       },
       {
         id: 'balance',
@@ -3648,7 +3648,7 @@ export const VIDEOS = [
       },
       {
         id: 'rules',
-        say: 'Then the rules in force for this seller. Read-only here, and already resolved — the figure shown is the one being applied, not the two places it might have come from. Anything marked override was agreed with them.',
+        say: 'Then the rules in force for this client. Read-only here, and already resolved — the figure shown is the one being applied, not the two places it might have come from. Anything marked override was agreed with them.',
       },
       {
         id: 'ledger',
@@ -3656,11 +3656,11 @@ export const VIDEOS = [
       },
       {
         id: 'topup',
-        say: 'A top-up is money the seller sent us, matched against our statement and credited. The reference on the row is the one off their own transfer — that is the thing it was matched on.',
+        say: 'A top-up is money the client sent us, matched against our statement and credited. The reference on the row is the one off their own transfer — that is the thing it was matched on.',
       },
       {
         id: 'cod',
-        say: 'A COD credit is cash the courier collected from the customer at the door. It lands when the courier pays us, not when the parcel arrived — crediting at delivery would mean fronting every seller a week of their own takings.',
+        say: 'A COD credit is cash the courier collected from the customer at the door. It lands when the courier pays us, not when the parcel arrived — crediting at delivery would mean fronting every client a week of their own takings.',
       },
       {
         id: 'gst',
@@ -3711,7 +3711,7 @@ export const VIDEOS = [
       },
       {
         id: 'quoted',
-        say: 'And the distinction most people miss. A charge that was worked out but never debited to the seller is a quote, not revenue — so it is named and left out, rather than counted because it exists.',
+        say: 'And the distinction most people miss. A charge that was worked out but never debited to the client is a quote, not revenue — so it is named and left out, rather than counted because it exists.',
       },
       {
         id: 'open',
@@ -3817,11 +3817,11 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'Top-ups. A seller telling us they have sent money — and until somebody here says otherwise, that is all a claim is. It has moved nothing.',
+        say: 'Top-ups. A client telling us they have sent money — and until somebody here says otherwise, that is all a claim is. It has moved nothing.',
       },
       {
         id: 'stakes',
-        say: 'Which makes this screen one of the sharpest in the console, because accepting IS the credit. There is no second step. The wallet moves as you press it, and the seller can draw against it from that moment.',
+        say: 'Which makes this screen one of the sharpest in the console, because accepting IS the credit. There is no second step. The wallet moves as you press it, and the client can draw against it from that moment.',
       },
       {
         id: 'row',
@@ -3861,7 +3861,7 @@ export const VIDEOS = [
       },
       {
         id: 'reject',
-        say: 'The other way out needs a reason, and the reason is mandatory for a plain cause: the seller reads it. Write what did not match, or what you need from them.',
+        say: 'The other way out needs a reason, and the reason is mandatory for a plain cause: the client reads it. Write what did not match, or what you need from them.',
       },
       {
         id: 'outro',
@@ -3871,12 +3871,12 @@ export const VIDEOS = [
   },
   {
     slug: 'pay-a-seller-out',
-    title: 'Paying a seller out',
+    title: 'Paying a client out',
     subtitle: 'Skydrop for ops',
     steps: [
       {
         id: 'intro',
-        say: 'Withdrawals. A seller asking for their money back, and the one sentence to keep in mind is at the top: nothing on this page moves any.',
+        say: 'Withdrawals. A client asking for their money back, and the one sentence to keep in mind is at the top: nothing on this page moves any.',
       },
       {
         id: 'request',
@@ -3892,7 +3892,7 @@ export const VIDEOS = [
       },
       {
         id: 'confirm',
-        say: 'The dialog says so: nothing is paid yet. Pay the account on the seller’s profile, record the remittance, and that is what closes this request.',
+        say: 'The dialog says so: nothing is paid yet. Pay the account on the client’s profile, record the remittance, and that is what closes this request.',
       },
       {
         id: 'approved',
@@ -3900,11 +3900,11 @@ export const VIDEOS = [
       },
       {
         id: 'remittances',
-        say: 'The payment is recorded on Remittances, and this is where the money actually moves — each entry debits the seller’s wallet. The approved request is waiting at the top with a button to pay it.',
+        say: 'The payment is recorded on Remittances, and this is where the money actually moves — each entry debits the client’s wallet. The approved request is waiting at the top with a button to pay it.',
       },
       {
         id: 'destination',
-        say: 'Which opens with the destination beside it: the seller’s own bank, masked, with the full number behind a deliberate reveal — reading it is an act at the moment of typing a transfer, not a side effect of opening a form.',
+        say: 'Which opens with the destination beside it: the client’s own bank, masked, with the full number behind a deliberate reveal — reading it is an act at the moment of typing a transfer, not a side effect of opening a form.',
       },
       {
         id: 'cover',
@@ -3916,11 +3916,11 @@ export const VIDEOS = [
       },
       {
         id: 'rate',
-        say: 'The taka figure is not typed. It is the rupees multiplied by the rate we quoted the seller — and whatever we actually achieved on the day is a different number. That gap is ours either way, recorded as a spread rather than taken off their balance.',
+        say: 'The taka figure is not typed. It is the rupees multiplied by the rate we quoted the client — and whatever we actually achieved on the day is a different number. That gap is ours either way, recorded as a spread rather than taken off their balance.',
       },
       {
         id: 'fee',
-        say: 'A bank fee goes in its own field, because it is our cost and not theirs. Netting it into the payout would charge the seller for our bank.',
+        say: 'A bank fee goes in its own field, because it is our cost and not theirs. Netting it into the payout would charge the client for our bank.',
       },
       {
         id: 'reference',
@@ -3943,7 +3943,7 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'Bank detail changes. The shortest screen in this console and the one with the highest stakes on it, because what it decides is where a seller’s money goes.',
+        say: 'Bank detail changes. The shortest screen in this console and the one with the highest stakes on it, because what it decides is where a client’s money goes.',
       },
       {
         id: 'until',
@@ -3951,7 +3951,7 @@ export const VIDEOS = [
       },
       {
         id: 'first',
-        say: 'And only a CHANGE needs approving. A seller adding bank details for the first time writes straight through, because there is no account to divert money away from.',
+        say: 'And only a CHANGE needs approving. A client adding bank details for the first time writes straight through, because there is no account to divert money away from.',
       },
       {
         id: 'diff',
@@ -3963,7 +3963,7 @@ export const VIDEOS = [
       },
       {
         id: 'attack',
-        say: 'Which is the thing to hold on to here. Somebody who gets into a seller’s account cannot take their money out — they can only ask us to send it somewhere else. This screen is the step that stops them.',
+        say: 'Which is the thing to hold on to here. Somebody who gets into a client’s account cannot take their money out — they can only ask us to send it somewhere else. This screen is the step that stops them.',
       },
       {
         id: 'verify',
@@ -3971,7 +3971,7 @@ export const VIDEOS = [
       },
       {
         id: 'open',
-        say: 'The dialog names the seller and the destination, and it is blunt about the consequence: from this moment every withdrawal goes to the account below, and the one they had stops receiving money.',
+        say: 'The dialog names the client and the destination, and it is blunt about the consequence: from this moment every withdrawal goes to the account below, and the one they had stops receiving money.',
       },
       {
         id: 'undo',
@@ -3983,11 +3983,11 @@ export const VIDEOS = [
       },
       {
         id: 'after',
-        say: 'The queue empties, and the new account is now the one every payout is typed against. The next remittance anybody records for this seller goes there.',
+        say: 'The queue empties, and the new account is now the one every payout is typed against. The next remittance anybody records for this client goes there.',
       },
       {
         id: 'outro',
-        say: 'Rejecting is the other way out, and it needs a reason the seller reads — so when you are not sure, that is the button. A payout delayed by a phone call costs nothing that a payout to the wrong account does. And this is where the decision shows up: the next withdrawal anybody pays for this seller is typed against the account you just let through.',
+        say: 'Rejecting is the other way out, and it needs a reason the client reads — so when you are not sure, that is the button. A payout delayed by a phone call costs nothing that a payout to the wrong account does. And this is where the decision shows up: the next withdrawal anybody pays for this client is typed against the account you just let through.',
       },
     ],
   },
@@ -3998,11 +3998,11 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'Courier settlements. Every rupee the courier pays us, matched to the orders it covers — and whatever is not matched is money we are carrying on a seller’s behalf.',
+        say: 'Courier settlements. Every rupee the courier pays us, matched to the orders it covers — and whatever is not matched is money we are carrying on a client’s behalf.',
       },
       {
         id: 'float',
-        say: 'That is the figure at the top. Delivered COD that no payout covers yet: the customer paid, the courier is holding it, and we are the ones who owe the seller in the meantime.',
+        say: 'That is the figure at the top. Delivered COD that no payout covers yet: the customer paid, the courier is holding it, and we are the ones who owe the client in the meantime.',
       },
       {
         id: 'window',
@@ -4026,7 +4026,7 @@ export const VIDEOS = [
       },
       {
         id: 'short',
-        say: 'And where they paid less, the difference is recorded and absorbed. The seller is credited what the ORDER was worth, not what the courier remitted — a short payment is our dispute with the courier, not a clawback from somebody who was paid in good faith.',
+        say: 'And where they paid less, the difference is recorded and absorbed. The client is credited what the ORDER was worth, not what the courier remitted — a short payment is our dispute with the courier, not a clawback from somebody who was paid in good faith.',
       },
       {
         id: 'reversal',
@@ -4034,11 +4034,11 @@ export const VIDEOS = [
       },
       {
         id: 'credit',
-        say: 'Which is what recording this does. In the same transaction it credits the seller, withholds the tax, and writes the bank entry for the cash — so a credit with no payment behind it cannot exist.',
+        say: 'Which is what recording this does. In the same transaction it credits the client, withholds the tax, and writes the bank entry for the cash — so a credit with no payment behind it cannot exist.',
       },
       {
         id: 'ledger',
-        say: 'Here it is on the seller’s side: the COD credit, the tax taken out of it, and both naming the order the money came from.',
+        say: 'Here it is on the client’s side: the COD credit, the tax taken out of it, and both naming the order the money came from.',
       },
       {
         id: 'unexplained',
@@ -4057,7 +4057,7 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'Wallet transfers. Taking money out of a seller’s wallet into our bank, or putting ours into theirs — by hand, when nothing in the ordinary flow has a way to do it.',
+        say: 'Wallet transfers. Taking money out of a client’s wallet into our bank, or putting ours into theirs — by hand, when nothing in the ordinary flow has a way to do it.',
       },
       {
         id: 'notacorrection',
@@ -4065,7 +4065,7 @@ export const VIDEOS = [
       },
       {
         id: 'seller',
-        say: 'So: find the seller. Everything after this is about one account, and the page shows you theirs before it shows you a form.',
+        say: 'So: find the client. Everything after this is about one account, and the page shows you theirs before it shows you a form.',
       },
       {
         id: 'direction',
@@ -4077,11 +4077,11 @@ export const VIDEOS = [
       },
       {
         id: 'reason',
-        say: 'Then the reason, and this is the field that matters. The seller reads it on their own wallet history, word for word, so write the thing they will need rather than the thing you would file.',
+        say: 'Then the reason, and this is the field that matters. The client reads it on their own wallet history, word for word, so write the thing they will need rather than the thing you would file.',
       },
       {
         id: 'internal',
-        say: 'The internal note is the other half. Only staff see it, it is kept with the audit record, and it is where the ticket number and the half of the story the seller does not need goes.',
+        say: 'The internal note is the other half. Only staff see it, it is kept with the audit record, and it is where the ticket number and the half of the story the client does not need goes.',
       },
       {
         id: 'preview',
@@ -4089,11 +4089,11 @@ export const VIDEOS = [
       },
       {
         id: 'numbers',
-        say: 'Underneath it, the two figures that are not the same thing: their wallet before and after, and the cash we actually hold for them before and after. On a seller already in debt the second one does not move at all.',
+        say: 'Underneath it, the two figures that are not the same thing: their wallet before and after, and the cash we actually hold for them before and after. On a client already in debt the second one does not move at all.',
       },
       {
         id: 'confirm',
-        say: 'And the confirm says the rest: it moves real money and cannot be undone. A mistake here is put right with a transfer the other way, which is a second entry on the seller’s history and not an erasure of the first.',
+        say: 'And the confirm says the rest: it moves real money and cannot be undone. A mistake here is put right with a transfer the other way, which is a second entry on the client’s history and not an erasure of the first.',
       },
       {
         id: 'post',
@@ -4105,7 +4105,7 @@ export const VIDEOS = [
       },
       {
         id: 'outro',
-        say: 'So use it when the ordinary flow has no answer, write the reason for the seller rather than for the file, and remember it is the one screen here that can put a wallet into debt on purpose.',
+        say: 'So use it when the ordinary flow has no answer, write the reason for the client rather than for the file, and remember it is the one screen here that can put a wallet into debt on purpose.',
       },
     ],
   },
@@ -4116,11 +4116,11 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'Treasury. Every rupee and every taka we hold, in the account it actually sits in — and one question the rest of the page exists to answer: is the money we owe sellers still here.',
+        say: 'Treasury. Every rupee and every taka we hold, in the account it actually sits in — and one question the rest of the page exists to answer: is the money we owe clients still here.',
       },
       {
         id: 'owed',
-        say: 'This is what we owe. The sum of every positive wallet balance — what the sellers could ask us for today, if they all asked at once.',
+        say: 'This is what we owe. The sum of every positive wallet balance — what the clients could ask us for today, if they all asked at once.',
       },
       {
         id: 'held',
@@ -4132,11 +4132,11 @@ export const VIDEOS = [
       },
       {
         id: 'accounts',
-        say: 'Per account, the same split again: ours, held for sellers, and the total the bank would show. And a balance here is the SUM of its entries rather than a figure stored beside them, so it cannot quietly go stale.',
+        say: 'Per account, the same split again: ours, held for clients, and the total the bank would show. And a balance here is the SUM of its entries rather than a figure stored beside them, so it cannot quietly go stale.',
       },
       {
         id: 'inside',
-        say: 'Open one and it tells you whose money is inside it. This is where a seller’s top-up lands and where their payout leaves from, so it carries both at once.',
+        say: 'Open one and it tells you whose money is inside it. This is where a client’s top-up lands and where their payout leaves from, so it carries both at once.',
       },
       {
         id: 'movements',
@@ -4152,7 +4152,7 @@ export const VIDEOS = [
       },
       {
         id: 'reconcile',
-        say: 'And this is the one you will use most. The statement says one figure, the book says another, and the difference is posted as a new entry against whoever it belongs to — our own money, or a seller’s holding.',
+        say: 'And this is the one you will use most. The statement says one figure, the book says another, and the difference is posted as a new entry against whoever it belongs to — our own money, or a client’s holding.',
       },
       {
         id: 'opening',
@@ -4191,11 +4191,11 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'This order is paused. The call centre rang the customer, nobody answered, and rather than reject it outright we stopped and asked the seller what they wanted done.',
+        say: 'This order is paused. The call centre rang the customer, nobody answered, and rather than reject it outright we stopped and asked the client what they wanted done.',
       },
       {
         id: 'stuck',
-        say: 'The seller has since rung us: the customer did answer, and does want it. There is no button for that. From here the rules allow calling again, letting it go, or calling it off.',
+        say: 'The client has since rung us: the customer did answer, and does want it. There is no button for that. From here the rules allow calling again, letting it go, or calling it off.',
       },
       {
         id: 'panel',
@@ -4207,7 +4207,7 @@ export const VIDEOS = [
       },
       {
         id: 'consequences',
-        say: 'And this is the half people miss. A forced status has the same consequences as a real one, except stock. Emails to the customer and the seller, webhooks, invoices, delivery-time billing, the call queue.',
+        say: 'And this is the half people miss. A forced status has the same consequences as a real one, except stock. Emails to the customer and the client, webhooks, invoices, delivery-time billing, the call queue.',
       },
       {
         id: 'waybill',
@@ -4337,7 +4337,7 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'Tickets. Everything anybody is arguing about — goods we damaged, a count that came up short, and a reseller store that has fallen out with the seller whose stock it sells.',
+        say: 'Tickets. Everything anybody is arguing about — goods we damaged, a count that came up short, and a member store that has fallen out with the client whose stock it sells.',
       },
       {
         id: 'kinds',
@@ -4353,7 +4353,7 @@ export const VIDEOS = [
       },
       {
         id: 'reply',
-        say: 'A reply here is not an internal note. The seller reads this on their own ticket, so it is written to them — and it is the only part of this page that is free.',
+        say: 'A reply here is not an internal note. The client reads this on their own ticket, so it is written to them — and it is the only part of this page that is free.',
       },
       {
         id: 'sent',
@@ -4365,11 +4365,11 @@ export const VIDEOS = [
       },
       {
         id: 'outcomes',
-        say: 'Four ways to finish. Goods went back, the seller accepted the loss, not upheld — three of them record a decision and move nothing. The first one moves money.',
+        say: 'Four ways to finish. Goods went back, the client accepted the loss, not upheld — three of them record a decision and move nothing. The first one moves money.',
       },
       {
         id: 'amount',
-        say: 'Refunded the seller, and a figure appears. There is no suggestion in it and there should not be: what a lost unit was worth is a judgement, and the form should not make it for you.',
+        say: 'Refunded the client, and a figure appears. There is no suggestion in it and there should not be: what a lost unit was worth is a judgement, and the form should not make it for you.',
       },
       {
         id: 'confirm',
@@ -4377,15 +4377,15 @@ export const VIDEOS = [
       },
       {
         id: 'store',
-        say: 'The dispute is a different animal. A reseller store sells a seller’s goods under its own name, and when the two of them disagree the argument is between them. We only referee it.',
+        say: 'The dispute is a different animal. A member store sells a client’s goods under its own name, and when the two of them disagree the argument is between them. We only referee it.',
       },
       {
         id: 'settle',
-        say: 'Which is why this one asks who pays whom. The money moves between the store’s wallet and the seller’s, as one pair, never out of ours — and the note you write is read by both of them.',
+        say: 'Which is why this one asks who pays whom. The money moves between the store’s wallet and the client’s, as one pair, never out of ours — and the note you write is read by both of them.',
       },
       {
         id: 'norefund',
-        say: 'And refunding the seller is simply not offered here. Not hidden because it would be awkward: the server refuses it by name on this type, because paying out of our own pocket is not settling an argument.',
+        say: 'And refunding the client is simply not offered here. Not hidden because it would be awkward: the server refuses it by name on this type, because paying out of our own pocket is not settling an argument.',
       },
       {
         id: 'outro',
@@ -4458,12 +4458,12 @@ export const VIDEOS = [
   },
   {
     slug: 'acting-on-a-failed-delivery',
-    title: 'When a seller asks about a failed delivery',
+    title: 'When a client asks about a failed delivery',
     subtitle: 'Skydrop for ops',
     steps: [
       {
         id: 'intro',
-        say: 'A parcel the driver could not hand over, and a seller who wants something done about it. Everything they have asked for lands here — and the three things they can ask cost wildly different amounts.',
+        say: 'A parcel the driver could not hand over, and a client who wants something done about it. Everything they have asked for lands here — and the three things they can ask cost wildly different amounts.',
       },
       {
         id: 'cost',
@@ -4471,7 +4471,7 @@ export const VIDEOS = [
       },
       {
         id: 'waiting',
-        say: 'One thing is waiting, and it is not ours to answer. A reseller store asked for this, and the seller whose stock it is chose to see those first — so it sits here for them to decide, and we can only watch.',
+        say: 'One thing is waiting, and it is not ours to answer. A member store asked for this, and the client whose stock it is chose to see those first — so it sits here for them to decide, and we can only watch.',
       },
       {
         id: 'decided',
@@ -4479,15 +4479,15 @@ export const VIDEOS = [
       },
       {
         id: 'already',
-        say: 'And both were decided the moment they were made. A seller asking us to act on their own parcel does not queue behind an approval — putting one in front of it only delayed work somebody was going to do anyway.',
+        say: 'And both were decided the moment they were made. A client asking us to act on their own parcel does not queue behind an approval — putting one in front of it only delayed work somebody was going to do anyway.',
       },
       {
         id: 'note',
-        say: 'What it does instead is say where the work went. Not "approved" — a sentence naming the thing that now exists, which the seller reads on their own order.',
+        say: 'What it does instead is say where the work went. Not "approved" — a sentence naming the thing that now exists, which the client reads on their own order.',
       },
       {
         id: 'ticket',
-        say: 'For the re-attempt, that is a ticket. Here it is, in the seller’s own words, raised against the parcel and sitting in the queue a person actually works from.',
+        say: 'For the re-attempt, that is a ticket. Here it is, in the client’s own words, raised against the parcel and sitting in the queue a person actually works from.',
       },
       {
         id: 'relay',
@@ -4503,7 +4503,7 @@ export const VIDEOS = [
       },
       {
         id: 'rto',
-        say: 'And the one return on the page is the store’s, which is the whole distinction. A seller sending their own parcel back reaches the courier on their own click; a store doing it with somebody else’s stock stops for them first.',
+        say: 'And the one return on the page is the store’s, which is the whole distinction. A client sending their own parcel back reaches the courier on their own click; a store doing it with somebody else’s stock stops for them first.',
       },
       {
         id: 'watch',
@@ -4511,7 +4511,7 @@ export const VIDEOS = [
       },
       {
         id: 'outro',
-        say: 'So: read it to find out what has been asked and what it cost us. Act on the ticket, not here. And the one row that does wait is waiting for the seller, not for you.',
+        say: 'So: read it to find out what has been asked and what it cost us. Act on the ticket, not here. And the one row that does wait is waiting for the client, not for you.',
       },
     ],
   },
@@ -4522,7 +4522,7 @@ export const VIDEOS = [
     steps: [
       {
         id: 'intro',
-        say: 'Inbound freight. What it cost to get a seller’s goods from Bangladesh into India, billed to them — and it is the one charge on this system that is not about a parcel at all.',
+        say: 'Inbound freight. What it cost to get a client’s goods from Bangladesh into India, billed to them — and it is the one charge on this system that is not about a parcel at all.',
       },
       {
         id: 'spread',
@@ -4534,7 +4534,7 @@ export const VIDEOS = [
       },
       {
         id: 'currency',
-        say: 'Then the currency it was agreed in. A Dhaka forwarder quotes taka, so type the figures exactly as they are on the invoice — the bill is converted to rupees at the rate in force the moment you record it, and the seller is charged rupees either way.',
+        say: 'Then the currency it was agreed in. A Dhaka forwarder quotes taka, so type the figures exactly as they are on the invoice — the bill is converted to rupees at the rate in force the moment you record it, and the client is charged rupees either way.',
       },
       {
         id: 'basis',
@@ -4550,7 +4550,7 @@ export const VIDEOS = [
       },
       {
         id: 'post',
-        say: 'Record it. On these terms nothing has left the wallet yet — the bill sits against the consignment, and the outstanding figure at the top is now what the seller still owes on it.',
+        say: 'Record it. On these terms nothing has left the wallet yet — the bill sits against the consignment, and the outstanding figure at the top is now what the client still owes on it.',
       },
       {
         id: 'split',
@@ -4629,7 +4629,7 @@ export const VIDEOS = [
       },
       {
         id: 'reason',
-        say: 'Corrections carry a reason, and this is where it earns its keep. Lost, returned to the seller, a counting error, something that never finished its journey \u2014 months later that word is the whole of what anybody remembers.',
+        say: 'Corrections carry a reason, and this is where it earns its keep. Lost, returned to the client, a counting error, something that never finished its journey \u2014 months later that word is the whole of what anybody remembers.',
       },
       {
         id: 'outro',
@@ -4672,7 +4672,7 @@ export const VIDEOS = [
       },
       {
         id: 'default',
-        say: 'And the default is marked. It is one per courier AND per environment, which is why both of these carry it \u2014 a seller nobody has routed anywhere ships on whichever is in force. So making something default is a decision about every seller at once, not about one account.',
+        say: 'And the default is marked. It is one per courier AND per environment, which is why both of these carry it \u2014 a client nobody has routed anywhere ships on whichever is in force. So making something default is a decision about every client at once, not about one account.',
       },
       {
         id: 'add',
@@ -4765,7 +4765,7 @@ export const VIDEOS = [
   },
   {
     slug: 'letting-a-seller-in',
-    title: 'Letting a seller in',
+    title: 'Letting a client in',
     subtitle: 'Skydrop for ops',
     steps: [
       {
@@ -4810,7 +4810,7 @@ export const VIDEOS = [
       },
       {
         id: 'pending',
-        say: 'Every invitation out there is on the sellers page, folded away until you ask for it.',
+        say: 'Every invitation out there is on the clients page, folded away until you ask for it.',
       },
       {
         id: 'resend',
@@ -4828,16 +4828,16 @@ export const VIDEOS = [
   },
   {
     slug: 'managing-a-seller',
-    title: 'Managing a seller',
+    title: 'Managing a client',
     subtitle: 'Skydrop for ops',
     steps: [
       {
         id: 'intro',
-        say: 'Any seller, found by any part of their name, their email or their phone. What opens is everything we know about one account \u2014 and the three levers we have over it.',
+        say: 'Any client, found by any part of their name, their email or their phone. What opens is everything we know about one account \u2014 and the three levers we have over it.',
       },
       {
         id: 'identity',
-        say: 'Start with the name and the number, because these two are what we approved them AS. The seller cannot change either from their own portal; a staff correction is the only route there is.',
+        say: 'Start with the name and the number, because these two are what we approved them AS. The client cannot change either from their own portal; a staff correction is the only route there is.',
       },
       {
         id: 'open',
@@ -4857,7 +4857,7 @@ export const VIDEOS = [
       },
       {
         id: 'holdcard',
-        say: 'Now the lever this page mostly exists for. An account hold stops a seller who owes us money from starting new work \u2014 and it takes itself off again once their balance clears.',
+        say: 'Now the lever this page mostly exists for. An account hold stops a client who owes us money from starting new work \u2014 and it takes itself off again once their balance clears.',
       },
       {
         id: 'safe',
@@ -4877,7 +4877,7 @@ export const VIDEOS = [
       },
       {
         id: 'reason2',
-        say: 'And this reason the seller reads, on every page of their own portal. Write it as you would say it to them. A hold somebody cannot understand is one they telephone about instead of fixing.',
+        say: 'And this reason the client reads, on every page of their own portal. Write it as you would say it to them. A hold somebody cannot understand is one they telephone about instead of fixing.',
       },
       {
         id: 'placed',
@@ -4911,16 +4911,16 @@ export const VIDEOS = [
   },
   {
     slug: 'per-seller-settings',
-    title: 'Settings and couriers for one seller',
+    title: 'Settings and couriers for one client',
     subtitle: 'Skydrop for ops',
     steps: [
       {
         id: 'intro',
-        say: 'Further down the same page, the part that decides how we treat THIS seller in particular \u2014 every setting that can be agreed separately, and what they are actually on.',
+        say: 'Further down the same page, the part that decides how we treat THIS client in particular \u2014 every setting that can be agreed separately, and what they are actually on.',
       },
       {
         id: 'columns',
-        say: 'Three columns, and the third is the one to read. What is in effect, what the system default is, and whether this seller has been moved off it at all.',
+        say: 'Three columns, and the third is the one to read. What is in effect, what the system default is, and whether this client has been moved off it at all.',
       },
       {
         id: 'name',
@@ -4948,11 +4948,11 @@ export const VIDEOS = [
       },
       {
         id: 'couriers',
-        say: 'Then the other half: which courier accounts carry this seller\u2019s parcels. No links at all is the ordinary state, and the line says what it means.',
+        say: 'Then the other half: which courier accounts carry this client\u2019s parcels. No links at all is the ordinary state, and the line says what it means.',
       },
       {
         id: 'add',
-        say: 'Add one and you choose the account and a weight. A weight is a share rather than a number of parcels \u2014 two links at a hundred split the seller evenly.',
+        say: 'Add one and you choose the account and a weight. A weight is a share rather than a number of parcels \u2014 two links at a hundred split the client evenly.',
       },
       {
         id: 'linked',
@@ -4968,7 +4968,7 @@ export const VIDEOS = [
       },
       {
         id: 'credit',
-        say: 'One switch is deliberately NOT on that list. This one lets a reseller store be paid days after a phone call and before the customer has paid, so it has an endpoint of its own and the ordinary override writer refuses it by name.',
+        say: 'One switch is deliberately NOT on that list. This one lets a member store be paid days after a phone call and before the customer has paid, so it has an endpoint of its own and the ordinary override writer refuses it by name.',
       },
       {
         id: 'outro',
@@ -5003,7 +5003,7 @@ export const VIDEOS = [
       },
       {
         id: 'readonly',
-        say: 'And one row here cannot be edited from this page at all. It has a route of its own with stricter guardrails, which is the same switch you saw on a seller\u2019s page a moment ago.',
+        say: 'And one row here cannot be edited from this page at all. It has a route of its own with stricter guardrails, which is the same switch you saw on a client\u2019s page a moment ago.',
       },
       {
         id: 'switch',
@@ -5074,7 +5074,7 @@ export const VIDEOS = [
       },
       {
         id: 'deactivated',
-        say: 'Done. The row stays, marked, with no actions left on it \u2014 because a person who has left is still the answer to who approved that seller in March.',
+        say: 'Done. The row stays, marked, with no actions left on it \u2014 because a person who has left is still the answer to who approved that client in March.',
       },
       {
         id: 'broadcast',
@@ -5133,7 +5133,7 @@ export const VIDEOS = [
       },
       {
         id: 'unfulfillable',
-        say: 'There are exactly two ways out and this is the other one. Read what it costs: the stock goes back, the parcel is voided, and the seller sees a cancelled order \u2014 so it asks for a reason in words they would recognise.',
+        say: 'There are exactly two ways out and this is the other one. Read what it costs: the stock goes back, the parcel is voided, and the client sees a cancelled order \u2014 so it asks for a reason in words they would recognise.',
       },
       {
         id: 'open',
@@ -5145,7 +5145,7 @@ export const VIDEOS = [
       },
       {
         id: 'courier',
-        say: 'And who has it. This one is required now, and the hint says why it had to become required: left blank, the seller and the customer were both told their parcel was with a courier called manual.',
+        say: 'And who has it. This one is required now, and the hint says why it had to become required: left blank, the client and the customer were both told their parcel was with a courier called manual.',
       },
       {
         id: 'service',
@@ -5176,7 +5176,7 @@ export const VIDEOS = [
       },
       {
         id: 'ids',
-        say: 'The seller, the product and how many. These are identifiers, not names, and they are printed on no screen in this console \u2014 you arrive holding them, off the sheet somebody walked the shelves with.',
+        say: 'The client, the product and how many. These are identifiers, not names, and they are printed on no screen in this console \u2014 you arrive holding them, off the sheet somebody walked the shelves with.',
       },
       {
         id: 'from',
@@ -5200,7 +5200,7 @@ export const VIDEOS = [
       },
       {
         id: 'confirm',
-        say: 'And it asks once more, restating it: this product, this seller, this many units, out of that building and into this one. Read the last sentence \u2014 a movement is not something this form can take back.',
+        say: 'And it asks once more, restating it: this product, this client, this many units, out of that building and into this one. Read the last sentence \u2014 a movement is not something this form can take back.',
       },
       {
         id: 'done',
@@ -5215,7 +5215,7 @@ export const VIDEOS = [
   {
     slug: 'store-find-your-way-around',
     title: 'Finding your way around the store',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5254,7 +5254,7 @@ export const VIDEOS = [
   {
     slug: 'store-what-you-may-sell',
     title: 'What you may sell, and for how much',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5289,7 +5289,7 @@ export const VIDEOS = [
   {
     slug: 'store-place-an-order',
     title: 'Placing an order for a customer',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5340,7 +5340,7 @@ export const VIDEOS = [
   {
     slug: 'store-upload-bulk-orders',
     title: 'A day’s orders from a spreadsheet',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5383,7 +5383,7 @@ export const VIDEOS = [
   {
     slug: 'store-find-an-order',
     title: 'Finding an order',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5422,7 +5422,7 @@ export const VIDEOS = [
   {
     slug: 'store-read-an-order',
     title: 'Reading an order',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5483,7 +5483,7 @@ export const VIDEOS = [
   {
     slug: 'store-invite-an-associate',
     title: 'Invite a sales person, and pause one',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5534,7 +5534,7 @@ export const VIDEOS = [
   {
     slug: 'store-set-associate-prices',
     title: 'Set what each of them sells it for',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5585,7 +5585,7 @@ export const VIDEOS = [
   {
     slug: 'store-how-associates-are-doing',
     title: 'How your associates are doing',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5648,7 +5648,7 @@ export const VIDEOS = [
   {
     slug: 'store-delivery-gone-wrong',
     title: 'When a delivery goes wrong',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5668,7 +5668,7 @@ export const VIDEOS = [
       },
       {
         id: 'strip',
-        say: 'And beside each one, the part people miss. Happens as soon as you ask means exactly that. The seller approves this one means nothing moves until a person at your supplier has read it and said yes.',
+        say: 'And beside each one, the part people miss. Happens as soon as you ask means exactly that. The client approves this one means nothing moves until a person at your supplier has read it and said yes.',
       },
       {
         id: 'dialog',
@@ -5688,7 +5688,7 @@ export const VIDEOS = [
       },
       {
         id: 'cancel',
-        say: 'Calling the order off entirely is up at the top, and it reads differently depending on the arrangement — Cancel order, or ask the seller to cancel. Either way it only works until the parcel is packed.',
+        say: 'Calling the order off entirely is up at the top, and it reads differently depending on the arrangement — Cancel the order, or Send to your client. Either way it only works until the parcel is packed.',
       },
       {
         id: 'change',
@@ -5707,7 +5707,7 @@ export const VIDEOS = [
   {
     slug: 'store-unreachable-customers',
     title: 'When we cannot reach your customer',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5747,7 +5747,7 @@ export const VIDEOS = [
       },
       {
         id: 'never',
-        say: 'Never mind, and nothing is decided. Depending on your arrangement, your answer here may itself go to your supplier to approve — in which case the dialog says so and the button says send to your seller.',
+        say: 'Never mind, and nothing is decided. Depending on your arrangement, your answer here may itself go to your supplier to approve — in which case the dialog says so and the button says send to your client.',
       },
       {
         id: 'order',
@@ -5762,7 +5762,7 @@ export const VIDEOS = [
   {
     slug: 'store-your-customers',
     title: 'Your customers',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5805,7 +5805,7 @@ export const VIDEOS = [
   {
     slug: 'store-raise-it-with-skydrop',
     title: 'Raising a problem',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5813,7 +5813,7 @@ export const VIDEOS = [
       },
       {
         id: 'list',
-        say: 'Every conversation about your orders. The column to read first is With — your seller, or Skydrop. That is the difference between arguing with your supplier and talking to your logistics provider.',
+        say: 'Every conversation about your orders. The column to read first is With — your client, or Skydrop. That is the difference between arguing with your supplier and talking to your logistics provider.',
       },
       {
         id: 'tabs',
@@ -5833,7 +5833,7 @@ export const VIDEOS = [
       },
       {
         id: 'choose',
-        say: 'With your seller is about the goods, the price, or what was sent — they read it and Skydrop referees. With Skydrop is for something in our hands: damaged, lost, or sitting in our warehouse, and your supplier is not told.',
+        say: 'With your client is about the goods, the price, or what was sent — they read it and Skydrop referees. With Skydrop is for something in our hands: damaged, lost, or sitting in our warehouse, and your supplier is not told.',
       },
       {
         id: 'money',
@@ -5864,7 +5864,7 @@ export const VIDEOS = [
   {
     slug: 'store-the-terms',
     title: 'The terms you are trading under',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5915,7 +5915,7 @@ export const VIDEOS = [
   {
     slug: 'store-your-team',
     title: 'Your team',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -5966,7 +5966,7 @@ export const VIDEOS = [
   {
     slug: 'store-your-wallet',
     title: 'Your wallet',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -6025,7 +6025,7 @@ export const VIDEOS = [
   {
     slug: 'store-your-expenses',
     title: 'Your own costs',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -6076,7 +6076,7 @@ export const VIDEOS = [
   {
     slug: 'store-month-by-month',
     title: 'What you made, month by month',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -6135,7 +6135,7 @@ export const VIDEOS = [
   {
     slug: 'store-how-the-shop-is-doing',
     title: 'How the shop is doing',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -6147,7 +6147,7 @@ export const VIDEOS = [
       },
       {
         id: 'rates',
-        say: 'How many orders you placed, and then three rates: confirmed on the phone, called off, and come back. For most reseller shops those second and third figures are the whole business.',
+        say: 'How many orders you placed, and then three rates: confirmed on the phone, called off, and come back. For most stores like yours those second and third figures are the whole business.',
       },
       {
         id: 'denominator',
@@ -6190,7 +6190,7 @@ export const VIDEOS = [
   {
     slug: 'store-your-inbox-and-login',
     title: 'Your inbox, and your own login',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
@@ -6249,7 +6249,7 @@ export const VIDEOS = [
   {
     slug: 'store-keys-and-webhooks',
     title: 'Letting your own systems in',
-    subtitle: 'Skydrop for reseller stores',
+    subtitle: 'Skydrop for member stores',
     steps: [
       {
         id: 'intro',
