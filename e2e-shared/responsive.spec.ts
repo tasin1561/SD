@@ -52,16 +52,23 @@ import { test, expect } from '@playwright/test';
  */
 const PUBLIC_ENTRY: Record<string, readonly string[]> = {
   admin: ['/login'],
-  seller: ['/login'],
+  // `/sign-up` (2026-10-14) earns its place rather than inheriting it:
+  // it is the one public page in the three consoles whose content is
+  // PROSE plus a full-width call to action, and it carries the console
+  // chooser, whose rows are a three-column grid holding a sentence —
+  // exactly the shape that refuses to shrink below its content and
+  // pushes a 320px page sideways. `/password-reset` was already public
+  // and already carried a field; it was simply never listed here.
+  seller: ['/login', '/password-reset', '/sign-up'],
   track: ['/'],
   marketing: ['/', '/request-invite', '/privacy'],
-  reseller: ['/login', '/password-reset'],
+  reseller: ['/login', '/password-reset', '/sign-up'],
   // ASSOC-1. Listed rather than left to the `?? ['/']` fallback: `/`
   // here redirects twice (to /orders, then to /login for a visitor with
   // no session), so the fallback would sweep the login page by accident
   // and the password-reset form — the only other public page, and the
   // one with a field on it — not at all.
-  associate: ['/login', '/password-reset'],
+  associate: ['/login', '/password-reset', '/sign-up'],
 };
 
 /**

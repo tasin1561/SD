@@ -145,3 +145,114 @@
     padding: var(--sp-5) var(--sp-4);
   }
 }
+
+/* ── The console chooser (OtherPortals) ──────────────────────────────
+   A row per OTHER console, under the card's own links. Each row is a
+   real 44px target rather than an inline link: these are standalone
+   navigation, and the responsive sweep's inline-link exemption (WCAG
+   2.5.8, for a link inside a sentence) is not meant to cover them.
+
+   `minmax(0, 1fr)` on the text column and `overflow-wrap` on the
+   description are what keep a long line inside the card at 320px —
+   a grid item defaults to `min-width: auto` and refuses to shrink
+   below its content, which is how a row like this pushes a page
+   sideways. */
+.sk-signin__portals {
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--line);
+  text-align: left;
+}
+.sk-signin__portals-head {
+  margin: 0 0 var(--sp-2);
+  color: var(--fg-muted);
+  font-size: var(--fs-sm);
+}
+.sk-signin__portals-list {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sk-signin__portal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 44px;
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+.sk-signin__portal:hover,
+.sk-signin__portal:focus-visible {
+  border-color: var(--line);
+  background: var(--surface-3);
+  text-decoration: none;
+}
+.sk-signin__portal-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.sk-signin__portal:hover .sk-signin__portal-icon,
+.sk-signin__portal:focus-visible .sk-signin__portal-icon {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+}
+.sk-signin__portal-text {
+  display: grid;
+  min-width: 0;
+}
+.sk-signin__portal-name {
+  color: var(--sky);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.sk-signin__portal-who {
+  color: var(--fg-faint);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+.sk-signin__portal-go {
+  flex: none;
+  color: var(--fg-faint);
+  transition: transform 160ms ease;
+}
+.sk-signin__portal:hover .sk-signin__portal-go,
+.sk-signin__portal:focus-visible .sk-signin__portal-go {
+  transform: translateX(2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-signin__portal,
+  .sk-signin__portal-go {
+    transition: none;
+  }
+  .sk-signin__portal:hover .sk-signin__portal-go,
+  .sk-signin__portal:focus-visible .sk-signin__portal-go {
+    transform: none;
+  }
+}
+
+/* Lead copy inside a card's form slot — used by the /sign-up pages,
+   which answer a question rather than taking input. */
+.sk-signin__lead {
+  margin: 0 0 var(--sp-4);
+  color: var(--fg-body);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+}

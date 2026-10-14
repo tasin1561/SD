@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { SignInCard } from '@skydrop/ui/app/sign-in';
+import { OtherPortals, SignInCard } from '@skydrop/ui/app/sign-in';
 import { PasswordResetRequestForm } from './_components/request-form';
 
 /**
@@ -22,14 +22,28 @@ export default function PasswordResetPage(): ReactElement {
       title="Reset your password"
       note={
         <>
-          Enter your seller account email. If we recognize it, you&apos;ll get a reset link by email
+          Enter your client account email. If we recognize it, you&apos;ll get a reset link by email
           within a few minutes.
         </>
       }
       footer={
-        <p>
-          Remembered it? <a href="/login">Sign in</a>
-        </p>
+        <>
+          <p>
+            Remembered it? <a href="/login">Sign in</a>
+          </p>
+          {/*
+           * The chooser belongs on THIS page as much as on /login, and
+           * for a worse reason. The API answers a reset request the same
+           * way whether or not the email has an account here
+           * (anti-enumeration), so somebody who is in the wrong console
+           * is told "if we recognize it, you'll get a reset link" and
+           * then gets nothing — a dead end that reads as success and
+           * teaches them to wait. A client on the store portal's reset
+           * page, or a store user on this one, needs the way out before
+           * they submit, not a reassuring message afterwards.
+           */}
+          <OtherPortals self="client" title="Reset it somewhere else?" />
+        </>
       }
     >
       <PasswordResetRequestForm />

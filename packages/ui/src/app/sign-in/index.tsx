@@ -124,3 +124,10 @@ export function SignInScreen({
     </SignInFrame>
   );
 }
+
+/**
+ * The console directory and its chooser live beside this screen because
+ * every console's auth pages already import from here — one import, and
+ * a console cannot be left off another's page by omission.
+ */
+export { CONSOLES, OtherPortals, type ConsoleKey } from './portals';

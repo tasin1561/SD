@@ -4,6 +4,7 @@ import { useState, type FormEvent, type ReactElement } from 'react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { Mail, Send } from 'lucide-react';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
+import { OtherPortals } from '@skydrop/ui/app/sign-in';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { AuthFrame } from '@/components/auth-frame';
 import { serverVerdict } from '@/lib/server-verdict';
@@ -42,7 +43,19 @@ export default function PasswordResetRequestPage(): ReactElement {
       note="step 1 of 2"
       title="Reset your password"
       subtitle="We will email you a link that works for 30 minutes."
-      footer={<a href="/login">Back to sign in</a>}
+      footer={
+        <>
+          <a href="/login">Back to sign in</a>
+          {/*
+           * The chooser matters more here than on /login. The API answers
+           * a reset request identically whether or not the email has a
+           * login here (anti-enumeration), so somebody in the wrong
+           * console is told a link is on its way and then gets nothing —
+           * a dead end that reads as success and teaches them to wait.
+           */}
+          <OtherPortals self="store" title="Reset it somewhere else?" />
+        </>
+      }
     >
       {state === 'sent' ? (
         <AuthNotice tone="good" role="status">

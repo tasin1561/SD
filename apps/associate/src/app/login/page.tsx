@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { resolveStoreSsrIdentity } from '@skydrop/auth/server';
+import { OtherPortals } from '@skydrop/ui/app/sign-in';
 import { apiOrigin } from '@/lib/api-origin';
 import { AuthFrame } from '@/components/auth-frame';
 import { LoginForm } from './_components/login-form';
@@ -30,21 +31,20 @@ export default async function LoginPage(): Promise<ReactElement> {
       footer={
         <>
           Forgot your password? <a href="/password-reset">Reset it</a>
-          {/*
-           * The way OUT to the store portal.
-           *
-           * This portal and the store's own look alike and only the
-           * hostname tells them apart, so somebody who runs the store
-           * and was forwarded a colleague's link would meet a form that
-           * accepts them perfectly and then shows them a far smaller
-           * app than the one they are looking for. Same tab: they are
-           * going there to sign in, and both /login pages bounce an
-           * already-authenticated visitor onward.
-           */}
           <span className="as-auth-alt">
-            Run the store yourself?{' '}
-            <a href="https://member.skydrop.global/login">Sign in to the store portal</a>
+            No login yet? <a href="/sign-up">How to get one</a>
           </span>
+          {/*
+           * The way OUT to the other consoles, from the shared directory
+           * in `@skydrop/ui/app/sign-in`. It replaced a single
+           * hand-written link to the store portal: this portal and the
+           * store's own look alike and only the hostname tells them
+           * apart, so somebody who runs the store and was forwarded a
+           * colleague's link would meet a form that accepts them
+           * perfectly and then shows them a far smaller app than the one
+           * they are looking for.
+           */}
+          <OtherPortals self="associate" />
         </>
       }
     >

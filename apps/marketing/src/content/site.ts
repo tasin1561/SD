@@ -31,13 +31,26 @@ export const platform = {
     primary: [
       { href: '/#services', label: 'Services' },
       { href: '/#platform', label: 'Platform' },
-      { href: '/#resellers', label: 'Reseller stores' },
+      { href: '/#resellers', label: 'Member stores' },
       { href: '/#pricing', label: 'Pricing' },
       { href: '/#faq', label: 'FAQ' },
     ],
+    /**
+     * Every console a visitor can sign in to. ASSOCIATE WAS MISSING
+     * until 2026-10-14 — the portal has existed since ASSOC-1 (2026-10-08)
+     * and the public site offered no way to reach it, so a sales person
+     * arriving at skydrop.global could get to the client or the store
+     * portal and neither would ever accept them. Admin is deliberately
+     * absent: nobody comes to the marketing site looking for Skydrop's
+     * own operations console.
+     *
+     * The labels mirror each console's own `portal` line so the link and
+     * the page a visitor lands on agree.
+     */
     signIn: [
-      { href: 'https://client.skydrop.global/login', label: 'Seller sign-in' },
+      { href: 'https://client.skydrop.global/login', label: 'Client sign-in' },
       { href: 'https://member.skydrop.global/login', label: 'Store sign-in' },
+      { href: 'https://associate.skydrop.global/login', label: 'Sales sign-in' },
     ],
     cta: { href: '/request-invite', label: 'Request an invite' },
     track: { href: 'https://track.skydrop.global', label: 'Track a parcel' },
@@ -137,13 +150,13 @@ export const platform = {
     gstInvoice: {
       term: 'GST invoice',
       title: 'GST invoice',
-      body: 'The tax document for a sale into India, issued from your seller account for every delivered order.',
+      body: 'The tax document for a sale into India, issued from your client account for every delivered order.',
     },
     instantPay: {
       term: 'Instant Pay',
       title: 'Instant Pay',
       body: "Your COD credited the moment the parcel is delivered, for a small fee — instead of waiting for the courier's payout.",
-      points: ['Opt in per seller', 'Fee shown before you switch it on'],
+      points: ['Opt in per client', 'Fee shown before you switch it on'],
     },
   },
   /** Section 2 — the four services, one scene each (what the product does, no figures). */
@@ -205,16 +218,16 @@ export const platform = {
   whoWeServe: [
     {
       id: 'sellers',
-      label: 'Sellers',
-      title: 'Bangladeshi e-commerce sellers',
+      label: 'Clients',
+      title: 'Bangladeshi e-commerce clients',
       body: 'Sell to Indian customers with your stock already in India: phone-confirmed COD, same-day dispatch, returns handled, money sent home.',
       hue: 'blue',
     },
     {
       id: 'stores',
-      label: 'Reseller stores',
-      title: "Stores that sell a seller's stock under their own name",
-      body: 'A store logs in to its own portal, sees only what the seller shows it, places orders, and gets its own wallet and reports — the seller decides the terms.',
+      label: 'Member stores',
+      title: "Stores that sell a client's stock under their own name",
+      body: 'A store logs in to its own portal, sees only what the client shows it, places orders, and gets its own wallet and reports — the client decides the terms.',
       hue: 'violet',
     },
     {
@@ -563,8 +576,8 @@ export const platform = {
         links: [
           { href: '/#services', label: 'Send to India' },
           { href: '/#services', label: 'Send to Bangladesh' },
-          { href: '/#platform', label: 'The seller platform' },
-          { href: '/#resellers', label: 'Reseller stores' },
+          { href: '/#platform', label: 'The client platform' },
+          { href: '/#resellers', label: 'Member stores' },
           { href: '/#pricing', label: 'Pricing' },
         ],
       },
@@ -572,8 +585,13 @@ export const platform = {
         title: 'Access',
         links: [
           { href: '/request-invite', label: 'Request an invite' },
-          { href: 'https://client.skydrop.global/login', label: 'Seller sign-in', external: true },
+          { href: 'https://client.skydrop.global/login', label: 'Client sign-in', external: true },
           { href: 'https://member.skydrop.global/login', label: 'Store sign-in', external: true },
+          {
+            href: 'https://associate.skydrop.global/login',
+            label: 'Sales sign-in',
+            external: true,
+          },
           { href: 'https://track.skydrop.global', label: 'Track a parcel', external: true },
         ],
       },
@@ -647,7 +665,7 @@ export const business = {
     ],
   },
   trustCount: dummy(120),
-  trustLine: 'Bangladeshi sellers ship with Skydrop',
+  trustLine: 'Bangladeshi clients ship with Skydrop',
   /**
    * Estimator — ILLUSTRATIVE until the owner supplies the rate cards. One
    * card per DIRECTION, each priced in the currency the sender pays in:
