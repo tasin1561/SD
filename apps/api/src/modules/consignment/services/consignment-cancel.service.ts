@@ -112,7 +112,7 @@ export class ConsignmentCancelService {
               actorType,
               actorId,
               reasonCode: StockMovementReasonCode.RETURNED_TO_SELLER,
-              reason: `Consignment ${consignment.consignmentNumber} cancelled — goods returned to seller`,
+              reason: `Consignment ${consignment.consignmentNumber} cancelled — goods returned to client`,
             });
             unitsReturned += level.qtyOnHand;
             touched.add(`${leg.warehouseId}:${line.variantId}`);

@@ -48,10 +48,10 @@ export class ResellerSetAsideNotifier {
       await this.dispatch.dispatch({
         topic: RESELLER_SET_ASIDE_SHRUNK_TOPIC,
         category: NotificationCategory.OPERATIONAL,
-        title: `Stock set aside for your reseller stores was reduced (${notice.skuCode})`,
+        title: `Stock set aside for your member stores was reduced (${notice.skuCode})`,
         body:
           `Only ${notice.onHand} of ${notice.skuCode} are on hand now, fewer than you had set ` +
-          `aside for your reseller stores, so we reduced the newest set-asides first: ${lines}. ` +
+          `aside for your member stores, so we reduced the newest set-asides first: ${lines}. ` +
           'Nothing else changed — review the stores’ stock settings if you want a different split.',
         channels: [NotificationChannel.IN_APP],
         audience: [

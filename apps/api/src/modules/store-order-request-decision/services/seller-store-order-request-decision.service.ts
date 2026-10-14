@@ -192,7 +192,7 @@ export class SellerStoreOrderRequestDecisionService {
             // says who wanted the order called off.
             actor: { type: ActorType.STORE, id: row.requestedByStoreUserId },
             cancellationReason: row.cancellationReason ?? OrderCancellationReason.SELLER_REQUESTED,
-            note: row.note ?? 'Cancelled at the reseller store’s request',
+            note: row.note ?? 'Cancelled at the member store’s request',
             ctx,
           });
           return { ok: true, ref: null, failure: null, outcome: 'The order has been cancelled.' };

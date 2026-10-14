@@ -143,7 +143,7 @@ export class AccrualExecutionService {
           detail:
             `Charges could not be computed before the accrual, so this order carries none: ` +
             `${message}\n\n` +
-            'The seller is credited for the COD and never invoiced for the delivery. Check the ' +
+            'The client is credited for the COD and never invoiced for the delivery. Check the ' +
             'count — one is a single bad order, and a climbing count means every order through ' +
             'this path is shipping unbilled. "Bill unbilled orders" on /wallets is the catch-up.',
           source: 'AccrualExecutionService',

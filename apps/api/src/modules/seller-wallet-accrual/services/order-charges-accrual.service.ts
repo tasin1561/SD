@@ -65,18 +65,18 @@ export class OrderChargesAccrualService {
       kind: SystemIssueKind.MONEY,
       severity: SystemIssueSeverity.HIGH,
       title: reseller
-        ? "A reseller order's delivery fee could not be re-billed to the seller"
+        ? "A member store order's delivery fee could not be re-billed to the client"
         : 'A delivery fee could not be re-billed',
       detail:
         `This order was billed its delivery fee, refunded it (lost in transit, or called ` +
         `off), and has now been delivered — so the fee is owed again. The database allows ` +
         `only ONE order-charges entry per order, so it cannot be taken automatically and ` +
         `nothing further will try.\n\n` +
-        `Take it by hand on /wallet-transfers as a debit on this seller, with the order ` +
+        `Take it by hand on /wallet-transfers as a debit on this client, with the order ` +
         `number in the reason. ` +
         (reseller
           ? `The STORE's share of the same fee was billed normally — its ledger carries no ` +
-            `such limit — so only the seller's share is outstanding. Everything else the ` +
+            `such limit — so only the client's share is outstanding. Everything else the ` +
             `delivery owed was charged normally.`
           : `Everything else the delivery owed (the COD credit, the inbound-freight share) ` +
             `was charged normally.`),

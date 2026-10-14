@@ -261,7 +261,7 @@ export class ReversePickupBookingService {
       title: 'A customer return was accepted but the collection was not booked',
       detail:
         `The courier did not book a pickup for order ${input.orderId}: ${message}\n\n` +
-        'The order is already marked as returning and the seller has been told, so the goods ' +
+        'The order is already marked as returning and the client has been told, so the goods ' +
         'are sitting with a customer nobody is coming for. Book it by hand in the courier ' +
         'portal, or clear the claim on the parcel so it can be retried — but establish which ' +
         'happened first: a refusal is safe to retry, a lost reply is a second van.',

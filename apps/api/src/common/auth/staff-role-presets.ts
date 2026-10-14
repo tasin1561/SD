@@ -127,9 +127,9 @@ export const STAFF_ROLE_PRESETS: readonly StaffRolePreset[] = [
     key: 'admin',
     name: 'Admin',
     description:
-      'Runs the platform: orders, the warehouse, couriers, sellers and the money that moves ' +
+      'Runs the platform: orders, the warehouse, couriers, clients and the money that moves ' +
       'through it. Can see who has access but not change it, cannot touch our bank ' +
-      'accounts or a seller’s, cannot sign in as a seller, and holds none of the five ' +
+      'accounts or a client’s, cannot sign in as a client, and holds none of the five ' +
       'overrides that bypass an invariant.',
     permissions: ALL_PERMISSION_KEYS.filter((key) => !ADMIN_EXCLUDED.has(key)),
   },
@@ -137,7 +137,7 @@ export const STAFF_ROLE_PRESETS: readonly StaffRolePreset[] = [
     key: 'support',
     name: 'Support',
     description:
-      'Answers for what went wrong: reads orders, parcels, sellers and stores, works the ticket ' +
+      'Answers for what went wrong: reads orders, parcels, clients and stores, works the ticket ' +
       'queue, and can open the system-issues page a problem notification points at. Changes ' +
       'nothing operational.',
     permissions: [

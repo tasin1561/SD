@@ -84,8 +84,8 @@ export class EarlyReservationDecisionService {
         expectedFrom: OrderStatus.AWAITING_SELLER_DECISION,
         reason:
           decision === 'REQUEST_MORE_ATTEMPTS'
-            ? 'Seller asked for more call attempts'
-            : 'Seller released the order after the call cap',
+            ? 'Client asked for more call attempts'
+            : 'Client released the order after the call cap',
         ...(ctx !== undefined ? { ctx } : {}),
       });
       return { review, orderStatus: result.status, orderMoved: true };

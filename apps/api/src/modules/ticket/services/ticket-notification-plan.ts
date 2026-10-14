@@ -260,7 +260,7 @@ export function planTicketNotification(
   if (event.fromStatus === null) {
     const said = ticket.description?.trim() ?? '';
     if (side === 'STORE') {
-      const store = ticket.storeName ?? 'A reseller store';
+      const store = ticket.storeName ?? 'A member store';
       const body = said === '' ? ticket.subject : said;
       // A STORE_ISSUE is the store telling US something. The seller is
       // not party to it, so telling them "a dispute was raised with you"
@@ -271,7 +271,7 @@ export function planTicketNotification(
           seller: null,
           staff: {
             topic: TICKET_SELLER_OPENED_TOPIC,
-            title: `${store} (a reseller store of ${ticket.companyName}) raised ${num} with us: ${ticket.subject}`,
+            title: `${store} (a member store of ${ticket.companyName}) raised ${num} with us: ${ticket.subject}`,
             body: clip(body),
           },
           // Nobody is told about their own act.
@@ -291,7 +291,7 @@ export function planTicketNotification(
         },
         staff: {
           topic: TICKET_SELLER_OPENED_TOPIC,
-          title: `${store} (a reseller store of ${ticket.companyName}) opened dispute ${num}: ${ticket.subject}`,
+          title: `${store} (a member store of ${ticket.companyName}) opened dispute ${num}: ${ticket.subject}`,
           body: clip(body),
         },
         store: null,
@@ -367,7 +367,7 @@ export function planTicketNotification(
   // carried a note. A move with nothing said tells nobody anything new.
   if (note === '') return NOTHING;
   if (side === 'STORE') {
-    const store = ticket.storeName ?? 'The reseller store';
+    const store = ticket.storeName ?? 'The member store';
     // Same rule as the opening: a STORE_ISSUE is ours to answer, so the
     // store's words go to staff and nowhere near the seller.
     if (ticket.ticketType === TicketType.STORE_ISSUE) {
@@ -375,7 +375,7 @@ export function planTicketNotification(
         seller: null,
         staff: {
           topic: TICKET_SELLER_REPLIED_TOPIC,
-          title: `${store} (a reseller store of ${ticket.companyName}) replied on ${num}`,
+          title: `${store} (a member store of ${ticket.companyName}) replied on ${num}`,
           body: clip(note),
         },
         store: null,
@@ -391,7 +391,7 @@ export function planTicketNotification(
       },
       staff: {
         topic: TICKET_SELLER_REPLIED_TOPIC,
-        title: `${store} (a reseller store of ${ticket.companyName}) replied on dispute ${num}`,
+        title: `${store} (a member store of ${ticket.companyName}) replied on dispute ${num}`,
         body: clip(note),
       },
       store: null,

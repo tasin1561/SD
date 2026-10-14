@@ -105,7 +105,7 @@ export class CourierEscalationWatchService {
           `A message for ${desk.courierName} about ${parcel} was queued on ` +
           `${item.createdAt.toISOString().slice(0, 16)} and has not been sent. No courier accepts ` +
           'support messages from software, so a person has to raise it by hand — until then the ' +
-          'seller believes it has been reported and nothing is carrying it.\n\n' +
+          'client believes it has been reported and nothing is carrying it.\n\n' +
           `${desk.howTo} ${contact}\n\n` +
           'Open Courier escalation → Send queue, send it, and mark it sent with their ticket ' +
           'number. This clears itself once the message leaves the queue.',

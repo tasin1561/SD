@@ -113,7 +113,7 @@ export const STORE_PERMISSIONS = [
     key: 'terms.view',
     label: 'See the client’s terms',
     description:
-      'Who pays which Skydrop fee on this store’s orders, when the store and the seller are credited, and every earlier version.',
+      'Who pays which Skydrop fee on this store’s orders, when the store and the client are credited, and every earlier version.',
     group: 'Terms',
   },
   {
@@ -187,7 +187,7 @@ export const STORE_PERMISSIONS = [
     key: 'orders.actions',
     label: 'Act on live orders',
     description:
-      'Ask for the customer to be called again, for another delivery attempt, or for a parcel to be sent back. What goes straight through and what waits for the seller is the seller’s setting.',
+      'Ask for the customer to be called again, for another delivery attempt, or for a parcel to be sent back. What goes straight through and what waits for the client is the client’s setting.',
     group: 'Orders',
   },
   {
@@ -249,14 +249,14 @@ export const STORE_PERMISSIONS = [
     key: 'tickets.view',
     label: 'See disputes',
     description:
-      'The disputes this store has raised with its seller about an order, and how Skydrop settled them.',
+      'The disputes this store has raised with its client about an order, and how Skydrop settled them.',
     group: 'Support',
   },
   {
     key: 'tickets.manage',
     label: 'Raise disputes',
     description:
-      'Raise a dispute with the seller about one of this store’s orders, and reply on it. Skydrop referees; a settlement moves money between the store and the seller.',
+      'Raise a dispute with the client about one of this store’s orders, and reply on it. Skydrop referees; a settlement moves money between the store and the client.',
     group: 'Support',
   },
 ] as const satisfies readonly StorePermissionDef[];

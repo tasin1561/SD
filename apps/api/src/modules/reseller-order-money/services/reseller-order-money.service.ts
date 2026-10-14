@@ -488,7 +488,7 @@ export class ResellerOrderMoneyService {
         amount: split.sellerInr,
         linkedOrderId: orderId,
         actorType: ActorType.SYSTEM,
-        note: `Order charges — your share of ${parts.join(', ')} on reseller order ${head.orderNumber} (the store pays ${split.storePercent.toFixed(2)}%)`,
+        note: `Order charges — your share of ${parts.join(', ')} on member store order ${head.orderNumber} (the store pays ${split.storePercent.toFixed(2)}%)`,
       });
       wrote = true;
     }
@@ -657,7 +657,7 @@ export class ResellerOrderMoneyService {
         amount: split.sellerInr,
         linkedOrderId: input.orderId,
         actorType: ActorType.SYSTEM,
-        note: `${what} — your share on reseller order ${head.orderNumber} (the store pays ${split.storePercent.toFixed(2)}%)`,
+        note: `${what} — your share on member store order ${head.orderNumber} (the store pays ${split.storePercent.toFixed(2)}%)`,
       });
     }
     if (split.storeInr.greaterThan(0)) {
@@ -820,7 +820,7 @@ export class ResellerOrderMoneyService {
         amount: seller.grossInr,
         linkedOrderId: head.id,
         actorType: ActorType.SYSTEM,
-        note: `Prepaid order ${head.orderNumber} — the goods at the seller’s transfer price`,
+        note: `Prepaid order ${head.orderNumber} — the goods at the client’s transfer price`,
       });
     }
     const { total } = await this.deliveryCharges(tx, head.id);
@@ -1391,14 +1391,14 @@ export class ResellerOrderMoneyService {
         await this.issues.raise({
           kind: SystemIssueKind.MONEY,
           severity: SystemIssueSeverity.HIGH,
-          title: 'A reseller order could not be re-credited after a courier reversal',
+          title: 'A member store order could not be re-credited after a courier reversal',
           detail:
             `The courier reversed its payment on this order and has now paid it again, so ` +
             `the credit is owed again. The database allows only ONE of each COD deduction ` +
             `per order (${refused.join(', ')}), and a courier reversal does not clear them, ` +
             `so the credit cannot be re-written automatically and nothing further will try.\n\n` +
             `THE REST OF THE PAYOUT WAS RECORDED NORMALLY — this order alone is outstanding. ` +
-            `Settle it by hand on /wallet-transfers as a credit to this seller (and to the ` +
+            `Settle it by hand on /wallet-transfers as a credit to this client (and to the ` +
             `store, if its share is also owed), with the order number in the reason.`,
           source: 'ResellerOrderMoneyService',
           dedupeKey: `reseller-credit-not-rewritable:${input.orderId}`,
@@ -1620,7 +1620,7 @@ export class ResellerOrderMoneyService {
           amount: row.grossInr,
           linkedOrderId: head.id,
           actorType: ActorType.SYSTEM,
-          note: `Prepaid reseller order ${order} — the goods at your transfer price`,
+          note: `Prepaid member store order ${order} — the goods at your transfer price`,
         });
       }
       return;
@@ -1763,7 +1763,7 @@ export class ResellerOrderMoneyService {
           sellerId: head.sellerId,
           amount: r.take,
           reference: r.reversalEntryId ?? head.id,
-          note: `Reseller order ${head.orderNumber} credit taken back — ${note}`,
+          note: `Member store order ${head.orderNumber} credit taken back — ${note}`,
         });
       }
       await this.audit.log(
@@ -1823,7 +1823,7 @@ export class ResellerOrderMoneyService {
         linkedOrderId: head.id,
         linkedEntryId: credit.id,
         actorType: ActorType.SYSTEM,
-        note: `Prepaid reseller order ${order} — transfer price taken back: ${note}`,
+        note: `Prepaid member store order ${order} — transfer price taken back: ${note}`,
       });
       // TO_CAPITAL in the F2 switch — its own cash, no take.
       return { gross: credit.amount, take: ZERO, reversalEntryId: e.id };
@@ -1932,7 +1932,7 @@ export class ResellerOrderMoneyService {
         linkedOrderId: head.id,
         linkedEntryId: credit.id,
         actorType: ActorType.SYSTEM,
-        note: `Reseller order ${order} — transfer price taken back: ${note}`,
+        note: `Member store order ${order} — transfer price taken back: ${note}`,
       });
       reversalId = e.id;
     }
@@ -1961,7 +1961,7 @@ export class ResellerOrderMoneyService {
         linkedOrderId: head.id,
         linkedEntryId: d.id,
         actorType: ActorType.SYSTEM,
-        note: `Returned: ${d.direction.toLowerCase().replace(/_/g, ' ')} on a reversed reseller COD`,
+        note: `Returned: ${d.direction.toLowerCase().replace(/_/g, ' ')} on a reversed COD on a member store order`,
       });
     }
     const gross = credit?.amount ?? ZERO;
@@ -2053,8 +2053,8 @@ export class ResellerOrderMoneyService {
       actorType: ActorType.STAFF,
       actorId: input.staffId,
       note: storePays
-        ? `Dispute ${input.ticketNumber} settled — paid to you by the reseller store`
-        : `Dispute ${input.ticketNumber} settled — paid by you to the reseller store`,
+        ? `Dispute ${input.ticketNumber} settled — paid to you by the member store`
+        : `Dispute ${input.ticketNumber} settled — paid by you to the member store`,
     });
     const store = await this.storeWallet.applyEntry(tx, {
       storeId: input.storeId,
@@ -2068,8 +2068,8 @@ export class ResellerOrderMoneyService {
       actorType: ActorType.STAFF,
       actorId: input.staffId,
       note: storePays
-        ? `Dispute ${input.ticketNumber} settled — paid by you to the seller`
-        : `Dispute ${input.ticketNumber} settled — paid to you by the seller`,
+        ? `Dispute ${input.ticketNumber} settled — paid by you to the client`
+        : `Dispute ${input.ticketNumber} settled — paid to you by the client`,
     });
     return { sellerEntryId: seller.id, storeEntryId: store.id };
   }

@@ -528,7 +528,7 @@ export class OrderPostCommitHooksService {
         ? 'No party has been paid yet on our reading of the credits.'
         : paid
             .map(
-              (c) => `${c.party === 'STORE' ? 'The store' : 'The seller'} was paid ₹${c.netInr}.`,
+              (c) => `${c.party === 'STORE' ? 'The store' : 'The client'} was paid ₹${c.netInr}.`,
             )
             .join(' ');
     await this.issues.raise({
@@ -536,7 +536,7 @@ export class OrderPostCommitHooksService {
       severity: SystemIssueSeverity.HIGH,
       title: `${orderNumber}: the order and the money behind it no longer agree`,
       detail:
-        `This reseller order was changed after its money had already been paid out, so the ` +
+        `This member store order was changed after its money had already been paid out, so the ` +
         `credits behind it could not be re-worked-out (${code}).\n\n` +
         `${said}\n\n` +
         'The order now says one thing and the wallets say another, and only a person can ' +
@@ -562,7 +562,7 @@ export class OrderPostCommitHooksService {
       severity: SystemIssueSeverity.HIGH,
       title: `${orderNumber}: changed, but its money was not re-worked-out`,
       detail:
-        'This reseller order changed in a way that moves what the store and the seller are ' +
+        'This member store order changed in a way that moves what the store and the client are ' +
         `credited, and re-pricing it failed: ${error}\n\n` +
         'The order and the credits planned behind it disagree until it succeeds, and the ' +
         'stale figures are what would be paid. The hourly sweep asks again and this clears ' +
@@ -722,9 +722,9 @@ export class OrderPostCommitHooksService {
         detail:
           `The order was confirmed but its shipment could not be created: ${error}\n\n` +
           'Every queue that moves a parcel — the AWB booking, printing, the pick list — ' +
-          'selects on a shipment, so this order is invisible to all of them while the seller ' +
+          'selects on a shipment, so this order is invisible to all of them while the client ' +
           'believes it is on its way. The hourly sweep retries the provision and clears this ' +
-          "once it works; if it keeps failing, fix the cause (usually the seller's " +
+          "once it works; if it keeps failing, fix the cause (usually the client's " +
           'ops.default_courier_code override or the default warehouse setting).',
         source: 'OrderPostCommitHooksService',
         dedupeKey: shipmentMissingIssueKey(orderId),

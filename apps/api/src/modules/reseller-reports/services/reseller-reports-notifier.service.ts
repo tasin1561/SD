@@ -37,7 +37,7 @@ export class ResellerReportsNotifier {
       await this.dispatch.dispatch({
         topic: RESELLER_STORE_AUTO_PAUSED_TOPIC,
         category: NotificationCategory.OPERATIONAL,
-        title: `Reseller store “${notice.storeName}” was paused for too many returns`,
+        title: `Member store “${notice.storeName}” was paused for too many returns`,
         body:
           `${notice.returned} of ${notice.decided} of its parcels with a known outcome in the last ` +
           `${notice.windowDays} days came back (${notice.returnRatePct}%), over the ${notice.limitPct}% ` +
@@ -77,10 +77,10 @@ export class ResellerReportsNotifier {
       await this.dispatch.dispatch({
         topic: RESELLER_STOCK_REORDER_TOPIC,
         category: NotificationCategory.OPERATIONAL,
-        title: `${notice.items.length} product${notice.items.length === 1 ? '' : 's'} your reseller stores sell will run low`,
+        title: `${notice.items.length} product${notice.items.length === 1 ? '' : 's'} your member stores sell will run low`,
         body:
           `At the rate they sold recently, stock of ${shown}${more} lasts fewer than ` +
-          `${notice.reorderDays} days. Send more stock, or see the forecast on Reseller stores → Stock forecast.`,
+          `${notice.reorderDays} days. Send more stock, or see the forecast on Member stores → Stock forecast.`,
         channels: [NotificationChannel.IN_APP],
         audience: [
           { kind: 'SELLER_PERMISSION', sellerId: notice.sellerId, permission: 'stores.reports' },

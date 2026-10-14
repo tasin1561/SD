@@ -249,7 +249,7 @@ export class PortalTicketSyncService {
                 : '') +
               'Replies were still collected for the tickets that WERE seen. What was withheld ' +
               'is closing: a ticket missing from a half-read list looks closed, and acting on ' +
-              "that would close every seller's ticket at once. A login challenge is the usual " +
+              "that would close every client's ticket at once. A login challenge is the usual " +
               'cause — check the portal session.',
             source: 'PortalTicketSyncService',
             dedupeKey: `portal-ticket-scan-partial:${accountId ?? 'default'}`,
@@ -271,7 +271,7 @@ export class PortalTicketSyncService {
         title: 'Courier replies are not being collected',
         detail:
           `The sweep that reads Delhivery's support tickets could not run: ${message}\n\n` +
-          'While this persists, sellers who raised an issue see no reply and a ticket they ' +
+          'While this persists, clients who raised an issue see no reply and a ticket they ' +
           'have closed stays open here. Check the portal session on /courier-escalation — a ' +
           'login challenge is the usual cause.',
         source: 'PortalTicketSyncService',

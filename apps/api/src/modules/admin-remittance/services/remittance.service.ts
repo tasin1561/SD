@@ -164,7 +164,7 @@ export class RemittanceService {
             `The money was sent and recorded. Closing the matching withdrawal request then ` +
             `failed: ${message}\n\n` +
             'Until somebody closes it by hand, that request still reads as owed — which is how ' +
-            'the same payout goes out a second time. Open the seller on /withdrawals, check it ' +
+            'the same payout goes out a second time. Open the client on /withdrawals, check it ' +
             'against this remittance, and mark it paid.',
           source: 'RemittanceService',
           dedupeKey: `remittance-withdrawal-unclosed:${remittanceId}`,
@@ -456,7 +456,7 @@ export class RemittanceService {
                 occurredAt: paidAt,
                 reference,
                 staffId: actor.staffId,
-                note: 'Paid out to the seller',
+                note: 'Paid out to the client',
                 inrBookValue: bookHere.neg(),
                 ...onPayout,
               },
@@ -474,7 +474,7 @@ export class RemittanceService {
                 occurredAt: paidAt,
                 reference,
                 staffId: actor.staffId,
-                note: 'Paid out to the seller from our money here — their money elsewhere becomes ours',
+                note: 'Paid out to the client from our money here — their money elsewhere becomes ours',
                 ...onPayout,
               },
               tx,

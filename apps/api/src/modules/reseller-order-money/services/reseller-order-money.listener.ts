@@ -174,9 +174,9 @@ export class ResellerOrderMoneyListener implements OnApplicationBootstrap, OnMod
         severity: SystemIssueSeverity.HIGH,
         title: `${head.orderNumber}: the order moved and its money did not`,
         detail:
-          `This reseller order went to ${event.to.toLowerCase().replaceAll('_', ' ')} and the ` +
+          `This member store order went to ${event.to.toLowerCase().replaceAll('_', ' ')} and the ` +
           `money that goes with it failed: ${error}\n\n` +
-          'Depending on which step it was, the store and the seller may not have been credited ' +
+          'Depending on which step it was, the store and the client may not have been credited ' +
           'at all, a prepaid debit may not have been taken or given back, or a credit that ' +
           'should have been reversed is still standing. Every step is idempotent, so the fix is ' +
           'to re-run it once the cause is dealt with; this clears itself the next time any ' +

@@ -657,7 +657,7 @@ export class SellerCashAttributionService {
       fromSeller: input.amount,
       ...(input.inrValue === undefined ? {} : { inrValue: input.inrValue }),
       walletEntryId: input.reference,
-      note: 'Repays what the seller owed — cash now ours',
+      note: 'Repays what the client owed — cash now ours',
     });
   }
 

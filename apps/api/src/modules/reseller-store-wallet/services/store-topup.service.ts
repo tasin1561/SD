@@ -475,7 +475,7 @@ export class StoreTopupService {
           staffId,
           occurredAt: new Date(),
           reference: existing.transactionRef ?? existing.id,
-          note: `Reseller store top-up verified — ${store.displayName ?? store.name}`,
+          note: `Member store top-up verified — ${store.displayName ?? store.name}`,
         },
         tx,
       );

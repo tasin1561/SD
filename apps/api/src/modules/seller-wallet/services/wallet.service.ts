@@ -167,7 +167,7 @@ export class WalletService {
         input.direction === WalletEntryDirection.STAFF_DEBIT) &&
       (input.note ?? '').trim() === ''
     ) {
-      throw new Error(`WALLET_NOTE_REQUIRED: a staff transfer carries the reason the seller reads`);
+      throw new Error(`WALLET_NOTE_REQUIRED: a staff transfer carries the reason the client reads`);
     }
 
     // ── Serialize every write to THIS wallet ──────────────────────────

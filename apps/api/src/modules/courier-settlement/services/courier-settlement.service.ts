@@ -1229,7 +1229,7 @@ export class CourierSettlementService {
             reference: settlement.reference,
             settlementId: settlement.id,
             staffId,
-            note: `Reattributed to sellers on ${settlement.reference}`,
+            note: `Reattributed to clients on ${settlement.reference}`,
           },
           tx,
         );

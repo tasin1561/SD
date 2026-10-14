@@ -165,7 +165,7 @@ export class OrderDeliveredAccrualListener implements OnApplicationBootstrap, On
         detail:
           `This order reached DELIVERED and the money that goes with it failed: ${error}\n\n` +
           'Depending on how far it got, the delivery charge may not have been taken, an Instant ' +
-          'Pay seller may not have been credited their COD, and the inbound-freight share of the ' +
+          'Pay client may not have been credited their COD, and the inbound-freight share of the ' +
           'units that left may still be owed. Every step is idempotent under the wallet lock, so ' +
           'the fix is to re-run it; this clears itself once the delivery-time money runs.',
         source: 'OrderDeliveredAccrualListener',

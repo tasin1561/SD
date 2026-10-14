@@ -450,7 +450,7 @@ describe('DeliveryActionService — final writes are guarded on APPROVED (2026-0
     });
     expect(sut.issues.raise).toHaveBeenCalledWith(
       expect.objectContaining({
-        title: 'A reseller store asked to return a parcel and the courier refused',
+        title: 'A member store asked to return a parcel and the courier refused',
       }),
     );
   });

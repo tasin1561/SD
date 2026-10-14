@@ -431,7 +431,7 @@ export class StorePnlPeriodService {
         failures += 1;
         this.logger.warn(
           { storeId: s.id, err: err instanceof Error ? err.message : String(err) },
-          'Could not close a reseller store month; retried on the next run',
+          'Could not close a member store month; retried on the next run',
         );
       }
     }
@@ -453,7 +453,7 @@ export class StorePnlPeriodService {
         failures += 1;
         this.logger.warn(
           { storeId, err: err instanceof Error ? err.message : String(err) },
-          'Could not detect carry-forwards for a reseller store',
+          'Could not detect carry-forwards for a member store',
         );
       }
     }

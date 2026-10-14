@@ -293,7 +293,7 @@ export const SELLER_PERMISSIONS = [
     key: 'stores.manage',
     label: 'Manage member stores',
     description:
-      'Open a reseller store, approve or reject one Skydrop opened for you, pause, resume or close it, choose who manages its wallet, and invite its team.',
+      'Open a member store, approve or reject one Skydrop opened for you, pause, resume or close it, choose who manages its wallet, and invite its team.',
     group: 'Member stores',
     sensitive: true,
   },
@@ -301,7 +301,7 @@ export const SELLER_PERMISSIONS = [
     key: 'stores.pricing',
     label: 'Set member store prices and terms',
     description:
-      'Publish a reseller store’s terms — who pays which Skydrop fee and when each side is credited — and, with reseller pricing, which products a store may sell, at what price and how stock is shared.',
+      'Publish a member store’s terms — who pays which Skydrop fee and when each side is credited — and, with member store pricing, which products a store may sell, at what price and how stock is shared.',
     group: 'Member stores',
     sensitive: true,
   },
@@ -309,7 +309,7 @@ export const SELLER_PERMISSIONS = [
     key: 'stores.wallet',
     label: 'Manage member store wallets',
     description:
-      'See each reseller store’s wallet; for a store whose wallet you manage, top it up from your own wallet and record paying it; and set how far below zero a store may go.',
+      'See each member store’s wallet; for a store whose wallet you manage, top it up from your own wallet and record paying it; and set how far below zero a store may go.',
     group: 'Member stores',
     sensitive: true,
   },
@@ -336,7 +336,7 @@ export const SELLER_PERMISSIONS = [
     key: 'stores.order_money.view',
     label: 'See what a member store order earns you',
     description:
-      'On an order one of your reseller stores placed: the transfer price the store pays you, ' +
+      'On an order one of your member stores placed: the transfer price the store pays you, ' +
       'your share of each Skydrop fee, and when each side is credited. It is your margin on ' +
       'that sale, so it is separate from simply reading the order.',
     group: 'Member stores',
@@ -350,7 +350,7 @@ export const SELLER_PERMISSIONS = [
     key: 'stores.reports',
     label: 'See member store reports',
     description:
-      'Each reseller store’s scorecard (delivery, return, confirmation and cancel rates, units, margin) and balance, the transfer revenue it brought you, stores ranked by profit, and how long your stock will last.',
+      'Each member store’s scorecard (delivery, return, confirmation and cancel rates, units, margin) and balance, the transfer revenue it brought you, stores ranked by profit, and how long your stock will last.',
     group: 'Member stores',
     sensitive: true,
   },
@@ -474,7 +474,7 @@ export const DEFAULT_SELLER_ROLES: ReadonlyArray<{
     key: 'member',
     name: 'Member',
     description:
-      'Runs the business day to day, including the reseller channel. Everything except changing who can get in, and everything except moving money out.',
+      'Runs the business day to day, including the member store channel. Everything except changing who can get in, and everything except moving money out.',
     permissions: [
       // 1–3. Orders: place one, place a day of them, and follow them.
       'orders.view',

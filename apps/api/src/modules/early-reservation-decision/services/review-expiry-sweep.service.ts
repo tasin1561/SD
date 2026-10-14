@@ -243,7 +243,7 @@ export class ReviewExpirySweepService {
       to: OrderStatus.REJECTED_NDR,
       actor: { type: ActorType.SYSTEM },
       expectedFrom: OrderStatus.AWAITING_SELLER_DECISION,
-      reason: 'Seller did not answer the call-cap review within the TTL',
+      reason: 'Client did not answer the call-cap review within the TTL',
     });
   }
 

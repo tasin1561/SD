@@ -419,7 +419,7 @@ export class PortalDispatcherService {
         `The automated raise for AWB ${awbNumber} did not go through: ${reason}\n\n` +
         'The ticket is now marked MANUAL, so it shows on /tickets under the manual filter. ' +
         "Raise it on Delhivery's portal by hand and record the ticket id on the escalation " +
-        'so their replies thread back to the seller.',
+        'so their replies thread back to the client.',
       source: 'PortalDispatcherService',
       dedupeKey: `courier-raise-manual:${ticketId}`,
       metadata: { ticketId, awbNumber, reason },

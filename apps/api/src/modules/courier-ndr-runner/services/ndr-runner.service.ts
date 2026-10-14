@@ -285,7 +285,7 @@ export class NdrRunnerService {
           attemptCount: -1,
           action: 'RE-ATTEMPT',
           disposition: 'NOT_ENABLED_FOR_SELLER',
-          reason: 'this seller has automatic re-attempts switched off',
+          reason: 'this client has automatic re-attempts switched off',
         });
         continue;
       }
@@ -367,7 +367,7 @@ export class NdrRunnerService {
           attemptCount: fresh.attemptCount,
           action,
           disposition: 'HELD_NOT_ON_AUTO_LIST',
-          reason: 'action is not in courier.ndr_auto_categories (as narrowed for this seller)',
+          reason: 'action is not in courier.ndr_auto_categories (as narrowed for this client)',
         });
         await this.audit.log({
           actorType: ActorType.SYSTEM,
@@ -381,7 +381,7 @@ export class NdrRunnerService {
             nslCode: fresh.nslCode,
             attemptCount: fresh.attemptCount,
             sellerId: c.sellerId,
-            reason: 'action is not in courier.ndr_auto_categories (as narrowed for this seller)',
+            reason: 'action is not in courier.ndr_auto_categories (as narrowed for this client)',
           },
         });
         continue;

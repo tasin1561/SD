@@ -210,7 +210,7 @@ export const PERMISSIONS = [
     key: 'notifications.broadcast',
     label: 'Send a broadcast',
     description:
-      'Send a message to an audience — every seller, a role, everyone holding a permission. It cannot be recalled, so this is separate from reading your own inbox.',
+      'Send a message to an audience — every client, a role, everyone holding a permission. It cannot be recalled, so this is separate from reading your own inbox.',
     group: 'System',
   },
   {
@@ -318,7 +318,7 @@ export const PERMISSIONS = [
     key: 'courier.accounts.view',
     label: 'View courier accounts',
     description:
-      'Which accounts exist and which sellers route to them. Credentials are never shown.',
+      'Which accounts exist and which clients route to them. Credentials are never shown.',
     group: 'Couriers',
   },
   {
@@ -394,7 +394,7 @@ export const PERMISSIONS = [
     key: 'sellers.settings.manage',
     label: 'Override a client’s settings',
     description:
-      'Give one seller different behaviour from the global default — call attempts, fees, accrual timing.',
+      'Give one client different behaviour from the global default — call attempts, fees, accrual timing.',
     group: 'Clients',
   },
   {
@@ -421,7 +421,7 @@ export const PERMISSIONS = [
     key: 'sellers.bank_change.approve',
     label: 'Approve a change of bank account',
     description:
-      'Decide whether a seller may move where their money is sent. Approving redirects their withdrawals; rejecting requires a reason the seller reads.',
+      'Decide whether a client may move where their money is sent. Approving redirects their withdrawals; rejecting requires a reason the client reads.',
     group: 'Clients',
     dangerous: true,
   },
@@ -436,7 +436,7 @@ export const PERMISSIONS = [
     key: 'reseller.stores.manage',
     label: 'Open a member store for a client',
     description:
-      'Create a reseller store on a seller’s account. It waits for the seller to approve or reject it; nothing about it is live until they do.',
+      'Create a member store on a client’s account. It waits for the client to approve or reject it; nothing about it is live until they do.',
     group: 'Clients',
   },
   {
@@ -447,7 +447,7 @@ export const PERMISSIONS = [
     key: 'reseller.stores.pause',
     label: 'Pause a member store',
     description:
-      'Stop a reseller store placing new orders — for example on a fraud signal. Orders already placed carry on; only the seller can resume it.',
+      'Stop a member store placing new orders — for example on a fraud signal. Orders already placed carry on; only the client can resume it.',
     group: 'Clients',
     dangerous: true,
   },
@@ -455,7 +455,7 @@ export const PERMISSIONS = [
     key: 'reseller.credit_after_confirmation.enable',
     label: 'Allow credit after confirmation for a client',
     description:
-      'Switch on, for one seller, reseller-store terms that credit a party N days after the order is confirmed — money fronted before the customer pays. Switching it off flags stores whose terms still use it.',
+      'Switch on, for one client, member-store terms that credit a party N days after the order is confirmed — money fronted before the customer pays. Switching it off flags stores whose terms still use it.',
     group: 'Clients',
     dangerous: true,
   },
@@ -491,7 +491,7 @@ export const PERMISSIONS = [
     key: 'money.wallets.bill_unbilled',
     label: 'Bill orders that were never charged',
     description:
-      'Charge delivered or returned orders whose carriage was never taken — a real debit against a real seller balance. Deliberately NOT money.wallets.reconcile, which says in its own description that it cannot move money.',
+      'Charge delivered or returned orders whose carriage was never taken — a real debit against a real client balance. Deliberately NOT money.wallets.reconcile, which says in its own description that it cannot move money.',
     group: 'Money',
     dangerous: true,
   },
@@ -499,7 +499,7 @@ export const PERMISSIONS = [
     key: 'money.topups.review',
     label: 'Accept or reject a top-up',
     description:
-      'Confirm a seller’s bank transfer actually arrived. Accepting credits their wallet immediately.',
+      'Confirm a client’s bank transfer actually arrived. Accepting credits their wallet immediately.',
     group: 'Money',
     dangerous: true,
   },
@@ -596,7 +596,7 @@ export const PERMISSIONS = [
     key: 'fx.manage',
     label: 'Set an exchange rate',
     description:
-      'Override the INR/BDT rate by hand. Every figure shown to a Bangladeshi seller is converted through it.',
+      'Override the INR/BDT rate by hand. Every figure shown to a Bangladeshi client is converted through it.',
     group: 'Pricing',
     dangerous: true,
   },
@@ -646,7 +646,7 @@ export const PERMISSIONS = [
     key: 'support.impersonate',
     label: 'Sign in as a client or a store',
     description:
-      'Open a support session inside a seller’s or a reseller store’s account and see exactly what they see. Read-only on its own, and every session is recorded with who, as whom, for how long and why.',
+      'Open a support session inside a client’s or a member store’s account and see exactly what they see. Read-only on its own, and every session is recorded with who, as whom, for how long and why.',
     group: 'System',
     dangerous: true,
   },
@@ -690,7 +690,7 @@ export const PERMISSIONS = [
     key: 'system.settings.manage',
     label: 'Change system settings',
     description:
-      'Edit that configuration. A single value here changes behaviour for every seller at once.',
+      'Edit that configuration. A single value here changes behaviour for every client at once.',
     group: 'System',
     dangerous: true,
   },

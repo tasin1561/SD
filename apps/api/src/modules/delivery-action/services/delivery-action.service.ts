@@ -544,9 +544,9 @@ export class DeliveryActionService {
           ? { decisionNote: `Courier refused: ${message}`.slice(0, 500) }
           : {}),
       });
-      // Name who actually asked: a reseller store's send-back is not the
-      // seller's, and whoever picks this up rings a different party.
-      const asker = who.store === undefined ? 'seller' : 'reseller store';
+      // Name who actually asked: a member store's send-back is not the
+      // client's, and whoever picks this up rings a different party.
+      const asker = who.store === undefined ? 'client' : 'member store';
       // The NUMBER, not the id. This lands on `/system-issues`, whose
       // whole job is to say which order needs a person — and a uuid is
       // not something anybody can type into a search box or read down a

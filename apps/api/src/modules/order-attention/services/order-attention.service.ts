@@ -642,14 +642,14 @@ export class OrderAttentionService {
             'stopped asking: a refusal is an opinion about this parcel and it will be the same ' +
             'opinion tomorrow. Nothing else will move this order.\n\n' +
             'Open it, read the last AWB error on the shipment, and either fix what the courier ' +
-            'objected to or place it with another courier by hand. Until then the seller ' +
+            'objected to or place it with another courier by hand. Until then the client ' +
             'believes it is on its way.'
           : 'This order was confirmed and its stock reserved, but no courier has issued a ' +
             'waybill for it and a retry just now did not get one either. Nothing downstream ' +
             'will move it, and if it has already been picked and packed it will sit at the ' +
             'handover bench with no label to scan — the confirmation-time attempt does not ' +
             'repeat on its own.\n\n' +
-            'The seller believes this order is on its way. Open the order, read the last AWB ' +
+            'The client believes this order is on its way. Open the order, read the last AWB ' +
             'error on the shipment, and either fix what the courier objected to or place it ' +
             'manually.',
         source: 'OrderAttentionService',
@@ -719,8 +719,8 @@ export class OrderAttentionService {
             `This order is ${o.status.toLowerCase().replaceAll('_', ' ')} but has no live ` +
             `shipment, and creating one just now failed: ${error}\n\n` +
             'Every queue that moves a parcel selects on a shipment, so this order is invisible ' +
-            'to all of them while the seller believes it is on its way. This retries every ' +
-            "hour; fix the cause (usually the seller's ops.default_courier_code override or the " +
+            'to all of them while the client believes it is on its way. This retries every ' +
+            "hour; fix the cause (usually the client's ops.default_courier_code override or the " +
             'default warehouse setting) and it clears itself.',
           source: 'OrderAttentionService',
           dedupeKey: key,
@@ -856,7 +856,7 @@ export class OrderAttentionService {
         `The delivery and/or return fee is agreed in a currency whose rate has not been ` +
         `updated recently, so every parcel is being charged from it: ${stale.join('; ')}.\n\n` +
         'Nothing fetches rates automatically, so this only changes when somebody sets it on ' +
-        'the FX screen. Until then sellers are billed at the old rate — not wrong exactly, ' +
+        'the FX screen. Until then clients are billed at the old rate — not wrong exactly, ' +
         'but not current either. This clears itself once the rate is updated.',
       source: 'OrderAttentionService',
       dedupeKey: staleFeeFxRateKey(),
@@ -1007,7 +1007,7 @@ export class OrderAttentionService {
         detail:
           `The courier has moved ${link.shipment.shipmentNumber} to ${link.shipment.status}, but ` +
           `the order is ${link.order.status} and there is no route between them — so every scan ` +
-          `arriving for this parcel is being dropped, and the seller is being told something ` +
+          `arriving for this parcel is being dropped, and the client is being told something ` +
           `that is no longer true.\n\n` +
           `This is not a stale scan: the order has never been ${target}. It is a missing edge ` +
           `between the tracking mapping (TrackingStatusMappingService) and the order state ` +
@@ -1069,12 +1069,12 @@ export class OrderAttentionService {
         severity: SystemIssueSeverity.HIGH,
         title: `${order.orderNumber}: the courier accepted a return that never started`,
         detail:
-          `The seller asked for this parcel back on ${since.toISOString().slice(0, 16)} and the ` +
+          `The client asked for this parcel back on ${since.toISOString().slice(0, 16)} and the ` +
           `courier accepted, but ${hours}h later there is still no return scan — the order is ` +
           `${order.status.toLowerCase().replaceAll('_', ' ')}.\n\n` +
-          'The seller believes their goods are coming back. Either the parcel was already too ' +
+          'The client believes their goods are coming back. Either the parcel was already too ' +
           'far along to stop and is still being delivered, or the cancellation was accepted and ' +
-          'dropped. Check the AWB in the courier portal and tell the seller which it is.',
+          'dropped. Check the AWB in the courier portal and tell the client which it is.',
         source: 'OrderAttentionService',
         dedupeKey: key,
         metadata: {
@@ -1207,7 +1207,7 @@ export class OrderAttentionService {
           `${ship.awbNumber ?? ship.shipmentNumber} was marked returned by the courier on ` +
           `${returnedAt.toISOString().slice(0, 16)}, and ${hours}h later it still has not ` +
           `been received at the warehouse — so the order is stuck at ` +
-          `${order.status.toLowerCase().replaceAll('_', ' ')} and the seller is being told their ` +
+          `${order.status.toLowerCase().replaceAll('_', ' ')} and the client is being told their ` +
           'goods are still on their way back.\n\n' +
           'Nothing moves this on its own: a return becomes RTO_RECEIVED only when somebody ' +
           'receives it at the bench, deliberately, because that is what starts the restock or ' +

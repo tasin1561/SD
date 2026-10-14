@@ -196,7 +196,7 @@ export function evaluateFraud(
         value: `${shared.length} customer${shared.length === 1 ? '' : 's'}`,
         threshold: `${t.sharedPhoneStores} stores`,
         reason:
-          `${shared.length} customer phone number(s) on this store’s orders also ordered from other reseller stores ${within} — ` +
+          `${shared.length} customer phone number(s) on this store’s orders also ordered from other member stores ${within} — ` +
           shared
             .slice(0, 5)
             .map((p) => `${p.masked} (${p.stores} stores)`)

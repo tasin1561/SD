@@ -75,9 +75,9 @@ export class ResellerSweepsService {
         // back from 2x to 1x is still flagged and is genuinely less
         // urgent than it was, so this key may go quieter.
         severityMayFall: true,
-        title: `Reseller store “${f.storeName}”: ${RULE_TITLES[f.rule]}`,
+        title: `Member store “${f.storeName}”: ${RULE_TITLES[f.rule]}`,
         detail:
-          `${f.reason} Seller: ${f.sellerName}. Look at the store on Reseller stores → Analysis; ` +
+          `${f.reason} Client: ${f.sellerName}. Look at the store on Member stores → Analysis; ` +
           'pause it there if it is not explained. This clears itself once the signal is back under its threshold.',
         source: ResellerSweepsService.name,
         dedupeKey: key,

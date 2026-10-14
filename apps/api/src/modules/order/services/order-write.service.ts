@@ -508,7 +508,7 @@ export class OrderWriteService {
       to: OrderStatus.CANCELLED,
       actor: input.actor,
       cancellationReason: input.cancellationReason ?? OrderCancellationReason.SELLER_REQUESTED,
-      reason: input.note ?? 'Cancelled by seller',
+      reason: input.note ?? 'Cancelled by client',
       ...(input.ctx ? { ctx: input.ctx } : {}),
     });
   }

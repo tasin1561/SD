@@ -313,7 +313,7 @@ export class UnpayableWithdrawalService {
             severity: SystemIssueSeverity.HIGH,
             title: `Approved withdrawal of ${money(a.currency, a.amountRequested)} is no longer covered`,
             detail:
-              `Withdrawal request ${a.id} was approved, but the seller's withdrawable balance is ` +
+              `Withdrawal request ${a.id} was approved, but the client's withdrawable balance is ` +
               `now ${money(a.currency, available)}. The payout will be refused. It is not rejected ` +
               `automatically because a transfer may already be under way: check whether it was ` +
               `sent, then record the payment or reject the request on /withdrawals.`,

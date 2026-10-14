@@ -125,7 +125,7 @@ export class ResellerTermsNotifier {
       await this.dispatch.dispatch({
         topic: RESELLER_TERMS_NEED_REVISION_TOPIC,
         category: NotificationCategory.OPERATIONAL,
-        title: 'Some reseller stores need new terms',
+        title: 'Some member stores need new terms',
         body:
           'Skydrop has switched off credit after confirmation for your account. These stores’ ' +
           `current terms still use it, so they cannot place new orders until you publish new terms and they accept them: ${names}.`,

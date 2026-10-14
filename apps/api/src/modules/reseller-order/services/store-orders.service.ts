@@ -567,7 +567,7 @@ export class StoreOrdersService {
       orderId: order.id,
       actor: { type: ActorType.STORE, id: user.id },
       cancellationReason: body.reason ?? OrderCancellationReason.SELLER_REQUESTED,
-      note: body.note ?? 'Cancelled by the reseller store',
+      note: body.note ?? 'Cancelled by the member store',
       ctx,
     });
     return {

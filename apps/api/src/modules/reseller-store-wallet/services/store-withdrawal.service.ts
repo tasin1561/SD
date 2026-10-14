@@ -486,7 +486,7 @@ export class StoreWithdrawalService {
               ...base,
               signedAmount: fromSeller.neg(),
               owner: { kind: BankOwnerKind.SELLER, sellerId: req.sellerId },
-              note: `Reseller store ${store.displayName ?? store.name} paid out`,
+              note: `Member store ${store.displayName ?? store.name} paid out`,
             },
             tx,
           );
@@ -497,7 +497,7 @@ export class StoreWithdrawalService {
               ...base,
               signedAmount: rest.neg(),
               owner: { kind: BankOwnerKind.CAPITAL },
-              note: `Reseller store ${store.displayName ?? store.name} paid out from our money here — the seller’s money elsewhere becomes ours`,
+              note: `Member store ${store.displayName ?? store.name} paid out from our money here — the client’s money elsewhere becomes ours`,
             },
             tx,
           );
@@ -505,7 +505,7 @@ export class StoreWithdrawalService {
             sellerId: req.sellerId,
             amount: rest,
             reference: entry.id,
-            note: `Store payout ${reference} paid from our money — this was the seller’s`,
+            note: `Store payout ${reference} paid from our money — this was the client’s`,
           });
         }
         await tx.storeWithdrawalRequest.update({

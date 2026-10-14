@@ -196,11 +196,11 @@ export class SellerIssueEscalationService implements OnModuleDestroy {
         void this.issues.raise({
           kind: SystemIssueKind.INTEGRATION,
           severity: SystemIssueSeverity.HIGH,
-          title: "A seller's issue did not reach the courier",
+          title: "A client's issue did not reach the courier",
           detail:
             `Ticket ${input.ticketId} was raised and saved, but opening the courier ` +
             `conversation failed: ${message}\n\n` +
-            'The seller believes they have reported this and nothing is carrying it to ' +
+            'The client believes they have reported this and nothing is carrying it to ' +
             'Delhivery. Open the ticket, raise it on their portal by hand, and record the ' +
             'ticket id on the escalation so the replies thread back.',
           source: 'SellerIssueEscalationService',

@@ -50,7 +50,7 @@ export const STORE_PNL_LINES: Record<
   order_margin: {
     label: 'Order credits',
     side: 'revenue',
-    note: 'What your COD orders credited to your wallet — the retail you sold at less the seller’s transfer price — net of any credit taken back when a parcel returned or was lost. An order sold below the transfer price counts the difference you paid the seller here, as a minus.',
+    note: 'What your COD orders credited to your wallet — the retail you sold at less the client’s transfer price — net of any credit taken back when a parcel returned or was lost. An order sold below the transfer price counts the difference you paid the client here, as a minus.',
   },
   prepaid_sales: {
     label: 'Prepaid sales (collected by you)',
@@ -65,7 +65,7 @@ export const STORE_PNL_LINES: Record<
   fee_shares: {
     label: 'Your share of Skydrop fees',
     side: 'cost',
-    note: 'Your share of the delivery fee, COD fee and Instant Pay fee, as the seller’s terms split them, net of any share given back.',
+    note: 'Your share of the delivery fee, COD fee and Instant Pay fee, as the client’s terms split them, net of any share given back.',
   },
   return_fees: {
     label: 'Your share of return fees',
@@ -80,7 +80,7 @@ export const STORE_PNL_LINES: Record<
   dispute_settlements: {
     label: 'Dispute settlements',
     side: 'revenue',
-    note: 'Money Skydrop moved between you and the seller to settle a dispute: what the seller paid you, less what you paid the seller.',
+    note: 'Money Skydrop moved between you and the client to settle a dispute: what the client paid you, less what you paid the client.',
   },
   expenses: {
     label: 'Your expenses',
@@ -287,13 +287,13 @@ const WORDS: Record<StoreWalletEntryDirection, string> = {
   PREPAID_DEBIT: 'Paid from wallet',
   PREPAID_REFUND: 'Refunded to wallet',
   TOPUP: 'Top-up',
-  SELLER_TOPUP: 'Top-up from the seller',
+  SELLER_TOPUP: 'Top-up from the client',
   WITHDRAWAL: 'Withdrawal',
-  SELLER_PAYOUT: 'Payout recorded by the seller',
+  SELLER_PAYOUT: 'Payout recorded by the client',
   TRANSFER_PRICE: 'Sold below the transfer price',
   TRANSFER_PRICE_REFUND: 'Transfer-price difference given back',
   DISPUTE_SETTLEMENT_IN: 'Dispute settled in your favour',
-  DISPUTE_SETTLEMENT_OUT: 'Dispute settled in the seller’s favour',
+  DISPUTE_SETTLEMENT_OUT: 'Dispute settled in the client’s favour',
 };
 
 const FEE_WORDS: Partial<Record<WalletEntryDirection, string>> = {
