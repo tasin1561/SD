@@ -187,6 +187,55 @@ describe('TicketNotifier', () => {
     );
   });
 
+  it('names WHERE in the store console, never WHICH — ASSOC-1', async () => {
+    /*
+      The store's ticket link was `${resellerAppUrl}/tickets/<id>`, one
+      origin for the whole audience. That audience is whoever holds
+      `tickets.view`, and the `associate` preset holds `tickets.view` AND
+      `tickets.manage` — so an associate on a ticket about their own sale
+      was emailed a link into the reseller console, where
+      `__Host-storeRefresh` cannot follow them. Both store ticket emails
+      are deliberately NOT retired (NOTIF-23), so it fired at them.
+
+      Which console is the SENDER's to answer, per recipient
+      (`store-console-url.ts`, and `store-notification-links.spec.ts`
+      pins the resolution). What is pinned HERE is that this notifier
+      stops answering it: a PATH, and no origin anywhere in what it
+      hands over.
+    */
+    const { svc, tell } = make({
+      rows: [
+        eventRow(
+          {
+            fromStatus: TicketStatus.OPEN,
+            toStatus: TicketStatus.RESOLVED_REFUND,
+            note: 'Settled between the two of you.',
+            actorType: ActorType.STAFF,
+          },
+          {
+            ticketType: TicketType.STORE_DISPUTE,
+            resolutionAmountInr: new Prisma.Decimal('640'),
+            storeId: 'store-1',
+            store: { name: 'menev-resell', displayName: 'Menev Resell' },
+            disputePayer: null,
+          },
+        ),
+      ],
+    });
+    await svc.run('ev-1');
+
+    expect(tell).toHaveBeenCalledTimes(1);
+    const sent = (tell.mock.calls as unknown as unknown[][])[0]?.[0] as {
+      linkPaths?: Record<string, string>;
+      variables: Record<string, unknown>;
+    };
+    expect(sent.linkPaths).toEqual({ ticket_url: '/tickets/tk-1' });
+    // No origin passed under ANY name — a pre-built URL in `variables`
+    // would be the same defect wearing a different key.
+    expect(JSON.stringify(sent.variables)).not.toContain('store.test');
+    expect(JSON.stringify(sent.variables)).not.toContain('http');
+  });
+
   it('afterEvent never throws, and drainInFlight waits for the work', async () => {
     const { svc, findUnique, dispatch } = make({});
     findUnique.mockRejectedValueOnce(new Error('db down'));

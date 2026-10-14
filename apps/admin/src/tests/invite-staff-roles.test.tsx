@@ -76,7 +76,7 @@ describe('invite staff — roles come from the server, and there may be several'
           createdAt: '2026-01-25T00:00:00.000Z',
           deletedAt: null,
           token: 't',
-          inviteUrl: 'https://admin.skydrop.online/invite/t',
+          inviteUrl: 'https://admin.skydrop.global/invite/t',
         },
       },
     ]);

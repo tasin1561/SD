@@ -159,7 +159,7 @@ export async function compose(slug, { lang = language('en') } = {}) {
   );
   parts.push(
     cardFilter({
-      title: 'skydrop.online',
+      title: 'skydrop.global',
       subtitle: video.title,
       seconds: OUTRO_SECONDS,
       label: 'outro',

@@ -35,6 +35,7 @@ import {
 } from '../auth-common/services/refresh-token.service';
 import { TokenHashService } from '../auth-common/services/token-hash.service';
 import { EmailQueue } from '../email/queue/email.queue';
+import { liveRoleKeys, storeConsoleUrl } from '../../common/auth/store-console-url';
 
 const PASSWORD_RESET_TTL_MS = 30 * 60 * 1000;
 const EMAIL_VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
@@ -309,6 +310,9 @@ export class StoreAuthService {
         email: true,
         fullName: true,
         store: { select: { id: true, name: true, displayName: true, sellerId: true } },
+        // ASSOC-1 — the link's CONSOLE depends on the person's roles, so
+        // they have to be read here. See `storeConsoleUrl`.
+        roles: { select: { role: { select: { key: true, deletedAt: true } } } },
       },
     });
     if (!user) {
@@ -342,7 +346,17 @@ export class StoreAuthService {
       variables: {
         full_name: user.fullName,
         store_name: user.store.displayName ?? user.store.name,
-        reset_url: `${this.env.resellerAppUrl}/auth/reset-password?token=${plaintext}`,
+        /*
+          ASSOC-1 — the console a store user can actually sign in to.
+          This read `resellerAppUrl` for every store user until
+          2026-10-14, so a sales person who asked to reset their password
+          was emailed a link to the STORE portal: the token is a store
+          token so it worked, and left them signed in at an origin where
+          almost every page refuses them, with `__Host-storeRefresh`
+          bound to that origin so the session could not follow them
+          across. The invitation path had this right from the start.
+        */
+        reset_url: `${storeConsoleUrl(liveRoleKeys(user.roles), this.env)}/auth/reset-password?token=${plaintext}`,
         expires_minutes: 30,
       },
       triggerEvent: 'store.password_reset.requested',
@@ -376,6 +390,7 @@ export class StoreAuthService {
             fullName: true,
             deletedAt: true,
             store: { select: { sellerId: true } },
+            roles: { select: { role: { select: { key: true, deletedAt: true } } } },
           },
         },
       },
@@ -441,7 +456,7 @@ export class StoreAuthService {
           email: row.storeUser.email,
           full_name: row.storeUser.fullName,
           changed_at: now.toUTCString(),
-          login_url: `${this.env.resellerAppUrl}/login`,
+          login_url: `${storeConsoleUrl(liveRoleKeys(row.storeUser.roles), this.env)}/login`,
           support_email: this.env.supportEmail,
           ip_address: ctx.ipAddress ?? 'unknown',
         },
@@ -470,6 +485,7 @@ export class StoreAuthService {
         fullName: true,
         emailVerifiedAt: true,
         store: { select: { sellerId: true } },
+        roles: { select: { role: { select: { key: true, deletedAt: true } } } },
       },
     });
     if (!user) {
@@ -498,7 +514,7 @@ export class StoreAuthService {
       recipient: { type: NotificationRecipientType.STORE_USER, id: user.id, email: user.email },
       variables: {
         full_name: user.fullName,
-        verify_url: `${this.env.resellerAppUrl}/auth/verify-email?token=${plaintext}`,
+        verify_url: `${storeConsoleUrl(liveRoleKeys(user.roles), this.env)}/auth/verify-email?token=${plaintext}`,
         expires_hours: 24,
       },
       triggerEvent: 'store.email_verification.requested',
@@ -884,7 +900,7 @@ export class StoreAuthService {
   private notActive(): ForbiddenException {
     return new ForbiddenException({
       code: 'STORE_NOT_ACTIVE',
-      message: 'This store is not open. Contact the seller you resell for.',
+      message: 'This store is not open. Contact the client you resell for.',
     });
   }
 

@@ -46,6 +46,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { TokenHashService } from '../../auth-common/services/token-hash.service';
 import { EmailQueue } from '../../email/queue/email.queue';
 import { acceptsInvitations } from './reseller-store-lifecycle';
+import { storeConsoleUrl } from '../../../common/auth/store-console-url';
 
 /**
  * How long an invitation stays good for.
@@ -172,13 +173,6 @@ export interface PendingInvitationEmail {
  * it answers the reseller app anyway: sending somebody to the narrow app
  * on a set we could not read is how an invitation becomes unusable.
  */
-export function invitationAppUrl(
-  roleKeys: readonly string[],
-  env: { readonly resellerAppUrl: string; readonly associateAppUrl: string },
-): string {
-  const associateOnly = roleKeys.length > 0 && roleKeys.every((k) => k === 'associate');
-  return associateOnly ? env.associateAppUrl : env.resellerAppUrl;
-}
 
 /**
  * RS-2 — a reseller store's team: invitations, roles, removal.
@@ -344,7 +338,7 @@ export class StoreTeamService {
           store_name: p.storeName,
           inviter_name: p.inviterName,
           role: p.roleName,
-          invite_url: `${invitationAppUrl(p.roleKeys, this.env)}/auth/accept-invitation?token=${p.plaintext}`,
+          invite_url: `${storeConsoleUrl(p.roleKeys, this.env)}/auth/accept-invitation?token=${p.plaintext}`,
           expires_at_display: p.expiresAt.toLocaleString('en-IN', {
             dateStyle: 'medium',
             timeStyle: 'short',
@@ -413,7 +407,7 @@ export class StoreTeamService {
         deletedAt: true,
         store: { select: { name: true, displayName: true, status: true } },
         // ASSOC-1 — `key` as well as `name`: a RESEND must point at the
-        // same app the original did, and `invitationAppUrl` decides that
+        // same app the original did, and `storeConsoleUrl` decides that
         // from the keys.
         roles: { select: { role: { select: { key: true, name: true, deletedAt: true } } } },
       },
@@ -822,7 +816,7 @@ export class StoreTeamService {
       select: { id: true, name: true, displayName: true, status: true, sellerId: true },
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return store;
   }
@@ -833,7 +827,7 @@ export class StoreTeamService {
       select: { id: true, name: true, displayName: true, status: true, sellerId: true },
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return store;
   }

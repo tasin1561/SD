@@ -304,8 +304,24 @@ export class TicketNotifier implements OnModuleDestroy {
         ticket_number: t.ticketNumber,
         ticket_subject: t.subject,
         message: notice.body,
-        ticket_url: `${this.env.resellerAppUrl}/tickets/${t.id}`,
       },
+      /*
+        ASSOC-1 — the PATH only; the sender picks the console per reader.
+
+        This was `${this.env.resellerAppUrl}/tickets/${t.id}`, one origin
+        for everybody the notice reached. The audience is whoever holds
+        `tickets.view`, and the `associate` preset holds `tickets.view`
+        AND `tickets.manage` — so an associate on a ticket about their
+        own sale was emailed a link into the reseller console, where
+        `__Host-storeRefresh` cannot follow them and almost every page
+        refuses them. Both store ticket emails are deliberately NOT
+        retired (NOTIF-23), so this fired at them today.
+
+        `apps/associate` HAS `/tickets/[id]`: only the host was wrong,
+        which is why the fix is to stop naming one here rather than to
+        change where the link goes.
+      */
+      linkPaths: { ticket_url: `/tickets/${t.id}` },
       orderId: t.orderId,
       triggerEvent: notice.topic,
       // Whoever at the store can see its tickets — the same permission

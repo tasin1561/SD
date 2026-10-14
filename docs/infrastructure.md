@@ -79,7 +79,7 @@ All infrastructure runs on **DigitalOcean** with **Cloudflare** at the edge. Del
 live state.** On the day of the rename only the `skydrop.global` apex and
 `www` resolved; none of the five app subdomains below existed, and every
 "put live" / "verified" sentence in this document was true of
-`skydrop.online`. `skydrop.online` is retired once `.global` serves, so
+`skydrop.online`. `skydrop.online` was to be retired once `.global` served. **It has NOT been (measured 2026-10-14): `skydrop.online` and its `app.`, `reseller.`, `admin.`, `api.` and `track.` subdomains all answer 200 and SERVE — only `portal.` was never created. Nothing is broken by that, since each console reaches the API through its own same-origin proxy (FE-3), but the console-rename runbook's step-5 traffic grep matches `.global` only and therefore cannot see `.online` traffic at all — so a "this name is quiet" judgement made from it is incomplete. Retiring the six for real, or amending this line, is the owner's call; see CON-2 in CLAUDE.md.** So
 treat the DNS, Caddy and Cloudflare steps here as a checklist to re-run on
 the new zone rather than a record of work already done on it. The one place
 to reason from is the zone and the droplet, never this file.

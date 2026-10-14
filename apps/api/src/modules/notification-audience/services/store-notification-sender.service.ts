@@ -3,6 +3,7 @@ import { NotificationCategory, NotificationChannel, StoreOrderScope } from '@sky
 import { EnvService } from '../../../config/env.service';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { storeOrderScope } from '../../../common/auth/store-order-scope';
+import { liveRoleKeys, storeConsoleUrl } from '../../../common/auth/store-console-url';
 import type { EmailVariables } from '../../email/email.types';
 import type { AudienceSelector } from './notification-audience.service';
 import { NotificationDispatchService } from './notification-dispatch.service';
@@ -62,6 +63,21 @@ export interface TellStoreInput {
   readonly moneyLine?: string | undefined;
   /** What the EMAIL template renders. `full_name` is added per person. */
   readonly variables: EmailVariables;
+  /**
+   * Template variables that are a LINK INTO THE STORE CONSOLE, given as
+   * the PATH alone (`/tickets/<id>`) — never a whole URL.
+   *
+   * The origin is not the caller's to choose: which console a store user
+   * signs in to depends on WHO is reading, and one message goes to
+   * several people (see `linksFor`). A caller that built the URL itself
+   * would have to pick one origin for all of them, which is exactly the
+   * defect this exists to remove. So the caller says WHERE in the
+   * console, and the sender says WHICH console, per person.
+   *
+   * Spread after `variables`, so a caller that still passes a whole URL
+   * under the same name is overridden rather than silently winning.
+   */
+  readonly linkPaths?: Readonly<Record<string, string>>;
   readonly orderId: string | null;
   readonly triggerEvent: string;
   /**
@@ -109,20 +125,45 @@ export class StoreNotificationSender {
   ) {}
 
   /**
-   * The store's people whose roles narrow them to their own orders.
+   * TWO facts about the store's people, from ONE read of their roles.
    *
-   * Read through `storeOrderScope` — never by comparing a role key —
-   * because a person holds SEVERAL roles since RBAC-1b and WIDEST WINS:
-   * somebody who is both an Associate and an Ops must not be narrowed
-   * by the role that was only ever meant to grant more.
+   * ── WHAT THEY MAY SEE, and WHERE THEY SIGN IN ────────────────────────
+   * Both are answered off the same rows and they are NOT the same
+   * question, so each is answered by its own authority:
    *
-   * FAILS OPEN to "nobody is narrow", which is the behaviour before this
-   * existed. A notification layer must never throw (NOTIF-1), and the
+   *   · `narrow` — whose roles narrow them to their own orders. Read
+   *     through `storeOrderScope` (`store_roles.order_scope`), never by
+   *     comparing a role key, because a person holds SEVERAL roles since
+   *     RBAC-1b and WIDEST WINS: somebody who is both an Associate and
+   *     an Ops must not be narrowed by the role that was only ever meant
+   *     to grant more.
+   *   · `console` — which app a link should point at. Read through
+   *     `storeConsoleUrl` over that person's LIVE role keys — the ONE
+   *     reader of ASSOC-1's console rule.
+   *
+   * They coincide today (of the six fixed store roles, exactly
+   * `associate` is OWN) and deliberately are not DERIVED from each
+   * other. Inferring the console from the scope would make this a second
+   * place that decides where a store user signs in, which is precisely
+   * what `store-console-url.ts` was extracted to stop — and the day a
+   * second narrow role exists (`store-order-scope.ts` names that case)
+   * the inference would start mailing those people links into an app
+   * they have no login for.
+   *
+   * FAILS OPEN on both counts: nobody is narrow, and nobody has a known
+   * console — so `linksFor` falls back to the WIDE one, which is both
+   * `storeConsoleUrl([])` and the behaviour before any of this existed.
+   * A notification layer must never throw (NOTIF-1), and the
    * alternative — failing closed and telling nobody — would silently
    * stop a store hearing about its own orders, which is worse than the
    * disclosure this narrows.
    */
-  private async narrowScopeUserIds(storeId: string): Promise<ReadonlySet<string>> {
+  private async storePeopleFacts(storeId: string): Promise<{
+    readonly narrow: ReadonlySet<string>;
+    readonly consoleByUserId: ReadonlyMap<string, string>;
+  }> {
+    const narrow = new Set<string>();
+    const consoleByUserId = new Map<string, string>();
     try {
       const rows = await this.prisma.client.storeUser.findMany({
         where: { storeId, deletedAt: null },
@@ -130,23 +171,30 @@ export class StoreNotificationSender {
           id: true,
           roles: {
             where: { role: { deletedAt: null } },
-            select: { role: { select: { isOwner: true, orderScope: true } } },
+            select: {
+              role: { select: { key: true, deletedAt: true, isOwner: true, orderScope: true } },
+            },
           },
         },
       });
-      const out = new Set<string>();
       for (const r of rows) {
-        const scope = storeOrderScope(r.roles.map((x) => x.role));
-        if (scope === StoreOrderScope.OWN) out.add(r.id);
+        if (storeOrderScope(r.roles.map((x) => x.role)) === StoreOrderScope.OWN) narrow.add(r.id);
+        // `liveRoleKeys` takes the JOIN rows, not the unwrapped roles,
+        // and re-applies the `deletedAt` filter the query already made.
+        // Kept because it is the module's own contract: the day somebody
+        // loosens that `where`, the console answer must not widen with
+        // it.
+        consoleByUserId.set(r.id, storeConsoleUrl(liveRoleKeys(r.roles), this.env));
       }
-      return out;
     } catch (err) {
       this.logger.warn(
         { storeId, err: err instanceof Error ? err.message : err },
-        'Could not resolve store order scopes — not narrowing this message',
+        'Could not resolve store roles — not narrowing this message, linking to the wide console',
       );
-      return new Set<string>();
+      narrow.clear();
+      consoleByUserId.clear();
     }
+    return { narrow, consoleByUserId };
   }
 
   /** Who placed this order, or null when nobody did (a seller's own, a machine key). */
@@ -190,7 +238,7 @@ export class StoreNotificationSender {
     // hand: dropping narrow-scope people there would also suppress the
     // notices an associate SHOULD get about their own sales, which
     // inverts the rule instead of applying it.
-    const narrow = await this.narrowScopeUserIds(input.storeId);
+    const { narrow, consoleByUserId } = await this.storePeopleFacts(input.storeId);
     const placedBy = await this.placedBy(input.orderId);
     const maySeeThisOrder = (recipientId: string): boolean => {
       if (!narrow.has(recipientId)) return true; // ALL scope — unchanged.
@@ -200,12 +248,42 @@ export class StoreNotificationSender {
       return placedBy !== null && placedBy === recipientId;
     };
 
-    const links = {
-      order_url:
-        input.orderId === null
-          ? this.env.resellerAppUrl
-          : `${this.env.resellerAppUrl}/orders/${input.orderId}`,
-      app_url: this.env.resellerAppUrl,
+    // ASSOC-1 — EVERY LINK IS PER PERSON, because the console is.
+    //
+    // This was one constant built from `resellerAppUrl` and spread into
+    // every recipient's variables. A store user's ROLE decides which
+    // console they sign in to, not their store (`store-console-url.ts`),
+    // so one origin for the whole audience is wrong for any associate in
+    // it — and `__Host-storeRefresh` is bound to the origin that set it,
+    // so the link does not merely look odd: it lands them on an app that
+    // refuses almost every page they then open, carrying a session that
+    // cannot follow them across.
+    //
+    // It was LIVE, not hypothetical. `store.order_changed_by_admin.email`
+    // is not retired, and `maySeeThisOrder` deliberately passes an
+    // associate for an order they placed — so an associate whose own
+    // order Skydrop had changed was emailed a link into the reseller
+    // console. `apps/associate` has `/orders/[id]`, so only the host was
+    // ever wrong.
+    //
+    // Keyed on the person's own live ROLES rather than on `narrow` just
+    // above. The two sets are the same today and answer different
+    // questions: `narrow` is what they may SEE (`order_scope`), this is
+    // where they sign IN. Deriving one from the other is the second
+    // reader `store-console-url.ts` exists to prevent.
+    const linksFor = (recipientId: string): EmailVariables => {
+      // The unknown case is asked of the module rather than restated as
+      // `resellerAppUrl`: it already decides what "no live roles" means,
+      // and a literal here would be a second answer to drift from it.
+      const base = consoleByUserId.get(recipientId) ?? storeConsoleUrl([], this.env);
+      const paths = Object.fromEntries(
+        Object.entries(input.linkPaths ?? {}).map(([name, path]) => [name, `${base}${path}`]),
+      );
+      return {
+        order_url: input.orderId === null ? base : `${base}/orders/${input.orderId}`,
+        app_url: base,
+        ...paths,
+      };
     };
 
     // ONE call, both legs. `resolveMany` dedupes across the three
@@ -247,7 +325,9 @@ export class StoreNotificationSender {
             // withholds it from; the template degrades to the rest of
             // the sentence rather than printing "undefined".
             ...(narrow.has(person.recipientId) ? { money: '' } : {}),
-            ...links,
+            // LAST, so a caller that pre-built a link under one of these
+            // names is corrected rather than left to win.
+            ...linksFor(person.recipientId),
           }),
         },
       });
