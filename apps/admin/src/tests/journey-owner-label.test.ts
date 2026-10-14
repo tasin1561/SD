@@ -25,7 +25,7 @@ describe('journeyOwnerLabel', () => {
   it('gives every owner a word a person reads', () => {
     const words: Record<MilestoneOwner, string> = {
       SKYDROP: 'Skydrop',
-      SELLER: 'Seller',
+      SELLER: 'Client',
       STORE: 'Store',
       COURIER: 'Courier',
     };
@@ -34,12 +34,12 @@ describe('journeyOwnerLabel', () => {
     }
   });
 
-  it('says "Seller", not "You" — the same word in both apps', () => {
+  it('says "Client", not "You" — the same word in both apps', () => {
     // A seller's order page is read by several people at one company,
     // and on a reseller order it is read by the seller ABOUT a store's
     // act, so "You" would be wrong for a colleague's line and confusing
     // beside "Store". One word set is also one thing to keep true.
-    expect(journeyOwnerLabel('SELLER')).toBe('Seller');
+    expect(journeyOwnerLabel('SELLER')).toBe('Client');
   });
 
   it('is the only place the owner becomes a word', () => {

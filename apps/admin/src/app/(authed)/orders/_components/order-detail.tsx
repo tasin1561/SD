@@ -77,7 +77,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             subtitle={
               detail.data.sellerOrderRef ? (
                 <span>
-                  Seller ref: <span className="sk-ident">{detail.data.sellerOrderRef}</span>
+                  Client ref: <span className="sk-ident">{detail.data.sellerOrderRef}</span>
                 </span>
               ) : undefined
             }
@@ -244,7 +244,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           {(detail.data.sellerNotes || detail.data.internalNotes || detail.data.callNotes) && (
             <OoSection title="Notes">
               {detail.data.sellerNotes && (
-                <NoteBlock label="From seller">{detail.data.sellerNotes}</NoteBlock>
+                <NoteBlock label="From client">{detail.data.sellerNotes}</NoteBlock>
               )}
               {detail.data.callNotes && (
                 <NoteBlock label="Call center">{detail.data.callNotes}</NoteBlock>

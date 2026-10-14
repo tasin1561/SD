@@ -703,7 +703,7 @@ export class WithdrawalRequestService {
     if (remittance.sellerId !== existing.sellerId) {
       throw new BadRequestException({
         code: 'REMITTANCE_SELLER_MISMATCH',
-        message: 'The linked remittance belongs to a different seller',
+        message: 'The linked remittance belongs to a different client',
       });
     }
     // ONE payment pays ONE request. Linking the same remittance to a second

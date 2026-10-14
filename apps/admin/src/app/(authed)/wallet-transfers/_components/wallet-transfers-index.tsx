@@ -49,12 +49,12 @@ export function WalletTransfersIndex({
     <div className="mk-page">
       <PageHeader
         title="Wallet transfers"
-        subtitle="Take money out of a seller's wallet into our bank, or put ours into theirs. The cash moves with it, and the seller reads your reason on their wallet history."
+        subtitle="Take money out of a client's wallet into our bank, or put ours into theirs. The cash moves with it, and the client reads your reason on their wallet history."
       />
       <MkSection>
         <SectionHeading
           title="New transfer"
-          note="Not a correction: this moves real money between the seller and us."
+          note="Not a correction: this moves real money between the client and us."
         />
         {sellerId === null ? (
           <SellerPicker onPick={setSellerId} />
@@ -69,7 +69,7 @@ export function WalletTransfersIndex({
       <MkSection>
         <SectionHeading
           title="History"
-          note={sellerId === null ? 'Every staff transfer.' : 'This seller’s staff transfers.'}
+          note={sellerId === null ? 'Every staff transfer.' : 'This client’s staff transfers.'}
         />
         <TransferHistory sellerId={sellerId} />
       </MkSection>
@@ -85,7 +85,7 @@ function SellerPicker({ onPick }: { readonly onPick: (id: string) => void }): Re
     <MkCard>
       <TextField
         id="wt-seller-q"
-        label="Find a seller"
+        label="Find a client"
         icon={<Search />}
         value={q}
         onChange={(e) => setQ(e.target.value)}
@@ -93,12 +93,12 @@ function SellerPicker({ onPick }: { readonly onPick: (id: string) => void }): Re
         autoComplete="off"
       />
       {found.isLoading ? (
-        <SkeletonRows rows={3} cols={2} label="Looking for sellers…" />
+        <SkeletonRows rows={3} cols={2} label="Looking for clients…" />
       ) : found.isError ? (
         <ErrorState message={serverVerdict(found.error)} retry={() => void found.refetch()} />
       ) : items.length === 0 ? (
         <p className="mk-muted">
-          No approved or suspended seller matches. Try part of the company name or email.
+          No approved or suspended client matches. Try part of the company name or email.
         </p>
       ) : (
         <ul className="mk-picks">
@@ -189,7 +189,7 @@ function TransferForm({
       setDone(
         out.replayed
           ? 'Already recorded — this form had been posted before, so nothing moved twice.'
-          : 'Transfer posted. The seller can see it on their wallet history now.',
+          : 'Transfer posted. The client can see it on their wallet history now.',
       );
     } catch (err) {
       setConfirmError(serverVerdict(err));
@@ -197,11 +197,11 @@ function TransferForm({
     }
   }
 
-  if (context.isLoading) return <SkeletonRows rows={4} cols={2} label="Reading this seller…" />;
+  if (context.isLoading) return <SkeletonRows rows={4} cols={2} label="Reading this client…" />;
   if (context.isError || context.data === undefined) {
     return (
       <ErrorState
-        message={serverVerdict(context.error, 'Could not read this seller.')}
+        message={serverVerdict(context.error, 'Could not read this client.')}
         retry={() => void context.refetch()}
       />
     );
@@ -217,7 +217,7 @@ function TransferForm({
         subtitle={ctx.seller.status.toLowerCase()}
         aside={
           <Button variant="ghost" size="sm" onClick={onChangeSeller}>
-            Change seller
+            Change client
           </Button>
         }
       >
@@ -249,8 +249,8 @@ function TransferForm({
               edited();
             }}
           >
-            <option value="DEBIT">Debit — take from the seller’s wallet into our bank</option>
-            <option value="CREDIT">Credit — give from our bank into the seller’s wallet</option>
+            <option value="DEBIT">Debit — take from the client’s wallet into our bank</option>
+            <option value="CREDIT">Credit — give from our bank into the client’s wallet</option>
           </Select>
           <TextField
             id="wt-amount"
@@ -303,7 +303,7 @@ function TransferForm({
           </div>
         ) : (
           <p className="mk-muted">
-            A debit takes the seller’s money where it already sits with us — rupees first, then any
+            A debit takes the client’s money where it already sits with us — rupees first, then any
             taka at the rate it was credited. The preview shows which account. Anything beyond what
             they hold is not in any bank: their wallet goes negative and they owe it to us.
           </p>
@@ -312,7 +312,7 @@ function TransferForm({
         <TextArea
           id="wt-reason"
           label="Reason"
-          hint="The seller sees this on their wallet history, word for word."
+          hint="The client sees this on their wallet history, word for word."
           requiredMark
           value={reason}
           onChange={(e) => {
@@ -503,10 +503,10 @@ function TransferHistory({ sellerId }: { readonly sellerId: string | null }): Re
         <THead>
           <Tr>
             <Th>When</Th>
-            <Th>Seller</Th>
+            <Th>Client</Th>
             <Th>Amount</Th>
             <Th>Wallet after</Th>
-            <Th>Reason (seller sees)</Th>
+            <Th>Reason (client sees)</Th>
             <Th>Internal note</Th>
             <Th>By</Th>
             <Th>Cash</Th>

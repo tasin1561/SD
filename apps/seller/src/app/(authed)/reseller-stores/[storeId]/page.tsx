@@ -177,16 +177,16 @@ export default function ResellerStorePage(): ReactElement {
     return (
       <div className="rs-page">
         <div className="rs-head">
-          <RsBack href="/reseller-stores">All reseller stores</RsBack>
+          <RsBack href="/reseller-stores">All member stores</RsBack>
           <PageHeader
             breadcrumbs={[
-              { label: 'Seller console' },
+              { label: 'Client console' },
               { label: 'Reselling' },
               { label: 'Stores', href: '/reseller-stores' },
               { label: 'Store' },
             ]}
             Link={Link}
-            title="Reseller store"
+            title="Member store"
           />
         </div>
         {store.isPending ? (
@@ -212,10 +212,10 @@ export default function ResellerStorePage(): ReactElement {
   return (
     <div className="rs-page">
       <div className="rs-head">
-        <RsBack href="/reseller-stores">All reseller stores</RsBack>
+        <RsBack href="/reseller-stores">All member stores</RsBack>
         <PageHeader
           breadcrumbs={[
-            { label: 'Seller console' },
+            { label: 'Client console' },
             { label: 'Reselling' },
             { label: 'Stores', href: '/reseller-stores' },
             { label: s.name },
@@ -839,7 +839,7 @@ function TeamSection({
   return (
     <RsSection
       title="The store’s team"
-      note="People with a login for this store on the reseller portal."
+      note="People with a login for this store on the store portal."
       action={
         canInvite ? (
           <Button

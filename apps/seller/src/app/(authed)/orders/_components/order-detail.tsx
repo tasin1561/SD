@@ -223,7 +223,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
         <>
           <PageHeader
             breadcrumbs={[
-              { label: 'Seller console' },
+              { label: 'Client console' },
               { label: 'Orders', href: '/orders' },
               { label: detail.data.orderNumber },
             ]}
@@ -257,7 +257,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   {detail.data.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid'}
                 </MetaFact>
                 {detail.data.storeKind === 'RESELLER' && (
-                  <MetaFact>Sold by {detail.data.storeNameSnapshot ?? 'a reseller store'}</MetaFact>
+                  <MetaFact>Sold by {detail.data.storeNameSnapshot ?? 'a member store'}</MetaFact>
                 )}
               </span>
             }
@@ -539,14 +539,14 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     // note says who sold to this person, because they
                     // are who the customer will ring first.
                     <p className="ord-p">
-                      Sold by your reseller store{' '}
+                      Sold by your member store{' '}
                       {detail.data.storeId !== null ? (
                         <Link href={`/reseller-stores/${detail.data.storeId}`} className="ord-link">
-                          {detail.data.storeNameSnapshot ?? 'a reseller store'}
+                          {detail.data.storeNameSnapshot ?? 'a member store'}
                         </Link>
                       ) : (
                         <span className="ord-strong">
-                          {detail.data.storeNameSnapshot ?? 'a reseller store'}
+                          {detail.data.storeNameSnapshot ?? 'a member store'}
                         </span>
                       )}
                       .

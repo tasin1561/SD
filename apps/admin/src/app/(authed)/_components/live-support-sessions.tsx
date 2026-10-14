@@ -47,8 +47,8 @@ export function LiveSupportSessions(): ReactElement | null {
       aria-label={`${count} support ${count === 1 ? 'session' : 'sessions'} running — review`}
       title={
         count === 1
-          ? 'A staff member is inside a seller’s or store’s account right now.'
-          : `${count} staff members are inside a seller’s or store’s account right now.`
+          ? 'A staff member is inside a client’s or store’s account right now.'
+          : `${count} staff members are inside a client’s or store’s account right now.`
       }
     >
       <ShieldAlert size={14} aria-hidden />

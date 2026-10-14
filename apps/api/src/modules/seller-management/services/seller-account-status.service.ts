@@ -62,7 +62,7 @@ export class SellerAccountStatusService {
     if (trimmedReason.length === 0) {
       throw new BadRequestException({
         code: 'REASON_NOTE_REQUIRED',
-        message: 'A reason note is required when suspending a seller',
+        message: 'A reason note is required when suspending a client',
       });
     }
 
@@ -71,12 +71,12 @@ export class SellerAccountStatusService {
       select: { id: true, email: true, companyName: true, status: true },
     });
     if (!seller) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
     }
     if (seller.status !== SellerStatus.APPROVED) {
       throw new BadRequestException({
         code: 'INVALID_STATUS_TRANSITION',
-        message: `Cannot suspend a seller with status ${seller.status}; only APPROVED → SUSPENDED is allowed`,
+        message: `Cannot suspend a client with status ${seller.status}; only APPROVED → SUSPENDED is allowed`,
       });
     }
 
@@ -159,12 +159,12 @@ export class SellerAccountStatusService {
       select: { id: true, email: true, companyName: true, status: true },
     });
     if (!seller) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
     }
     if (seller.status !== SellerStatus.SUSPENDED) {
       throw new BadRequestException({
         code: 'INVALID_STATUS_TRANSITION',
-        message: `Cannot reapprove a seller with status ${seller.status}; only SUSPENDED → APPROVED is allowed`,
+        message: `Cannot reapprove a client with status ${seller.status}; only SUSPENDED → APPROVED is allowed`,
       });
     }
 

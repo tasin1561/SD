@@ -92,7 +92,7 @@ export function AdminRequestReturnDialog({
       <div className="oo-stack oo-stack--tight">
         <p className="oo-p">
           The courier collects it from the customer and returns it to the warehouse. It travels the
-          same distance again, so <span className="oo-strong">the seller is charged ₹200</span> — a
+          same distance again, so <span className="oo-strong">the client is charged ₹200</span> — a
           second delivery, on top of the one they already paid. Charged when the parcel arrives, not
           now.
         </p>

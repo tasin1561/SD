@@ -158,7 +158,7 @@ function ChargeRow({ charge }: { charge: OrderChargeView }): ReactElement {
           {charge.type.toLowerCase().replace(/_/g, ' ')} · {charge.status.toLowerCase()}
         </span>
       </Td>
-      <Td className="oo-muted">{charge.isVisibleToSeller ? 'Seller-visible' : 'Internal'}</Td>
+      <Td className="oo-muted">{charge.isVisibleToSeller ? 'Client-visible' : 'Internal'}</Td>
       <Td align="right">
         <Money amount={charge.totalAmountInr} />
       </Td>

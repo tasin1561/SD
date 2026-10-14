@@ -54,7 +54,7 @@ export function CreateInvitationDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => (o ? onOpenChange(true) : close())}
-      title="Invite a seller"
+      title="Invite a client"
       description="An invitation email with a one-time registration link will be sent. The invitee creates their account; you can monitor it from the invitations panel."
       icon={<Mail size={18} />}
       locked={create.isPending}
@@ -72,7 +72,7 @@ export function CreateInvitationDialog({
           type="email"
           autoComplete="off"
           required
-          placeholder="seller@example.com"
+          placeholder="client@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           disabled={create.isPending}

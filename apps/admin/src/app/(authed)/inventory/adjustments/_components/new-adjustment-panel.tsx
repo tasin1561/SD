@@ -192,7 +192,7 @@ export function NewAdjustmentPanel({
           {error !== null && <InlineError message={error} />}
 
           <TextField
-            label="Seller id"
+            label="Client id"
             requiredMark
             inputClassName="sk-ident"
             value={sellerId}

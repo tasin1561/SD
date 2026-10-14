@@ -85,7 +85,7 @@ export function AssociateCoverage({
           ? // Your seller has turned nothing on for this store, so there is
             // nothing an associate could be priced for. Saying "priced for
             // everything" here would read as a clean bill of health.
-            'Your seller sells nothing through this store yet'
+            'Your client sells nothing through this store yet'
           : missing === 0
             ? 'Priced for everything this store sells'
             : `${missing} product${missing === 1 ? '' : 's'} they cannot sell yet`}
@@ -93,7 +93,7 @@ export function AssociateCoverage({
       {outOfRange > 0 ? (
         <span className="as-count" data-tone="bad">
           <CircleAlert size={12} className="as-count__icon" aria-hidden />
-          {outOfRange} price{outOfRange === 1 ? '' : 's'} outside the seller’s range
+          {outOfRange} price{outOfRange === 1 ? '' : 's'} outside the client’s range
         </span>
       ) : null}
     </div>

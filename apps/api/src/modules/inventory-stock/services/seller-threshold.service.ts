@@ -40,7 +40,7 @@ export class SellerThresholdService {
       select: { defaultLowStockThreshold: true },
     });
     if (!seller) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
     }
     return { defaultLowStockThreshold: seller.defaultLowStockThreshold };
   }
@@ -56,7 +56,7 @@ export class SellerThresholdService {
         select: { id: true, defaultLowStockThreshold: true },
       });
       if (!seller) {
-        throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+        throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
       }
       await tx.seller.update({
         where: { id: sellerId },

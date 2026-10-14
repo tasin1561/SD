@@ -211,7 +211,7 @@ export class StoreJwtGuard implements CanActivate {
       });
       throw new ForbiddenException({
         code: 'STORE_NOT_ACTIVE',
-        message: 'This store is not open. Contact the seller you resell for.',
+        message: 'This store is not open. Contact the client you resell for.',
       });
     }
 
@@ -309,7 +309,7 @@ export class StoreJwtGuard implements CanActivate {
     if (ctx.subject.kind !== 'STORE') {
       throw new ForbiddenException({
         code: 'IMPERSONATION_WRONG_SUBJECT',
-        message: 'This support session is inside a seller account, not a store.',
+        message: 'This support session is inside a client account, not a store.',
       });
     }
     const owner = await this.prisma.client.storeUser.findFirst({

@@ -69,9 +69,9 @@ export default function ResellerStoresPage(): ReactElement {
 
   const header = (
     <PageHeader
-      breadcrumbs={[{ label: 'Seller console' }, { label: 'Reselling' }, { label: 'Stores' }]}
+      breadcrumbs={[{ label: 'Client console' }, { label: 'Reselling' }, { label: 'Stores' }]}
       Link={Link}
-      title="Reseller stores"
+      title="Member stores"
       subtitle="Other businesses that sell your stock under their own name, with their own login."
       meta={
         !loaded ? undefined : (
@@ -93,7 +93,7 @@ export default function ResellerStoresPage(): ReactElement {
           icon={<Plus size={15} />}
           onClick={() => setCreating(true)}
         >
-          Open a reseller store
+          Open a member store
         </Button>
       }
     />
@@ -108,7 +108,7 @@ export default function ResellerStoresPage(): ReactElement {
             <Skeleton key={i} className="rs-kpi-skel" height={104} rounded="md" />
           ))}
         </div>
-        <SkeletonRows rows={4} cols={6} label="Loading reseller stores" />
+        <SkeletonRows rows={4} cols={6} label="Loading member stores" />
       </div>
     );
   }
@@ -180,7 +180,7 @@ export default function ResellerStoresPage(): ReactElement {
       ) : null}
 
       <RsSection
-        title="Your reseller stores"
+        title="Your member stores"
         note={`${rest.length} ${rest.length === 1 ? 'store' : 'stores'}`}
         action={<RsLink href="/reseller-stores/reports">Reports</RsLink>}
         flush
@@ -188,7 +188,7 @@ export default function ResellerStoresPage(): ReactElement {
         {rest.length === 0 ? (
           <EmptyState
             bare
-            title="No reseller stores yet"
+            title="No member stores yet"
             description="Open one for a business that will resell your stock, and invite its first user."
             action={
               <Button
@@ -197,12 +197,12 @@ export default function ResellerStoresPage(): ReactElement {
                 icon={<Plus size={15} />}
                 onClick={() => setCreating(true)}
               >
-                Open a reseller store
+                Open a member store
               </Button>
             }
           />
         ) : (
-          <StoreTable stores={rest} caption="Your reseller stores" />
+          <StoreTable stores={rest} caption="Your member stores" />
         )}
       </RsSection>
 
@@ -331,7 +331,7 @@ function CreateModal({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Open a reseller store"
+      title="Open a member store"
       description="It is active as soon as you create it."
       icon={<Store size={18} />}
       size="lg"

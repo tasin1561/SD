@@ -430,10 +430,10 @@ export function DashboardView(): ReactElement {
                 <AttentionCard
                   href="/orders?status=AWAITING_SELLER_DECISION"
                   area="Merchant"
-                  label="Seller decision"
+                  label="Client decision"
                   count={awaitingSeller.data?.total}
                   loading={awaitingSeller.isLoading}
-                  hint="Call cap reached; awaiting the seller."
+                  hint="Call cap reached; awaiting the client."
                   badge="Action"
                   tone="warn"
                 />
@@ -474,7 +474,7 @@ export function DashboardView(): ReactElement {
                 label="Open tickets"
                 count={openTickets.data?.total}
                 loading={openTickets.isLoading}
-                hint="Damage claims, missing items, seller issues."
+                hint="Damage claims, missing items, client issues."
                 badge="Action"
                 tone="warn"
               />
@@ -486,7 +486,7 @@ export function DashboardView(): ReactElement {
                 label="Withdrawal requests"
                 count={pendingWithdrawals.data?.total}
                 loading={pendingWithdrawals.isLoading}
-                hint="Sellers waiting to be paid out."
+                hint="Clients waiting to be paid out."
                 badge="Escrow"
                 tone="warn"
               />
@@ -623,9 +623,9 @@ export function DashboardView(): ReactElement {
               loading={summary.isLoading}
             />
             <MoneyCard
-              label="Remitted to sellers"
+              label="Remitted to clients"
               amount={summary.data?.wallet.remittancesPaid}
-              hint="Paid out to seller bank accounts."
+              hint="Paid out to client bank accounts."
               icon={<Send size={13} />}
               iconTone="info"
               footLeft="Completed remittances"
@@ -634,7 +634,7 @@ export function DashboardView(): ReactElement {
             <MoneyCard
               label="Outstanding owed"
               amount={summary.data?.wallet.netOutstanding}
-              hint="Seller balances we hold and have not yet paid out."
+              hint="Client balances we hold and have not yet paid out."
               icon={<Wallet size={13} />}
               iconTone="accent"
               footLeft="Wallet liability"

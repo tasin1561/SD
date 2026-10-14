@@ -82,7 +82,7 @@ export function TrackingIndex(): ReactElement {
   return (
     <div className="ord-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Selling' }, { label: 'Tracking' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Selling' }, { label: 'Tracking' }]}
         Link={Link}
         title="Tracking"
         subtitle="Where your parcels are, and why any of them have not arrived."

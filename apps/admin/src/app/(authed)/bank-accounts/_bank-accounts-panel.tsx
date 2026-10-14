@@ -149,7 +149,7 @@ export function BankAccountsPanel(): ReactElement | null {
     try {
       if (editing === null) {
         await create.mutateAsync(body);
-        toast.success(`${body.label} added — sellers can transfer to it now.`);
+        toast.success(`${body.label} added — clients can transfer to it now.`);
       } else {
         await update.mutateAsync({ id: editing.id, body });
         toast.success(`${body.label} updated.`);
@@ -164,7 +164,7 @@ export function BankAccountsPanel(): ReactElement | null {
     setError(null);
     try {
       await retire.mutateAsync({ id: a.id });
-      toast.info(`${a.label} retired — it is off the seller transfer page. Past top-ups keep it.`);
+      toast.info(`${a.label} retired — it is off the client transfer page. Past top-ups keep it.`);
     } catch (err) {
       setError(serverVerdict(err));
       // Keeps the confirm open with the verdict on it.
@@ -179,10 +179,10 @@ export function BankAccountsPanel(): ReactElement | null {
     <div className="mo-page">
       <PageHeader
         title="Bank accounts"
-        subtitle="Our own bank accounts — where a seller sends money to top up their wallet. A seller reads these details off their screen and types them into their bank, so anything wrong here becomes a payment nobody can match against a statement."
+        subtitle="Our own bank accounts — where a client sends money to top up their wallet. A client reads these details off their screen and types them into their bank, so anything wrong here becomes a payment nobody can match against a statement."
       />
       <MoSection
-        title="Accounts offered to sellers"
+        title="Accounts offered to clients"
         note="Retiring one keeps every past top-up that names it."
         flush
         action={
@@ -226,7 +226,7 @@ export function BankAccountsPanel(): ReactElement | null {
             />
           </div>
         ) : (
-          <Table caption="Bank accounts offered to sellers">
+          <Table caption="Bank accounts offered to clients">
             <THead>
               <Tr>
                 <Th>Label</Th>
@@ -243,7 +243,7 @@ export function BankAccountsPanel(): ReactElement | null {
                   <EmptyState
                     bare
                     title="No bank accounts"
-                    description="Until one exists a seller has nowhere to send money and cannot top up at all."
+                    description="Until one exists a client has nowhere to send money and cannot top up at all."
                   />
                 </TableEmpty>
               ) : (
@@ -313,7 +313,7 @@ export function BankAccountsPanel(): ReactElement | null {
             ? ''
             : `${retiring.label} · ${retiring.bankName} ${retiring.accountNumber}`
         }
-        consequence="It comes off the seller transfer page at once. Past top-ups keep it, and it is not deleted."
+        consequence="It comes off the client transfer page at once. Past top-ups keep it, and it is not deleted."
         confirmLabel="Retire"
         destructive
         onConfirm={() => (retiring === null ? undefined : onRetire(retiring))}
@@ -328,7 +328,7 @@ export function BankAccountsPanel(): ReactElement | null {
         icon={<Landmark size={18} />}
         size="lg"
         title={editing === null ? 'Add a bank account' : `Edit ${editing.label}`}
-        description="Sellers read these details off their own screen and type them into their bank. Anything wrong here becomes a payment nobody can match against a statement."
+        description="Clients read these details off their own screen and type them into their bank. Anything wrong here becomes a payment nobody can match against a statement."
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => setOpen(false)}>
@@ -351,7 +351,7 @@ export function BankAccountsPanel(): ReactElement | null {
           <TextField
             label="Label"
             requiredMark
-            hint="What the seller picks from, e.g. “HDFC — current”"
+            hint="What the client picks from, e.g. “HDFC — current”"
             value={form.label}
             onChange={(e) => set('label', e.target.value)}
           />
@@ -423,7 +423,7 @@ export function BankAccountsPanel(): ReactElement | null {
             </Select>
             <TextField
               label="Order"
-              hint="Lower sorts first on the seller's form."
+              hint="Lower sorts first on the client's form."
               inputMode="numeric"
               value={String(form.displayOrder ?? 100)}
               onChange={(e) => set('displayOrder', Number(e.target.value) || 0)}
@@ -456,11 +456,11 @@ export function BankAccountsPanel(): ReactElement | null {
             onChange={(e) => set('purpose', e.target.value)}
             maxLength={120}
             showCount
-            placeholder="COD receipts, seller top-ups, operating…"
+            placeholder="COD receipts, client top-ups, operating…"
           />
           <TextArea
             label="Transfer instructions"
-            hint="Anything the seller must put in the transfer — a reference format, a note field."
+            hint="Anything the client must put in the transfer — a reference format, a note field."
             value={form.instructions ?? ''}
             onChange={(e) => set('instructions', e.target.value)}
             rows={3}
@@ -470,7 +470,7 @@ export function BankAccountsPanel(): ReactElement | null {
           <Checkbox
             checked={form.isActive ?? true}
             onChange={(e) => set('isActive', e.target.checked)}
-            label="Offer this account to sellers"
+            label="Offer this account to clients"
           />
           {error !== null && open && (
             <p className="mo-error" role="alert">

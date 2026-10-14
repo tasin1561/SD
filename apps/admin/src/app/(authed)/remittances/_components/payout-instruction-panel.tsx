@@ -86,14 +86,14 @@ export function PayoutInstructionPanel({
         <p className="mk-panel__title">Send it to</p>
         {!mayReadSeller ? (
           <p className="mk-muted">
-            You do not have access to seller records, so the destination account is not shown. Ask
+            You do not have access to client records, so the destination account is not shown. Ask
             someone who does for the payout details before sending.
           </p>
         ) : seller.isLoading ? (
           <Skeleton height={40} width="100%" />
         ) : bankMissing ? (
           <p className="mk-text" data-tone="critical">
-            This seller has no bank details on file. There is nowhere to send the money — ask them
+            This client has no bank details on file. There is nowhere to send the money — ask them
             to add them on their profile before paying.
           </p>
         ) : s === undefined ? (
@@ -121,7 +121,7 @@ export function PayoutInstructionPanel({
                   loading={reveal.isPending}
                   disabled={reveal.isPending}
                   onClick={() => {
-                    reveal.mutate('Recording a remittance to this seller', {
+                    reveal.mutate('Recording a remittance to this client', {
                       onSuccess: (r) => setRevealed(r.accountNumber),
                     });
                   }}
@@ -149,12 +149,12 @@ export function PayoutInstructionPanel({
 
       {mayReadTreasury && (
         <div className="mk-panel__part">
-          <p className="mk-panel__title">Of that, this seller&rsquo;s</p>
+          <p className="mk-panel__title">Of that, this client&rsquo;s</p>
           {holdings.isLoading ? (
             <Skeleton height={16} width="66%" />
           ) : (holdings.data ?? []).length === 0 ? (
             <p className="mk-muted">
-              None of our accounts holds cash attributed to this seller. That is normal for a wallet
+              None of our accounts holds cash attributed to this client. That is normal for a wallet
               built from credits rather than transfers — the money to pay them is our capital, and
               paying it is what settles the liability.
             </p>

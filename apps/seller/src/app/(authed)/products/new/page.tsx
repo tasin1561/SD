@@ -14,7 +14,7 @@ export default function NewProductPage(): ReactElement {
     <AreaPage>
       <StockPageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Stock & WMS' },
           { label: 'Products', href: '/products' },
           { label: 'New' },

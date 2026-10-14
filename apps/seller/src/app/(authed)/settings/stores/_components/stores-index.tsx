@@ -27,7 +27,7 @@ import {
 import { SetCallout, SetFact, SetPageHeader, phaseOf } from '../../_components/settings-parts';
 
 const CRUMBS = [
-  { label: 'Seller console' },
+  { label: 'Client console' },
   { label: 'Account' },
   { label: 'Settings', href: '/settings' },
   { label: 'Stores' },

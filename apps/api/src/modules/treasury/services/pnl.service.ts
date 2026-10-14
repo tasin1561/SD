@@ -956,7 +956,7 @@ export class PnlService {
       basis: {
         revenue: [
           {
-            label: 'Freight billed to sellers',
+            label: 'Freight billed to clients',
             source:
               'inbound_freight_charges.total_inr (bill raised in window); amount_settled_inr when WAIVED',
             count: charges.length,
@@ -2096,7 +2096,7 @@ export class PnlService {
       basis: {
         revenue: [
           {
-            label: 'Deducted from COD before crediting the seller',
+            label: 'Deducted from COD before crediting the client',
             source: 'seller_wallet_entries.amount WHERE direction=GST_WITHHOLDING',
             count: agg._count._all,
             amountInr: withheld.toFixed(2),
@@ -2104,7 +2104,7 @@ export class PnlService {
           ...(store.taken.length > 0
             ? [
                 {
-                  label: 'Reseller stores’ share, taken from their wallets',
+                  label: 'Member stores’ share, taken from their wallets',
                   source: 'store_wallet_entries.amount WHERE direction=COD_TAX_SHARE',
                   count: store.taken.length,
                   amountInr: storeTaken.toFixed(2),
@@ -2125,7 +2125,7 @@ export class PnlService {
           ...(store.returned.length > 0
             ? [
                 {
-                  label: 'Returned to reseller stores on CODs the courier reversed',
+                  label: 'Returned to member stores on CODs the courier reversed',
                   source:
                     'store_wallet_entries.amount WHERE direction=SHARE_REFUND of a COD_TAX_SHARE',
                   count: store.returned.length,
@@ -2371,7 +2371,7 @@ export class PnlService {
           ...(store.returned.length > 0
             ? [
                 {
-                  label: 'Returned to reseller stores on CODs the courier reversed',
+                  label: 'Returned to member stores on CODs the courier reversed',
                   source:
                     'store_wallet_entries.amount WHERE direction=SHARE_REFUND of a COD fee share',
                   count: store.returned.length,
@@ -2560,7 +2560,7 @@ export class PnlService {
         revenue: [],
         cost: [
           {
-            label: 'Paid short of the COD we credited the seller',
+            label: 'Paid short of the COD we credited the client',
             source: 'courier_settlement_lines.shortfall_inr WHERE > 0',
             count: short._count._all,
             amountInr: shortSum.toFixed(2),
@@ -2603,7 +2603,7 @@ export class PnlService {
     const count = agg._count._all;
     return this.line({
       key: 'damage_refunds',
-      label: 'Damage & loss refunds to sellers',
+      label: 'Damage & loss refunds to clients',
       revenue: ZERO,
       cost,
       priced: count,
@@ -2613,7 +2613,7 @@ export class PnlService {
         revenue: [],
         cost: [
           {
-            label: 'Credited to sellers for damaged or lost goods',
+            label: 'Credited to clients for damaged or lost goods',
             source: 'seller_wallet_entries.amount WHERE direction=SCRAP_REFUND',
             count,
             amountInr: cost.toFixed(2),
@@ -2662,7 +2662,7 @@ export class PnlService {
       basis: {
         revenue: [
           {
-            label: 'Taken from sellers’ wallets by staff, with a reason',
+            label: 'Taken from clients’ wallets by staff, with a reason',
             source: 'seller_wallet_entries.amount WHERE direction=STAFF_DEBIT',
             count: debits.count,
             amountInr: debits.amount.toFixed(2),
@@ -2670,7 +2670,7 @@ export class PnlService {
         ],
         cost: [
           {
-            label: 'Given to sellers’ wallets by staff, with a reason',
+            label: 'Given to clients’ wallets by staff, with a reason',
             source: 'seller_wallet_entries.amount WHERE direction=STAFF_CREDIT',
             count: credits.count,
             amountInr: credits.amount.toFixed(2),

@@ -79,13 +79,13 @@ export function StoreDisputeSettle({
   return (
     <AfCard>
       <p className="af-muted">
-        The money moves between {store}&apos;s wallet and the seller&apos;s — never from ours. Both
+        The money moves between {store}&apos;s wallet and the client&apos;s — never from ours. Both
         read your note.
         {claimAmountInr != null && claimPayer != null ? (
           <>
             {' '}
             Filled in from what was claimed (₹{claimAmountInr},{' '}
-            {claimPayer === 'STORE' ? `${store} owes the seller` : `the seller owes ${store}`}) —
+            {claimPayer === 'STORE' ? `${store} owes the client` : `the client owes ${store}`}) —
             change it if that is not what you have decided.
           </>
         ) : null}
@@ -98,8 +98,8 @@ export function StoreDisputeSettle({
           onChange={(e) => setPayer(e.target.value as Payer | '')}
         >
           <option value="">Choose…</option>
-          <option value="STORE">The store pays the seller</option>
-          <option value="SELLER">The seller pays the store</option>
+          <option value="STORE">The store pays the client</option>
+          <option value="SELLER">The client pays the store</option>
         </Select>
         <TextField
           id="dispute-amount"
@@ -113,7 +113,7 @@ export function StoreDisputeSettle({
             id="dispute-notes"
             label="Note"
             rows={1}
-            placeholder="The seller and the store both read this."
+            placeholder="The client and the store both read this."
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             // Display only: SettleStoreDisputeDto allows 2000; never enforced here.
@@ -138,11 +138,11 @@ export function StoreDisputeSettle({
         open={confirming}
         onOpenChange={setConfirming}
         title="Settle this dispute?"
-        entity={storeName ?? 'Reseller store'}
+        entity={storeName ?? 'Member store'}
         consequence={
           payer === 'STORE'
-            ? `${store} pays the seller ₹${amount.trim()}. Both wallets move now and the ticket closes.`
-            : `The seller pays ${store} ₹${amount.trim()}. Both wallets move now and the ticket closes.`
+            ? `${store} pays the client ₹${amount.trim()}. Both wallets move now and the ticket closes.`
+            : `The client pays ${store} ₹${amount.trim()}. Both wallets move now and the ticket closes.`
         }
         confirmLabel="Settle"
         onConfirm={submit}

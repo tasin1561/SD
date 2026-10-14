@@ -9,7 +9,7 @@ const SELLER = {
 };
 
 describe('callBrandLine (RS-10) — whom the agent is calling for', () => {
-  it('a channel order reads exactly as before: the seller company', () => {
+  it('a channel order reads exactly as before: the client company', () => {
     expect(
       callBrandLine(SELLER, {
         kind: 'SELLER',
@@ -20,14 +20,14 @@ describe('callBrandLine (RS-10) — whom the agent is calling for', () => {
     ).toEqual({ orderedFrom: 'Acme Exports Ltd', isReseller: false });
   });
 
-  it('no brand from the server (older API / read failed) falls back to the seller', () => {
+  it('no brand from the server (older API / read failed) falls back to the client', () => {
     expect(callBrandLine(SELLER, null)).toEqual({
       orderedFrom: 'Acme Exports Ltd',
       isReseller: false,
     });
   });
 
-  it('a reseller-store order names THE STORE, never the seller', () => {
+  it('a reseller-store order names THE STORE, never the client', () => {
     const r = callBrandLine(SELLER, {
       kind: 'RESELLER_STORE',
       name: 'Kurta Corner',

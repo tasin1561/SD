@@ -53,7 +53,7 @@ export const SELLER_PERMISSION_GROUPS = [
   'Money',
   'Support',
   'Company',
-  'Reseller stores',
+  'Member stores',
 ] as const;
 
 export type SellerPermissionGroup = (typeof SELLER_PERMISSION_GROUPS)[number];
@@ -291,26 +291,26 @@ export const SELLER_PERMISSIONS = [
   // ── Reseller stores (RS-2, docs/reseller-stores.md) ────────────────
   {
     key: 'stores.manage',
-    label: 'Manage reseller stores',
+    label: 'Manage member stores',
     description:
       'Open a reseller store, approve or reject one Skydrop opened for you, pause, resume or close it, choose who manages its wallet, and invite its team.',
-    group: 'Reseller stores',
+    group: 'Member stores',
     sensitive: true,
   },
   {
     key: 'stores.pricing',
-    label: 'Set reseller prices and terms',
+    label: 'Set member store prices and terms',
     description:
       'Publish a reseller store’s terms — who pays which Skydrop fee and when each side is credited — and, with reseller pricing, which products a store may sell, at what price and how stock is shared.',
-    group: 'Reseller stores',
+    group: 'Member stores',
     sensitive: true,
   },
   {
     key: 'stores.wallet',
-    label: 'Manage reseller store wallets',
+    label: 'Manage member store wallets',
     description:
       'See each reseller store’s wallet; for a store whose wallet you manage, top it up from your own wallet and record paying it; and set how far below zero a store may go.',
-    group: 'Reseller stores',
+    group: 'Member stores',
     sensitive: true,
   },
   {
@@ -334,12 +334,12 @@ export const SELLER_PERMISSIONS = [
     // an owner asking "what may this person do with our reseller
     // stores" looks here.
     key: 'stores.order_money.view',
-    label: 'See what a reseller order earns you',
+    label: 'See what a member store order earns you',
     description:
       'On an order one of your reseller stores placed: the transfer price the store pays you, ' +
       'your share of each Skydrop fee, and when each side is credited. It is your margin on ' +
       'that sale, so it is separate from simply reading the order.',
-    group: 'Reseller stores',
+    group: 'Member stores',
     sensitive: true,
   },
   {
@@ -348,10 +348,10 @@ export const SELLER_PERMISSIONS = [
     // profit they made you, and the stock forecast. Never a store's own
     // expenses or P&L — those are the store's books.
     key: 'stores.reports',
-    label: 'See reseller store reports',
+    label: 'See member store reports',
     description:
       'Each reseller store’s scorecard (delivery, return, confirmation and cancel rates, units, margin) and balance, the transfer revenue it brought you, stores ranked by profit, and how long your stock will last.',
-    group: 'Reseller stores',
+    group: 'Member stores',
     sensitive: true,
   },
 ] as const satisfies readonly SellerPermissionDef[];

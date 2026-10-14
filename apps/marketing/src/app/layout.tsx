@@ -124,7 +124,7 @@ const organizationJsonLd = {
   logo: `${siteUrl}/brand/skydrop-logo.png`,
   email: platform.brand.email,
   description:
-    'Cross-border courier and fulfilment for Bangladeshi e-commerce sellers shipping to India: warehousing, COD call-confirmation, courier dispatch, returns, tracking and payouts.',
+    'Cross-border courier and fulfilment for Bangladeshi e-commerce clients shipping to India: warehousing, COD call-confirmation, courier dispatch, returns, tracking and payouts.',
   areaServed: ['BD', 'IN'],
   sameAs: [],
 };

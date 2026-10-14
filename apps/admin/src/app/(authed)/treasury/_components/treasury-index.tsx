@@ -114,7 +114,7 @@ export function TreasuryIndex(): ReactElement {
     <div className="mo-page">
       <PageHeader
         title="Treasury"
-        subtitle="Which account holds what, how much of it is ours, and whether what we owe sellers is covered."
+        subtitle="Which account holds what, how much of it is ours, and whether what we owe clients is covered."
         action={
           canManage ? (
             <Button
@@ -150,13 +150,13 @@ export function TreasuryIndex(): ReactElement {
               on this page that can mean we are in trouble. */}
           <div className="mo-kpis">
             <KpiCard
-              label="Owed to sellers"
+              label="Owed to clients"
               figure={<Money amount={overview.data.clientMoney.owedToSellersInr} currency="INR" />}
               hint="Sum of positive wallet balances — what they could ask for"
               tone="pending"
             />
             <KpiCard
-              label="Held for sellers"
+              label="Held for clients"
               figure={<Money amount={overview.data.clientMoney.heldForSellersInr} currency="INR" />}
               hint="Cash in our accounts marked as theirs"
             />
@@ -180,7 +180,7 @@ export function TreasuryIndex(): ReactElement {
                 overview.data.clientMoney.covered
                   ? isZeroAmount(overview.data.clientMoney.gapInr)
                     ? 'Exactly covered — we hold what we owe, to the rupee'
-                    : 'Held for sellers over and above what we owe them'
+                    : 'Held for clients over and above what we owe them'
                   : 'We owe more than we hold — money in transit is a normal cause, but check'
               }
               tone={overview.data.clientMoney.covered ? 'credit' : 'debit'}
@@ -237,7 +237,7 @@ export function TreasuryIndex(): ReactElement {
           {!overview.data.clientMoney.covered && (
             <Notice tone="bad" icon={<AlertTriangle size={16} />} role="status">
               <p>
-                We owe sellers more than we are holding for them. That is not automatically wrong —
+                We owe clients more than we are holding for them. That is not automatically wrong —
                 COD the courier has collected but not yet settled shows up exactly like this — but
                 it is the gap to be able to explain.
               </p>
@@ -256,7 +256,7 @@ export function TreasuryIndex(): ReactElement {
                   <Th>Purpose</Th>
                   <Th>Settles from</Th>
                   <Th align="right">Ours</Th>
-                  <Th align="right">Held for sellers</Th>
+                  <Th align="right">Held for clients</Th>
                   <Th align="right">Total</Th>
                   <Th align="right">Actions</Th>
                 </Tr>
@@ -293,7 +293,7 @@ export function TreasuryIndex(): ReactElement {
                         {openAccount === a.accountId &&
                           (a.bySeller.length === 0 ? (
                             <p className="mo-faint tr-holders">
-                              Nothing in here belongs to a seller.
+                              Nothing in here belongs to a client.
                             </p>
                           ) : (
                             <dl className="tr-holders">
@@ -417,7 +417,7 @@ export function TreasuryIndex(): ReactElement {
                           )}
                         </Td>
                         <Td className="mo-muted">
-                          {e.ownerKind === 'CAPITAL' ? 'Ours' : (e.sellerName ?? 'A seller')}
+                          {e.ownerKind === 'CAPITAL' ? 'Ours' : (e.sellerName ?? 'A client')}
                         </Td>
                         <Td align="right">
                           {/* Sign carries the direction, so a debit and a

@@ -186,7 +186,7 @@ export function AddressCorrection({
       toast.success(
         out.applied
           ? 'Corrected. The parcel now goes to the new address.'
-          : 'Sent to seller staff. The parcel keeps the old address until they answer.',
+          : 'Sent to client staff. The parcel keeps the old address until they answer.',
       );
       setOpen(false);
     } catch (err) {
@@ -212,9 +212,9 @@ export function AddressCorrection({
   const pending = history.find((r) => r.status === 'PENDING' || r.status === 'APPROVED') ?? null;
   if (mode === 'OFF' && history.length === 0) return <></>;
 
-  const sendLabel = waits ? 'Send it to seller staff' : 'Correct it';
+  const sendLabel = waits ? 'Send it to client staff' : 'Correct it';
   const consequence = waits
-    ? 'Seller staff decide this one. The parcel keeps the OLD address until they answer.'
+    ? 'Client staff decide this one. The parcel keeps the OLD address until they answer.'
     : 'This is written onto the order as soon as you send it.';
 
   return (
@@ -222,21 +222,21 @@ export function AddressCorrection({
       title="Something wrong with this order?"
       note={
         mode === 'OFF'
-          ? 'Your seller does not allow this store to change its orders.'
+          ? 'Your client does not allow this store to change its orders.'
           : !stageOpen
             ? 'What is in the parcel can only change until the customer confirms it on our call. The customer’s details can still be corrected — while the parcel is with the courier, only if they accept it.'
             : waits
-              ? 'Seller staff read the change and decide. Nothing on the order changes until they answer.'
+              ? 'Client staff read the change and decide. Nothing on the order changes until they answer.'
               : 'A change here is written onto the order straight away.'
       }
     >
       <div className="ro-stack">
         {mode === 'OFF' ? (
-          <p className="ro-p">Ask the seller if anything on this order needs to change.</p>
+          <p className="ro-p">Ask the client if anything on this order needs to change.</p>
         ) : !stageOpen ? (
           <p className="ro-p">
             This order is past that stage, so what is in the parcel stands. The customer’s details
-            can still be corrected — ask your seller, and once it is with the courier the change
+            can still be corrected — ask your client, and once it is with the courier the change
             only sticks if the courier accepts it. Once it is out for delivery you can also ask for
             another attempt or for it to be sent back.
           </p>
@@ -257,9 +257,9 @@ export function AddressCorrection({
                 <Zap size={13} aria-hidden />
               )}
               {pending !== null
-                ? 'A change on this order is still open with seller staff — it has to be finished before you can send another.'
+                ? 'A change on this order is still open with client staff — it has to be finished before you can send another.'
                 : waits
-                  ? 'Seller staff approve this one before anything changes'
+                  ? 'Client staff approve this one before anything changes'
                   : 'Happens as soon as you send it'}
             </span>
           </div>
@@ -367,7 +367,7 @@ export function AddressCorrection({
             <TextArea
               id="fix-reason"
               label="Why the details are wrong"
-              hint="At least a sentence — seller staff read this before deciding."
+              hint="At least a sentence — client staff read this before deciding."
               requiredMark
               rows={3}
               maxLength={2000}
@@ -392,7 +392,7 @@ export function AddressCorrection({
       <ConfirmDialog
         open={confirming && open}
         onOpenChange={setConfirming}
-        title={waits ? 'Send this change to seller staff?' : 'Correct this order now?'}
+        title={waits ? 'Send this change to client staff?' : 'Correct this order now?'}
         entity={orderNumber}
         entityIsIdentifier
         consequence={consequence}

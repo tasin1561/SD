@@ -84,7 +84,7 @@ export function BinContentsOverview(): ReactElement {
   return (
     <AreaSection
       title="What's in every bin"
-      note="Each bin with the product, seller and batch on it. Returns-hold, damaged and in-transit stock is shown but cannot be sold."
+      note="Each bin with the product, client and batch on it. Returns-hold, damaged and in-transit stock is shown but cannot be sold."
     >
       <Toolbar>
         {all.length > 1 && (
@@ -117,11 +117,11 @@ export function BinContentsOverview(): ReactElement {
         </Select>
         <Select
           id="bc-seller"
-          label="Seller"
+          label="Client"
           value={sellerId}
           onChange={(e) => setSellerId(e.target.value)}
         >
-          <option value="">All sellers</option>
+          <option value="">All clients</option>
           {sellers.map(([id, name]) => (
             <option key={id} value={id}>
               {name}
@@ -242,7 +242,7 @@ export function LinesTable({ lines }: { readonly lines: readonly BinStockLine[] 
         <Tr>
           <Th>Product</Th>
           <Th>SKU</Th>
-          <Th>Seller</Th>
+          <Th>Client</Th>
           <Th>Batch</Th>
           <Th align="right">On hand</Th>
           <Th align="right">Reserved</Th>

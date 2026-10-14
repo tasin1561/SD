@@ -1214,7 +1214,7 @@ export class GoodsReceiptService {
       if (!v || v.sellerId !== sellerId) {
         throw new BadRequestException({
           code: 'VARIANT_NOT_FOUND',
-          message: `Variant ${id} not found for this seller`,
+          message: `Variant ${id} not found for this client`,
         });
       }
       // CLAUDE catalog rule #8: ARCHIVED blocks new stock receiving.

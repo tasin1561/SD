@@ -20,7 +20,7 @@ export default async function EditOrderPage({
     <div className="ord-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Fulfilment' },
           { label: 'Orders', href: '/orders' },
           { label: 'Order', href: `/orders/${id}` },

@@ -46,7 +46,7 @@ export function SettlementsIndex(): ReactElement {
     <div className="mk-page">
       <PageHeader
         title="Courier settlements"
-        subtitle="Every rupee the courier pays us, matched to the orders it covers. What is not matched is float we are carrying on the sellers' behalf."
+        subtitle="Every rupee the courier pays us, matched to the orders it covers. What is not matched is float we are carrying on the clients' behalf."
         action={
           canWrite ? (
             <Button

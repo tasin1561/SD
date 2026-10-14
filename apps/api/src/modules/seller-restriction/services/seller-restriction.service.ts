@@ -134,7 +134,7 @@ export class SellerRestrictionService {
       throw new BadRequestException({
         code: 'RESTRICTION_REASON_TOO_SHORT',
         message:
-          `Give a reason of at least ${MIN_REASON_LEN} characters. The seller reads it — a hold ` +
+          `Give a reason of at least ${MIN_REASON_LEN} characters. The client reads it — a hold ` +
           `they cannot understand is one they will phone about instead of fixing.`,
       });
     }
@@ -170,7 +170,7 @@ export class SellerRestrictionService {
     if (existing !== null) {
       throw new BadRequestException({
         code: 'RESTRICTION_ALREADY_ACTIVE',
-        message: 'This seller is already on hold. Lift the existing one first, or edit it.',
+        message: 'This client is already on hold. Lift the existing one first, or edit it.',
         cause: { restrictionId: existing.id },
       });
     }

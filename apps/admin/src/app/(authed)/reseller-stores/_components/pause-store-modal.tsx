@@ -45,7 +45,7 @@ export function PauseStoreModal({
         if (!o) onClose();
       }}
       title={`Pause “${storeName}”?`}
-      description="It stops placing new orders now. Orders already placed carry on, and only its seller can resume it. The seller and the store read your reason."
+      description="It stops placing new orders now. Orders already placed carry on, and only its client can resume it. The client and the store read your reason."
       footer={
         <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={onClose}>
@@ -86,7 +86,7 @@ export function PauseStoreModal({
         />
         {mayPause ? null : (
           <p className="ac-muted">
-            Pausing a store needs the “reseller.stores.pause” permission. Its seller can pause it
+            Pausing a store needs the “reseller.stores.pause” permission. Its client can pause it
             themselves.
           </p>
         )}

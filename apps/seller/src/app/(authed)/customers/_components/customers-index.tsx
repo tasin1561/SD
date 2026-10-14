@@ -89,7 +89,7 @@ export function CustomersIndex(): ReactElement {
   return (
     <div className="cst-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Selling' }, { label: 'Customers' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Selling' }, { label: 'Customers' }]}
         Link={Link}
         title="Customers"
         subtitle="Everyone you have shipped to, and how those orders ended."

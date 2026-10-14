@@ -23,7 +23,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { RevealCard, SetCallout, SetFact, SetPageHeader } from '../../_components/settings-parts';
 
 const CRUMBS = [
-  { label: 'Seller console' },
+  { label: 'Client console' },
   { label: 'Account' },
   { label: 'Settings', href: '/settings' },
   { label: 'API keys' },
@@ -339,7 +339,7 @@ export function ApiKeysIndex(): ReactElement {
         onOpenChange={setConfirmCreate}
         title="Create this API key?"
         entity={name.trim()}
-        consequence={`A new key that can call the seller API for this company the moment it exists, limited to: ${scopes.join(
+        consequence={`A new key that can call the Skydrop API for this company the moment it exists, limited to: ${scopes.join(
           ', ',
         )}. ${
           ttlDays

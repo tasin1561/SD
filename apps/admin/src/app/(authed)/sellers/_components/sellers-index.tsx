@@ -39,8 +39,8 @@ export function SellersIndex(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        title="Sellers"
-        subtitle="Invitation lifecycle + seller status management."
+        title="Clients"
+        subtitle="Invitation lifecycle + client status management."
         action={
           canWrite ? (
             <Button
@@ -49,7 +49,7 @@ export function SellersIndex(): ReactElement {
               icon={<Plus size={15} />}
               onClick={() => setInviteOpen(true)}
             >
-              Invite seller
+              Invite client
             </Button>
           ) : null
         }
@@ -86,20 +86,20 @@ export function SellersIndex(): ReactElement {
       </div>
 
       {list.isLoading ? (
-        <SkeletonRows rows={6} cols={7} label="Loading sellers…" />
+        <SkeletonRows rows={6} cols={7} label="Loading clients…" />
       ) : list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load sellers.'}
+          message={list.error?.message ?? 'Failed to load clients.'}
           retry={() => void list.refetch()}
         />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
-          title="No sellers match these filters"
-          description="Try clearing the filters or invite a new seller."
+          title="No clients match these filters"
+          description="Try clearing the filters or invite a new client."
         />
       ) : (
         <AcCard flush>
-          <Table caption="Sellers">
+          <Table caption="Clients">
             <THead>
               <Tr>
                 <Th>Company</Th>
@@ -145,7 +145,7 @@ export function SellersIndex(): ReactElement {
             {list.data.total === 0 && (
               <TBody>
                 <TableEmpty colSpan={6}>
-                  No sellers match this filter. Sellers appear here once they accept an invitation.
+                  No clients match this filter. Clients appear here once they accept an invitation.
                 </TableEmpty>
               </TBody>
             )}
@@ -156,7 +156,7 @@ export function SellersIndex(): ReactElement {
               pageSize={PAGE_SIZE}
               total={list.data.total}
               onPageChange={setPage}
-              label="Sellers pages"
+              label="Clients pages"
             />
           </div>
         </AcCard>

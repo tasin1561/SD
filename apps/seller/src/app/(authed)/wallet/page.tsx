@@ -172,7 +172,7 @@ export default function WalletPage(): ReactElement {
   return (
     <div className="wal-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Money' }, { label: 'Wallet' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Money' }, { label: 'Wallet' }]}
         Link={Link}
         title="Wallet"
         subtitle="What's owed to you. COD net of charges per delivered order; remittances debit as we pay you out."

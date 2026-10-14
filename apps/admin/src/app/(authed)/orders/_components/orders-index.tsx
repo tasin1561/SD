@@ -138,7 +138,7 @@ export function OrdersIndex(): ReactElement {
         breadcrumbs={[{ label: 'Operations' }, { label: 'Orders' }]}
         Link={Link}
         title="Orders"
-        subtitle="Cross-seller list. Filter by status, source, seller, the day it was placed (India time) or search; rows link to the order detail."
+        subtitle="Cross-client list. Filter by status, source, client, the day it was placed (India time) or search; rows link to the order detail."
         meta={
           list.data === undefined ? undefined : (
             <span className="oo-meta">
@@ -227,13 +227,13 @@ export function OrdersIndex(): ReactElement {
         </FilterField>
         <FilterField>
           <Select
-            label="Seller"
-            aria-label="Seller"
+            label="Client"
+            aria-label="Client"
             value={params.sellerId}
             onChange={(e) => updateUrl({ sellerId: e.target.value, page: 1 })}
           >
-            <option value="">All sellers</option>
-            {sellerMissing && <option value={params.sellerId}>This seller</option>}
+            <option value="">All clients</option>
+            {sellerMissing && <option value={params.sellerId}>This client</option>}
             {sellerOptions.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName}
@@ -270,7 +270,7 @@ export function OrdersIndex(): ReactElement {
         <EmptyState
           icon={<Package size={20} />}
           title="No orders match"
-          description="Try clearing the filters; new orders surface here as sellers submit."
+          description="Try clearing the filters; new orders surface here as clients submit."
         />
       ) : (
         <OoCard flush>

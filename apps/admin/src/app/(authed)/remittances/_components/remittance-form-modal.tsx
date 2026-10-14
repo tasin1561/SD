@@ -201,7 +201,7 @@ export function RemittanceFormModal({
     e.preventDefault();
     setError(null);
     if (!sellerId) {
-      setError('Pick a seller');
+      setError('Pick a client');
       return;
     }
     const src = Number(sourceAmount);
@@ -279,7 +279,7 @@ export function RemittanceFormModal({
         }}
         locked={busy}
         title="Record remittance"
-        description="Debits the seller's wallet by the source amount and records the cash leaving the account you paid from. A bank fee is booked as our expense."
+        description="Debits the client's wallet by the source amount and records the cash leaving the account you paid from. A bank fee is booked as our expense."
         size="lg"
         footer={
           <DialogFooter>
@@ -294,13 +294,13 @@ export function RemittanceFormModal({
       >
         <form id={formId} onSubmit={(e) => void onSubmit(e)} className="mk-stack">
           <Select
-            label="Seller"
+            label="Client"
             value={sellerId}
             onChange={(e) => setSellerId(e.target.value)}
             required
             disabled={sellers.isLoading || Boolean(initialSellerId)}
           >
-            <option value="">{sellers.isLoading ? 'Loading sellers…' : 'Select a seller'}</option>
+            <option value="">{sellers.isLoading ? 'Loading clients…' : 'Select a client'}</option>
             {sellers.data?.items.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName} · {s.email}
@@ -456,7 +456,7 @@ export function RemittanceFormModal({
 
           <TextField
             label={`Bank fee (optional, ${currency})`}
-            hint="What the bank charged to send it. Booked as our bank charge — the seller still receives the full amount."
+            hint="What the bank charged to send it. Booked as our bank charge — the client still receives the full amount."
             type="number"
             min={0}
             step="0.01"
@@ -514,7 +514,7 @@ export function RemittanceFormModal({
               The wallet holds{' '}
               <Money amount={overBalance.have} currency={sourceCurrency} convert={false} />, so{' '}
               <Money amount={overBalance.asked} currency={sourceCurrency} convert={false} /> is more
-              than we owe this seller. The server will refuse it (INSUFFICIENT_WALLET_BALANCE). Note
+              than we owe this client. The server will refuse it (INSUFFICIENT_WALLET_BALANCE). Note
               this is capped by the WALLET, not by what we hold for them in the paying account —
               paying beyond that draws on our own capital, which is normal.
             </MkAlert>
@@ -552,7 +552,7 @@ export function RemittanceFormModal({
             />
           )
         }
-        consequence="Debits this seller's wallet by the amount above and records the cash leaving the account you paid from."
+        consequence="Debits this client's wallet by the amount above and records the cash leaving the account you paid from."
         confirmLabel="Record remittance"
         onConfirm={post}
         error={error}

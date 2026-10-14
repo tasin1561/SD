@@ -86,7 +86,7 @@ export function IdentityCorrectionPanel({
       });
       close();
     } catch (err) {
-      setError(serverVerdict(err, 'Failed to correct the seller identity.'));
+      setError(serverVerdict(err, 'Failed to correct the client identity.'));
     }
   }
 
@@ -114,7 +114,7 @@ export function IdentityCorrectionPanel({
 
       {!canCorrect && (
         <p className="ac-faint">
-          Your role can&apos;t correct an approved identity. Ask a super-admin if a seller has
+          Your role can&apos;t correct an approved identity. Ask a super-admin if a client has
           reported one of these is wrong.
         </p>
       )}
@@ -124,7 +124,7 @@ export function IdentityCorrectionPanel({
         onOpenChange={(o) => {
           if (!o) close();
         }}
-        title="Correct this seller's identity"
+        title="Correct this client's identity"
         description="Use this when the approved details are wrong — a mistyped company name, a phone number captured incorrectly at registration. It corrects the record; it does not move the account to a different business."
         icon={<PencilLine size={18} />}
         size="lg"
@@ -179,7 +179,7 @@ export function IdentityCorrectionPanel({
             onChange={(e) => setReason(e.target.value)}
             maxLength={500}
             rows={4}
-            placeholder="e.g. Seller emailed 2026-08-14: trade licence reads “Nabeela Traders”, registered here as “Nabila Traders”. Corrected to match the licence."
+            placeholder="e.g. Client emailed 2026-08-14: trade licence reads “Nabeela Traders”, registered here as “Nabila Traders”. Corrected to match the licence."
             disabled={correct.isPending}
           />
 

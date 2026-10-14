@@ -88,7 +88,7 @@ export function HoldReviewsIndex(): ReactElement {
     <AreaPage>
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Selling' },
           { label: 'Unreachable customers' },
         ]}

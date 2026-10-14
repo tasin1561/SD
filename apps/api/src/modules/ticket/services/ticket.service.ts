@@ -543,7 +543,7 @@ export class TicketService {
     if (trimmed.length < 3) {
       throw new BadRequestException({
         code: 'TICKET_NOTE_EMPTY',
-        message: 'Write something the seller can act on.',
+        message: 'Write something the client can act on.',
       });
     }
     const ticket = await client.ticket.findFirst({
@@ -884,7 +884,7 @@ export class TicketService {
       throw new ConflictException({
         code: 'STORE_DISPUTE_USE_SETTLEMENT',
         message:
-          'A store dispute is not refunded by Skydrop. Settle it between the store and the seller instead — the money moves between their two wallets.',
+          'A store dispute is not refunded by Skydrop. Settle it between the store and the client instead — the money moves between their two wallets.',
       });
     }
     if (!this.stateMachine.canTransition(existing.status, input.to)) {
@@ -923,7 +923,7 @@ export class TicketService {
         throw new BadRequestException({
           code: 'REFUND_ABOVE_TRANSFER_PRICE',
           message:
-            `This is a reseller store's order: the seller is compensated at the transfer price, ` +
+            `This is a member store's order: the client is compensated at the transfer price, ` +
             `at most ₹${cap.toFixed(2)} here — not the retail price the store charged.`,
         });
       }
@@ -944,7 +944,7 @@ export class TicketService {
               `The goods on this ticket are worth ₹${bound.cap.toFixed(2)} (${bound.basis}), ` +
               `so that is the most that can be refunded here. Anything beyond it is a ` +
               `commercial decision, not compensation — take it on /wallet-transfers, ` +
-              `where the reason is recorded against the seller.`,
+              `where the reason is recorded against the client.`,
           });
         }
       }
@@ -1290,7 +1290,7 @@ export class TicketService {
     if (event.actorType !== ActorType.SELLER) {
       throw new BadRequestException({
         code: 'NOT_A_SELLER_MESSAGE',
-        message: 'Only what the seller wrote gets passed to the courier.',
+        message: 'Only what the client wrote gets passed to the courier.',
       });
     }
     if (event.relay !== null) {
@@ -1834,7 +1834,7 @@ export class TicketService {
       throw new ConflictException({
         code: 'TICKET_NOT_A_STORE_DISPUTE',
         message:
-          'Only a dispute a reseller store raised with its seller is settled between them. Resolve this ticket the ordinary way.',
+          'Only a dispute a member store raised with its client is settled between them. Resolve this ticket the ordinary way.',
       });
     }
     const storeId = existing.storeId;

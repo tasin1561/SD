@@ -89,8 +89,8 @@ export function ResellerStoresClient(): ReactElement {
     <div ref={root} className="rs" data-island={__SD_ISLAND_PLATFORM__} data-party={party}>
       <div className="rs__aside">
         <p className="rs__legend">
-          <span className="rs__key rs__key--seller">You, the seller</span>
-          <span className="rs__key rs__key--store">The reseller store</span>
+          <span className="rs__key rs__key--seller">You, the client</span>
+          <span className="rs__key rs__key--store">The member store</span>
         </p>
         <ol className="rs__steps">
           {r.beats.map((b, k) => (

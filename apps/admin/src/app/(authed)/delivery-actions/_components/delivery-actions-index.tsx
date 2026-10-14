@@ -86,7 +86,7 @@ export function DeliveryActionsIndex(): ReactElement {
     if (deciding === null) return false;
     setError(null);
     if (deciding.decision === 'reject' && note.trim().length < 5) {
-      setError('Say why — the seller sees this, and an unexplained no comes straight back');
+      setError('Say why — the client sees this, and an unexplained no comes straight back');
       return false;
     }
     try {
@@ -110,7 +110,7 @@ export function DeliveryActionsIndex(): ReactElement {
     <div className="oo-page">
       <PageHeader
         title="Failed deliveries"
-        subtitle="What sellers have asked us to do about parcels the courier could not hand over. A Reseller store's ask that its seller chose to approve is shown for reference only — Seller staff decide it, not Skydrop admin."
+        subtitle="What clients have asked us to do about parcels the courier could not hand over. A Member store's ask that its client chose to approve is shown for reference only — Client staff decide it, not Skydrop admin."
       />
 
       <OoCard>
@@ -146,8 +146,8 @@ export function DeliveryActionsIndex(): ReactElement {
             title={showAll ? 'No requests yet' : 'Nothing waiting'}
             description={
               showAll
-                ? 'No seller has asked for anything yet.'
-                : 'Nothing waiting. Failed deliveries appear here when a seller asks us to act.'
+                ? 'No client has asked for anything yet.'
+                : 'Nothing waiting. Failed deliveries appear here when a client asks us to act.'
             }
           />
         ) : (
@@ -155,7 +155,7 @@ export function DeliveryActionsIndex(): ReactElement {
             <THead>
               <Tr>
                 <Th>Order</Th>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th>Asked for</Th>
                 <Th>Why</Th>
                 <Th>State</Th>
@@ -180,7 +180,7 @@ export function DeliveryActionsIndex(): ReactElement {
                     {r.seller?.companyName ?? '—'}
                     {r.resellerStore !== null && (
                       <span className="oo-sub">
-                        Reseller store: {r.resellerStore.displayName ?? r.resellerStore.name}
+                        Member store: {r.resellerStore.displayName ?? r.resellerStore.name}
                       </span>
                     )}
                   </Td>
@@ -214,7 +214,7 @@ export function DeliveryActionsIndex(): ReactElement {
                       // Seller staff decide this one — the Reseller
                       // store's policy says so. Skydrop admin can see it,
                       // and the server refuses a decision here anyway.
-                      <span className="oo-muted">Waiting on seller staff</span>
+                      <span className="oo-muted">Waiting on client staff</span>
                     ) : r.status === 'PENDING' && canDecide ? (
                       <div className="oo-row oo-row--end">
                         <Button
@@ -267,7 +267,7 @@ export function DeliveryActionsIndex(): ReactElement {
             ? deciding.row.action === 'RECALL'
               ? 'Queues the order for one of our agents to phone the customer. Nothing reaches the courier.'
               : 'This reaches Delhivery. A re-attempt dispatches a van; a return ends the sale.'
-            : 'The seller sees your reason.'
+            : 'The client sees your reason.'
         }
         footer={
           <DialogFooter>
@@ -312,7 +312,7 @@ export function DeliveryActionsIndex(): ReactElement {
               maxLength={2000}
               placeholder={
                 deciding.decision === 'approve'
-                  ? 'Optional note for the seller'
+                  ? 'Optional note for the client'
                   : 'e.g. Two attempts already made — a third is unlikely to land'
               }
             />

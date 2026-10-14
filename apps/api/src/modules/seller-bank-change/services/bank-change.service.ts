@@ -243,7 +243,7 @@ export class BankChangeService {
           throw new ConflictException({
             code: 'BANK_CHANGE_UNAPPROVABLE',
             message:
-              'This request does not carry a complete account number, so approving it would leave the seller with withdrawal details nobody can read. Reject it and ask the seller to submit the change again.',
+              'This request does not carry a complete account number, so approving it would leave the client with withdrawal details nobody can read. Reject it and ask the client to submit the change again.',
           });
         }
 

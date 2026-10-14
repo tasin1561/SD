@@ -81,7 +81,7 @@ export function InventoryView(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Stock' }, { label: 'Inventory' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Stock' }, { label: 'Inventory' }]}
         Link={Link}
         title="Inventory"
         subtitle="Stock available for orders. Receiving happens at the warehouse — speak to ops to add inventory."

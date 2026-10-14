@@ -312,7 +312,7 @@ export class ResellerStoreTermsService {
         ready: false,
         termsVersionId: null,
         reasons: ['NO_TERMS'],
-        message: 'The seller has not published terms for this store yet.',
+        message: 'The client has not published terms for this store yet.',
       };
     }
     const reasons: TermsReadinessReason[] = [];
@@ -354,7 +354,7 @@ export class ResellerStoreTermsService {
       select: STORE_SELECT,
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return this.view(store, { showIp: true });
   }
@@ -371,7 +371,7 @@ export class ResellerStoreTermsService {
       select: STORE_SELECT,
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return this.view(store, { showIp: true });
   }
@@ -602,7 +602,7 @@ export class ResellerStoreTermsService {
       select: STORE_SELECT,
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     if (accepted !== null) {
       await this.audit.log({
@@ -642,7 +642,7 @@ export class ResellerStoreTermsService {
       select: STORE_SELECT,
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return store;
   }

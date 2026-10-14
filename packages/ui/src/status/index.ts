@@ -512,7 +512,7 @@ export function deliveryActionStatusKind(status: DeliveryActionStatus): StatusKi
 export function deliveryActionStatusLabel(status: DeliveryActionStatus): string {
   switch (status) {
     case DeliveryActionStatus.PENDING:
-      return 'Waiting on the seller';
+      return 'Waiting on the client';
     case DeliveryActionStatus.APPROVED:
       return 'Approved';
     case DeliveryActionStatus.REJECTED:
@@ -574,7 +574,7 @@ export function storeAddressChangeStatusKind(status: StoreAddressChangeStatus): 
 export function storeAddressChangeStatusLabel(status: StoreAddressChangeStatus): string {
   switch (status) {
     case StoreAddressChangeStatus.PENDING:
-      return 'Waiting on seller staff';
+      return 'Waiting on client staff';
     case StoreAddressChangeStatus.APPROVED:
       return 'Approved';
     case StoreAddressChangeStatus.APPLIED:
@@ -586,7 +586,7 @@ export function storeAddressChangeStatusLabel(status: StoreAddressChangeStatus):
     case StoreAddressChangeStatus.EXPIRED:
       return 'Not answered in time';
     case StoreAddressChangeStatus.SUPERSEDED:
-      return 'Seller staff corrected it themselves';
+      return 'Client staff corrected it themselves';
     default: {
       const exhaustive: never = status;
       throw new Error(`Unhandled StoreAddressChangeStatus: ${String(exhaustive)}`);
@@ -622,7 +622,7 @@ export function storeOrderRequestStatusKind(status: StoreOrderRequestStatus): St
 export function storeOrderRequestStatusLabel(status: StoreOrderRequestStatus): string {
   switch (status) {
     case StoreOrderRequestStatus.PENDING:
-      return 'Waiting on seller staff';
+      return 'Waiting on client staff';
     case StoreOrderRequestStatus.APPROVED:
       return 'Approved';
     case StoreOrderRequestStatus.EXECUTED:
@@ -995,21 +995,21 @@ export function walletDirectionLabel(direction: WalletEntryDirection): string {
       return 'Debited by Skydrop';
     // RS-6 — money between the seller and a reseller store they manage.
     case WalletEntryDirection.STORE_TOPUP_OUT:
-      return 'Moved to a reseller store';
+      return 'Moved to a member store';
     case WalletEntryDirection.STORE_PAYOUT_IN:
-      return 'Reseller store paid (recorded)';
+      return 'Member store paid (recorded)';
     case WalletEntryDirection.RESELLER_TRANSFER_CREDIT:
-      return 'Reseller order — your transfer price';
+      return 'Member store order — your transfer price';
     case WalletEntryDirection.RESELLER_TRANSFER_REVERSAL:
-      return 'Reseller order — transfer price taken back';
+      return 'Member store order — transfer price taken back';
     case WalletEntryDirection.PREPAID_TRANSFER_CREDIT:
-      return 'Prepaid reseller order — your transfer price';
+      return 'Prepaid member store order — your transfer price';
     case WalletEntryDirection.PREPAID_TRANSFER_REVERSAL:
-      return 'Prepaid reseller order — transfer price taken back';
+      return 'Prepaid member store order — transfer price taken back';
     case WalletEntryDirection.STORE_DISPUTE_IN:
-      return 'Dispute settled — paid by a reseller store';
+      return 'Dispute settled — paid by a member store';
     case WalletEntryDirection.STORE_DISPUTE_OUT:
-      return 'Dispute settled — paid to a reseller store';
+      return 'Dispute settled — paid to a member store';
     // The bill itself is labelled "Inbound freight"; this is that bill
     // being withdrawn, so the label says which way the money went.
     case WalletEntryDirection.INBOUND_FREIGHT_REFUND:
@@ -1063,7 +1063,7 @@ export function isStoreWalletCredit(direction: StoreWalletEntryDirection): boole
  */
 export function storeWalletDirectionLabel(
   direction: StoreWalletEntryDirection,
-  seller = 'the seller',
+  seller = 'the client',
 ): string {
   switch (direction) {
     case StoreWalletEntryDirection.SELLER_TOPUP:
@@ -1233,7 +1233,7 @@ export const FREIGHT_MODES: readonly InboundFreightMode[] = [
  * all four places at once.
  *
  * ── ONE WORD SET, NOT A PER-APP ONE ──────────────────────────────────
- * SELLER deliberately reads "Seller" and not "You" on the seller's own
+ * SELLER deliberately reads "Client" and not "You" on the client's own
  * app. Their order page is read by several people at one company, and
  * on a reseller order it is read by the seller ABOUT a store's act — so
  * "You" would be wrong for a colleague's line and confusing beside
@@ -1247,7 +1247,7 @@ export function journeyOwnerLabel(owner: MilestoneOwner): string {
     case 'SKYDROP':
       return 'Skydrop';
     case 'SELLER':
-      return 'Seller';
+      return 'Client';
     case 'STORE':
       return 'Store';
     case 'COURIER':

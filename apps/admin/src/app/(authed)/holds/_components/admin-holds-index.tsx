@@ -57,7 +57,7 @@ export function AdminHoldsIndex(): ReactElement {
     <div className="oo-page">
       <PageHeader
         title="Held stock"
-        subtitle="Orders where stock was claimed at placement and the customer could not be reached. The seller decides; this is the view that tells you who to chase."
+        subtitle="Orders where stock was claimed at placement and the customer could not be reached. The client decides; this is the view that tells you who to chase."
       />
 
       <div className="oo-kpis">
@@ -69,7 +69,7 @@ export function AdminHoldsIndex(): ReactElement {
           {...(list.isLoading ? { figure: dash } : { figure: <Num value={heldUnits} /> })}
         />
         <KpiCard
-          label="Awaiting a seller"
+          label="Awaiting a client"
           icon={<Users size={14} />}
           tone="neutral"
           hint="Open reviews"
@@ -129,7 +129,7 @@ export function AdminHoldsIndex(): ReactElement {
             }
             description={
               status === EarlyReservationReviewStatus.OPEN
-                ? 'No seller is sitting on stock frozen against an unreachable customer.'
+                ? 'No client is sitting on stock frozen against an unreachable customer.'
                 : 'Try a different status.'
             }
           />
@@ -137,7 +137,7 @@ export function AdminHoldsIndex(): ReactElement {
           <Table caption="Held stock reviews">
             <THead>
               <Tr>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th>Order</Th>
                 <Th align="right">Units</Th>
                 <Th align="right">Calls</Th>
@@ -200,7 +200,7 @@ export function AdminHoldsIndex(): ReactElement {
       <Notice tone="info">
         <p>
           There is no release control here on purpose. Whether to give the stock back or keep
-          calling is the seller&apos;s commercial decision, and an unanswered review is released by
+          calling is the client&apos;s commercial decision, and an unanswered review is released by
           the TTL sweep rather than held forever. If a hold genuinely has to be broken from this
           side, that is god mode — audited as the exception it is.
         </p>

@@ -9,7 +9,7 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
  */
 export default function SellerAuthLayout({ children }: { children: ReactNode }): ReactElement {
   return (
-    <SignInFrame portal="seller portal" themeControl={<ThemeSwitch />} wide>
+    <SignInFrame portal="client portal" themeControl={<ThemeSwitch />} wide>
       {children}
     </SignInFrame>
   );

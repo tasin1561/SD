@@ -58,7 +58,7 @@ const CASES: ReadonlyArray<{
   readonly dto: string;
 }> = [
   {
-    label: 'seller suspend / reapprove',
+    label: 'client suspend / reapprove',
     clientFile: '../../../../packages/api-client/src/endpoints/admin-sellers.ts',
     iface: 'UpdateSellerStatusRequest',
     dtoFile: '../../../api/src/modules/admin-seller/dto/update-status.dto.ts',
@@ -83,7 +83,7 @@ describe('client request types name exactly the server DTO fields', () => {
 });
 
 describe('the specific field names that were wrong', () => {
-  it('seller status sends newStatus / reasonNote, never targetStatus / reason', () => {
+  it('client status sends newStatus / reasonNote, never targetStatus / reason', () => {
     const caller = R('../app/(authed)/sellers/_components/status-action-panel.tsx');
     expect(caller).toContain('newStatus: intent');
     expect(caller).toContain('reasonNote:');

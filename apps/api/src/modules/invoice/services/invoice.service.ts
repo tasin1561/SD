@@ -136,7 +136,7 @@ export class InvoiceService {
       throw new ConflictException({
         code: RESELLER_ORDER_NO_INVOICE,
         message:
-          'This order was sold by a reseller store. Reseller-store orders do not get a tax invoice.',
+          'This order was sold by a member store. Member-store orders do not get a tax invoice.',
       });
     }
   }

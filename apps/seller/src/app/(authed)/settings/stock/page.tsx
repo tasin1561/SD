@@ -20,7 +20,7 @@ export default function StockSettingsPage(): ReactElement {
     <div className="set-page">
       <SetPageHeader
         crumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Account' },
           { label: 'Settings', href: '/settings' },
           { label: 'Stock alerts' },

@@ -62,7 +62,7 @@ function ChangeSummary({ row }: { readonly row: BankAccountChangeView }): ReactE
   if (row.action.endsWith('.retired')) {
     return (
       <span className="mo-muted">
-        {String(before?.['label'] ?? 'Account')} — no longer offered to sellers
+        {String(before?.['label'] ?? 'Account')} — no longer offered to clients
       </span>
     );
   }

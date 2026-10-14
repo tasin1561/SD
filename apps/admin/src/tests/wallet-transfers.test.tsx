@@ -106,7 +106,7 @@ describe('wallet transfer — preview, confirm, verdict', () => {
     await user.type(screen.getByRole('textbox', { name: /^Amount/ }), '500');
     await user.type(
       screen.getByRole('textbox', { name: /^Reason/ }),
-      'Carton lost by the seller’s own forwarder before it reached us',
+      'Carton lost by the client’s own forwarder before it reached us',
     );
     await user.click(screen.getByRole('button', { name: 'Preview' }));
 

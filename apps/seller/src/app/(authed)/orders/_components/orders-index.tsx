@@ -207,7 +207,7 @@ export function OrdersIndex(): ReactElement {
     ...channelStores.map((s) => ({ id: s.id, name: s.name })),
     ...resellerStores.map((s) => ({
       id: s.id,
-      name: `${s.displayName ?? s.name} (reseller store)`,
+      name: `${s.displayName ?? s.name} (member store)`,
     })),
   ];
   const pendingCount = usePendingRows().data?.length ?? 0;
@@ -304,7 +304,7 @@ export function OrdersIndex(): ReactElement {
   return (
     <div className="ord-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Fulfilment' }, { label: 'Orders' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Fulfilment' }, { label: 'Orders' }]}
         Link={Link}
         title="Orders"
         subtitle="Everything you have sent us, and where each one has got to."
@@ -625,10 +625,10 @@ export function OrdersIndex(): ReactElement {
                           via{' '}
                           {o.storeId !== undefined ? (
                             <Link href={`/reseller-stores/${o.storeId}`} className="ord-link">
-                              {o.storeNameSnapshot ?? 'a reseller store'}
+                              {o.storeNameSnapshot ?? 'a member store'}
                             </Link>
                           ) : (
-                            (o.storeNameSnapshot ?? 'a reseller store')
+                            (o.storeNameSnapshot ?? 'a member store')
                           )}
                         </span>
                       )}

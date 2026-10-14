@@ -244,7 +244,7 @@ export async function assertCodFeesWithinLimit(
       message:
         `The COD fee and the Instant Pay fee are both taken from the same post-tax amount; ` +
         `${value.toString()}% here with ${other.toString()}% on '${sibling}' comes to more ` +
-        `than 100%, which would credit the seller less than nothing.`,
+        `than 100%, which would credit the client less than nothing.`,
     });
   }
 }
@@ -464,7 +464,7 @@ export class SettingsResolverService {
         );
         throw new ConflictException({
           code: 'NOT_SELLER_OVERRIDABLE',
-          message: `Setting '${key}' does not accept a per-seller override`,
+          message: `Setting '${key}' does not accept a per-client override`,
         });
       }
       if (system.valueType !== input.valueType) {

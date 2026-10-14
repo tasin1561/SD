@@ -147,7 +147,7 @@ describe('call-cap answer — the consequence, then the commit', () => {
     openDialog();
 
     const dialog = await screen.findByRole('dialog');
-    const send = within(dialog).getByRole('button', { name: 'Send to your seller to approve' });
+    const send = within(dialog).getByRole('button', { name: 'Send to your client to approve' });
     expect(send).toBeDisabled();
     fireEvent.change(within(dialog).getByRole('textbox'), {
       target: { value: 'Customer asked us to try tomorrow' },
@@ -155,7 +155,7 @@ describe('call-cap answer — the consequence, then the commit', () => {
     fireEvent.click(send);
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalled());
-    expect(await screen.findByText(/Sent to Seller staff to approve/)).toBeInTheDocument();
+    expect(await screen.findByText(/Sent to Client staff to approve/)).toBeInTheDocument();
   });
 
   it('shows the server’s refusal verbatim (FE-2) when the seller keeps this question', async () => {

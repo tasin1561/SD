@@ -974,7 +974,7 @@ export class ImpersonationService implements ImpersonationHandoffExchange {
       if (seller === null) {
         throw new NotFoundException({
           code: 'SELLER_NOT_FOUND',
-          message: 'No live seller with that id',
+          message: 'No live client with that id',
         });
       }
       return { label: `${seller.companyName} (${seller.email})`, sellerId: seller.id };

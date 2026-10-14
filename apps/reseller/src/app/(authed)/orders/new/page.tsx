@@ -241,7 +241,7 @@ export default function NewStoreOrderPage(): ReactElement {
         <EmptyState
           icon={<PackageSearch size={20} />}
           title="Nothing to sell yet"
-          description="The seller has not turned any products on for your store. Ask them to, then come back."
+          description="The client has not turned any products on for your store. Ask them to, then come back."
         />
       </div>
     );
@@ -336,7 +336,7 @@ export default function NewStoreOrderPage(): ReactElement {
                   </div>
                   {item !== undefined ? (
                     <p className="ro-line__note">
-                      You pay the seller <Money amount={item.transferPriceInr} convert={false} />{' '}
+                      You pay the client <Money amount={item.transferPriceInr} convert={false} />{' '}
                       each · {item.availableQty} available to your store
                     </p>
                   ) : null}
@@ -474,7 +474,7 @@ export default function NewStoreOrderPage(): ReactElement {
             <Notice tone="info" icon={<Wallet size={16} />}>
               <span>
                 Nothing is collected on delivery. When this order is confirmed your wallet pays the
-                goods at your seller’s transfer price
+                goods at your client’s transfer price
                 {prepaidGoods > 0 ? (
                   <>
                     {' '}

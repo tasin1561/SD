@@ -104,7 +104,7 @@ describe('Instant Pay advances list', () => {
     expect(screen.getByRole('link', { name: 'See courier payouts' })).toBeInTheDocument();
   });
 
-  it('passes the seller filter it was opened with to the server', async () => {
+  it('passes the client filter it was opened with to the server', async () => {
     const fetchImpl = buildFetchMock([
       {
         match: /\/api\/admin\/treasury\/instant-pay-advances/,

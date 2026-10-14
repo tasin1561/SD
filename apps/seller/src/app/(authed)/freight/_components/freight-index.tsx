@@ -87,7 +87,7 @@ export function SellerFreightIndex(): ReactElement {
     <div className="frt-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Money' },
           { label: 'Inbound freight' },
         ]}

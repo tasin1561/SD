@@ -42,7 +42,7 @@ const ADMIN_NAV = '../app/(authed)/_components/authed-shell.tsx';
 const ADMIN_GATE = '../lib/page-access.ts';
 const SUBMIT_DTO = '../../../api/src/modules/wallet-topup/dto/wallet-topup.dto.ts';
 
-describe('WAL-2 — the seller is never told the money arrived', () => {
+describe('WAL-2 — the client is never told the money arrived', () => {
   it('the wording never promises credit (WAL-2)', () => {
     // A seller is telling us what they SENT, not adding money. The
     // wizard says so at both ends — before they pay and after they
@@ -105,13 +105,13 @@ describe('the admin side can actually accept one', () => {
 
   it('accepting says plainly that it moves money', () => {
     expect(src).toContain('Credit the wallet');
-    expect(src).toMatch(/adds the money to the seller/);
+    expect(src).toMatch(/adds the money to the client/);
   });
 
-  it('a rejection carries a reason the seller can act on', () => {
+  it('a rejection carries a reason the client can act on', () => {
     // The DTO requires ≥5 chars; mirrored so the operator is told first.
     expect(src).toContain('note.trim().length < 5');
-    expect(src).toContain('the seller sees your reason');
+    expect(src).toContain('the client sees your reason');
   });
 
   it('the receipt link is fetched on demand, not listed', () => {
@@ -129,7 +129,7 @@ describe('the admin side can actually accept one', () => {
   });
 });
 
-describe('the seller card is reachable', () => {
+describe('the client card is reachable', () => {
   it('is mounted on the wallet page, before withdrawals', () => {
     const page = R(SELLER_PAGE);
     expect(page).toContain('<TopupCard');

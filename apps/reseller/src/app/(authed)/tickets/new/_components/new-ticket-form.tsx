@@ -119,9 +119,9 @@ export function NewTicketForm({
   const submitLabel =
     audience === 'skydrop'
       ? heldForSeller
-        ? 'Send it to your seller to approve'
+        ? 'Send it to your client to approve'
         : 'Raise it with Skydrop'
-      : 'Raise it with your seller';
+      : 'Raise it with your client';
 
   return (
     <form onSubmit={(e) => void onSubmit(e)} className="rc-tkt-form">
@@ -135,7 +135,7 @@ export function NewTicketForm({
           {
             value: 'seller',
             icon: <Store size={16} />,
-            title: 'Your seller',
+            title: 'Your client',
             description: withSeller.blurb,
           },
           ...(offerSkydrop
@@ -145,7 +145,7 @@ export function NewTicketForm({
                   icon: <LifeBuoy size={16} />,
                   title: 'Skydrop',
                   description: heldForSeller
-                    ? 'Skydrop reads it — something damaged in our hands, lost, or sitting in our warehouse. Your seller approves these first: it reaches Skydrop only once Seller staff say yes.'
+                    ? 'Skydrop reads it — something damaged in our hands, lost, or sitting in our warehouse. Your client approves these first: it reaches Skydrop only once Client staff say yes.'
                     : withSkydrop.blurb,
                 },
               ]
@@ -171,7 +171,7 @@ export function NewTicketForm({
               <>
                 Say what you think is owed and who owes it. Skydrop checks it against the figures
                 that were on the order when you raised this, and settles it between your wallet and
-                your seller&rsquo;s.
+                your client&rsquo;s.
               </>
             }
           />
@@ -193,8 +193,8 @@ export function NewTicketForm({
                 value={claimPayer}
                 onChange={(e) => setClaimPayer(e.target.value === 'STORE' ? 'STORE' : 'SELLER')}
               >
-                <option value="SELLER">The seller owes us</option>
-                <option value="STORE">We owe the seller</option>
+                <option value="SELLER">The client owes us</option>
+                <option value="STORE">We owe the client</option>
               </Select>
             </div>
           ) : null}

@@ -122,7 +122,7 @@ export function FreightIndex(): ReactElement {
       ) : rows.length === 0 ? (
         <EmptyState
           title="No freight bills recorded"
-          description="Record the freight invoice for a consignment once something has landed in India. One bill per consignment — recording it twice is refused, and a seller who shipped straight to India is refused outright."
+          description="Record the freight invoice for a consignment once something has landed in India. One bill per consignment — recording it twice is refused, and a client who shipped straight to India is refused outright."
           action={
             canWrite ? (
               <Button variant="primary" size="sm" onClick={() => setRecording(true)}>

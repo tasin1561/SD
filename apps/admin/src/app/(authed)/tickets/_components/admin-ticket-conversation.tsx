@@ -98,7 +98,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     `storeName` is preferred over a bare "Reseller store" so an operator
     reading this with the seller on the telephone can say who complained.
   */
-  const them = ticket.storeName ?? 'Reseller store';
+  const them = ticket.storeName ?? 'Member store';
   const openedByStore = ticket.openedBy === 'STORE';
   /*
     On a dispute our reply reaches BOTH parties — the plan's own rule is
@@ -118,7 +118,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     bubbles.push({
       key: 'raised',
       side: theirs ? 'SELLER' : 'US',
-      who: openedByStore ? them : fromSeller ? 'Seller' : 'Skydrop',
+      who: openedByStore ? them : fromSeller ? 'Client' : 'Skydrop',
       body: ticket.description,
       at: ticket.createdAt,
       /*
@@ -145,7 +145,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     bubbles.push({
       key: `note-${e.id}`,
       side: fromSeller || fromStore ? 'SELLER' : 'US',
-      who: fromStore ? them : fromSeller ? 'Seller' : 'Skydrop',
+      who: fromStore ? them : fromSeller ? 'Client' : 'Skydrop',
       body: said,
       at: e.createdAt,
       ...(fromSeller ? { eventId: e.id, relayedAt: e.relayedAt } : {}),
@@ -184,8 +184,8 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
         const res = await relay.mutateAsync({ ticketId: ticket.id, eventId });
         toast.success(
           res.alreadyRelayed
-            ? 'Already marked — the seller can see it'
-            : 'Marked as passed to the courier — the seller can see it',
+            ? 'Already marked — the client can see it'
+            : 'Marked as passed to the courier — the client can see it',
         );
       } catch (err) {
         toast.error(serverVerdict(err));
@@ -204,7 +204,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     try {
       await reply.mutateAsync({ ticketId: ticket.id, note });
       setDraft('');
-      toast.success(isDispute ? 'Sent — both sides can see it' : 'Sent — the seller can see it');
+      toast.success(isDispute ? 'Sent — both sides can see it' : 'Sent — the client can see it');
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
@@ -285,14 +285,14 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
       {ticket.resolvedAt === null && canReply ? (
         <div className="af-reply">
           <TextArea
-            label={isDispute ? `Reply to the seller and ${them}` : 'Reply to the seller'}
+            label={isDispute ? `Reply to the client and ${them}` : 'Reply to the client'}
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={
               isDispute
                 ? 'Both sides read this, each on their own ticket.'
-                : 'Reply to the seller — they read this on their own ticket.'
+                : 'Reply to the client — they read this on their own ticket.'
             }
             // Display only: the server's limit on a note (AddTicketNoteDto,
             // 2000), shown so a long reply is not a surprise — never enforced.
@@ -300,7 +300,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
           />
           <div className="af-row af-row--end">
             <PaperPlaneSendButton
-              label={isDispute ? 'Reply to both' : 'Reply to seller'}
+              label={isDispute ? 'Reply to both' : 'Reply to client'}
               busyLabel="Sending…"
               doneLabel="Sent"
               errorLabel="Not sent"

@@ -70,7 +70,7 @@ describe('a stock adjustment can be raised', () => {
   });
 });
 
-describe('a seller can retire a product', () => {
+describe('a client can retire a product', () => {
   it('the product page offers archive and restore', () => {
     const src = R(SELLER_PRODUCT);
     expect(src).toContain('Archive product');

@@ -139,8 +139,8 @@ export function AuthedShell({
     <Toaster>
       <ToastProvider>
         <Shell
-          subtitle="Reseller"
-          sectionLabel="Reseller portal"
+          subtitle="Store"
+          sectionLabel="Store portal"
           navGroups={visible}
           identityPrimary={identity.store.displayName ?? identity.store.name}
           identitySecondary={identity.emailDisplay}

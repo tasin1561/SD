@@ -214,7 +214,7 @@ export class CourierSettlementService {
       throw new BadRequestException({
         code: 'SETTLEMENT_RTO_REVERSAL_ORDERS_REQUIRED',
         message:
-          'An RTO reversal takes back COD a seller was credited — name the order(s) it reverses ' +
+          'An RTO reversal takes back COD a client was credited — name the order(s) it reverses ' +
           '(their file flags them) so each can be taken back exactly.',
       });
     }

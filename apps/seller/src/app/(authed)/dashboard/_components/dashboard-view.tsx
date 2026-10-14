@@ -228,7 +228,7 @@ export function DashboardView(): ReactElement {
   return (
     <div className="db-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Dashboard' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Dashboard' }]}
         Link={Link}
         title={`Hello, ${companyName}`}
         subtitle="Your most recent orders, what you are owed, and where to go next."

@@ -63,8 +63,8 @@ function linksFetch(deleteResponse?: {
   ]);
 }
 
-describe('seller ↔ courier-account links (CACC-1)', () => {
-  it('shows which account carries this seller, and its share', async () => {
+describe('client ↔ courier-account links (CACC-1)', () => {
+  it('shows which account carries this client, and its share', async () => {
     renderWithProviders(<SellerCourierLinksSection sellerId={SELLER} />, {
       fetchImpl: linksFetch(),
       identity: makeStaff(undefined, ['courier.accounts.view', 'sellers.courier_links.manage']),
@@ -115,8 +115,8 @@ describe('seller ↔ courier-account links (CACC-1)', () => {
   });
 });
 
-describe("bulk-closing a seller's call queue", () => {
-  it('sends the reason the DTO requires, with the seller', async () => {
+describe("bulk-closing a client's call queue", () => {
+  it('sends the reason the DTO requires, with the client', async () => {
     const user = userEvent.setup();
     const fetchImpl = buildFetchMock([
       {
@@ -132,7 +132,7 @@ describe("bulk-closing a seller's call queue", () => {
 
     await user.type(
       screen.getByLabelText(/reason/i),
-      'Seller paused trading until their stock arrives',
+      'Client paused trading until their stock arrives',
     );
     await user.click(screen.getByRole('button', { name: /close all open queue entries/i }));
     await user.click(await screen.findByRole('button', { name: /^close entries$/i }));
@@ -144,7 +144,7 @@ describe("bulk-closing a seller's call queue", () => {
     const init = call?.[1] as RequestInit | undefined;
     expect(JSON.parse(String(init?.body))).toEqual({
       sellerId: SELLER,
-      reason: 'Seller paused trading until their stock arrives',
+      reason: 'Client paused trading until their stock arrives',
     });
   });
 

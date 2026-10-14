@@ -248,7 +248,7 @@ export function PendingOrdersIndex(): ReactElement {
     <div className="ord-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Fulfilment' },
           { label: 'Orders', href: '/orders' },
           { label: 'Pending' },

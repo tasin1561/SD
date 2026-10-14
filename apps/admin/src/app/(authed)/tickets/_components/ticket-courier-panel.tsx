@@ -140,7 +140,7 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
       try {
         await record.mutateAsync({ escalationId, body });
         setInbound('');
-        toast.success('Recorded — the seller can see it now');
+        toast.success('Recorded — the client can see it now');
       } catch (err) {
         toast.error(serverVerdict(err));
       }
@@ -267,7 +267,7 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
           <TextArea
             id={`inbound-${ticketId}`}
             label="What the courier told us"
-            hint="Paste their reply rather than paraphrasing — the seller reads this as the courier’s own words."
+            hint="Paste their reply rather than paraphrasing — the client reads this as the courier’s own words."
             rows={3}
             value={inbound}
             onChange={(e) => setInbound(e.target.value)}

@@ -102,7 +102,7 @@ export function NeedsAttentionIndex(): ReactElement {
     <div className="nat-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Selling' },
           { label: 'Needs attention' },
         ]}

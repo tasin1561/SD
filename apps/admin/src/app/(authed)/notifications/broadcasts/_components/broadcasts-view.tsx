@@ -56,14 +56,14 @@ const AUDIENCES: ReadonlyArray<{
   readonly build: (v: readonly string[]) => AudienceSelector;
 }> = [
   {
-    label: 'Every seller',
+    label: 'Every client',
     hint: 'every active user at every company',
     fields: [],
     build: () => ({ kind: 'ALL_SELLERS' }),
   },
   {
     label: 'One company',
-    hint: 'everyone at that seller',
+    hint: 'everyone at that client',
     fields: ['Seller id'],
     build: (v) => ({ kind: 'SELLER_ORG', sellerId: v[0] ?? '' }),
   },
@@ -80,8 +80,8 @@ const AUDIENCES: ReadonlyArray<{
     build: (v) => ({ kind: 'SELLER_PERMISSION', sellerId: v[0] ?? '', permission: v[1] ?? '' }),
   },
   {
-    label: 'One person at a seller',
-    hint: 'a single seller user',
+    label: 'One person at a client',
+    hint: 'a single client user',
     fields: ['Seller user id'],
     build: (v) => ({ kind: 'SELLER_USER', sellerUserId: v[0] ?? '' }),
   },
@@ -113,19 +113,19 @@ const AUDIENCES: ReadonlyArray<{
   // construction — there is deliberately no "every reseller store",
   // because such a message would cross seller boundaries.
   {
-    label: 'Everyone at one reseller store',
+    label: 'Everyone at one member store',
     hint: 'every login at that store',
     fields: ['Store id'],
     build: (v) => ({ kind: 'STORE_ORG', storeId: v[0] ?? '' }),
   },
   {
-    label: 'Everyone at a reseller store with a permission',
+    label: 'Everyone at a member store with a permission',
     hint: 'preferred over a role: a store can rename its own roles, and what somebody may DO is the durable fact',
     fields: ['Store id', 'Permission key, e.g. orders.actions'],
     build: (v) => ({ kind: 'STORE_PERMISSION', storeId: v[0] ?? '', permission: v[1] ?? '' }),
   },
   {
-    label: 'One reseller store user',
+    label: 'One member store user',
     hint: 'a single person at a store',
     fields: ['Store user id'],
     build: (v) => ({ kind: 'STORE_USER', storeUserId: v[0] ?? '' }),

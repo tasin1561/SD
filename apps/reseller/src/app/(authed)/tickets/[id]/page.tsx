@@ -36,7 +36,7 @@ function who(actor: ActorType): string {
       return 'You';
     case 'SELLER':
     case 'API':
-      return 'The seller';
+      return 'The client';
     default:
       return 'Skydrop';
   }
@@ -77,12 +77,12 @@ function Outcome({ t }: { t: StoreTicketView }): ReactElement | null {
       <p>
         {t.disputePayer === 'STORE' && amount !== null ? (
           <>
-            Settled: you paid the seller <Money amount={amount} convert={false} />, taken from your
+            Settled: you paid the client <Money amount={amount} convert={false} />, taken from your
             wallet.
           </>
         ) : t.disputePayer === 'SELLER' && amount !== null ? (
           <>
-            Settled: the seller paid you <Money amount={amount} convert={false} />, credited to your
+            Settled: the client paid you <Money amount={amount} convert={false} />, credited to your
             wallet.
           </>
         ) : (
@@ -119,7 +119,7 @@ function Correction({ t }: { t: StoreTicketView }): ReactElement | null {
       <section className="rc-tkt-section">
         <SectionHeading
           title="The figures"
-          note="What was claimed. The settlement between the store and the seller is not shown to an associate."
+          note="What was claimed. The settlement between the store and the client is not shown to an associate."
         />
         <div className="rc-tkt-card">
           {t.disputeClaimAmountInr !== null ? (
@@ -148,7 +148,7 @@ function Correction({ t }: { t: StoreTicketView }): ReactElement | null {
           <p>
             Claimed: <Money amount={t.disputeClaimAmountInr} convert={false} />{' '}
             <span className="rc-tkt-card__aside">
-              {t.disputeClaimPayer === 'STORE' ? '— we owe the seller' : '— the seller owes us'}
+              {t.disputeClaimPayer === 'STORE' ? '— we owe the client' : '— the client owes us'}
             </span>
           </p>
         ) : null}
@@ -168,7 +168,7 @@ function Correction({ t }: { t: StoreTicketView }): ReactElement | null {
             </p>
             {f.parties.map((p) => (
               <p key={p.party}>
-                {p.party === 'STORE' ? 'Us' : 'The seller'}: net{' '}
+                {p.party === 'STORE' ? 'Us' : 'The client'}: net{' '}
                 <Money amount={p.netInr} convert={false} />{' '}
                 <span className="rc-tkt-card__aside">({p.status.toLowerCase()})</span>
               </p>

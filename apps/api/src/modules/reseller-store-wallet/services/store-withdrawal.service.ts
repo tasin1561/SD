@@ -218,7 +218,7 @@ export class StoreWithdrawalService {
           code: 'STORE_WITHDRAWAL_EXCEEDS_WITHDRAWABLE',
           message:
             `You can withdraw at most ₹${withdrawable.toFixed(2)} now — your balance, less ` +
-            'withdrawals already asked for, and never more than your seller’s account holds for you.',
+            'withdrawals already asked for, and never more than your client’s account holds for you.',
         });
       }
       return tx.storeWithdrawalRequest.create({
@@ -409,7 +409,7 @@ export class StoreWithdrawalService {
         if (store.walletManagedBy !== ResellerWalletManager.SKYDROP) {
           throw new ConflictException({
             code: 'STORE_WALLET_SELLER_MANAGED',
-            message: 'The seller manages this store’s wallet now — reject the request.',
+            message: 'The client manages this store’s wallet now — reject the request.',
           });
         }
         const { withdrawable } = await this.storeWallet.storeWithdrawable(tx, {

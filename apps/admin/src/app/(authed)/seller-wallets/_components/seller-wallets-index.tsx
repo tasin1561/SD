@@ -169,13 +169,13 @@ export function SellerWalletsIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Seller wallets"
+        title="Client wallets"
         meta={
           <span className="mk-count sk-figure">
             {counts.all} {counts.all === 1 ? 'account' : 'accounts'}
           </span>
         }
-        subtitle="What we owe sellers, what they owe us, and every ledger behind those two numbers."
+        subtitle="What we owe clients, what they owe us, and every ledger behind those two numbers."
         action={
           mayReconcile ? (
             <Button
@@ -195,7 +195,7 @@ export function SellerWalletsIndex(): ReactElement {
 
       {reconcile.isPending && (
         <ParachuteProgress
-          label="Re-checking every seller wallet against its ledger"
+          label="Re-checking every client wallet against its ledger"
           detail="Nothing is changed unless a cached balance drifted from its own entries."
         />
       )}
@@ -207,7 +207,7 @@ export function SellerWalletsIndex(): ReactElement {
               <Skeleton key={i} height={148} rounded="md" />
             ))}
           </div>
-          <SkeletonRows rows={6} cols={7} label="Loading seller wallets…" />
+          <SkeletonRows rows={6} cols={7} label="Loading client wallets…" />
         </>
       ) : overview.isError || overview.data === undefined ? (
         <ErrorState
@@ -218,7 +218,7 @@ export function SellerWalletsIndex(): ReactElement {
         <>
           <div className="mk-kpis">
             <MoneyTile
-              label="We owe sellers"
+              label="We owe clients"
               caption="Payable on demand"
               amountInr={overview.data.totals.owedToSellersInr}
               icon={<ArrowUpRight size={16} />}
@@ -228,7 +228,7 @@ export function SellerWalletsIndex(): ReactElement {
               inrToBdt={inrToBdt}
             />
             <MoneyTile
-              label="Sellers owe us"
+              label="Clients owe us"
               caption="Negative balances and return charges"
               amountInr={overview.data.totals.owedBySellersInr}
               icon={<AlertTriangle size={16} />}
@@ -290,10 +290,10 @@ export function SellerWalletsIndex(): ReactElement {
                 placeholder: 'Filter by company, email or id…',
               }}
             />
-            <Table caption="Seller wallets">
+            <Table caption="Client wallets">
               <THead>
                 <Tr>
-                  <Th>Seller</Th>
+                  <Th>Client</Th>
                   <Th align="right">Available balance</Th>
                   <Th align="right">Requested out</Th>
                   <Th align="right">Awaiting review</Th>
@@ -306,7 +306,7 @@ export function SellerWalletsIndex(): ReactElement {
                 {shown.length === 0 ? (
                   <TableEmpty colSpan={7}>
                     {rows.length === 0
-                      ? 'No sellers yet. Every approved seller appears here, whether or not money has moved.'
+                      ? 'No clients yet. Every approved client appears here, whether or not money has moved.'
                       : 'No wallet matches that.'}
                   </TableEmpty>
                 ) : (
@@ -316,7 +316,7 @@ export function SellerWalletsIndex(): ReactElement {
             </Table>
             <div className="mk-card__foot">
               <span>
-                Showing {shown.length} of {rows.length} registered seller wallet
+                Showing {shown.length} of {rows.length} registered client wallet
                 {rows.length === 1 ? '' : 's'}
               </span>
               <span className="mk-balances">
@@ -326,7 +326,7 @@ export function SellerWalletsIndex(): ReactElement {
                     working is the one number on this page that could be
                     read as "nothing is outstanding". */}
                 <span className="mk-faint">
-                  (owed to sellers {overview.data.totals.owedToSellersInr} − owed by them{' '}
+                  (owed to clients {overview.data.totals.owedToSellersInr} − owed by them{' '}
                   {overview.data.totals.owedBySellersInr})
                 </span>
               </span>
@@ -338,8 +338,8 @@ export function SellerWalletsIndex(): ReactElement {
       <ConfirmDialog
         open={confirmingReconcile}
         onOpenChange={setConfirmingReconcile}
-        title="Re-check every seller ledger?"
-        entity={`Every seller wallet · ${counts.all} ${counts.all === 1 ? 'account' : 'accounts'}`}
+        title="Re-check every client ledger?"
+        entity={`Every client wallet · ${counts.all} ${counts.all === 1 ? 'account' : 'accounts'}`}
         consequence="Each wallet's cached balance is checked against its own ledger entries. A cached balance that drifted is repaired; a ledger that disagrees with itself is reported and never changed."
         confirmLabel="Re-check ledgers"
         onConfirm={runReconcile}

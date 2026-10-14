@@ -46,7 +46,7 @@ export function OpenReturns({
           <THead>
             <Tr>
               <Th>Parcel</Th>
-              <Th>Seller</Th>
+              <Th>Client</Th>
               <Th>Received</Th>
               <Th>Items</Th>
               <Th align="right">Open</Th>

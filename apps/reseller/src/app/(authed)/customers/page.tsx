@@ -26,7 +26,7 @@ import './_components/customers.css';
  *
  * This file said the opposite for weeks — "the seller whose stock you
  * sell never sees their names or numbers" — on the subtitle AND here,
- * while `customers/[id]` one click away said "Your seller sees them too".
+ * while `customers/[id]` one click away said "Your client sees them too".
  * A promise the platform deliberately does not make is worse than no
  * promise: the shopkeeper acts on it. The detail page was right.
  *
@@ -44,7 +44,7 @@ export default function CustomersPage(): ReactElement {
     <div className="rc-cst-page">
       <PageHeader
         title="Customers"
-        subtitle="Everyone your store has sold to. No other store sees them. Your seller does, and each of you is told when the other changes their details."
+        subtitle="Everyone your store has sold to. No other store sees them. Your client does, and each of you is told when the other changes their details."
       />
       <section className="rc-cst-section">
         <SectionHeading title="Your customers" />

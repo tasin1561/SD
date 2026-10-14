@@ -122,7 +122,7 @@ export function OrderActions({
       }
       toast.success(
         out.awaitingSeller
-          ? 'Sent to Seller staff to approve. Nothing happens until they answer.'
+          ? 'Sent to Client staff to approve. Nothing happens until they answer.'
           : 'Done.',
       );
       setAsking(null);
@@ -151,17 +151,17 @@ export function OrderActions({
     asking === null
       ? undefined
       : askingWaits
-        ? 'The seller sees this and decides. Nothing happens to the parcel until they answer.'
+        ? 'The client sees this and decides. Nothing happens to the parcel until they answer.'
         : 'This is carried out as soon as you send it.';
 
   return (
     <RoSection
       title="Something wrong with the delivery?"
-      note="What you can ask for is set by the seller. Some of it happens straight away; some goes to them first."
+      note="What you can ask for is set by the client. Some of it happens straight away; some goes to them first."
     >
       <div className="ro-stack">
         {offered.length === 0 ? (
-          <p className="ro-p">The seller has not enabled any of these for your store.</p>
+          <p className="ro-p">The client has not enabled any of these for your store.</p>
         ) : !stageOpen ? (
           <p className="ro-p">
             Calling the customer again, another delivery attempt and sending the parcel back are
@@ -187,7 +187,7 @@ export function OrderActions({
                   <span className="ro-offer__note">
                     {waits ? <Clock size={13} aria-hidden /> : <Zap size={13} aria-hidden />}
                     {waits
-                      ? 'The seller approves this one before anything happens'
+                      ? 'The client approves this one before anything happens'
                       : 'Happens as soon as you ask'}
                   </span>
                 </li>

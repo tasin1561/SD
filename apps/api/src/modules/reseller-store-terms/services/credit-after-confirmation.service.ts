@@ -186,7 +186,7 @@ export class CreditAfterConfirmationService {
       select: { id: true },
     });
     if (seller === null) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such client' });
     }
   }
 }

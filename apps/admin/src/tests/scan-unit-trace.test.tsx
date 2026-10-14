@@ -51,7 +51,7 @@ function renderPanel(): ReturnType<typeof renderWithProviders> {
 async function chooseSeller(): Promise<void> {
   await screen.findByRole('option', { name: 'Menev Store' });
   const select = screen.getByRole('option', { name: 'Menev Store' }).closest('select');
-  if (select === null) throw new Error('seller select not found');
+  if (select === null) throw new Error('client select not found');
   fireEvent.change(select, { target: { value: 'seller-1' } });
 }
 
@@ -73,7 +73,7 @@ describe('unit trace — Enter traces', () => {
       ]),
     );
     expect(
-      await screen.findByText(/No unit with that serial belongs to this seller/),
+      await screen.findByText(/No unit with that serial belongs to this client/),
     ).toBeInTheDocument();
   });
 
@@ -89,7 +89,7 @@ describe('unit trace — Enter traces', () => {
 
   // ops-hooks.ts:2433 — with no seller chosen, Enter asks nothing (a serial
   // is only unique within one seller).
-  it('with no seller chosen, Enter makes no trace request', async () => {
+  it('with no client chosen, Enter makes no trace request', async () => {
     const user = userEvent.setup();
     const { fetchImpl } = renderPanel();
     await screen.findByRole('option', { name: 'Menev Store' });

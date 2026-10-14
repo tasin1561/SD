@@ -43,7 +43,7 @@ export const tourStockIn: TourVignetteContent = {
     },
     {
       id: 'freight',
-      text: 'Freight billed three ways — now, later as units sell, or in advance at the Dhaka count — per seller or per consignment, agreed in taka or rupees and converted when you are charged',
+      text: 'Freight billed three ways — now, later as units sell, or in advance at the Dhaka count — per client or per consignment, agreed in taka or rupees and converted when you are charged',
       beat: 'freight',
     },
   ],

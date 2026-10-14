@@ -75,7 +75,7 @@ export class AdminDeliveryActionController {
     if (note.length < 5) {
       throw new BadRequestException({
         code: 'DELIVERY_ACTION_REASON_REQUIRED',
-        message: 'Say why. The seller sees this, and an unexplained no comes straight back.',
+        message: 'Say why. The client sees this, and an unexplained no comes straight back.',
       });
     }
     return this.svc.reject(staff.id, requestId, note);

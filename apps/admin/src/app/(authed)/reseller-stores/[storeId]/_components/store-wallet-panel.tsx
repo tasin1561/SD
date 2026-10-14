@@ -43,7 +43,7 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
   return (
     <AcSection
       title="Wallet"
-      note="A ledger between the store and its seller; the cash behind it is the seller’s in our books."
+      note="A ledger between the store and its client; the cash behind it is the client’s in our books."
       bare
       action={
         <Link
@@ -70,14 +70,14 @@ export function StoreWalletPanel({ storeId }: { readonly storeId: string }): Rea
           />
           <KpiCard
             label="Managed by"
-            figure={summary.data.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'The seller'}
+            figure={summary.data.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'The client'}
           />
           <KpiCard
             label="May go below zero by"
             figure={<Money amount={summary.data.negativeLimit.effectiveInr} />}
             hint={
               <>
-                Seller set <Money amount={summary.data.negativeLimit.ownInr} convert={false} />; our
+                Client set <Money amount={summary.data.negativeLimit.ownInr} convert={false} />; our
                 cap <Money amount={summary.data.negativeLimit.capInr} convert={false} />.
               </>
             }

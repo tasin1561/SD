@@ -99,7 +99,7 @@ export function ShipmentCostPanel({
         }}
         icon={<ReceiptIndianRupee size={18} />}
         title="What did this parcel cost us?"
-        description="From the courier's invoice. Feeds the delivery and returns margins; changes nothing the seller was billed."
+        description="From the courier's invoice. Feeds the delivery and returns margins; changes nothing the client was billed."
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => setOpen(false)}>
@@ -169,7 +169,7 @@ export function ShipmentCostPanel({
             )}
           </span>
         }
-        consequence="The P&L reads this cost as what the parcel cost us to carry; nothing the seller was billed changes."
+        consequence="The P&L reads this cost as what the parcel cost us to carry; nothing the client was billed changes."
         confirmLabel="Save the cost"
         onConfirm={save}
         error={confirming ? (error ?? undefined) : undefined}

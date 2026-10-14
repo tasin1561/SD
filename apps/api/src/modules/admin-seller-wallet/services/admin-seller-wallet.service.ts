@@ -363,7 +363,7 @@ export class AdminSellerWalletService {
       select: { id: true, companyName: true, email: true, status: true },
     });
     if (seller === null) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
     }
 
     // Same reasoning as the list: the ledger is authoritative, the cache

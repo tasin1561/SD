@@ -505,7 +505,7 @@ export class OrderCsvImportProcessorService {
         const resolved = await this.catalog.getVariantBySku(sellerId, l.productSku);
         if (!resolved || resolved.sellerId !== sellerId) {
           // See above: the seller's own data, so the seller reads it.
-          throw new BadRequestException(`Variant SKU "${l.productSku}" not found for this seller`);
+          throw new BadRequestException(`Variant SKU "${l.productSku}" not found for this client`);
         }
         return {
           variantId: resolved.variantId,

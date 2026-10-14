@@ -25,7 +25,7 @@ export default function CataloguePage(): ReactElement {
   const me = useStoreIdentity();
   const catalogue = useStoreCatalogue();
   const [search, setSearch] = useState('');
-  const seller = me?.seller.companyName ?? 'The seller';
+  const seller = me?.seller.companyName ?? 'The client';
 
   const items = useMemo(() => {
     const q = search.trim().toLowerCase();

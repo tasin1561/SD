@@ -97,13 +97,13 @@ export default function SettingsPage(): ReactElement {
       group: 'integrations',
       icon: <Key size={16} />,
       title: 'API keys',
-      description: 'Programmatic access to the Skydrop seller API. Create, label, and revoke keys.',
+      description: 'Programmatic access to the Skydrop API. Create, label, and revoke keys.',
     },
   ];
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={[{ label: 'Seller console' }, { label: 'Account' }, { label: 'Settings' }]}
+        crumbs={[{ label: 'Client console' }, { label: 'Account' }, { label: 'Settings' }]}
         title="Settings"
         subtitle="Sign-in and sessions, order and stock defaults, wallet limits, webhooks, notifications, API keys."
       />

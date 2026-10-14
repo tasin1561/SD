@@ -22,7 +22,7 @@ function order(extra: Record<string, unknown>): OrderView {
   } as unknown as OrderView;
 }
 
-describe('reseller order panel — terms version', () => {
+describe('member store order panel — terms version', () => {
   it('shows the version number, not the uuid', () => {
     render(<ResellerOrderPanel order={order({ resellerTermsVersionNumber: 3 })} />);
     expect(screen.getByText('Version 3')).toBeInTheDocument();

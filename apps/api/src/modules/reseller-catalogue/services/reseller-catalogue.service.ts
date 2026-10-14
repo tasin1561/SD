@@ -382,7 +382,7 @@ export class ResellerCatalogueService {
     if (before === null) {
       throw new NotFoundException({
         code: 'PRICE_NOT_FOUND',
-        message: 'This product has no default reseller price',
+        message: 'This product has no default member store price',
       });
     }
     await this.prisma.client.resellerPriceListItem.deleteMany({
@@ -611,7 +611,7 @@ export class ResellerCatalogueService {
         throw new ConflictException({
           code: 'TRANSFER_PRICE_REQUIRED',
           message:
-            'This product has no reseller price. Set one on your price list, or give this store its own, before turning it on.',
+            'This product has no member store price. Set one on your price list, or give this store its own, before turning it on.',
         });
       }
     }
@@ -1095,7 +1095,7 @@ export class ResellerCatalogueService {
       select: { id: true, name: true, sellerId: true, status: true },
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return store;
   }

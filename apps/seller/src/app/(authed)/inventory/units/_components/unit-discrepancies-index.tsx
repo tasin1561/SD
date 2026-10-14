@@ -65,7 +65,7 @@ export function UnitDiscrepanciesIndex(): ReactElement {
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Stock' },
           { label: 'Inventory', href: '/inventory' },
           { label: 'Unit discrepancies' },

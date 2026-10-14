@@ -106,7 +106,7 @@ export class SellerAddressService {
     if (!SELLER_OWNED_TYPES.includes(input.type)) {
       throw new BadRequestException({
         code: 'INVALID_ADDRESS_TYPE',
-        message: 'Sellers can only manage BD_ORIGIN, BD_OFFICE, or IN_RETURN addresses',
+        message: 'Clients can only manage BD_ORIGIN, BD_OFFICE, or IN_RETURN addresses',
       });
     }
 

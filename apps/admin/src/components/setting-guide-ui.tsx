@@ -356,7 +356,7 @@ function WarehouseChoices({
           : `Consignments sent via Bangladesh are received at ${w.code} first.`,
         example: fulfils
           ? `A consignment created without a warehouse is received at ${w.code} (${w.name}).`
-          : `A seller choosing "via Bangladesh" delivers to ${w.name}, and it is counted there before flying.`,
+          : `A client choosing "via Bangladesh" delivers to ${w.name}, and it is counted there before flying.`,
       },
     ]);
   return render(extra, warehouses.isLoading);
@@ -374,7 +374,7 @@ function AccountChoices({
     a.id,
     {
       label: `${a.label} (${a.environment.toLowerCase()}${a.isActive ? '' : ', inactive'})`,
-      does: `Parcels of sellers without their own accounts go to the "${a.label}" account.`,
+      does: `Parcels of clients without their own accounts go to the "${a.label}" account.`,
       example: `A default-routed parcel is booked, billed and tracked on "${a.label}".`,
     },
   ]);

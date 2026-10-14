@@ -137,7 +137,7 @@ export default function AssociatePricesPage(): ReactElement {
           note={
             none
               ? undefined
-              : `${priced} of ${prices.data.rows.length} priced${outOfRange > 0 ? ` · ${outOfRange} now outside the seller’s range` : ''}`
+              : `${priced} of ${prices.data.rows.length} priced${outOfRange > 0 ? ` · ${outOfRange} now outside the client’s range` : ''}`
           }
         />
         <TableToolbar
@@ -154,7 +154,7 @@ export default function AssociatePricesPage(): ReactElement {
             title={none ? 'Nothing to price yet' : 'Nothing matches that search'}
             description={
               none
-                ? 'Your seller has not turned any products on for this store yet, so there is nothing for an associate to sell.'
+                ? 'Your client has not turned any products on for this store yet, so there is nothing for an associate to sell.'
                 : undefined
             }
             action={
@@ -326,7 +326,7 @@ function PriceRow({
             <p className="as-price__note">
               <TriangleAlert size={12} aria-hidden />
               <span>
-                Outside what your seller now allows. Orders at this price are refused — set one{' '}
+                Outside what your client now allows. Orders at this price are refused — set one{' '}
                 {rangeWords(row.minRetailInr, row.maxRetailInr)}.
               </span>
             </p>

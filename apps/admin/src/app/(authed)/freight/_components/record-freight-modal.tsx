@@ -60,7 +60,7 @@ function legWords(leg: string | null): string {
 
 const SOURCE_WORDS: Record<'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT', string> = {
   CONSIGNMENT: 'pinned on this consignment',
-  SELLER: "from the seller's settings",
+  SELLER: "from the client's settings",
   SYSTEM_DEFAULT: 'the platform default',
 };
 
@@ -267,7 +267,7 @@ export function RecordFreightModal({
       size="xl"
       locked={record.isPending}
       title="Record a freight bill"
-      description="The BD→India cost for one arrival. Pay-now debits the seller's wallet immediately; pay-later leaves a receivable that amortises as the stock sells."
+      description="The BD→India cost for one arrival. Pay-now debits the client's wallet immediately; pay-later leaves a receivable that amortises as the stock sells."
       footer={
         <DialogFooter>
           <Button
@@ -360,7 +360,7 @@ export function RecordFreightModal({
               <Select
                 id="freight-currency"
                 label="Agreed in"
-                hint="The currency the rate was agreed in on the phone — type the figures exactly as they are on the invoice. The bill is converted to rupees at the rate in force when it is recorded, and the seller is charged rupees either way."
+                hint="The currency the rate was agreed in on the phone — type the figures exactly as they are on the invoice. The bill is converted to rupees at the rate in force when it is recorded, and the client is charged rupees either way."
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value as Currency)}
               >

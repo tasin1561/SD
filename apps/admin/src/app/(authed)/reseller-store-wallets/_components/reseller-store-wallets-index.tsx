@@ -85,11 +85,11 @@ export function ResellerStoreWalletsIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Reseller store wallets"
-        subtitle="Top-up claims and withdrawal requests from stores whose wallet Skydrop manages. The cash is the seller’s in our books."
+        title="Member store wallets"
+        subtitle="Top-up claims and withdrawal requests from stores whose wallet Skydrop manages. The cash is the client’s in our books."
         action={
           <Link href="/reseller-stores" className="mk-link">
-            Reseller stores <ArrowRight size={14} aria-hidden />
+            Member stores <ArrowRight size={14} aria-hidden />
           </Link>
         }
       />
@@ -195,7 +195,7 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
             <THead>
               <Tr>
                 <Th>Claimed</Th>
-                <Th>Store · seller</Th>
+                <Th>Store · client</Th>
                 <Th>Paid into</Th>
                 <Th align="right">Amount</Th>
                 <Th>Evidence</Th>
@@ -297,7 +297,7 @@ function TopupQueue({ storeId }: { readonly storeId: string | null }): ReactElem
         }
         description={
           intent === 'ACCEPT'
-            ? 'Only if the money is on our statement. It is held as the seller’s cash.'
+            ? 'Only if the money is on our statement. It is held as the client’s cash.'
             : 'Say why — the store reads it.'
         }
         tone={intent === 'REJECT' ? 'critical' : 'default'}
@@ -414,7 +414,7 @@ function WithdrawalQueue({ storeId }: { readonly storeId: string | null }): Reac
             <THead>
               <Tr>
                 <Th>Asked</Th>
-                <Th>Store · seller</Th>
+                <Th>Store · client</Th>
                 <Th>Pay to</Th>
                 <Th align="right">Amount</Th>
                 <Th>Status</Th>

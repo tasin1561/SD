@@ -65,7 +65,7 @@ export function CustomerRiskStrip({ orderId }: { readonly orderId: string }): Re
           {platform.refusedOnCall > 0 && ` · declined on a call ${platform.refusedOnCall}×`}
         </span>
         {yours.totalOrders > 0 && (
-          <span className="oo-faint">({yours.totalOrders} with this seller)</span>
+          <span className="oo-faint">({yours.totalOrders} with this client)</span>
         )}
         {flagged && <span className="cc-risk__flag">Flagged {riskLevel.toLowerCase()}</span>}
       </div>
@@ -74,7 +74,7 @@ export function CustomerRiskStrip({ orderId }: { readonly orderId: string }): Re
       )}
       {yours.openOrders.length > 1 && (
         <div className="cc-risk__note">
-          {yours.openOrders.length} orders from this seller are open at once — worth asking whether
+          {yours.openOrders.length} orders from this client are open at once — worth asking whether
           they meant to place them all.
         </div>
       )}

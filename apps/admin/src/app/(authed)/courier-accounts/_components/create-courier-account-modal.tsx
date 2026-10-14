@@ -282,7 +282,7 @@ export function CreateCourierAccountModal({
           checked={isDefault}
           onChange={(e) => setIsDefault(e.target.checked)}
           label="Make this the default for its courier and environment"
-          description="Sellers with no explicit link route here. At most one default per pair."
+          description="Clients with no explicit link route here. At most one default per pair."
         />
 
         <TextField

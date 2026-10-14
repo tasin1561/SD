@@ -48,7 +48,7 @@ export default function StoreExpensesPage(): ReactElement {
     <div className="rm-page">
       <PageHeader
         title="Expenses"
-        subtitle="What your store spent. It counts in your profit and loss and return on ad spend; it moves no money and your seller never sees it."
+        subtitle="What your store spent. It counts in your profit and loss and return on ad spend; it moves no money and your client never sees it."
       />
       {mayRecord && <RecordExpense />}
       <div className="rm-filters">

@@ -156,7 +156,7 @@ export function NotificationsView(): ReactElement {
   return (
     <div className="set-page">
       <SetPageHeader
-        crumbs={[{ label: 'Seller console' }, { label: 'Notifications' }]}
+        crumbs={[{ label: 'Client console' }, { label: 'Notifications' }]}
         title="Notifications"
         subtitle="Everything sent to you — what a courier did, what the warehouse checked in, and what moved in your wallet."
         meta={

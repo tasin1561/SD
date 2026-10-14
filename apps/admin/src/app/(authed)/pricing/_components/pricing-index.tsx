@@ -85,7 +85,7 @@ function usePricingPreview(): UseMutationResult<PricingResult, Error, PreviewBod
 /** Plain-language explanations. A code alone tells you nothing actionable. */
 const FALLBACK_TEXT: Record<string, string> = {
   NO_RATE_CARD:
-    'No rate card applies to this seller — base shipping is zero, which is not a price.',
+    'No rate card applies to this client — base shipping is zero, which is not a price.',
   NO_RATE_CARD_ITEM:
     'No rate exists for this courier, zone and weight slab. Base shipping fell back to zero.',
   ZONE_FALLBACK_DEFAULT:
@@ -139,7 +139,7 @@ export function PricingIndex(): ReactElement {
         <div className="mo-fields" data-cols="2">
           <TextField
             id="pp-seller"
-            label="Seller id"
+            label="Client id"
             hint="Their rate card and discounts apply."
             value={form.sellerId}
             onChange={(e) => set('sellerId', e.target.value)}
@@ -254,7 +254,7 @@ export function PricingIndex(): ReactElement {
                   value: <Num value={r.chargeableWeightGrams} suffix="g" />,
                 },
                 {
-                  label: 'Seller discount',
+                  label: 'Client discount',
                   value: r.sellerDiscountPercent === null ? 'None' : `${r.sellerDiscountPercent}%`,
                 },
               ]}
@@ -306,7 +306,7 @@ export function PricingIndex(): ReactElement {
 
           <MoSection
             title="Margin"
-            note="Internal only — never shown to a seller and never touches their wallet."
+            note="Internal only — never shown to a client and never touches their wallet."
           >
             <Facts
               items={[

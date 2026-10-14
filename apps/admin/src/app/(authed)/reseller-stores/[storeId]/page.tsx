@@ -37,8 +37,8 @@ function when(iso: string | null): string {
 
 const EVENT_WORDS: Record<string, string> = {
   CREATED: 'Opened',
-  APPROVED: 'Approved by the seller',
-  REJECTED: 'Rejected by the seller',
+  APPROVED: 'Approved by the client',
+  REJECTED: 'Rejected by the client',
   PAUSED: 'Paused',
   RESUMED: 'Resumed',
   CLOSED: 'Closed',
@@ -47,10 +47,10 @@ const EVENT_WORDS: Record<string, string> = {
 
 const ACTOR_WORDS: Record<string, string> = {
   STAFF: 'Skydrop staff',
-  SELLER: 'The seller',
+  SELLER: 'The client',
   STORE: 'The store',
   SYSTEM: 'System',
-  API: 'The seller’s systems',
+  API: 'The client’s systems',
 };
 
 /**
@@ -76,7 +76,7 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
       {c === null ? (
         <EmptyState
           title="No terms published"
-          description="The store cannot place orders until the seller publishes terms and the store accepts them."
+          description="The store cannot place orders until the client publishes terms and the store accepts them."
         />
       ) : (
         <AcCard flush>
@@ -101,7 +101,7 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
               <Tr>
                 <Th>Fee</Th>
                 <Th align="right">Store pays</Th>
-                <Th align="right">Seller pays</Th>
+                <Th align="right">Client pays</Th>
                 <Th>Example</Th>
               </Tr>
             </THead>
@@ -190,13 +190,13 @@ export default function AdminResellerStorePage(): ReactElement {
   const canImpersonate = usePermission('support.impersonate');
   const [impersonating, setImpersonating] = useState(false);
 
-  const crumbs = [{ label: 'Reseller stores', href: '/reseller-stores' }] as const;
+  const crumbs = [{ label: 'Member stores', href: '/reseller-stores' }] as const;
   // The header and the way back stay on screen while the store loads or
   // fails, so a slow or refused read never leaves a blank page.
   if (store.isPending || store.isError) {
     return (
       <AcPage>
-        <AcHeader crumbs={[...crumbs, { label: 'Reseller store' }]} title="Reseller store" />
+        <AcHeader crumbs={[...crumbs, { label: 'Member store' }]} title="Member store" />
         {store.isPending ? (
           <SkeletonRows rows={5} cols={2} label="Loading the store" />
         ) : (
@@ -266,7 +266,7 @@ export default function AdminResellerStorePage(): ReactElement {
           columns={2}
           items={[
             {
-              label: 'Seller',
+              label: 'Client',
               value: (
                 <span className="ac-inline">
                   <Link href={`/sellers/${s.sellerId}`} className="ac-link">
@@ -282,10 +282,10 @@ export default function AdminResellerStorePage(): ReactElement {
               ),
             },
             { label: 'Customers see', value: s.displayName ?? s.name },
-            { label: 'Opened by', value: s.origin === 'ADMIN' ? 'Skydrop' : 'The seller' },
+            { label: 'Opened by', value: s.origin === 'ADMIN' ? 'Skydrop' : 'The client' },
             {
               label: 'Wallet managed by',
-              value: s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'The seller',
+              value: s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'The client',
             },
             { label: 'Contact email', value: s.contactEmail ?? '—' },
             { label: 'Contact phone', value: s.contactPhone ?? '—' },
@@ -334,14 +334,14 @@ export default function AdminResellerStorePage(): ReactElement {
 
       <AcSection
         title="Team"
-        note="Logins on the reseller portal, and invitations still open."
+        note="Logins on the member store portal, and invitations still open."
         flush
       >
         {s.team.members.length === 0 && s.team.invitations.length === 0 ? (
           <EmptyState
             bare
             title="Nobody on the team yet"
-            description="The seller invites the store’s first user."
+            description="The client invites the store’s first user."
           />
         ) : (
           <Table caption="Store team">

@@ -109,7 +109,7 @@ export class ManualExpenseService {
       throw new BadRequestException({
         code: 'TREASURY_EXPENSE_NOT_CAPITAL',
         message:
-          'An expense is always ours. Paying for something out of a seller’s money would be ' +
+          'An expense is always ours. Paying for something out of a client’s money would be ' +
           'spending their balance — their wallet is charged through its own flows.',
       });
     }

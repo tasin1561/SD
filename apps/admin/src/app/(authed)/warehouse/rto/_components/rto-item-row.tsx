@@ -100,13 +100,13 @@ export const DISPOSITION_OPTIONS = [
     value: 'HOLD_DAMAGED',
     label: 'Keep aside (damaged)',
     effect:
-      'Moves from the returns hold into this warehouse’s Damaged bin at finalise — kept for the seller, never sellable, and no inbound freight is charged. Finalise refuses if the warehouse has no Damaged bin. To send it back or scrap it later: Inventory → Adjustments, a decrease from the Damaged bin with reason “returned to seller” or “damaged in warehouse”.',
+      'Moves from the returns hold into this warehouse’s Damaged bin at finalise — kept for the client, never sellable, and no inbound freight is charged. Finalise refuses if the warehouse has no Damaged bin. To send it back or scrap it later: Inventory → Adjustments, a decrease from the Damaged bin with reason “returned to seller” or “damaged in warehouse”.',
   },
   {
     value: 'WRITE_OFF',
     label: 'Write off (not sellable)',
     effect:
-      'Removed from the returns hold at finalise, and from stock for good. The seller is charged this unit’s share of inbound freight; any refund for the goods is decided on the damage ticket.',
+      'Removed from the returns hold at finalise, and from stock for good. The client is charged this unit’s share of inbound freight; any refund for the goods is decided on the damage ticket.',
   },
   {
     value: 'INSPECT_LATER',
@@ -121,7 +121,7 @@ export const DISPOSITION_OPTIONS = [
  * receive), so each choice says where it goes FROM there at finalise.
  */
 const DISPOSITION_HINT =
-  'Everything received waits in the returns hold until you decide. Put back in stock: sellable immediately (the floor bin, or its old shelf when bins are tracked). Keep aside (damaged): the Damaged bin, kept for the seller and never sold. Write off: removed from the returns hold and from stock, and the seller is charged its share of inbound freight. Decide later: stays in the returns hold; the parcel cannot be finalised until you choose.';
+  'Everything received waits in the returns hold until you decide. Put back in stock: sellable immediately (the floor bin, or its old shelf when bins are tracked). Keep aside (damaged): the Damaged bin, kept for the client and never sold. Write off: removed from the returns hold and from stock, and the client is charged its share of inbound freight. Decide later: stays in the returns hold; the parcel cannot be finalised until you choose.';
 
 /**
  * A combination that is allowed but usually a slip — said out loud, never
@@ -269,7 +269,7 @@ export function RtoItemRow({
           <div className="wh-fields" data-cols="2">
             <Select
               label="Condition"
-              hint="What you found in the box. Damaged or Missing opens a damage ticket to the seller, which is where any refund is decided."
+              hint="What you found in the box. Damaged or Missing opens a damage ticket to the client, which is where any refund is decided."
               value={condition}
               onChange={(e) => setCondition(e.target.value)}
               disabled={saving}

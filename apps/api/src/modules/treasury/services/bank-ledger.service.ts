@@ -30,7 +30,7 @@ function statedInrValue(
       throw new BadRequestException({
         code: 'INR_VALUE_REQUIRED',
         message:
-          `This moves a seller's money in a ${accountCurrency} account. Say what it is worth to ` +
+          `This moves a client's money in a ${accountCurrency} account. Say what it is worth to ` +
           'their wallet in rupees (inrValue) — valued at today’s rate it would move what the ' +
           'book holds for them while their wallet stood still.',
       });
@@ -258,7 +258,7 @@ export class BankLedgerService {
     if (input.owner.kind === BankOwnerKind.SELLER && !input.owner.sellerId) {
       throw new BadRequestException({
         code: 'BANK_SELLER_REQUIRED',
-        message: 'Money held for a seller must say which seller',
+        message: 'Money held for a client must say which client',
       });
     }
     if (input.owner.kind === BankOwnerKind.CAPITAL && input.owner.sellerId) {
@@ -266,7 +266,7 @@ export class BankLedgerService {
       // somebody will later read as either.
       throw new BadRequestException({
         code: 'BANK_CAPITAL_HAS_SELLER',
-        message: 'Capital is ours — it cannot also belong to a seller',
+        message: 'Capital is ours — it cannot also belong to a client',
       });
     }
 
@@ -565,7 +565,7 @@ export class BankLedgerService {
       throw new BadRequestException({
         code: 'OPENING_BALANCE_CAPITAL_ONLY',
         message:
-          'An opening balance is what the business already had — our own money. A seller’s ' +
+          'An opening balance is what the business already had — our own money. A client’s ' +
           'money arrives through a top-up or a settlement, each of which records why.',
       });
     }
@@ -986,7 +986,7 @@ export class BankLedgerService {
         select: { id: true },
       });
       if (!exists) {
-        throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller' });
+        throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such client' });
       }
       const inrValue = statedInrValue(
         input.inrValue,

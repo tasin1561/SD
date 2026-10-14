@@ -89,7 +89,7 @@ export function HandoffPanel(): ReactElement {
         attempt either way.
       </p>
       <ButtonLink href="/login" variant="secondary" fullWidth>
-        Seller sign-in
+        Client sign-in
       </ButtonLink>
     </div>
   );

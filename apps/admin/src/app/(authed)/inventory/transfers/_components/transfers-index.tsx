@@ -115,7 +115,7 @@ export function TransfersIndex(): ReactElement {
         <FieldGrid columns={3}>
           <TextField
             id="tr-seller"
-            label="Seller id"
+            label="Client id"
             inputClassName="sk-ident"
             value={form.sellerId}
             onChange={(e) => set('sellerId', e.target.value)}
@@ -243,7 +243,7 @@ export function TransfersIndex(): ReactElement {
         open={confirming}
         onOpenChange={setConfirming}
         title="Transfer this stock?"
-        entity={`${form.variantId.trim()} · seller ${form.sellerId.trim()}`}
+        entity={`${form.variantId.trim()} · client ${form.sellerId.trim()}`}
         entityIsIdentifier
         amount={`${form.qty} unit(s) · ${sourceName} → ${destName}`}
         consequence="The units leave the source bin and batch and arrive in the destination bin and batch as a matched TRANSFER_OUT and TRANSFER_IN — a movement, not something this form can take back."

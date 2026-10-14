@@ -128,7 +128,10 @@ export class ResellerOrderMoneyReadService {
       (scope.storeId !== undefined && snap.storeId !== scope.storeId) ||
       (scope.sellerId !== undefined && snap.sellerId !== scope.sellerId)
     ) {
-      throw new NotFoundException({ code: 'ORDER_NOT_FOUND', message: 'No such reseller order' });
+      throw new NotFoundException({
+        code: 'ORDER_NOT_FOUND',
+        message: 'No such member store order',
+      });
     }
     const [rows, storeEntries, sellerEntries, store] = await Promise.all([
       db.resellerOrderCredit.findMany({ where: { orderId }, orderBy: { party: 'asc' } }),

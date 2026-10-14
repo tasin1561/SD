@@ -203,7 +203,8 @@ export const ORDER_CSV_IGNORED_HEADERS: Record<string, string> = {
   'billing state': 'we hold one delivery address per order',
   'billing pincode': 'we hold one delivery address per order',
   'e way bill number': 'we raise the e-waybill with the courier when the parcel needs one',
-  'seller name': 'the seller is your own account; a reseller order shows the store that sold it',
+  'seller name':
+    'the client is your own account; a member store order shows the store that sold it',
 };
 
 /** A row needs all of these mapped to be importable. */

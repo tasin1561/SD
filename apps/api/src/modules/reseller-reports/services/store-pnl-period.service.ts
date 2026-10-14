@@ -124,7 +124,7 @@ export class StorePnlPeriodService {
       select: { id: true, createdAt: true },
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return store;
   }

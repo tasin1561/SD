@@ -73,8 +73,8 @@ export function SellerCourierLinksSection({
       title="Courier accounts"
       note={
         rows.length === 0
-          ? "No links: this seller's parcels go to each courier's default account."
-          : "This seller's parcels are split across these accounts by weight. Unlinking returns them to the default account."
+          ? "No links: this client's parcels go to each courier's default account."
+          : "This client's parcels are split across these accounts by weight. Unlinking returns them to the default account."
       }
       action={
         canManage ? (
@@ -103,12 +103,12 @@ export function SellerCourierLinksSection({
           title="Uses the default accounts"
           description={
             canManage
-              ? 'Add a link to route this seller to a specific courier account.'
-              : 'A person with the courier-links permission can route this seller to a specific account.'
+              ? 'Add a link to route this client to a specific courier account.'
+              : 'A person with the courier-links permission can route this client to a specific account.'
           }
         />
       ) : (
-        <Table caption="Courier accounts for this seller">
+        <Table caption="Courier accounts for this client">
           <THead>
             <Tr>
               <Th>Account</Th>
@@ -310,7 +310,7 @@ function AddLinkModal({
     >
       <div className="ac-form">
         {available.length === 0 ? (
-          <p className="ac-muted">Every courier account is already linked to this seller.</p>
+          <p className="ac-muted">Every courier account is already linked to this client.</p>
         ) : (
           <>
             <Select
@@ -330,7 +330,7 @@ function AddLinkModal({
             <TextField
               label="Weight"
               id="courier-link-weight"
-              hint="Relative share of this seller's parcels sent to this account. Two links at 100 split evenly."
+              hint="Relative share of this client's parcels sent to this account. Two links at 100 split evenly."
               requiredMark
               inputMode="numeric"
               inputClassName="sk-figure"
@@ -454,7 +454,7 @@ function UnlinkModal({
       }}
       title={`Unlink ${name}?`}
       entity={name}
-      consequence={`New parcels for this seller stop going to ${name}. If no other link remains, they go to the courier's default account. Parcels already booked keep the account that carried them.`}
+      consequence={`New parcels for this client stop going to ${name}. If no other link remains, they go to the courier's default account. Parcels already booked keep the account that carried them.`}
       confirmLabel="Unlink"
       cancelLabel="Keep it"
       destructive

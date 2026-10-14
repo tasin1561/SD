@@ -132,7 +132,7 @@ export function StatusActionPanel({
       </div>
       {!canChangeStatus && (
         <p className="ac-faint">
-          Your role can&apos;t change seller status. Contact a super-admin if you need this changed.
+          Your role can&apos;t change client status. Contact a super-admin if you need this changed.
         </p>
       )}
 
@@ -141,12 +141,12 @@ export function StatusActionPanel({
         onOpenChange={(o) => {
           if (!o) close();
         }}
-        title={intent === 'SUSPENDED' ? 'Suspend this seller?' : 'Reapprove this seller?'}
-        entity={sellerName ?? 'This seller'}
+        title={intent === 'SUSPENDED' ? 'Suspend this client?' : 'Reapprove this client?'}
+        entity={sellerName ?? 'This client'}
         consequence={
           intent === 'SUSPENDED'
-            ? 'The seller will immediately lose portal access. Existing orders + shipments continue under our operations. A read-only profile view remains for ops.'
-            : 'The seller regains full portal access. Their open invitations and existing orders are unaffected by the status change itself.'
+            ? 'The client will immediately lose portal access. Existing orders + shipments continue under our operations. A read-only profile view remains for ops.'
+            : 'The client regains full portal access. Their open invitations and existing orders are unaffected by the status change itself.'
         }
         confirmLabel={intent === 'SUSPENDED' ? 'Suspend' : 'Reapprove'}
         destructive={intent === 'SUSPENDED'}
@@ -156,7 +156,7 @@ export function StatusActionPanel({
         <TextArea
           label="Reason (optional, recorded in the audit trail)"
           id="status-reason"
-          hint="Surfaced on the seller's audit timeline + the global audit log."
+          hint="Surfaced on the client's audit timeline + the global audit log."
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           placeholder="e.g., Customer complaints about fulfillment quality."

@@ -138,7 +138,7 @@ export class BankTransferService {
       throw new BadRequestException({
         code: 'TRANSFER_QUOTE_INTO_WALLET_CURRENCY',
         message:
-          'A seller’s money moving INTO rupees takes no quoted rate. Their wallet is in rupees, ' +
+          'A client’s money moving INTO rupees takes no quoted rate. Their wallet is in rupees, ' +
           'so they are credited exactly what the money that left was worth to it (their average ' +
           'rate in the sending account), and the difference against what arrived is booked as ' +
           'our FX. Leave the quote empty.',
@@ -233,7 +233,7 @@ export class BankTransferService {
             throw new BadRequestException({
               code: 'TRANSFER_EXCEEDS_SELLER_HOLDING',
               message:
-                `This account holds ${held.toFixed(2)} ${from.currency} for that seller, and the ` +
+                `This account holds ${held.toFixed(2)} ${from.currency} for that client, and the ` +
                 `transfer moves ${out.toFixed(2)}. Move at most what they hold here, or record the ` +
                 `rest as ours — the difference is not theirs to send.`,
             });

@@ -31,7 +31,7 @@ import {
   phaseOf,
 } from '../../settings/_components/ac-parts';
 
-const CRUMBS = [{ label: 'Sellers', href: '/sellers' }] as const;
+const CRUMBS = [{ label: 'Clients', href: '/sellers' }] as const;
 
 // Was a check against the role NAME, which cannot see a role somebody
 // created — the permission is what the server enforces, so it is what
@@ -55,16 +55,16 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
   if (detail.isLoading || detail.isError || !detail.data) {
     return (
       <AcPage>
-        <AcHeader crumbs={[...CRUMBS, { label: 'Seller' }]} title="Seller" />
+        <AcHeader crumbs={[...CRUMBS, { label: 'Client' }]} title="Client" />
         {detail.isLoading ? (
-          <SkeletonRows rows={6} cols={2} label="Loading seller…" />
+          <SkeletonRows rows={6} cols={2} label="Loading client…" />
         ) : detail.isError ? (
           <ErrorState
-            message={detail.error?.message ?? 'Failed to load seller.'}
+            message={detail.error?.message ?? 'Failed to load client.'}
             retry={() => void detail.refetch()}
           />
         ) : (
-          <ErrorState message="Seller not found." />
+          <ErrorState message="Client not found." />
         )}
       </AcPage>
     );
@@ -96,7 +96,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
               <span className="sk-btn__icon" aria-hidden>
                 <PackageSearch size={15} />
               </span>
-              <span className="sk-btn__label">This seller&apos;s orders →</span>
+              <span className="sk-btn__label">This client&apos;s orders →</span>
             </Link>
             {canTransfer && (
               <Link
@@ -186,7 +186,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
       <AcSection title="Registered identity" bare>
         <AcCard
           title="Company name and phone"
-          note="What this account was approved as. The seller cannot change either — a staff correction, recorded with a reason, is the only route."
+          note="What this account was approved as. The client cannot change either — a staff correction, recorded with a reason, is the only route."
         >
           <IdentityCorrectionPanel
             sellerId={d.id}
@@ -199,7 +199,7 @@ export function SellerDetailView({ sellerId }: { sellerId: string }): ReactEleme
       <AcSection title="Status" bare>
         <AcCard
           title="Account status"
-          note="Suspend a seller to immediately revoke their portal access; reapprove to restore it."
+          note="Suspend a client to immediately revoke their portal access; reapprove to restore it."
         >
           <StatusActionPanel
             sellerId={d.id}
@@ -364,7 +364,7 @@ function InitialsRow({
         value={value}
         onChange={(e) => setValue(e.target.value)}
         maxLength={4}
-        aria-label="Seller short code"
+        aria-label="Client short code"
         inputClassName="sk-ident"
       />
       <AsyncButton

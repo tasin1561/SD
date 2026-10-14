@@ -66,7 +66,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
         breadcrumbs={[{ label: 'System' }, { label: 'Webhook deliveries' }]}
         Link={Link}
         title="Webhook deliveries"
-        subtitle="Outbound HMAC-signed POSTs to seller-configured endpoints. Read-only diagnostic view."
+        subtitle="Outbound HMAC-signed POSTs to client-configured endpoints. Read-only diagnostic view."
       />
 
       <AfCard>
@@ -90,14 +90,14 @@ export function WebhookDeliveriesIndex(): ReactElement {
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No webhook deliveries match the filter."
-          description="Deliveries appear here as sellers' endpoints are sent events."
+          description="Deliveries appear here as clients' endpoints are sent events."
         />
       ) : (
         <Table>
           <THead>
             <Tr>
               <Th>When</Th>
-              <Th>Seller</Th>
+              <Th>Client</Th>
               <Th>Event</Th>
               <Th>URL</Th>
               <Th align="right">Attempt</Th>
@@ -188,7 +188,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
         consequence={
           confirming === null
             ? ''
-            : `The signed event is queued to be POSTed again to ${confirming.url}; the seller's system may act on it a second time.`
+            : `The signed event is queued to be POSTed again to ${confirming.url}; the client's system may act on it a second time.`
         }
         confirmLabel="Retry"
         onConfirm={() => {

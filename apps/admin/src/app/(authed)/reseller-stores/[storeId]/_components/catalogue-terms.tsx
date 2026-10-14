@@ -29,8 +29,8 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
       return (
         <EmptyState
           bare
-          title="The seller has not given this store any products yet"
-          description="Products appear here once the seller turns them on for the store."
+          title="The client has not given this store any products yet"
+          description="Products appear here once the client turns them on for the store."
         />
       );
     }
@@ -96,7 +96,7 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
   return (
     <AcSection
       title="Catalogue terms"
-      note="What the seller lets this store sell, at what price, and how much stock it is shown."
+      note="What the client lets this store sell, at what price, and how much stock it is shown."
       flush
     >
       {body}

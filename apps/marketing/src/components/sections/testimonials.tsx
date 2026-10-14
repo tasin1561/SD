@@ -18,9 +18,9 @@ export function Testimonials(): ReactElement {
         <SectionHeading
           id="testi-h2"
           hue="blue"
-          eyebrow="Sellers"
+          eyebrow="Clients"
           icon={<MessageSquareQuote size={14} />}
-          title="What sellers say"
+          title="What clients say"
           center
         />
         <TestimonialsLoader items={business.testimonials} />

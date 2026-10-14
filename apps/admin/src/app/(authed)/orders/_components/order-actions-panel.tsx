@@ -57,7 +57,7 @@ const CANCELLATION_REASONS: ReadonlyArray<{
   { value: OrderCancellationReason.HIGH_RISK_CUSTOMER, label: 'High-risk customer' },
   { value: OrderCancellationReason.DUPLICATE_ORDER, label: 'Duplicate order' },
   { value: OrderCancellationReason.NO_COURIER_AVAILABLE, label: 'No courier available' },
-  { value: OrderCancellationReason.SELLER_REQUESTED, label: 'Seller requested' },
+  { value: OrderCancellationReason.SELLER_REQUESTED, label: 'Client requested' },
   { value: OrderCancellationReason.OTHER, label: 'Other' },
 ];
 
@@ -142,7 +142,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
               variant="secondary"
               size="md"
               onClick={() => setReturnOpen(true)}
-              title="The customer wants to send it back — charged to the seller as a second delivery"
+              title="The customer wants to send it back — charged to the client as a second delivery"
             >
               Request return
             </Button>
@@ -266,7 +266,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
               number would be worse than naming the condition. */}
           <p className="oo-faint">
             If a delivery fee has already been charged for this order and the parcel has not been
-            dispatched, it is credited back to the seller&apos;s wallet automatically. Once
+            dispatched, it is credited back to the client&apos;s wallet automatically. Once
             dispatched, the fee stands — the courier already has the parcel.
           </p>
           <Select
@@ -286,7 +286,7 @@ export function OrderActionsPanel({ order }: { readonly order: OrderView }): Rea
           <TextArea
             id="cancel-note"
             label="Internal note (optional)"
-            hint="Recorded in the order event + audit log; not visible to the seller."
+            hint="Recorded in the order event + audit log; not visible to the client."
             value={note}
             onChange={(e) => setNote(e.target.value)}
             maxLength={500}
@@ -383,14 +383,16 @@ function OverrideResultPanel({
 
       {result.resellerMoney?.refusal != null && (
         <div className="oc-result__rule">
-          <p className="oo-strong">The money on this reseller order did NOT follow the change</p>
+          <p className="oo-strong">
+            The money on this member store order did NOT follow the change
+          </p>
           <p className="oo-bad oo-p">
             {result.resellerMoney.refusal === 'ALREADY_PAID'
               ? 'A credit on this order had already been paid, so it could not be worked out again. The order now says one figure and the wallets say another.'
               : 'Re-pricing this order failed. The stale figures are what would be paid until it succeeds.'}
           </p>
           <p className="oo-faint">
-            This is open on /system-issues (MONEY, HIGH) and the store and seller staff have been
+            This is open on /system-issues (MONEY, HIGH) and the store and client staff have been
             told. Settle the difference on the order’s ticket, or call the order off and place it
             again.
           </p>

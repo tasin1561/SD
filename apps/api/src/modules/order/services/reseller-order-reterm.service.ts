@@ -113,7 +113,7 @@ export class ResellerOrderRetermService {
       if (snapshotted === null && (offer === undefined || !offer.enabled || !offer.resellable)) {
         throw new ConflictException({
           code: 'RESELLER_VARIANT_NOT_OFFERED',
-          message: `${label(item.variantId)} is not in this store’s catalogue. Pick from the products the seller has turned on for you.`,
+          message: `${label(item.variantId)} is not in this store’s catalogue. Pick from the products the client has turned on for you.`,
           details: { variantId: item.variantId },
         });
       }
@@ -130,7 +130,7 @@ export class ResellerOrderRetermService {
           code: 'RESELLER_RETAIL_REQUIRED',
           message:
             `Say what ${label(item.variantId)} is being sold to the customer for. It was not on this ` +
-            'order before and the seller has suggested no retail price for it.',
+            'order before and the client has suggested no retail price for it.',
           details: { variantId: item.variantId },
         });
       }

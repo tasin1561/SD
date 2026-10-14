@@ -50,7 +50,7 @@ export function CourierAccountsIndex(): ReactElement {
         breadcrumbs={[{ label: 'Network' }, { label: 'Courier accounts' }]}
         Link={Link}
         title="Courier accounts"
-        subtitle="Multiple accounts per courier. Route a seller to specific accounts, by weight, from that seller's page; every shipment records the account that carried it."
+        subtitle="Multiple accounts per courier. Route a client to specific accounts, by weight, from that client's page; every shipment records the account that carried it."
         action={
           canWrite ? (
             <Button
@@ -268,7 +268,7 @@ function AccountRow({ account }: { readonly account: CourierAccountView }): Reac
           entity={`${account.label} · ${account.courierCode} · ${account.environment.toLowerCase()}`}
           consequence={
             confirming === 'default'
-              ? 'Every seller with no explicit link to this courier routes their new parcels through this account from now on.'
+              ? 'Every client with no explicit link to this courier routes their new parcels through this account from now on.'
               : 'No new parcel is booked on this account; parcels it already carried keep their record of it.'
           }
           confirmLabel={confirming === 'default' ? 'Make default' : 'Deactivate'}

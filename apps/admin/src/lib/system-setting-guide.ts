@@ -36,7 +36,7 @@ export type SettingGroup =
   | 'Courier costs & invoices'
   | 'Tracking & webhooks'
   | 'Alerts'
-  | 'Reseller stores'
+  | 'Member stores'
   | 'Live chat'
   | 'Capacity';
 
@@ -58,7 +58,7 @@ export const SETTING_GROUP_ORDER: readonly SettingGroup[] = [
   'Courier connection',
   'Courier costs & invoices',
   'Alerts',
-  'Reseller stores',
+  'Member stores',
   'Live chat',
   'Capacity',
 ];
@@ -213,9 +213,9 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'pricing.flat_delivery_fee': {
     name: 'Delivery fee per parcel',
     group: 'Charges',
-    what: 'What Skydrop charges this seller to deliver one parcel anywhere in India. One flat amount, no zones or weight slabs. The currency is the setting "Delivery fee currency".',
+    what: 'What Skydrop charges this client to deliver one parcel anywhere in India. One flat amount, no zones or weight slabs. The currency is the setting "Delivery fee currency".',
     example:
-      'Set to 250 with currency BDT: every parcel costs the seller ৳250, converted to rupees on the day the charge is taken.',
+      'Set to 250 with currency BDT: every parcel costs the client ৳250, converted to rupees on the day the charge is taken.',
   },
   'pricing.flat_delivery_fee_currency': {
     name: 'Delivery fee currency',
@@ -231,7 +231,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Charges',
     what: 'Charged on top of the delivery fee when the courier could not deliver and the parcel comes back to our warehouse. Taken when the parcel physically arrives back, not when the courier says it is returning.',
     example:
-      'Delivery fee ৳200 and return fee ৳30: a parcel that comes back costs the seller ৳230 in total.',
+      'Delivery fee ৳200 and return fee ৳30: a parcel that comes back costs the client ৳230 in total.',
   },
   'pricing.flat_rto_fee_currency': {
     name: 'Return fee currency',
@@ -245,9 +245,9 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'pricing.customer_return_fee': {
     name: 'Customer return fee (delivered, then sent back)',
     group: 'Charges',
-    what: 'What the seller pays when a customer asks to send back a parcel that was already delivered. The parcel travels the whole way again, so it costs about as much as a delivery.',
+    what: 'What the client pays when a customer asks to send back a parcel that was already delivered. The parcel travels the whole way again, so it costs about as much as a delivery.',
     example:
-      'Set to 200: a customer returns a delivered kurta, and the seller pays the original delivery fee plus 200.',
+      'Set to 200: a customer returns a delivered kurta, and the client pays the original delivery fee plus 200.',
   },
   'pricing.customer_return_fee_currency': {
     name: 'Customer return fee currency',
@@ -260,7 +260,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'orders.default_customer_delivery_fee_inr': {
     name: 'Delivery charge pre-filled for the customer (₹)',
     group: 'Charges',
-    what: 'The delivery charge pre-filled on the seller’s new-order form, added to what the courier collects from the customer. It only fills the box: it does not change what Skydrop charges the seller, and the seller can edit it on any order.',
+    what: 'The delivery charge pre-filled on the client’s new-order form, added to what the courier collects from the customer. It only fills the box: it does not change what Skydrop charges the client, and the client can edit it on any order.',
     example:
       'Set to 99: a new order for a ₹900 product opens with ₹99 delivery, so the customer pays ₹999 on delivery.',
   },
@@ -269,14 +269,14 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'wallet.cod_credit_mode': {
     name: 'When COD money is credited',
     group: 'Cash on delivery',
-    what: 'When the cash a courier collects is credited to the seller’s wallet: when the courier pays Skydrop (no fee), or straight away at delivery for an Instant Pay fee.',
+    what: 'When the cash a courier collects is credited to the client’s wallet: when the courier pays Skydrop (no fee), or straight away at delivery for an Instant Pay fee.',
     example:
       'On "Instant Pay", a parcel delivered today is credited today. On "When the courier pays us", it is credited about a week later, when the courier settles.',
     values: {
       SETTLEMENT: opt(
         'When the courier pays us',
         'The COD is credited when the courier’s payout for that parcel is recorded, with no Instant Pay fee.',
-        '₹1,180 COD delivered today: about a week later, when the courier pays, the seller is credited ₹990 (after ₹180 GST and a 1% handling fee).',
+        '₹1,180 COD delivered today: about a week later, when the courier pays, the client is credited ₹990 (after ₹180 GST and a 1% handling fee).',
       ),
       INSTANT_PAY: opt(
         'Instant Pay, at delivery',
@@ -289,20 +289,20 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     name: 'GST taken out of COD (%)',
     group: 'Cash on delivery',
     what: 'The GST rate removed from the cash collected before it is credited. The customer’s price already includes GST, so it is taken out, not added on.',
-    example: 'At 18%, a ₹1,180 COD has ₹180 of GST inside it, so ₹1,000 goes towards the seller.',
+    example: 'At 18%, a ₹1,180 COD has ₹180 of GST inside it, so ₹1,000 goes towards the client.',
   },
   'wallet.cod_collection_fee_percent': {
     name: 'COD handling fee (%)',
     group: 'Cash on delivery',
     what: 'A fee on every cash-on-delivery credit, worked out on the amount after GST. 0 means no fee.',
-    example: 'At 1%, on ₹1,000 after GST the seller pays ₹10 and is credited ₹990.',
+    example: 'At 1%, on ₹1,000 after GST the client pays ₹10 and is credited ₹990.',
   },
   'wallet.instant_pay_fee_percent': {
     name: 'Instant Pay fee (%)',
     group: 'Cash on delivery',
     what: 'The extra fee for being credited at delivery instead of waiting for the courier. Only charged when "When COD money is credited" is Instant Pay, and it is on top of the COD handling fee.',
     example:
-      '₹1,180 COD: GST leaves ₹1,000, a 1% handling fee is ₹10 and 2.5% Instant Pay is ₹25, so the seller is credited ₹965.',
+      '₹1,180 COD: GST leaves ₹1,000, a 1% handling fee is ₹10 and 2.5% Instant Pay is ₹25, so the client is credited ₹965.',
   },
   'wallet.courier_fee_deduction_timing': {
     name: 'When delivery charges are taken',
@@ -345,7 +345,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'wallet.accrual_delay_days': {
     name: 'Delay before crediting (days)',
     group: 'Cash on delivery',
-    what: 'How many days after delivery the money is credited, for a seller on "After a delay". Should cover how long the courier takes to pay Skydrop.',
+    what: 'How many days after delivery the money is credited, for a client on "After a delay". Should cover how long the courier takes to pay Skydrop.',
     example: 'Set to 7: delivered Monday, credited the following Monday.',
   },
 
@@ -353,61 +353,61 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'wallet.minimum_balance_inr': {
     name: 'Money that must stay in the wallet (₹)',
     group: 'Wallet & withdrawals',
-    what: 'An amount the seller cannot withdraw. What they can withdraw is the balance minus this.',
-    example: 'Set to 2,000 with ₹10,000 in the wallet: the seller can withdraw up to ₹8,000.',
+    what: 'An amount the client cannot withdraw. What they can withdraw is the balance minus this.',
+    example: 'Set to 2,000 with ₹10,000 in the wallet: the client can withdraw up to ₹8,000.',
   },
   'wallet.negative_balance_limit_inr': {
     name: 'How far the wallet may go below zero (₹)',
     group: 'Wallet & withdrawals',
-    what: 'How much the seller may owe before new orders are refused. Charges can land before money comes in, and the value of their stock in our warehouse can add to this slack.',
+    what: 'How much the client may owe before new orders are refused. Charges can land before money comes in, and the value of their stock in our warehouse can add to this slack.',
     example:
-      'Set to 5,000: the seller can reach −₹5,000; one more rupee owed and a new order is refused.',
+      'Set to 5,000: the client can reach −₹5,000; one more rupee owed and a new order is refused.',
   },
   'wallet.withdrawal_min_threshold_inr': {
     name: 'Smallest withdrawal (₹)',
     group: 'Wallet & withdrawals',
-    what: 'The smallest amount the seller may ask for in one withdrawal.',
+    what: 'The smallest amount the client may ask for in one withdrawal.',
     example: 'Set to 500: a request for ₹300 is refused, a request for ₹500 is accepted.',
   },
   'wallet.withdrawal_max_per_day': {
     name: 'Withdrawals allowed per day',
     group: 'Wallet & withdrawals',
-    what: 'How many withdrawal requests the seller may make in 24 hours. It counts requests, not money.',
+    what: 'How many withdrawal requests the client may make in 24 hours. It counts requests, not money.',
     example: 'Set to 1: after one request this morning, a second one today is refused.',
   },
   'wallet.withdrawal_max_per_month': {
     name: 'Withdrawals allowed per month',
     group: 'Wallet & withdrawals',
-    what: 'How many withdrawal requests the seller may make in 30 days. It counts requests, not money.',
+    what: 'How many withdrawal requests the client may make in 30 days. It counts requests, not money.',
     example: 'Set to 20: the 21st request within 30 days is refused.',
   },
   'wallet.auto_withdraw_enabled': {
     name: 'Automatic withdrawals',
     group: 'Wallet & withdrawals',
-    what: 'When on, everything the seller can withdraw is requested for them once a day, at the hour in "Automatic withdrawal time".',
+    what: 'When on, everything the client can withdraw is requested for them once a day, at the hour in "Automatic withdrawal time".',
     example:
-      'On, at 10: every day at 10 am the seller’s withdrawable balance is requested without them asking.',
+      'On, at 10: every day at 10 am the client’s withdrawable balance is requested without them asking.',
     values: onOff(
       [
-        'Once a day, at the chosen hour, everything the seller can withdraw is requested for them.',
-        'At 10 am the seller’s withdrawable ₹8,000 is requested without them doing anything.',
+        'Once a day, at the chosen hour, everything the client can withdraw is requested for them.',
+        'At 10 am the client’s withdrawable ₹8,000 is requested without them doing anything.',
       ],
       [
-        'Nothing is requested automatically; the seller asks for each withdrawal themselves.',
-        'The seller’s ₹8,000 stays in the wallet until they request it.',
+        'Nothing is requested automatically; the client asks for each withdrawal themselves.',
+        'The client’s ₹8,000 stays in the wallet until they request it.',
       ],
     ),
   },
   'wallet.auto_withdraw_hour_local': {
-    name: 'Automatic withdrawal time (hour, seller’s time)',
+    name: 'Automatic withdrawal time (hour, client’s time)',
     group: 'Wallet & withdrawals',
-    what: 'The hour of the day (0–23) the automatic withdrawal is requested, in the seller’s own time zone.',
-    example: 'Set to 10 for a seller in Dhaka: the request is raised at 10 am Dhaka time.',
+    what: 'The hour of the day (0–23) the automatic withdrawal is requested, in the client’s own time zone.',
+    example: 'Set to 10 for a client in Dhaka: the request is raised at 10 am Dhaka time.',
   },
   'wallet.auto_withdraw_keep_balance_inr': {
     name: 'Keep in the wallet after an automatic withdrawal (₹)',
     group: 'Wallet & withdrawals',
-    what: 'What the seller wants left behind when the automatic withdrawal runs, on top of the money that must stay. Does not affect withdrawals they ask for themselves.',
+    what: 'What the client wants left behind when the automatic withdrawal runs, on top of the money that must stay. Does not affect withdrawals they ask for themselves.',
     example: 'Set to 3,000 with ₹12,000 in the wallet: the automatic withdrawal takes ₹9,000.',
   },
   'wallet.auto_reject_unpayable_withdrawals': {
@@ -415,10 +415,10 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Wallet & withdrawals',
     what: 'When on, a withdrawal still waiting for approval is rejected automatically if later charges leave too little in the wallet to pay it, so it stops blocking new requests.',
     example:
-      'The seller asks for ₹3,000, then ₹2,500 of charges land and leave ₹500: with this on, the request is rejected and the seller is told.',
+      'The client asks for ₹3,000, then ₹2,500 of charges land and leave ₹500: with this on, the request is rejected and the client is told.',
     values: onOff(
       [
-        'A waiting withdrawal the wallet can no longer cover is rejected automatically and the seller is told.',
+        'A waiting withdrawal the wallet can no longer cover is rejected automatically and the client is told.',
         'A ₹3,000 request left facing a ₹500 balance is rejected within 15 minutes.',
       ],
       [
@@ -431,12 +431,12 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'wallet.negative_balance_stock_backed': {
     name: 'Let stock in our warehouse raise that limit',
     group: 'Wallet & withdrawals',
-    what: 'Whether the cost value of a seller’s stock sitting in our warehouse is added to "How far the wallet may go below zero". Their goods are what secures the debt.',
+    what: 'Whether the cost value of a client’s stock sitting in our warehouse is added to "How far the wallet may go below zero". Their goods are what secures the debt.',
     example:
       'Limit ₹5,000 and ₹20,000 of stock at cost: with this on, new orders are refused only past −₹25,000.',
     values: onOff(
       [
-        'A seller may go below zero by the flat limit plus the cost value of their stock in our warehouse.',
+        'A client may go below zero by the flat limit plus the cost value of their stock in our warehouse.',
         'Limit ₹5,000 and ₹20,000 of stock: new orders are refused only past −₹25,000.',
       ],
       [
@@ -448,14 +448,14 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'wallet.withdrawal_sla_hours': {
     name: 'Withdrawal processing time we promise (hours)',
     group: 'Wallet & withdrawals',
-    what: 'What sellers are told to expect: a withdrawal request is paid within this many hours. Display only — it does not hold, delay or schedule anything.',
+    what: 'What clients are told to expect: a withdrawal request is paid within this many hours. Display only — it does not hold, delay or schedule anything.',
     example:
-      'Set to 48: the seller’s wallet page says a request made on Monday morning is paid by Wednesday morning.',
+      'Set to 48: the client’s wallet page says a request made on Monday morning is paid by Wednesday morning.',
   },
   'wallet.settlement_shortfall_alert_percent': {
     name: 'Alert when a courier payout is short by (%)',
     group: 'Cash on delivery',
-    what: 'Sellers are credited what an order was worth even when the courier pays us less. A payout short by more than this percentage is flagged CRITICAL for a person to chase the courier.',
+    what: 'Clients are credited what an order was worth even when the courier pays us less. A payout short by more than this percentage is flagged CRITICAL for a person to chase the courier.',
     example:
       'Set to 1: a payout expected at ₹50,000 that arrives as ₹49,300 (1.4% short) is flagged; one at ₹49,800 (0.4%) is absorbed quietly.',
   },
@@ -464,7 +464,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'wallet.inbound_freight_mode': {
     name: 'How Bangladesh → India freight is paid',
     group: 'Inbound freight',
-    what: 'When the seller is billed for flying their stock into India: at our Bangladesh warehouse before it flies, in full when it lands, or bit by bit as each unit sells.',
+    what: 'When the client is billed for flying their stock into India: at our Bangladesh warehouse before it flies, in full when it lands, or bit by bit as each unit sells.',
     example:
       'On "Pay as it sells", a ৳10,000 bill for 100 units is charged ৳100 each time one of those units is delivered.',
     values: {
@@ -488,7 +488,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'wallet.inbound_freight_service_charge_percent': {
     name: 'Service charge for paying freight later (%)',
     group: 'Inbound freight',
-    what: 'An extra percentage added to a freight bill when the seller pays as it sells. Ignored for the other ways of paying.',
+    what: 'An extra percentage added to a freight bill when the client pays as it sells. Ignored for the other ways of paying.',
     example: 'At 2%, a ₹10,000 freight bill paid as it sells becomes ₹10,200.',
   },
 
@@ -506,32 +506,32 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     example: 'Set to 4: the customer does not pick up at 10 am, so we call again after 2 pm.',
   },
   'orders.reattempt_requestable_statuses': {
-    name: 'Orders the seller may ask us to call again',
+    name: 'Orders the client may ask us to call again',
     group: 'Customer calls',
-    what: 'For which stopped orders the seller sees an "ask us to call again" button. A list of order statuses.',
+    what: 'For which stopped orders the client sees an "ask us to call again" button. A list of order statuses.',
     example:
-      'Tick only "Customer said no": the seller can ask for another call when the customer refused, not when nobody ever answered.',
+      'Tick only "Customer said no": the client can ask for another call when the customer refused, not when nobody ever answered.',
     multi: {
       REJECTED_BY_CUSTOMER: opt(
         'Customer said no',
-        'The seller may ask us to call again an order the customer refused on the phone.',
-        'The customer declined on Monday; the seller asks for another call and, once approved, it goes back to the call queue.',
+        'The client may ask us to call again an order the customer refused on the phone.',
+        'The customer declined on Monday; the client asks for another call and, once approved, it goes back to the call queue.',
       ),
       REJECTED_NDR: opt(
         'Nobody answered',
-        'The seller may ask us to call again an order rejected because the call attempts ran out.',
-        'Three calls went unanswered; the seller asks for more attempts and the order is called again.',
+        'The client may ask us to call again an order rejected because the call attempts ran out.',
+        'Three calls went unanswered; the client asks for more attempts and the order is called again.',
       ),
     },
   },
 
   // ── Courier ─────────────────────────────────────────────────────────
   'ops.default_courier_code': {
-    name: 'Courier for this seller’s parcels',
+    name: 'Courier for this client’s parcels',
     group: 'Courier',
     what: 'Which courier new parcels are booked with. "manual" means no courier is booked automatically: every parcel waits for a person to arrange it.',
     example:
-      'Set to shiprocket: this seller’s new orders are booked with Shiprocket instead of Delhivery.',
+      'Set to shiprocket: this client’s new orders are booked with Shiprocket instead of Delhivery.',
     values: {
       delhivery: opt(
         'Delhivery',
@@ -611,11 +611,11 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Stock holds',
     what: 'When on, stock is held the moment an order is placed, before our call centre has confirmed it with the customer. Protects stock for new orders, but ties it up for orders that may never be confirmed.',
     example:
-      'On: a seller with 5 units gets 5 orders in a minute, and a 6th order sees no stock straight away.',
+      'On: a client with 5 units gets 5 orders in a minute, and a 6th order sees no stock straight away.',
     values: onOff(
       [
         'Stock is held the moment an order is placed, before the call centre confirms it.',
-        'A seller with 5 units gets 5 orders in a minute; a 6th order sees no stock at once.',
+        'A client with 5 units gets 5 orders in a minute; a 6th order sees no stock at once.',
       ],
       [
         'Stock is held only when the call centre confirms the order.',
@@ -633,14 +633,14 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'inventory.early_reservation_ndr_action': {
     name: 'When we cannot reach the customer',
     group: 'Stock holds',
-    what: 'What happens once the call attempts run out: ask the seller whether to keep trying, or reject the order straight away and release its stock.',
+    what: 'What happens once the call attempts run out: ask the client whether to keep trying, or reject the order straight away and release its stock.',
     example:
-      'On "Ask the seller", after 3 unanswered calls the seller sees the order and chooses to keep trying or stop.',
+      'On "Ask the client", after 3 unanswered calls the client sees the order and chooses to keep trying or stop.',
     values: {
       MANUAL_REVIEW: opt(
-        'Ask the seller',
-        'The order pauses and the seller decides whether we keep calling or give up; any stock held stays held until they answer.',
-        'After 3 unanswered calls the order waits on the seller’s review list; they choose "keep trying" and it goes back to the call queue.',
+        'Ask the client',
+        'The order pauses and the client decides whether we keep calling or give up; any stock held stays held until they answer.',
+        'After 3 unanswered calls the order waits on the client’s review list; they choose "keep trying" and it goes back to the call queue.',
       ),
       AUTO_RELEASE: opt(
         'Reject it straight away',
@@ -650,40 +650,40 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     },
   },
   'inventory.early_reservation_review_ttl_hours': {
-    name: 'Time the seller has to answer (hours)',
+    name: 'Time the client has to answer (hours)',
     group: 'Stock holds',
-    what: 'For "Ask the seller": how long we wait for the seller’s answer before the order is rejected and its stock released.',
+    what: 'For "Ask the client": how long we wait for the client’s answer before the order is rejected and its stock released.',
     example:
-      'Set to 72: a seller who does not answer within 3 days has the order rejected for them.',
+      'Set to 72: a client who does not answer within 3 days has the order rejected for them.',
   },
 
   // ── Reseller stores ─────────────────────────────────────────────────
   'reseller.orders_enabled': {
-    name: 'Reseller stores can place orders',
-    group: 'Reseller stores',
-    what: 'Whether this seller’s reseller stores may place orders at all.',
+    name: 'Member stores can place orders',
+    group: 'Member stores',
+    what: 'Whether this client’s member stores may place orders at all.',
     example:
       'Off: a store can sign in and see its catalogue, but every new order it tries is refused.',
     values: onOff(
       [
-        'This seller’s reseller stores may place orders (portal, CSV and API).',
+        'This client’s member stores may place orders (portal, CSV and API).',
         'A store places an order for 2 kurtas and it goes to our call centre.',
       ],
       [
-        'Every order a reseller store tries to place is refused; they can still sign in and browse.',
+        'Every order a member store tries to place is refused; they can still sign in and browse.',
         'The store’s order is refused with RESELLER_ORDERS_DISABLED.',
       ],
     ),
   },
   'reseller.credit_after_confirmation_enabled': {
-    name: 'Reseller terms may pay after phone confirmation',
-    group: 'Reseller stores',
-    what: 'Whether this seller may give a reseller store terms that pay out a number of days after the order is confirmed on the phone, before the customer has paid. Changed with its own control in the reseller section of this page, because it needs a reason; the Override button here is refused.',
+    name: 'Member store terms may pay after phone confirmation',
+    group: 'Member stores',
+    what: 'Whether this client may give a member store terms that pay out a number of days after the order is confirmed on the phone, before the customer has paid. Changed with its own control in the member store section of this page, because it needs a reason; the Override button here is refused.',
     example:
       'On: a store’s terms can say "credited 3 days after confirmation" instead of "after delivery".',
     values: onOff(
       [
-        'A reseller store’s terms may pay out a set number of days after phone confirmation.',
+        'A member store’s terms may pay out a set number of days after phone confirmation.',
         'Terms can say "credited 3 days after confirmation".',
       ],
       [
@@ -693,20 +693,20 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     ),
   },
   'reseller.store_negative_limit_cap_inr': {
-    name: 'Most a reseller store may owe (₹)',
-    group: 'Reseller stores',
-    what: 'The highest limit this seller may give any one of their reseller stores for going below zero.',
-    example: 'Set to 25,000: the seller can let a store owe up to ₹25,000, but not ₹30,000.',
+    name: 'Most a member store may owe (₹)',
+    group: 'Member stores',
+    what: 'The highest limit this client may give any one of their member stores for going below zero.',
+    example: 'Set to 25,000: the client can let a store owe up to ₹25,000, but not ₹30,000.',
   },
   'reseller.stock_reorder_days': {
     name: 'Reorder alert (days of stock left)',
-    group: 'Reseller stores',
-    what: 'A product their stores sell is flagged for reordering when, at the recent rate of sales, the stock left lasts fewer than this many days. The seller is told once a week.',
+    group: 'Member stores',
+    what: 'A product their stores sell is flagged for reordering when, at the recent rate of sales, the stock left lasts fewer than this many days. The client is told once a week.',
     example: 'Set to 14: 30 units left selling 3 a day lasts 10 days, so it is flagged.',
   },
   'reseller.stock_forecast_window_days': {
     name: 'Days of sales used for the forecast',
-    group: 'Reseller stores',
+    group: 'Member stores',
     what: 'How many recent days of confirmed orders are averaged to work out how fast each product sells.',
     example: 'Set to 30: 90 units sold in the last 30 days counts as 3 a day.',
   },
@@ -717,7 +717,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Invoices & tax',
     what: 'The legal company name printed at the top of every GST tax invoice we issue.',
     example:
-      'Set to "Skydrop Logistics Pvt Ltd": every invoice a seller downloads is headed with that name.',
+      'Set to "Skydrop Logistics Pvt Ltd": every invoice a client downloads is headed with that name.',
   },
   'invoice.gstin': {
     name: 'Our GSTIN on invoices',
@@ -738,14 +738,14 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Invoices & tax',
     what: 'The Indian state printed as ours on every tax invoice, under our address.',
     example:
-      'Set to Karnataka: every invoice a seller downloads reads "State: Karnataka" in our block.',
+      'Set to Karnataka: every invoice a client downloads reads "State: Karnataka" in our block.',
     values: INVOICE_STATE_OPTIONS,
   },
   'pricing.flat_fee_gst_percent': {
     name: 'GST on our delivery and return fees (%)',
     group: 'Invoices & tax',
-    what: 'GST added on top of the flat delivery and return fees. At 0 the fee is what the seller pays, full stop. The same for every seller — a tax rate is not negotiated per seller.',
-    example: 'Set to 18: a ₹162.60 delivery fee carries ₹29.27 of GST, so the seller pays ₹191.87.',
+    what: 'GST added on top of the flat delivery and return fees. At 0 the fee is what the client pays, full stop. The same for every client — a tax rate is not negotiated per client.',
+    example: 'Set to 18: a ₹162.60 delivery fee carries ₹29.27 of GST, so the client pays ₹191.87.',
   },
   'pricing.gst_rate': {
     name: 'GST rate on goods when a product has none (%)',
@@ -807,7 +807,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'ops.allowed_indian_states': {
     name: 'States and territories we deliver to',
     group: 'Orders',
-    what: 'The list of Indian states and union territories an order may be addressed to. Only checked when the order gives a state — orders from the seller form do not, and are checked by the courier from the PIN code instead.',
+    what: 'The list of Indian states and union territories an order may be addressed to. Only checked when the order gives a state — orders from the client form do not, and are checked by the courier from the PIN code instead.',
     example: 'Untick Ladakh: a CSV order addressed to Ladakh is refused at creation.',
     multi: INDIAN_STATE_OPTIONS,
   },
@@ -828,13 +828,13 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'courier.default_account_delhivery': {
     name: 'Default Delhivery account',
     group: 'Courier',
-    what: 'Which Delhivery account carries a parcel when the seller has no courier accounts of their own. The value is the account’s id. Empty means any active one — fine with one account, a coin toss with several.',
+    what: 'Which Delhivery account carries a parcel when the client has no courier accounts of their own. The value is the account’s id. Empty means any active one — fine with one account, a coin toss with several.',
     example:
       'Empty with one Delhivery account: every Delhivery parcel uses it. With a second account added, set this so parcels do not split between them by chance.',
     values: {
       '': opt(
         'Any active account',
-        'A parcel from a seller without their own accounts goes to any active Delhivery account.',
+        'A parcel from a client without their own accounts goes to any active Delhivery account.',
         'With one Delhivery account every parcel uses it; with two, either may be used.',
       ),
     },
@@ -845,11 +845,11 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Courier',
     what: 'The Shiprocket half of the same choice. Empty means Shiprocket is left out of the default split altogether.',
     example:
-      'Empty: sellers without their own accounts never go through Shiprocket, whatever the Delhivery share says.',
+      'Empty: clients without their own accounts never go through Shiprocket, whatever the Delhivery share says.',
     values: {
       '': opt(
         'None — Shiprocket is not in the default split',
-        'Sellers without their own accounts never go through Shiprocket, whatever the share says.',
+        'Clients without their own accounts never go through Shiprocket, whatever the share says.',
         'With the Delhivery share at 70, all 100 parcels still go to Delhivery.',
       ),
     },
@@ -858,7 +858,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'courier.delhivery_share_percent': {
     name: 'Share of parcels to Delhivery (%)',
     group: 'Courier',
-    what: 'How the two default accounts split the parcels of sellers with no split of their own. Decided per parcel by a weighted draw, so it is reached over many parcels, not exactly.',
+    what: 'How the two default accounts split the parcels of clients with no split of their own. Decided per parcel by a weighted draw, so it is reached over many parcels, not exactly.',
     example: 'Set to 70: out of 100 parcels, about 70 go to Delhivery and 30 to Shiprocket.',
   },
   'courier.delhivery_pickup_location': {
@@ -930,14 +930,14 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     ),
   },
   'courier.ticket_automation_enabled': {
-    name: 'Raise seller issues with the courier automatically',
+    name: 'Raise client issues with the courier automatically',
     group: 'Courier',
-    what: 'When on, an issue a seller raises on a Delhivery parcel is sent through Delhivery’s portal by software. When off, every issue waits for a person to take it to the courier. Only affects issues raised after the change.',
+    what: 'When on, an issue a client raises on a Delhivery parcel is sent through Delhivery’s portal by software. When off, every issue waits for a person to take it to the courier. Only affects issues raised after the change.',
     example:
-      'Off: a seller reports a parcel stuck for a week, and the ticket says clearly that a person must raise it with Delhivery.',
+      'Off: a client reports a parcel stuck for a week, and the ticket says clearly that a person must raise it with Delhivery.',
     values: onOff(
       [
-        'A seller’s issue on a Delhivery parcel is raised through Delhivery’s portal by software, falling back to a person if that fails.',
+        'A client’s issue on a Delhivery parcel is raised through Delhivery’s portal by software, falling back to a person if that fails.',
         'A "parcel stuck" issue raised at 11 am is filed with Delhivery by 11:15.',
       ],
       [
@@ -965,7 +965,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'inventory.default_inventory_mode': {
     name: 'How stock is tracked (default)',
     group: 'Inventory',
-    what: 'Whether a seller’s stock is counted by quantity, or each unit carries its own serial that is scanned at pick, pack and return. This is the default; it can be changed per seller on the seller’s page.',
+    what: 'Whether a client’s stock is counted by quantity, or each unit carries its own serial that is scanned at pick, pack and return. This is the default; it can be changed per client on the client’s page.',
     example:
       'On "Serial per unit", 3 phones on an order need 3 serial scans at the pick shelf and again at the pack bench.',
     values: {
@@ -1012,7 +1012,7 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Inventory',
     what: 'After a low-stock alert for a product, no new alert is sent for it until stock has recovered and this many hours have passed.',
     example:
-      'Set to 24: a product dips below its threshold at 9 am and the seller is told once, not again that day.',
+      'Set to 24: a product dips below its threshold at 9 am and the client is told once, not again that day.',
   },
 
   // ── Warehouse ───────────────────────────────────────────────────────
@@ -1027,14 +1027,14 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'ops.bd_intake_warehouse_id': {
     name: 'Bangladesh intake warehouse',
     group: 'Warehouse',
-    what: 'The warehouse in Bangladesh that receives consignments before they travel to India. Must be a warehouse that does not fulfil orders. Empty means sellers cannot send stock via Bangladesh.',
+    what: 'The warehouse in Bangladesh that receives consignments before they travel to India. Must be a warehouse that does not fulfil orders. Empty means clients cannot send stock via Bangladesh.',
     example:
-      'Empty: a seller choosing "via Bangladesh" for a consignment is refused until this is set to the Dhaka warehouse’s id.',
+      'Empty: a client choosing "via Bangladesh" for a consignment is refused until this is set to the Dhaka warehouse’s id.',
     values: {
       '': opt(
         'None — sending via Bangladesh is off',
         'No Bangladesh warehouse is set, so consignments cannot be routed via Bangladesh.',
-        'A seller choosing "via Bangladesh" for a consignment is refused with BD_WAREHOUSE_NOT_CONFIGURED.',
+        'A client choosing "via Bangladesh" for a consignment is refused with BD_WAREHOUSE_NOT_CONFIGURED.',
       ),
     },
     source: 'intake-warehouses',
@@ -1109,13 +1109,13 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'ops.nsa_enabled': {
     name: 'Flag parcels still out for delivery in the evening',
     group: 'Failed deliveries',
-    what: 'When on, an evening check flags parcels still out for delivery after the cutoff hour as needing the seller’s attention. Turning it off stops new flags; flags already raised stay.',
+    what: 'When on, an evening check flags parcels still out for delivery after the cutoff hour as needing the client’s attention. Turning it off stops new flags; flags already raised stay.',
     example:
-      'On with a 6 pm cutoff: a parcel still out for delivery at 7 pm is flagged to the seller.',
+      'On with a 6 pm cutoff: a parcel still out for delivery at 7 pm is flagged to the client.',
     values: onOff(
       [
-        'Each evening, parcels still out for delivery after the cutoff are flagged to the seller as needing attention.',
-        'A parcel still with the van at 7 pm shows on the seller’s attention list.',
+        'Each evening, parcels still out for delivery after the cutoff are flagged to the client as needing attention.',
+        'A parcel still with the van at 7 pm shows on the client’s attention list.',
       ],
       [
         'No new flags are raised; flags already raised stay.',
@@ -1140,16 +1140,16 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Failed deliveries',
     what:
       'The on/off switch for the nightly run that asks the courier to re-attempt failed deliveries. Off stops it at its next run without a deploy; requests already sent are still followed up. ' +
-      'Set for one seller, this can only switch it OFF for them — never on. The system-wide switch is the one that decides whether anything runs at all, so with it off nothing is sent for anybody, whatever a seller is set to.',
+      'Set for one client, this can only switch it OFF for them — never on. The system-wide switch is the one that decides whether anything runs at all, so with it off nothing is sent for anybody, whatever a client is set to.',
     example:
-      'Off: nothing is asked of the courier at night; re-attempts are requested by hand. Set to On for one seller while the system-wide switch is Off: still nothing is sent for them.',
+      'Off: nothing is asked of the courier at night; re-attempts are requested by hand. Set to On for one client while the system-wide switch is Off: still nothing is sent for them.',
     values: onOff(
       [
         'Each night the runner asks the courier to re-attempt eligible failed deliveries, for the actions allowed — provided the system-wide switch is also on.',
         'At 9:35 pm Dhaka time 18 failed parcels are submitted for another attempt.',
       ],
       [
-        'The nightly runner sends nothing; requests already sent are still followed up. Set for one seller, only that seller’s parcels are left alone.',
+        'The nightly runner sends nothing; requests already sent are still followed up. Set for one client, only that client’s parcels are left alone.',
         'Failed deliveries are re-attempted only when a person asks.',
       ],
     ),
@@ -1165,10 +1165,10 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
     group: 'Failed deliveries',
     what:
       'Which actions the nightly run may send on its own, as a list: "RE-ATTEMPT" and/or "PICKUP_RESCHEDULE". Empty means it prepares and logs but sends nothing. ' +
-      'Set for one seller, this can only take actions AWAY — the system-wide list is the ceiling, and the seller gets whichever actions appear on both lists.',
+      'Set for one client, this can only take actions AWAY — the system-wide list is the ceiling, and the client gets whichever actions appear on both lists.',
     example:
       'Tick only "Re-attempt delivery": failed deliveries are re-attempted automatically; pickup reschedules still need a person. Nothing ticked: the run prepares and logs but sends nothing. ' +
-      'System-wide list has only "Re-attempt delivery" and a seller is set to both: that seller still only gets re-attempts.',
+      'System-wide list has only "Re-attempt delivery" and a client is set to both: that client still only gets re-attempts.',
     multi: {
       'RE-ATTEMPT': opt(
         'Re-attempt delivery',
@@ -1303,15 +1303,15 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
       'Set to 90: a scan from January keeps its timeline entry, but its raw message is gone by May.',
   },
   'webhooks.auto_disable_after_consecutive_failures': {
-    name: 'Seller webhook switched off after failures (not used)',
+    name: 'Client webhook switched off after failures (not used)',
     group: 'Tracking & webhooks',
-    what: 'Meant as the number of failed deliveries in a row after which a seller’s webhook is switched off. Nothing reads it today: the sending code uses its own built-in limit.',
+    what: 'Meant as the number of failed deliveries in a row after which a client’s webhook is switched off. Nothing reads it today: the sending code uses its own built-in limit.',
     example: 'Set to 50: changing it has no effect.',
   },
   'webhooks.max_retry_attempts': {
-    name: 'Seller webhook retries (not used)',
+    name: 'Client webhook retries (not used)',
     group: 'Tracking & webhooks',
-    what: 'Meant as how many times a delivery to a seller’s webhook is retried. Nothing reads it today: retries follow a fixed built-in schedule.',
+    what: 'Meant as how many times a delivery to a client’s webhook is retried. Nothing reads it today: retries follow a fixed built-in schedule.',
     example: 'Set to 5: changing it has no effect.',
   },
 
@@ -1642,14 +1642,14 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   'ops.tracking_stranded_alert_hours': {
     name: 'Courier and order disagree — flag after (hours)',
     group: 'Alerts',
-    what: 'A parcel whose courier updates cannot move its order to where the courier says it is gets raised on the issues board after this many hours, so a seller is not told something no longer true.',
+    what: 'A parcel whose courier updates cannot move its order to where the courier says it is gets raised on the issues board after this many hours, so a client is not told something no longer true.',
     example:
       'Set to 6: the courier says a parcel is on its way back but the order still says failed delivery; six hours later it is flagged.',
   },
   'ops.rto_stall_alert_hours': {
     name: 'Return accepted but never started — flag after (hours)',
     group: 'Alerts',
-    what: 'A seller asked for a parcel back and the courier accepted, but no return scan has arrived. After this many hours it is raised on the issues board.',
+    what: 'A client asked for a parcel back and the courier accepted, but no return scan has arrived. After this many hours it is raised on the issues board.',
     example:
       'Set to 48: accepted Monday morning, still no return scan on Wednesday morning, so it is flagged.',
   },
@@ -1676,62 +1676,62 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   // ── Reseller stores (global only) ───────────────────────────────────
   'reseller.fraud_window_days': {
     name: 'Fraud checks: days looked back',
-    group: 'Reseller stores',
-    what: 'The fraud checks on reseller stores (cancel, return and failed-delivery rates, shared customers, high prices, rapid orders) are judged over orders placed in this many days.',
+    group: 'Member stores',
+    what: 'The fraud checks on member stores (cancel, return and failed-delivery rates, shared customers, high prices, rapid orders) are judged over orders placed in this many days.',
     example: 'Set to 30: a store’s cancel rate is worked out from its last 30 days of orders.',
   },
   'reseller.fraud_min_orders': {
     name: 'Fraud checks: fewest orders before a rate counts',
-    group: 'Reseller stores',
+    group: 'Member stores',
     what: 'A cancel, return or failed-delivery rate is only judged once the store has at least this many orders in the window.',
     example: 'Set to 10: a store with 2 cancellations out of 3 orders is not flagged yet.',
   },
   'reseller.fraud_orders_per_hour': {
     name: 'Fraud checks: orders in one hour',
-    group: 'Reseller stores',
+    group: 'Member stores',
     what: 'A store placing this many orders or more within any one hour is flagged for rapid ordering.',
     example: 'Set to 30: 34 orders between 2 and 3 pm flags the store.',
   },
   'reseller.fraud_shared_phone_stores': {
     name: 'Fraud checks: stores sharing one customer',
-    group: 'Reseller stores',
-    what: 'A customer phone number on orders from at least this many different reseller stores is flagged on each of them.',
+    group: 'Member stores',
+    what: 'A customer phone number on orders from at least this many different member stores is flagged on each of them.',
     example: 'Set to 3: one number ordering through 3 different stores flags all 3.',
   },
   'reseller.fraud_cancel_rate_percent': {
     name: 'Fraud checks: cancel rate (%)',
-    group: 'Reseller stores',
+    group: 'Member stores',
     what: 'A store whose orders are cancelled or rejected at this rate or above is flagged; twice the rate is raised as urgent.',
     example: 'Set to 40: 18 of 40 orders cancelled (45%) flags the store.',
   },
   'reseller.fraud_return_rate_percent': {
     name: 'Fraud checks: return rate (%)',
-    group: 'Reseller stores',
+    group: 'Member stores',
     what: 'A store whose parcels come back at this rate or above (of those delivered or returned) is flagged; twice the rate is raised as urgent.',
     example: 'Set to 40: 9 returns out of 20 finished parcels (45%) flags the store.',
   },
   'reseller.fraud_ndr_rate_percent': {
     name: 'Fraud checks: failed delivery rate (%)',
-    group: 'Reseller stores',
+    group: 'Member stores',
     what: 'A store whose dispatched parcels have a failed delivery attempt at this rate or above is flagged.',
     example: 'Set to 50: 11 of 20 dispatched parcels with a failed attempt (55%) flags the store.',
   },
   'reseller.fraud_retail_markup_percent': {
     name: 'Fraud checks: price above suggested (%)',
-    group: 'Reseller stores',
+    group: 'Member stores',
     what: 'An order line sold for more than the suggested retail price plus this percentage is flagged.',
     example: 'Set to 100: a product suggested at ₹500 sold at ₹1,100 is flagged.',
   },
   'reseller.store_request_remind_hours': {
-    name: 'Remind seller staff of a store’s request after (hours)',
-    group: 'Reseller stores',
-    what: 'A request a reseller store sent for the seller’s approval (cancel, order change, re-attempt, issue) that is still unanswered after this many hours reminds seller staff once, in-app.',
+    name: 'Remind client staff of a store’s request after (hours)',
+    group: 'Member stores',
+    what: 'A request a member store sent for the client’s approval (cancel, order change, re-attempt, issue) that is still unanswered after this many hours reminds client staff once, in-app.',
     example:
-      'Set to 24: a cancel request sent Monday at 10 am reminds the seller Tuesday at 10 am.',
+      'Set to 24: a cancel request sent Monday at 10 am reminds the client Tuesday at 10 am.',
   },
   'reseller.store_request_expire_hours': {
     name: 'Close a store’s unanswered request after (hours)',
-    group: 'Reseller stores',
+    group: 'Member stores',
     what: 'A request still unanswered after this many hours is closed as expired, nothing is carried out, and the store is told so it can follow up.',
     example: 'Set to 72: a request from Monday morning unanswered by Thursday morning is closed.',
   },

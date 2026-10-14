@@ -142,7 +142,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '200.00',
     displayName: 'Delivery Fee (flat)',
     description:
-      'What a seller is charged to deliver one parcel, anywhere in India. Flat — no zone, no weight slab, no surcharges. The AMOUNT only; the currency it is held in is pricing.flat_delivery_fee_currency, and the two are set together. Per-seller override via seller_setting_overrides, and the override is the one that counts.',
+      'What a client is charged to deliver one parcel, anywhere in India. Flat — no zone, no weight slab, no surcharges. The AMOUNT only; the currency it is held in is pricing.flat_delivery_fee_currency, and the two are set together. Per-client override via seller_setting_overrides, and the override is the one that counts.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100000',
@@ -161,7 +161,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'BDT',
     displayName: 'Delivery Fee — currency',
     description:
-      'INR or BDT. Decides how pricing.flat_delivery_fee is read. A BDT fee is converted to rupees at the rate in force AT THE MOMENT THE CHARGE IS TAKEN, and the source amount, currency and rate are all recorded on the charge so the figure can be explained later. Seller-overridable alongside the amount.',
+      'INR or BDT. Decides how pricing.flat_delivery_fee is read. A BDT fee is converted to rupees at the rate in force AT THE MOMENT THE CHARGE IS TAKEN, and the source amount, currency and rate are all recorded on the charge so the figure can be explained later. Client-overridable alongside the amount.',
     sellerOverridable: true,
   },
   {
@@ -180,7 +180,7 @@ const systemSettings: SystemSettingSeed[] = [
     description:
       'Pre-filled into the delivery fee on a new order, where it is added to the collectable ' +
       'amount. Used for that autofill and nothing else — it does not affect what Skydrop ' +
-      'charges the seller, and the seller can change the figure on any order.',
+      'charges the client, and the client can change the figure on any order.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100000',
@@ -192,7 +192,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '200',
     displayName: 'Customer Return Fee',
     description:
-      'What a seller pays when the CUSTOMER asks to send a delivered parcel back. It is a second delivery — the parcel travels the same distance again — so it costs the same as one, and the seller pays the outbound ₹200 plus this. Deliberately NOT pricing.flat_rto_fee, which is the smaller fee for a parcel the courier never managed to deliver in the first place.',
+      'What a client pays when the CUSTOMER asks to send a delivered parcel back. It is a second delivery — the parcel travels the same distance again — so it costs the same as one, and the client pays the outbound ₹200 plus this. Deliberately NOT pricing.flat_rto_fee, which is the smaller fee for a parcel the courier never managed to deliver in the first place.',
     sellerOverridable: true,
   },
   {
@@ -202,7 +202,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '30.00',
     displayName: 'RTO Return Fee (flat)',
     description:
-      'Charged ON TOP of the delivery fee when a parcel comes back, and only then — debited from the wallet at the moment the return is physically RECEIVED, not when the courier says it is coming. A returned parcel therefore costs delivery + RTO (default ৳200 + ৳30). The AMOUNT only; its currency is pricing.flat_rto_fee_currency. Per-seller override via seller_setting_overrides.',
+      'Charged ON TOP of the delivery fee when a parcel comes back, and only then — debited from the wallet at the moment the return is physically RECEIVED, not when the courier says it is coming. A returned parcel therefore costs delivery + RTO (default ৳200 + ৳30). The AMOUNT only; its currency is pricing.flat_rto_fee_currency. Per-client override via seller_setting_overrides.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100000',
@@ -219,7 +219,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'BDT',
     displayName: 'RTO Return Fee — currency',
     description:
-      'INR or BDT. Decides how pricing.flat_rto_fee is read. Converted at the rate in force when the return is physically received, which is when the fee is charged. Seller-overridable alongside the amount.',
+      'INR or BDT. Decides how pricing.flat_rto_fee is read. Converted at the rate in force when the return is physically received, which is when the fee is charged. Client-overridable alongside the amount.',
     sellerOverridable: true,
   },
   {
@@ -233,7 +233,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'INR',
     displayName: 'Customer Return Fee — currency',
     description:
-      'INR or BDT. Decides how pricing.customer_return_fee is read. Converted at the rate in force when the customer return is charged. Seller-overridable alongside the amount.',
+      'INR or BDT. Decides how pricing.customer_return_fee is read. Converted at the rate in force when the customer return is charged. Client-overridable alongside the amount.',
     sellerOverridable: true,
   },
   {
@@ -243,7 +243,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '0.00',
     displayName: 'GST on Delivery Fees (%)',
     description:
-      'GST applied on top of the flat delivery and RTO fees. Seeded at 0 — the flat fees are currently what the seller pays, full stop. Set this to 18 to start charging GST on them; nothing in the code needs to change. Deliberately GLOBAL and not seller-overridable: a tax rate is set by law, not per customer. Distinct from pricing.gst_rate, which is the fallback GST on the GOODS for customs and invoicing.',
+      'GST applied on top of the flat delivery and RTO fees. Seeded at 0 — the flat fees are currently what the client pays, full stop. Set this to 18 to start charging GST on them; nothing in the code needs to change. Deliberately GLOBAL and not client-overridable: a tax rate is set by law, not per customer. Distinct from pricing.gst_rate, which is the fallback GST on the GOODS for customs and invoicing.',
   },
   {
     key: 'pricing.gst_rate',
@@ -276,7 +276,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 4,
     displayName: 'Call Retry Interval (hours)',
     description:
-      "How long before an order whose customer did not pick up (NO_ANSWER / VOICEMAIL_LEFT) becomes callable again. Per-seller overridable: how hard we chase a customer is a decision about that seller's business. The minimum of 1 hour is deliberate — 0 would redial someone seconds after they ignored the phone and spend all their cap attempts in a minute.",
+      "How long before an order whose customer did not pick up (NO_ANSWER / VOICEMAIL_LEFT) becomes callable again. Per-client overridable: how hard we chase a customer is a decision about that client's business. The minimum of 1 hour is deliberate — 0 would redial someone seconds after they ignored the phone and spend all their cap attempts in a minute.",
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 72,
@@ -288,7 +288,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 48,
     displayName: 'Stock Reservation TTL (hours)',
     description:
-      'Auto-release reservations after N hours. Per-seller override via seller_setting_overrides (the grandfathered sellers.reservation_ttl_hours_override column still wins over the global default, but the override row wins over both).',
+      'Auto-release reservations after N hours. Per-client override via seller_setting_overrides (the grandfathered sellers.reservation_ttl_hours_override column still wins over the global default, but the override row wins over both).',
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 8760,
@@ -371,7 +371,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 3,
     displayName: 'Call Attempts Before NDR',
     description:
-      'Default max attempt-counting call outcomes before an order is auto-rejected as REJECTED_NDR (per-seller override: sellers.call_max_attempts_before_ndr_override, or the newer seller_setting_overrides row for this same key)',
+      'Default max attempt-counting call outcomes before an order is auto-rejected as REJECTED_NDR (per-client override: sellers.call_max_attempts_before_ndr_override, or the newer seller_setting_overrides row for this same key)',
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 10,
@@ -390,9 +390,9 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'ops',
     valueType: SettingValueType.JSON,
     valueJson: ['REJECTED_BY_CUSTOMER'],
-    displayName: 'Statuses a seller may request another call on',
+    displayName: 'Statuses a client may request another call on',
     description:
-      'Which failed statuses show the seller an "ask us to call again" button. REJECTED_BY_CUSTOMER by default: they answered and said no, so a human weighs the seller\'s new information against a refusal. Adding REJECTED_NDR is possible and is a REAL trade — nobody ever answered those, so there is no refusal to override, but un-rejecting an order corrupts NDR reporting. For that case prefer inventory.early_reservation_ndr_action = MANUAL_REVIEW, which asks the seller BEFORE the order is rejected. A status the state machine cannot leave is ignored, so this list can never produce a button that fails on approval.',
+      'Which failed statuses show the client an "ask us to call again" button. REJECTED_BY_CUSTOMER by default: they answered and said no, so a human weighs the client\'s new information against a refusal. Adding REJECTED_NDR is possible and is a REAL trade — nobody ever answered those, so there is no refusal to override, but un-rejecting an order corrupts NDR reporting. For that case prefer inventory.early_reservation_ndr_action = MANUAL_REVIEW, which asks the client BEFORE the order is rejected. A status the state machine cannot leave is ignored, so this list can never produce a button that fails on approval.',
     sellerOverridable: true,
   },
   {
@@ -436,7 +436,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'delhivery',
     displayName: 'Default Courier Code',
     description:
-      'Courier assigned to a new shipment at provisioning (FK couriers.code). Seller-overridable (2026-09-12): a seller set to `manual` gets parcels no integrated courier is asked to book — they route straight to manual placement and never fail over. An override must name an existing courier.',
+      'Courier assigned to a new shipment at provisioning (FK couriers.code). Client-overridable (2026-09-12): a client set to `manual` gets parcels no integrated courier is asked to book — they route straight to manual placement and never fail over. An override must name an existing courier.',
     sellerOverridable: true,
   },
   {
@@ -672,7 +672,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 48,
     displayName: 'Return accepted but never started — hours before we flag it',
     description:
-      'A seller asks for a parcel back and the courier accepts, then no return scan ever arrives. After this many hours the order is raised on the system issues board, because the seller believes their goods are on the way back and nothing else in the system notices they are not.',
+      'A client asks for a parcel back and the courier accepts, then no return scan ever arrives. After this many hours the order is raised on the system issues board, because the client believes their goods are on the way back and nothing else in the system notices they are not.',
   },
   {
     key: 'ops.cancelled_waybill_alert_hours',
@@ -690,7 +690,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 48,
     displayName: 'Returned by the courier but never received — hours before we flag it',
     description:
-      'The mirror of the setting above. The courier marks a parcel returned, and then nobody receives it at the warehouse — so the order stays in RTO in transit and the seller is told their goods are still travelling. The wait itself is correct: a return becomes received only when a person confirms it at the bench, because that is what starts the restock or write-off. What this catches is nobody being told there is a parcel waiting.',
+      'The mirror of the setting above. The courier marks a parcel returned, and then nobody receives it at the warehouse — so the order stays in RTO in transit and the client is told their goods are still travelling. The wait itself is correct: a return becomes received only when a person confirms it at the bench, because that is what starts the restock or write-off. What this catches is nobody being told there is a parcel waiting.',
   },
   {
     key: 'ops.handover_scan_required',
@@ -765,9 +765,9 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'courier',
     valueType: SettingValueType.BOOLEAN,
     valueBoolean: false,
-    displayName: "Software may raise a seller's issue with the courier",
+    displayName: "Software may raise a client's issue with the courier",
     description:
-      "OFF (where this starts): every issue a seller raises is stamped MANUAL and waits for a person to carry it to the courier — nothing is enqueued and no portal is driven, so the ticket says plainly that it is somebody's to move rather than sitting in a queue everyone assumes software is working. ON: a Delhivery parcel's issue is raised through the portal automatically, and falls back to manual by itself if that attempt fails. Only Delhivery has ticket automation at all; a Shiprocket or manually-placed parcel is manual either way. This decides the stamp AT RAISE TIME only — turning it off does not take back a ticket software has already opened, because a conversation already under way must not change hands halfway through.",
+      "OFF (where this starts): every issue a client raises is stamped MANUAL and waits for a person to carry it to the courier — nothing is enqueued and no portal is driven, so the ticket says plainly that it is somebody's to move rather than sitting in a queue everyone assumes software is working. ON: a Delhivery parcel's issue is raised through the portal automatically, and falls back to manual by itself if that attempt fails. Only Delhivery has ticket automation at all; a Shiprocket or manually-placed parcel is manual either way. This decides the stamp AT RAISE TIME only — turning it off does not take back a ticket software has already opened, because a conversation already under way must not change hands halfway through.",
   },
   // Each courier's support-desk email, shown beside a message waiting to
   // be sent by hand. EMPTY on purpose: a guessed address sends a seller's
@@ -807,7 +807,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 6,
     displayName: 'Courier says one thing, the order says another — hours before we flag it',
     description:
-      'A parcel whose courier scans cannot move its order: the tracking mapping has no route from where the order is to where the courier says the parcel is, so every scan is dropped and the seller keeps being told something that is no longer true. Two real parcels sat like that for two days while twenty-four return-leg scans were discarded, and nothing anywhere said so. Long enough that a pair of scans arriving out of order settles by itself first.',
+      'A parcel whose courier scans cannot move its order: the tracking mapping has no route from where the order is to where the courier says the parcel is, so every scan is dropped and the client keeps being told something that is no longer true. Two real parcels sat like that for two days while twenty-four return-leg scans were discarded, and nothing anywhere said so. Long enough that a pair of scans arriving out of order settles by itself first.',
   },
   {
     key: 'ops.awb_stall_alert_hours',
@@ -869,7 +869,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: '',
     displayName: 'Default Delhivery account',
     description:
-      'Which Delhivery account carries a parcel when the seller has no distribution of their own. Empty means "any active one", which is fine with a single account and becomes a coin toss with four — set it once a second account exists.',
+      'Which Delhivery account carries a parcel when the client has no distribution of their own. Empty means "any active one", which is fine with a single account and becomes a coin toss with four — set it once a second account exists.',
   },
   {
     key: 'courier.default_account_shiprocket',
@@ -887,7 +887,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 100,
     displayName: 'Share of parcels to Delhivery (%)',
     description:
-      'How the two default accounts split the work. 70 means roughly seven parcels in ten go to Delhivery and three to Shiprocket. Applied PER PARCEL by a weighted draw, so the split is approached over volume rather than enforced exactly — the alternative is a running counter that two API instances would fight over. Starts at 100 because Shiprocket has no account yet; a seller with their own distribution ignores this entirely.',
+      'How the two default accounts split the work. 70 means roughly seven parcels in ten go to Delhivery and three to Shiprocket. Applied PER PARCEL by a weighted draw, so the split is approached over volume rather than enforced exactly — the alternative is a running counter that two API instances would fight over. Starts at 100 because Shiprocket has no account yet; a client with their own distribution ignores this entirely.',
   },
   // No Delhivery sandbox exists for this account, so the only environment
   // is production. Reads (serviceability, tracking, cost, TAT, EPOD) are
@@ -1078,7 +1078,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueBoolean: false,
     displayName: 'NDR Nightly Runner Enabled',
     description:
-      'The KILL SWITCH for automated NDR re-attempts. OFF by default. CUR-10 as amended permits a runner to fire courier writes only on a channel an operator explicitly enabled — this is that channel. Turning it off stops the runner at its next tick without a deploy; in-flight UPL polling and reconciliation continue, because abandoning requests already sent would be worse than finishing them. Seller-overridable, but ONE-DIRECTIONALLY: a seller override is ANDed with this value, never substituted for it, so OFF here means nothing fires for anybody whatever a seller row says.',
+      'The KILL SWITCH for automated NDR re-attempts. OFF by default. CUR-10 as amended permits a runner to fire courier writes only on a channel an operator explicitly enabled — this is that channel. Turning it off stops the runner at its next tick without a deploy; in-flight UPL polling and reconciliation continue, because abandoning requests already sent would be worse than finishing them. Client-overridable, but ONE-DIRECTIONALLY: a client override is ANDed with this value, never substituted for it, so OFF here means nothing fires for anybody whatever a client row says.',
     sellerOverridable: true,
   },
   {
@@ -1097,7 +1097,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueJson: [],
     displayName: 'NDR Auto-Action Allow List',
     description:
-      "Which NDR actions the runner may fire unattended: a JSON array of 'RE-ATTEMPT' and/or 'PICKUP_RESCHEDULE'. EMPTY by default, which means the runner prepares and logs but sends nothing — the only safe initial state while the write contract has never been exercised. Widen one entry at a time. Seller-overridable, but this list is the CEILING: a seller's list is INTERSECTED with it, so an action absent here can never be fired for one seller.",
+      "Which NDR actions the runner may fire unattended: a JSON array of 'RE-ATTEMPT' and/or 'PICKUP_RESCHEDULE'. EMPTY by default, which means the runner prepares and logs but sends nothing — the only safe initial state while the write contract has never been exercised. Widen one entry at a time. Client-overridable, but this list is the CEILING: a client's list is INTERSECTED with it, so an action absent here can never be fired for one client.",
     sellerOverridable: true,
   },
   {
@@ -1304,7 +1304,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'AT_DELIVERY',
     displayName: 'Courier Fee Deduction Timing',
     description:
-      "Default timing for debiting a seller's ORDER_CHARGES: 'AT_DELIVERY' (default — debited when the order is DELIVERED) or 'AT_AWB' (debited as soon as an AWB is generated, before delivery is known). Per-seller override via seller_setting_overrides.",
+      "Default timing for debiting a client's ORDER_CHARGES: 'AT_DELIVERY' (default — debited when the order is DELIVERED) or 'AT_AWB' (debited as soon as an AWB is generated, before delivery is known). Per-client override via seller_setting_overrides.",
     sellerOverridable: true,
   },
   // R2 — seller-initiated withdrawal requests.
@@ -1315,7 +1315,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'SETTLEMENT',
     displayName: 'COD Credit Mode',
     description:
-      "How a seller is paid their COD money. 'SETTLEMENT' (default) credits them when the courier actually settles with us — no float, no fee. 'INSTANT_PAY' credits at delivery for a percentage fee, and we front the money until the courier pays. ONE at a time: this is a mode, not two switches. Per-seller override.",
+      "How a client is paid their COD money. 'SETTLEMENT' (default) credits them when the courier actually settles with us — no float, no fee. 'INSTANT_PAY' credits at delivery for a percentage fee, and we front the money until the courier pays. ONE at a time: this is a mode, not two switches. Per-client override.",
     sellerOverridable: true,
   },
   {
@@ -1325,7 +1325,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '18.00',
     displayName: 'GST Withheld from COD (%)',
     description:
-      'The customer pays a tax-INCLUSIVE price, so this is extracted from the COD (cod × r / (100 + r)), never added on top: ₹1,000 at 18% withholds ₹152.54, not ₹180. WE file it, so the withheld amount is a liability recorded in gst_withholdings — not margin. Per-seller override because GST is slabbed by what is being sold — apparel is 5% or 12%, electronics 18% — so one rate across every seller is wrong for most of them. It is still not NEGOTIABLE: the override records which slab a seller trades in, and the rate is snapshotted per order so changing it never restates a filed quarter.',
+      'The customer pays a tax-INCLUSIVE price, so this is extracted from the COD (cod × r / (100 + r)), never added on top: ₹1,000 at 18% withholds ₹152.54, not ₹180. WE file it, so the withheld amount is a liability recorded in gst_withholdings — not margin. Per-client override because GST is slabbed by what is being sold — apparel is 5% or 12%, electronics 18% — so one rate across every client is wrong for most of them. It is still not NEGOTIABLE: the override records which slab a client trades in, and the rate is snapshotted per order so changing it never restates a filed quarter.',
     sellerOverridable: true,
     // The GST slabs, and nothing between 0 and 28 is impossible. A wider
     // range would let a typo withhold a third of a seller's takings.
@@ -1402,7 +1402,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '0.00',
     displayName: 'COD Collection Fee (%)',
     description:
-      'The COD fee: what handling cash-on-delivery costs the seller, charged on the POST-GST amount on EVERY COD credit, SETTLEMENT or INSTANT_PAY, as its own ledger line. Independent of wallet.instant_pay_fee_percent — an Instant Pay order pays both. 0 turns it off; seeded at 0. Per-seller override; the rate is negotiable, unlike the tax.',
+      'The COD fee: what handling cash-on-delivery costs the client, charged on the POST-GST amount on EVERY COD credit, SETTLEMENT or INSTANT_PAY, as its own ledger line. Independent of wallet.instant_pay_fee_percent — an Instant Pay order pays both. 0 turns it off; seeded at 0. Per-client override; the rate is negotiable, unlike the tax.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100',
@@ -1414,7 +1414,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '2.50',
     displayName: 'Instant Pay Fee (%)',
     description:
-      'The Instant Pay fee: charged on the POST-GST amount only when an order is credited under INSTANT_PAY, as its own ledger line — IN ADDITION to wallet.cod_collection_fee_percent, not instead of it. On ₹1,180 COD: GST leaves ₹1,000; a 1% COD fee is ₹10 and 2.5% Instant Pay is ₹25, so the seller is credited ₹965 (₹990 on SETTLEMENT). 0 turns it off. Per-seller override; the rate is negotiable, unlike the tax.',
+      'The Instant Pay fee: charged on the POST-GST amount only when an order is credited under INSTANT_PAY, as its own ledger line — IN ADDITION to wallet.cod_collection_fee_percent, not instead of it. On ₹1,180 COD: GST leaves ₹1,000; a 1% COD fee is ₹10 and 2.5% Instant Pay is ₹25, so the client is credited ₹965 (₹990 on SETTLEMENT). 0 turns it off. Per-client override; the rate is negotiable, unlike the tax.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '100',
@@ -1432,7 +1432,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '1.00',
     displayName: 'Settlement Shortfall Alert (%)',
     description:
-      'A seller is credited what the order was WORTH, not what the courier remitted — a short payment is our dispute with the courier, not a clawback from a seller paid in good faith. This is the circuit breaker: a settlement short by more than this percentage audits CRITICAL and asks for a human, so we absorb the occasional error without quietly funding a systematic one.',
+      'A client is credited what the order was WORTH, not what the courier remitted — a short payment is our dispute with the courier, not a clawback from a client paid in good faith. This is the circuit breaker: a settlement short by more than this percentage audits CRITICAL and asks for a human, so we absorb the occasional error without quietly funding a systematic one.',
   },
   {
     key: 'wallet.minimum_balance_inr',
@@ -1441,7 +1441,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '0.00',
     displayName: 'Minimum Wallet Balance (INR)',
     description:
-      'A floor the seller may not withdraw below. Withdrawable = balance − this. Distinct from the minimum WITHDRAWAL amount: that is the smallest single request, this is what must be left behind. Raise it for a seller shipping prepaid, where the wallet is the only thing standing between us and an unpaid delivery fee. Per-seller override.',
+      'A floor the client may not withdraw below. Withdrawable = balance − this. Distinct from the minimum WITHDRAWAL amount: that is the smallest single request, this is what must be left behind. Raise it for a client shipping prepaid, where the wallet is the only thing standing between us and an unpaid delivery fee. Per-client override.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '10000000',
@@ -1453,7 +1453,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '0.00',
     displayName: 'Auto-withdrawal: balance to keep (INR)',
     description:
-      'What the SELLER wants left in the wallet after an automatic withdrawal, on top of the platform minimum. Theirs to set, unlike the minimum balance beside it: a seller who wants a working float carried between sweeps had no way to say so, and the sweep took everything down to our floor. Applies to the AUTOMATIC sweep only — a request they make by hand is theirs to size. Must be at or above wallet.minimum_balance_inr, which is the floor they may never go under.',
+      'What the CLIENT wants left in the wallet after an automatic withdrawal, on top of the platform minimum. Theirs to set, unlike the minimum balance beside it: a client who wants a working float carried between sweeps had no way to say so, and the sweep took everything down to our floor. Applies to the AUTOMATIC sweep only — a request they make by hand is theirs to size. Must be at or above wallet.minimum_balance_inr, which is the floor they may never go under.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '10000000',
@@ -1463,9 +1463,9 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'wallet',
     valueType: SettingValueType.DECIMAL,
     valueDecimal: '0.00',
-    displayName: 'How far below zero a seller may go (INR)',
+    displayName: 'How far below zero a client may go (INR)',
     description:
-      'A wallet goes negative when charges land with nothing behind them — an RTO fee on a seller who has not topped up, freight on stock that has not sold. Some slack is correct: their goods are in our warehouse and the debt clears as those goods sell. Past this, new orders are refused, because every further order spends money we are already owed. Seller-overridable, for an account we know and want to carry.',
+      'A wallet goes negative when charges land with nothing behind them — an RTO fee on a client who has not topped up, freight on stock that has not sold. Some slack is correct: their goods are in our warehouse and the debt clears as those goods sell. Past this, new orders are refused, because every further order spends money we are already owed. Client-overridable, for an account we know and want to carry.',
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '10000000',
@@ -1479,9 +1479,9 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'wallet',
     valueType: SettingValueType.DECIMAL,
     valueDecimal: '25000.00',
-    displayName: 'Reseller stores: the most a seller may let one store go below zero (INR)',
+    displayName: 'Member stores: the most a client may let one store go below zero (INR)',
     description:
-      "A seller decides how far below zero each of their reseller stores may go — their risk, since a store's negative balance is money the seller is owed by that store. This caps that choice: whatever the seller sets, a store is never allowed further below zero than this. Per-seller override, for a seller we know and want to allow more (or less). Order create refuses an order that would take a store past the lower of the two.",
+      "A client decides how far below zero each of their member stores may go — their risk, since a store's negative balance is money the client is owed by that store. This caps that choice: whatever the client sets, a store is never allowed further below zero than this. Per-client override, for a client we know and want to allow more (or less). Order create refuses an order that would take a store past the lower of the two.",
     sellerOverridable: true,
     overrideMinDecimal: '0',
     overrideMaxDecimal: '10000000',
@@ -1493,7 +1493,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueBoolean: true,
     displayName: 'Let stock in our warehouse raise that limit',
     description:
-      'When on, a seller may go negative up to the limit above PLUS the cost value of their stock sitting in our warehouse — the thing that actually secures the debt. When off, the flat limit is the whole allowance, whatever they are holding. On is the honest default: refusing an order from a seller with a warehouse full of their goods protects nothing.',
+      'When on, a client may go negative up to the limit above PLUS the cost value of their stock sitting in our warehouse — the thing that actually secures the debt. When off, the flat limit is the whole allowance, whatever they are holding. On is the honest default: refusing an order from a client with a warehouse full of their goods protects nothing.',
     sellerOverridable: false,
   },
   {
@@ -1503,7 +1503,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 20,
     displayName: 'Withdrawal Requests Per Month (max)',
     description:
-      'Maximum number of withdrawal requests in a rolling 30-day window. A COUNT of requests, not a total amount — the daily limit works the same way. Per-seller override.',
+      'Maximum number of withdrawal requests in a rolling 30-day window. A COUNT of requests, not a total amount — the daily limit works the same way. Per-client override.',
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 500,
@@ -1515,7 +1515,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueBoolean: false,
     displayName: 'Auto Withdrawal Enabled',
     description:
-      "When on, everything above the minimum balance is requested automatically at the seller's chosen time each day — no manual request needed. Off by default: a seller should opt into money moving without them asking. Per-seller override.",
+      "When on, everything above the minimum balance is requested automatically at the client's chosen time each day — no manual request needed. Off by default: a client should opt into money moving without them asking. Per-client override.",
     sellerOverridable: true,
   },
   {
@@ -1523,9 +1523,9 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'wallet',
     valueType: SettingValueType.INT,
     valueInt: 10,
-    displayName: 'Auto Withdrawal Hour (seller local time)',
+    displayName: 'Auto Withdrawal Hour (client local time)',
     description:
-      "Hour of day (0-23) the auto-withdrawal sweep raises the request, in the SELLER's local timezone — not ours. A Bangladeshi seller asking for 10am means 10am in Dhaka. Per-seller override.",
+      "Hour of day (0-23) the auto-withdrawal sweep raises the request, in the CLIENT's local timezone — not ours. A Bangladeshi client asking for 10am means 10am in Dhaka. Per-client override.",
     sellerOverridable: true,
     overrideMinInt: 0,
     overrideMaxInt: 23,
@@ -1537,7 +1537,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueBoolean: true,
     displayName: 'Auto-reject withdrawal requests the wallet no longer covers',
     description:
-      'A withdrawal request holds its amount out of what the seller may withdraw until somebody decides it. When charges land after it was raised and the balance falls below it, nobody can pay it — approval and payout both refuse — yet it keeps blocking every new request and the automatic sweep, and sits in the liabilities as money asked for. When on, a PENDING request the balance no longer covers is rejected automatically (every 15 minutes) with the numbers in the reason, and the seller is told they can ask again. APPROVED requests are never auto-rejected — they may already be mid-payout — they are raised on the system issues board instead. Per-seller override.',
+      'A withdrawal request holds its amount out of what the client may withdraw until somebody decides it. When charges land after it was raised and the balance falls below it, nobody can pay it — approval and payout both refuse — yet it keeps blocking every new request and the automatic sweep, and sits in the liabilities as money asked for. When on, a PENDING request the balance no longer covers is rejected automatically (every 15 minutes) with the numbers in the reason, and the client is told they can ask again. APPROVED requests are never auto-rejected — they may already be mid-payout — they are raised on the system issues board instead. Per-client override.',
     sellerOverridable: true,
   },
   {
@@ -1551,9 +1551,9 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'reseller',
     valueType: SettingValueType.BOOLEAN,
     valueBoolean: false,
-    displayName: 'Reseller stores — allow credit after confirmation',
+    displayName: 'Member stores — allow credit after confirmation',
     description:
-      "Whether this seller's reseller-store terms may credit a party N days after the order is confirmed on the phone — money fronted before the customer has paid. Off by default. Turned on per seller only, by Skydrop, on the seller's page (it needs the \"Allow credit after confirmation for a seller\" permission); the global value is not editable. Switching it off never rewrites a store's terms: new versions using it are refused, and stores whose current version uses it are flagged until the seller publishes a new one.",
+      "Whether this client's member-store terms may credit a party N days after the order is confirmed on the phone — money fronted before the customer has paid. Off by default. Turned on per client only, by Skydrop, on the client's page (it needs the \"Allow credit after confirmation for a client\" permission); the global value is not editable. Switching it off never rewrites a store's terms: new versions using it are refused, and stores whose current version uses it are flagged until the client publishes a new one.",
     sellerOverridable: true,
     isEditableByAdmin: false,
   },
@@ -1568,9 +1568,9 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'reseller',
     valueType: SettingValueType.BOOLEAN,
     valueBoolean: false,
-    displayName: 'Reseller stores — accept store orders',
+    displayName: 'Member stores — accept store orders',
     description:
-      "Whether this seller's reseller stores may place orders. OFF until the reseller money (fee split at each party's credit trigger, prepaid debit, reversals) is live: without it a delivered reseller order would credit the seller the whole COD. Switch on per seller from the seller's settings.",
+      "Whether this client's member stores may place orders. OFF until the member-store money (fee split at each party's credit trigger, prepaid debit, reversals) is live: without it a delivered member-store order would credit the client the whole COD. Switch on per client from the client's settings.",
     sellerOverridable: true,
   },
   // ── RS-9 — reseller analysis (2026-09-15). Also inserted by
@@ -1582,16 +1582,16 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'reseller',
     valueType: SettingValueType.INT,
     valueInt: 30,
-    displayName: 'Reseller fraud signals: days looked back',
+    displayName: 'Member store fraud signals: days looked back',
     description:
-      "The fraud flags on reseller stores (cancel, return and NDR rates, one customer across many stores, retail far above suggested, rapid-fire orders) are judged over the store's orders placed in this many days.",
+      "The fraud flags on member stores (cancel, return and NDR rates, one customer across many stores, retail far above suggested, rapid-fire orders) are judged over the store's orders placed in this many days.",
   },
   {
     key: 'reseller.fraud_min_orders',
     category: 'reseller',
     valueType: SettingValueType.INT,
     valueInt: 10,
-    displayName: 'Reseller fraud signals: fewest orders before a rate is judged',
+    displayName: 'Member store fraud signals: fewest orders before a rate is judged',
     description:
       'A cancel, return or NDR rate is only flagged once the store has at least this many orders in the window — two cancellations out of three orders say nothing.',
   },
@@ -1600,7 +1600,7 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'reseller',
     valueType: SettingValueType.INT,
     valueInt: 30,
-    displayName: 'Reseller fraud signals: orders in one hour',
+    displayName: 'Member store fraud signals: orders in one hour',
     description:
       'A store that places this many orders or more inside any one hour is flagged as rapid-fire ordering.',
   },
@@ -1609,54 +1609,54 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'reseller',
     valueType: SettingValueType.INT,
     valueInt: 3,
-    displayName: 'Reseller fraud signals: stores sharing one customer',
+    displayName: 'Member store fraud signals: stores sharing one customer',
     description:
-      'A customer phone number that appears on orders of at least this many different reseller stores in the window is flagged on each of them.',
+      'A customer phone number that appears on orders of at least this many different member stores in the window is flagged on each of them.',
   },
   {
     key: 'reseller.fraud_cancel_rate_percent',
     category: 'reseller',
     valueType: SettingValueType.DECIMAL,
     valueDecimal: '40.00',
-    displayName: 'Reseller fraud signals: cancel rate (%)',
+    displayName: 'Member store fraud signals: cancel rate (%)',
     description:
-      'A reseller store whose orders in the window are cancelled or rejected at this rate or above is flagged. Twice the rate raises it as HIGH.',
+      'A member store whose orders in the window are cancelled or rejected at this rate or above is flagged. Twice the rate raises it as HIGH.',
   },
   {
     key: 'reseller.fraud_return_rate_percent',
     category: 'reseller',
     valueType: SettingValueType.DECIMAL,
     valueDecimal: '40.00',
-    displayName: 'Reseller fraud signals: return rate (%)',
+    displayName: 'Member store fraud signals: return rate (%)',
     description:
-      'A reseller store whose parcels come back (of those delivered or returned) at this rate or above is flagged. Twice the rate raises it as HIGH.',
+      'A member store whose parcels come back (of those delivered or returned) at this rate or above is flagged. Twice the rate raises it as HIGH.',
   },
   {
     key: 'reseller.fraud_ndr_rate_percent',
     category: 'reseller',
     valueType: SettingValueType.DECIMAL,
     valueDecimal: '50.00',
-    displayName: 'Reseller fraud signals: failed delivery rate (%)',
+    displayName: 'Member store fraud signals: failed delivery rate (%)',
     description:
-      'A reseller store whose dispatched parcels have a failed delivery attempt at this rate or above is flagged.',
+      'A member store whose dispatched parcels have a failed delivery attempt at this rate or above is flagged.',
   },
   {
     key: 'reseller.fraud_retail_markup_percent',
     category: 'reseller',
     valueType: SettingValueType.DECIMAL,
     valueDecimal: '100.00',
-    displayName: 'Reseller fraud signals: retail above suggested (%)',
+    displayName: 'Member store fraud signals: retail above suggested (%)',
     description:
-      'An order line sold at more than the suggested retail plus this percentage is flagged — a store charging a customer double what the seller suggested.',
+      'An order line sold at more than the suggested retail plus this percentage is flagged — a store charging a customer double what the client suggested.',
   },
   {
     key: 'reseller.stock_reorder_days',
     category: 'reseller',
     valueType: SettingValueType.INT,
     valueInt: 14,
-    displayName: 'Reseller stock forecast: reorder when stock lasts fewer days than',
+    displayName: 'Member store stock forecast: reorder when stock lasts fewer days than',
     description:
-      'A product your reseller stores sell is flagged for reordering when, at the rate it sold recently, the stock on hand lasts fewer than this many days. You are told in-app once a week while it stays low.',
+      'A product your member stores sell is flagged for reordering when, at the rate it sold recently, the stock on hand lasts fewer than this many days. You are told in-app once a week while it stays low.',
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 180,
@@ -1666,7 +1666,7 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'reseller',
     valueType: SettingValueType.INT,
     valueInt: 30,
-    displayName: 'Reseller stock forecast: days of sales it learns from',
+    displayName: 'Member store stock forecast: days of sales it learns from',
     description:
       'How many days of confirmed orders the stock forecast averages to work out how fast each product sells.',
     sellerOverridable: true,
@@ -1682,18 +1682,18 @@ const systemSettings: SystemSettingSeed[] = [
     category: 'reseller',
     valueType: SettingValueType.INT,
     valueInt: 24,
-    displayName: 'Reseller store requests: remind seller staff after (hours)',
+    displayName: 'Member store requests: remind client staff after (hours)',
     description:
-      'A request a reseller store sent to seller staff for approval (cancel, address correction, delivery action, call-cap answer, issue with Skydrop) that is still unanswered after this many hours reminds seller staff once, in-app.',
+      'A request a member store sent to client staff for approval (cancel, address correction, delivery action, call-cap answer, issue with Skydrop) that is still unanswered after this many hours reminds client staff once, in-app.',
   },
   {
     key: 'reseller.store_request_expire_hours',
     category: 'reseller',
     valueType: SettingValueType.INT,
     valueInt: 72,
-    displayName: 'Reseller store requests: close unanswered after (hours)',
+    displayName: 'Member store requests: close unanswered after (hours)',
     description:
-      'A request still unanswered after this many hours is closed as expired, nothing is carried out, and the reseller store is emailed so it knows to follow up with the seller.',
+      'A request still unanswered after this many hours is closed as expired, nothing is carried out, and the member store is emailed so it knows to follow up with the client.',
   },
   {
     key: 'wallet.withdrawal_sla_hours',
@@ -1702,7 +1702,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 48,
     displayName: 'Withdrawal SLA (hours)',
     description:
-      'What we tell the seller to expect: a request is processed within this many hours. DISPLAY ONLY — it does not hold, delay or schedule anything, and an agent may pay sooner.',
+      'What we tell the client to expect: a request is processed within this many hours. DISPLAY ONLY — it does not hold, delay or schedule anything, and an agent may pay sooner.',
   },
   {
     key: 'wallet.withdrawal_min_threshold_inr',
@@ -1711,7 +1711,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '500.00',
     displayName: 'Withdrawal Minimum Threshold (INR)',
     description:
-      'Minimum wallet balance a seller must request in one withdrawal. Per-seller override via seller_setting_overrides.',
+      'Minimum wallet balance a client must request in one withdrawal. Per-client override via seller_setting_overrides.',
     sellerOverridable: true,
   },
   {
@@ -1721,7 +1721,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 1,
     displayName: 'Withdrawal Requests Per Day (max)',
     description:
-      'Maximum number of withdrawal requests a seller may submit in a rolling 24h window. Per-seller override via seller_setting_overrides.',
+      'Maximum number of withdrawal requests a client may submit in a rolling 24h window. Per-client override via seller_setting_overrides.',
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 20,
@@ -1743,7 +1743,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'T_PLUS_N',
     displayName: 'Wallet Accrual Timing Tier',
     description:
-      "'T_PLUS_N' (default — credited/debited accrual_delay_days after DELIVERED, once the courier has settled with us) or 'INSTANT' (credited the moment the parcel is delivered, which means Skydrop fronts the money until the courier pays). Per-seller override via seller_setting_overrides.",
+      "'T_PLUS_N' (default — credited/debited accrual_delay_days after DELIVERED, once the courier has settled with us) or 'INSTANT' (credited the moment the parcel is delivered, which means Skydrop fronts the money until the courier pays). Per-client override via seller_setting_overrides.",
     sellerOverridable: true,
   },
   // R5 — two-stage ("virtual") inventory booking. Defaults keep every
@@ -1756,7 +1756,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueBoolean: false,
     displayName: 'Book Stock At Order Placement',
     description:
-      'When true, stock is reserved the moment an order lands (before call confirmation) as well as at confirmation. Off by default — an at-placement hold ties up stock for orders that may never be confirmed. Per-seller override.',
+      'When true, stock is reserved the moment an order lands (before call confirmation) as well as at confirmation. Off by default — an at-placement hold ties up stock for orders that may never be confirmed. Per-client override.',
     sellerOverridable: true,
   },
   {
@@ -1766,7 +1766,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'MANUAL_REVIEW',
     displayName: 'Early-Hold Action At Call Cap',
     description:
-      "What happens when call attempts are exhausted: 'MANUAL_REVIEW' pauses the order in AWAITING_SELLER_DECISION and asks the seller whether to keep trying, or 'AUTO_RELEASE' rejects it there and then. MANUAL_REVIEW by default since 2026-09-08 — under AUTO_RELEASE an order nobody could reach was simply dropped and the seller found out afterwards, if at all, and they are the one person who knows whether that customer is worth another ring. It costs no stock while at-placement booking is off, and an unanswered pause still expires on the TTL below, so it delays a rejection rather than preventing one. Per-seller override.",
+      "What happens when call attempts are exhausted: 'MANUAL_REVIEW' pauses the order in AWAITING_SELLER_DECISION and asks the client whether to keep trying, or 'AUTO_RELEASE' rejects it there and then. MANUAL_REVIEW by default since 2026-09-08 — under AUTO_RELEASE an order nobody could reach was simply dropped and the client found out afterwards, if at all, and they are the one person who knows whether that customer is worth another ring. It costs no stock while at-placement booking is off, and an unanswered pause still expires on the TTL below, so it delays a rejection rather than preventing one. Per-client override.",
     sellerOverridable: true,
   },
   {
@@ -1776,7 +1776,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 24,
     displayName: 'Early-Hold TTL (hours)',
     description:
-      'How long an at-placement hold survives before the reservation sweeper releases it. Deliberately shorter than the confirmed-order TTL, because these holds back orders nobody has spoken to yet. Per-seller override.',
+      'How long an at-placement hold survives before the reservation sweeper releases it. Deliberately shorter than the confirmed-order TTL, because these holds back orders nobody has spoken to yet. Per-client override.',
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 336,
@@ -1794,7 +1794,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'PAY_NOW',
     displayName: 'Inbound Freight Payment Mode',
     description:
-      "Who fronts the BD→India freight bill, and WHEN it is raised. 'PAY_ADVANCE' — billed at the Bangladesh intake once Dhaka has counted and weighed, debited in full there and then, before the goods fly. 'PAY_NOW' (default) — billed at the India arrival and debited in full. 'PAY_LATER' — billed at the India arrival and carried as a receivable, charged per unit as stock sells, optionally with a service charge. Per-seller override; whatever applies is SNAPSHOTTED onto each consignment when it is declared, so changing this never re-bills a consignment already in the air.",
+      "Who fronts the BD→India freight bill, and WHEN it is raised. 'PAY_ADVANCE' — billed at the Bangladesh intake once Dhaka has counted and weighed, debited in full there and then, before the goods fly. 'PAY_NOW' (default) — billed at the India arrival and debited in full. 'PAY_LATER' — billed at the India arrival and carried as a receivable, charged per unit as stock sells, optionally with a service charge. Per-client override; whatever applies is SNAPSHOTTED onto each consignment when it is declared, so changing this never re-bills a consignment already in the air.",
     sellerOverridable: true,
   },
   {
@@ -1804,7 +1804,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueDecimal: '0.00',
     displayName: 'Inbound Freight Pay-Later Service Charge (%)',
     description:
-      'Percentage added to a PAY_LATER inbound freight bill. Ignored for PAY_NOW. Defaults to 0 — a seller is only charged for credit terms that were explicitly quoted to them. Per-seller override.',
+      'Percentage added to a PAY_LATER inbound freight bill. Ignored for PAY_NOW. Defaults to 0 — a client is only charged for credit terms that were explicitly quoted to them. Per-client override.',
     sellerOverridable: true,
     overrideMinDecimal: '0.00',
     overrideMaxDecimal: '5.00',
@@ -1819,7 +1819,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 72,
     displayName: 'Call-Cap Review TTL (hours)',
     description:
-      'How long an order may sit in AWAITING_SELLER_DECISION before the hourly sweep releases any held stock and rejects it (REJECTED_NDR). Only applies to sellers whose NDR action is MANUAL_REVIEW. Per-seller override.',
+      'How long an order may sit in AWAITING_SELLER_DECISION before the hourly sweep releases any held stock and rejects it (REJECTED_NDR). Only applies to clients whose NDR action is MANUAL_REVIEW. Per-client override.',
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 720,
@@ -1834,7 +1834,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueString: 'NORMAL',
     displayName: 'Default Inventory Mode',
     description:
-      "Tracking mode for a seller's SKUs: 'NORMAL' (aggregate quantities, today's behaviour) or 'STRICT' (one scanned serial per physical unit at pick/pack/RTO). ADMIN-ONLY — set here, or per seller from the seller's detail page. It decides how the warehouse floor works, so it is our operational call rather than something a seller flips from their own settings.",
+      "Tracking mode for a client's SKUs: 'NORMAL' (aggregate quantities, today's behaviour) or 'STRICT' (one scanned serial per physical unit at pick/pack/RTO). ADMIN-ONLY — set here, or per client from the client's detail page. It decides how the warehouse floor works, so it is our operational call rather than something a client flips from their own settings.",
     sellerOverridable: false,
   },
   {
@@ -1882,7 +1882,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueInt: 7,
     displayName: 'Accrual Delay (days)',
     description:
-      "Days after DELIVERED before a T_PLUS_N-tier seller's wallet is credited/debited. Should be >= the courier's settlement window, so we are paying out money we already hold. Ignored for INSTANT-tier sellers. Per-seller override via seller_setting_overrides.",
+      "Days after DELIVERED before a T_PLUS_N-tier client's wallet is credited/debited. Should be >= the courier's settlement window, so we are paying out money we already hold. Ignored for INSTANT-tier clients. Per-client override via seller_setting_overrides.",
     sellerOverridable: true,
     overrideMinInt: 1,
     overrideMaxInt: 30,
@@ -2870,7 +2870,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.STAFF,
     subject: 'Delhivery issue categories changed ({{ created }} new, {{ changed }} re-worded)',
     bodyTemplate:
-      'The nightly taxonomy fetch found changes.\n\nNew: {{ created }}\nRe-worded: {{ changed }}\nNo longer offered: {{ disappeared }}\n\nA NEW category is not on the auto list and cannot be until someone decides about it — but it may be the one your sellers now need. A category that DISAPPEARED is worth a look: if it carried a human-only lock, that lock has stopped being exercised.',
+      'The nightly taxonomy fetch found changes.\n\nNew: {{ created }}\nRe-worded: {{ changed }}\nNo longer offered: {{ disappeared }}\n\nA NEW category is not on the auto list and cannot be until someone decides about it — but it may be the one your clients now need. A category that DISAPPEARED is worth a look: if it carried a human-only lock, that lock has stopped being exercised.',
   },
   {
     code: 'ops.courier_mode_change_code.email',
@@ -2888,7 +2888,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.STAFF,
     subject: 'Tracking has not moved for {{ minutes }} minutes',
     bodyTemplate:
-      'No tracking cycle has completed successfully in {{ minutes }} minutes (threshold {{ threshold }}).\n\nDelhivery sends us no webhooks, so this poll is the only thing that moves an order to delivered. While it is stopped, no parcel updates, no order reaches DELIVERED, and COD is not credited — so seller withdrawals stop with it.\n\nAutomatic recovery: {{ recovery }}\n\nIf that did not fix it, check in order: is the API up ({{ health_url }}); is the worker running (pm2, WORKERS_ENABLED); did Redis lose the repeatable job (restarting the API re-adds it); is courier.delhivery_api_base_url still set (empty means stub mode, where the poller does nothing).\n\nYou can also run a cycle by hand from the Delhivery page in admin. It is safe to press repeatedly.',
+      'No tracking cycle has completed successfully in {{ minutes }} minutes (threshold {{ threshold }}).\n\nDelhivery sends us no webhooks, so this poll is the only thing that moves an order to delivered. While it is stopped, no parcel updates, no order reaches DELIVERED, and COD is not credited — so client withdrawals stop with it.\n\nAutomatic recovery: {{ recovery }}\n\nIf that did not fix it, check in order: is the API up ({{ health_url }}); is the worker running (pm2, WORKERS_ENABLED); did Redis lose the repeatable job (restarting the API re-adds it); is courier.delhivery_api_base_url still set (empty means stub mode, where the poller does nothing).\n\nYou can also run a cycle by hand from the Delhivery page in admin. It is safe to press repeatedly.',
   },
   {
     code: 'ops.ndr_reconciliation_alert.email',
@@ -3018,9 +3018,9 @@ const notificationTemplates: TemplateSeed[] = [
     bodyTemplate: [
       "You're invited to Skydrop.",
       '',
-      "You've been invited to join Skydrop — the cross-border courier aggregator helping Bangladeshi sellers ship into India.",
+      "You've been invited to join Skydrop — the cross-border courier aggregator helping Bangladeshi clients ship into India.",
       '',
-      'Set up your seller account here:',
+      'Set up your client account here:',
       '{{ invite_url }}',
       '',
       'This invitation expires on {{ expires_at_display }}.',
@@ -3045,10 +3045,10 @@ const notificationTemplates: TemplateSeed[] = [
               <td style="padding:20px 32px 0 32px;">
                 <h1 style="margin:0 0 12px 0;font-size:22px;font-weight:600;color:#0f172a;letter-spacing:-0.015em;line-height:1.3;">You're invited to Skydrop</h1>
                 <p style="margin:0 0 14px 0;font-size:14px;line-height:1.65;color:#4b5563;">
-                  You've been invited to join <strong style="color:#1f2937;">Skydrop</strong> — the cross-border courier aggregator helping Bangladeshi sellers ship into India.
+                  You've been invited to join <strong style="color:#1f2937;">Skydrop</strong> — the cross-border courier aggregator helping Bangladeshi clients ship into India.
                 </p>
                 <p style="margin:0 0 24px 0;font-size:14px;line-height:1.65;color:#4b5563;">
-                  Use the button below to create your seller account. This invitation expires on <strong style="color:#1f2937;">{{ expires_at_display }}</strong>.
+                  Use the button below to create your client account. This invitation expires on <strong style="color:#1f2937;">{{ expires_at_display }}</strong>.
                 </p>
               </td>
             </tr>
@@ -3113,7 +3113,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Welcome to Skydrop — {{ company_name }}',
     bodyTemplate:
-      'Welcome aboard, {{ contact_name }}. Your Skydrop seller account for {{ company_name }} is set up and you can sign in to {{ seller_app_url }} now. Start by adding products to your catalog and shipping stock to our warehouse.',
+      'Welcome aboard, {{ contact_name }}. Your Skydrop client account for {{ company_name }} is set up and you can sign in to {{ seller_app_url }} now. Start by adding products to your catalog and shipping stock to our warehouse.',
   },
   {
     code: 'seller.approved.email',
@@ -3122,7 +3122,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Your Skydrop account is approved',
     bodyTemplate:
-      'Good news, {{ contact_name }} — your Skydrop seller account has been approved. You can now ship stock to our warehouse and start placing orders.',
+      'Good news, {{ contact_name }} — your Skydrop client account has been approved. You can now ship stock to our warehouse and start placing orders.',
   },
   {
     code: 'seller.rejected.email',
@@ -3340,7 +3340,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Reset your Skydrop password',
     bodyTemplate:
-      'A password reset was requested for your Skydrop seller account. Reset here: {{ reset_url }}. This link expires in 30 minutes. If you did not request this, please ignore.',
+      'A password reset was requested for your Skydrop client account. Reset here: {{ reset_url }}. This link expires in 30 minutes. If you did not request this, please ignore.',
   },
   {
     code: 'staff.email_verification.email',
@@ -3358,7 +3358,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Verify your Skydrop email',
     bodyTemplate:
-      'Hi {{ contact_name }}, please verify your Skydrop seller email by clicking: {{ verify_url }}. This link expires in {{ expires_hours }} hours. If you did not request this, please ignore.',
+      'Hi {{ contact_name }}, please verify your Skydrop client email by clicking: {{ verify_url }}. This link expires in {{ expires_hours }} hours. If you did not request this, please ignore.',
   },
   {
     code: 'seller.account_suspended.email',
@@ -3367,7 +3367,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Your Skydrop account has been suspended',
     bodyTemplate:
-      'Hi {{ company_name }}, your Skydrop seller account has been suspended. Reason: {{ reason }}. While suspended you can still log in to view your account in read-only mode, but you cannot place new orders or modify your profile. Reach out to {{ support_email }} to resolve.',
+      'Hi {{ company_name }}, your Skydrop client account has been suspended. Reason: {{ reason }}. While suspended you can still log in to view your account in read-only mode, but you cannot place new orders or modify your profile. Reach out to {{ support_email }} to resolve.',
   },
   // ── Bank details ────────────────────────────────────────────────
   // Where a seller's money goes is the highest-stakes thing they can
@@ -3426,7 +3426,7 @@ const notificationTemplates: TemplateSeed[] = [
     recipientType: NotificationRecipientType.SELLER,
     subject: 'Your Skydrop account has been reactivated',
     bodyTemplate:
-      'Good news, {{ company_name }} — your Skydrop seller account has been reactivated. You can log in and resume operations at {{ app_url }}. If you need anything, reach out to {{ support_email }}.',
+      'Good news, {{ company_name }} — your Skydrop client account has been reactivated. You can log in and resume operations at {{ app_url }}. If you need anything, reach out to {{ support_email }}.',
   },
   {
     code: 'seller.onboarding_complete.email',
@@ -3797,9 +3797,9 @@ const notificationTemplates: TemplateSeed[] = [
     name: 'Reseller store awaiting the seller’s approval (RS-1)',
     channel: NotificationChannel.EMAIL,
     recipientType: NotificationRecipientType.SELLER,
-    subject: 'Approve or reject the reseller store “{{ store_name }}”',
+    subject: 'Approve or reject the member store “{{ store_name }}”',
     bodyTemplate:
-      'Hi {{ company_name }}, Skydrop opened a reseller store called “{{ store_name }}” on your account. Nothing can be ordered through it until you approve it — or you can reject it. Decide at {{ store_url }}.',
+      'Hi {{ company_name }}, Skydrop opened a member store called “{{ store_name }}” on your account. Nothing can be ordered through it until you approve it — or you can reject it. Decide at {{ store_url }}.',
   },
   // RS-4 (2026-09-14) — the seller published new terms for a reseller
   // store; sent to each store user who may accept them. OPERATIONAL (no
@@ -3946,7 +3946,7 @@ const notificationTemplates: TemplateSeed[] = [
       '',
       '{{ message }}',
       '',
-      'A settlement moves money between your wallet and the seller’s — your wallet',
+      'A settlement moves money between your wallet and the client’s — your wallet',
       'ledger shows the entry.',
       '',
       'See the ticket at {{ ticket_url }}',
@@ -4319,7 +4319,7 @@ async function seedExpenseCategories(): Promise<void> {
       'Bank & payment charges',
       'Wire fees, gateway fees, and what a bank takes to move money.',
     ],
-    ['marketing', 'Marketing', 'Acquiring sellers — ads, content, commissions.'],
+    ['marketing', 'Marketing', 'Acquiring clients — ads, content, commissions.'],
     ['professional_fees', 'Professional fees', 'Legal, accounting, audit, compliance.'],
     ['office', 'Office & admin', 'Everything that keeps the office running and fits nowhere else.'],
     [

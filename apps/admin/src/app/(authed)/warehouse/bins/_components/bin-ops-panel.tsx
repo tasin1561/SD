@@ -461,7 +461,7 @@ export function BinOpsPanel({
             <span className="stk-faint stk-note">
               {bulkReady
                 ? `${bulkUnits} unit(s) will move.`
-                : 'Every line needs a seller, variant, batch, a whole quantity of at least one, and two different bins.'}
+                : 'Every line needs a client, variant, batch, a whole quantity of at least one, and two different bins.'}
             </span>
           </Actions>
         </PanelPad>

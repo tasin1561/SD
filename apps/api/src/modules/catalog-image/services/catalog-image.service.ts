@@ -124,7 +124,7 @@ export class CatalogImageService {
     if (parsed.sellerId !== sellerId) {
       throw new ForbiddenException({
         code: 'KEY_OWNERSHIP_MISMATCH',
-        message: 'spacesKey does not belong to the authenticated seller',
+        message: 'spacesKey does not belong to the authenticated client',
       });
     }
     if (parsed.variantId !== variantId) {

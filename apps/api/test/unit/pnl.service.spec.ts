@@ -2525,7 +2525,7 @@ describe('RS-6 phase 3c — a reseller order earns Skydrop exactly what a channe
         .map((p) => [p.label, p.amountInr]);
     expect(storePart('delivery')).toEqual([['Reseller stores’ share of delivery fees', '120.01']]);
     expect(storePart('cod_tax')).toEqual([
-      ['Reseller stores’ share, taken from their wallets', '91.52'],
+      ['Member stores’ share, taken from their wallets', '91.52'],
     ]);
     expect(storePart('cod_service_fees')).toEqual([
       ['Reseller stores’ share of Instant Pay fees', '15.02'],

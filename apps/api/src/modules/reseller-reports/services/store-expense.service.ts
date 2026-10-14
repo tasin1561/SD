@@ -182,7 +182,7 @@ export class StoreExpenseService {
       select: { createdAt: true },
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     // The P&L months begin with the store's first month; an expense dated
     // before it would sit in no month at all.

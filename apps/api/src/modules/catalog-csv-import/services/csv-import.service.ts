@@ -363,7 +363,7 @@ export class CsvImportService {
     if (parsed.sellerId !== sellerId) {
       throw new ForbiddenException({
         code: 'KEY_OWNERSHIP_MISMATCH',
-        message: 'spacesKey does not belong to the authenticated seller',
+        message: 'spacesKey does not belong to the authenticated client',
       });
     }
     const head = await this.spaces.headObject(spacesKey);

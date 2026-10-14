@@ -84,7 +84,7 @@ export function OurCostCell({ row }: { readonly row: FreightChargeView }): React
               <span
                 className="mk-text mk-small"
                 data-tone={margin < 0 ? 'critical' : undefined}
-                title="What we billed the seller, less what the forwarder charged us"
+                title="What we billed the client, less what the forwarder charged us"
               >
                 <Money
                   amount={margin}
@@ -175,7 +175,7 @@ function CostOnlyModal({
           autoFocus
         />
         <p className="mk-small">
-          Billed to the seller: <Money amount={row.totalInr} />
+          Billed to the client: <Money amount={row.totalInr} />
         </p>
         {error !== null && <MkAlert>{error}</MkAlert>}
       </div>
@@ -306,7 +306,7 @@ function PayForwarderModal({
         <MkDl
           items={[
             {
-              label: 'Billed to the seller for this consignment',
+              label: 'Billed to the client for this consignment',
               value: <Money amount={row.totalInr} />,
             },
             ...(row.ourCostInr === null

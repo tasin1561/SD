@@ -28,7 +28,7 @@ const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
   ORDER_UPDATES: {
     title: 'Your orders and your requests',
     description:
-      'Answers to what you asked the seller, and changes somebody else made to one of your orders.',
+      'Answers to what you asked the client, and changes somebody else made to one of your orders.',
   },
   MONEY: {
     title: 'Money',
@@ -36,10 +36,10 @@ const CATEGORY_LABEL: Record<string, { title: string; description: string }> = {
   },
   SUPPORT: {
     title: 'Disputes and issues',
-    description: 'Replies and outcomes on the tickets you raise with the seller or with Skydrop.',
+    description: 'Replies and outcomes on the tickets you raise with the client or with Skydrop.',
   },
   TERMS: {
-    title: 'The seller’s terms',
+    title: 'The client’s terms',
     description: 'A new version to accept — who pays which fee, and when each side is credited.',
   },
   ANNOUNCEMENTS: {
@@ -393,12 +393,12 @@ function AlwaysOn(): ReactElement {
     {
       Icon: BellOff,
       title: 'Anything about your money',
-      body: 'Credits, fee shares, what you prepaid, and a settled dispute that moves money between your wallet and the seller’s.',
+      body: 'Credits, fee shares, what you prepaid, and a settled dispute that moves money between your wallet and the client’s.',
     },
     {
       Icon: BellOff,
       title: 'Changes to your orders',
-      body: 'Including a courier refusing an address change the seller had already agreed to.',
+      body: 'Including a courier refusing an address change the client had already agreed to.',
     },
     {
       Icon: ShieldCheck,

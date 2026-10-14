@@ -10,7 +10,7 @@ export class RejectBankChangeDto {
   })
   @IsString()
   @MinLength(10, {
-    message: 'reason must be at least 10 characters — the seller reads it verbatim',
+    message: 'reason must be at least 10 characters — the client reads it verbatim',
   })
   @MaxLength(500)
   readonly reason!: string;

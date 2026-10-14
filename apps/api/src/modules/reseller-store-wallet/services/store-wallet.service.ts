@@ -472,7 +472,7 @@ export class StoreWalletService {
       select: STORE_SELECT,
     });
     if (row === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return {
       id: row.id,

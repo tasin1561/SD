@@ -443,7 +443,7 @@ export class ConsignmentService {
         code: 'CONSIGNMENT_FREIGHT_BILLED',
         message:
           `${row.consignmentNumber} carries a freight bill, so cancelling it would leave the ` +
-          'seller charged for a shipment that never happened. Withdraw the freight bill first, ' +
+          'client charged for a shipment that never happened. Withdraw the freight bill first, ' +
           'then cancel.',
         cause: { freightChargeId: billed.id, status: billed.status },
       });

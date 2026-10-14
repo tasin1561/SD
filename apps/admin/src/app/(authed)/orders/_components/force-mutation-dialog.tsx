@@ -96,7 +96,7 @@ const FIELD_GROUPS: ReadonlyArray<{
   {
     title: 'Notes + cancellation',
     fields: [
-      { key: 'sellerNotes', label: 'Seller notes', kind: 'long-text' },
+      { key: 'sellerNotes', label: 'Client notes', kind: 'long-text' },
       { key: 'internalNotes', label: 'Internal notes', kind: 'long-text' },
       { key: 'callNotes', label: 'Call notes', kind: 'long-text' },
       {
@@ -411,7 +411,7 @@ function CriticalNotice(): ReactElement {
         <strong>This is a deliberate bypass.</strong> The order&apos;s state machine, edit rules,
         and saga compensation are all opted out of. Use it only when normal flows can&apos;t reach
         the required state — and document why. A forced status has the same consequences as any
-        other change except stock: customer and seller emails, seller webhooks, invoices and
+        other change except stock: customer and client emails, client webhooks, invoices and
         delivery-time billing fire for the status it lands on; it joins or leaves the call queue; a
         forced CONFIRMED gets a shipment (so it can be picked and booked); and a cancel voids an
         unpicked shipment and returns the delivery fee if the parcel never left with a courier. A

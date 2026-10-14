@@ -85,7 +85,7 @@ export function ImportDetail({ importId }: { readonly importId: string }): React
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Stock & WMS' },
           { label: 'Products', href: '/products' },
           { label: 'History', href: '/products/import/jobs' },

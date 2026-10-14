@@ -125,7 +125,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
         <>
           <PageHeader
             breadcrumbs={[
-              { label: 'Seller console' },
+              { label: 'Client console' },
               { label: 'Products', href: '/products' },
               { label: detail.data.name },
             ]}

@@ -57,7 +57,7 @@ import './team.css';
 // most needs to be right about custom roles would have been blank for
 // exactly the people who have them.
 
-const CRUMBS = [{ label: 'Seller console' }, { label: 'Account' }, { label: 'Team' }];
+const CRUMBS = [{ label: 'Client console' }, { label: 'Account' }, { label: 'Team' }];
 
 /** PENDING / USED / EXPIRED, decided once and read in two places. */
 type InviteState = 'PENDING' | 'USED' | 'EXPIRED';

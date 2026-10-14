@@ -139,7 +139,7 @@ export function ResolveWithdrawalModal({
                 ),
               },
               {
-                label: 'Seller',
+                label: 'Client',
                 value: (
                   <Link href={`/sellers/${request.sellerId}`} className="mk-inline-link">
                     <Ident value={request.sellerId} />
@@ -149,7 +149,7 @@ export function ResolveWithdrawalModal({
               {
                 label: 'Source',
                 value:
-                  request.requestedBy === 'SYSTEM' ? 'Auto-withdraw cycle' : 'Seller-initiated',
+                  request.requestedBy === 'SYSTEM' ? 'Auto-withdraw cycle' : 'Client-initiated',
               },
               {
                 label: 'Note',
@@ -195,7 +195,7 @@ export function ResolveWithdrawalModal({
             <TextArea
               id="wd-reason"
               label="Reason"
-              hint="Shown to the seller. Say what would make a resubmission succeed."
+              hint="Shown to the client. Say what would make a resubmission succeed."
               requiredMark
               rows={3}
               value={reason}

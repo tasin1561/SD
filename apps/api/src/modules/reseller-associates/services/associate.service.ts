@@ -510,7 +510,7 @@ export class AssociateService {
       throw new NotFoundException({
         code: 'ASSOCIATE_PRODUCT_NOT_SELLABLE',
         message:
-          'Your store cannot sell that product — it is switched off for you, or your seller has set no price for it.',
+          'Your store cannot sell that product — it is switched off for you, or your client has set no price for it.',
       });
     }
     const refusal = checkAssociatePrice({ retailInr: retailPriceInr, range: product.range });

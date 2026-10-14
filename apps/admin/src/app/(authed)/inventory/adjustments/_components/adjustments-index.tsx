@@ -341,7 +341,7 @@ function AdjustmentReview({
                   ),
               },
               { label: 'Warehouse', value: <Ident value={adjustment.warehouseId} /> },
-              { label: 'Seller', value: <Ident value={adjustment.sellerId} /> },
+              { label: 'Client', value: <Ident value={adjustment.sellerId} /> },
             ]}
           />
 

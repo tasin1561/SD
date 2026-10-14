@@ -172,7 +172,7 @@ export function ExpenseModal({
         }}
         icon={<Receipt size={18} />}
         title="Record an expense"
-        description="Money leaving one of our accounts for something we bought. Always ours — never a seller's."
+        description="Money leaving one of our accounts for something we bought. Always ours — never a client's."
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
@@ -373,12 +373,12 @@ function FreightLinkField({
       label="Link to a consignment"
       hint={
         prompt
-          ? 'A forwarder payment with no consignment behind it is counted twice in the profit report — once as that leg’s cost, once here. Search by consignment number, receipt or seller.'
-          : 'Optional. Search by consignment number, receipt or seller.'
+          ? 'A forwarder payment with no consignment behind it is counted twice in the profit report — once as that leg’s cost, once here. Search by consignment number, receipt or client.'
+          : 'Optional. Search by consignment number, receipt or client.'
       }
       value={term}
       onChange={(e) => setTerm(e.target.value)}
-      placeholder="e.g. CN-2026-08 or the seller’s name"
+      placeholder="e.g. CN-2026-08 or the client’s name"
       // Loud only where leaving it empty is an actual error.
       className={prompt && term === '' ? 'ex-prompt' : undefined}
       after={

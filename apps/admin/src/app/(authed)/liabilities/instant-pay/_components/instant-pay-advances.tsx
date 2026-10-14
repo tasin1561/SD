@@ -74,7 +74,7 @@ export function InstantPayAdvances({
     <div className="mo-page">
       <PageHeader
         title="Instant Pay advances"
-        subtitle="Paid to sellers at delivery out of our money, not yet paid to us by the courier."
+        subtitle="Paid to clients at delivery out of our money, not yet paid to us by the courier."
         action={
           <LinkButton href="/liabilities" variant="ghost" size="sm" icon={<ArrowLeft size={14} />}>
             What we owe
@@ -101,10 +101,10 @@ export function InstantPayAdvances({
             <KpiCard
               label="Cash we fronted"
               figure={<Money amount={q.data.totalFrontedInr} currency="INR" convert={false} />}
-              hint="Out of capital — less than the COD where it cleared a seller's debt"
+              hint="Out of capital — less than the COD where it cleared a client's debt"
             />
             <KpiCard
-              label="Credited to sellers"
+              label="Credited to clients"
               figure={<Money amount={q.data.totalNetCreditedInr} currency="INR" convert={false} />}
               hint="COD less tax and fees"
             />
@@ -120,11 +120,11 @@ export function InstantPayAdvances({
             >
               <FilterField icon={<Store size={16} />}>
                 <Select
-                  label="Seller"
+                  label="Client"
                   value={sellerId}
                   onChange={(e) => setSellerId(e.target.value)}
                 >
-                  <option value="">All sellers</option>
+                  <option value="">All clients</option>
                   {(all.data?.bySeller ?? []).map((g) => (
                     <option key={g.key ?? ''} value={g.key ?? ''}>
                       {g.label} ({g.count})
@@ -153,7 +153,7 @@ export function InstantPayAdvances({
               <THead>
                 <Tr>
                   <Th>Order</Th>
-                  <Th>Seller</Th>
+                  <Th>Client</Th>
                   <Th>Owed by</Th>
                   <SortableTh
                     label="Age"

@@ -79,13 +79,13 @@ export function checkAssociatePrice(input: {
   if (min !== null && retail < min) {
     return {
       code: 'ASSOCIATE_PRICE_OUT_OF_SELLER_RANGE',
-      message: `${rupees(retail)} is below the lowest price your seller allows for this product (${rupees(min)}).`,
+      message: `${rupees(retail)} is below the lowest price your client allows for this product (${rupees(min)}).`,
     };
   }
   if (max !== null && retail > max) {
     return {
       code: 'ASSOCIATE_PRICE_OUT_OF_SELLER_RANGE',
-      message: `${rupees(retail)} is above the highest price your seller allows for this product (${rupees(max)}).`,
+      message: `${rupees(retail)} is above the highest price your client allows for this product (${rupees(max)}).`,
     };
   }
   return null;

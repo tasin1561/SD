@@ -51,13 +51,13 @@ export default function ResellerStockForecastPage(): ReactElement {
     <div className="rs-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Reselling' },
           { label: 'Stock forecast' },
         ]}
         Link={Link}
         title="Stock forecast"
-        subtitle="Days of stock left for every product your reseller stores may sell, at the rate it sold recently."
+        subtitle="Days of stock left for every product your member stores may sell, at the rate it sold recently."
         meta={
           !loaded ? undefined : (
             <RsFacts>
@@ -126,7 +126,7 @@ export default function ResellerStockForecastPage(): ReactElement {
             figure={loaded ? <Num value={available} /> : dash}
             unit={loaded ? 'units' : undefined}
             tone="neutral"
-            hint="Across every product a reseller store may sell."
+            hint="Across every product a member store may sell."
           />
         </div>
       )}
@@ -146,9 +146,9 @@ export default function ResellerStockForecastPage(): ReactElement {
             {rows.length === 0 ? (
               <EmptyState
                 bare
-                title="No products enabled for a reseller store"
-                description="Give a product a reseller price and switch it on for a store, and it appears here."
-                action={<RsLink href="/reseller-stores">Your reseller stores</RsLink>}
+                title="No products enabled for a member store"
+                description="Give a product a member store price and switch it on for a store, and it appears here."
+                action={<RsLink href="/reseller-stores">Your member stores</RsLink>}
               />
             ) : (
               <Table caption="Stock forecast">

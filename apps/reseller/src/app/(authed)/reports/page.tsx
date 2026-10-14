@@ -264,7 +264,7 @@ function PositionTiles(): ReactElement {
         figure={<Money amount={p.owedToStoreInr} size="lg" />}
       />
       <KpiCard
-        label="You owe your seller"
+        label="You owe your client"
         icon={<ArrowUpRight size={14} />}
         tone={p.owedByStoreInr === '0.00' ? 'neutral' : 'pending'}
         figure={<Money amount={p.owedByStoreInr} size="lg" />}
@@ -293,7 +293,7 @@ function PositionTiles(): ReactElement {
         label="May go below zero by"
         icon={<Gauge size={14} />}
         figure={<Money amount={p.negativeLimit.effectiveInr} size="lg" />}
-        hint="Set by your seller."
+        hint="Set by your client."
       />
     </div>
   );
@@ -302,7 +302,7 @@ function PositionTiles(): ReactElement {
 /** The lines, expenses by category and cash movements of one report. */
 function ReportBody({ report }: { report: StorePnlReport }): ReactElement {
   const me = useStoreIdentity();
-  const sellerName = me?.seller.companyName ?? 'Your seller';
+  const sellerName = me?.seller.companyName ?? 'Your client';
   return (
     <>
       <RmSection>

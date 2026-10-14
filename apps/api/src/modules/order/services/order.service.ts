@@ -480,7 +480,7 @@ export class OrderService {
     if (reseller !== null && reseller.lines.length !== input.items.length) {
       throw new BadRequestException({
         code: 'RESELLER_LINES_MISMATCH',
-        message: 'Every line of a reseller order needs its terms',
+        message: 'Every line of a member store order needs its terms',
       });
     }
     const store =
@@ -742,7 +742,7 @@ export class OrderService {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
         throw new ConflictException({
           code: 'DUPLICATE_SELLER_ORDER_REF',
-          message: `An order with sellerOrderRef "${input.sellerOrderRef}" already exists for this seller`,
+          message: `An order with sellerOrderRef "${input.sellerOrderRef}" already exists for this client`,
         });
       }
       throw e;
@@ -853,7 +853,7 @@ export class OrderService {
       if (!v || v.sellerId !== sellerId) {
         throw new BadRequestException({
           code: 'VARIANT_NOT_FOUND',
-          message: `Variant ${item.variantId} not found for this seller`,
+          message: `Variant ${item.variantId} not found for this client`,
         });
       }
       if (v.status === VariantStatus.ARCHIVED) {
@@ -2008,7 +2008,7 @@ export class OrderService {
       throw new ConflictException({
         code: 'RESELLER_ORDER_NOT_EDITABLE',
         message:
-          'A reseller store’s order cannot be changed by this path — it carries terms a live-catalogue re-snapshot would lose',
+          'A member store’s order cannot be changed by this path — it carries terms a live-catalogue re-snapshot would lose',
       });
     }
     if (order.status !== OrderStatus.DRAFT && order.status !== OrderStatus.PENDING_CONFIRMATION) {
@@ -2109,7 +2109,7 @@ export class OrderService {
       if (!resolved || resolved.sellerId !== sellerId) {
         throw new BadRequestException({
           code: 'VARIANT_NOT_FOUND',
-          message: `Variant SKU "${l.productSku}" not found for this seller`,
+          message: `Variant SKU "${l.productSku}" not found for this client`,
         });
       }
       resolvedBySku.set(l.productSku, resolved);

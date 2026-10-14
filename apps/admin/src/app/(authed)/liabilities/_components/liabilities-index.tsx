@@ -158,12 +158,12 @@ export function LiabilitiesIndex(): ReactElement {
           label="We owe"
           tone="pending"
           figure={<Money amount={d.owedTotalInr} currency="INR" convert={false} />}
-          hint="Sellers and the tax authority"
+          hint="Clients and the tax authority"
         />
         <KpiCard
           label="Owed to us"
           figure={<Money amount={d.dueTotalInr} currency="INR" convert={false} />}
-          hint="Couriers, sellers, freight not yet recovered"
+          hint="Couriers, clients, freight not yet recovered"
         />
         <KpiCard
           label="Net position"
@@ -190,10 +190,10 @@ export function LiabilitiesIndex(): ReactElement {
       </MoSection>
 
       <section className="mo-section">
-        <SectionHeading title="Sellers in the red" />
+        <SectionHeading title="Clients in the red" />
         {d.sellerDebts.length === 0 ? (
           <Notice tone="good" icon={<ShieldCheck size={16} />}>
-            <p>No seller is carrying a negative balance.</p>
+            <p>No client is carrying a negative balance.</p>
           </Notice>
         ) : (
           <>
@@ -201,17 +201,17 @@ export function LiabilitiesIndex(): ReactElement {
               <Notice tone="warn" icon={<AlertTriangle size={16} />}>
                 <p>
                   {uncovered.length === 1
-                    ? 'One seller owes more than their stock is worth'
-                    : `${uncovered.length} sellers owe more than their stock is worth`}
+                    ? 'One client owes more than their stock is worth'
+                    : `${uncovered.length} clients owe more than their stock is worth`}
                   . A debt covered by goods in our building clears as they sell; an uncovered one is
                   money we may not see again.
                 </p>
               </Notice>
             )}
-            <Table caption="Sellers in the red">
+            <Table caption="Clients in the red">
               <THead>
                 <Tr>
-                  <Th>Seller</Th>
+                  <Th>Client</Th>
                   <Th align="right">Owes</Th>
                   <Th>What for</Th>
                   <Th align="right">Stock held (at cost)</Th>

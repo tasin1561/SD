@@ -147,11 +147,33 @@ function SettingRow({
   );
 }
 
+/**
+ * Category keys whose DISPLAY name is not just the key title-cased.
+ *
+ * CON-2 renamed the words a person reads and deliberately left every KEY
+ * alone, so `system_settings.category = 'reseller'` is still the right
+ * key and "Reseller" is no longer the right heading — it would sit above
+ * eight settings titled "Member store fraud signals…". A display map is
+ * the fix rather than a migration: the key is an identifier the API and
+ * the seed agree on, and renaming it to correct a heading would be the
+ * tail wagging the dog.
+ *
+ * Note this is the one place a rename sweep could never have found. The
+ * heading is DERIVED from the key below, not written as a string, so
+ * there was nothing for a search for "Reseller" to match.
+ */
+const CATEGORY_LABELS: Record<string, string> = {
+  reseller: 'Member stores',
+};
+
 function categoryLabel(category: string): string {
-  return category
-    .split('_')
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(' ');
+  return (
+    CATEGORY_LABELS[category] ??
+    category
+      .split('_')
+      .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(' ')
+  );
 }
 
 function valueTypeKind(type: SettingValueType): 'draft' | 'confirmed' | 'pending' | 'in-transit' {

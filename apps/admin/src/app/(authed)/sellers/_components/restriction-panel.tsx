@@ -101,7 +101,7 @@ export function RestrictionPanel({
         clearAtBalanceInr: clearAt.trim(),
         reason: reason.trim(),
       });
-      toast.success('Hold placed. The seller sees it on every page.');
+      toast.success('Hold placed. The client sees it on every page.');
       setOpen(false);
       setReason('');
     } catch (err) {
@@ -114,7 +114,7 @@ export function RestrictionPanel({
     try {
       await lift.mutateAsync({
         restrictionId: hold.id,
-        reason: 'Lifted by hand from seller detail',
+        reason: 'Lifted by hand from client detail',
       });
       toast.success('Hold lifted.');
     } catch (err) {
@@ -125,7 +125,7 @@ export function RestrictionPanel({
   return (
     <AcCard
       title="Account hold"
-      note="Stop a seller who owes us money from starting new work. It lifts itself once their balance reaches the figure you set — they never wait for someone to notice a payment."
+      note="Stop a client who owes us money from starting new work. It lifts itself once their balance reaches the figure you set — they never wait for someone to notice a payment."
       tone={hold === null ? undefined : 'warn'}
       action={
         canManage && hold === null ? (
@@ -141,7 +141,7 @@ export function RestrictionPanel({
       }
     >
       {hold === null ? (
-        <p className="ac-muted">No hold. This seller can trade normally.</p>
+        <p className="ac-muted">No hold. This client can trade normally.</p>
       ) : (
         <div className="ac-card__body">
           <p className="ac-text">{hold.reason}</p>
@@ -230,7 +230,7 @@ export function RestrictionPanel({
 
           <TextField
             label="Lifts automatically at balance (₹)"
-            hint="Usually 0 — the point at which they no longer owe us. The seller sees this figure and how far off it they are."
+            hint="Usually 0 — the point at which they no longer owe us. The client sees this figure and how far off it they are."
             requiredMark
             inputMode="decimal"
             inputClassName="sk-figure"
@@ -240,7 +240,7 @@ export function RestrictionPanel({
 
           <TextArea
             label="Reason"
-            hint="The SELLER reads this. Write it as you would say it to them — a hold they cannot understand is one they phone about instead of fixing."
+            hint="The CLIENT reads this. Write it as you would say it to them — a hold they cannot understand is one they phone about instead of fixing."
             requiredMark
             rows={3}
             value={reason}

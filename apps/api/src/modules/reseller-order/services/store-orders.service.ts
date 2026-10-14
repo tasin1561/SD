@@ -546,7 +546,7 @@ export class StoreOrdersService {
       throw new ForbiddenException({
         code: 'STORE_ACTION_NOT_ALLOWED',
         message:
-          'The seller has not enabled cancelling for this store. Ask them to call the order off.',
+          'The client has not enabled cancelling for this store. Ask them to call the order off.',
       });
     }
 

@@ -92,7 +92,7 @@ const overviewRoute = (times = 3) => ({
 });
 
 describe('every bin, with what is in it', () => {
-  it('shows each bin with its products, SKUs, sellers and batches — empty bins too', async () => {
+  it('shows each bin with its products, SKUs, clients and batches — empty bins too', async () => {
     renderWithProviders(<BinContentsOverview />, {
       identity: staff,
       fetchImpl: buildFetchMock([overviewRoute()]),
@@ -146,19 +146,19 @@ describe('every bin, with what is in it', () => {
     expect(more.getAttribute('href')).toBe('/warehouse/bins/b-floor');
   });
 
-  it('filters by seller and by SKU without another request', async () => {
+  it('filters by client and by SKU without another request', async () => {
     const fetchImpl = buildFetchMock([overviewRoute()]);
     renderWithProviders(<BinContentsOverview />, { identity: staff, fetchImpl });
     await screen.findByText('Cotton Kurta');
     const calls = fetchImpl.mock.calls.length;
 
-    fireEvent.change(screen.getByLabelText('Seller'), { target: { value: 's-rupa' } });
+    fireEvent.change(screen.getByLabelText('Client'), { target: { value: 's-rupa' } });
     expect(screen.queryByText('Cotton Kurta')).toBeNull();
     expect(screen.getByText('Silk Saree')).toBeTruthy();
     // A line filter hides bins with nothing matching.
     expect(screen.queryByTestId('bin-total-R-01-01')).toBeNull();
 
-    fireEvent.change(screen.getByLabelText('Seller'), { target: { value: '' } });
+    fireEvent.change(screen.getByLabelText('Client'), { target: { value: '' } });
     fireEvent.change(screen.getByLabelText('Product, SKU or batch'), {
       target: { value: 'krt-red' },
     });

@@ -45,7 +45,7 @@ describe('stores.order_money.view', () => {
 
   it('is NOT in the Orders group — adjacency to orders.view is what caused this', () => {
     const def = SELLER_PERMISSIONS.find((p) => p.key === KEY);
-    expect(def?.group).toBe('Reseller stores');
+    expect(def?.group).toBe('Member stores');
   });
 
   it.each(['admin', 'finance'])('%s holds it', (key) => {

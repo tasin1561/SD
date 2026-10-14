@@ -249,7 +249,7 @@ export class SellerProfileService {
     if (!seller) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
-        message: 'Seller session no longer valid',
+        message: 'Client session no longer valid',
       });
     }
     const onboarding = await this.onboarding.getProgress(sellerId);
@@ -409,7 +409,7 @@ export class SellerProfileService {
         select: { id: true },
       });
       if (!existing) {
-        throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+        throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
       }
       await tx.seller.update({ where: { id: sellerId }, data });
       await this.audit.log(
@@ -509,7 +509,7 @@ export class SellerProfileService {
       if (!existing) {
         throw new NotFoundException({
           code: 'SELLER_NOT_FOUND',
-          message: 'Seller not found',
+          message: 'Client not found',
         });
       }
 

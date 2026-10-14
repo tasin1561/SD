@@ -88,7 +88,7 @@ export function MoveSellerCashModal({
       }}
       locked={move.isPending}
       title={`Correct whose cash it is — ${holding?.label ?? ''}`}
-      description="Relabels cash already in this account between the seller and us. Nothing moves between banks, so the account total does not change."
+      description="Relabels cash already in this account between the client and us. Nothing moves between banks, so the account total does not change."
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={onClose} disabled={move.isPending}>
@@ -105,7 +105,7 @@ export function MoveSellerCashModal({
       <div className="mk-stack">
         {holding !== null && (
           <div className="mk-subject">
-            <span className="mk-subject__label">Held for this seller here</span>
+            <span className="mk-subject__label">Held for this client here</span>
             <span className="mk-subject__main">
               <Money amount={holding.amount} currency={holding.currency} convert={false} />
             </span>

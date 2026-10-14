@@ -62,8 +62,8 @@ const mono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'Skydrop Seller',
-  description: 'Skydrop seller portal — manage catalog, orders, and shipments.',
+  title: 'Skydrop Client',
+  description: 'Skydrop client portal — manage catalog, orders, and shipments.',
   robots: { index: false, follow: false },
 };
 

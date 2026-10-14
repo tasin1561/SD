@@ -109,7 +109,7 @@ function EditCustomer({ customer: c }: { customer: StoreCustomer }): ReactElemen
         email: email.trim() === '' ? null : email.trim(),
         altPhoneE164: alt.trim() === '' ? null : alt.trim(),
       });
-      toast.success('Saved. Your seller has been told what changed.');
+      toast.success('Saved. Your client has been told what changed.');
       setOpen(false);
     } catch (err) {
       setError(serverVerdict(err));
@@ -135,7 +135,7 @@ function EditCustomer({ customer: c }: { customer: StoreCustomer }): ReactElemen
         size="md"
         icon={<UserRound size={18} />}
         title="Edit this customer"
-        description="Their phone number is how we tell one customer from another, so it never changes. Your seller is told what you changed."
+        description="Their phone number is how we tell one customer from another, so it never changes. Your client is told what you changed."
         footer={
           <DialogFooter>
             <Button variant="ghost" size="md" onClick={() => setOpen(false)}>
@@ -205,7 +205,7 @@ function CustomerBody({ customer: c }: { customer: StoreCustomer }): ReactElemen
         ]}
         Link={Link}
         title={c.name ?? 'No name given'}
-        subtitle="Your customer. Your seller sees them too, and each of you is told when the other changes their details."
+        subtitle="Your customer. Your client sees them too, and each of you is told when the other changes their details."
         action={<EditCustomer customer={c} />}
       />
       <div className="rc-cst-card">

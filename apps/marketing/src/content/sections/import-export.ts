@@ -117,7 +117,7 @@ export const importExport: ImportExportContent = {
       tone: 'blue',
       eyebrow: 'Exporting to India',
       title: 'Sending goods to India',
-      who: 'For Bangladeshi sellers and shippers sending to Indian customers, cash on delivery included.',
+      who: 'For Bangladeshi clients and shippers sending to Indian customers, cash on delivery included.',
       rowsHeading: 'What we handle',
       rows: [
         {

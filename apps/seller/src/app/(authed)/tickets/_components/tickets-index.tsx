@@ -89,7 +89,7 @@ export function SellerTicketsIndex(): ReactElement {
   return (
     <div className="tkt-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Selling' }, { label: 'Tickets' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Selling' }, { label: 'Tickets' }]}
         Link={Link}
         title="Tickets"
         subtitle="Damage we found on returns, and any issue you raise about a parcel. Settled tickets that end in a refund credit your wallet."
@@ -295,7 +295,7 @@ export function SellerTicketsIndex(): ReactElement {
                         {t.openedBy === 'SELLER'
                           ? 'You'
                           : t.openedBy === 'STORE'
-                            ? (t.storeName ?? 'A reseller store')
+                            ? (t.storeName ?? 'A member store')
                             : 'Skydrop'}
                       </span>
                     </Td>

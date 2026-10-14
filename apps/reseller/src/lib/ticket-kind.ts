@@ -45,17 +45,17 @@ export function storeTicketKind(type: TicketType): StoreTicketKind {
   switch (type) {
     case TicketType.STORE_DISPUTE:
       return {
-        label: 'With your seller',
-        counterparty: 'your seller',
+        label: 'With your client',
+        counterparty: 'your client',
         blurb:
-          'Your seller reads it and Skydrop referees. If it is settled with money, it moves between your wallet and theirs.',
+          'Your client reads it and Skydrop referees. If it is settled with money, it moves between your wallet and theirs.',
       };
     case TicketType.STORE_ISSUE:
       return {
         label: 'With Skydrop',
         counterparty: 'Skydrop',
         blurb:
-          'Skydrop reads it — something damaged in our hands, lost, or sitting in our warehouse. Your seller is not told and is not part of it.',
+          'Skydrop reads it — something damaged in our hands, lost, or sitting in our warehouse. Your client is not told and is not part of it.',
       };
     // Raised by Skydrop or the seller rather than by the store. Named
     // rather than blank: if the store-readable list ever widens to one
@@ -68,9 +68,9 @@ export function storeTicketKind(type: TicketType): StoreTicketKind {
       };
     case TicketType.SELLER_RAISED_ISSUE:
       return {
-        label: 'Raised by your seller',
+        label: 'Raised by your client',
         counterparty: 'Skydrop',
-        blurb: 'Raised by your seller with Skydrop about a parcel.',
+        blurb: 'Raised by your client with Skydrop about a parcel.',
       };
     case TicketType.COURIER_NDR_ESCALATION:
       return {

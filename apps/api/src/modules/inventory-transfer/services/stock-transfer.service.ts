@@ -152,7 +152,7 @@ export class StockTransferService {
     if (destBatch.sellerId !== input.sellerId || destBatch.variantId !== input.variantId) {
       throw new BadRequestException({
         code: 'DEST_BATCH_OWNER_MISMATCH',
-        message: `Destination batch ${input.destBatchId} does not belong to this seller/variant`,
+        message: `Destination batch ${input.destBatchId} does not belong to this client/variant`,
       });
     }
 

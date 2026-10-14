@@ -382,7 +382,7 @@ function AttributeModal({
           <TextField
             label="Which consignment"
             requiredMark
-            hint="Search by consignment number, receipt or seller."
+            hint="Search by consignment number, receipt or client."
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder="e.g. CN-2026-08"

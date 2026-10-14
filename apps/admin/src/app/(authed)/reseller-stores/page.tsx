@@ -23,7 +23,7 @@ import { useAdminCreateResellerStore, useAdminResellerStores } from '@/lib/resel
 
 const STATUSES = [
   ['', 'Every status'],
-  ['PENDING_SELLER_APPROVAL', 'Awaiting the seller'],
+  ['PENDING_SELLER_APPROVAL', 'Awaiting the client'],
   ['ACTIVE', 'Active'],
   ['PAUSED', 'Paused'],
   ['CLOSED', 'Closed'],
@@ -41,7 +41,7 @@ export default function ResellerStoresPage(): ReactElement {
   // The filters live in the URL (`?status=&sellerId=`) so a link — a
   // seller's page, a store's "their other stores" — can open it pre-filled.
   return (
-    <Suspense fallback={<SkeletonRows rows={5} cols={7} label="Loading reseller stores" />}>
+    <Suspense fallback={<SkeletonRows rows={5} cols={7} label="Loading member stores" />}>
       <ResellerStoresIndex />
     </Suspense>
   );
@@ -72,8 +72,8 @@ function ResellerStoresIndex(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        title="Reseller stores"
-        subtitle="Businesses reselling one seller’s stock under their own name."
+        title="Member stores"
+        subtitle="Businesses reselling one client’s stock under their own name."
         action={
           mayCreate ? (
             <Button
@@ -82,7 +82,7 @@ function ResellerStoresIndex(): ReactElement {
               icon={<Store size={15} />}
               onClick={() => setCreating(true)}
             >
-              Open a store for a seller
+              Open a store for a client
             </Button>
           ) : undefined
         }
@@ -101,13 +101,13 @@ function ResellerStoresIndex(): ReactElement {
           ))}
         </Select>
         <Select
-          label="Seller"
+          label="Client"
           id="rs-seller"
           value={sellerId}
           onChange={(e) => setFilter('sellerId', e.target.value)}
         >
-          <option value="">Every seller</option>
-          {!sellerKnown ? <option value={sellerId}>The seller in the link</option> : null}
+          <option value="">Every client</option>
+          {!sellerKnown ? <option value={sellerId}>The client in the link</option> : null}
           {sellerOptions.map((o) => (
             <option key={o.id} value={o.id}>
               {o.companyName}
@@ -117,25 +117,25 @@ function ResellerStoresIndex(): ReactElement {
       </div>
 
       {stores.isPending ? (
-        <SkeletonRows rows={5} cols={7} label="Loading reseller stores" />
+        <SkeletonRows rows={5} cols={7} label="Loading member stores" />
       ) : stores.isError ? (
         <ErrorState message={serverVerdict(stores.error)} retry={() => void stores.refetch()} />
       ) : stores.data.length === 0 ? (
         <EmptyState
-          title="No reseller stores"
+          title="No member stores"
           description={
             status === '' && sellerId === ''
-              ? 'Sellers open their own from their portal; you can open one for a seller here.'
+              ? 'Clients open their own from their portal; you can open one for a client here.'
               : 'None match these filters. Choose others.'
           }
         />
       ) : (
         <AcCard flush>
-          <Table caption="Reseller stores">
+          <Table caption="Member stores">
             <THead>
               <Tr>
                 <Th>Store</Th>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th>Status</Th>
                 <Th>Opened by</Th>
                 <Th>Wallet</Th>
@@ -155,7 +155,7 @@ function ResellerStoresIndex(): ReactElement {
                     <Link
                       href={`/reseller-stores?sellerId=${s.sellerId}`}
                       className="ac-link"
-                      title="Only this seller’s stores"
+                      title="Only this client’s stores"
                     >
                       {s.sellerCompanyName}
                     </Link>
@@ -167,8 +167,8 @@ function ResellerStoresIndex(): ReactElement {
                       size="sm"
                     />
                   </Td>
-                  <Td>{s.origin === 'ADMIN' ? 'Skydrop' : 'Seller'}</Td>
-                  <Td>{s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'Seller'}</Td>
+                  <Td>{s.origin === 'ADMIN' ? 'Skydrop' : 'Client'}</Td>
+                  <Td>{s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'Client'}</Td>
                   <Td>
                     <span className="sk-figure">{s.memberCount}</span>
                   </Td>
@@ -232,27 +232,27 @@ function CreateModal({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Open a reseller store for a seller"
-      description="It waits for the seller to approve or reject it, and they are told now. Nothing about it is live until they do."
+      title="Open a member store for a client"
+      description="It waits for the client to approve or reject it, and they are told now. Nothing about it is live until they do."
       icon={<Store size={18} />}
       size="lg"
       locked={create.isPending}
     >
       <form onSubmit={submit} className="ac-form">
         <TextField
-          label="Find the seller"
+          label="Find the client"
           id="cr-search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <Select
-          label="Seller"
+          label="Client"
           id="cr-seller"
           required
           value={sellerId}
           onChange={(e) => setSellerId(e.target.value)}
         >
-          <option value="">{sellers.isPending ? 'Loading…' : 'Choose an approved seller'}</option>
+          <option value="">{sellers.isPending ? 'Loading…' : 'Choose an approved client'}</option>
           {(sellers.data?.items ?? []).map((s) => (
             <option key={s.id} value={s.id}>
               {s.companyName}
@@ -263,7 +263,7 @@ function CreateModal({
           <TextField
             label="Store name"
             id="cr-name"
-            hint="Unique among this seller’s stores."
+            hint="Unique among this client’s stores."
             required
             maxLength={80}
             showCount
@@ -297,7 +297,7 @@ function CreateModal({
           />
         </div>
         <TextArea
-          label="Note for the seller"
+          label="Note for the client"
           id="cr-note"
           maxLength={500}
           showCount
@@ -315,7 +315,7 @@ function CreateModal({
             size="md"
             icon={<Store size={15} />}
             state={phaseOf(create.isPending, error)}
-            labels={{ idle: 'Open and ask the seller', busy: 'Opening…', error: 'Not opened' }}
+            labels={{ idle: 'Open and ask the client', busy: 'Opening…', error: 'Not opened' }}
             disabled={create.isPending || sellerId === ''}
           />
         </DialogFooter>

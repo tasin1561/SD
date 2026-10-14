@@ -103,7 +103,7 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
               <Tr>
                 <Th>Product</Th>
                 <Th>SKU</Th>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th>Batch</Th>
                 <Th align="right">On hand</Th>
                 <Th align="right">Reserved</Th>

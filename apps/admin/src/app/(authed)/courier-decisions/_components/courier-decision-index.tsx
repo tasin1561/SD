@@ -196,7 +196,7 @@ export function CourierDecisionIndex(): ReactElement {
             tone="positive"
             icon={<Truck size={20} />}
             title="Nothing waiting on a decision"
-            description="Orders appear here only for sellers whose courier policy is set to Manual, and only when the aggregator offered more than one carrier."
+            description="Orders appear here only for clients whose courier policy is set to Manual, and only when the aggregator offered more than one carrier."
           />
         ) : (
           <Table caption="Parcels waiting for a carrier">

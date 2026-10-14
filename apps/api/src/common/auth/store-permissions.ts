@@ -111,7 +111,7 @@ export const STORE_PERMISSIONS = [
   // orders, and when each side is credited.
   {
     key: 'terms.view',
-    label: 'See the seller’s terms',
+    label: 'See the client’s terms',
     description:
       'Who pays which Skydrop fee on this store’s orders, when the store and the seller are credited, and every earlier version.',
     group: 'Terms',
@@ -121,7 +121,7 @@ export const STORE_PERMISSIONS = [
     // agree to them on the store's behalf — and agreeing binds every
     // later order, which is why it is its own permission.
     key: 'terms.accept',
-    label: 'Accept the seller’s terms',
+    label: 'Accept the client’s terms',
     description:
       'Agree to a new version of the terms on the store’s behalf. Until somebody does, the store cannot place new orders.',
     group: 'Terms',

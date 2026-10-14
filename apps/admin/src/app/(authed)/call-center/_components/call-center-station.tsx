@@ -160,7 +160,7 @@ export function CallCenterStation(): ReactElement {
         {
           value: 'SPOKE_TO_CUSTOMER' as CallOutcome,
           label: 'Called',
-          helper: 'What they said goes in the note below — the seller reads it.',
+          helper: 'What they said goes in the note below — the client reads it.',
         },
       ] as typeof OUTCOME_OPTIONS);
   /** Whether the held-call check has answered — the auto-advance must
@@ -522,7 +522,7 @@ export function CallCenterStation(): ReactElement {
               title="This order changed while you were on the call"
             >
               <p className="oo-p">
-                The seller or the store that sold it has just changed something. What is on this
+                The client or the store that sold it has just changed something. What is on this
                 screen is the new version — read the address and the items again before you confirm
                 anything.
               </p>
@@ -646,7 +646,7 @@ export function CallCenterStation(): ReactElement {
               label={hasOpenIssues ? 'What the customer told you' : 'Notes'}
               hint={
                 hasOpenIssues
-                  ? 'Written onto the seller’s open issue word for word — this is how they find out what happened.'
+                  ? 'Written onto the client’s open issue word for word — this is how they find out what happened.'
                   : 'Free-form, audited.'
               }
               value={notes}
@@ -664,7 +664,7 @@ export function CallCenterStation(): ReactElement {
                 onChange={(e) => setCloseIssues(e.target.checked)}
                 label={
                   <>
-                    Close the seller’s {assignment.openTickets.length === 1 ? 'issue' : 'issues'}{' '}
+                    Close the client’s {assignment.openTickets.length === 1 ? 'issue' : 'issues'}{' '}
                     after recording
                   </>
                 }
@@ -783,7 +783,7 @@ function RecipientPanel({
     ...(seller !== null
       ? [
           {
-            label: isReseller ? 'Seller contact (not for the customer)' : 'Seller contact',
+            label: isReseller ? 'Client contact (not for the customer)' : 'Client contact',
             // For the questions an agent cannot answer — a substitution,
             // a discount the customer says they were promised. Reaching
             // the shop takes a call, not a support ticket.
@@ -819,7 +819,7 @@ function RecipientPanel({
             <span>
               Ordered from <strong>{orderedFrom}</strong>
             </span>
-            {isReseller && <span className="cc-tag">Reseller store</span>}
+            {isReseller && <span className="cc-tag">Member store</span>}
           </span>
         )}
       </div>
@@ -830,7 +830,7 @@ function RecipientPanel({
         // on the phone reads as a stranger calling about their parcel.
         <p className="oo-script" data-testid="reseller-script">
           Say you are calling about their order from <strong>{orderedFrom}</strong>. Do not mention
-          the seller behind the store.
+          the client behind the store.
         </p>
       )}
 

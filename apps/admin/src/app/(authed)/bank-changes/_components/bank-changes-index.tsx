@@ -118,7 +118,7 @@ export function BankChangesIndex(): ReactElement {
         toast.success(`${reviewing.companyName} is now paid to the new account.`);
       } else {
         await reject.mutateAsync({ requestId: reviewing.id, reason: reason.trim() });
-        toast.success('Rejected — the seller reads your reason.');
+        toast.success('Rejected — the client reads your reason.');
       }
       close();
     } catch (err) {
@@ -143,7 +143,7 @@ export function BankChangesIndex(): ReactElement {
     <div className="mk-page">
       <PageHeader
         title="Bank detail changes"
-        subtitle="Sellers asking us to send their withdrawals somewhere new. Their money keeps going to the account already on file until you approve one."
+        subtitle="Clients asking us to send their withdrawals somewhere new. Their money keeps going to the account already on file until you approve one."
       />
 
       {list.isLoading ? (
@@ -157,11 +157,11 @@ export function BankChangesIndex(): ReactElement {
         <EmptyState
           tone="positive"
           title="Nothing waiting"
-          description="A request appears here when a seller edits bank details they already had on file. A seller adding theirs for the first time does not need approval — check their profile on the seller record instead."
+          description="A request appears here when a client edits bank details they already had on file. A client adding theirs for the first time does not need approval — check their profile on the client record instead."
           action={
             maySeeSellers ? (
               <Link href="/sellers" className={buttonClassName('secondary', 'sm')}>
-                <span className="sk-btn__label">Open the seller records</span>
+                <span className="sk-btn__label">Open the client records</span>
               </Link>
             ) : undefined
           }
@@ -263,7 +263,7 @@ export function BankChangesIndex(): ReactElement {
         locked={busy}
         title={
           intent === 'APPROVE'
-            ? `Pay ${reviewing?.companyName ?? 'this seller'} into the new account?`
+            ? `Pay ${reviewing?.companyName ?? 'this client'} into the new account?`
             : `Reject ${reviewing?.companyName ?? 'this'} bank change?`
         }
         footer={
@@ -290,7 +290,7 @@ export function BankChangesIndex(): ReactElement {
           {intent === 'APPROVE' ? (
             <>
               <p className="mk-muted">
-                From this moment every withdrawal to {reviewing?.companyName ?? 'this seller'} goes
+                From this moment every withdrawal to {reviewing?.companyName ?? 'this client'} goes
                 to the account below, and the one they had before stops receiving money. Undoing it
                 takes another change request and another approval — so approve it because you
                 recognise the account, not because the form was filled in.
@@ -315,11 +315,11 @@ export function BankChangesIndex(): ReactElement {
             <>
               <p className="mk-muted">
                 Nothing moves — their withdrawals carry on to the account already on file. The
-                seller reads your reason word for word, so write what did not match or what you need
+                client reads your reason word for word, so write what did not match or what you need
                 from them; “rejected” on its own just sends the same request back.
               </p>
               <TextArea
-                label="Reason the seller will read"
+                label="Reason the client will read"
                 requiredMark
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}

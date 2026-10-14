@@ -74,12 +74,12 @@ export default function ResellerPriceListPage(): ReactElement {
 
   const header = (
     <div className="rs-head">
-      <RsBack href="/reseller-stores">Reseller stores</RsBack>
+      <RsBack href="/reseller-stores">Member stores</RsBack>
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Reselling' }, { label: 'Price list' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Reselling' }, { label: 'Price list' }]}
         Link={Link}
-        title="Reseller price list"
-        subtitle="Your default price to every reseller store, and the range it may sell at. A store can be given its own price on its page."
+        title="Member store price list"
+        subtitle="Your default price to every member store, and the range it may sell at. A store can be given its own price on its page."
         meta={
           list.data === undefined ? undefined : (
             <RsFacts>
@@ -140,7 +140,7 @@ export default function ResellerPriceListPage(): ReactElement {
           value={inStores}
           unit={inStores === 1 ? 'product' : 'products'}
           tone="neutral"
-          hint="Switched on for at least one of your reseller stores."
+          hint="Switched on for at least one of your member stores."
         />
         <KpiCard
           label="Units available"
@@ -183,7 +183,7 @@ export default function ResellerPriceListPage(): ReactElement {
             title={search === '' ? 'No active products yet' : 'Nothing matches that search'}
             description={
               search === ''
-                ? 'Add products to your catalogue, then set their reseller prices here.'
+                ? 'Add products to your catalogue, then set their member store prices here.'
                 : 'Try a different name or SKU code.'
             }
             action={
@@ -195,7 +195,7 @@ export default function ResellerPriceListPage(): ReactElement {
             }
           />
         ) : (
-          <Table caption="Reseller prices">
+          <Table caption="Member store prices">
             <THead>
               <Tr>
                 <Th>Product</Th>
@@ -203,7 +203,7 @@ export default function ResellerPriceListPage(): ReactElement {
                 <Th align="right">
                   <GlossaryTerm
                     title="Transfer price"
-                    description="What a reseller store pays you per unit, unless it has been given a price of its own."
+                    description="What a member store pays you per unit, unless it has been given a price of its own."
                   >
                     Transfer price
                   </GlossaryTerm>
@@ -354,7 +354,7 @@ function EditPriceModal({
     setError(null);
     try {
       await save.mutateAsync({ variantId: row.variantId, body: priceBody(draft) });
-      toast.success(`Saved the reseller price of ${row.skuCode}.`);
+      toast.success(`Saved the member store price of ${row.skuCode}.`);
       onClose();
     } catch (err) {
       setError(serverVerdict(err));
@@ -367,7 +367,7 @@ function EditPriceModal({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={`Reseller price — ${row.productName}`}
+      title={`Member store price — ${row.productName}`}
       description={`${row.skuCode}. Stores with a price of their own are not affected.`}
       icon={<Tag size={18} />}
       footer={

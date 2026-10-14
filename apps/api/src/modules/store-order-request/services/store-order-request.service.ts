@@ -115,7 +115,7 @@ export class StoreOrderRequestService {
       // cancel or give up on an order is unanswerable.
       throw new BadRequestException({
         code: 'STORE_REQUEST_REASON_REQUIRED',
-        message: 'Seller staff approve this for your store, so tell them why.',
+        message: 'Client staff approve this for your store, so tell them why.',
       });
     }
     if (input.kind === StoreOrderRequestKind.CALL_CAP_DECISION && !input.callCapProposal) {
@@ -151,7 +151,7 @@ export class StoreOrderRequestService {
         throw new ConflictException({
           code: 'STORE_REQUEST_ALREADY_OPEN',
           message:
-            'You have already sent this to seller staff for this order. They have to answer that one first.',
+            'You have already sent this to client staff for this order. They have to answer that one first.',
         });
       }
       return tx.storeOrderRequest.create({

@@ -112,7 +112,7 @@ export function ReconcileModal({
   const ownerWords =
     sellerId === ''
       ? 'our own money'
-      : `the holding for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'the seller'}`;
+      : `the holding for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'the client'}`;
 
   return (
     <>
@@ -191,7 +191,7 @@ export function ReconcileModal({
             <TextField
               label="Worth to their wallet (INR)"
               requiredMark
-              hint="The rupees this difference is worth to the seller's wallet — the book keeps a taka holding at what it was credited for, not at today's rate."
+              hint="The rupees this difference is worth to the client's wallet — the book keeps a taka holding at what it was credited for, not at today's rate."
               type="number"
               inputMode="decimal"
               step="0.01"

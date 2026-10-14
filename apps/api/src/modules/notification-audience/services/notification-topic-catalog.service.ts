@@ -258,65 +258,65 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
     // store on the seller's account. The spec pins this key to the
     // notifier's exported constant.
     topic: 'seller.reseller_store_pending',
-    label: 'A reseller store waits for your approval',
+    label: 'A member store waits for your approval',
     description:
       'Skydrop opened a reseller store on your account. Nothing about it is live until you approve or reject it.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by ResellerSetAsideNotifier (RS-3) when the hourly sweep cuts
     // a reseller set-aside because stock fell below what was promised.
     topic: 'seller.reseller_set_aside_shrunk',
-    label: 'Stock set aside for a reseller store was reduced',
+    label: 'Stock set aside for a member store was reduced',
     description:
       'Stock fell below what you had set aside for your reseller stores, so the newest set-asides were reduced to fit.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by ResellerTermsNotifier (RS-4) to the people holding
     // `stores.pricing` when a store accepts a version of its terms.
     topic: 'seller.reseller_terms_accepted',
-    label: 'A reseller store accepted your terms',
+    label: 'A member store accepted your terms',
     description:
       'A store accepted the version of the terms you published; its next orders are priced and credited under it.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by ResellerTermsNotifier (RS-4) when Skydrop switches credit
     // after confirmation off while stores' current terms still use it.
     topic: 'seller.reseller_terms_need_revision',
-    label: 'A reseller store needs new terms',
+    label: 'A member store needs new terms',
     description:
       'A store’s current terms use a timing Skydrop no longer allows for your account. It cannot order until you publish new terms and it accepts them.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by ResellerReportsNotifier (RS-9) to `stores.manage` when the
     // store's return rate crossed the limit the seller set, and it paused.
     topic: 'seller.reseller_store_auto_paused',
-    label: 'A reseller store was paused for too many returns',
+    label: 'A member store was paused for too many returns',
     description:
       'More of a store’s parcels came back than the limit you set, so it was paused: it cannot place new orders until you resume it.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by ResellerReportsNotifier (RS-9) to `stores.reports`, at most
     // once a week while a product your stores sell stays low.
     topic: 'seller.reseller_stock_reorder',
-    label: 'Stock your reseller stores sell is running low',
+    label: 'Stock your member stores sell is running low',
     description:
       'At the rate it sold recently, stock of a product your reseller stores sell will run out sooner than your reorder threshold.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by AddressChangeNotifier (2026-09-16) to `stores.manage` when
     // a store corrects a delivery address and the seller's policy for
     // that store says they approve it first.
     topic: 'seller.store_address_change_waiting',
-    label: 'A reseller store wants to correct an address',
+    label: 'A member store wants to correct an address',
     description:
       'A store says the delivery details on one of its orders are wrong. The parcel keeps the old address until you answer.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by StoreActionNotifier (2026-09-16) to `stores.manage` when a
@@ -324,20 +324,20 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
     // policy says they approve it first. Sent since 2026-09-16 and missing
     // from this list until 2026-09-17, so it could not be silenced.
     topic: 'seller.store_action_waiting',
-    label: 'A reseller store is waiting on you about a delivery',
+    label: 'A member store is waiting on you about a delivery',
     description:
       'A store asked for its customer to be called again, another delivery attempt, or the parcel back, and you approve those first.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by StoreRequestNotifier (2026-09-17) to `stores.manage` when a
     // store asks to cancel, answers the call-cap question, or raises an
     // issue with Skydrop, and the seller's policy says they approve it.
     topic: 'seller.store_request_waiting',
-    label: 'A reseller store wants to cancel, answer a call question, or raise an issue',
+    label: 'A member store wants to cancel, answer a call question, or raise an issue',
     description:
       'A store sent you something to approve before it happens: calling an order off, whether to keep calling a customer, or an issue for Skydrop.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by StoreRequestNotifier (2026-09-17) once, when any request a
@@ -347,10 +347,10 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
     // only thing standing between "a store is waiting on you" and a
     // request closing itself with nobody having read it.
     topic: 'seller.store_request_reminder',
-    label: 'A reseller store is still waiting on your answer',
+    label: 'A member store is still waiting on your answer',
     description:
       'Something a store asked you to approve has not been answered. If nobody answers in time it closes on its own and the store is told. This one cannot be switched off.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by StoreRequestNotifier (2026-09-18) when a reseller store
@@ -358,10 +358,10 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
     // a policy the seller set to DIRECT. Whoever did not make the change
     // hears about it.
     topic: 'seller.store_changed_order',
-    label: 'A reseller store changed one of its orders',
+    label: 'A member store changed one of its orders',
     description:
       'A store changed an order of its own — the customer’s details, what is in the parcel, or the money — or changed a customer’s record. You own the goods, so you are told what moved.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
   {
     // Sent by StoreRequestNotifier (2026-09-19) when a Skydrop admin
@@ -369,10 +369,10 @@ export const SELLER_TOPICS: readonly TopicDef[] = [
     // mode (ORD-2). Neither you nor the store made that change, so both
     // of you are told.
     topic: 'seller.store_order_money_changed_by_admin',
-    label: 'Skydrop changed the money on a reseller order',
+    label: 'Skydrop changed the money on a member store order',
     description:
       'A Skydrop admin changed what is collected on one of your reseller stores’ orders. You and the store are both told what moved, and what each of you is now credited.',
-    group: 'Reseller stores',
+    group: 'Member stores',
   },
 ];
 
@@ -457,10 +457,10 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
   },
   {
     topic: topicForIssue(SystemIssueKind.RESELLER_RISK),
-    label: 'A reseller store looks risky',
+    label: 'A member store looks risky',
     description:
       'A reseller store crossed a fraud-signal threshold — cancel, return or failed-delivery rate, one customer across many stores, retail far above suggested, or rapid-fire orders.',
-    group: 'Sellers',
+    group: 'Clients',
   },
   {
     topic: topicForIssue(SystemIssueKind.OTHER),
@@ -472,14 +472,14 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
   // TicketNotifier to everyone who can open the tickets queue.
   {
     topic: 'ticket.seller_opened',
-    label: 'A seller opened a ticket',
-    description: 'A seller raised an issue about one of their parcels or orders.',
+    label: 'A client opened a ticket',
+    description: 'A client raised an issue about one of their parcels or orders.',
     group: 'Tickets',
   },
   {
     topic: 'ticket.seller_replied',
-    label: 'A seller replied on a ticket',
-    description: 'A seller answered on one of their tickets, and may be waiting on us.',
+    label: 'A client replied on a ticket',
+    description: 'A client answered on one of their tickets, and may be waiting on us.',
     group: 'Tickets',
   },
   // Not a system issue: a stranger asked to be let into the beta. Its
@@ -489,7 +489,7 @@ export const STAFF_TOPICS: readonly TopicDef[] = [
     topic: 'staff.invite_lead',
     label: 'A new invite request',
     description: 'Somebody asked to be let into the beta from the marketing site.',
-    group: 'Sellers',
+    group: 'Clients',
   },
   // Not a system issue: somebody asked for a serial label to be reprinted
   // (LBL-5b), sent by LabelReprintRequestService to everyone who can
@@ -533,7 +533,7 @@ export const STORE_TOPICS: readonly StoreTopicDef[] = [
   // ── The answers to what the store asked ────────────────────────────
   {
     topic: 'store.request_approved',
-    label: 'The seller agreed',
+    label: 'The client agreed',
     description:
       'Something you sent the seller to approve — calling an order off, whether to keep ringing a customer, or an issue for Skydrop — was agreed, and what happened next.',
     group: 'Your requests',
@@ -541,8 +541,8 @@ export const STORE_TOPICS: readonly StoreTopicDef[] = [
   },
   {
     topic: 'store.request_rejected',
-    label: 'The seller said no',
-    description: 'Something you sent the seller to approve was turned down, with their reason.',
+    label: 'The client said no',
+    description: 'Something you sent the client to approve was turned down, with their reason.',
     group: 'Your requests',
     category: StoreNotificationCategory.ORDER_UPDATES,
   },
@@ -589,7 +589,7 @@ export const STORE_TOPICS: readonly StoreTopicDef[] = [
   // ── Somebody else changed your things ──────────────────────────────
   {
     topic: 'store.order_changed_by_seller',
-    label: 'The seller changed one of your orders',
+    label: 'The client changed one of your orders',
     description:
       'What is in the parcel, what the customer pays, or who it goes to — with the old value beside the new one, and the money’s before and after when it moved.',
     group: 'Your orders',
@@ -605,7 +605,7 @@ export const STORE_TOPICS: readonly StoreTopicDef[] = [
   },
   {
     topic: 'store.customer_changed_by_seller',
-    label: 'The seller changed a customer’s details',
+    label: 'The client changed a customer’s details',
     description:
       'The seller corrected what we hold about one of your customers — their name, email, second phone or language. Their phone number never changes.',
     group: 'Your orders',

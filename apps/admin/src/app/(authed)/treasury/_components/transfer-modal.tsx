@@ -181,7 +181,7 @@ export function TransferModal({
   const sellerName =
     sellerId === ''
       ? null
-      : ((sellers.data?.items ?? []).find((x) => x.id === sellerId)?.companyName ?? 'a seller');
+      : ((sellers.data?.items ?? []).find((x) => x.id === sellerId)?.companyName ?? 'a client');
   const whenLabel = movedAt === '' ? '' : new Date(movedAt).toLocaleString('en-IN');
 
   return (
@@ -269,7 +269,7 @@ export function TransferModal({
 
           <Select
             label="Whose money"
-            hint="Leave as ours unless this is moving a seller's balance between our accounts"
+            hint="Leave as ours unless this is moving a client's balance between our accounts"
             /*
               WHAT THEY ACTUALLY HOLD IN THE SENDING ACCOUNT.
 
@@ -299,7 +299,7 @@ export function TransferModal({
 
           {intoWalletCurrency && (
             <p className="mo-p">
-              Into rupees there is no quote: the seller is credited what this money was worth to
+              Into rupees there is no quote: the client is credited what this money was worth to
               their wallet (their average rate in {from?.label ?? 'the sending account'}), and the
               difference against what arrived is booked as ours.
             </p>
@@ -307,7 +307,7 @@ export function TransferModal({
 
           {quoteApplies && (
             <TextField
-              label="Rate quoted to the seller"
+              label="Rate quoted to the client"
               hint={
                 systemRate === null
                   ? 'They are credited at this rate; the gap against what we achieved is booked as ours, either way.'
@@ -350,7 +350,7 @@ export function TransferModal({
               <p>
                 {Number(quotedRate) > 0 ? (
                   <>
-                    The seller would be credited{' '}
+                    The client would be credited{' '}
                     <Money
                       amount={(Number(amountOut) * Number(quotedRate)).toFixed(2)}
                       currency={to?.currency === 'BDT' ? 'BDT' : 'INR'}
@@ -363,7 +363,7 @@ export function TransferModal({
                      calmly it reads as arithmetic; what it actually does is
                      move the seller's whole balance to us. */
                   <>
-                    A rate of zero credits the seller NOTHING and books the entire amount to us.
+                    A rate of zero credits the client NOTHING and books the entire amount to us.
                     That is almost certainly not what you mean — use the system rate, or whatever
                     you actually quoted them.
                   </>

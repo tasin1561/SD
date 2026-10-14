@@ -196,14 +196,14 @@ export class RemittanceService {
     if (!seller) {
       throw new NotFoundException({
         code: 'SELLER_NOT_FOUND',
-        message: 'Seller not found',
+        message: 'Client not found',
       });
     }
     if (!seller.bankAccountNumber || !seller.bankName || !seller.bankAccountName) {
       throw new BadRequestException({
         code: 'BANK_DETAILS_MISSING',
         message:
-          'Seller has incomplete bank details; cannot record a remittance until they fill in bank name, account name, and account number',
+          'Client has incomplete bank details; cannot record a remittance until they fill in bank name, account name, and account number',
       });
     }
 
@@ -292,7 +292,7 @@ export class RemittanceService {
       throw new BadRequestException({
         code: 'REMITTANCE_SOURCE_CURRENCY_UNSUPPORTED',
         message:
-          'A payout is debited from the seller’s RUPEE wallet (sourceCurrency INR). Their wallet ' +
+          'A payout is debited from the client’s RUPEE wallet (sourceCurrency INR). Their wallet ' +
           'holds nothing in any other currency — say what was sent in the destination currency ' +
           'and the rate.',
       });

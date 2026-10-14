@@ -144,7 +144,7 @@ export function NsaIndex(): ReactElement {
               <Tr>
                 <Th>Night</Th>
                 <Th>Order</Th>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th>Recipient</Th>
                 <Th>AWB</Th>
                 <Th align="right">COD</Th>

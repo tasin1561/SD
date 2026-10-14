@@ -55,7 +55,7 @@ export function RemittancesIndex(): ReactElement {
     <div className="mk-page">
       <PageHeader
         title="Remittances"
-        subtitle="Recorded withdrawals to sellers. Each entry debits the seller's wallet (and writes a paired FX credit for cross-currency)."
+        subtitle="Recorded withdrawals to clients. Each entry debits the client's wallet (and writes a paired FX credit for cross-currency)."
         action={
           canWrite ? (
             <Button
@@ -77,7 +77,7 @@ export function RemittancesIndex(): ReactElement {
             <Table caption="Approved, waiting to be paid">
               <THead>
                 <Tr>
-                  <Th>Seller</Th>
+                  <Th>Client</Th>
                   <Th align="right">Amount</Th>
                   <Th align="right">They receive</Th>
                   <Th align="right">Wallet balance</Th>
@@ -172,7 +172,7 @@ export function RemittancesIndex(): ReactElement {
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No remittances yet"
-          description="Record one to debit a seller's wallet and reflect the bank transfer in their ledger."
+          description="Record one to debit a client's wallet and reflect the bank transfer in their ledger."
           action={
             canWrite ? (
               <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
@@ -187,7 +187,7 @@ export function RemittancesIndex(): ReactElement {
             <THead>
               <Tr>
                 <Th>Paid at</Th>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th align="right">Source</Th>
                 <Th align="right">Destination</Th>
                 <Th>Paid from</Th>

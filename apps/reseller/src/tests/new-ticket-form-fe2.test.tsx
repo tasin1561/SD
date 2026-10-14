@@ -30,7 +30,7 @@ describe('raise a ticket — the server verdict, verbatim', () => {
       <NewTicketForm initialOrderId={ORDER} pending={false} submit={submit} onDone={onDone} />,
     );
     await userEvent.type(screen.getByLabelText('What is wrong'), 'Wrong colour sent');
-    await userEvent.click(screen.getByRole('button', { name: 'Raise it with your seller' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Raise it with your client' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
       '[ORDER_NOT_FOUND] No such order in your store.',
     );

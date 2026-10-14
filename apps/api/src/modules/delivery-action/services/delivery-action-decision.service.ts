@@ -68,7 +68,7 @@ export class DeliveryActionDecisionService {
       throw new ConflictException({
         code: 'DELIVERY_ACTION_HELD_FOR_SELLER',
         message:
-          'A reseller store asked this and the seller chose to approve it themselves. Seller staff decide it, not Skydrop admin.',
+          'A member store asked this and the client chose to approve it themselves. Client staff decide it, not Skydrop admin.',
       });
     }
     throw new ConflictException({

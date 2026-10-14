@@ -161,7 +161,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           <p className="mk-muted">Could not read the bank book. The balance above is unaffected.</p>
         ) : holdings.data.length === 0 ? (
           <p className="mk-muted">
-            No cash is recorded against this seller in any account. If they hold a balance, it was
+            No cash is recorded against this client in any account. If they hold a balance, it was
             credited before the bank book existed, or by a flow that has not been wired to it.
           </p>
         ) : (
@@ -202,7 +202,7 @@ export function SellerWalletDetailView({ sellerId }: { readonly sellerId: string
           places it might have come from (SET-1). Read-only: they are
           edited where they are owned. */}
       <MkCard
-        title="Wallet rules for this seller"
+        title="Wallet rules for this client"
         subtitle="What is in force right now. A value marked override was set for them; the rest are the system default."
         icon={<Scale size={18} />}
         aside={

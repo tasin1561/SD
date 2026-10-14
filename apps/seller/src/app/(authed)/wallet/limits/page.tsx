@@ -34,7 +34,7 @@ export default function WalletLimitsPage(): ReactElement {
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Money' },
           { label: 'Wallet', href: '/wallet' },
           { label: 'Limits' },

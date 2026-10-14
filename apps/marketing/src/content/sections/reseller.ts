@@ -17,7 +17,7 @@ import type { ResellerSectionContent } from './reseller-types';
  * as it is in the money vignette: the row names the fee and stops.
  */
 export const reseller: ResellerSectionContent = {
-  title: 'Reseller stores',
+  title: 'Member stores',
   promise: 'Other businesses that sell your stock under their own name, with their own login.',
   sellerHue: 'blue',
   storeHue: 'violet',
@@ -36,7 +36,7 @@ export const reseller: ResellerSectionContent = {
   ],
 
   policyQuestions: {
-    can: 'Can the Reseller store do this?',
+    can: 'Can the Member store do this?',
     how: 'How?',
     direct: 'Directly',
     approval: 'Needs my approval',

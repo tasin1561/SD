@@ -58,7 +58,7 @@ export function ImportJobsIndex(): ReactElement {
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Stock & WMS' },
           { label: 'Products', href: '/products' },
           { label: 'CSV import', href: '/products/import' },

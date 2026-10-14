@@ -10,7 +10,7 @@ type T = (typeof business.testimonials)[number];
 export function TestimonialsClient({ items }: { items: readonly T[] }): ReactElement {
   return (
     <Carousel
-      label="Seller testimonials"
+      label="Client testimonials"
       items={items.map((t) => ({
         id: t.name,
         node: (

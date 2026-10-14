@@ -33,8 +33,8 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
   if (order.storeKind !== 'RESELLER') return null;
   return (
     <OoSection
-      title="Reseller store"
-      note="Placed by a reseller store under the terms below — snapshotted when it was placed, so later edits never re-price it."
+      title="Member store"
+      note="Placed by a member store under the terms below — snapshotted when it was placed, so later edits never re-price it."
     >
       <Facts
         items={[
@@ -45,7 +45,7 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
                 (order.storeNameSnapshot ?? '—')
               ) : (
                 <Link href={`/reseller-stores/${order.storeId}`} className="oo-link">
-                  {order.storeNameSnapshot ?? 'Reseller store'}
+                  {order.storeNameSnapshot ?? 'Member store'}
                 </Link>
               ),
           },
@@ -69,13 +69,13 @@ export function ResellerOrderPanel({ order }: { order: OrderView }): ReactElemen
             value: timing(order.resellerStoreCreditTrigger, order.resellerStoreCreditDays),
           },
           {
-            label: 'Seller credited',
+            label: 'Client credited',
             value: timing(order.resellerSellerCreditTrigger, order.resellerSellerCreditDays),
           },
         ]}
       />
       <OoCard flush>
-        <Table caption="Reseller lines">
+        <Table caption="Member store lines">
           <THead>
             <Tr>
               <Th>Line</Th>

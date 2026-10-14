@@ -115,7 +115,7 @@ export class StoreOrderEditService {
       throw new ForbiddenException({
         code: 'STORE_ACTION_NOT_ALLOWED',
         message:
-          'The seller has not enabled changes to orders for this store. Ask them to make the change.',
+          'The client has not enabled changes to orders for this store. Ask them to make the change.',
       });
     }
 
@@ -135,7 +135,7 @@ export class StoreOrderEditService {
         throw new BadRequestException({
           code: 'ADDRESS_CHANGE_REASON_REQUIRED',
           message:
-            'The seller approves changes to this store’s orders, so tell them why this one is needed.',
+            'The client approves changes to this store’s orders, so tell them why this one is needed.',
         });
       }
       const request = await this.holds.hold({

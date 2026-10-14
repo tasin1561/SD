@@ -78,7 +78,7 @@ export default function CallReviewsPage(): ReactElement {
     <div className="ro-page">
       <PageHeader
         title="Customers we could not reach"
-        subtitle="Orders where we rang the customer as often as your seller allows and never got through. Until you answer, the stock stays held and nothing is sent."
+        subtitle="Orders where we rang the customer as often as your client allows and never got through. Until you answer, the stock stays held and nothing is sent."
         action={
           <LinkButton href="/orders" variant="ghost" icon={<ArrowRight size={15} />}>
             All orders
@@ -92,7 +92,7 @@ export default function CallReviewsPage(): ReactElement {
           icon={<Boxes size={14} />}
           tone={heldUnits > 0 ? 'pending' : 'credit'}
           figure={reviews.isPending ? '—' : <Num value={heldUnits} />}
-          hint="Your seller cannot sell these to anyone else meanwhile"
+          hint="Your client cannot sell these to anyone else meanwhile"
         />
         <KpiCard
           label="Orders waiting on an answer"
@@ -112,7 +112,7 @@ export default function CallReviewsPage(): ReactElement {
             <span>
               {reviews.error instanceof ApiError
                 ? serverVerdictMessage(reviews.error)
-                : 'The seller answers call-attempt questions for this store. Ask them whether to keep trying.'}
+                : 'The client answers call-attempt questions for this store. Ask them whether to keep trying.'}
             </span>
           </Notice>
         ) : reviews.isPending ? (
@@ -176,7 +176,7 @@ function serverVerdictMessage(err: ApiError): string {
     const m = (body as { message: unknown }).message;
     if (typeof m === 'string' && m !== '') return m;
   }
-  return 'The seller answers call-attempt questions for this store. Ask them whether to keep trying.';
+  return 'The client answers call-attempt questions for this store. Ask them whether to keep trying.';
 }
 
 function ReviewRow({

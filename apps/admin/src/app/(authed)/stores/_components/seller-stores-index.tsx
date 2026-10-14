@@ -59,7 +59,7 @@ export function SellerStoresIndex(): ReactElement {
       await fn();
       toast.success(done);
     } catch (err) {
-      // FE-2 — the server's own words. "This is the default store" is a
+      // FE-2 — the server's own words. "This is the default shop" is a
       // sentence the UI must not try to guess at.
       toast.error(serverVerdict(err));
     }
@@ -78,15 +78,15 @@ export function SellerStoresIndex(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        title="Seller stores"
-        subtitle="The shopfronts each seller sells under. A store decides which brand an order belongs to — their products, stock, wallet and couriers are shared across all of them."
+        title="Shops"
+        subtitle="The shops each client sells under. A shop decides which brand an order belongs to — their products, stock, wallet and couriers are shared across all of them."
       />
 
       {groups.isLoading ? (
         <SkeletonRows rows={6} cols={4} />
       ) : groups.isError || groups.data === undefined ? (
         <ErrorState
-          message={groups.error?.message ?? 'Could not load the stores.'}
+          message={groups.error?.message ?? 'Could not load the shops.'}
           retry={() => void groups.refetch()}
         />
       ) : (
@@ -94,7 +94,7 @@ export function SellerStoresIndex(): ReactElement {
           <div className="ac-toolbar">
             <TextField
               icon={<Search size={15} />}
-              placeholder="Filter by seller or store name…"
+              placeholder="Filter by client or shop name…"
               aria-label="Filter"
               value={term}
               onChange={(e) => setTerm(e.target.value)}
@@ -102,7 +102,7 @@ export function SellerStoresIndex(): ReactElement {
           </div>
 
           {shown.length === 0 ? (
-            <EmptyState title="No seller matches that." />
+            <EmptyState title="No client matches that." />
           ) : (
             shown.map((g) => (
               <AcSection
@@ -130,7 +130,7 @@ export function SellerStoresIndex(): ReactElement {
                 <Table caption={`Stores for ${g.companyName}`}>
                   <THead>
                     <Tr>
-                      <Th>Store</Th>
+                      <Th>Shop</Th>
                       <Th align="right">Orders</Th>
                       <Th>State</Th>
                       <Th align="right">Actions</Th>
@@ -268,7 +268,7 @@ function StoreModal({
   async function save(): Promise<void> {
     setError(null);
     if (name.trim() === '') {
-      setError('Give the store a name');
+      setError('Give the shop a name');
       return;
     }
     try {
@@ -305,8 +305,8 @@ function StoreModal({
       }
       description={
         editing
-          ? 'Orders already placed keep the name they were placed under. This is recorded against the seller as a change WE made.'
-          : 'It never becomes the default, so adding one cannot move where their orders are filed. Recorded against the seller as a change WE made.'
+          ? 'Orders already placed keep the name they were placed under. This is recorded against the client as a change WE made.'
+          : 'It never becomes the default, so adding one cannot move where their orders are filed. Recorded against the client as a change WE made.'
       }
       icon={<StoreIcon size={18} />}
       locked={busy}
@@ -318,7 +318,7 @@ function StoreModal({
           <AsyncButton
             state={phaseOf(busy, error)}
             labels={{
-              idle: editing ? 'Save' : 'Add store',
+              idle: editing ? 'Save' : 'Add shop',
               busy: 'Saving…',
               error: 'Not saved',
             }}

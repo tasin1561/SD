@@ -40,7 +40,7 @@ export function ReattemptRequestsIndex(): ReactElement {
     <div className="oo-page">
       <PageHeader
         title="Re-attempt requests"
-        subtitle="Sellers asking us to call a customer who declined. Read the reason before approving — the customer already said no once."
+        subtitle="Clients asking us to call a customer who declined. Read the reason before approving — the customer already said no once."
       />
 
       <FilterBar activeCount={status === 'PENDING' ? 0 : 1}>
@@ -68,7 +68,7 @@ export function ReattemptRequestsIndex(): ReactElement {
           tone={status === 'PENDING' ? 'positive' : 'neutral'}
           icon={<PhoneCall size={20} />}
           title="Nothing waiting"
-          description="When a seller asks us to call a customer who declined, it lands here."
+          description="When a client asks us to call a customer who declined, it lands here."
         />
       ) : (
         <ul className="oo-queue" aria-label="Re-attempt requests">
@@ -98,7 +98,7 @@ export function ReattemptRequestsIndex(): ReactElement {
                     }
                     label={r.status.toLowerCase()}
                   />
-                  <AgeChip title="When the seller asked">
+                  <AgeChip title="When the client asked">
                     asked {new Date(r.createdAt).toLocaleString('en-IN')}
                   </AgeChip>
                 </div>
@@ -182,7 +182,7 @@ function Decide({
       description={
         target?.approve === true
           ? 'The order returns to PENDING_CONFIRMATION and is queued for calling. Its attempt count is unchanged; choose how many extra calls to allow, or it comes back already at its cap.'
-          : 'The order stays rejected. The seller can ask again if something changes.'
+          : 'The order stays rejected. The client can ask again if something changes.'
       }
       footer={
         <DialogFooter>
@@ -215,14 +215,14 @@ function Decide({
         {target !== null && (
           <div className="oo-row">
             <span className="sk-ident oo-strong">{target.row.orderNumber ?? '—'}</span>
-            <span className="oo-muted">asked by the seller</span>
+            <span className="oo-muted">asked by the client</span>
           </div>
         )}
         {target?.approve === true && (
           <Select
             id="ra-extra"
             label="Extra calls to allow"
-            hint="On top of the seller's normal cap. One is usually right — an approval that grants none puts the order back already out of chances, so the first unanswered ring rejects it again."
+            hint="On top of the client's normal cap. One is usually right — an approval that grants none puts the order back already out of chances, so the first unanswered ring rejects it again."
             value={extra}
             onChange={(e) => setExtra(e.target.value)}
           >

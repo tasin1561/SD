@@ -457,7 +457,7 @@ function RowDemo(): ReactElement {
       <RowLink
         href="#"
         icon={<ShieldCheck size={18} />}
-        title="Reseller stores"
+        title="Member stores"
         helper="Sell your stock under their name"
         meta="New"
         hue="violet"
@@ -911,7 +911,7 @@ function MascotDemo(): ReactElement {
 function DoorDemo(): ReactElement {
   return (
     <div className="flex gap-4">
-      <DoorLink href="#" label="Seller sign-in" />
+      <DoorLink href="#" label="Client sign-in" />
       <DoorLink href="#" label="Store sign-in" />
     </div>
   );
@@ -1033,7 +1033,7 @@ export const MICRO_REGISTRY: readonly MicroEntry[] = [
     id: 'door-hover',
     n: 14,
     name: 'Door hover',
-    where: 'Store / seller sign-in links (Phase 7 polish)',
+    where: 'Store / client sign-in links (Phase 7 polish)',
     Demo: DoorDemo,
   },
   {

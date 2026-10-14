@@ -144,7 +144,7 @@ export function AuthedShell({
       heading: 'Reselling',
       index: '04',
       items: [
-        { href: '/reseller-stores', label: 'Reseller stores', icon: <Store size={15} /> },
+        { href: '/reseller-stores', label: 'Member stores', icon: <Store size={15} /> },
         // 2026-09-16 — what the stores are waiting on the seller to decide.
         // The COUNT is the point: an approval queue nobody looks at holds
         // a store's customer waiting, and the in-app notice only covers
@@ -172,13 +172,13 @@ export function AuthedShell({
         // RS-3 — the default price every reseller store pays.
         {
           href: '/reseller-stores/price-list',
-          label: 'Reseller price list',
+          label: 'Member store price list',
           icon: <Tags size={15} />,
         },
         // RS-8 / RS-9 — how the stores are doing, and the stock they sell.
         {
           href: '/reseller-stores/reports',
-          label: 'Reseller reports',
+          label: 'Member store reports',
           icon: <BarChart3 size={15} />,
         },
         {
@@ -221,8 +221,8 @@ export function AuthedShell({
     <Toaster>
       <ToastProvider>
         <Shell
-          subtitle="Seller"
-          sectionLabel="Seller portal"
+          subtitle="Client"
+          sectionLabel="Client portal"
           navGroups={visibleGroups}
           identityPrimary={identity.companyName}
           identitySecondary={identity.emailDisplay}

@@ -99,7 +99,7 @@ export function ChargesBackfillCard(): ReactElement | null {
       <p className="mo-p">
         An order with no charge rows is billed nothing when it delivers — the sum is zero, so there
         is nothing to take, and no error says so. This finds those orders and prices them at the
-        current flat fee. It writes the charge lines only; nothing is taken from a seller&rsquo;s
+        current flat fee. It writes the charge lines only; nothing is taken from a client&rsquo;s
         wallet here.
       </p>
 
@@ -127,7 +127,7 @@ export function ChargesBackfillCard(): ReactElement | null {
         entity={`${String(examined)} order${examined === 1 ? '' : 's'} found by the preview`}
         consequence={`Writes charge lines onto ${String(examined)} order${
           examined === 1 ? '' : 's'
-        } at the current flat fee; nothing is taken from any seller's wallet here.`}
+        } at the current flat fee; nothing is taken from any client's wallet here.`}
         confirmLabel="Add the missing charges"
         onConfirm={runReal}
       />
@@ -237,7 +237,7 @@ export function BillUnbilledCard(): ReactElement | null {
     <MoSection title="Orders that finished unbilled" tone="critical">
       <p className="mo-p">
         Delivered or returned orders whose carriage was never taken. This is a real debit against a
-        real seller balance — not a correction to a record. Only orders whose journey has ended are
+        real client balance — not a correction to a record. Only orders whose journey has ended are
         eligible; an in-transit one is billed when it lands.
       </p>
 
@@ -267,7 +267,7 @@ export function BillUnbilledCard(): ReactElement | null {
           report?.examined === 1 ? '' : 's'
         } found by the preview`}
         amount={<Money amount={report?.totalInr ?? '0'} convert={false} />}
-        consequence="This debits real seller balances and cannot be undone from here."
+        consequence="This debits real client balances and cannot be undone from here."
         confirmLabel="Charge them"
         destructive
         onConfirm={runReal}

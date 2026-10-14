@@ -103,7 +103,7 @@ export function VariantDetailView({
         <>
           <PageHeader
             breadcrumbs={[
-              { label: 'Seller console' },
+              { label: 'Client console' },
               { label: 'Products', href: '/products' },
               { label: product.data?.name ?? 'Product', href: `/products/${productId}` },
               { label: detail.data.skuCode },

@@ -57,7 +57,7 @@ export class StoreOrderMoneyController {
       throw new ForbiddenException({
         code: 'STORE_MONEY_NOT_FOR_ASSOCIATE',
         message:
-          'What this order pays the store and the seller is not shown to an associate. ' +
+          'What this order pays the store and the client is not shown to an associate. ' +
           'You can see the order, what the customer pays and where the parcel is.',
       });
     }

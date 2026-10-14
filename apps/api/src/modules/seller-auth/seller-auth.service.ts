@@ -229,7 +229,7 @@ export class SellerAuthService {
     if (existing) {
       throw new ConflictException({
         code: 'EMAIL_ALREADY_REGISTERED',
-        message: 'A seller account already exists for this email',
+        message: 'A client account already exists for this email',
       });
     }
 
@@ -855,7 +855,7 @@ export class SellerAuthService {
     if (!user || user.seller.deletedAt !== null) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
-        message: 'Seller session no longer valid',
+        message: 'Client session no longer valid',
       });
     }
     if (user.emailVerifiedAt !== null) {
@@ -1040,7 +1040,7 @@ export class SellerAuthService {
     if (!user || resolved === null || resolved.roles.length === 0) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
-        message: 'Seller session no longer valid',
+        message: 'Client session no longer valid',
       });
     }
     return {

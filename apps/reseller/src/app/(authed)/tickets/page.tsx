@@ -55,7 +55,7 @@ export default function TicketsPage(): ReactElement {
     <div className="rc-tkt-page">
       <PageHeader
         title="Tickets"
-        subtitle="Problems with your orders — raised with your seller, or with Skydrop."
+        subtitle="Problems with your orders — raised with your client, or with Skydrop."
         action={
           mayRaise ? (
             <Link href="/tickets/new" className={buttonClassName('primary', 'md')}>
@@ -86,8 +86,8 @@ export default function TicketsPage(): ReactElement {
             title="No tickets"
             description={
               mayRaise
-                ? 'Something wrong with one of your orders? Open it and raise a ticket from there — with your seller if it is about the goods or the price, with Skydrop if we damaged it, lost it or are sitting on it.'
-                : 'Nothing has been raised with your seller or with Skydrop.'
+                ? 'Something wrong with one of your orders? Open it and raise a ticket from there — with your client if it is about the goods or the price, with Skydrop if we damaged it, lost it or are sitting on it.'
+                : 'Nothing has been raised with your client or with Skydrop.'
             }
             action={
               <Link href="/orders" className={buttonClassName('secondary', 'sm')}>

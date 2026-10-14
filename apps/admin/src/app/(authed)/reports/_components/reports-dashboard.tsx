@@ -171,7 +171,7 @@ function WalletGroup({ data }: { readonly data: ReportSummary['wallet'] }): Reac
         />
         <KpiCard
           label="Net outstanding"
-          hint="Owed to sellers across all wallets"
+          hint="Owed to clients across all wallets"
           figure={<Money amount={data.netOutstanding} />}
         />
       </div>

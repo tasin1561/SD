@@ -65,7 +65,7 @@ export function CourierTemplatesIndex(): ReactElement {
         breadcrumbs={[{ label: 'Network' }, { label: 'Courier escalation' }]}
         Link={Link}
         title="Message patterns"
-        subtitle="Courier messages the library could not classify, and the live patterns it matches with. A pattern decides what a seller is told a message means."
+        subtitle="Courier messages the library could not classify, and the live patterns it matches with. A pattern decides what a client is told a message means."
       />
       <EscalationTabs />
 

@@ -120,7 +120,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
       toast.success(
         out.applied
           ? 'Order cancelled.'
-          : 'Sent to Seller staff to approve. The order is not cancelled until they say yes.',
+          : 'Sent to Client staff to approve. The order is not cancelled until they say yes.',
       );
       setConfirming(false);
     } catch (err) {
@@ -129,7 +129,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
     }
   }
 
-  const cancelLabel = cancelNeedsSeller ? 'Send to your seller' : 'Cancel the order';
+  const cancelLabel = cancelNeedsSeller ? 'Send to your client' : 'Cancel the order';
   const parcels = o.shipments.filter((s) => s.awbNumber !== null);
 
   return (
@@ -156,7 +156,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
               icon={<XCircle size={15} />}
               onClick={() => setConfirming(true)}
             >
-              {cancelNeedsSeller ? 'Ask the seller to cancel' : 'Cancel order'}
+              {cancelNeedsSeller ? 'Ask the client to cancel' : 'Cancel order'}
             </Button>
           ) : undefined
         }
@@ -231,7 +231,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
                 ...(o.totals.cost.visible
                   ? [
                       {
-                        label: 'You pay the seller',
+                        label: 'You pay the client',
                         value: <Money amount={o.totals.cost.transferInr} convert={false} />,
                       },
                     ]
@@ -388,7 +388,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
         onOpenChange={setConfirming}
         title={
           cancelNeedsSeller
-            ? `Ask the seller to cancel ${o.orderNumber}?`
+            ? `Ask the client to cancel ${o.orderNumber}?`
             : `Cancel ${o.orderNumber}?`
         }
         tone="critical"
@@ -426,7 +426,7 @@ function OrderBody({ order: o }: { order: StoreOrderView }): ReactElement {
           }
           consequence={`${
             cancelNeedsSeller
-              ? 'Your seller approves cancels for this store. Seller staff read your reason and decide; the order is cancelled only if they say yes, and only until it is packed.'
+              ? 'Your client approves cancels for this store. Client staff read your reason and decide; the order is cancelled only if they say yes, and only until it is packed.'
               : 'An order can be cancelled until it is packed.'
           } The customer is not told by us — let them know yourself.`}
         >
@@ -476,7 +476,7 @@ function CallCapPanel({
         note="Nothing happens on this order until it is answered. The stock stays held in the meantime."
       >
         <p className="ro-p">
-          Seller staff answer this question for your store. Ask your seller whether to keep trying.
+          Client staff answer this question for your store. Ask your client whether to keep trying.
         </p>
       </RoSection>
     );
@@ -507,7 +507,7 @@ function CallCapPanel({
             <span>
               We have rung them {review.attemptCount} time
               {review.attemptCount === 1 ? '' : 's'} without an answer, and {review.heldQty} unit
-              {review.heldQty === 1 ? '' : 's'} of your seller’s stock{' '}
+              {review.heldQty === 1 ? '' : 's'} of your client’s stock{' '}
               {review.heldQty === 1 ? 'is' : 'are'} held for this order.
             </span>
             <CallReviewDecision
@@ -548,9 +548,9 @@ function RaiseTicketLinks({
   return (
     <Notice tone="neutral" icon={<Flag size={16} />}>
       <p className="ro-body">
-        Something wrong with this order that the seller should put right?{' '}
+        Something wrong with this order that the client should put right?{' '}
         <Link href={`/tickets/new?orderId=${orderId}&with=seller`} className="ro-link">
-          Raise it with your seller
+          Raise it with your client
         </Link>
       </p>
       {chase === 'OFF' ? null : (
@@ -561,8 +561,8 @@ function RaiseTicketLinks({
           </Link>
           <span className="ro-faint">
             {chase === 'ASK_SELLER'
-              ? ' — Seller staff approve it first; it reaches Skydrop once they say yes.'
-              : ' — your seller is not told.'}
+              ? ' — Client staff approve it first; it reaches Skydrop once they say yes.'
+              : ' — your client is not told.'}
           </span>
         </p>
       )}
@@ -579,7 +579,7 @@ function RaiseTicketLinks({
 function HeldRequests({ orderId }: { orderId: string }): ReactElement {
   const requests = useStoreOrderRequests(orderId);
   if (requests.isPending) {
-    return <SkeletonRows rows={1} cols={3} label="Loading what you asked the seller" />;
+    return <SkeletonRows rows={1} cols={3} label="Loading what you asked the client" />;
   }
   if (requests.isError) {
     return (
@@ -589,11 +589,11 @@ function HeldRequests({ orderId }: { orderId: string }): ReactElement {
   if (requests.data.length === 0) return <></>;
   return (
     <RoSection
-      title="Sent to your seller to approve"
-      note="Nothing on these happens until Seller staff answer. A request nobody answers closes after a few days — follow up with your seller if that happens."
+      title="Sent to your client to approve"
+      note="Nothing on these happens until Client staff answer. A request nobody answers closes after a few days — follow up with your client if that happens."
       flush
     >
-      <Table caption="Sent to your seller to approve">
+      <Table caption="Sent to your client to approve">
         <THead>
           <Tr>
             <Th>What you asked</Th>

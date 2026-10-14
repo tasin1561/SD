@@ -73,7 +73,7 @@ export const PERMISSION_GROUPS = [
   'Warehouse',
   'Inventory',
   'Couriers',
-  'Sellers',
+  'Clients',
   'Money',
   'Pricing',
   'Support',
@@ -231,7 +231,7 @@ export const PERMISSIONS = [
   {
     key: 'warehouse.rto.receive',
     label: 'Receive a return',
-    description: 'Book a returned parcel in at the warehouse. Charges the seller the RTO fee.',
+    description: 'Book a returned parcel in at the warehouse. Charges the client the RTO fee.',
     group: 'Warehouse',
   },
   {
@@ -287,7 +287,7 @@ export const PERMISSIONS = [
   {
     key: 'inventory.goods_receipts.manage',
     label: 'Receive inbound goods',
-    description: 'Book a seller’s consignment into the warehouse and record its freight bill.',
+    description: 'Book a client’s consignment into the warehouse and record its freight bill.',
     group: 'Inventory',
   },
   {
@@ -324,7 +324,7 @@ export const PERMISSIONS = [
   {
     key: 'courier.accounts.manage',
     label: 'Manage courier accounts',
-    description: 'Add an account, replace its credentials, and set how sellers are distributed.',
+    description: 'Add an account, replace its credentials, and set how clients are distributed.',
     group: 'Couriers',
     dangerous: true,
   },
@@ -367,54 +367,54 @@ export const PERMISSIONS = [
   // ── Sellers ────────────────────────────────────────────────────────
   {
     key: 'sellers.view',
-    label: 'View sellers',
-    description: 'The seller list and each seller’s profile, team and settings.',
-    group: 'Sellers',
+    label: 'View clients',
+    description: 'The client list and each client’s profile, team and settings.',
+    group: 'Clients',
   },
   {
     key: 'sellers.approve',
-    label: 'Approve or reject a seller',
-    description: 'Let a registered seller into the platform, or turn them away.',
-    group: 'Sellers',
+    label: 'Approve or reject a client',
+    description: 'Let a registered client into the platform, or turn them away.',
+    group: 'Clients',
   },
   {
     key: 'sellers.suspend',
-    label: 'Suspend or reinstate a seller',
-    description: 'Cut off a trading seller’s access, and give it back.',
-    group: 'Sellers',
+    label: 'Suspend or reinstate a client',
+    description: 'Cut off a trading client’s access, and give it back.',
+    group: 'Clients',
     dangerous: true,
   },
   {
     key: 'sellers.invite',
-    label: 'Invite a seller',
+    label: 'Invite a client',
     description: 'Issue and revoke invitations to the closed beta.',
-    group: 'Sellers',
+    group: 'Clients',
   },
   {
     key: 'sellers.settings.manage',
-    label: 'Override a seller’s settings',
+    label: 'Override a client’s settings',
     description:
       'Give one seller different behaviour from the global default — call attempts, fees, accrual timing.',
-    group: 'Sellers',
+    group: 'Clients',
   },
   {
     key: 'sellers.courier_links.manage',
-    label: 'Route a seller to courier accounts',
-    description: 'Which courier accounts carry this seller’s parcels, and in what proportion.',
-    group: 'Sellers',
+    label: 'Route a client to courier accounts',
+    description: 'Which courier accounts carry this client’s parcels, and in what proportion.',
+    group: 'Clients',
   },
   {
     key: 'sellers.notes.manage',
-    label: 'Keep notes on a seller',
-    description: 'Internal notes on a seller’s record. Never shown to the seller.',
-    group: 'Sellers',
+    label: 'Keep notes on a client',
+    description: 'Internal notes on a client’s record. Never shown to the client.',
+    group: 'Clients',
   },
   {
     key: 'sellers.bank_account.reveal',
-    label: 'Reveal a seller’s bank details',
+    label: 'Reveal a client’s bank details',
     description:
       'Show the account we pay them into. Needed to send a remittance; every reveal is audited.',
-    group: 'Sellers',
+    group: 'Clients',
     dangerous: true,
   },
   {
@@ -422,22 +422,22 @@ export const PERMISSIONS = [
     label: 'Approve a change of bank account',
     description:
       'Decide whether a seller may move where their money is sent. Approving redirects their withdrawals; rejecting requires a reason the seller reads.',
-    group: 'Sellers',
+    group: 'Clients',
     dangerous: true,
   },
   // ── Reseller stores (RS-2, docs/reseller-stores.md) ───────────────
   {
     key: 'reseller.stores.view',
-    label: 'View reseller stores',
-    description: 'Every seller’s reseller stores, their status history and their teams.',
-    group: 'Sellers',
+    label: 'View member stores',
+    description: 'Every client’s member stores, their status history and their teams.',
+    group: 'Clients',
   },
   {
     key: 'reseller.stores.manage',
-    label: 'Open a reseller store for a seller',
+    label: 'Open a member store for a client',
     description:
       'Create a reseller store on a seller’s account. It waits for the seller to approve or reject it; nothing about it is live until they do.',
-    group: 'Sellers',
+    group: 'Clients',
   },
   {
     // RS-9 — the one thing staff DO to a store's lifecycle: stop its new
@@ -445,31 +445,31 @@ export const PERMISSIONS = [
     // Its own key because reading the flags (`reseller.stores.view`) is
     // not the same trust as acting on them.
     key: 'reseller.stores.pause',
-    label: 'Pause a reseller store',
+    label: 'Pause a member store',
     description:
       'Stop a reseller store placing new orders — for example on a fraud signal. Orders already placed carry on; only the seller can resume it.',
-    group: 'Sellers',
+    group: 'Clients',
     dangerous: true,
   },
   {
     key: 'reseller.credit_after_confirmation.enable',
-    label: 'Allow credit after confirmation for a seller',
+    label: 'Allow credit after confirmation for a client',
     description:
       'Switch on, for one seller, reseller-store terms that credit a party N days after the order is confirmed — money fronted before the customer pays. Switching it off flags stores whose terms still use it.',
-    group: 'Sellers',
+    group: 'Clients',
     dangerous: true,
   },
   {
     key: 'leads.view',
     label: 'View invite requests',
     description: 'People who asked to be let in from the landing page.',
-    group: 'Sellers',
+    group: 'Clients',
   },
   {
     key: 'leads.manage',
     label: 'Work invite requests',
     description: 'Move a request through the queue and keep notes against it.',
-    group: 'Sellers',
+    group: 'Clients',
   },
 
   // ── Money ──────────────────────────────────────────────────────────
@@ -482,7 +482,7 @@ export const PERMISSIONS = [
   },
   {
     key: 'money.wallets.reconcile',
-    label: 'Reconcile seller wallets',
+    label: 'Reconcile client wallets',
     description:
       'Re-check every wallet against its own ledger and repair the cached balance. Reads and repairs only — it never changes a balance, so it cannot move money.',
     group: 'Money',
@@ -506,14 +506,14 @@ export const PERMISSIONS = [
   {
     key: 'money.withdrawals.review',
     label: 'Resolve a withdrawal request',
-    description: 'Approve a seller’s withdrawal request by linking the remittance that paid it.',
+    description: 'Approve a client’s withdrawal request by linking the remittance that paid it.',
     group: 'Money',
     dangerous: true,
   },
   {
     key: 'money.remittances.manage',
     label: 'Record a remittance',
-    description: 'Log money actually sent to a seller. This is the only thing that pays anyone.',
+    description: 'Log money actually sent to a client. This is the only thing that pays anyone.',
     group: 'Money',
     dangerous: true,
   },
@@ -528,7 +528,7 @@ export const PERMISSIONS = [
   {
     key: 'money.freight.manage',
     label: 'Settle inbound freight',
-    description: 'Charge or waive a seller’s cross-border freight bill.',
+    description: 'Charge or waive a client’s cross-border freight bill.',
     group: 'Money',
     dangerous: true,
   },
@@ -574,7 +574,7 @@ export const PERMISSIONS = [
   {
     key: 'money.bank_accounts.manage',
     label: 'Manage our bank accounts',
-    description: 'The accounts sellers are told to transfer their top-ups into.',
+    description: 'The accounts clients are told to transfer their top-ups into.',
     group: 'Money',
     dangerous: true,
   },
@@ -605,13 +605,13 @@ export const PERMISSIONS = [
   {
     key: 'tickets.view',
     label: 'View tickets',
-    description: 'Damage and scrap tickets, and issues sellers have raised.',
+    description: 'Damage and scrap tickets, and issues clients have raised.',
     group: 'Support',
   },
   {
     key: 'tickets.resolve',
     label: 'Resolve a ticket',
-    description: 'Close a ticket, including by refunding the seller from the wallet.',
+    description: 'Close a ticket, including by refunding the client from the wallet.',
     group: 'Support',
     dangerous: true,
   },
@@ -633,18 +633,18 @@ export const PERMISSIONS = [
   {
     key: 'webhooks.view',
     label: 'View webhook deliveries',
-    description: 'What we sent a seller’s endpoint and what came back.',
+    description: 'What we sent a client’s endpoint and what came back.',
     group: 'System',
   },
   {
     key: 'webhooks.retry',
     label: 'Retry a webhook delivery',
-    description: 'Send a seller’s endpoint a payload again after it failed.',
+    description: 'Send a client’s endpoint a payload again after it failed.',
     group: 'System',
   },
   {
     key: 'support.impersonate',
-    label: 'Sign in as a seller or a store',
+    label: 'Sign in as a client or a store',
     description:
       'Open a support session inside a seller’s or a reseller store’s account and see exactly what they see. Read-only on its own, and every session is recorded with who, as whom, for how long and why.',
     group: 'System',
@@ -666,7 +666,7 @@ export const PERMISSIONS = [
      * seller endpoints answer for the length of one session.
      */
     reserved: true,
-    label: 'Act inside a seller’s or store’s account',
+    label: 'Act inside a client’s or store’s account',
     description:
       'Not just look — DO, inside their account, under their name. Refused for anything that creates lasting access or moves money: passwords, email, bank details, withdrawals, API keys, invitations, roles and accepting terms stay impossible. Held alongside the permission to open the session, never instead of it.',
     group: 'System',

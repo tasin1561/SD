@@ -167,7 +167,7 @@ export function OrderOmnisearch(): ReactElement | null {
           ) : items.length === 0 ? (
             tickets.length > 0 ? null : (
               <p className="text-text-muted px-3 py-2 text-xs">
-                Nothing matches that. It searches the order number, the seller’s own reference, the
+                Nothing matches that. It searches the order number, the client’s own reference, the
                 recipient’s name and phone, the waybill, and a ticket number (TK-…).
               </p>
             )

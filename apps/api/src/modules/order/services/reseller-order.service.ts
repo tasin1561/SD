@@ -207,7 +207,7 @@ export class ResellerOrderService {
       if (offer === undefined || !offer.enabled || !offer.resellable || offer.price === null) {
         throw new ConflictException({
           code: 'RESELLER_VARIANT_NOT_OFFERED',
-          message: `${label(item.variantId)} is not in this store’s catalogue. Pick from the products the seller has turned on for you.`,
+          message: `${label(item.variantId)} is not in this store’s catalogue. Pick from the products the client has turned on for you.`,
           details: { variantId: item.variantId },
         });
       }
@@ -314,7 +314,7 @@ export class ResellerOrderService {
         throw new BadRequestException({
           code: 'RESELLER_RETAIL_REQUIRED',
           message:
-            `Say what ${label(item.variantId)} is being sold to the customer for — the seller has ` +
+            `Say what ${label(item.variantId)} is being sold to the customer for — the client has ` +
             'suggested no retail price for it.',
           details: { variantId: item.variantId },
         });
@@ -337,7 +337,7 @@ export class ResellerOrderService {
           code: 'ASSOCIATE_PRICE_OUT_OF_SELLER_RANGE',
           message:
             `${label(item.variantId)} is set to sell at ${inr(fixed)} for you, which is outside what ` +
-            'the seller allows for this product. Your store has to put it right before you can sell it.',
+            'the client allows for this product. Your store has to put it right before you can sell it.',
           details: {
             variantId: item.variantId,
             yourPriceInr: fixed.toFixed(2),
@@ -564,7 +564,7 @@ export class ResellerOrderService {
       throw new ConflictException({
         code: 'RESELLER_ORDERS_DISABLED',
         message:
-          'Reseller store orders are not switched on for this seller yet. Skydrop turns them on once store payments are live.',
+          'Member store orders are not switched on for this client yet. Skydrop turns them on once store payments are live.',
       });
     }
   }
@@ -580,7 +580,7 @@ export function assertStoreTakesOrders(
     throw new ConflictException({
       code: 'RESELLER_STORE_PAUSED',
       message:
-        'This store is paused. Orders already placed carry on; new ones wait until the seller resumes it.',
+        'This store is paused. Orders already placed carry on; new ones wait until the client resumes it.',
     });
   }
   throw new ConflictException({

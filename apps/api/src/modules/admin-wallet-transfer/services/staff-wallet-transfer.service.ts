@@ -262,7 +262,7 @@ export class StaffWalletTransferService {
     if (reason.length < MIN_REASON || reason.length > MAX_REASON) {
       throw new BadRequestException({
         code: 'WALLET_TRANSFER_REASON_TOO_SHORT',
-        message: `The seller reads this reason on their wallet — write ${MIN_REASON} to ${MAX_REASON} characters.`,
+        message: `The client reads this reason on their wallet — write ${MIN_REASON} to ${MAX_REASON} characters.`,
       });
     }
     if (input.direction === 'CREDIT' && !input.bankAccountId) {
@@ -275,7 +275,7 @@ export class StaffWalletTransferService {
       throw new BadRequestException({
         code: 'WALLET_TRANSFER_ACCOUNT_NOT_FOR_DEBIT',
         message:
-          'A debit takes the seller’s money where it already sits with us — do not name an account.',
+          'A debit takes the client’s money where it already sits with us — do not name an account.',
       });
     }
     return amount;
@@ -296,12 +296,12 @@ export class StaffWalletTransferService {
       select: { companyName: true, status: true },
     });
     if (!seller) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such client' });
     }
     if (!TRANSFERABLE.includes(seller.status)) {
       throw new ConflictException({
         code: 'WALLET_TRANSFER_SELLER_NOT_ACTIVE',
-        message: `${seller.companyName} is ${seller.status.toLowerCase()} — only an approved or suspended seller's wallet can be moved.`,
+        message: `${seller.companyName} is ${seller.status.toLowerCase()} — only an approved or suspended client's wallet can be moved.`,
       });
     }
     if (input.direction === 'CREDIT') {
@@ -372,7 +372,7 @@ export class StaffWalletTransferService {
         throw new ConflictException({
           code: 'WALLET_TRANSFER_CAPITAL_SHORT',
           message:
-            `Our own money in that account is ₹${capital.toFixed(2)}; the seller would be given ` +
+            `Our own money in that account is ₹${capital.toFixed(2)}; the client would be given ` +
             `₹${split.toSeller.toFixed(2)} of it. Choose an account that holds it, or record the money arriving first.`,
         });
       }

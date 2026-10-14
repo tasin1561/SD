@@ -74,14 +74,14 @@ export function ConsignmentsIndex(): ReactElement {
         </Select>
         {maySeeSellers && (
           <Select
-            aria-label="Seller"
+            aria-label="Client"
             value={sellerId}
             onChange={(e) => {
               setSellerId(e.target.value);
               setPage(1);
             }}
           >
-            <option value="">All sellers</option>
+            <option value="">All clients</option>
             {(sellers.data?.items ?? []).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName}
@@ -98,7 +98,7 @@ export function ConsignmentsIndex(): ReactElement {
       ) : (list.data?.items.length ?? 0) === 0 ? (
         <EmptyState
           title="No consignments"
-          description="Sellers announce these from their own dashboard before the stock travels."
+          description="Clients announce these from their own dashboard before the stock travels."
         />
       ) : (
         <>
@@ -106,7 +106,7 @@ export function ConsignmentsIndex(): ReactElement {
             <THead>
               <Tr>
                 <Th>Consignment</Th>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th>Route</Th>
                 <Th>Status</Th>
                 <Th align="right">Legs</Th>

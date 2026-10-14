@@ -142,7 +142,7 @@ export class StockUnitService {
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
           throw new ConflictException({
             code: 'UNIT_SERIAL_ALREADY_REGISTERED',
-            message: `Serial '${serial}' is already registered for this seller`,
+            message: `Serial '${serial}' is already registered for this client`,
           });
         }
         throw err;

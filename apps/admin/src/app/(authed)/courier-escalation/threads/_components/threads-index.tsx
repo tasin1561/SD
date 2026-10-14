@@ -72,13 +72,13 @@ export function CourierThreadsIndex(): ReactElement {
       ) : rows.length === 0 ? (
         <EmptyState
           title="No conversations yet"
-          description="One opens when a ticket needs the courier — either a seller raises an issue, or a failed re-attempt request escalates one automatically."
+          description="One opens when a ticket needs the courier — either a client raises an issue, or a failed re-attempt request escalates one automatically."
         />
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Seller</Th>
+              <Th>Client</Th>
               <Th>AWB</Th>
               <Th>Their ticket</Th>
               <Th>State</Th>
@@ -201,7 +201,7 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
     try {
       await recordInbound.mutateAsync({ escalationId, body });
       setInbound('');
-      toast.success('Recorded — the seller can see it now');
+      toast.success('Recorded — the client can see it now');
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
@@ -272,7 +272,7 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
           <TextArea
             id={`inbound-${escalationId}`}
             label="Record what the courier told us"
-            hint="Paste their reply rather than paraphrasing — the seller reads this as the courier's own words."
+            hint="Paste their reply rather than paraphrasing — the client reads this as the courier's own words."
             rows={3}
             value={inbound}
             onChange={(e) => setInbound(e.target.value)}
@@ -290,7 +290,7 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
               disabled={inbound.trim() === ''}
               onAction={saveInbound}
             />
-            <span className="af-small">Shown to the seller on their ticket. Sends nothing.</span>
+            <span className="af-small">Shown to the client on their ticket. Sends nothing.</span>
           </div>
         </div>
       ) : null}

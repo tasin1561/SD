@@ -44,7 +44,7 @@ const STATUS_COPY: Readonly<Record<string, string>> = {
   NEW: 'Nobody has looked at this yet.',
   CONTACTED: 'Someone has reached out and is waiting to hear back.',
   QUALIFIED: 'A real prospect. Worth onboarding.',
-  CONVERTED: 'They became a seller.',
+  CONVERTED: 'They became a client.',
   DECLINED: 'Not a fit, or never replied. Say why in the notes.',
   SPAM: 'Junk. Kept rather than deleted, so the same address is recognised next time.',
 };
@@ -281,7 +281,7 @@ export function LeadDrawer({
                   {existing.data.usedAt === null
                     ? ''
                     : new Date(existing.data.usedAt).toLocaleString()}
-                  . Their account is under Sellers.
+                  . Their account is under Clients.
                 </span>
               </AcCallout>
             ) : (

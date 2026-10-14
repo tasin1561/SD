@@ -45,7 +45,7 @@ function NewTicket(): ReactElement {
         breadcrumbs={[{ label: 'Tickets', href: '/tickets' }, { label: 'Raise a ticket' }]}
         Link={Link}
         title="Raise a ticket"
-        subtitle="About one of your orders — with your seller, or with Skydrop. Choose below; they go to different people."
+        subtitle="About one of your orders — with your client, or with Skydrop. Choose below; they go to different people."
       />
       <NewTicketForm
         initialOrderId={params?.get('orderId') ?? ''}
@@ -71,7 +71,7 @@ function NewTicket(): ReactElement {
             return;
           }
           toast.success(
-            'Sent to Seller staff to approve. It reaches Skydrop only once they say yes — follow it on the order.',
+            'Sent to Client staff to approve. It reaches Skydrop only once they say yes — follow it on the order.',
           );
           router.push(`/orders/${result.orderId}`);
         }}

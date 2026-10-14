@@ -86,7 +86,7 @@ export class AdminResellerAnalysisController {
       select: { sellerId: true },
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return this.stores.pause(
       store.sellerId,

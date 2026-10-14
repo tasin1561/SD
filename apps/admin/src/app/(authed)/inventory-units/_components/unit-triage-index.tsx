@@ -53,7 +53,7 @@ export function UnitTriageIndex(): ReactElement {
       <PageHeader
         breadcrumbs={[{ label: 'Inventory' }, { label: 'Serial units' }]}
         title="Unit discrepancies"
-        subtitle="For SKUs tracked per unit by serial. Which sellers have a scan missing, a parcel unaccounted for, or serials that disagree with the stock count."
+        subtitle="For SKUs tracked per unit by serial. Which clients have a scan missing, a parcel unaccounted for, or serials that disagree with the stock count."
       />
 
       {triage.isError ? (
@@ -72,10 +72,10 @@ export function UnitTriageIndex(): ReactElement {
               icon={<TriangleAlert size={14} />}
               value={data?.totalNeedsAttention ?? 0}
               tone={(data?.totalNeedsAttention ?? 0) > 0 ? 'pending' : 'credit'}
-              hint="Across every seller holding serialized stock"
+              hint="Across every client holding serialized stock"
             />
             <KpiCard
-              label="Sellers affected"
+              label="Clients affected"
               icon={<Users size={14} />}
               value={data?.sellers.filter((s) => s.needsAttention > 0).length ?? 0}
               hint={`of ${data?.examined ?? 0} swept`}
@@ -90,7 +90,7 @@ export function UnitTriageIndex(): ReactElement {
 
           {data?.truncated === true && (
             <InlineError
-              message={`Only the first ${data.examined} sellers were swept. More hold serialized stock — the rest are not shown, and are not counted above.`}
+              message={`Only the first ${data.examined} clients were swept. More hold serialized stock — the rest are not shown, and are not counted above.`}
             />
           )}
 
@@ -98,13 +98,13 @@ export function UnitTriageIndex(): ReactElement {
             <EmptyState
               tone="positive"
               title="No serialized stock anywhere"
-              description="Nothing to reconcile — no seller has a SKU set to strict per-unit tracking yet."
+              description="Nothing to reconcile — no client has a SKU set to strict per-unit tracking yet."
             />
           ) : (
             <Table>
               <THead>
                 <Tr>
-                  <Th>Seller</Th>
+                  <Th>Client</Th>
                   <Th align="right">Stuck</Th>
                   <Th align="right">Unresolved dispatch</Th>
                   <Th align="right">Count mismatch</Th>
@@ -120,7 +120,7 @@ export function UnitTriageIndex(): ReactElement {
                     onActivate={() => setSelected(selected === s.sellerId ? null : s.sellerId)}
                   >
                     <Td>
-                      <span className="unit-seller">{s.companyName ?? 'Unknown seller'}</span>
+                      <span className="unit-seller">{s.companyName ?? 'Unknown client'}</span>
                       <span className="stk-sub">
                         <Link
                           href={`/sellers/${s.sellerId}`}
@@ -175,8 +175,8 @@ export function UnitTriageIndex(): ReactElement {
 
           <Callout tone="info">
             <p className="unit-note">
-              Thresholds are per seller and overridable, so &ldquo;stuck&rdquo; means past{' '}
-              <em>that</em> seller&apos;s SLA. Retired units — written off or lost — are
+              Thresholds are per client and overridable, so &ldquo;stuck&rdquo; means past{' '}
+              <em>that</em> client&apos;s SLA. Retired units — written off or lost — are
               deliberately excluded from the totals: they are settled facts rather than work, and
               counting them would mean the queue never reaches zero.
             </p>
@@ -194,7 +194,7 @@ function SellerDetail({ sellerId }: { readonly sellerId: string }): ReactElement
   return (
     <AreaSection
       title="Detail"
-      note="Exactly what this seller sees on their own screen — same computation, so the two cannot disagree."
+      note="Exactly what this client sees on their own screen — same computation, so the two cannot disagree."
     >
       {report.isError ? (
         <InlineError message={serverVerdict(report.error)} retry={() => void report.refetch()} />

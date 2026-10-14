@@ -26,19 +26,19 @@ function ticketTypeLabel(type: TicketType): string {
     case TicketType.SCRAP_DAMAGE:
       return 'Scrap / damage';
     case TicketType.SELLER_RAISED_ISSUE:
-      return 'Seller issue';
+      return 'Client issue';
     case TicketType.COURIER_NDR_ESCALATION:
       return 'Delivery escalation';
     case TicketType.RECEIPT_SHORTFALL:
       return 'Receipt short';
     case TicketType.STORE_DISPUTE:
-      return 'Reseller store dispute';
+      return 'Member store dispute';
     // 2026-09-16 — a reseller store raising something with SKYDROP, not
     // with its seller staff. Named apart from the dispute for the same
     // reason the types are apart: one is Skydrop's to answer, the other
     // Skydrop referees between seller staff and the store.
     case TicketType.STORE_ISSUE:
-      return 'Reseller store issue';
+      return 'Member store issue';
     default:
       // F2: every value above returns, so this is unreachable — but the
       // compiler cannot see that, and `never` is what makes a FUTURE
@@ -119,7 +119,7 @@ export function TicketsIndex(): ReactElement {
         breadcrumbs={[{ label: 'Operations' }, { label: 'Tickets' }]}
         Link={Link}
         title="Tickets"
-        subtitle="Scrap/damage raised by RTO inspection, and parcel issues raised by sellers. Resolving with a refund credits the seller's wallet in the same transaction."
+        subtitle="Scrap/damage raised by RTO inspection, and parcel issues raised by clients. Resolving with a refund credits the client's wallet in the same transaction."
       />
 
       <div className="af-kpis">
@@ -137,7 +137,7 @@ export function TicketsIndex(): ReactElement {
           label="Refunded on this page"
           figure={<Money amount={refundOnPage} decimals={false} />}
           tone="credit"
-          hint="Already credited to seller wallets"
+          hint="Already credited to client wallets"
         />
         {list.isLoading ? (
           <KpiCard label="Auto-raised" figure="—" hint="Loading" />
@@ -145,7 +145,7 @@ export function TicketsIndex(): ReactElement {
           <KpiCard
             label="Auto-raised"
             value={autoRaised}
-            hint="Opened by RTO inspection, not by a seller"
+            hint="Opened by RTO inspection, not by a client"
           />
         )}
       </div>

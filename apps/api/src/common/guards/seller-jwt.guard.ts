@@ -197,14 +197,14 @@ export class SellerJwtGuard implements CanActivate {
     if (!user || user.seller.deletedAt !== null) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
-        message: 'Seller session no longer valid',
+        message: 'Client session no longer valid',
       });
     }
     const resolved = resolveRoles(user.roles, ALL_SELLER_PERMISSION_KEYS);
     if (resolved.roles.length === 0) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
-        message: 'Seller session no longer valid',
+        message: 'Client session no longer valid',
       });
     }
     const seller = user.seller;
@@ -349,7 +349,7 @@ export class SellerJwtGuard implements CanActivate {
     if (ctx.subject.kind !== 'SELLER') {
       throw new ForbiddenException({
         code: 'IMPERSONATION_WRONG_SUBJECT',
-        message: 'This support session is inside a store, not a seller account.',
+        message: 'This support session is inside a store, not a client account.',
       });
     }
     const owner = await this.prisma.client.sellerUser.findFirst({
@@ -366,7 +366,7 @@ export class SellerJwtGuard implements CanActivate {
     if (owner === null) {
       throw new UnauthorizedException({
         code: 'IMPERSONATION_SUBJECT_UNAVAILABLE',
-        message: 'This seller has no owner account to act as, so the session cannot be used.',
+        message: 'This client has no owner account to act as, so the session cannot be used.',
       });
     }
     return owner.id;

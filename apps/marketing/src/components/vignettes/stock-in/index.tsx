@@ -195,7 +195,7 @@ export default function StockInVignette({ enabled }: VignetteProps): ReactElemen
               </span>
             </div>
             <div className="vg-si__row">
-              <span className="vg-si__sword">Per seller</span>
+              <span className="vg-si__sword">Per client</span>
               <DrawToggle label="Per consignment" checked readOnly />
             </div>
             <div className="vg-si__row" style={{ '--k': 1 } as CSSProperties}>

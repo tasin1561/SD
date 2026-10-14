@@ -66,7 +66,7 @@ export function AllocateSettlementModal({
         settlementId,
         lines: filled.map((l) => ({ orderId: l.orderId.trim(), settledInr: l.settledInr.trim() })),
       });
-      toast.success('Allocated. Those sellers have been credited.');
+      toast.success('Allocated. Those clients have been credited.');
       onOpenChange(false);
     } catch (err) {
       // FE-2 — the server owns the rules; show its refusal verbatim.
@@ -81,7 +81,7 @@ export function AllocateSettlementModal({
       onOpenChange={onOpenChange}
       locked={allocate.isPending}
       title="Allocate more of this payout"
-      description={`${reference} — name the orders it also covered. The payout total is not changed; this moves money already in the bank to the sellers it belongs to.`}
+      description={`${reference} — name the orders it also covered. The payout total is not changed; this moves money already in the bank to the clients it belongs to.`}
       footer={
         <DialogFooter>
           <Button

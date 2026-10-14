@@ -21,7 +21,7 @@ export default function CatalogImportPage(): ReactElement {
     <AreaPage>
       <StockPageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Stock & WMS' },
           { label: 'Products', href: '/products' },
           { label: 'CSV import' },

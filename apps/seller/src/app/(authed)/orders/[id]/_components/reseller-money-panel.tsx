@@ -112,7 +112,7 @@ export function ResellerMoneyPanel({
   if (!enabled) return null;
   if (money.isLoading) {
     return (
-      <OrdSection title="Reseller store money">
+      <OrdSection title="Member store money">
         <SkeletonRows rows={3} cols={4} label="Loading the store money…" />
       </OrdSection>
     );
@@ -121,7 +121,7 @@ export function ResellerMoneyPanel({
     // A channel order has no reseller money — nothing to show, not an error.
     if (money.error instanceof ApiError && money.error.status === 404) return null;
     return (
-      <OrdSection title="Reseller store money">
+      <OrdSection title="Member store money">
         <ErrorState message={serverVerdict(money.error)} retry={() => void money.refetch()} />
       </OrdSection>
     );
@@ -131,7 +131,7 @@ export function ResellerMoneyPanel({
   const mine = view.parties.find((p) => p.party === 'SELLER');
   return (
     <OrdSection
-      title="Reseller store money"
+      title="Member store money"
       note="Your transfer price for the goods, your share of Skydrop's fees on this order, and when it reaches your wallet."
       action={<DisputeFiguresAction orderId={orderId} />}
     >

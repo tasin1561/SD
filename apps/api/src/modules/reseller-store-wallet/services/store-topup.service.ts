@@ -438,7 +438,7 @@ export class StoreTopupService {
       if (store.walletManagedBy !== ResellerWalletManager.SKYDROP) {
         throw new ConflictException({
           code: 'STORE_WALLET_SELLER_MANAGED',
-          message: 'The seller manages this store’s wallet now — reject the claim instead.',
+          message: 'The client manages this store’s wallet now — reject the claim instead.',
         });
       }
       if (

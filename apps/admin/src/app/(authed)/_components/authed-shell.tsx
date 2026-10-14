@@ -154,7 +154,7 @@ export function AuthedShell({
     {
       heading: 'Money',
       items: [
-        { href: '/seller-wallets', label: 'Seller wallets', icon: <Wallet size={15} /> },
+        { href: '/seller-wallets', label: 'Client wallets', icon: <Wallet size={15} /> },
         { href: '/settlements', label: 'Settlements', icon: <Banknote size={15} /> },
         { href: '/withdrawals', label: 'Withdrawals', icon: <Wallet size={15} /> },
         {
@@ -165,7 +165,7 @@ export function AuthedShell({
         { href: '/topups', label: 'Top-ups', icon: <Wallet size={15} /> },
         {
           href: '/reseller-store-wallets',
-          label: 'Reseller store wallets',
+          label: 'Member store wallets',
           icon: <Wallet size={15} />,
         },
         { href: '/treasury', label: 'Treasury', icon: <Vault size={15} /> },
@@ -191,12 +191,12 @@ export function AuthedShell({
       heading: 'Network',
       items: [
         { href: '/leads', label: 'Invite requests', icon: <Inbox size={15} /> },
-        { href: '/sellers', label: 'Sellers', icon: <Store size={15} /> },
-        { href: '/stores', label: 'Seller stores', icon: <Building2 size={15} /> },
-        { href: '/reseller-stores', label: 'Reseller stores', icon: <Store size={15} /> },
+        { href: '/sellers', label: 'Clients', icon: <Store size={15} /> },
+        { href: '/stores', label: 'Shops', icon: <Building2 size={15} /> },
+        { href: '/reseller-stores', label: 'Member stores', icon: <Store size={15} /> },
         {
           href: '/reseller-stores/analysis',
-          label: 'Reseller analysis',
+          label: 'Member store analysis',
           icon: <BarChart3 size={15} />,
         },
         { href: '/courier-accounts', label: 'Courier accounts', icon: <Building2 size={15} /> },

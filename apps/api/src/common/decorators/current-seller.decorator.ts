@@ -6,7 +6,7 @@ export const CurrentSeller = createParamDecorator(
   (_: unknown, ctx: ExecutionContext): AuthenticatedSeller => {
     const req = ctx.switchToHttp().getRequest<Request>();
     if (!req.seller) {
-      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Seller session required' });
+      throw new UnauthorizedException({ code: 'UNAUTHORIZED', message: 'Client session required' });
     }
     return req.seller;
   },

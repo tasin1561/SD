@@ -127,7 +127,7 @@ export function MarginIndex(): ReactElement {
           )}
           <div className="mo-kpis">
             <KpiCard
-              label="Billed to sellers"
+              label="Billed to clients"
               figure={<Money amount={data.totalBilledInr} decimals={false} />}
               hint={`Across ${data.sampledShipments} priced shipment${
                 data.sampledShipments === 1 ? '' : 's'

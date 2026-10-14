@@ -92,7 +92,7 @@ export function TopupsIndex(): ReactElement {
         toast.success(`Credited ${reviewing.currency} ${reviewing.amount}.`);
       } else {
         await reject.mutateAsync({ topupId: reviewing.id, reason: note.trim() });
-        toast.success('Rejected — the seller sees your reason.');
+        toast.success('Rejected — the client sees your reason.');
       }
       close();
     } catch (err) {
@@ -111,7 +111,7 @@ export function TopupsIndex(): ReactElement {
     <div className="mk-page">
       <PageHeader
         title="Wallet top-ups"
-        subtitle="Sellers telling us they have sent money. Accepting one credits their wallet — check it against the statement first."
+        subtitle="Clients telling us they have sent money. Accepting one credits their wallet — check it against the statement first."
         action={
           // The accounts moved to their own page. A pointer stays,
           // because with none configured nothing can ever arrive here,
@@ -144,7 +144,7 @@ export function TopupsIndex(): ReactElement {
         <EmptyState
           tone={status === 'PENDING' ? 'positive' : 'neutral'}
           title={status === 'PENDING' ? 'Nothing waiting' : `No ${status.toLowerCase()} top-ups`}
-          description="Claims appear here when a seller records a transfer."
+          description="Claims appear here when a client records a transfer."
         />
       ) : (
         <MkCard flush>
@@ -152,7 +152,7 @@ export function TopupsIndex(): ReactElement {
             <THead>
               <Tr>
                 <Th>Claimed</Th>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th>Paid into</Th>
                 <Th align="right">Amount</Th>
                 <Th>Evidence</Th>
@@ -330,8 +330,8 @@ export function TopupsIndex(): ReactElement {
           )}
           <p className="mk-muted">
             {intent === 'ACCEPT'
-              ? 'This adds the money to the seller’s wallet immediately. Only do it once you have seen the payment on our statement — it is not reversible without an adjusting entry.'
-              : 'The seller sees this reason, so write something they can act on: what did not match, or what you need from them.'}
+              ? 'This adds the money to the client’s wallet immediately. Only do it once you have seen the payment on our statement — it is not reversible without an adjusting entry.'
+              : 'The client sees this reason, so write something they can act on: what did not match, or what you need from them.'}
           </p>
 
           {error !== null && <MkAlert>{error}</MkAlert>}

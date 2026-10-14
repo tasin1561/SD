@@ -144,7 +144,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         title="Settle this freight bill?"
         entity={`Arrival ${arrival}${row.sellerCompanyName !== null ? ` · ${row.sellerCompanyName}` : ''}`}
         amount={<Money amount={row.outstandingInr} />}
-        consequence={`Debits the seller's wallet by the outstanding amount for arrival ${arrival}. The ledger entry is permanent.`}
+        consequence={`Debits the client's wallet by the outstanding amount for arrival ${arrival}. The ledger entry is permanent.`}
         confirmLabel="Settle"
         onConfirm={doSettle}
         error={settleError}
@@ -214,7 +214,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
         description={
           <>
             For a bill that was WRONG — a mistyped rate, a recount. It is withdrawn and whatever it
-            charged (<Money amount={row.amountSettledInr} />) goes back to the seller&apos;s wallet.
+            charged (<Money amount={row.amountSettledInr} />) goes back to the client&apos;s wallet.
             Raise the corrected bill for this stop afterwards; until you do, this arrival has no
             freight against it. Audited at HIGH severity. Not the same as a waiver: waive is for a
             bill that was right and we chose to forgive.
@@ -256,7 +256,7 @@ export function FreightActions({ row }: { readonly row: FreightChargeView }): Re
           <TextArea
             id="void-reason"
             label="What was wrong with it"
-            hint={`At least ${MIN_VOID_REASON} characters. The seller sees this on their consignment, so write what actually happened.`}
+            hint={`At least ${MIN_VOID_REASON} characters. The client sees this on their consignment, so write what actually happened.`}
             requiredMark
             rows={3}
             value={voidReason}

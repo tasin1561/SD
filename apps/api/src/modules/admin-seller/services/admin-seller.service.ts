@@ -165,7 +165,7 @@ export class AdminSellerService {
     if (!seller) {
       throw new NotFoundException({
         code: 'SELLER_NOT_FOUND',
-        message: 'Seller not found',
+        message: 'Client not found',
       });
     }
 
@@ -302,7 +302,7 @@ export class AdminSellerService {
       },
     });
     if (!seller) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
     }
 
     const [addresses, onboarding, recentAuditLogs, notes] = await Promise.all([
@@ -392,7 +392,7 @@ export class AdminSellerService {
       select: { id: true, initials: true, companyName: true },
     });
     if (seller === null) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller.' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such client.' });
     }
 
     const next = initials.trim();
@@ -409,7 +409,7 @@ export class AdminSellerService {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
         throw new ConflictException({
           code: 'INITIALS_TAKEN',
-          message: `Another seller already uses "${next}".`,
+          message: `Another client already uses "${next}".`,
         });
       }
       throw err;
@@ -460,7 +460,7 @@ export class AdminSellerService {
       select: { id: true, companyName: true, phone: true, email: true },
     });
     if (seller === null) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller.' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such client.' });
     }
 
     const nextCompany = input.companyName?.trim();
@@ -519,7 +519,7 @@ export class AdminSellerService {
       if (!input.reasonNote || input.reasonNote.trim().length === 0) {
         throw new BadRequestException({
           code: 'REASON_NOTE_REQUIRED',
-          message: 'reasonNote is required when suspending a seller',
+          message: 'reasonNote is required when suspending a client',
         });
       }
       const result = await this.status.suspend({
@@ -588,7 +588,7 @@ export class AdminSellerService {
       select: { id: true },
     });
     if (!seller) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
     }
 
     return this.prisma.client.$transaction(async (tx) => {
@@ -743,7 +743,7 @@ export class AdminSellerService {
       select: { id: true },
     });
     if (!seller) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
     }
     return this.onboarding.getProgress(sellerId);
   }
@@ -760,7 +760,7 @@ export class AdminSellerService {
       select: { id: true },
     });
     if (!seller) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Seller not found' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'Client not found' });
     }
 
     await this.prisma.client.$transaction(async (tx) => {

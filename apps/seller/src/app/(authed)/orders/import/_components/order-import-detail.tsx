@@ -163,7 +163,7 @@ export function OrderImportDetail({ importId }: { readonly importId: string }): 
         <>
           <PageHeader
             breadcrumbs={[
-              { label: 'Seller console' },
+              { label: 'Client console' },
               { label: 'Fulfilment' },
               { label: 'Orders', href: '/orders' },
               { label: 'CSV import', href: '/orders/import' },

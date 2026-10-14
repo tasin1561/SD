@@ -117,7 +117,7 @@ export class StoreApiKeyGuard implements CanActivate {
       });
       throw new ForbiddenException({
         code: 'STORE_NOT_ACTIVE',
-        message: 'This store is not open. Contact the seller you resell for.',
+        message: 'This store is not open. Contact the client you resell for.',
       });
     }
 

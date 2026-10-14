@@ -56,7 +56,7 @@ export function ResellerStores(): ReactElement {
         <SectionHeading
           id="resellers-h2"
           hue="violet"
-          eyebrow="Reseller stores"
+          eyebrow="Member stores"
           icon={<Store size={14} />}
           title="Your stock, their shopfront, your terms"
           sub={reseller.promise}

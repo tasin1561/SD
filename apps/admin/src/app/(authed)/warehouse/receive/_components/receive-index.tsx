@@ -73,15 +73,15 @@ export function ReceiveIndex(): ReactElement {
 
         {maySeeSellers && (
           <Select
-            label="Seller"
+            label="Client"
             value={sellerId}
-            aria-label="Filter by seller"
+            aria-label="Filter by client"
             onChange={(e) => {
               setSellerId(e.target.value);
               setPage(1);
             }}
           >
-            <option value="">All sellers</option>
+            <option value="">All clients</option>
             {(sellers.data?.items ?? []).map((s) => (
               <option key={s.id} value={s.id}>
                 {s.companyName}
@@ -120,7 +120,7 @@ export function ReceiveIndex(): ReactElement {
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
           title="No goods receipts match"
-          description="Sellers declare stock as a consignment from Inbound in their portal before shipping. Once it arrives, its goods receipt appears here for the warehouse team to count."
+          description="Clients declare stock as a consignment from Inbound in their portal before shipping. Once it arrives, its goods receipt appears here for the warehouse team to count."
         />
       ) : (
         <div className="wh-stack">
@@ -129,7 +129,7 @@ export function ReceiveIndex(): ReactElement {
               <Tr>
                 <Th>Receipt</Th>
                 <Th>Consignment</Th>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th>Status</Th>
                 <Th align="right">Products</Th>
                 <Th>Declared</Th>

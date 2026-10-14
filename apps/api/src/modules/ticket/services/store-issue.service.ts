@@ -55,7 +55,7 @@ export class StoreIssueService {
       throw new ForbiddenException({
         code: 'STORE_ACTION_NOT_ALLOWED',
         message:
-          'The seller has not enabled raising issues with Skydrop for this store. Raise it with them instead.',
+          'The client has not enabled raising issues with Skydrop for this store. Raise it with them instead.',
       });
     }
     if (policy.chaseSkydrop === ResellerStoreActionMode.ASK_SELLER) {

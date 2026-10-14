@@ -261,7 +261,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
       setReason('');
       toast.success(
         result.unitsReturned > 0
-          ? `Cancelled — ${result.unitsReturned} unit(s) removed and going back to the seller`
+          ? `Cancelled — ${result.unitsReturned} unit(s) removed and going back to the client`
           : 'Cancelled before anything arrived',
       );
     } catch (e) {
@@ -334,7 +334,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
         <Facts
           columns={3}
           items={[
-            { label: 'Seller', value: `${c.seller.companyName} — ${c.seller.emailDisplay}` },
+            { label: 'Client', value: `${c.seller.companyName} — ${c.seller.emailDisplay}` },
             { label: 'Route', value: ROUTE_LABEL[c.route] },
             { label: 'Their reference', value: c.sellerReference ?? '—' },
             { label: 'Expected arrival', value: dt(c.expectedArrivalAt) },
@@ -628,7 +628,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                   <Note>
                     It has not been counted in Bangladesh. Count it first if you want a number from
                     that stop — or send it on unopened, in which case it travels on the
-                    seller&apos;s declared quantities and India is the only count.
+                    client&apos;s declared quantities and India is the only count.
                   </Note>
                   <FieldGrid columns={2}>
                     <TextField
@@ -683,7 +683,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       <Code>{leg.receiptNumber}</Code>
                       <span className="stk-sub">
                         {leg.dispatchedAt === null
-                          ? 'shipped direct by the seller'
+                          ? 'shipped direct by the client'
                           : `left Bangladesh ${dt(leg.dispatchedAt)}`}
                         {leg.receivedAt === null ? '' : ` · counted ${dt(leg.receivedAt)}`}
                       </span>
@@ -745,7 +745,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
         }
         consequence={
           confirmDispatch === 'uncounted'
-            ? 'It leaves Bangladesh unopened on the seller’s declared quantities and India becomes the only count; once dispatched, the consignment can no longer be cancelled.'
+            ? 'It leaves Bangladesh unopened on the client’s declared quantities and India becomes the only count; once dispatched, the consignment can no longer be cancelled.'
             : 'The units leave the Bangladesh count and sit in the Indian warehouse’s transit location until they land; once dispatched, the consignment can no longer be cancelled.'
         }
         confirmLabel={
@@ -783,7 +783,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
             <Code>{c.consignmentNumber}</Code> · {c.seller.companyName}
           </p>
           <Note>
-            Stock already booked in will be removed from Skydrop and returned to the seller. This is
+            Stock already booked in will be removed from Skydrop and returned to the client. This is
             impossible once the goods have left Bangladesh, so it cannot be undone by dispatching
             later.
           </Note>
@@ -833,7 +833,7 @@ function LegLines({
 
 const FREIGHT_SOURCE_LABEL: Record<'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT', string> = {
   CONSIGNMENT: 'pinned on this consignment',
-  SELLER: "from the seller's settings",
+  SELLER: "from the client's settings",
   SYSTEM_DEFAULT: 'the platform default',
 };
 
@@ -913,7 +913,7 @@ function FreightModeControl({ id }: { readonly id: string }): ReactElement {
           disabled={locked || setMode.isPending}
           onChange={(e) => void onChange(e.target.value)}
         >
-          <option value="">Follow the seller&apos;s setting</option>
+          <option value="">Follow the client&apos;s setting</option>
           {FREIGHT_MODES.map((m) => (
             <option key={m} value={m}>
               {freightModeExplainer(m, 'STAFF')}

@@ -613,7 +613,7 @@ export function NewOrderForm(): ReactElement {
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Fulfilment' },
           { label: 'Orders', href: '/orders' },
           { label: 'New' },
@@ -1064,7 +1064,7 @@ export function NewOrderForm(): ReactElement {
                 <span className="ord-faint">
                   Prepaid — the driver hands it over and takes no money. The goods still come to{' '}
                   <span className="sk-figure">₹{itemsTotal.toLocaleString('en-IN')}</span>, which is
-                  what the seller is charged against.
+                  what the client is charged against.
                 </span>
               </Notice>
             )}

@@ -154,7 +154,7 @@ export class SellerNotificationPreferenceService {
     if (!existing) {
       throw new NotFoundException({
         code: 'PREFERENCE_NOT_FOUND',
-        message: `Preference for ${category} not found for this seller`,
+        message: `Preference for ${category} not found for this client`,
       });
     }
 
@@ -236,7 +236,7 @@ export class SellerNotificationPreferenceService {
     if (!row) {
       throw new NotFoundException({
         code: 'PREFERENCE_NOT_FOUND',
-        message: `Preference for ${category} not found for this seller`,
+        message: `Preference for ${category} not found for this client`,
       });
     }
     return row;

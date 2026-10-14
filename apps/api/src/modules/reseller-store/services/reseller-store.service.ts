@@ -187,7 +187,7 @@ export class ResellerStoreService {
       // An admin-created store has no team until the seller agrees to it.
       throw new BadRequestException({
         code: 'INVITE_AFTER_APPROVAL',
-        message: 'The seller invites the store’s first user when they approve it.',
+        message: 'The client invites the store’s first user when they approve it.',
       });
     }
 
@@ -196,12 +196,12 @@ export class ResellerStoreService {
       select: { id: true, status: true, companyName: true },
     });
     if (seller === null) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such client' });
     }
     if (seller.status !== SellerStatus.APPROVED) {
       throw new ConflictException({
         code: 'SELLER_NOT_ACTIVE',
-        message: 'A reseller store can only be opened for an approved seller.',
+        message: 'A member store can only be opened for an approved client.',
       });
     }
 
@@ -262,7 +262,7 @@ export class ResellerStoreService {
         if (target.includes('name') || target.includes('seller_id')) {
           throw new ConflictException({
             code: 'STORE_NAME_TAKEN',
-            message: `This seller already has a store called “${name}”.`,
+            message: `This client already has a store called “${name}”.`,
           });
         }
       }
@@ -347,7 +347,7 @@ export class ResellerStoreService {
     if (rule.needsReason && reason.length < 10) {
       throw new BadRequestException({
         code: 'REASON_REQUIRED',
-        message: 'Say why, in at least 10 characters. The store and the seller both read it.',
+        message: 'Say why, in at least 10 characters. The store and the client both read it.',
       });
     }
 
@@ -356,7 +356,7 @@ export class ResellerStoreService {
       select: { id: true, name: true, displayName: true, status: true },
     });
     if (store === null || store.status === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     const from = store.status;
     if (!canTake(action, from)) {
@@ -512,7 +512,7 @@ export class ResellerStoreService {
       select: { status: true, walletManagedBy: true },
     });
     if (store === null || store.status === null || store.walletManagedBy === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     if (isTerminalStoreStatus(store.status)) {
       throw new ConflictException({
@@ -630,7 +630,7 @@ export class ResellerStoreService {
       },
     });
     if (row === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such reseller store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such member store' });
     }
     return {
       ...this.toView(row),

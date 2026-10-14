@@ -41,12 +41,12 @@ export default function ResellerAnalysisPage(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        crumbs={[{ label: 'Reseller stores', href: '/reseller-stores' }, { label: 'Analysis' }]}
-        title="Reseller analysis"
-        subtitle="Fraud signals, disputes and float across every seller's reseller stores."
+        crumbs={[{ label: 'Member stores', href: '/reseller-stores' }, { label: 'Analysis' }]}
+        title="Member store analysis"
+        subtitle="Fraud signals, disputes and float across every client's member stores."
         action={
           <Link href="/reseller-stores" className={buttonClassName('secondary', 'md')}>
-            <span className="sk-btn__label">All reseller stores</span>
+            <span className="sk-btn__label">All member stores</span>
           </Link>
         }
       />
@@ -118,7 +118,11 @@ export default function ResellerAnalysisPage(): ReactElement {
           ))}
       </AcSection>
 
-      <AcSection title="Disputes" note="Tickets on reseller orders placed in the last year." bare>
+      <AcSection
+        title="Disputes"
+        note="Tickets on member store orders placed in the last year."
+        bare
+      >
         {disputes.isPending && <SkeletonRows rows={3} cols={5} label="Loading disputes" />}
         {disputes.isError && (
           <ErrorState
@@ -202,7 +206,7 @@ export default function ResellerAnalysisPage(): ReactElement {
       {mayFloat && (
         <AcSection
           title="Float and advances"
-          note="Store balances (a negative one is its seller's exposure), money credited to a store before the courier paid, and Instant Pay advanced on reseller orders."
+          note="Store balances (a negative one is its client's exposure), money credited to a store before the courier paid, and Instant Pay advanced on member store orders."
           bare
         >
           {float.isPending && <SkeletonRows rows={3} cols={4} label="Loading float and advances" />}
@@ -231,10 +235,10 @@ export default function ResellerAnalysisPage(): ReactElement {
                 />
               </div>
               <AcCard flush>
-                <Table caption="Float by seller and store">
+                <Table caption="Float by client and store">
                   <THead>
                     <Tr>
-                      <Th>Seller / store</Th>
+                      <Th>Client / store</Th>
                       <Th align="right">Wallet</Th>
                       <Th align="right">Credited before payout</Th>
                       <Th align="right">Instant Pay advanced</Th>

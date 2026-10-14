@@ -195,7 +195,7 @@ export class StoreAddressChangeService {
         throw new ConflictException({
           code: 'ADDRESS_CHANGE_ALREADY_OPEN',
           message:
-            'A correction on this order is already with the seller. That one has to be finished first.',
+            'A correction on this order is already with the client. That one has to be finished first.',
         });
       }
       return tx.storeAddressChangeRequest.create({

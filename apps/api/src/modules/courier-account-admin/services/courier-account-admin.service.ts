@@ -385,7 +385,7 @@ export class CourierAccountAdminService {
       if (!seller) {
         throw new NotFoundException({
           code: 'SELLER_NOT_FOUND',
-          message: `Seller ${sellerId} not found`,
+          message: `Client ${sellerId} not found`,
         });
       }
 
@@ -445,7 +445,7 @@ export class CourierAccountAdminService {
       if (!existing) {
         throw new NotFoundException({
           code: 'SELLER_COURIER_ACCOUNT_LINK_NOT_FOUND',
-          message: `No link between seller ${sellerId} and courier account ${courierAccountId}`,
+          message: `No link between client ${sellerId} and courier account ${courierAccountId}`,
         });
       }
       const updated = await tx.sellerCourierAccountLink.update({

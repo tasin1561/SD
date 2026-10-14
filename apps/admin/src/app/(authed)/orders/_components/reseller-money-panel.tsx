@@ -113,15 +113,15 @@ export function ResellerMoneyPanel({
   if (!enabled) return null;
   if (money.isLoading) {
     return (
-      <OoSection title="Reseller order money">
-        <SkeletonRows rows={4} cols={5} label="Loading the reseller split…" />
+      <OoSection title="Member store order money">
+        <SkeletonRows rows={4} cols={5} label="Loading the member store split…" />
       </OoSection>
     );
   }
   if (money.isError) {
     if (money.error instanceof ApiError && money.error.status === 404) return null;
     return (
-      <OoSection title="Reseller order money">
+      <OoSection title="Member store order money">
         <ErrorState message={serverVerdict(money.error)} retry={() => void money.refetch()} />
       </OoSection>
     );
@@ -131,7 +131,7 @@ export function ResellerMoneyPanel({
   return (
     <section className="oo-section">
       <OoSection
-        title="Reseller order money"
+        title="Member store order money"
         note="Each party's credit at its own trigger, every Skydrop fee split by the order's snapshot, and both wallets' lines. Skydrop's take is the same as an identical channel order's."
       >
         <Facts
@@ -191,7 +191,7 @@ export function ResellerMoneyPanel({
               v.parties.map((p) => (
                 <Tr key={p.party}>
                   <Td>
-                    <span className="oo-body">{p.party === 'STORE' ? 'Store' : 'Seller'}</span>
+                    <span className="oo-body">{p.party === 'STORE' ? 'Store' : 'Client'}</span>
                     <span className="oo-sub">{p.timing}</span>
                   </Td>
                   <Td>
@@ -237,7 +237,7 @@ export function ResellerMoneyPanel({
               <Tr>
                 <Th>Fee billed</Th>
                 <Th align="right">Store</Th>
-                <Th align="right">Seller</Th>
+                <Th align="right">Client</Th>
                 <Th align="right">Total</Th>
               </Tr>
             </THead>
@@ -276,13 +276,13 @@ export function ResellerMoneyPanel({
         </div>
         <div className="oo-stack oo-stack--tight">
           <Lines
-            title="Seller wallet"
+            title="Client wallet"
             lines={v.sellerLines ?? []}
             label={(l) => walletDirectionLabel(l.direction as WalletEntryDirection)}
           />
           {v.sellerNetInr !== null ? (
             <p className="oo-muted oo-row oo-row--end">
-              Seller net: <Money amount={v.sellerNetInr} convert={false} />
+              Client net: <Money amount={v.sellerNetInr} convert={false} />
             </p>
           ) : null}
         </div>

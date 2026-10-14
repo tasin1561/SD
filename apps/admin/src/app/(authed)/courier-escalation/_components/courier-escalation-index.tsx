@@ -317,7 +317,7 @@ export function CourierEscalationIndex(): ReactElement {
           <EmptyState
             tone="positive"
             title="Nothing waiting"
-            description="Messages arrive here when a seller raises an issue or an NDR re-attempt could not be confirmed."
+            description="Messages arrive here when a client raises an issue or an NDR re-attempt could not be confirmed."
           />
         ) : (
           <Table>

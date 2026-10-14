@@ -107,7 +107,7 @@ export function ImpersonationReview(): ReactElement {
     <AcPage>
       <AcHeader
         title="Support sessions"
-        subtitle="Every time a staff member has gone inside a seller’s or a reseller store’s account: who, as whom, for how long, and why. Newest first."
+        subtitle="Every time a staff member has gone inside a client’s or a member store’s account: who, as whom, for how long, and why. Newest first."
       />
 
       {!canReview && (
@@ -135,7 +135,7 @@ export function ImpersonationReview(): ReactElement {
         title="Sessions"
         {...(all.length === LIMIT
           ? {
-              note: `The newest ${LIMIT} sessions — the server does not serve a screen more than that. Narrow by seller or staff member to look further back.`,
+              note: `The newest ${LIMIT} sessions — the server does not serve a screen more than that. Narrow by client or staff member to look further back.`,
             }
           : {})}
         flush
@@ -153,7 +153,7 @@ export function ImpersonationReview(): ReactElement {
             title="No support sessions."
             description={
               filter === 'LIVE'
-                ? 'Nobody is inside a seller’s or a store’s account right now.'
+                ? 'Nobody is inside a client’s or a store’s account right now.'
                 : 'Nobody has opened one yet.'
             }
           />
@@ -207,7 +207,7 @@ export function ImpersonationReview(): ReactElement {
                         <StatusChip
                           kind="neutral"
                           size="sm"
-                          label={s.subject.kind === 'SELLER' ? 'seller' : 'store'}
+                          label={s.subject.kind === 'SELLER' ? 'client' : 'store'}
                         />
                       </span>
                     </Td>

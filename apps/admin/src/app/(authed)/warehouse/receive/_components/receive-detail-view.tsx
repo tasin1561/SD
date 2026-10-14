@@ -351,9 +351,9 @@ export function ReceiveDetailView({ id }: { readonly id: string }): ReactElement
             whether a carton matches its paperwork should not have to
             open another screen for a field the API already sent. */}
         <dl className="wh-facts">
-          <Field label="Seller" value={r.seller.companyName} />
-          <Field label="Seller email" value={r.seller.email} />
-          <Field label="Seller ref" value={r.sellerReference ?? '—'} ident />
+          <Field label="Client" value={r.seller.companyName} />
+          <Field label="Client email" value={r.seller.email} />
+          <Field label="Client ref" value={r.sellerReference ?? '—'} ident />
           <Field label="Status" value={r.status} />
           <Field
             label="Expected arrival"

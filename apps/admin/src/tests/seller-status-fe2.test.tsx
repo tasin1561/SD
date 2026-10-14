@@ -22,7 +22,7 @@ import { StatusActionPanel } from '@/app/(authed)/sellers/_components/status-act
 import { buildFetchMock, renderWithProviders, makeStaff } from './helpers';
 import { StaffRoleKey } from '@skydrop/db';
 
-describe('FE-2 boundary — seller status action', () => {
+describe('FE-2 boundary — client status action', () => {
   it('SUSPENDED button: open modal → server-rejects with [INSUFFICIENT_ROLE] → UI displays the verdict verbatim (NOT pre-empted)', async () => {
     const user = userEvent.setup();
 
@@ -56,7 +56,7 @@ describe('FE-2 boundary — seller status action', () => {
 
     // (a) UI collects: SUSPEND button → modal → reason → confirm
     await user.click(screen.getByRole('button', { name: /suspend account/i }));
-    expect(await screen.findByText(/Suspend this seller\?/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Suspend this client\?/i)).toBeInTheDocument();
     // `selector` because the field's (i) is ALSO named after the field
     // — "Show help for Reason (optional…)" — so a bare label query now
     // finds two elements. Naming the control is what this line meant
@@ -91,7 +91,7 @@ describe('FE-2 boundary — seller status action', () => {
     expect(body['targetStatus']).toBeUndefined();
 
     // Modal stays OPEN (so the operator can read the error + retry).
-    expect(screen.getByText(/Suspend this seller\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/Suspend this client\?/i)).toBeInTheDocument();
   });
 
   it('cosmetic RBAC: canChangeStatus=false → SUSPEND button is disabled (UX hide-not-gate) — but the SERVER is still the real boundary', async () => {
@@ -132,7 +132,7 @@ describe('FE-2 boundary — seller status action', () => {
 
     // Modal closes — the dialog title disappears from the tree.
     await waitFor(() => {
-      expect(screen.queryByText(/Suspend this seller\?/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Suspend this client\?/i)).not.toBeInTheDocument();
     });
   });
 });

@@ -431,7 +431,7 @@ export class StockAdjustmentService {
       if (!v || v.sellerId !== sellerId) {
         throw new BadRequestException({
           code: 'VARIANT_NOT_FOUND',
-          message: `Line ${i}: variant ${l.variantId} not found for this seller`,
+          message: `Line ${i}: variant ${l.variantId} not found for this client`,
         });
       }
       const batch = await this.prisma.client.stockBatch.findFirst({
@@ -447,7 +447,7 @@ export class StockAdjustmentService {
       if (!batch) {
         throw new BadRequestException({
           code: 'ADJUSTMENT_LINE_BATCH_NOT_FOUND',
-          message: `Line ${i}: batch ${l.batchId} not found for this seller/variant/warehouse`,
+          message: `Line ${i}: batch ${l.batchId} not found for this client/variant/warehouse`,
         });
       }
       const resolvedUnitCost =

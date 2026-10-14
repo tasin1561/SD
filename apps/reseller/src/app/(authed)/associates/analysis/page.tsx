@@ -191,8 +191,8 @@ export default function AssociateAnalysisPage(): ReactElement {
                 figure={<Money amount={totals.margin} />}
                 hint={
                   uncovered === 0
-                    ? 'Retail − what you pay your seller, on every delivered line, before your share of Skydrop’s fees'
-                    : `Retail − what you pay your seller, before your share of Skydrop’s fees. ${uncovered} of ${totals.lines} delivered lines have no cost recorded and are LEFT OUT, so the real figure is higher.`
+                    ? 'Retail − what you pay your client, on every delivered line, before your share of Skydrop’s fees'
+                    : `Retail − what you pay your client, before your share of Skydrop’s fees. ${uncovered} of ${totals.lines} delivered lines have no cost recorded and are LEFT OUT, so the real figure is higher.`
                 }
               />
             </div>

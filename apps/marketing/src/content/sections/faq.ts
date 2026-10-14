@@ -54,9 +54,9 @@ export interface FaqItem {
  */
 export const faqCategories: readonly FaqCategory[] = [
   { id: 'sending', label: 'Sending', hue: 'saffron' },
-  { id: 'sellers', label: 'Sellers', hue: 'teal' },
+  { id: 'sellers', label: 'Clients', hue: 'teal' },
   { id: 'platform', label: 'Platform', hue: 'blue' },
-  { id: 'reseller', label: 'Reseller stores', hue: 'violet' },
+  { id: 'reseller', label: 'Member stores', hue: 'violet' },
   { id: 'money', label: 'Payments & COD', hue: 'green' },
   { id: 'customs', label: 'Customs', hue: 'red' },
   { id: 'returns', label: 'Returns', hue: 'magenta' },
@@ -74,7 +74,7 @@ export const faq: readonly FaqItem[] = [
     id: 'gst-registration',
     category: 'sellers',
     q: 'Do I need an Indian GST registration?',
-    a: 'Not to start. Stock is held and dispatched under ours, so there is no Indian company to register, no Indian office and no Indian staff to hire. GST invoices are issued from your seller account on delivered orders. If you grow to the point where your own Indian entity makes more sense, we help you move to it rather than holding you here.',
+    a: 'Not to start. Stock is held and dispatched under ours, so there is no Indian company to register, no Indian office and no Indian staff to hire. GST invoices are issued from your client account on delivered orders. If you grow to the point where your own Indian entity makes more sense, we help you move to it rather than holding you here.',
   },
   {
     id: 'stock-to-india',
@@ -128,20 +128,20 @@ export const faq: readonly FaqItem[] = [
     id: 'own-system',
     category: 'platform',
     q: 'Can I run it from my own system, with my own team?',
-    a: 'Orders arrive by single entry, by bulk CSV, or from your own system through an API key and webhooks. Your team members get roles and permissions you set, a notification inbox alongside email that can be silenced per topic, and per-seller settings — fee currency, courier choice policy, call-attempt caps, credit timing — that are yours rather than ours.',
+    a: 'Orders arrive by single entry, by bulk CSV, or from your own system through an API key and webhooks. Your team members get roles and permissions you set, a notification inbox alongside email that can be silenced per topic, and per-client settings — fee currency, courier choice policy, call-attempt caps, credit timing — that are yours rather than ours.',
   },
 
   // ── Reseller stores ────────────────────────────────────────────────
   {
     id: 'reseller-what',
     category: 'reseller',
-    q: 'What is a reseller store?',
+    q: 'What is a member store?',
     a: "Another business that sells your goods under its own name, with its own login. The customer never sees you: the tracking page, the courier label and the emails all carry the store's name and logo. You decide which products it may sell and at what transfer price, how much of your stock it is shown — hide a share, or set units aside for it — and, per store and per task, whether it may recall a parcel, change an order, cancel or send one back, and whether that happens directly or waits for your approval.",
   },
   {
     id: 'reseller-visibility',
     category: 'reseller',
-    q: 'What does a reseller store see of my business?',
+    q: 'What does a member store see of my business?',
     a: 'Its own price and its own visible stock, and nothing else — never your cost, never your real stock figures, never another store. It gets its own team and permissions, its own wallet, P&L and expense book, and terms it must accept, versioned, so a change is a new version rather than a quiet edit. A dispute between the two of you is settled between your two wallets, never from ours.',
   },
 
@@ -156,7 +156,7 @@ export const faq: readonly FaqItem[] = [
     id: 'what-it-costs',
     category: 'money',
     q: 'What does it cost?',
-    a: 'One flat delivery fee per order, agreed with you before anything ships, and a fee on a parcel that has to come back. Inbound freight for a consignment is billed one of three ways, your choice per seller or per consignment: on arrival, per unit as each one is delivered, or in advance at the Dhaka count before it flies. Every rate is agreed in taka or rupees and converted at the moment you are charged, and every charge is itemised per order. The figures depend on what you are sending, so they are settled when we talk rather than guessed at on this page.',
+    a: 'One flat delivery fee per order, agreed with you before anything ships, and a fee on a parcel that has to come back. Inbound freight for a consignment is billed one of three ways, your choice per client or per consignment: on arrival, per unit as each one is delivered, or in advance at the Dhaka count before it flies. Every rate is agreed in taka or rupees and converted at the moment you are charged, and every charge is itemised per order. The figures depend on what you are sending, so they are settled when we talk rather than guessed at on this page.',
   },
 
   // ── Returns ────────────────────────────────────────────────────────

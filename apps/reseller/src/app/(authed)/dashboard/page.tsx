@@ -65,7 +65,7 @@ const SHORTCUTS: readonly Shortcut[] = [
     label: 'Tickets',
     // Two different conversations live behind this one link, and which
     // one a person wants decides what they say — so both are named.
-    hint: 'Problems raised with your seller, or with Skydrop',
+    hint: 'Problems raised with your client, or with Skydrop',
     permission: 'tickets.view',
     icon: <LifeBuoy size={18} />,
   },
@@ -196,7 +196,7 @@ function PositionTiles(): ReactElement | null {
           figure={p === undefined ? null : <Money amount={p.owedToStoreInr} size="lg" />}
         />
         <PositionTile
-          label="You owe your seller"
+          label="You owe your client"
           icon={<ArrowUpRight size={16} />}
           tone={p === undefined || p.owedByStoreInr === '0.00' ? 'neutral' : 'pending'}
           loading={loading}

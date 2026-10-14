@@ -57,10 +57,10 @@ export function CreditAfterConfirmationPanel({
       const after = await set.mutateAsync({ enabled: target, reason: reason.trim() });
       toast.success(
         after.enabled
-          ? 'Credit after confirmation is on for this seller.'
+          ? 'Credit after confirmation is on for this client.'
           : after.flaggedStores.length > 0
             ? `Switched off. ${after.flaggedStores.length} store(s) need new terms before they can order.`
-            : 'Credit after confirmation is off for this seller.',
+            : 'Credit after confirmation is off for this client.',
       );
       setTarget(null);
       setReason('');
@@ -71,8 +71,8 @@ export function CreditAfterConfirmationPanel({
 
   return (
     <AcSection
-      title="Reseller stores — credit after confirmation"
-      note="Lets this seller's store terms credit a party days after the order is confirmed — before the customer has paid. Off by default."
+      title="Member stores — credit after confirmation"
+      note="Lets this client's store terms credit a party days after the order is confirmed — before the customer has paid. Off by default."
     >
       {status.isPending ? (
         <SkeletonRows rows={1} cols={2} label="Loading" />
@@ -82,7 +82,7 @@ export function CreditAfterConfirmationPanel({
         <div className="ac-card__body">
           <Switch
             checked={status.data.enabled}
-            label={status.data.enabled ? 'On for this seller' : 'Off for this seller'}
+            label={status.data.enabled ? 'On for this client' : 'Off for this client'}
             disabled={!canSet || set.isPending}
             onCheckedChange={(next) => {
               setError(null);
@@ -98,7 +98,7 @@ export function CreditAfterConfirmationPanel({
             <AcCallout tone="critical" icon={<TriangleAlert size={15} />}>
               <p className="ac-text">
                 These stores’ current terms still use it, so they cannot place new orders until the
-                seller publishes new terms:
+                client publishes new terms:
               </p>
               <ul className="ac-list">
                 {status.data.flaggedStores.map((s) => (
@@ -126,8 +126,8 @@ export function CreditAfterConfirmationPanel({
         }
         description={
           target === true
-            ? 'Skydrop will front money for this seller’s stores before customers pay. Say why.'
-            : 'No terms are rewritten: stores whose current terms use it are flagged and cannot order until the seller publishes new terms. Say why.'
+            ? 'Skydrop will front money for this client’s stores before customers pay. Say why.'
+            : 'No terms are rewritten: stores whose current terms use it are flagged and cannot order until the client publishes new terms. Say why.'
         }
         tone="critical"
         icon={<TriangleAlert size={18} />}

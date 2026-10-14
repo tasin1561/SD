@@ -218,7 +218,7 @@ export function ManualPlacementPanel({
           <TextField
             label="Courier"
             requiredMark
-            hint="Bluedart, DTDC, whoever has it. The seller and the customer both see this name on their tracking — leave it blank and they are told their parcel is with a courier called “manual”."
+            hint="Bluedart, DTDC, whoever has it. The client and the customer both see this name on their tracking — leave it blank and they are told their parcel is with a courier called “manual”."
             value={courierName}
             onChange={(e) => setCourierName(e.target.value)}
             maxLength={80}
@@ -276,7 +276,7 @@ export function ManualPlacementPanel({
           <Notice tone="bad" icon={<Ban size={16} />}>
             <p>
               No courier will carry this parcel. Cancelling releases the stock back to inventory and
-              voids the shipment. The seller sees a cancelled order, so say why in terms they would
+              voids the shipment. The client sees a cancelled order, so say why in terms they would
               recognise.
             </p>
           </Notice>

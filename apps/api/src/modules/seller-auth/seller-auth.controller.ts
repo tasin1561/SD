@@ -286,7 +286,7 @@ export class SellerAuthController {
     if (!user || user.seller.deletedAt !== null) {
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
-        message: 'Seller session no longer valid',
+        message: 'Client session no longer valid',
       });
     }
     if (user.seller.status !== SellerStatus.APPROVED) {

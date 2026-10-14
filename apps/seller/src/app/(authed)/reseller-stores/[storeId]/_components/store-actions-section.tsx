@@ -112,7 +112,7 @@ const CAPABILITIES: ReadonlyArray<{
 ];
 
 const APPROVAL_NOTE =
-  'Needs my approval: the request comes to Seller staff to approve or reject, and nothing happens until then. A request nobody answers closes after a few days and the store is told.';
+  'Needs my approval: the request comes to Client staff to approve or reject, and nothing happens until then. A request nobody answers closes after a few days and the store is told.';
 
 type Draft = Record<ActionCapability, StoreActionMode>;
 
@@ -179,7 +179,7 @@ export function StoreActionsSection({
     setError(null);
     try {
       await save.mutateAsync({ storeId, policy: draft });
-      toast.success('Saved. The Reseller store sees this the next time it asks for something.');
+      toast.success('Saved. The Member store sees this the next time it asks for something.');
     } catch (err) {
       // Verbatim (FE-2): STORE_NOT_FOUND, and anything else the server says.
       setError(serverVerdict(err));
@@ -200,17 +200,17 @@ export function StoreActionsSection({
     >
       <div className="rs-card__pad">
         <p className="rs-muted">
-          For each task: can the Reseller store do it, and if so, does it happen directly or does it
-          need Seller staff&apos;s approval first? Whatever you choose, the store is emailed what
-          happened — when Seller staff approve something it is told whether it was carried out, and
+          For each task: can the Member store do it, and if so, does it happen directly or does it
+          need Client staff&apos;s approval first? Whatever you choose, the store is emailed what
+          happened — when Client staff approve something it is told whether it was carried out, and
           when they turn it down it is sent the reason.
         </p>
       </div>
-      <Table caption="What the Reseller store can do">
+      <Table caption="What the Member store can do">
         <THead>
           <Tr>
             <Th>Task</Th>
-            <Th>Can the Reseller store do this?</Th>
+            <Th>Can the Member store do this?</Th>
             <Th>How?</Th>
           </Tr>
         </THead>
@@ -229,7 +229,7 @@ export function StoreActionsSection({
                     <span className="rs-task__what">{c.what}</span>
                     <span className="rs-task__note">
                       {!allowed
-                        ? 'No: the Reseller store is not offered this. Seller staff do it instead.'
+                        ? 'No: the Member store is not offered this. Client staff do it instead.'
                         : how === 'DIRECT'
                           ? c.direct
                           : APPROVAL_NOTE}
@@ -239,7 +239,7 @@ export function StoreActionsSection({
                 <Td>
                   <Switch
                     id={`can-${c.key}`}
-                    aria-label="Can the Reseller store do this?"
+                    aria-label="Can the Member store do this?"
                     aria-describedby={`task-${c.key}`}
                     checked={allowed}
                     onText="Yes"
@@ -314,7 +314,7 @@ export function StoreActionsSection({
         onOpenChange={setConfirming}
         title="Save what this store can do?"
         entity={storeName}
-        consequence="The Reseller store sees this the next time it asks for something."
+        consequence="The Member store sees this the next time it asks for something."
         confirmLabel="Save"
         onConfirm={submit}
         error={error}

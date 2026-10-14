@@ -234,7 +234,7 @@ export class SellerStoreService {
         select: { id: true, name: true, isActive: true, kind: true },
       });
       if (store === null) {
-        throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such store' });
+        throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such shop' });
       }
       if (store.kind !== CHANNEL) {
         // RS-11: a reseller store places its own orders from its own
@@ -242,7 +242,7 @@ export class SellerStoreService {
         // order under one here would skip every term that makes it one.
         throw new ConflictException({
           code: 'STORE_IS_RESELLER',
-          message: `“${store.name}” is a reseller store. Its orders are placed from its own portal.`,
+          message: `“${store.name}” is a member store. Its orders are placed from its own portal.`,
         });
       }
       if (!store.isActive) {
@@ -264,7 +264,7 @@ export class SellerStoreService {
       // would be invisible to every filter that exists from here on.
       throw new ConflictException({
         code: 'NO_DEFAULT_STORE',
-        message: 'This seller has no default store, so an order cannot be filed under one.',
+        message: 'This client has no default shop, so an order cannot be filed under one.',
       });
     }
     return fallback;
@@ -279,7 +279,7 @@ export class SellerStoreService {
     if (name === '') {
       throw new BadRequestException({
         code: 'STORE_NAME_REQUIRED',
-        message: 'Give the store a name',
+        message: 'Give the shop a name',
       });
     }
 
@@ -332,14 +332,14 @@ export class SellerStoreService {
       select: { name: true, note: true },
     });
     if (before === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such shop' });
     }
 
     const name = input.name?.trim();
     if (name !== undefined && name === '') {
       throw new BadRequestException({
         code: 'STORE_NAME_REQUIRED',
-        message: 'Give the store a name',
+        message: 'Give the shop a name',
       });
     }
 
@@ -389,12 +389,12 @@ export class SellerStoreService {
       select: { id: true, name: true, isActive: true, isDefault: true },
     });
     if (target === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such shop' });
     }
     if (!target.isActive) {
       throw new ConflictException({
         code: 'STORE_INACTIVE',
-        message: 'A closed store cannot be the default — new orders would be filed under it.',
+        message: 'A closed shop cannot be the default — new orders would be filed under it.',
       });
     }
     if (target.isDefault) return this.one(sellerId, storeId);
@@ -439,7 +439,7 @@ export class SellerStoreService {
       select: { name: true, isDefault: true },
     });
     if (store === null) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such shop' });
     }
     if (!isActive && store.isDefault) {
       throw new ConflictException({
@@ -458,7 +458,7 @@ export class SellerStoreService {
     if (changed.count === 0) {
       throw new ConflictException({
         code: 'STORE_CHANGED',
-        message: 'This store changed while you were looking at it. Try again.',
+        message: 'This shop changed while you were looking at it. Try again.',
       });
     }
 
@@ -477,7 +477,7 @@ export class SellerStoreService {
     const all = await this.list(sellerId);
     const found = all.find((s) => s.id === storeId);
     if (found === undefined) {
-      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such store' });
+      throw new NotFoundException({ code: 'STORE_NOT_FOUND', message: 'No such shop' });
     }
     return found;
   }

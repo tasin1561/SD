@@ -262,7 +262,7 @@ export class WalletTopupService {
     if (proofKey.length > 0 && !proofKey.startsWith(`topups/${sellerId}/`)) {
       throw new BadRequestException({
         code: 'INVALID_PROOF_KEY',
-        message: 'That proof key does not belong to this seller',
+        message: 'That proof key does not belong to this client',
       });
     }
 
@@ -646,7 +646,7 @@ export class WalletTopupService {
     if (reason.trim().length < 5) {
       throw new BadRequestException({
         code: 'REASON_REQUIRED',
-        message: 'Say why — the seller sees this, and "rejected" on its own is not actionable',
+        message: 'Say why — the client sees this, and "rejected" on its own is not actionable',
       });
     }
     const existing = await this.requireRequest(topupId);

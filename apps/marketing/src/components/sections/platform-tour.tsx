@@ -18,10 +18,10 @@ export function PlatformTour(): ReactElement {
         <SectionHeading
           id="platform-h2"
           hue="blue"
-          eyebrow="The seller platform"
+          eyebrow="The client platform"
           icon={<LayoutDashboard size={14} />}
           title="Everything the operation does, shown working"
-          sub="Not a feature list. Six short scenes from the seller app — stock in, the shelf, orders, returns, money and your team — each in the words the app itself uses."
+          sub="Not a feature list. Six short scenes from the client app — stock in, the shelf, orders, returns, money and your team — each in the words the app itself uses."
         />
         <PlatformTourLoader />
       </div>

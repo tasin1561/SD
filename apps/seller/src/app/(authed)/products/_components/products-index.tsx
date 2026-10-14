@@ -162,7 +162,7 @@ export function ProductsIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Stock & WMS' }, { label: 'Products' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Stock & WMS' }, { label: 'Products' }]}
         Link={Link}
         title="Products"
         subtitle="Your catalogue: products, their variants and the pictures customers see."

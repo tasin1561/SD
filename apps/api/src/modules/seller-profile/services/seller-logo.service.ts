@@ -91,7 +91,7 @@ export class SellerLogoService {
     if (!seller) {
       throw new NotFoundException({
         code: 'SELLER_NOT_FOUND',
-        message: 'Seller not found',
+        message: 'Client not found',
       });
     }
 
@@ -140,7 +140,7 @@ export class SellerLogoService {
     if (!seller) {
       throw new NotFoundException({
         code: 'SELLER_NOT_FOUND',
-        message: 'Seller not found',
+        message: 'Client not found',
       });
     }
     const previousKey = seller.logoStorageKey;

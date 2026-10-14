@@ -794,7 +794,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       {/* Notes — always editable */}
       <OrdSection id="eo-notes" title="Notes" note="For us, never the customer.">
         <TextArea
-          label="Seller notes"
+          label="Notes for the call agent"
           rows={3}
           maxLength={2000}
           value={form.sellerNotes}

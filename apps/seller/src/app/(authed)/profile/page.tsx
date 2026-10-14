@@ -56,7 +56,7 @@ import {
   phaseOf,
 } from '../settings/_components/settings-parts';
 
-const CRUMBS = [{ label: 'Seller console' }, { label: 'Account' }, { label: 'Profile' }];
+const CRUMBS = [{ label: 'Client console' }, { label: 'Account' }, { label: 'Profile' }];
 
 /**
  * Seller profile — Phase 1B M19+M20.

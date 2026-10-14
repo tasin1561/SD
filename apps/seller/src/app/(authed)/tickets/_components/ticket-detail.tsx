@@ -57,7 +57,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
           />
           <p className="tkt-help">
             If this ticket was raised from another account in your company, ask them to open it —
-            tickets are scoped to the seller they belong to.
+            tickets are scoped to the client they belong to.
           </p>
         </div>
       </div>
@@ -74,7 +74,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
   const openedByStore = ticket.openedBy === 'STORE';
   const raisedByUs = ticket.openedBy !== 'SELLER' && !openedByStore;
   const raisedBy = openedByStore
-    ? `Raised by ${ticket.storeName ?? 'a reseller store'}`
+    ? `Raised by ${ticket.storeName ?? 'a member store'}`
     : raisedByUs
       ? 'Raised by Skydrop'
       : 'Raised by you';
@@ -86,7 +86,7 @@ export function TicketDetail({ ticketId }: { readonly ticketId: string }): React
 
         <PageHeader
           breadcrumbs={[
-            { label: 'Seller console' },
+            { label: 'Client console' },
             { label: 'Support', href: '/tickets' },
             { label: ticket.ticketNumber },
           ]}

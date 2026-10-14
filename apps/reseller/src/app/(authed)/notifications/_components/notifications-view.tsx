@@ -212,7 +212,7 @@ export function NotificationsView(): ReactElement {
             title={items.length === 0 ? 'Nothing yet' : 'Nothing matches'}
             description={
               items.length === 0
-                ? 'Decisions on what you have asked the seller, changes to your orders, replies on your tickets and new terms all land here.'
+                ? 'Decisions on what you have asked the client, changes to your orders, replies on your tickets and new terms all land here.'
                 : query.trim() !== '' && more !== null
                   ? 'Nothing on this page matches. There are older notifications that have not been loaded — load them and try again.'
                   : 'Nothing here matches that.'

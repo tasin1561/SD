@@ -22,7 +22,7 @@ export default function OrderImportPage(): ReactElement {
     <div className="ord-page">
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Fulfilment' },
           { label: 'Orders', href: '/orders' },
           { label: 'CSV import' },

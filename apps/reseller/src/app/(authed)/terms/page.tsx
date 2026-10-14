@@ -35,7 +35,7 @@ export default function TermsPage(): ReactElement {
       <div className="rm-page">
         <PageHeader
           title="Terms"
-          subtitle="Who pays which Skydrop fee on your orders, and when you and your seller are paid."
+          subtitle="Who pays which Skydrop fee on your orders, and when you and your client are paid."
         />
         {terms.isPending ? (
           <>

@@ -73,10 +73,10 @@ export default function ResellerReportsPage(): ReactElement {
   return (
     <div className="rs-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Reselling' }, { label: 'Reports' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Reselling' }, { label: 'Reports' }]}
         Link={Link}
-        title="Reseller store reports"
-        subtitle="How each of your reseller stores is doing, what it earned you, and when one pauses itself for too many returns."
+        title="Member store reports"
+        subtitle="How each of your member stores is doing, what it earned you, and when one pauses itself for too many returns."
         meta={
           !loaded ? undefined : (
             <RsFacts>
@@ -114,7 +114,7 @@ export default function ResellerReportsPage(): ReactElement {
             figure={loaded ? <Num value={placed} /> : dash}
             unit={loaded ? (placed === 1 ? 'order' : 'orders') : undefined}
             tone="neutral"
-            hint="By your reseller stores, in this window."
+            hint="By your member stores, in this window."
           />
           <KpiCard
             label="Units delivered"
@@ -174,9 +174,9 @@ export default function ResellerReportsPage(): ReactElement {
       {cards.data !== undefined &&
         (stores.length === 0 ? (
           <EmptyState
-            title="No reseller stores yet"
+            title="No member stores yet"
             description="Open one for a business that will resell your stock, and its numbers appear here."
-            action={<RsLink href="/reseller-stores">Open a reseller store</RsLink>}
+            action={<RsLink href="/reseller-stores">Open a member store</RsLink>}
           />
         ) : (
           <>

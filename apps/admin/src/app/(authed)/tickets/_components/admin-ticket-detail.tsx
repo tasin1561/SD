@@ -46,9 +46,9 @@ const STAGES: ReadonlyArray<{ value: 'REVIEWING' | 'CLOSED'; label: string }> = 
 
 /** How a ticket finished. Asked only once "Closed" is chosen. */
 const OUTCOMES: ReadonlyArray<{ value: TicketStatus; label: string }> = [
-  { value: TicketStatus.RESOLVED_REFUND, label: 'Refunded the seller' },
+  { value: TicketStatus.RESOLVED_REFUND, label: 'Refunded the client' },
   { value: TicketStatus.RESOLVED_RETURNED, label: 'Goods went back' },
-  { value: TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED, label: 'Seller accepted the loss' },
+  { value: TicketStatus.RESOLVED_WRITE_OFF_ACCEPTED, label: 'Client accepted the loss' },
   { value: TicketStatus.REJECTED, label: 'Not upheld' },
 ];
 
@@ -119,9 +119,9 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
 
   const openedBy =
     t.openedBy === 'SELLER'
-      ? 'the seller'
+      ? 'the client'
       : t.openedBy === 'STORE'
-        ? (t.storeName ?? 'a reseller store')
+        ? (t.storeName ?? 'a member store')
         : 'Skydrop';
 
   return (
@@ -199,7 +199,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                 ),
             },
             { label: 'Courier', value: t.courierCode ?? '—' },
-            ...(t.storeName == null ? [] : [{ label: 'Reseller store', value: t.storeName }]),
+            ...(t.storeName == null ? [] : [{ label: 'Member store', value: t.storeName }]),
             ...(t.disputePayer == null
               ? []
               : [
@@ -207,8 +207,8 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                     label: 'Settled',
                     value:
                       t.disputePayer === 'STORE'
-                        ? 'The store paid the seller'
-                        : 'The seller paid the store',
+                        ? 'The store paid the client'
+                        : 'The client paid the store',
                   },
                 ]),
           ]}
@@ -292,7 +292,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
             <ul className="tk-figures">
               {t.disputedFigures.parties.map((p) => (
                 <li key={p.party}>
-                  <span className="af-strong">{p.party === 'STORE' ? 'Store' : 'Seller'}</span> net
+                  <span className="af-strong">{p.party === 'STORE' ? 'Store' : 'Client'}</span> net
                   ₹{p.netInr}{' '}
                   <span className="af-small">
                     (gross ₹{p.grossInr}, transfer ₹{p.transferInr}, tax ₹{p.taxShareInr}, COD fee ₹
@@ -305,7 +305,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
               <ul className="tk-figures af-small">
                 {t.disputedFigures.fees.map((f) => (
                   <li key={f.fee}>
-                    {f.fee}: store ₹{f.storeInr} · seller ₹{f.sellerInr} · total ₹{f.totalInr}
+                    {f.fee}: store ₹{f.storeInr} · client ₹{f.sellerInr} · total ₹{f.totalInr}
                   </li>
                 ))}
               </ul>
@@ -315,7 +315,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
       ) : null}
 
       {canResolve && t.resolvedAt === null && isStoreDispute ? (
-        <AfSection title="Settle between store and seller">
+        <AfSection title="Settle between store and client">
           <StoreDisputeSettle
             ticketId={ticketId}
             storeName={t.storeName ?? null}
@@ -385,7 +385,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   inputMode="decimal"
                   // This credits a seller's wallet in the same
                   // transaction, so it says so where it cannot be missed.
-                  title="Credited to the seller's wallet in the same transaction."
+                  title="Credited to the client's wallet in the same transaction."
                 />
               ) : null}
 
@@ -394,7 +394,7 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
                   id="admin-ticket-notes"
                   label="Notes"
                   rows={1}
-                  placeholder="The seller reads this on their ticket."
+                  placeholder="The client reads this on their ticket."
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   // Display only: TransitionTicketDto allows 2000.
@@ -423,11 +423,11 @@ export function AdminTicketDetail({ ticketId }: { readonly ticketId: string }): 
           <ConfirmDialog
             open={confirmRefund}
             onOpenChange={setConfirmRefund}
-            title="Refund the seller?"
+            title="Refund the client?"
             entity={t.ticketNumber}
             entityIsIdentifier
             amount={refund.trim() === '' ? undefined : <Money amount={refund.trim()} />}
-            consequence="The seller's wallet is credited the amount typed, in the same transaction, and the ticket closes as refunded."
+            consequence="The client's wallet is credited the amount typed, in the same transaction, and the ticket closes as refunded."
             confirmLabel="Refund and close"
             onConfirm={send}
           />

@@ -121,7 +121,7 @@ export function NotificationSettingsView(): ReactElement {
     <div className="set-page">
       <SetPageHeader
         crumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Notifications', href: '/notifications' },
           { label: 'Settings' },
         ]}

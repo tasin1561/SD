@@ -95,7 +95,7 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
                   value: <Money amount={store.grossInr} convert={false} />,
                 },
                 {
-                  label: 'Goods at the seller’s transfer price',
+                  label: 'Goods at the client’s transfer price',
                   value: <Money amount={store.transferInr} direction="debit" convert={false} />,
                 },
                 {
@@ -148,7 +148,7 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
       ) : m.paymentMode === 'PREPAID' ? (
         <Notice tone="info" icon={<Wallet size={16} />}>
           <span>
-            A prepaid order is paid from your wallet at confirmation: the goods at the seller’s
+            A prepaid order is paid from your wallet at confirmation: the goods at the client’s
             transfer price and your share of the delivery fee. The lines are below.
           </span>
         </Notice>
@@ -203,7 +203,7 @@ function MoneyBody({ m }: { m: ResellerOrderMoneyView }): ReactElement {
                     <div>
                       {storeWalletDirectionLabel(
                         l.direction as StoreWalletEntryDirection,
-                        'the seller',
+                        'the client',
                       )}
                     </div>
                     {l.note !== null ? <span className="ro-sub">{l.note}</span> : null}

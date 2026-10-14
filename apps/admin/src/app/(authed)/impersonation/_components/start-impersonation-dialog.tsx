@@ -190,7 +190,7 @@ export function StartImpersonationDialog({
             hint={
               mayWritePermission
                 ? 'Pick read-only unless you already know you will have to change something. A session can be opened again, not widened.'
-                : 'Read-only is the only mode you hold. Acting inside somebody’s account needs the separate “Act inside a seller’s or store’s account” permission.'
+                : 'Read-only is the only mode you hold. Acting inside somebody’s account needs the separate “Act inside a client’s or store’s account” permission.'
             }
           />
 

@@ -100,7 +100,7 @@ export function CallReviewDecision({
       });
       if (!out.applied) {
         toast.success(
-          'Sent to Seller staff to approve. Nothing changes on the order until they answer.',
+          'Sent to Client staff to approve. Nothing changes on the order until they answer.',
         );
         setOpen(false);
         return;
@@ -125,7 +125,7 @@ export function CallReviewDecision({
   }
 
   const commitLabel = heldForSeller
-    ? 'Send to your seller to approve'
+    ? 'Send to your client to approve'
     : releasing
       ? 'Release the stock and reject the order'
       : 'Keep trying';
@@ -150,7 +150,7 @@ export function CallReviewDecision({
             ? 'Keep trying to reach the customer?'
             : `${orderNumber} — keep trying to reach the customer?`
         }
-        description={`We have tried them ${tries} without an answer, and ${units} of your seller’s stock ${review.heldQty === 1 ? 'is' : 'are'} held for this order in the meantime.${heldForSeller ? ' Your seller approves this answer first — nothing happens until Seller staff say yes.' : ''}`}
+        description={`We have tried them ${tries} without an answer, and ${units} of your client’s stock ${review.heldQty === 1 ? 'is' : 'are'} held for this order in the meantime.${heldForSeller ? ' Your client approves this answer first — nothing happens until Client staff say yes.' : ''}`}
         footer={
           <DialogFooter>
             <Button
@@ -216,9 +216,9 @@ export function CallReviewDecision({
             label={releasing ? 'Why you are giving up on it' : heldForSeller ? 'Why' : 'Note'}
             hint={
               heldForSeller
-                ? 'Seller staff read this before they approve or reject your answer.'
+                ? 'Client staff read this before they approve or reject your answer.'
                 : releasing
-                  ? 'Kept on the order. Your seller reads this when they ask why the sale was rejected.'
+                  ? 'Kept on the order. Your client reads this when they ask why the sale was rejected.'
                   : 'Optional — anything the call centre should know.'
             }
             requiredMark={releasing || heldForSeller}

@@ -119,7 +119,7 @@ export function InboundIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Seller console' }, { label: 'Stock' }, { label: 'Add stock' }]}
+        breadcrumbs={[{ label: 'Client console' }, { label: 'Stock' }, { label: 'Add stock' }]}
         Link={Link}
         title="Add stock"
         subtitle="Consignments on their way to the Indian warehouse — where each one is now, and what was counted when it got there."

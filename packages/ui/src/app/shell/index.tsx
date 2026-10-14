@@ -434,7 +434,7 @@ export function Shell({
   readonly brand?: string;
   /** Served from the app's own origin (FE-3). */
   readonly logoSrc?: string;
-  /** "Admin" / "Seller" — the line under the wordmark. */
+  /** "Admin" / "Client" — the line under the wordmark. */
   readonly subtitle: string;
   /** Quiet context label in the desktop top bar. */
   readonly sectionLabel: string;

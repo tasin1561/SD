@@ -104,13 +104,13 @@ export default function StoreRequestsPage(): ReactElement {
   const header = (
     <PageHeader
       breadcrumbs={[
-        { label: 'Seller console' },
+        { label: 'Client console' },
         { label: 'Reselling' },
         { label: 'Waiting on you' },
       ]}
       Link={Link}
       title="Waiting on you"
-      subtitle="What your Reseller stores have asked Seller staff to approve. Until you answer, nothing happens — and a request nobody answers closes after a few days and the store is told."
+      subtitle="What your Member stores have asked Client staff to approve. Until you answer, nothing happens — and a request nobody answers closes after a few days and the store is told."
       meta={
         !counted ? undefined : (
           <RsFacts>
@@ -120,7 +120,7 @@ export default function StoreRequestsPage(): ReactElement {
           </RsFacts>
         )
       }
-      action={<RsLink href="/reseller-stores">All reseller stores</RsLink>}
+      action={<RsLink href="/reseller-stores">All member stores</RsLink>}
     />
   );
 
@@ -194,7 +194,7 @@ export default function StoreRequestsPage(): ReactElement {
         <EmptyState
           tone="positive"
           title="Nothing is waiting"
-          description="When a reseller store asks for something you chose to approve yourself, it appears here. Anything you let them do on their own never stops here at all."
+          description="When a member store asks for something you chose to approve yourself, it appears here. Anything you let them do on their own never stops here at all."
           action={<RsLink href="/reseller-stores">Change what your stores can do</RsLink>}
         />
       ) : (

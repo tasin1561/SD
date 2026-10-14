@@ -116,11 +116,11 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
 
   return (
     <AcSection
-      title="Settings for this seller"
+      title="Settings for this client"
       note={
         overridden.length === 0
           ? 'Everything is on the system default.'
-          : `${overridden.length} of ${items.length} keys are overridden for this seller.`
+          : `${overridden.length} of ${items.length} keys are overridden for this client.`
       }
       flush
     >
@@ -132,10 +132,10 @@ export function SellerSettingsSection({ sellerId }: { readonly sellerId: string 
         <EmptyState
           bare
           title="Nothing overridable"
-          description="A key becomes settable per seller when it is marked seller-overridable in system settings."
+          description="A key becomes settable per client when it is marked seller-overridable in system settings."
         />
       ) : (
-        <Table caption="Settings for this seller">
+        <Table caption="Settings for this client">
           <THead>
             <Tr>
               <Th>Setting</Th>
@@ -263,8 +263,8 @@ function OverrideDialog({
       }}
       title={
         setting === null
-          ? 'Override for this seller'
-          : `${guide?.name ?? fallbackSettingName(setting.key)} — this seller`
+          ? 'Override for this client'
+          : `${guide?.name ?? fallbackSettingName(setting.key)} — this client`
       }
       icon={<SlidersHorizontal size={18} />}
       locked={save.isPending}
@@ -272,7 +272,7 @@ function OverrideDialog({
         setting === null ? undefined : (
           <span>
             Currently <strong>{current}</strong> (
-            {setting.source === 'SELLER_OVERRIDE' ? 'set for this seller' : 'the system default'}).{' '}
+            {setting.source === 'SELLER_OVERRIDE' ? 'set for this client' : 'the system default'}).{' '}
             <code className="sk-ident">{setting.key}</code>
           </span>
         )
@@ -335,7 +335,7 @@ function OverrideDialog({
           <TextField
             label="Note"
             id="ov-note"
-            hint="Optional. Why this seller is different."
+            hint="Optional. Why this client is different."
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />

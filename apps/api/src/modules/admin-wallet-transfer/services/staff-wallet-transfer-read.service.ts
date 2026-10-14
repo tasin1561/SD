@@ -166,7 +166,7 @@ export class StaffWalletTransferReadService {
       select: { id: true, companyName: true, status: true },
     });
     if (!seller) {
-      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such seller' });
+      throw new NotFoundException({ code: 'SELLER_NOT_FOUND', message: 'No such client' });
     }
     const [last, holdings, accounts] = await Promise.all([
       this.prisma.client.sellerWalletEntry.findFirst({

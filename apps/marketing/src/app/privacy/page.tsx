@@ -43,20 +43,20 @@ export default function PrivacyPage(): ReactElement {
           </div>
           <p className="mt-6 text-[16px] leading-relaxed text-fg-body">
             Skydrop runs warehousing, order confirmation calls and courier dispatch for online
-            sellers in Bangladesh who ship to customers in India. This page says what information we
+            clients in Bangladesh who ship to customers in India. This page says what information we
             handle to do that, why, who we share it with, and how to reach us about it.
           </p>
 
           <Section title="What we collect">
             <ul>
               <li>
-                <strong>Sellers and their teams:</strong> names, email addresses, phone numbers,
-                company details, the bank details we pay you into, and what you do in the seller app
+                <strong>Clients and their teams:</strong> names, email addresses, phone numbers,
+                company details, the bank details we pay you into, and what you do in the client app
                 — orders, products, stock and support tickets.
               </li>
               <li>
-                <strong>Our sellers&rsquo; customers:</strong> name, phone number, delivery address,
-                the items ordered and the amount to collect. Sellers give us these so we can confirm
+                <strong>Our clients&rsquo; customers:</strong> name, phone number, delivery address,
+                the items ordered and the amount to collect. Clients give us these so we can confirm
                 the order by phone and deliver it.
               </li>
               <li>
@@ -76,13 +76,13 @@ export default function PrivacyPage(): ReactElement {
                 to a courier, track them, and handle returns.
               </li>
               <li>
-                To run seller accounts, pay sellers what they are owed, and keep the records tax and
+                To run client accounts, pay clients what they are owed, and keep the records tax and
                 accounting law requires.
               </li>
               <li>To keep the service secure and to answer your questions.</li>
             </ul>
             <p>
-              We do not sell personal information, and we do not use our sellers&rsquo; customers
+              We do not sell personal information, and we do not use our clients&rsquo; customers
               for our own marketing.
             </p>
           </Section>
@@ -94,7 +94,7 @@ export default function PrivacyPage(): ReactElement {
                 the carriers they use — receive the delivery details they need to deliver it.
               </li>
               <li>
-                <strong>The seller</strong> whose order it is.
+                <strong>The client</strong> whose order it is.
               </li>
               <li>
                 <strong>Providers that run our systems for us:</strong> DigitalOcean (servers,
@@ -140,7 +140,7 @@ export default function PrivacyPage(): ReactElement {
               >
                 hello@skydrop.global
               </a>
-              . If you are a customer of one of our sellers, you can also ask the seller. We may
+              . If you are a customer of one of our clients, you can also ask the client. We may
               have to keep some records the law requires.
             </p>
           </Section>

@@ -15,7 +15,7 @@ import { SetFact, SetPageHeader } from '../../../settings/_components/settings-p
 import { RoleEditor } from './role-editor';
 
 const CRUMBS = [
-  { label: 'Seller console' },
+  { label: 'Client console' },
   { label: 'Account' },
   { label: 'Team', href: '/team' },
   { label: 'Roles' },

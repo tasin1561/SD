@@ -68,11 +68,11 @@ describe('admin ticket conversation', () => {
     ];
     show(ticket());
     expect(screen.getByText(/^Skydrop ·/)).toBeInTheDocument();
-    expect(screen.queryByText(/^Seller ·/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Client ·/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Mark delivered' })).not.toBeInTheDocument();
   });
 
-  it("a seller's own opening message is theirs, and can still be marked as passed on", () => {
+  it("a client's own opening message is theirs, and can still be marked as passed on", () => {
     state.events = [
       { id: 'ev-1', note: 'Ticket opened', actorType: 'SELLER', createdAt: AT, relayedAt: null },
     ];
@@ -83,7 +83,7 @@ describe('admin ticket conversation', () => {
         description: 'The customer says it never arrived.',
       }),
     );
-    expect(screen.getByText(/^Seller ·/)).toBeInTheDocument();
+    expect(screen.getByText(/^Client ·/)).toBeInTheDocument();
     expect(screen.getByText('The customer says it never arrived.').closest('li')).toHaveClass(
       'justify-end',
     );
@@ -94,13 +94,13 @@ describe('admin ticket conversation', () => {
     state.events = [];
     show(ticket({ description: null }));
     expect(screen.getByText('Nothing said yet.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Reply to the seller')).toBeInTheDocument();
+    expect(screen.getByLabelText('Reply to the client')).toBeInTheDocument();
   });
 
   it('a closed ticket with nothing said offers no reply box', () => {
     state.events = [];
     show(ticket({ description: null, status: 'REJECTED', resolvedAt: AT }));
-    expect(screen.queryByLabelText('Reply to the seller')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Reply to the client')).not.toBeInTheDocument();
   });
 
   /*
@@ -170,7 +170,7 @@ describe('admin ticket conversation', () => {
         description: null,
       } as Partial<TicketView>),
     );
-    expect(screen.getByLabelText('Reply to the seller and Silk Studio')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Reply to the seller')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Reply to the client and Silk Studio')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Reply to the client')).not.toBeInTheDocument();
   });
 });

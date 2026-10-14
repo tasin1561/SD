@@ -140,7 +140,7 @@ function ConsignmentBody({ consignment }: { consignment: ConsignmentView }): Rea
     <>
       <PageHeader
         breadcrumbs={[
-          { label: 'Seller console' },
+          { label: 'Client console' },
           { label: 'Stock' },
           { label: 'Add stock', href: '/inbound' },
           { label: consignment.consignmentNumber },

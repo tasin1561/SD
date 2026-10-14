@@ -87,7 +87,7 @@ export function WithdrawalsIndex(): ReactElement {
     <div className="mk-page">
       <PageHeader
         title="Withdrawals"
-        subtitle="Seller withdrawal requests, and the ones the auto-withdraw cycle raised. Nothing here moves money — pay the seller, record the remittance, then link it to close the request."
+        subtitle="Client withdrawal requests, and the ones the auto-withdraw cycle raised. Nothing here moves money — pay the client, record the remittance, then link it to close the request."
       />
 
       <div className="mk-kpis">
@@ -105,7 +105,7 @@ export function WithdrawalsIndex(): ReactElement {
         <KpiCard
           label="Auto-raised"
           figure={list.isLoading ? '—' : autoRaised}
-          hint="Created by the auto-withdraw cycle, not by a seller"
+          hint="Created by the auto-withdraw cycle, not by a client"
         />
       </div>
 
@@ -178,7 +178,7 @@ export function WithdrawalsIndex(): ReactElement {
             <THead>
               <Tr>
                 <Th>Requested</Th>
-                <Th>Seller</Th>
+                <Th>Client</Th>
                 <Th align="right">Amount</Th>
                 <Th align="right">They receive</Th>
                 <Th align="right">Wallet balance</Th>
@@ -271,7 +271,7 @@ export function WithdrawalsIndex(): ReactElement {
                     )}
                   </Td>
                   <Td className="mk-small">
-                    {w.requestedBy === 'SYSTEM' ? 'Auto-withdraw' : 'Seller'}
+                    {w.requestedBy === 'SYSTEM' ? 'Auto-withdraw' : 'Client'}
                   </Td>
                   <Td>
                     <div className="mk-cell">
@@ -384,14 +384,14 @@ export function WithdrawalsIndex(): ReactElement {
         entity={
           approving === null
             ? ''
-            : (approving.sellerName ?? `Seller ${approving.sellerId.slice(0, 8)}…`)
+            : (approving.sellerName ?? `Client ${approving.sellerId.slice(0, 8)}…`)
         }
         amount={
           approving === null ? undefined : (
             <Money amount={approving.amountRequested} currency={approving.currency} />
           )
         }
-        consequence="Approving re-checks their wallet against this amount. Nothing is paid yet — pay the bank account on the seller's profile, record the remittance, and it closes this request."
+        consequence="Approving re-checks their wallet against this amount. Nothing is paid yet — pay the bank account on the client's profile, record the remittance, and it closes this request."
         confirmLabel="Approve"
         onConfirm={confirmApprove}
         error={approveError}
@@ -423,7 +423,7 @@ export function WithdrawalsIndex(): ReactElement {
               },
               {
                 label: 'Raised by',
-                value: approving.requestedBy === 'SYSTEM' ? 'Auto-withdraw cycle' : 'The seller',
+                value: approving.requestedBy === 'SYSTEM' ? 'Auto-withdraw cycle' : 'The client',
               },
             ]}
           />

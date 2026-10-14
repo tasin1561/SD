@@ -58,8 +58,8 @@ const mono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'Skydrop Portal',
-  description: 'Skydrop portal — place orders for your store and follow them.',
+  title: 'Skydrop Sales',
+  description: 'Skydrop sales portal — place orders for your store and follow them.',
   robots: { index: false, follow: false },
 };
 

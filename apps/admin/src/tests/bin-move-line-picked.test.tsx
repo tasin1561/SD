@@ -124,7 +124,7 @@ describe('bulk bin moves — the line is picked, never typed', () => {
     mount();
     await screen.findByText('Apply a list of moves');
     // The three boxes this replaced. Their absence IS the fix.
-    expect(screen.queryByLabelText('Seller id')).toBeNull();
+    expect(screen.queryByLabelText('Client id')).toBeNull();
     expect(screen.queryByLabelText('Variant id')).toBeNull();
     expect(screen.queryByLabelText('Batch id')).toBeNull();
   });

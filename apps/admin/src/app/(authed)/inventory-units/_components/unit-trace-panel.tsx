@@ -52,7 +52,7 @@ export function UnitTracePanel(): ReactElement {
     >
       <div className="unit-trace__form">
         <Select
-          label="Seller"
+          label="Client"
           requiredMark
           hint="A serial is only unique within one company."
           value={sellerId}
@@ -103,7 +103,7 @@ export function UnitTracePanel(): ReactElement {
 
       {searched && !trace.isLoading && unit === null && trace.isError === false && (
         <Note>
-          No unit with that serial belongs to this seller. Either it is another company&apos;s, or
+          No unit with that serial belongs to this client. Either it is another company&apos;s, or
           it was never received as a tracked unit.
         </Note>
       )}

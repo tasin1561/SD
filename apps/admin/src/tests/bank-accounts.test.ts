@@ -123,7 +123,7 @@ describe('retiring says what it does and does not do', () => {
 });
 
 describe('the empty state states the consequence', () => {
-  it('says a seller cannot top up at all until one exists', () => {
+  it('says a client cannot top up at all until one exists', () => {
     // "No accounts" is a fact; this is what the fact costs.
     expect(flat(PANEL)).toContain('cannot top up at all');
   });

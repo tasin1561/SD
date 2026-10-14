@@ -148,7 +148,7 @@ export class StoreReviewDecisionService {
       throw new ForbiddenException({
         code: 'STORE_ACTION_NOT_ALLOWED',
         message:
-          'The seller answers call-attempt questions for this store. Ask them whether to keep trying.',
+          'The client answers call-attempt questions for this store. Ask them whether to keep trying.',
       });
     }
     return policy.callCapDecision;

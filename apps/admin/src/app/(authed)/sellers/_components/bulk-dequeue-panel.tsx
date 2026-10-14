@@ -49,7 +49,7 @@ export function BulkDequeuePanel({
       const res = await dequeue.mutateAsync({ sellerId, reason: reason.trim() });
       toast.success(
         res.dequeuedOrders === 0
-          ? 'Nothing to close: this seller had no open call-queue entries.'
+          ? 'Nothing to close: this client had no open call-queue entries.'
           : `Closed ${res.dequeuedOrders} open call-queue ${res.dequeuedOrders === 1 ? 'entry' : 'entries'}.`,
       );
       setConfirming(false);
@@ -64,7 +64,7 @@ export function BulkDequeuePanel({
   return (
     <AcCard
       title="Call queue"
-      note="Stop agents calling this seller's customers. Closes every open queue entry; the orders themselves do not move, and confirmed orders are untouched."
+      note="Stop agents calling this client's customers. Closes every open queue entry; the orders themselves do not move, and confirmed orders are untouched."
     >
       <div className="ac-form">
         <TextArea
@@ -74,7 +74,7 @@ export function BulkDequeuePanel({
           rows={2}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="e.g. Seller paused trading until their stock arrives"
+          placeholder="e.g. Client paused trading until their stock arrives"
         />
         <div className="ac-buttons" data-align="start">
           <Button
@@ -97,7 +97,7 @@ export function BulkDequeuePanel({
         onOpenChange={setConfirming}
         title={`Close ${sellerName}'s call queue?`}
         entity={sellerName}
-        consequence="Every open call-queue entry for this seller is closed now. Agents stop being handed these orders; the orders stay in their current status until something else moves them."
+        consequence="Every open call-queue entry for this client is closed now. Agents stop being handed these orders; the orders stay in their current status until something else moves them."
         confirmLabel="Close entries"
         destructive
         error={error}

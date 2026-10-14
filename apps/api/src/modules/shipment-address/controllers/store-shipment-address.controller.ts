@@ -102,16 +102,16 @@ export class StoreShipmentAddressController {
       throw new ForbiddenException({
         code: 'STORE_ACTION_NOT_ALLOWED',
         message:
-          'The seller has not enabled changes to orders for this store. Ask them to make the change.',
+          'The client has not enabled changes to orders for this store. Ask them to make the change.',
       });
     }
     if (policy.orderChange === ResellerStoreActionMode.ASK_SELLER) {
       throw new ForbiddenException({
         code: 'STORE_ACTION_NEEDS_SELLER_NOW',
         message:
-          'This parcel is already with the courier, and your seller approves changes to this store’s ' +
+          'This parcel is already with the courier, and your client approves changes to this store’s ' +
           'orders before they happen. A change held for approval could miss the courier’s window ' +
-          'entirely, so ask the seller to make this one themselves — now, while the courier will ' +
+          'entirely, so ask the client to make this one themselves — now, while the courier will ' +
           'still take it.',
       });
     }
