@@ -3485,7 +3485,19 @@ export const FLOWS = {
         await scopes.scrollIntoViewIfNeeded();
         await page.waitForTimeout(500);
         for (const label of INTEGRATIONS.keyScopes) {
-          await stage.clickIt(scopes.getByLabel(label, { exact: true }).first(), { after: 700 });
+          // The LABEL SPAN, not the accessible name. Checkbox renders
+          // its label and its description inside one <label htmlFor>,
+          // so the input's accessible name is the two run together and
+          // an exact match on the label alone finds nothing. Clicking
+          // the words toggles the box (they are inside the label) and
+          // puts the pointer on the text the narration is reading.
+          await stage.clickIt(
+            scopes
+              .locator('.sk-check__label')
+              .filter({ hasText: new RegExp(`^${label}$`) })
+              .first(),
+            { after: 700 },
+          );
         }
 
         // The FORM's button, scoped away from the dialog's — the confirm
@@ -3574,7 +3586,10 @@ export const FLOWS = {
         await stage.typeIn(dialog.getByLabel('Display name'), INTEGRATIONS.endpointName, {
           after: 400,
         });
-        await stage.dwellOn(dialog.getByLabel(/^Subscribed events/), 1600);
+        // The events are a FIELDSET now ("Events"), not a field called
+        // "Subscribed events" — the API still calls them that, which is
+        // why the old selector reads as though it should work.
+        await stage.dwellOn(dialog.locator('.whk-events').first(), 1600);
       },
 
       async secret({ page, stage }) {
