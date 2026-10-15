@@ -2114,6 +2114,24 @@ async function resellingWorldFor(slug, sellerId, sellerToken) {
       });
       await prisma.bulkOrderUpload.deleteMany({ where: { resellerStoreId: store.id } });
       await prisma.customer.deleteMany({ where: { resellerStoreId: store.id } });
+
+      // SECOND-LEVEL BLOCKERS. `store_roles` CASCADEs from the store, so
+      // it looks safe — but it carries two RESTRICT children of its own
+      // (RBAC-1b gave both a store user and an INVITATION several roles
+      // through join tables), and a RESTRICT child blocks the cascade
+      // that would have removed its parent. Clearing only the direct
+      // children of `seller_stores` is therefore not enough, and the
+      // failure arrives naming `store_roles` rather than the store.
+      const roles = await prisma.storeRoleDefinition.findMany({
+        where: { storeId: store.id },
+        select: { id: true },
+      });
+      const roleIds = roles.map((r) => r.id);
+      if (roleIds.length > 0) {
+        await prisma.storeUserInvitationRole.deleteMany({ where: { roleId: { in: roleIds } } });
+        await prisma.storeUserRoleAssignment.deleteMany({ where: { roleId: { in: roleIds } } });
+      }
+
       await prisma.storeUser.deleteMany(of);
       await prisma.sellerStore.delete({ where: { id: store.id } });
       console.log(`  · removed a previous take's "${RESELLING.storeName}" store`);
