@@ -4132,7 +4132,24 @@ export const FLOWS = {
       },
 
       async register({ page, stage }) {
-        const row = page.getByRole('row').filter({ hasText: 'Lakshmi Raghavan' }).first();
+        // SEARCH for the parcel rather than expecting it on page one.
+        // The register is paginated and the demo world has grown well
+        // past a single page since this scene was written, so a named
+        // older parcel is simply not on screen — the scene timed out on
+        // a row that exists and is three pages back. Searching is also
+        // what a person does, and the field says so: "Order number, ref,
+        // AWB, recipient name or phone".
+        await stage.typeIn(page.getByLabel('Search orders'), DELIVERED_CUSTOMER, { after: 600 });
+        // SUBMIT it. The search is a <form> whose magnifier is a real
+        // submit button, so typing alone only sets local state — the
+        // URL, and therefore the query, changes on submit. Typing
+        // without this filters nothing and the scene waits out its
+        // timeout on a row that is still pages away.
+        await page.keyboard.press('Enter');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(800);
+        const row = page.getByRole('row').filter({ hasText: DELIVERED_CUSTOMER }).first();
+        await row.waitFor({ state: 'visible', timeout: 20_000 });
         await row.scrollIntoViewIfNeeded();
         await page.waitForTimeout(600);
         await stage.dwellOn(row, 3200);
@@ -4784,6 +4801,21 @@ export const FLOWS = {
         await page.waitForURL(/\/orders$/, { timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
         await page.waitForTimeout(1000);
+        // SEARCH rather than expect the parcel on page one. The order
+        // list is paginated and the demo world has grown well past one
+        // page since this was written, so this named older parcel sits
+        // several pages back and the scene timed out on a row that
+        // exists. The field takes a recipient name, which is what the
+        // narration is doing anyway.
+        await stage.typeIn(page.getByLabel('Search orders'), DELIVERED_CUSTOMER, { after: 600 });
+        // SUBMIT it. The search is a <form> whose magnifier is a real
+        // submit button, so typing alone only sets local state — the
+        // URL, and therefore the query, changes on submit. Typing
+        // without this filters nothing and the scene waits out its
+        // timeout on a row that is still pages away.
+        await page.keyboard.press('Enter');
+        await page.waitForLoadState('networkidle').catch(() => {});
+        await page.waitForTimeout(800);
         const row = page.getByRole('row').filter({ hasText: DELIVERED_CUSTOMER }).first();
         await row.waitFor({ state: 'visible', timeout: 25_000 });
         await stage.clickIt(row.getByRole('link').first(), { after: 1800 });
