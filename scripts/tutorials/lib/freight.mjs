@@ -353,13 +353,43 @@ async function shipSomeOfIt(sellerId, sellerToken, staffToken, log) {
  * lands is exactly the money the 7th would have brought.
  */
 async function letTheClockRun(orderId, log) {
-  const due = await prisma.pendingAccrual.updateMany({
-    where: { orderId, processedAt: null },
-    data: { eligibleAt: new Date(Date.now() - 60_000) },
-  });
+  /*
+    WAIT FOR THE ROW BEFORE BACK-DATING IT.
+
+    `pending_accruals` is written by the DELIVERED hook POST-COMMIT, so
+    it lands a heartbeat after the transition this seed just drove — and
+    this used to back-date immediately, match nothing, and take the
+    "already swept" branch out of the door. The sweep was then never
+    asked to run, the row sat dated a week out, and the seed failed
+    ninety seconds later on `the freight share to be charged` — a race
+    reported as if the freight had not been charged at all.
+
+    It is a race that LOAD decides, which is why it surfaced now: two
+    stacks filming at once, each with an ffmpeg render beside a headless
+    Chromium, is exactly when a post-commit listener is slowest.
+
+    There are now THREE cases where the update matches nothing and only
+    two of them are benign, so they are told apart rather than lumped
+    together: the row is already PROCESSED (swept — fine), the seller is
+    on the INSTANT tier so no row is ever written (fine), or it simply
+    has not been written yet (NOT fine, and the thing this waits for).
+  */
+  let due = { count: 0 };
+  for (let i = 0; i < 30; i += 1) {
+    due = await prisma.pendingAccrual.updateMany({
+      where: { orderId, processedAt: null },
+      data: { eligibleAt: new Date(Date.now() - 60_000) },
+    });
+    if (due.count > 0) break;
+    const swept = await prisma.pendingAccrual.count({
+      where: { orderId, processedAt: { not: null } },
+    });
+    if (swept > 0) return;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
   if (due.count === 0) {
-    // Already swept, or the seller is on the INSTANT tier and the money
-    // landed at delivery. Either way there is nothing to hurry along.
+    // No row after thirty seconds: the seller is on the INSTANT tier and
+    // the money landed at delivery. Nothing to hurry along.
     return;
   }
   const url = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
