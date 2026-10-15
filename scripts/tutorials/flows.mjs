@@ -13536,7 +13536,22 @@ export const FLOWS = {
       async ledger({ page, stage, baseUrl }) {
         await page.goto(`${baseUrl}/seller-wallets`, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('networkidle').catch(() => {});
-        await stage.clickIt(page.getByRole('link', { name: /Ledger/ }).first(), { after: 1500 });
+        /*
+          OUR SELLER'S ROW, not the first one on the page. This box
+          carries two sellers and the other one sorts first, so
+          `.first()` opened a ledger with no COD on it and the step
+          waited out its timeout on a row that was never going to
+          appear — while the payout it had just recorded was sitting
+          correctly in the OTHER seller's ledger. The rig's own warning
+          about this shape is written at the pick seeding: when a seed
+          stages one row and a flow takes `.first()`, they can be
+          different rows.
+        */
+        const walletRow = page.getByRole('row').filter({ hasText: DEMO_SELLER_COMPANY }).first();
+        await walletRow.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(walletRow.getByRole('link', { name: /Ledger/ }).first(), {
+          after: 1500,
+        });
         await page.waitForURL(/\/seller-wallets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
         await stage.dwellOn(await ledgerRow(page, 'COD collected'), 2400);
@@ -13732,7 +13747,13 @@ export const FLOWS = {
       async outro({ page, stage, baseUrl }) {
         await page.goto(`${baseUrl}/seller-wallets`, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('networkidle').catch(() => {});
-        await stage.clickIt(page.getByRole('link', { name: /Ledger/ }).first(), { after: 1500 });
+        // OUR seller's row — this box carries two and the other sorts
+        // first, so `.first()` opens a ledger the video never touched.
+        const ourWallet = page.getByRole('row').filter({ hasText: DEMO_SELLER_COMPANY }).first();
+        await ourWallet.waitFor({ state: 'visible', timeout: 25_000 });
+        await stage.clickIt(ourWallet.getByRole('link', { name: /Ledger/ }).first(), {
+          after: 1500,
+        });
         await page.waitForURL(/\/seller-wallets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
         await stage.dwellOn(await ledgerRow(page, 'Debited by Skydrop'), 3600);
