@@ -757,6 +757,11 @@ const WITHDRAWAL = {
 const INTEGRATIONS = {
   keyName: 'Rangpur order sync',
   keyDays: '90',
+  // What the key may do. A key carries SCOPES since RBAC-1 (2026-09-30)
+  // and the form refuses an empty set, so this is not decoration — it is
+  // what makes the create button do anything. Named for an order-sync
+  // integration, which is what the video says the key is for.
+  keyScopes: ['Read orders', 'Place and cancel orders'],
   endpointUrl: 'https://example.com/skydrop/orders',
   endpointName: 'Order sync',
   brokenName: 'Warehouse screen (old)',
@@ -3470,6 +3475,19 @@ export const FLOWS = {
       },
 
       async 'confirm-create'({ page, stage }) {
+        // A KEY CARRIES SCOPES (RBAC-1, 2026-09-30) and the form refuses
+        // to submit with none ticked — so clicking Create with nothing
+        // chosen simply does nothing, and this scene used to wait 20s
+        // for a dialog that was never going to open. Tick what the key
+        // is for first; it is also the part of this screen the
+        // narration is about.
+        const scopes = page.locator('.set-scopes').first();
+        await scopes.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+        for (const label of INTEGRATIONS.keyScopes) {
+          await stage.clickIt(scopes.getByLabel(label, { exact: true }).first(), { after: 700 });
+        }
+
         // The FORM's button, scoped away from the dialog's — the confirm
         // carries the same accessible name, and both are in the DOM
         // together the moment it opens.

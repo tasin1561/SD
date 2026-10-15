@@ -2062,12 +2062,59 @@ async function resellingWorldFor(slug, sellerId, sellerToken) {
     select: { id: true },
   });
   if (store !== null) {
+    // ORDERS are still the question, exactly as before: a store with an
+    // order filed under it is somebody's real work. Everything else
+    // below is this store's own scaffolding, and in a filming stack a
+    // customer row under a store with no orders is a previous take's
+    // leftover rather than anybody's work.
     const orders = await prisma.order.count({ where: { storeId: store.id } });
     if (orders > 0) {
       console.log(
         `  · leaving the "${RESELLING.storeName}" store alone — ${orders} order(s) are filed under it`,
       );
     } else {
+      // The store's OWN SCAFFOLDING, cleared first. `store_users` FKs
+      // with RESTRICT, and since RS-1 (2026-09-16) opening a store
+      // REQUIRES an invitation — so the store this video creates on
+      // camera always has an owner by the time the next take wants it
+      // gone, and the delete had been failing on that ever since.
+      // Everything else the two videos touch (invitations, roles,
+      // wallet settings, catalogue terms) cascades.
+      // EVERY RESTRICT CHILD, cleared in one place.
+      //
+      // `seller_stores` has eighteen FK children that RESTRICT, and a
+      // store accumulates more of them every time the reselling feature
+      // grows — this delete has been quietly acquiring new blockers
+      // since it was written against a store that only had orders. The
+      // whole set is listed rather than discovered one failure at a
+      // time, because each missing one costs a filming run that dies
+      // hours in on the video that happens to need it.
+      //
+      // Safe BECAUSE of the orders guard above: with no order filed
+      // under the store, none of these rows is anybody's work — they
+      // are what previous takes left behind. `orders` itself is
+      // deliberately NOT in this list; it is the thing we refuse to
+      // delete around, not something to clear.
+      const of = { where: { storeId: store.id } };
+      await prisma.storePnlCarryForward.deleteMany(of);
+      await prisma.storePnlPeriod.deleteMany(of);
+      await prisma.storeExpense.deleteMany(of);
+      await prisma.storeWalletEntry.deleteMany(of);
+      await prisma.storeTopupRequest.deleteMany(of);
+      await prisma.storeWithdrawalRequest.deleteMany(of);
+      await prisma.storeOrderRequest.deleteMany(of);
+      await prisma.storeAddressChangeRequest.deleteMany(of);
+      await prisma.resellerOrderCredit.deleteMany(of);
+      await prisma.ticket.deleteMany(of);
+      await prisma.impersonationSession.deleteMany(of);
+      await prisma.resellerStoreTermsAcceptance.deleteMany(of);
+      await prisma.resellerStoreTermsVersion.deleteMany(of);
+      await prisma.orderDeliveryActionRequest.deleteMany({
+        where: { resellerStoreId: store.id },
+      });
+      await prisma.bulkOrderUpload.deleteMany({ where: { resellerStoreId: store.id } });
+      await prisma.customer.deleteMany({ where: { resellerStoreId: store.id } });
+      await prisma.storeUser.deleteMany(of);
       await prisma.sellerStore.delete({ where: { id: store.id } });
       console.log(`  · removed a previous take's "${RESELLING.storeName}" store`);
     }
