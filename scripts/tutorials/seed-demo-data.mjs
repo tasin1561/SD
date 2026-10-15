@@ -5479,6 +5479,21 @@ async function clearPreviousOrders(sellerId) {
         a substitute: it names the table instead of printing a wall of
         Prisma.
       */
+      /*
+        THE STORE-ACTION REQUESTS, which are RESTRICT and which a store's
+        order really does carry: a held cancel, a held order change, a
+        held delivery ask (the three tables the 2026-09-17 store-actions
+        work added). `orders` has 23 RESTRICT children now and this list
+        is the ones an UNSHIPPED parcel can have — the money and stock
+        ledgers are not here on purpose, because this path only runs for
+        an order with no shipment and no god-mode force, so a row in one
+        of those would be a real anomaly and the database refusing is the
+        right outcome rather than a seed quietly deleting it.
+      */
+      prisma.storeOrderRequest.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.storeAddressChangeRequest.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.orderDeliveryActionRequest.deleteMany({ where: { orderId: { in: ids } } }),
+      prisma.notificationLog.deleteMany({ where: { orderId: { in: ids } } }),
       prisma.orderReattemptRequest.deleteMany({ where: { orderId: { in: ids } } }),
       prisma.orderItem.deleteMany({ where: { orderId: { in: ids } } }),
       prisma.orderEvent.deleteMany({ where: { orderId: { in: ids } } }),
