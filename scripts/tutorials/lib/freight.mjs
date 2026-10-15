@@ -270,13 +270,55 @@ async function recordTheBill(arrival, staffToken, log) {
  * scans — through the same helper rather than a second copy of it.
  */
 async function shipSomeOfIt(sellerId, sellerToken, staffToken, log) {
-  const existing = await prisma.order.findFirst({
+  let existing = await prisma.order.findFirst({
     where: { sellerId, sellerOrderRef: FREIGHT_PARCEL.ref },
     select: { id: true, status: true, orderNumber: true },
   });
   if (existing !== null && existing.status === 'DELIVERED') {
-    log(`  · ${FREIGHT_PARCEL.ref} already delivered (${existing.orderNumber})`);
-    return existing.id;
+    /*
+      A DELIVERED PARCEL IS ONLY REUSABLE IF IT CAN STILL CHARGE THIS
+      BILL, and after a void it cannot.
+
+      E5 films a bill being WITHDRAWN — that is what FRT-6 is about — so
+      the next run finds no live bill and `recordTheBill` raises a fresh
+      one. The parcel, though, was reused: already DELIVERED, and its
+      `pending_accruals` row already PROCESSED, which is a once-only
+      gate. So its freight share had been charged against the bill that
+      was since voided, nothing would ever charge the new one, and the
+      seed sat out ninety seconds on `the freight share to be charged`
+      against a bill reading 0 of 38 units. Measured on the box: the
+      share was taken on 9 October at ₹766.14, against a bill voided the
+      same minute the new one was raised.
+
+      So the parcel is reused in the two cases where it still makes the
+      world right — the bill ALREADY has charges on it, or the parcel's
+      accrual has not been swept yet and will put them there — and in
+      the third it is retired forward and a fresh one placed, which is
+      the same `-SPENT-n` rename the rest of this seeding uses for a
+      parcel a take has spent.
+    */
+    const [billNow] = await freightReport(sellerId);
+    const billCharged = billNow !== undefined && billNow.unitsSettled > 0;
+    const spent = await prisma.pendingAccrual.count({
+      where: { orderId: existing.id, processedAt: { not: null } },
+    });
+    if (billCharged || spent === 0) {
+      log(`  \u00b7 ${FREIGHT_PARCEL.ref} already delivered (${existing.orderNumber})`);
+      return existing.id;
+    }
+    const parked = await prisma.order.count({
+      where: { sellerId, sellerOrderRef: { startsWith: `${FREIGHT_PARCEL.ref}-SPENT-` } },
+    });
+    const retiredRef = `${FREIGHT_PARCEL.ref}-SPENT-${parked + 1}`;
+    await prisma.order.update({
+      where: { id: existing.id },
+      data: { sellerOrderRef: retiredRef },
+    });
+    log(
+      `  \u00b7 ${FREIGHT_PARCEL.ref} (${existing.orderNumber}) spent its freight share on a ` +
+        `bill that has since been withdrawn \u2014 renamed ${retiredRef}; a fresh parcel follows`,
+    );
+    existing = null;
   }
 
   let orderId = existing?.id ?? null;
@@ -306,6 +348,12 @@ async function shipSomeOfIt(sellerId, sellerToken, staffToken, log) {
         codAmountInr: FREIGHT_PARCEL.codAmountInr,
         sellerOrderRef: FREIGHT_PARCEL.ref,
         items,
+        // A PREVIOUS take's parcel for this customer may have just been
+        // retired above, and `create` refuses a repeat for a customer
+        // whose last parcel is recent (`DUPLICATE_ORDER_SUSPECTED`).
+        // Here it is deliberate, and acknowledging is what the real form
+        // makes a person do too — the same trap the pick seeding hits.
+        acknowledgeDuplicate: true,
       },
     });
     orderId = order.id;
