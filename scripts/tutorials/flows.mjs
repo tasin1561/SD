@@ -1165,6 +1165,75 @@ async function applyLedgerFilter({ page, stage }, locator, choose) {
   return ledgerRows(page);
 }
 
+/** The warehouse K3's shelf scene filters to. Seeded, so it is stable. */
+const LEDGER_WAREHOUSE = 'Kolkata Main';
+
+/** A bin code composed from aisle+rack+shelf (BIN-4): `A-01-01`. */
+const SHELF_CODE = /^[A-Z]+-\d{2}-\d{2}$/;
+
+/**
+ * WHICH SHELF K3 films, found off the screen rather than written down.
+ *
+ * The scene used to name `A-01-01`, and bins are made per warehouse by
+ * whatever seeded them — so that code was a real busy shelf on one
+ * filming stack and absent from the select on the other, where the step
+ * threw "No movements on A-01-01" after setting a filter to nothing.
+ *
+ * So the prologue asks the ledger which shelf it can actually talk
+ * about: of the shelf-shaped bins in the warehouse, the one carrying
+ * the MOST movements. Busiest rather than first, because the scene
+ * dwells on the filtered table and one row makes a thin shelf.
+ *
+ * OFF CAMERA on purpose — `intro` re-navigates, so none of this
+ * probing is in the take. Capped at the first dozen candidates: this is
+ * a demo world, and a rig that walks fifty bins to pick a shelf spends
+ * a minute of every run on it.
+ */
+async function probeLedgerShelf(ctx) {
+  const { page, baseUrl } = ctx;
+  await page.goto(`${baseUrl}/inventory/movements`, { waitUntil: 'domcontentloaded' });
+  const wh = page.locator('#mv-wh');
+  await wh.waitFor({ state: 'visible', timeout: 25_000 });
+  await wh.selectOption({ label: LEDGER_WAREHOUSE });
+  await page.waitForTimeout(700);
+
+  const bin = page.locator('#mv-bin');
+  const codes = (await bin.locator('option').allInnerTexts())
+    .map((t) => t.trim())
+    .filter((t) => SHELF_CODE.test(t))
+    .slice(0, 12);
+  if (codes.length === 0) {
+    throw new Error(
+      `No shelf-shaped bin in ${LEDGER_WAREHOUSE}'s bin filter. K3 is about one shelf, ` +
+        'so the warehouse needs bins beyond FLOOR before it can be filmed (BIN-1).',
+    );
+  }
+
+  let best = null;
+  for (const code of codes) {
+    await bin.selectOption({ label: code });
+    await page.waitForTimeout(500);
+    const rows = page.locator('.sk-tbody .sk-tr');
+    const n = await rows.count();
+    // Counted by the BIN CELL, not by row: an empty table draws a row
+    // of its own saying so, and that row would score as a movement.
+    let mine = 0;
+    for (let i = 0; i < n; i += 1) {
+      const said = (await ledgerCell(rows.nth(i), 'bin').innerText()).trim();
+      if (said.startsWith(code)) mine += 1;
+    }
+    if (best === null || mine > best.count) best = { code, count: mine };
+  }
+  if (best === null || best.count === 0) {
+    throw new Error(
+      `No movements on any shelf in ${LEDGER_WAREHOUSE} (tried ${codes.join(', ')}). ` +
+        'The scene is about one shelf, and a shelf nothing has moved through has nothing to read.',
+    );
+  }
+  ctx.shelfCode = best.code;
+  console.log(`  \u00b7 K3 films shelf ${best.code} (${best.count} movement(s))`);
+}
+
 /**
  * M1 adds an account with this label and the seeding removes it by the
  * same one. Restated here rather than imported, because `flows.mjs`
@@ -1173,6 +1242,15 @@ async function applyLedgerFilter({ page, stage }, locator, choose) {
  * both files and fails if the two strings stop matching.
  */
 const M1_ACCOUNT_LABEL = 'Delhivery — second contract';
+
+/**
+ * The damaged shelf K1 sends a unit back from. Composed from aisle+rack
+ * +shelf (BIN-4) by `ensureWarehouseBins`, so the CODE is stable even
+ * though every id on that page is minted per box — and it is the one
+ * thing about that shelf worth pinning, the product on it being
+ * whatever the seeding could move there.
+ */
+const DAMAGED_BIN = 'D-01-01';
 
 /**
  * The lead O1 works. `leadsWorldFor` writes it and resets it; the two
@@ -8403,30 +8481,46 @@ export const FLOWS = {
     app: 'admin',
 
     async prologue(ctx) {
+      /*
+        THE TWO TICKET NUMBERS, off the fixture. They used to be written
+        in here as `TK-2026-000003` and `TK-2026-000004`, and a ticket
+        number comes from a per-year sequence (TKT-1) — so the same two
+        numbers were a short count and a store dispute on one filming
+        stack, and a long-resolved scrap ticket and nothing at all on
+        the other. The video asks for the KIND of ticket it is about and
+        lets the sequence be wherever it is.
+      */
+      ctx.tickets = await readFixture('refunds-and-disputes');
       await signInAndOpen(ctx, '/tickets', ctx.page.getByRole('heading', { level: 1 }).first());
     },
 
     steps: {
       async intro({ page, stage }) {
-        // The LIST, which opens on OPEN — the three tickets the seeding
-        // leaves. Gated on the count rather than on "a row", because an
-        // empty list renders the same table.
+        /*
+          THE LIST HAS DRAWN AND HOLDS SOMETHING. Gated on the summary's
+          SHAPE with a non-zero total rather than on "1–3 of 3": an
+          empty list renders the same table, so a plain row check proves
+          nothing — but the exact count is a property of how many
+          tickets that stack has ever opened, which is not what this
+          scene is about.
+        */
         await page
-          .getByText(/^Showing 1–3 of 3$/)
+          .locator('.sk-pg__summary')
+          .filter({ hasText: /^Showing \d+–\d+ of [1-9]\d*$/ })
           .first()
           .waitFor({ state: 'visible', timeout: 25_000 });
         await stage.dwellOn(page.getByRole('heading', { level: 1 }).first(), 3200);
       },
 
-      async kinds({ page, stage }) {
+      async kinds({ page, stage, tickets }) {
         // The TYPE cell of the dispute row, which is what the line is
         // about — the column that changes how the rest reads.
-        const row = page.getByRole('row').filter({ hasText: 'TK-2026-000004' }).first();
+        const row = page.getByRole('row').filter({ hasText: tickets.disputeTicket }).first();
         await row.waitFor({ state: 'visible', timeout: 20_000 });
         await stage.dwellOn(row, 3800);
       },
 
-      async open({ page, stage }) {
+      async open({ page, stage, tickets }) {
         /*
           THE ROW, not the number. The admin queue's ticket number is a
           plain `<span>` and the whole `<Tr>` carries `onActivate` — "the
@@ -8436,9 +8530,10 @@ export const FLOWS = {
           cell holds the `<Link>`), which is exactly why this is worth a
           comment rather than a memory.
         */
-        await stage.clickIt(page.getByRole('row').filter({ hasText: 'TK-2026-000003' }).first(), {
-          after: 1400,
-        });
+        await stage.clickIt(
+          page.getByRole('row').filter({ hasText: tickets.shortfallTicket }).first(),
+          { after: 1400 },
+        );
         await page.waitForURL(/\/tickets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
         // The GOODS RECEIPT line, which is the narration's whole point:
         // this one names a receipt where the others name an order.
@@ -12062,10 +12157,27 @@ export const FLOWS = {
         await page.waitForTimeout(1200);
         const section = page.locator('.stk-section').first();
         const said = await section.innerText();
-        if (!/RSH-JAMDANI-IVORY/.test(said)) {
+        /*
+          THE SHELF HOLDS SOMETHING — gated on the BIN, not on a named
+          SKU. It used to demand `RSH-JAMDANI-IVORY`, and which product
+          `ensureDamagedBinStock` can move onto the damaged shelf
+          depends on what that stack's warehouse happens to hold (it
+          tops up the biggest pickable line it can find). The next three
+          scenes act on whatever is on the shelf and never say its name,
+          so the SKU was never what this gate was about: an EMPTY
+          damaged bin is.
+        */
+        if (!new RegExp(`${DAMAGED_BIN}\\b`).test(said)) {
           throw new Error(
-            'Filtering the overview to damaged shows no line — `ensureDamagedBinStock` keeps a ' +
-              'unit or two on that shelf and is what the next three scenes act on.',
+            `Filtering the overview to damaged does not list ${DAMAGED_BIN} — ` +
+              '`ensureDamagedBinStock` keeps a unit or two on that shelf and is what the next ' +
+              'three scenes act on.',
+          );
+        }
+        if (!/\d/.test(said)) {
+          throw new Error(
+            `${DAMAGED_BIN} is listed with no quantity against it — the scene is about a unit ` +
+              'standing on the damaged shelf, and an empty shelf has nothing to send back.',
           );
         }
         await stage.dwellOn(section, 3200);
@@ -12077,7 +12189,7 @@ export const FLOWS = {
           typed (BIN-4), so it is the one stable handle on this page —
           every id here is minted per box.
         */
-        await stage.clickIt(page.getByRole('link', { name: 'D-01-01', exact: true }).first(), {
+        await stage.clickIt(page.getByRole('link', { name: DAMAGED_BIN, exact: true }).first(), {
           after: 1600,
         });
         await page.waitForURL(/\/warehouse\/bins\/[0-9a-f-]+$/, { timeout: 30_000 });
@@ -14033,6 +14145,7 @@ export const FLOWS = {
 
     async prologue(ctx) {
       await signIn(ctx);
+      await probeLedgerShelf(ctx);
     },
 
     steps: {
@@ -14169,14 +14282,14 @@ export const FLOWS = {
         await stage.glide(-520);
       },
 
-      async bin({ page, stage }) {
+      async bin({ page, stage, shelfCode }) {
         await page.locator('#mv-variant').fill('');
         // …and give the focus ring back, or the emptied field stays
         // outlined through a scene that is about the two selects beside it.
         await page.locator('#mv-variant').blur();
         await page.waitForTimeout(400);
         await applyLedgerFilter({ page, stage }, page.locator('#mv-wh'), () =>
-          page.locator('#mv-wh').selectOption({ label: 'Kolkata Main' }),
+          page.locator('#mv-wh').selectOption({ label: LEDGER_WAREHOUSE }),
         );
         /*
           THE BIN SELECT IS DISABLED UNTIL A WAREHOUSE IS PICKED — a
@@ -14185,13 +14298,15 @@ export const FLOWS = {
           it is done in that order on camera rather than set up off it.
         */
         const rows = await applyLedgerFilter({ page, stage }, page.locator('#mv-bin'), () =>
-          page.locator('#mv-bin').selectOption({ label: 'A-01-01' }),
+          page.locator('#mv-bin').selectOption({ label: shelfCode }),
         );
         const n = await rows.count();
-        if (n === 0) throw new Error('No movements on A-01-01 — the scene is about one shelf.');
+        if (n === 0) {
+          throw new Error(`No movements on ${shelfCode} — the scene is about one shelf.`);
+        }
         for (let i = 0; i < n; i += 1) {
           const said = (await ledgerCell(rows.nth(i), 'bin').innerText()).trim();
-          if (!said.startsWith('A-01-01')) {
+          if (!said.startsWith(shelfCode)) {
             throw new Error(`Filtered to one shelf and a row reads "${said}".`);
           }
         }
@@ -18717,7 +18832,7 @@ function scheduledCountRow(page) {
  * wrong row.
  */
 function returnOrScrap(page) {
-  return page.getByRole('link', { name: /in bin D-01-01$/ }).first();
+  return page.getByRole('link', { name: new RegExp(`in bin ${DAMAGED_BIN}$`) }).first();
 }
 
 /** The one returned line in the station below. */

@@ -3462,6 +3462,7 @@ async function storeRequestsWorldFor(slug, sellerId, sellerToken, staffToken) {
   }
   if (STORE_DISPUTE_SLUGS.has(slug ?? '')) {
     await ensureStoreDispute(sellerId, world, log);
+    await writeRefundsFixture(sellerId, log);
   }
   if (STORE_DELIVERY_ASK_SLUGS.has(slug ?? '')) {
     await ensureHeldDeliveryAsk(sellerId, world.storeToken, staffToken, world.variantId, log);
@@ -3551,6 +3552,63 @@ async function ensureStoreDispute(sellerId, world, log) {
     return;
   }
   log(`  · ${existing.ticketNumber} is still open on ${order.orderNumber}`);
+}
+
+/**
+ * P3's two ticket NUMBERS, handed to the video off a fixture.
+ *
+ * The flow used to name `TK-2026-000003` and `TK-2026-000004` outright,
+ * and a ticket number is allocated from a per-year sequence (TKT-1) —
+ * so which number lands on which ticket depends on how many tickets
+ * that stack has ever opened. Measured on the two filming stacks the
+ * same two numbers were a receipt shortfall on one and a long-resolved
+ * scrap ticket on the other, and `…0004` did not exist at all on one of
+ * them. The video therefore opened whatever happened to be third and
+ * waited out its timeout on a "Goods receipt" line that was never
+ * coming.
+ *
+ * So the video is handed the numbers the way an operator is — by the
+ * KIND of ticket it is about — and the sequence is free to be wherever
+ * it is. Scoped to a LIVE ticket for each kind, because P3 replies on
+ * the shortfall and reads the dispute, and a settled one of either is
+ * somebody else's take (`ensureStoreDispute` says the same thing about
+ * reopening one).
+ *
+ * THROWS rather than writing a null. A fixture carrying `undefined`
+ * fails thirty seconds later inside a `waitFor`, in a step whose name
+ * says nothing about seeding; failing here names the missing ticket and
+ * the function that was supposed to have made it.
+ */
+async function writeRefundsFixture(sellerId, log) {
+  const live = { in: ['OPEN', 'NEGOTIATING'] };
+  const pick = async (ticketType) =>
+    prisma.ticket.findFirst({
+      where: { sellerId, ticketType, status: live },
+      orderBy: { createdAt: 'desc' },
+      select: { ticketNumber: true },
+    });
+
+  const shortfall = await pick('RECEIPT_SHORTFALL');
+  const dispute = await pick('STORE_DISPUTE');
+  if (shortfall === null) {
+    throw new Error(
+      'refunds-and-disputes: no live RECEIPT_SHORTFALL ticket for this seller. ' +
+        'TKT-3 opens one when a goods receipt completes short, so the consignment ' +
+        'world has to be seeded before this runs.',
+    );
+  }
+  if (dispute === null) {
+    throw new Error(
+      'refunds-and-disputes: no live STORE_DISPUTE ticket — ensureStoreDispute ' +
+        'should have raised or rebuilt one just above this.',
+    );
+  }
+
+  await writeFixture('refunds-and-disputes', {
+    shortfallTicket: shortfall.ticketNumber,
+    disputeTicket: dispute.ticketNumber,
+  });
+  log(`  · P3 films ${shortfall.ticketNumber} (short count) and ${dispute.ticketNumber} (dispute)`);
 }
 
 /**
@@ -8961,6 +9019,105 @@ async function ensureWalletHasMoney(sellerId, sellerToken, staffToken) {
  * — so nothing downstream of them has a running balance to be wrong.
  * It refuses rather than guesses if that stops being true.
  */
+/**
+ * Remove wallet entries from the MIDDLE of a chain, and re-stamp what
+ * follows.
+ *
+ * ── WHY THE OLD GUARD COULD NOT HOLD ───────────────────────────────
+ * Both money-desk cleanups below used to REFUSE unless the rows they
+ * wanted gone were the newest on the wallet, on the grounds that
+ * `runningBalanceAfter` is STAMPED and never recomputed (WAL-7) — so
+ * removing an entry with anything after it leaves every later balance
+ * wrong. The reasoning is right and the TEST is unsatisfiable: a filming
+ * box runs every other money video between two takes of this one, and
+ * each of those writes its own entries. Measured on a real box, the COD
+ * credit sat twenty-five rows deep — two weeks and four videos behind
+ * the newest entry — so the cleanup refused for ever, and the only
+ * advice it could give was to reseed the whole box, which a run of a
+ * hundred slugs cannot do between two of them.
+ *
+ * ── WHAT IT DOES INSTEAD ───────────────────────────────────────────
+ * It repairs the chain rather than refusing to break it. Each entry's
+ * SIGNED amount is read off the chain itself —
+ * `balanceAfter(n) − balanceAfter(n−1)` — so nothing here has to know
+ * which directions are credits, and `WalletService.CREDIT_DIRECTIONS`
+ * (the one authority, WAL-1) cannot be restated here and then drift
+ * from it. Survivors are re-accumulated in id order and only rows whose
+ * stamp actually moved are written.
+ *
+ * `seller_wallet_balances` moves with them. It is a CACHE of the same
+ * number, read directly by several screens these videos film, and
+ * `applyEntry` keeps it in step inside its own transaction — so a delete
+ * that left it alone would film a balance disagreeing with the ledger
+ * under it until the next entry landed.
+ *
+ * PER CURRENCY, because the chain is: the balance read is the last
+ * entry's by `(seller_id, currency, id)`. Both old guards compared
+ * against the newest entry of ANY currency, which on a seller holding
+ * taka would have refused for a reason that was not true.
+ *
+ * It never invents a figure: the amounts come from the chain, so a
+ * pre-existing discontinuity is preserved rather than papered over.
+ */
+async function removeWalletEntries(sellerId, removeIds) {
+  const remove = new Set(removeIds);
+  if (remove.size === 0) return 0;
+  const affected = await prisma.sellerWalletEntry.findMany({
+    where: { sellerId, id: { in: [...remove] } },
+    select: { currency: true },
+  });
+  for (const currency of new Set(affected.map((e) => e.currency))) {
+    const chain = await prisma.sellerWalletEntry.findMany({
+      where: { sellerId, currency },
+      orderBy: { id: 'asc' },
+      select: { id: true, runningBalanceAfter: true },
+    });
+    // Paisa, so the arithmetic is integer and a re-stamp can never
+    // introduce a rounding drift of its own.
+    const paisa = (d) => Math.round(Number(d) * 100);
+    const signed = new Map();
+    let previous = 0;
+    for (const e of chain) {
+      signed.set(e.id, paisa(e.runningBalanceAfter) - previous);
+      previous = paisa(e.runningBalanceAfter);
+    }
+    const restamps = [];
+    let running = 0;
+    let lastId = null;
+    for (const e of chain) {
+      if (remove.has(e.id)) continue;
+      running += signed.get(e.id) ?? 0;
+      lastId = e.id;
+      if (paisa(e.runningBalanceAfter) !== running) {
+        restamps.push(
+          prisma.sellerWalletEntry.update({
+            where: { id: e.id },
+            data: { runningBalanceAfter: (running / 100).toFixed(2) },
+          }),
+        );
+      }
+    }
+    const balance = (running / 100).toFixed(2);
+    await prisma.$transaction([
+      prisma.sellerWalletEntry.deleteMany({
+        where: { sellerId, currency, id: { in: [...remove] } },
+      }),
+      ...restamps,
+      prisma.sellerWalletBalance.upsert({
+        where: { sellerId_currency: { sellerId, currency } },
+        create: { sellerId, currency, balance, lastEntryId: lastId },
+        update: { balance, lastEntryId: lastId },
+      }),
+    ]);
+    if (restamps.length > 0) {
+      console.log(
+        `  · re-stamped ${restamps.length} later ${currency} running balance(s) → ${balance}`,
+      );
+    }
+  }
+  return remove.size;
+}
+
 async function unrecordTutorialPayouts(sellerId) {
   const settlements = await prisma.courierSettlement.findMany({
     where: { reference: { startsWith: DESK_PAYOUT_PREFIX } },
@@ -8984,28 +9141,31 @@ async function unrecordTutorialPayouts(sellerId) {
       e.direction,
     ),
   );
-  const newest = await prisma.sellerWalletEntry.findMany({
-    where: { sellerId },
-    select: { id: true },
-    orderBy: { id: 'desc' },
-    take: settlementWritten.length,
-  });
   const removable = new Set(settlementWritten.map((e) => e.id));
-  if (!newest.every((e) => removable.has(e.id))) {
-    throw new Error(
-      'The COD credit is no longer the newest thing on this wallet — removing it would leave ' +
-        'every later running balance wrong. Reseed the box instead of filming N5 on it.',
-    );
-  }
 
+  /*
+    THE CASH GOES WITH THE CREDIT, which this used to leave behind.
+
+    A settlement posts its bank entry in the same transaction as the
+    wallet one (TRE-3) and the COD credit reclassifies held cash as a
+    zero-sum pair referenced by the wallet entry's own id (TRE-8) — so
+    removing only the ledger rows left bank entries per take with
+    nothing behind them, and "held for a seller equals the positive part
+    of their wallet" off by the credit's net. `unpostStaffTransfers`
+    below has always deleted both halves and says why; this is the same
+    move, which is the argument for making it.
+  */
+  const bank = await prisma.bankEntry.deleteMany({
+    where: { OR: [{ settlementId: { in: ids } }, { reference: { in: [...removable] } }] },
+  });
+  const removed = await removeWalletEntries(sellerId, [...removable]);
   await prisma.$transaction([
-    prisma.sellerWalletEntry.deleteMany({ where: { id: { in: [...removable] } } }),
     prisma.courierSettlementLine.deleteMany({ where: { settlementId: { in: ids } } }),
     prisma.courierSettlement.deleteMany({ where: { id: { in: ids } } }),
   ]);
   console.log(
-    `  · un-recorded ${settlements.length} tutorial payout(s) and the ${removable.size} ` +
-      `wallet entr(ies) they wrote`,
+    `  · un-recorded ${settlements.length} tutorial payout(s), the ${removed} wallet ` +
+      `entr(ies) and the ${bank.count} bank entr(ies) they wrote`,
   );
 }
 
@@ -9140,10 +9300,12 @@ const REMITTANCE_EXPORT_FILE = 'courier-remittance.csv';
  * wallet" invariant true (TRE-8); deleting the wallet row alone would
  * leave cash attributed to somebody who is no longer owed it.
  *
- * Guarded on these being the NEWEST entries on the wallet, for the same
- * reason the settlement one is: a running balance is stamped, not
- * recomputed, so removing an entry with anything after it would leave
- * every later balance wrong.
+ * A running balance is stamped and not recomputed (WAL-7), so this used
+ * to be GUARDED on these being the newest entries on the wallet — a test
+ * no filming box can satisfy, because every other money video writes to
+ * the same wallet between two takes of this one.
+ * `removeWalletEntries` re-stamps what follows instead; the reasoning is
+ * in its own docblock.
  */
 async function unpostStaffTransfers(sellerId) {
   const staff = await prisma.sellerWalletEntry.findMany({
@@ -9152,23 +9314,11 @@ async function unpostStaffTransfers(sellerId) {
     orderBy: { id: 'desc' },
   });
   if (staff.length === 0) return;
-  const newest = await prisma.sellerWalletEntry.findMany({
-    where: { sellerId },
-    select: { id: true },
-    orderBy: { id: 'desc' },
-    take: staff.length,
-  });
   const ids = new Set(staff.map((e) => e.id));
-  if (!newest.every((e) => ids.has(e.id))) {
-    throw new Error(
-      'A staff transfer is no longer the newest thing on this wallet — removing it would leave ' +
-        'every later running balance wrong. Reseed the box instead of filming N6 on it.',
-    );
-  }
   const bank = await prisma.bankEntry.deleteMany({ where: { reference: { in: [...ids] } } });
-  await prisma.sellerWalletEntry.deleteMany({ where: { id: { in: [...ids] } } });
+  const removed = await removeWalletEntries(sellerId, [...ids]);
   console.log(
-    `  · un-posted ${ids.size} staff transfer(s) and the ${bank.count} bank entr(ies) they wrote`,
+    `  · un-posted ${removed} staff transfer(s) and the ${bank.count} bank entr(ies) they wrote`,
   );
 }
 

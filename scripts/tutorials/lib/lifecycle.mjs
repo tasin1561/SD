@@ -649,36 +649,122 @@ async function pullOwnCall(orderId, staffToken) {
     where: { agent: { email: OPS.email } },
     data: { lastSeenAt: new Date() },
   });
-  await callThisOneFirst(orderId);
 
-  // Ours is at the front, so the first pull should be it. Anything else
-  // is released and NOTED: a queue that hands back the same entry twice
-  // cannot be walked (release keeps its place, by design), and saying so
-  // is better than spinning until a loop bound runs out.
-  const seen = new Set();
-  const waiting = await prisma.callQueueEntry.count({ where: { status: 'PENDING' } });
-  for (let i = 0; i < waiting + 5; i += 1) {
-    const pulled = await call('/agent/calls/next', { method: 'POST', token: staffToken });
-    const assignment = pulled.assignment;
-    if (!assignment) return null;
-    if (assignment.orderId === orderId) return assignment.assignmentId;
-    if (seen.has(assignment.assignmentId)) {
-      throw new Error(
-        `The call queue keeps handing back ${assignment.assignmentId} — it is ahead of ours ` +
-          'and release does not move it. Clear the stale PENDING entries on this box first.',
-      );
-    }
-    seen.add(assignment.assignmentId);
-    // A 409 here means it is already back on the queue, which is the
-    // outcome we wanted: not consumed.
-    await call(`/agent/calls/${assignment.assignmentId}/release`, {
+  /*
+    A CALL A PREVIOUS RUN LEFT IN HER HAND, handed back before we ask
+    for another.
+
+    An agent's capacity is ONE, so an assignment still ASSIGNED from a
+    take that died mid-scene makes the very FIRST pull below answer 409
+    `AGENT_AT_CAPACITY` — and the loop only knows how to hand back a
+    call it managed to pull, so nothing caught this and the seed
+    stopped on it. It is not hypothetical: it is what every second run
+    on a box that has already filmed a call video does.
+
+    Released through the ENDPOINT rather than by writing the row, so the
+    service's own bookkeeping runs — CC-7's guarded revert hands the
+    entry back as PENDING with `availableAt` untouched, keeping its
+    place in the queue. Done BEFORE `callThisOneFirst` so ours is moved
+    to the front of a queue that already has this one back in it.
+
+    `ASSIGNMENT_NOT_ACTIVE` is tolerated for the same reason the loop
+    tolerates it: the presence sweep may have stood her down and handed
+    it back a second before we asked.
+  */
+  const stillHeld = await prisma.callQueueEntry.findMany({
+    where: { status: 'ASSIGNED', assignedAgent: { email: OPS.email } },
+    select: { id: true },
+  });
+  for (const entry of stillHeld) {
+    await call(`/agent/calls/${entry.id}/release`, {
       method: 'POST',
       token: staffToken,
     }).catch((e) => {
       if (!/ASSIGNMENT_NOT_ACTIVE/.test(String(e))) throw e;
     });
   }
-  return null;
+  if (stillHeld.length > 0) {
+    console.log(`  \u00b7 handed back ${stillHeld.length} call(s) a previous take left assigned`);
+  }
+
+  await callThisOneFirst(orderId);
+
+  /*
+    EVERY OTHER PICKABLE CALL IS PARKED, and ours is pulled on its own.
+
+    ── WHY WALKING THE QUEUE CANNOT WORK ───────────────────────────────
+    This used to pull repeatedly, RELEASE anything that was not ours,
+    and try again — and on any box carrying another pickable entry it
+    looped until its bound ran out and then threw "the call queue keeps
+    handing back …". The reason is in `pullNext`'s own ORDER BY, whose
+    FIRST key is `(scheduled_attempts > 0) DESC`: a PENDING row an agent
+    claimed and gave back without logging a call goes to the FRONT, on
+    purpose, because that customer has already waited through an agent
+    doing nothing with their order.
+
+    Releasing is exactly that act. So every lap PROMOTED the rival it
+    had just handed back, ahead of ours, however early we had set our
+    own `available_at` — the loop was generating the thing that beat it.
+    `callThisOneFirst` moves `available_at` alone and is structurally
+    unable to win that first key.
+
+    ── SO: MAKE OURS THE ONLY PICKABLE ENTRY ───────────────────────────
+    A future `available_at` is not pickable (`available_at <= now()` in
+    the same query), so the others are pushed forward, ours is pulled —
+    it is now the only candidate, so there is nothing to walk and
+    nothing to release — and they are put back EXACTLY where they were.
+    Their own timestamps are carried rather than an offset subtracted,
+    because an offset assumes nothing else wrote in between.
+
+    Restored in a FINALLY: a seed that dies here must not leave the
+    box's call queue parked in 2027, which would read as an empty queue
+    on every later take and in the admin station.
+
+    Nothing is released and nothing's `scheduled_attempts` is touched,
+    so no other video's queue position moves — which the old loop could
+    not say.
+  */
+  const parked = await prisma.callQueueEntry.findMany({
+    where: {
+      status: 'PENDING',
+      availableAt: { lte: new Date() },
+      orderId: { not: orderId },
+    },
+    select: { id: true, availableAt: true },
+  });
+  const PARKED_AT = new Date('2099-01-01T00:00:00.000Z');
+  if (parked.length > 0) {
+    await prisma.callQueueEntry.updateMany({
+      where: { id: { in: parked.map((e) => e.id) } },
+      data: { availableAt: PARKED_AT },
+    });
+  }
+
+  try {
+    const pulled = await call('/agent/calls/next', { method: 'POST', token: staffToken });
+    const assignment = pulled.assignment;
+    if (!assignment) return null;
+    if (assignment.orderId === orderId) return assignment.assignmentId;
+    /*
+      Ours was the only pickable entry, so being handed something else
+      means the queue is not what this function thinks it is — said out
+      loud rather than released and retried, which is what used to turn
+      one surprise into a loop.
+    */
+    throw new Error(
+      `Asked for ${orderId} at the head of an otherwise parked queue and was handed ` +
+        `${assignment.assignmentId} (order ${assignment.orderId}).`,
+    );
+  } finally {
+    for (const entry of parked) {
+      await prisma.callQueueEntry.updateMany({
+        // Guarded on the parked value, so a row something else has
+        // legitimately rescheduled in the meantime is left alone.
+        where: { id: entry.id, availableAt: PARKED_AT },
+        data: { availableAt: entry.availableAt },
+      });
+    }
+  }
 }
 
 async function recordAttempt(assignmentId, staffToken, outcome, notes) {

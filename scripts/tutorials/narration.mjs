@@ -597,7 +597,7 @@ export const VIDEOS = [
       },
       {
         id: 'role',
-        say: 'The list here is the six roles every account starts with. A role you built yourself on the Roles screen is given after they join, not from this box.',
+        say: 'The list here is every role you have — the seven each account starts with, and any you built yourself on the Roles screen. Pick more than one if that is the truth of it: what they can do is all of them added together.',
       },
       {
         id: 'create',
@@ -5050,7 +5050,7 @@ export const VIDEOS = [
       },
       {
         id: 'invite',
-        say: 'An invitation is an email address and a role \u2014 and these are the seven built-in ones, not the rows your team invented under Roles. One of those is given afterwards, from the table itself.',
+        say: 'An invitation is an email address and the roles they will hold — as many as the job really is. The list is every role on this console, including the ones your team built, so somebody\u2019s first day does not need correcting afterwards.',
       },
       {
         id: 'link',
@@ -5062,11 +5062,11 @@ export const VIDEOS = [
       },
       {
         id: 'role',
-        say: 'Changing somebody\u2019s role is a dropdown that does NOT act on its own. Choosing a different one arms a confirmation and nothing else, so a slipped scroll wheel cannot re-rank your colleague.',
+        say: 'Changing what somebody may do replaces the whole set, from their own row. Nothing has moved yet: the panel lists what they gain and what they lose, and until the set is genuinely different there is nothing to save.',
       },
       {
         id: 'confirmrole',
-        say: 'Confirmed, and it takes effect on their next request rather than their next sign-in. Permissions are read per request, which is the half people expect to have to wait for.',
+        say: 'Saved, and the row names every role she holds now — what she can do is all of them added together. It takes effect on her next request rather than her next sign-in, which is the half people expect to have to wait for.',
       },
       {
         id: 'deactivate',
