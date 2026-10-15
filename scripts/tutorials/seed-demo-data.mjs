@@ -1546,6 +1546,7 @@ async function dangerousActsWorldFor(slug, sellerId, sellerToken, staffToken) {
 
   await pendingBankChange(sellerId, sellerToken);
   await closeAnEndedMonth(staffToken);
+  await reopenMonthsAfter('2026-07');
   await aReceiptReadyToComplete(staffToken);
 
   /*
@@ -1764,6 +1765,69 @@ async function closeAnEndedMonth(staffToken) {
     body: { reason: 'Closed for the tutorial library so the page has a frozen month to show.' },
   });
   console.log(`  · closed ${MONTH} — frozen for good, as the video says`);
+}
+
+/**
+ * August back to "not closed yet", which the AUTO-CLOSE keeps taking
+ * away.
+ *
+ * The scene picks `August 2026 — not closed yet` out of the month
+ * dropdown and its outro dwells on `Close August 2026`, so a closed
+ * August leaves the picker with nothing to choose and the step waits
+ * out its timeout on a control that is present and permanently
+ * disabled.
+ *
+ * It is closed by the product, on purpose and correctly: PNL-CF-1's
+ * hourly `pnl-auto-close` closes every ended month on time, and marks
+ * it PROVISIONAL when a nightly job did not run — which on a filming
+ * box is always, because none of them do. So this is not a previous
+ * take's mess; it is a worker doing its job between takes, and it will
+ * do it again.
+ *
+ * ── WHY DELETING IS THE RIGHT MOVE HERE, AND ONLY HERE ──────────────
+ * PNL-CF-1 is explicit that a month is never REOPENED — the product
+ * has no such path, and it must not grow one. This is the demo world
+ * putting a screen back the way a video needs it, in a database
+ * nothing is reported from, and it takes the row out rather than
+ * flipping a state the product would never flip.
+ *
+ * PROVISIONAL only. A FINAL month after July means somebody locked it
+ * deliberately and this stops rather than guessing — the same posture
+ * `closeAnEndedMonth` takes about July.
+ *
+ * `pnl_snapshot_versions` is `onDelete: Restrict`, so the period cannot
+ * go while a version exists even though the ROWS cascade — delete the
+ * rows, then the versions, then the carry-forwards, then the period.
+ * (The same shape as a store's roles blocking its own cascade.)
+ */
+async function reopenMonthsAfter(month) {
+  const later = await prisma.pnlPeriod.findMany({
+    where: { month: { gt: month } },
+    select: { id: true, month: true, lockState: true },
+    orderBy: { month: 'asc' },
+  });
+  if (later.length === 0) return;
+
+  const locked = later.filter((p) => p.lockState !== 'PROVISIONAL');
+  if (locked.length > 0) {
+    throw new Error(
+      `${locked.map((p) => p.month).join(', ')} is closed FINAL, after ${month}. ` +
+        'The video needs an ended month that is not closed, and a month somebody locked ' +
+        "deliberately is not this seeding's to remove.",
+    );
+  }
+
+  const ids = later.map((p) => p.id);
+  await prisma.$transaction([
+    prisma.pnlSnapshotRow.deleteMany({ where: { periodId: { in: ids } } }),
+    prisma.pnlSnapshotVersion.deleteMany({ where: { periodId: { in: ids } } }),
+    prisma.pnlCarryForward.deleteMany({ where: { periodId: { in: ids } } }),
+    prisma.pnlPeriod.deleteMany({ where: { id: { in: ids } } }),
+  ]);
+  console.log(
+    `  \u00b7 reopened ${later.map((p) => p.month).join(', ')} \u2014 ` +
+      'the auto-close had closed it provisionally between takes',
+  );
 }
 
 async function walletWorldFor(slug, sellerId, sellerToken, staffToken) {

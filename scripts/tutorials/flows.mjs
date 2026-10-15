@@ -13405,10 +13405,37 @@ export const FLOWS = {
           closed. The seeding now writes the file from one account's
           parcels and names it here.
         */
-        await dialog
-          .getByLabel(/^Courier account/)
-          .first()
-          .selectOption({ label: payout.accountLabel });
+        /*
+          BY THE OPTION'S VALUE, found from its text — not by
+          `{ label }`, which is an EXACT match against the option's whole
+          text and the option is not labelled what the account is
+          called: it renders `${a.label} · ${a.courierCode}
+          (${a.environment})`. Asking for the bare label matched nothing,
+          and `selectOption` reports that as sixty retries of "waiting
+          for element to be visible and enabled" — which reads as a
+          disabled control rather than as a missing option, and the
+          control is never disabled.
+
+          Anchored with `^… · ` because two of this box's accounts share
+          a prefix ("Simulator account" and "Simulator account
+          (SANDBOX)"), and a substring match would let the wrong one win.
+        */
+        const accountSelect = dialog.getByLabel(/^Courier account/).first();
+        await accountSelect.waitFor({ state: 'visible', timeout: 20_000 });
+        const wanted = new RegExp(
+          `^${payout.accountLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} · `,
+        );
+        const option = accountSelect.locator('option').filter({ hasText: wanted }).first();
+        await option.waitFor({ state: 'attached', timeout: 20_000 });
+        const accountValue = await option.getAttribute('value');
+        if (accountValue === null || accountValue === '') {
+          throw new Error(
+            `No courier-account option for "${payout.accountLabel}" — the seeding writes the ` +
+              'remittance file from ONE account and names it in the fixture, so a missing ' +
+              'option means that account is not on this box.',
+          );
+        }
+        await accountSelect.selectOption(accountValue);
         await page.waitForTimeout(500);
         await stage.typeIn(dialog.getByLabel(/^Amount received/).first(), String(payout.totalInr), {
           after: 600,
