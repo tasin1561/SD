@@ -29,6 +29,14 @@ const BULK_CSV = path.join(TUTORIALS_DIR, 'fixtures', 'rangpur-bulk-orders.csv')
 const BULK_MULTI_LINE_REF = 'RSH-2026-0501';
 
 /** Who the demo order goes to. Plausible, and nobody real. */
+/**
+ * The demo seller's company, as every admin list prints it. Scenes that
+ * open "a seller" from an admin list must name THIS one: the seed
+ * arranges one seller's world, and `.first()` on a list that has since
+ * grown opens somebody else's.
+ */
+const DEMO_SELLER_COMPANY = 'Rangpur Silk House';
+
 const CUSTOMER = {
   name: 'Ananya Iyer',
   phone: '9845017722',
@@ -576,6 +584,24 @@ async function ledgerRow(page, label) {
     .getByRole('row')
     .filter({ has: page.getByRole('cell').filter({ hasText: startsWithLabel }) })
     .first();
+
+  // THE LEDGER IS A WINDOW, not the whole history. It loads a page at a
+  // time behind a "Load more" button, and the demo seller now has over
+  // forty entries — so an older row (the one accepted top-up, say) is
+  // simply not on screen yet, and waiting for it just spends the
+  // timeout. The row EXISTS; it has not been fetched.
+  //
+  // Press Load more until it appears or the button goes, which is what
+  // a person does. Bounded, because a label that is genuinely absent
+  // must still fail rather than page to the end of the ledger forever.
+  for (let round = 0; round < 8; round += 1) {
+    if ((await row.count()) > 0) break;
+    const more = page.getByRole('button', { name: /^Load(ed|ing)?( more)?$/ }).first();
+    if ((await more.count()) === 0) break;
+    await more.click();
+    await page.waitForTimeout(900);
+  }
+
   await row.waitFor({ state: 'visible', timeout: 25_000 });
   await row.scrollIntoViewIfNeeded();
   await page.waitForTimeout(700);
@@ -1275,7 +1301,10 @@ async function selectCourierAccount(dialog, label) {
 const O4_THRESHOLD_NAME = 'Public tracking lookups per visitor per minute';
 const O4_THRESHOLD_VALUE = '30';
 const O4_SECRET_REF_NAME = 'Where the Shiprocket update token is kept';
-const O4_READ_ONLY_NAME = 'Reseller terms may pay after phone confirmation';
+// CON-2's wording, not ours: the row reads "Member store…" since the
+// rename. The KEY it sits on is still
+// `reseller.credit_after_confirmation_enabled`.
+const O4_READ_ONLY_NAME = 'Member store terms may pay after phone confirmation';
 const O4_SWITCH_NAME = 'Nightly automatic re-attempts';
 
 /** One `/settings` row, by the words at the top of it. */
@@ -4139,15 +4168,16 @@ export const FLOWS = {
         // a row that exists and is three pages back. Searching is also
         // what a person does, and the field says so: "Order number, ref,
         // AWB, recipient name or phone".
-        await stage.typeIn(page.getByLabel('Search orders'), DELIVERED_CUSTOMER, { after: 600 });
-        // SUBMIT it. The search is a <form> whose magnifier is a real
-        // submit button, so typing alone only sets local state — the
-        // URL, and therefore the query, changes on submit. Typing
-        // without this filters nothing and the scene waits out its
-        // timeout on a row that is still pages away.
-        await page.keyboard.press('Enter');
-        await page.waitForLoadState('networkidle').catch(() => {});
-        await page.waitForTimeout(800);
+        // "Search parcels", not "Search orders" — this scene is on
+        // /tracking, and its field carries `aria-label="Search parcels by
+        // waybill, number or recipient"`, which Playwright returns in
+        // PREFERENCE to the visible label. The orders page's handle
+        // matches nothing here. Unlike /orders this is NOT a form:
+        // `search` is state fed straight into the query, so it filters as
+        // you type and there is no Enter to press. Both the selector and
+        // the comment above it were copied from the other page.
+        await stage.typeIn(page.getByLabel('Search parcels'), DELIVERED_CUSTOMER, { after: 600 });
+        await page.waitForTimeout(1200);
         const row = page.getByRole('row').filter({ hasText: DELIVERED_CUSTOMER }).first();
         await row.waitFor({ state: 'visible', timeout: 20_000 });
         await row.scrollIntoViewIfNeeded();
@@ -4218,7 +4248,17 @@ export const FLOWS = {
       },
 
       async outro({ page, stage }) {
-        const row = page.getByRole('row').filter({ hasText: 'Lakshmi Raghavan' }).first();
+        // ANY row — the line is "one click from every row", so naming a
+        // parcel here is a liability. The unfiltered register is the 100
+        // NEWEST shipments (a server window, not pages, and this page has
+        // no pagination), and the delivered lifecycle parcel is the one
+        // that is never re-made, so it ages out permanently. The scene
+        // before this clears the search, which is exactly the state the
+        // other lookup timed out in.
+        const row = page
+          .getByRole('row')
+          .filter({ has: page.locator('a.ord-link') })
+          .first();
         await row.scrollIntoViewIfNeeded();
         await page.waitForTimeout(500);
         await stage.dwellOn(row.locator('a.ord-link').first(), 3000);
@@ -9014,8 +9054,17 @@ export const FLOWS = {
       async pack({ page, stage, baseUrl }) {
         await page.goto(`${baseUrl}/warehouse/pack`, { waitUntil: 'domcontentloaded' });
         await page.waitForLoadState('networkidle').catch(() => {});
-        // The bench's own sentence about the box being opened by a scan.
-        const scan = page.getByText(/a box is opened by scanning one/i).first();
+        /*
+          THE SCAN FIELD'S OWN LABEL, which is on the bench whatever is
+          waiting on it. This used to gate on the QUEUE's note ("…no
+          printed label yet — a box is opened by scanning one"), which
+          renders only when the queue holds a parcel AND one of them is
+          unlabelled — true on neither filming stack, so a tour that
+          presses nothing died waiting for a warning about work.
+        */
+        const scan = page
+          .getByText('Scan the shipping label to open a box', { exact: true })
+          .first();
         await scan.waitFor({ state: 'visible', timeout: 25_000 });
         await scan.evaluate((el) => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
         await page.waitForTimeout(800);
@@ -12378,7 +12427,15 @@ export const FLOWS = {
         const table = page.locator('table').filter({ hasText: 'Available balance' }).first();
         await table.waitFor({ state: 'visible', timeout: 20_000 });
         await stage.dwellOn(table, 2200);
-        const open = page.getByRole('link', { name: /Ledger/ }).first();
+        // THE DEMO SELLER'S ledger, not whichever row sorts first. The
+        // seed arranges this one seller's money — the accepted top-up,
+        // the COD credit, the charges the later scenes name — and the
+        // list has grown enough that `.first()` opened somebody else's
+        // wallet, where none of those lines exist. The scene then failed
+        // three scenes later, on a row that was never going to be there.
+        const ours = page.getByRole('row').filter({ hasText: DEMO_SELLER_COMPANY }).first();
+        await ours.scrollIntoViewIfNeeded();
+        const open = ours.getByRole('link', { name: /Ledger/ }).first();
         await stage.clickIt(open, { after: 1500 });
         await page.waitForURL(/\/seller-wallets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
         await page.waitForLoadState('networkidle').catch(() => {});
@@ -14694,10 +14751,23 @@ export const FLOWS = {
   'managing-a-seller': {
     app: 'admin',
 
+    /*
+      THROUGH THE NAV, never `goto` — `signInAndOpen` says why at length
+      and this flow is the second proof of it: two takes filmed the
+      OVERVIEW page under scene one's line, because the `goto` issued the
+      instant `signIn` saw `/dashboard` was overtaken by the client-side
+      navigation still finishing behind it. The failure presents as a
+      twenty-five-second wait for a heading that is on a page the camera
+      never reached.
+
+      The probe is the TABLE and deliberately not a named row: there are
+      thirty-three clients on a filming box and a page holds twenty, so
+      the row this video wants is not promised on page one — which is why
+      scene one searches for it. The table is what the list draws when it
+      HAS data, which is the question `withRetry` is asking.
+    */
     async prologue(ctx) {
-      await signIn(ctx);
-      await ctx.page.goto(`${ctx.baseUrl}/sellers`, { waitUntil: 'domcontentloaded' });
-      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+      await signInAndOpen(ctx, '/sellers', ctx.page.locator('.sk-table').first());
     },
 
     steps: {
@@ -14991,10 +15061,11 @@ export const FLOWS = {
   'per-seller-settings': {
     app: 'admin',
 
+    // THROUGH THE NAV (see the client-management prologue): the `goto`
+    // that used to be here raced the client-side navigation `signIn`
+    // left in flight, and the fill below timed out on the dashboard.
     async prologue(ctx) {
-      await signIn(ctx);
-      await ctx.page.goto(`${ctx.baseUrl}/sellers`, { waitUntil: 'domcontentloaded' });
-      await ctx.page.waitForLoadState('networkidle').catch(() => {});
+      await signInAndOpen(ctx, '/sellers', ctx.page.locator('.sk-table').first());
       await ctx.page.getByPlaceholder(/Search by name/).fill('Khulna');
       const link = ctx.page.getByRole('link', { name: O2_SELLER_NAME, exact: true }).first();
       await link.waitFor({ state: 'visible', timeout: 25_000 });
@@ -15738,7 +15809,33 @@ export const FLOWS = {
         await dialog.waitFor({ state: 'visible', timeout: 20_000 });
         await page.waitForTimeout(600);
         await stage.typeIn(dialog.getByLabel(/^Email/).first(), O5_INVITE_EMAIL, { after: 600 });
-        await stage.dwellOn(dialog.getByLabel(/^Role/).first(), 2600);
+        /*
+          A MULTI-ROLE COMBOBOX since RBAC-1b, and PICKING IS NOT
+          OPTIONAL. The form sends the empty set on purpose (FE-2 — the
+          server owns that rule, so the button is not disabled), so this
+          scene used to halo the field, choose nothing, and leave the NEXT
+          scene waiting out its timeout for a reveal card the server had
+          refused to write. It survived at all only because `/^Role/`
+          prefix-matches "Roles" and nothing asserted a choice was made.
+
+          Two of them, because the field's own hint asks for that: a tier
+          for how much of the console they reach, plus the job they do.
+          The listbox stays open after a pick, so the second needs no
+          reopening.
+        */
+        const combo = dialog.getByLabel(/^Roles/);
+        await stage.point(combo, { settle: 700 });
+        await combo.click();
+        for (const name of [O5_INVITE_ROLE_TIER, O5_INVITE_ROLE_JOB]) {
+          const option = page.getByRole('option', { name }).first();
+          await option.waitFor({ state: 'visible', timeout: 15_000 });
+          await stage.clickIt(option, { after: 700 });
+        }
+        // Close the LIST, not the dialog — Escape dismisses the whole
+        // Dialog and the next scene's Create button with it.
+        await page.keyboard.press('Tab');
+        await page.waitForTimeout(500);
+        await stage.dwellOn(combo, 2400);
       },
 
       /*
@@ -15776,26 +15873,72 @@ export const FLOWS = {
         that is the line. So this scene only chooses; the press is the
         next one.
       */
+      /*
+        A DIALOG, NOT A DROPDOWN IN THE ROW, since RBAC-1b. A person holds
+        a SET of roles, so the cell shows chips and the change is made in
+        `StaffRolesDialog`. This is the ADMIN twin of the break already
+        fixed on the seller side — that commit mended two scenes of the
+        colleague video and never touched this one, so `row.locator(
+        'select')` has been pointing at a control that no longer exists.
+        This scene opens the dialog and chooses; the save is the next one.
+      */
       async role({ page, stage }) {
         const row = staffRow(page, O5_STAFF_EMAIL);
         await row.scrollIntoViewIfNeeded();
         await page.waitForTimeout(500);
-        const select = row.locator('select').first();
-        await stage.point(select, { settle: 500 });
-        await select.selectOption({ label: O5_NEW_ROLE_NAME });
-        await page.waitForTimeout(700);
+        await stage.clickIt(row.getByRole('button', { name: /^Change roles/ }).first(), {
+          after: 1400,
+        });
+        const dialog = page.getByRole('dialog', { name: /^Roles for / });
+        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
+
+        // Take the role she HOLDS off before adding the new one, so the
+        // take shows a replacement rather than an accumulation — which is
+        // what the narration describes.
+        const held = dialog.getByRole('button', {
+          name: new RegExp(`Remove ${O5_HELD_ROLE_NAME}`),
+        });
+        if ((await held.count()) > 0) {
+          await stage.clickIt(held.first(), { after: 700 });
+        }
+
+        const combo = dialog.getByLabel(/^Roles/);
+        await stage.point(combo, { settle: 600 });
+        await combo.click();
+        const option = page.getByRole('option', { name: O5_NEW_ROLE_NAME }).first();
+        await option.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.clickIt(option, { after: 900 });
+        // Tab, never Escape — Escape closes the Dialog itself.
+        await page.keyboard.press('Tab');
+        await page.waitForTimeout(600);
         await stage.clearHalo();
+
+        // The consequence in the dialog's own words: what she gains and
+        // what she loses. Asserted rather than dwelt on blind, because an
+        // UNCHANGED set renders no list and disables Save — which would
+        // lose the next scene to a click that never lands.
+        const change = dialog.locator('.ac-list').first();
+        await change.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.dwellOn(change, 2600);
       },
 
       async confirmrole({ page, stage }) {
-        const dialog = page.getByRole('dialog', { name: /Change this person/ });
-        await dialog.waitFor({ state: 'visible', timeout: 20_000 });
-        await page.waitForTimeout(600);
-        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2800);
-        await stage.clickIt(dialogActions(page).getByRole('button', { name: 'Change role' }), {
+        const dialog = page.getByRole('dialog', { name: /^Roles for / });
+        await stage.clickIt(dialog.getByRole('button', { name: 'Save roles' }).first(), {
           after: 2000,
         });
-        await dialog.waitFor({ state: 'detached', timeout: 25_000 });
+        await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
+        // The CHIPS are the proof it landed: the cell names every role
+        // held now, which is the whole reason the single-value dropdown
+        // went away.
+        const row = staffRow(page, O5_STAFF_EMAIL);
+        await row
+          .locator('.ac-chip')
+          .filter({ hasText: O5_NEW_ROLE_NAME })
+          .first()
+          .waitFor({ state: 'visible', timeout: 25_000 });
+        await page.waitForTimeout(600);
+        await stage.dwellOn(row, 3000);
       },
 
       async deactivate({ page, stage }) {

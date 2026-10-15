@@ -352,7 +352,14 @@ const RESUMABLE_FROM = new Set([
  * loop is trying to get to, and the product's own
  * `CONFIRMATION_CALL_STATUSES` includes it for a different reason.
  */
-const STILL_CALLABLE = new Set(['PENDING_CONFIRMATION', 'CALL_NO_RESPONSE', 'CALL_RESCHEDULED']);
+// Exported because `seed-demo-data.mjs` carried a SECOND copy of this
+// loop with the narrower `=== PENDING_CONFIRMATION` condition, and so
+// stopped after one ring. One set, one place.
+export const STILL_CALLABLE = new Set([
+  'PENDING_CONFIRMATION',
+  'CALL_NO_RESPONSE',
+  'CALL_RESCHEDULED',
+]);
 
 /**
  * Orders no call of ANY reason can help any more.

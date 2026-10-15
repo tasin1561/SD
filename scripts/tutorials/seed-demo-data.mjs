@@ -23,7 +23,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { prisma, pdfLib } from './lib/deps.mjs';
+import { prisma, pdfLib, BullMQ } from './lib/deps.mjs';
 import { MOCK_ROOT, mockObjectPath } from './lib/spaces-shim.mjs';
 import { GENERATED_DIR, TUTORIALS_DIR } from './lib/paths.mjs';
 import { API, call, waitFor } from './lib/api.mjs';
@@ -35,6 +35,7 @@ import {
   lifecycleReport,
   settleRetiredReturns,
   LIFECYCLE_PARCELS,
+  STILL_CALLABLE,
 } from './lib/lifecycle.mjs';
 import { clearLoginThrottle } from './lib/clear-login-throttle.mjs';
 import { writeFixture } from './lib/fixture.mjs';
@@ -4819,7 +4820,13 @@ async function enqueueResellerReportsJob(name, log) {
     building the connection field by field does not, so it is read here
     explicitly rather than inherited.
   */
-  const BullMQ = await import('bullmq');
+  /*
+    BORROWED FROM `apps/api`, never imported bare. The workspace root's
+    `node_modules` holds only build tooling, so `await import('bullmq')`
+    from a script at the root resolves to nothing — which is what
+    `lib/deps.mjs` exists to solve, and what `lib/freight.mjs` already
+    does for the identical nudge.
+  */
   const queue = new BullMQ.Queue('reseller-reports', {
     connection: {
       host: url.hostname,
@@ -4866,7 +4873,12 @@ async function ringStoreOrderToCap(orderId, staffToken, cap, log) {
       where: { id: orderId },
       select: { status: true },
     });
-    if (order.status !== 'PENDING_CONFIRMATION') break;
+    // NOT just PENDING_CONFIRMATION: `NO_ANSWER` moves the order to
+    // CALL_NO_RESPONSE and re-queues it (CC-2/CC-5), so this loop used
+    // to stop after ONE ring and the order never reached the cap.
+    // `STILL_CALLABLE` is lifecycle.mjs's set, imported rather than
+    // restated — a second copy of it is exactly what went stale here.
+    if (!STILL_CALLABLE.has(order.status)) break;
     const entry = await waitFor(`a call queue entry for ${orderId}`, () =>
       prisma.callQueueEntry.findFirst({
         where: { orderId, status: { in: ['PENDING', 'ASSIGNED'] } },
@@ -8375,14 +8387,20 @@ async function ensureDamagedBinStock(sellerId, staffToken, warehouse) {
     console.log(`  · ${bin.code} holds ${have} damaged unit(s) — nothing to top up`);
     return;
   }
-  const onto = held[0];
-  if (onto === undefined) {
-    console.log(
-      `  · note: ${bin.code} is empty and has never held anything, so there is no batch to ` +
-        'top up — run K2 once, or the "Return or scrap" half of L1 has no line.',
-    );
-    return;
-  }
+  /*
+    A BIN THAT HAS NEVER HELD ANYTHING still needs a line, and this used
+    to give up on it — printed a note telling somebody to run another
+    video first and returned, so the SEED reported success and the take
+    died nine scenes later on a shelf reading "Empty". A fresh filming
+    stack is exactly the box where it has never held anything, which is
+    the one case this is for.
+
+    The batch comes from the seller's biggest PICKABLE line: an INCREASE
+    writes its own `stock_levels` row for (variant, damaged bin, batch),
+    so nothing has to be there first — all that is needed is a batch of
+    this seller's that exists in this warehouse.
+  */
+  const onto = held[0] ?? (await biggestPickableLine(sellerId, warehouse.id, staffToken, 1));
   await call('/admin/stock-adjustments', {
     method: 'POST',
     token: staffToken,
