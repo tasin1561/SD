@@ -3004,9 +3004,25 @@ const SUPERVISE_ORDERS = [
  */
 const SUPERVISE_SLUGS = new Set(['supervising-the-queue', 'forcing-an-outcome']);
 
-async function superviseWorldFor(slug, sellerId, sellerToken) {
-  if (!SUPERVISE_SLUGS.has(slug)) return;
-
+/**
+ * The two call agents, on the roster and holding the `call_agent` role.
+ *
+ * EXPORTED from the supervise world because a SECOND video needs them
+ * and needs nothing else of it: O5's broadcast sends to "a staff role"
+ * — `call_agent` — and on a box where nobody holds it the form refuses
+ * with `[EMPTY_AUDIENCE] … nobody would receive this` and says "Send to
+ * 0 people". Which is the product working: NOTIF-12 refuses an empty
+ * broadcast before it writes a row. The video simply had no audience to
+ * send to, so its last three scenes could not happen.
+ *
+ * Making them here rather than adding `staff-and-broadcasts` to
+ * `SUPERVISE_SLUGS`: that world also stages a queue, an assigned call
+ * and three orders, none of which the broadcast video opens, and one of
+ * which ("exactly one ASSIGNED row, across the whole queue") is a
+ * promise another video depends on and this one would be re-making for
+ * no reason.
+ */
+async function ensureCallAgents() {
   const callAgentRole = await prisma.staffRoleDefinition.findFirstOrThrow({
     where: { key: 'call_agent' },
     select: { id: true },
@@ -3052,10 +3068,17 @@ async function superviseWorldFor(slug, sellerId, sellerToken) {
     seeded.push({ ...a, id: staff.id });
   }
   console.log(
-    `  · two call agents on the roster: ${seeded
+    `  \u00b7 two call agents on the roster: ${seeded
       .map((a) => `${a.email} (${a.isAvailable ? 'available' : 'off'})`)
       .join(', ')}`,
   );
+  return seeded;
+}
+
+async function superviseWorldFor(slug, sellerId, sellerToken) {
+  if (!SUPERVISE_SLUGS.has(slug)) return;
+
+  const seeded = await ensureCallAgents();
 
   // Nothing else may be ASSIGNED, or "Reassign" is not a unique button.
   const released = await prisma.callQueueEntry.updateMany({
@@ -7950,6 +7973,24 @@ async function staffWorldFor(slug) {
     create: { staffUserId: o5Staff.id, roleId: role.id },
   });
   console.log(`  \u00b7 ${O5_STAFF_EMAIL} is active and back on ${role.name}`);
+
+  /*
+    AND AN AUDIENCE FOR THE BROADCAST TO REACH.
+
+    O5's last three scenes send to a staff ROLE — `call_agent` — and
+    NOTIF-12 refuses an empty broadcast before it writes a row, so on a
+    box where nobody holds that role the form answers
+    `[EMPTY_AUDIENCE] … nobody would receive this`, the button reads
+    "Send to 0 people", and the scene that opens on the sent row has
+    nothing to open on. That is the product working; the video simply
+    had no audience.
+
+    The two the narration means already exist as a pair elsewhere —
+    they are the call-centre roster — so they are made the same way
+    rather than invented here, which keeps "the first few names" the
+    same people a viewer meets in the call videos.
+  */
+  await ensureCallAgents();
 
   const invites = await prisma.staffInvitation.deleteMany({
     where: { email: O5_INVITE_EMAIL, usedAt: null },
