@@ -193,7 +193,11 @@ export const TEAM_COLLEAGUE = {
   email: 'shahidul@rangpursilk.test',
   fullName: 'Shahidul Islam',
   password: 'Skydrop-Demo-2026',
-  role: 'INVENTORY',
+  // The KEY, not the old `role` enum: since RBAC-1b a seller user holds
+  // roles through `seller_user_roles`, and both the invitation and the
+  // put-back resolve this key to a `seller_roles` id. The enum field
+  // that used to sit here was read by nothing after that migration and
+  // was what let the seed keep writing a column Prisma had dropped.
   roleKey: 'inventory',
 };
 
@@ -1057,14 +1061,31 @@ async function ensureTeamColleague(sellerId, sellerToken) {
     select: { id: true },
   });
 
+  // RBAC-1b (2026-10-05) moved a seller user's role off the row and into
+  // `seller_user_roles`, so BOTH halves below need the role's id rather
+  // than its enum name: the invitation takes `roleIds`, and putting the
+  // colleague back is a replacement of that set. Resolved once, here,
+  // because an invite that cannot name the role and a reset that cannot
+  // find it are the same missing row.
+  const role = await prisma.sellerRoleDefinition.findFirst({
+    where: { sellerId, key: TEAM_COLLEAGUE.roleKey },
+    select: { id: true, name: true },
+  });
+
   if (existing === null) {
+    if (role === null) {
+      throw new Error(
+        `ensureTeamColleague: the seller has no "${TEAM_COLLEAGUE.roleKey}" role, so the ` +
+          `colleague cannot be invited onto one. Seed the seller's roles first.`,
+      );
+    }
     const invite = await call('/seller/team/invitations', {
       method: 'POST',
       token: await sellerToken(),
       body: {
         email: TEAM_COLLEAGUE.email,
         fullName: TEAM_COLLEAGUE.fullName,
-        role: TEAM_COLLEAGUE.role,
+        roleIds: [role.id],
       },
     });
     await call('/auth/seller/accept-team-invitation', {
@@ -1081,16 +1102,40 @@ async function ensureTeamColleague(sellerId, sellerToken) {
   // Back to the role the video moves them OFF. The confirm dialog
   // restates "moves from X to Y", so a second take starting on Y would
   // film a sentence that reads backwards.
-  const role = await prisma.sellerRoleDefinition.findFirst({
-    where: { sellerId, key: TEAM_COLLEAGUE.roleKey },
-    select: { id: true, name: true },
+  //
+  // A person holds SEVERAL roles now (RBAC-1b), and the product's own
+  // assignment REPLACES the set — so "put them back" is: drop every
+  // other role, make sure this one is there. Granting without dropping
+  // would leave the previous take's role beside it, and the dialog would
+  // name whichever the screen happened to show first.
+  const user = await prisma.sellerUser.findFirst({
+    where: { sellerId, email: TEAM_COLLEAGUE.email },
+    select: { id: true },
   });
-  if (role !== null) {
-    const reset = await prisma.sellerUser.updateMany({
-      where: { sellerId, email: TEAM_COLLEAGUE.email, roleId: { not: role.id } },
-      data: { roleId: role.id, role: TEAM_COLLEAGUE.role, deletedAt: null },
+  if (role !== null && user !== null) {
+    const held = await prisma.sellerUserRoleAssignment.findMany({
+      where: { sellerUserId: user.id },
+      select: { roleId: true },
     });
-    if (reset.count > 0) {
+    const wrong = held.filter((r) => r.roleId !== role.id);
+    const missing = !held.some((r) => r.roleId === role.id);
+
+    if (wrong.length > 0) {
+      await prisma.sellerUserRoleAssignment.deleteMany({
+        where: { sellerUserId: user.id, roleId: { not: role.id } },
+      });
+    }
+    if (missing) {
+      await prisma.sellerUserRoleAssignment.create({
+        data: { sellerUserId: user.id, roleId: role.id },
+      });
+    }
+    await prisma.sellerUser.updateMany({
+      where: { id: user.id, deletedAt: { not: null } },
+      data: { deletedAt: null },
+    });
+
+    if (wrong.length > 0 || missing) {
       console.log(`  · put ${TEAM_COLLEAGUE.fullName} back on "${role.name}"`);
     }
   }

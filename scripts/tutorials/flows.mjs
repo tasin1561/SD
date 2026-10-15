@@ -725,8 +725,15 @@ const PHOTOS = {
 const TEAM = {
   fullName: 'Nusrat Jahan',
   email: 'nusrat@rangpursilk.test',
-  role: 'FINANCE',
+  // The role's NAME as the picker lists it, not the old enum value.
+  // RBAC-1b made a person hold SEVERAL roles, so the field stopped being
+  // a <select> and became a combobox over `seller_roles` — there is no
+  // enum on screen to select by any more.
+  roleName: 'Finance',
   colleague: 'Shahidul Islam',
+  // What the colleague holds when the take starts (the seed puts them
+  // back on it), so the scene can take it off before adding the new one.
+  roleHeld: 'Inventory',
   newRoleName: 'Operations',
 };
 
@@ -3122,11 +3129,26 @@ export const FLOWS = {
       },
 
       async role({ page, stage }) {
+        // A MULTI-ROLE COMBOBOX since RBAC-1b, not a <select>:
+        // `selectOption` throws "Element is not a <select> element" on
+        // it, which is how this scene died rather than filming wrong.
+        // Clicking the input opens the listbox and clicking the option
+        // toggles it — which is also what a person does, so the take
+        // shows the real interaction instead of a value appearing.
         const dialog = page.locator('.sk-dialog').first();
-        const select = dialog.getByLabel(/^Role/);
-        await stage.point(select, { settle: 700 });
-        await select.selectOption(TEAM.role);
-        await page.waitForTimeout(900);
+        const combo = dialog.getByLabel(/^Role/);
+        await stage.point(combo, { settle: 700 });
+        await combo.click();
+        const option = page.getByRole('option', { name: TEAM.roleName }).first();
+        await option.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.clickIt(option, { after: 900 });
+        // Close the LIST, not the dialog. Escape dismisses the whole
+        // Dialog — which left the next scene waiting 30s for a "Create
+        // invitation" button that was no longer on screen. The combobox
+        // closes its list on blur, so Tab is what shuts the dropdown and
+        // leaves the chip as the thing on camera.
+        await page.keyboard.press('Tab');
+        await page.waitForTimeout(600);
         await stage.clearHalo();
       },
 
@@ -3192,18 +3214,42 @@ export const FLOWS = {
       },
 
       async 'role-change'({ page, stage }) {
+        // RBAC-1b: a member's roles are CHIPS in the row and a "Change
+        // roles" button opens a dialog holding a MultiSelect — not the
+        // in-row <select> that used to change a role in place. The old
+        // scene drove `select.selectOption` on a row that no longer has
+        // one, and the confirm button is "Save roles" now, because the
+        // act is replacing a SET rather than swapping one value.
         const member = page.locator('.team-member').filter({ hasText: TEAM.colleague }).first();
         await member.scrollIntoViewIfNeeded();
         await page.waitForTimeout(600);
-        const select = member.locator('select').first();
-        await stage.point(select, { settle: 700 });
-        await select.selectOption({ label: TEAM.newRoleName });
-        await page.waitForTimeout(700);
-        await stage.clearHalo();
+        await stage.clickIt(member.getByRole('button', { name: /^Change roles/ }).first(), {
+          after: 1200,
+        });
+
         const dialog = page.locator('.sk-dialog').first();
         await dialog.waitFor({ state: 'visible', timeout: 20_000 });
-        await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 2600);
-        await stage.clickIt(dialog.getByRole('button', { name: 'Change role' }).first(), {
+
+        // Take the role they hold OFF before adding the new one, so the
+        // take shows a replacement rather than a person quietly
+        // accumulating roles — which is what the narration describes.
+        const current = dialog.getByRole('button', { name: new RegExp(`Remove ${TEAM.roleHeld}`) });
+        if ((await current.count()) > 0) {
+          await stage.clickIt(current.first(), { after: 700 });
+        }
+
+        const combo = dialog.getByLabel(/^Roles/);
+        await stage.point(combo, { settle: 600 });
+        await combo.click();
+        const option = page.getByRole('option', { name: TEAM.newRoleName }).first();
+        await option.waitFor({ state: 'visible', timeout: 15_000 });
+        await stage.clickIt(option, { after: 900 });
+        // Tab, never Escape — Escape closes the dialog itself.
+        await page.keyboard.press('Tab');
+        await page.waitForTimeout(600);
+        await stage.clearHalo();
+
+        await stage.clickIt(dialog.getByRole('button', { name: 'Save roles' }).first(), {
           after: 2000,
         });
         await dialog.waitFor({ state: 'hidden', timeout: 25_000 });
