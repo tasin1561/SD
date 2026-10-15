@@ -1303,10 +1303,24 @@ function settingRow(page, name) {
  * a row.
  */
 async function withRetry(page, probe, { rounds = 4 } = {}) {
+  // A PROBE IS EITHER A LOCATOR OR A FUNCTION, and twelve store flows
+  // pass the function form — `(page) => page.getByRole(…).waitFor(…)`,
+  // which lets the caller state its own wait. `probe.waitFor` threw
+  // "is not a function" on every one of them, at scene ZERO, so the
+  // whole member-store portal set had never once been filmed: those
+  // twelve slugs are exactly the ones with no mp4 in `out/`.
+  //
+  // Accepting both here rather than rewriting twelve call sites: the
+  // function form is the more expressive of the two, and a prologue
+  // that wants a different wait should not have to express it as a
+  // bare locator.
+  const look = async (timeout) => {
+    if (typeof probe === 'function') return probe(page);
+    return probe.waitFor({ state: 'attached', timeout });
+  };
   const retry = page.getByRole('button', { name: 'Retry' }).first();
   for (let round = 0; round < rounds; round += 1) {
-    const appeared = await probe
-      .waitFor({ state: 'attached', timeout: round === 0 ? 15_000 : 8_000 })
+    const appeared = await look(round === 0 ? 15_000 : 8_000)
       .then(() => true)
       .catch(() => false);
     if (appeared) return;
@@ -1326,7 +1340,10 @@ async function withRetry(page, probe, { rounds = 4 } = {}) {
     }
     await page.waitForTimeout(1500);
   }
-  await probe.waitFor({ state: 'attached', timeout: 20_000 });
+  // Last attempt, and this one is allowed to throw: a prologue that
+  // cannot find its page must fail loudly here rather than hand a blank
+  // screen to scene one.
+  await look(20_000);
 }
 
 /**
