@@ -139,6 +139,20 @@ export interface ReconciliationReport {
   readonly shortPaidOrders: readonly UnsettledOrderRow[];
 }
 
+/**
+ * How long a payout's one transaction may take, and how long it may
+ * wait for a connection to start.
+ *
+ * Prisma's interactive-transaction default is five seconds. A payout
+ * covering twelve orders measured 5,091 ms and died with `P2028
+ * Transaction already closed` — a 500 from a form that had filled in
+ * perfectly and said "Fully allocated" — and a real courier remittance
+ * covers hundreds of parcels, so the default was wrong for the ordinary
+ * case rather than for a tail one.
+ */
+const SETTLEMENT_TX_TIMEOUT_MS = 120_000;
+const SETTLEMENT_TX_MAX_WAIT_MS = 10_000;
+
 const ZERO = new Prisma.Decimal(0);
 const NO_PRIOR = { paid: ZERO, recognised: ZERO } as const;
 
@@ -384,485 +398,521 @@ export class CourierSettlementService {
       });
     }
 
-    const created = await this.prisma.client.$transaction(async (tx) => {
-      // One payout at a time per order: what an order was paid before is
-      // read under its lock, so two payouts recorded together cannot both
-      // believe they are its first. Sorted, so they queue, not deadlock.
-      const touched = [...new Set([...lineIds, ...reversedIds])].sort();
-      for (const id of touched) {
-        await takeAdvisoryLock(tx, AdvisoryLock.SETTLEMENT_ORDER, id);
-      }
-      const prior = await this.priorByOrder(tx, touched);
-      // Every seller this payout credits or takes back from, locked UP
-      // FRONT and in one sorted order. Taken line by line, two payouts
-      // covering the same two sellers in opposite orders each held one
-      // wallet and waited for the other — a deadlock Postgres broke by
-      // killing one of them (40P01). Still WALLET before any bank
-      // reconcile lock, as everywhere.
-      const sellers = [
-        ...new Set(
-          touched.map((id) => byId.get(id)?.sellerId).filter((s): s is string => s !== undefined),
-        ),
-      ].sort();
-      for (const s of sellers) {
-        await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${s}|${Currency.INR}`);
-      }
-      // The receiving account's reconcile key, after every wallet lock and
-      // before the first credit (whose attribution pair takes the
-      // attribution key): a reconcile of this account must not read its
-      // balance with the payout half-landed. Order on `accountReconcileKey`.
-      await lockAccountsForPosting(tx, [receivingAccount.id]);
-
-      let allocated = ZERO;
-      const lineData = parsedLines.map((line) => {
-        allocated = allocated.add(line.settled);
-        const expected = byId.get(line.orderId)?.codAmountInr ?? ZERO;
-        const p = prior.get(line.orderId) ?? NO_PRIOR;
-        return {
-          orderId: line.orderId,
-          expectedInr: expected,
-          settledInr: line.settled,
-          shortfallInr: recognisedShortfall({
-            expected,
-            priorPaid: p.paid,
-            priorRecognised: p.recognised,
-            settled: line.settled,
-            reversal: false,
-          }),
-          note: line.note,
-        };
-      });
-      // An RTO reversal is a NEGATIVE line: the courier taking back
-      // exactly what it paid on that order. Anything else cannot be booked
-      // exactly, and is refused naming both figures.
-      for (const r of rtoReversals) {
-        const p = prior.get(r.orderId) ?? NO_PRIOR;
-        if (p.paid.lessThanOrEqualTo(0)) {
-          throw new BadRequestException({
-            code: 'SETTLEMENT_RTO_REVERSAL_NOT_PAID',
-            message:
-              `The courier reversed ₹${r.amount.toFixed(2)} on order ${r.orderId}, but no recorded ` +
-              'payout paid for it. Record the payout that paid it first.',
-          });
+    const created = await this.prisma.client.$transaction(
+      async (tx) => {
+        // One payout at a time per order: what an order was paid before is
+        // read under its lock, so two payouts recorded together cannot both
+        // believe they are its first. Sorted, so they queue, not deadlock.
+        const touched = [...new Set([...lineIds, ...reversedIds])].sort();
+        for (const id of touched) {
+          await takeAdvisoryLock(tx, AdvisoryLock.SETTLEMENT_ORDER, id);
         }
-        if (!p.paid.equals(r.amount)) {
-          throw new BadRequestException({
-            code: 'SETTLEMENT_RTO_REVERSAL_AMOUNT_MISMATCH',
-            message:
-              `The courier reversed ₹${r.amount.toFixed(2)} on order ${r.orderId} but has paid ` +
-              `₹${p.paid.toFixed(2)} on it across recorded payouts — a reversal takes back exactly ` +
-              'what was paid. Check the remittance file.',
-          });
+        const prior = await this.priorByOrder(tx, touched);
+        // Every seller this payout credits or takes back from, locked UP
+        // FRONT and in one sorted order. Taken line by line, two payouts
+        // covering the same two sellers in opposite orders each held one
+        // wallet and waited for the other — a deadlock Postgres broke by
+        // killing one of them (40P01). Still WALLET before any bank
+        // reconcile lock, as everywhere.
+        const sellers = [
+          ...new Set(
+            touched.map((id) => byId.get(id)?.sellerId).filter((s): s is string => s !== undefined),
+          ),
+        ].sort();
+        for (const s of sellers) {
+          await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${s}|${Currency.INR}`);
         }
-        const expected = byId.get(r.orderId)?.codAmountInr ?? ZERO;
-        const settled = r.amount.negated();
-        allocated = allocated.add(settled);
-        lineData.push({
-          orderId: r.orderId,
-          expectedInr: expected,
-          settledInr: settled,
-          shortfallInr: recognisedShortfall({
-            expected,
-            priorPaid: p.paid,
-            priorRecognised: p.recognised,
-            settled,
-            reversal: true,
-          }),
-          note: 'RTO reversal — COD taken back by the courier',
-        });
-      }
+        // The receiving account's reconcile key, after every wallet lock and
+        // before the first credit (whose attribution pair takes the
+        // attribution key): a reconcile of this account must not read its
+        // balance with the payout half-landed. Order on `accountReconcileKey`.
+        await lockAccountsForPosting(tx, [receivingAccount.id]);
 
-      const row = await tx.courierSettlement.create({
-        data: {
-          courierAccountId: input.courierAccountId,
-          reference,
-          amountInr: amount,
-          allocatedInr: allocated,
-          earlyCodFeeInr: earlyCodFee,
-          freightDeductedInr: freightKept,
-          rtoReversalInr: rtoKept,
-          receivedAt,
-          recordedByStaffId: staffId,
-          note: input.note ?? null,
-          lines: { create: lineData },
-        },
-        include: {
-          lines: { include: { order: { select: { orderNumber: true } } } },
-        },
-      });
-
-      // ── The credit ───────────────────────────────────────────────
-      //
-      // This REVERSES what SETL-1 originally said — that the settlement
-      // ledger never writes a wallet entry. That rule was written when
-      // sellers were paid at DELIVERED, i.e. BEFORE the settlement, so
-      // its concern was not clawing back money already given. Now the
-      // seller is paid FROM the settlement, so the settlement is the
-      // trigger and the reasoning inverts.
-      //
-      // The seller is credited what the ORDER WAS WORTH, not what the
-      // courier actually remitted. A short payment is our dispute with
-      // the courier — the seller has no visibility into them and no
-      // leverage, and absorbing that risk is the service. The
-      // circuit breaker below is what stops us quietly funding a
-      // systematic shortfall rather than an occasional error.
-      let attributed = ZERO;
-      for (const line of lineData) {
-        if (line.settledInr.isNegative()) continue; // a reversal — below
-        // Every COD we credited or fronted (settlement or Instant Pay) and
-        // the courier did not pay in full is ours to absorb (WAL-6).
-        if (line.shortfallInr.gt(0)) {
-          shortfalls.push({
+        let allocated = ZERO;
+        const lineData = parsedLines.map((line) => {
+          allocated = allocated.add(line.settled);
+          const expected = byId.get(line.orderId)?.codAmountInr ?? ZERO;
+          const p = prior.get(line.orderId) ?? NO_PRIOR;
+          return {
             orderId: line.orderId,
-            expected: line.expectedInr.toString(),
-            settled: line.settledInr.toString(),
-            shortfall: line.shortfallInr.toString(),
-          });
-        }
-        const order = byId.get(line.orderId);
-        if (!order) continue;
-        // Whatever the seller's CURRENT mode: an order this payout covers
-        // and nobody has credited yet (delivered before a switch to Instant
-        // Pay, or whose Instant Pay credit never ran) is owed now, as a
-        // settlement credit. One Instant Pay already credited at delivery
-        // is caught by `isCredited` below, and its cash repays our front.
-        if (line.expectedInr.lessThanOrEqualTo(0)) continue; // no COD to credit
-        if (order.storeKind === SellerStoreKind.RESELLER) {
-          // RS-6 phase 3c: the COD is the store's AND the seller's, each at
-          // its own trigger. Nothing is attributed to the seller here — the
-          // whole line lands as capital's (the remainder below) and every
-          // party credit due now is fronted out of it, in this transaction.
-          await this.resellerMoney.onPayoutLine(tx, {
-            orderId: order.id,
-            accountId: receivingAccount.id,
-            at: new Date(),
-          });
-          touchedSellers.add(order.sellerId);
-          continue;
-        }
-        // Held for the seller ONLY when this payout is what credits them.
-        // An order already credited on an earlier payout (the rest of a
-        // part-payment) was held for them then; that cash repays what we
-        // fronted, so it is capital's.
-        await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
-        if (await this.codCredit.isCredited(tx, order.id)) continue;
-        // Their cash is posted BEFORE the credit, so the tax and fee the
-        // credit takes find cash to make ours (TRE-8) — posted after, they
-        // found none and the seller was held the gross. The part that
-        // repays what they owe is ours too: it reaches capital through the
-        // remainder below.
-        const split = await this.attribution.debtSplit(tx, order.sellerId, line.expectedInr);
-        if (split.toSeller.gt(0)) {
-          await this.bank.post(
-            {
-              accountId: receivingAccount.id,
-              type: BankEntryType.COURIER_SETTLEMENT,
-              signedAmount: split.toSeller,
-              amountCurrency: Currency.INR,
-              owner: { kind: BankOwnerKind.SELLER, sellerId: order.sellerId },
-              occurredAt: receivedAt,
-              reference,
-              settlementId: row.id,
-              staffId,
-              note: `COD settled by courier — ${reference}`,
-            },
-            tx,
-          );
-          attributed = attributed.add(split.toSeller);
-        }
-        const credit = await this.codCredit.creditForOrder(tx, {
-          orderId: order.id,
-          sellerId: order.sellerId,
-          grossInr: line.expectedInr,
-          mode: 'SETTLEMENT',
+            expectedInr: expected,
+            settledInr: line.settled,
+            shortfallInr: recognisedShortfall({
+              expected,
+              priorPaid: p.paid,
+              priorRecognised: p.recognised,
+              settled: line.settled,
+              reversal: false,
+            }),
+            note: line.note,
+          };
         });
-        if (!credit.credited) {
-          // Unreachable under the wallet lock: the gate above is the one
-          // creditForOrder applies. If it ever fires the cash just posted
-          // is wrong, so the whole payout rolls back rather than keep it.
-          throw new ConflictException({
-            code: 'SETTLEMENT_CREDIT_RACED',
-            message: `Order ${order.id} was credited by another payout meanwhile — record this one again.`,
+        // An RTO reversal is a NEGATIVE line: the courier taking back
+        // exactly what it paid on that order. Anything else cannot be booked
+        // exactly, and is refused naming both figures.
+        for (const r of rtoReversals) {
+          const p = prior.get(r.orderId) ?? NO_PRIOR;
+          if (p.paid.lessThanOrEqualTo(0)) {
+            throw new BadRequestException({
+              code: 'SETTLEMENT_RTO_REVERSAL_NOT_PAID',
+              message:
+                `The courier reversed ₹${r.amount.toFixed(2)} on order ${r.orderId}, but no recorded ` +
+                'payout paid for it. Record the payout that paid it first.',
+            });
+          }
+          if (!p.paid.equals(r.amount)) {
+            throw new BadRequestException({
+              code: 'SETTLEMENT_RTO_REVERSAL_AMOUNT_MISMATCH',
+              message:
+                `The courier reversed ₹${r.amount.toFixed(2)} on order ${r.orderId} but has paid ` +
+                `₹${p.paid.toFixed(2)} on it across recorded payouts — a reversal takes back exactly ` +
+                'what was paid. Check the remittance file.',
+            });
+          }
+          const expected = byId.get(r.orderId)?.codAmountInr ?? ZERO;
+          const settled = r.amount.negated();
+          allocated = allocated.add(settled);
+          lineData.push({
+            orderId: r.orderId,
+            expectedInr: expected,
+            settledInr: settled,
+            shortfallInr: recognisedShortfall({
+              expected,
+              priorPaid: p.paid,
+              priorRecognised: p.recognised,
+              settled,
+              reversal: true,
+            }),
+            note: 'RTO reversal — COD taken back by the courier',
           });
         }
-        touchedSellers.add(order.sellerId);
-      }
 
-      // ── RTO reversals ────────────────────────────────────────────
-      //
-      // COD the courier paid us earlier for a parcel that then came back,
-      // taken out of this payout. The seller was never really paid by that
-      // customer, so their credit is taken back and our deductions on it
-      // returned — exactly, per order. The cash leaving is theirs as far
-      // as they still hold any with us; beyond that it is ours, and their
-      // wallet shows what they now owe.
-      const clawbacks: Array<{
-        sellerId: string | null;
-        amount: Prisma.Decimal;
-        /** The reversed credit's gross. */
-        gross: Prisma.Decimal;
-        /** Their cash that stops being theirs — see below. */
-        take: Prisma.Decimal;
-      }> = [];
-      for (const r of rtoReversals) {
-        const order = byId.get(r.orderId);
-        if (!order) continue; // refused before the transaction
-        if (order.storeKind === SellerStoreKind.RESELLER) {
-          // RS-6 phase 3c: each party's written credit is taken back (the
-          // store's COD margin and fee shares, the seller's transfer price
-          // and deductions); pending ones are skipped. The cash to move to
-          // capital is computed per party and taken below, once.
-          const rr = await this.resellerMoney.reverseOnCourierReversal(tx, {
+        const row = await tx.courierSettlement.create({
+          data: {
+            courierAccountId: input.courierAccountId,
+            reference,
+            amountInr: amount,
+            allocatedInr: allocated,
+            earlyCodFeeInr: earlyCodFee,
+            freightDeductedInr: freightKept,
+            rtoReversalInr: rtoKept,
+            receivedAt,
+            recordedByStaffId: staffId,
+            note: input.note ?? null,
+            lines: { create: lineData },
+          },
+          include: {
+            lines: { include: { order: { select: { orderNumber: true } } } },
+          },
+        });
+
+        // ── The credit ───────────────────────────────────────────────
+        //
+        // This REVERSES what SETL-1 originally said — that the settlement
+        // ledger never writes a wallet entry. That rule was written when
+        // sellers were paid at DELIVERED, i.e. BEFORE the settlement, so
+        // its concern was not clawing back money already given. Now the
+        // seller is paid FROM the settlement, so the settlement is the
+        // trigger and the reasoning inverts.
+        //
+        // The seller is credited what the ORDER WAS WORTH, not what the
+        // courier actually remitted. A short payment is our dispute with
+        // the courier — the seller has no visibility into them and no
+        // leverage, and absorbing that risk is the service. The
+        // circuit breaker below is what stops us quietly funding a
+        // systematic shortfall rather than an occasional error.
+        let attributed = ZERO;
+        for (const line of lineData) {
+          if (line.settledInr.isNegative()) continue; // a reversal — below
+          // Every COD we credited or fronted (settlement or Instant Pay) and
+          // the courier did not pay in full is ours to absorb (WAL-6).
+          if (line.shortfallInr.gt(0)) {
+            shortfalls.push({
+              orderId: line.orderId,
+              expected: line.expectedInr.toString(),
+              settled: line.settledInr.toString(),
+              shortfall: line.shortfallInr.toString(),
+            });
+          }
+          const order = byId.get(line.orderId);
+          if (!order) continue;
+          // Whatever the seller's CURRENT mode: an order this payout covers
+          // and nobody has credited yet (delivered before a switch to Instant
+          // Pay, or whose Instant Pay credit never ran) is owed now, as a
+          // settlement credit. One Instant Pay already credited at delivery
+          // is caught by `isCredited` below, and its cash repays our front.
+          if (line.expectedInr.lessThanOrEqualTo(0)) continue; // no COD to credit
+          if (order.storeKind === SellerStoreKind.RESELLER) {
+            // RS-6 phase 3c: the COD is the store's AND the seller's, each at
+            // its own trigger. Nothing is attributed to the seller here — the
+            // whole line lands as capital's (the remainder below) and every
+            // party credit due now is fronted out of it, in this transaction.
+            await this.resellerMoney.onPayoutLine(tx, {
+              orderId: order.id,
+              accountId: receivingAccount.id,
+              at: new Date(),
+            });
+            touchedSellers.add(order.sellerId);
+            continue;
+          }
+          // Held for the seller ONLY when this payout is what credits them.
+          // An order already credited on an earlier payout (the rest of a
+          // part-payment) was held for them then; that cash repays what we
+          // fronted, so it is capital's.
+          await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
+          if (await this.codCredit.isCredited(tx, order.id)) continue;
+          // Their cash is posted BEFORE the credit, so the tax and fee the
+          // credit takes find cash to make ours (TRE-8) — posted after, they
+          // found none and the seller was held the gross. The part that
+          // repays what they owe is ours too: it reaches capital through the
+          // remainder below.
+          const split = await this.attribution.debtSplit(tx, order.sellerId, line.expectedInr);
+          if (split.toSeller.gt(0)) {
+            await this.bank.post(
+              {
+                accountId: receivingAccount.id,
+                type: BankEntryType.COURIER_SETTLEMENT,
+                signedAmount: split.toSeller,
+                amountCurrency: Currency.INR,
+                owner: { kind: BankOwnerKind.SELLER, sellerId: order.sellerId },
+                occurredAt: receivedAt,
+                reference,
+                settlementId: row.id,
+                staffId,
+                note: `COD settled by courier — ${reference}`,
+              },
+              tx,
+            );
+            attributed = attributed.add(split.toSeller);
+          }
+          const credit = await this.codCredit.creditForOrder(tx, {
             orderId: order.id,
+            sellerId: order.sellerId,
+            grossInr: line.expectedInr,
+            mode: 'SETTLEMENT',
+          });
+          if (!credit.credited) {
+            // Unreachable under the wallet lock: the gate above is the one
+            // creditForOrder applies. If it ever fires the cash just posted
+            // is wrong, so the whole payout rolls back rather than keep it.
+            throw new ConflictException({
+              code: 'SETTLEMENT_CREDIT_RACED',
+              message: `Order ${order.id} was credited by another payout meanwhile — record this one again.`,
+            });
+          }
+          touchedSellers.add(order.sellerId);
+        }
+
+        // ── RTO reversals ────────────────────────────────────────────
+        //
+        // COD the courier paid us earlier for a parcel that then came back,
+        // taken out of this payout. The seller was never really paid by that
+        // customer, so their credit is taken back and our deductions on it
+        // returned — exactly, per order. The cash leaving is theirs as far
+        // as they still hold any with us; beyond that it is ours, and their
+        // wallet shows what they now owe.
+        const clawbacks: Array<{
+          sellerId: string | null;
+          amount: Prisma.Decimal;
+          /** The reversed credit's gross. */
+          gross: Prisma.Decimal;
+          /** Their cash that stops being theirs — see below. */
+          take: Prisma.Decimal;
+        }> = [];
+        for (const r of rtoReversals) {
+          const order = byId.get(r.orderId);
+          if (!order) continue; // refused before the transaction
+          if (order.storeKind === SellerStoreKind.RESELLER) {
+            // RS-6 phase 3c: each party's written credit is taken back (the
+            // store's COD margin and fee shares, the seller's transfer price
+            // and deductions); pending ones are skipped. The cash to move to
+            // capital is computed per party and taken below, once.
+            const rr = await this.resellerMoney.reverseOnCourierReversal(tx, {
+              orderId: order.id,
+              note: `COD reversed by the courier on payout ${reference}`,
+            });
+            if (rr.outcome === 'ALREADY_REVERSED') {
+              throw new ConflictException({
+                code: 'SETTLEMENT_RTO_ALREADY_REVERSED',
+                message: `This order's COD was already reversed on an earlier payout (${r.orderId}).`,
+              });
+            }
+            if (rr.outcome === 'REVERSED') touchedSellers.add(order.sellerId);
+            clawbacks.push({
+              sellerId: rr.outcome === 'REVERSED' ? order.sellerId : null,
+              amount: r.amount,
+              gross: rr.grossInr,
+              take: rr.take,
+            });
+            continue;
+          }
+          // What they were owed before this reversal, under their wallet lock —
+          // the seller and their reseller stores together, as the bank book
+          // holds them (RS-6, decision 7).
+          const before = await this.attribution.groupBalance(tx, order.sellerId);
+          const res = await this.codCredit.reverseForOrder(tx, {
+            orderId: order.id,
+            sellerId: order.sellerId,
             note: `COD reversed by the courier on payout ${reference}`,
           });
-          if (rr.outcome === 'ALREADY_REVERSED') {
+          if (res.reason === 'ALREADY_REVERSED') {
             throw new ConflictException({
               code: 'SETTLEMENT_RTO_ALREADY_REVERSED',
               message: `This order's COD was already reversed on an earlier payout (${r.orderId}).`,
             });
           }
-          if (rr.outcome === 'REVERSED') touchedSellers.add(order.sellerId);
+          const gross = new Prisma.Decimal(res.grossInr);
+          // Across the WHOLE reversal, the cash that stops being theirs is
+          //   max(0, before) − max(0, after)
+          // where `after` is the wallet once the reversal AND the refunds of
+          // its tax and fee have landed. Those refunds are TO_SELLER and have
+          // ALREADY moved their share back to the seller as each was written —
+          // max(0, after) − max(0, before − G) in all — so what is taken here
+          // is the difference of the two:
+          //   max(0, before) − max(0, before − G),   never more than G.
+          // Taking the whole G after the refunds took the refunds back too:
+          // ₹900 held, a ₹1,000 credit reversed with ₹152.54 of tax returned,
+          // left them holding ₹0 against a wallet of ₹52.54.
+          const take = res.reversed ? positive(before).sub(positive(before.sub(gross))) : ZERO;
+          if (res.reversed) touchedSellers.add(order.sellerId);
           clawbacks.push({
-            sellerId: rr.outcome === 'REVERSED' ? order.sellerId : null,
+            sellerId: res.reversed ? order.sellerId : null,
             amount: r.amount,
-            gross: rr.grossInr,
-            take: rr.take,
-          });
-          continue;
-        }
-        // What they were owed before this reversal, under their wallet lock —
-        // the seller and their reseller stores together, as the bank book
-        // holds them (RS-6, decision 7).
-        const before = await this.attribution.groupBalance(tx, order.sellerId);
-        const res = await this.codCredit.reverseForOrder(tx, {
-          orderId: order.id,
-          sellerId: order.sellerId,
-          note: `COD reversed by the courier on payout ${reference}`,
-        });
-        if (res.reason === 'ALREADY_REVERSED') {
-          throw new ConflictException({
-            code: 'SETTLEMENT_RTO_ALREADY_REVERSED',
-            message: `This order's COD was already reversed on an earlier payout (${r.orderId}).`,
+            gross,
+            take,
           });
         }
-        const gross = new Prisma.Decimal(res.grossInr);
-        // Across the WHOLE reversal, the cash that stops being theirs is
-        //   max(0, before) − max(0, after)
-        // where `after` is the wallet once the reversal AND the refunds of
-        // its tax and fee have landed. Those refunds are TO_SELLER and have
-        // ALREADY moved their share back to the seller as each was written —
-        // max(0, after) − max(0, before − G) in all — so what is taken here
-        // is the difference of the two:
-        //   max(0, before) − max(0, before − G),   never more than G.
-        // Taking the whole G after the refunds took the refunds back too:
-        // ₹900 held, a ₹1,000 credit reversed with ₹152.54 of tax returned,
-        // left them holding ₹0 against a wallet of ₹52.54.
-        const take = res.reversed ? positive(before).sub(positive(before.sub(gross))) : ZERO;
-        if (res.reversed) touchedSellers.add(order.sellerId);
-        clawbacks.push({
-          sellerId: res.reversed ? order.sellerId : null,
-          amount: r.amount,
-          gross,
-          take,
-        });
-      }
 
-      // ── The cash ─────────────────────────────────────────────────
-      //
-      // The wallet says what the seller is OWED; the bank book says
-      // where the money actually is. Both are written here, in one
-      // transaction, because a settlement that credits a wallet without
-      // recording the cash behind it is how the coverage page comes to
-      // report money we do not hold.
-      //
-      // Attribution: each seller is held what we CREDITED them. The
-      // remainder goes to capital — positive when the courier paid for
-      // Instant-Pay orders we already funded (a reimbursement), negative
-      // when they short-paid and we absorbed it (SETL-1 / WAL-6). That
-      // split is what keeps seller-held cash equal to wallet liability
-      // and leaves the dispute sitting visibly against our own money.
-      // (Each seller was posted their share above, as each credit was
-      // written.)
-      //
-      // An early-COD fee is GROSSED UP: the courier collected that money
-      // for us and spent it on its own fee, so the book shows it arriving
-      // with the rest and then leaving as a categorised EXPENSE. The two
-      // net to exactly what the statement shows, and the fee reaches
-      // /expenses and the P&L as the cost it is — rather than a hole in
-      // capital labelled "shortfall" that no report ever counts.
-      //
-      // Freight kept back is Shiprocket POSTPAID: part of the COD goes
-      // into our Shiprocket wallet instead of our bank, and the freight is
-      // then debited from the wallet like any other (so it is already each
-      // parcel's cost). It is a TOP-UP, not a cost: grossed up here, then
-      // posted out as a courier-wallet recharge — the same entry a bank
-      // transfer into the wallet makes — with its recharge record, so the
-      // "paid but never arrived" check sees where it went.
-      const gross = amount.add(earlyCodFee).add(freightKept).add(rtoKept);
-      const toCapital = gross.sub(attributed);
-      if (!toCapital.isZero()) {
-        await this.bank.post(
-          {
-            accountId: receivingAccount.id,
-            type: BankEntryType.COURIER_SETTLEMENT,
-            signedAmount: toCapital,
-            amountCurrency: Currency.INR,
-            owner: { kind: BankOwnerKind.CAPITAL },
-            occurredAt: receivedAt,
-            reference,
-            settlementId: row.id,
-            staffId,
-            note: toCapital.isNegative()
-              ? `Shortfall absorbed on ${reference}`
-              : `Ours from ${reference} — instant-pay reimbursement or unallocated`,
-          },
-          tx,
-        );
-      }
-      // The reversed COD leaving again, grossed up above like the rest.
-      //
-      // Two steps. First, the seller's part stops being theirs: exactly
-      // what the reversal took off the wallet net of the refunds (`take`,
-      // above), at most the credit's gross G, taken wherever they hold it —
-      // their rupees first, then any taka (TRE-8, clamped). Capping at the
-      // courier's figure R instead left a short-paid order's gap (G − R)
-      // "theirs" while their wallet said nothing was owed. Then the cash
-      // itself leaves as OURS: all of R, from the account it was taken out
-      // of. Net, capital is charged R − (what the seller gave up), which
-      // is positive by the shortfall capital absorbed when the order was
-      // first paid short.
-      for (const c of clawbacks) {
-        const fromSeller =
-          c.sellerId === null || c.take.lessThanOrEqualTo(0)
-            ? ZERO
-            : await this.attribution.takeToCapital(tx, {
-                sellerId: c.sellerId,
-                amount: c.take,
-                reference,
-                note: `COD reversed by the courier on ${reference} — the credit is gone, so is their cash`,
-              });
-        if (c.amount.gt(0)) {
+        // ── The cash ─────────────────────────────────────────────────
+        //
+        // The wallet says what the seller is OWED; the bank book says
+        // where the money actually is. Both are written here, in one
+        // transaction, because a settlement that credits a wallet without
+        // recording the cash behind it is how the coverage page comes to
+        // report money we do not hold.
+        //
+        // Attribution: each seller is held what we CREDITED them. The
+        // remainder goes to capital — positive when the courier paid for
+        // Instant-Pay orders we already funded (a reimbursement), negative
+        // when they short-paid and we absorbed it (SETL-1 / WAL-6). That
+        // split is what keeps seller-held cash equal to wallet liability
+        // and leaves the dispute sitting visibly against our own money.
+        // (Each seller was posted their share above, as each credit was
+        // written.)
+        //
+        // An early-COD fee is GROSSED UP: the courier collected that money
+        // for us and spent it on its own fee, so the book shows it arriving
+        // with the rest and then leaving as a categorised EXPENSE. The two
+        // net to exactly what the statement shows, and the fee reaches
+        // /expenses and the P&L as the cost it is — rather than a hole in
+        // capital labelled "shortfall" that no report ever counts.
+        //
+        // Freight kept back is Shiprocket POSTPAID: part of the COD goes
+        // into our Shiprocket wallet instead of our bank, and the freight is
+        // then debited from the wallet like any other (so it is already each
+        // parcel's cost). It is a TOP-UP, not a cost: grossed up here, then
+        // posted out as a courier-wallet recharge — the same entry a bank
+        // transfer into the wallet makes — with its recharge record, so the
+        // "paid but never arrived" check sees where it went.
+        const gross = amount.add(earlyCodFee).add(freightKept).add(rtoKept);
+        const toCapital = gross.sub(attributed);
+        if (!toCapital.isZero()) {
           await this.bank.post(
             {
               accountId: receivingAccount.id,
               type: BankEntryType.COURIER_SETTLEMENT,
-              signedAmount: c.amount.negated(),
+              signedAmount: toCapital,
               amountCurrency: Currency.INR,
               owner: { kind: BankOwnerKind.CAPITAL },
               occurredAt: receivedAt,
               reference,
               settlementId: row.id,
               staffId,
-              note:
-                c.sellerId === null
-                  ? `COD reversed by the courier on ${reference} — an order never credited`
-                  : fromSeller.lt(c.gross)
-                    ? `COD reversed by the courier on ${reference} — the seller held ${fromSeller.toFixed(2)} of it; their wallet owes the rest`
-                    : `COD reversed by the courier on ${reference}`,
+              note: toCapital.isNegative()
+                ? `Shortfall absorbed on ${reference}`
+                : `Ours from ${reference} — instant-pay reimbursement or unallocated`,
             },
             tx,
           );
         }
-      }
-      if (earlyCodFee.gt(0)) {
-        const category = await tx.expenseCategory.upsert({
-          where: { code: COD_FEE_EXPENSE_CATEGORY },
-          update: {},
-          create: {
-            code: COD_FEE_EXPENSE_CATEGORY,
-            name: 'Courier COD fees',
-            hint: 'Early-COD fees a courier kept back from a COD payout. Booked automatically when the payout is recorded — do not file these by hand, or the P&L counts them twice.',
-          },
-          select: { id: true },
-        });
-        await this.bank.post(
-          {
-            accountId: receivingAccount.id,
-            type: BankEntryType.EXPENSE,
-            signedAmount: earlyCodFee.negated(),
-            amountCurrency: Currency.INR,
-            owner: { kind: BankOwnerKind.CAPITAL },
-            occurredAt: receivedAt,
-            reference,
-            settlementId: row.id,
-            expenseCategoryId: category.id,
-            staffId,
-            note: `Early-COD fee the courier kept back from payout ${reference}`,
-          },
-          tx,
-        );
-      }
-      if (freightKept.gt(0)) {
-        const topUpRef = `COD-${reference}`;
-        const entry = await this.bank.post(
-          {
-            accountId: receivingAccount.id,
-            type: BankEntryType.COURIER_WALLET_RECHARGE,
-            signedAmount: freightKept.negated(),
-            amountCurrency: Currency.INR,
-            owner: { kind: BankOwnerKind.CAPITAL },
-            occurredAt: receivedAt,
-            reference: topUpRef,
-            settlementId: row.id,
-            staffId,
-            note: `Moved from COD payout ${reference} into the courier wallet (freight from COD)`,
-          },
-          tx,
-        );
-        // Its recharge record, already matched: the money provably went
-        // to their wallet, because they say so in the payout itself. The
-        // wallet sync cross-checks that the credit shows up there.
-        await tx.courierWalletRecharge.create({
-          data: {
-            courierAccountId: input.courierAccountId,
-            externalTxnId: topUpRef,
-            bankTxnRef: topUpRef,
-            amountInr: freightKept,
-            status: 'Success',
-            occurredAt: receivedAt,
-            bankEntryId: entry.id,
-            matchState: CourierRechargeMatch.MATCHED,
-          },
-        });
-      }
-      const unexplained = amount.add(keptBack).sub(allocated);
+        // The reversed COD leaving again, grossed up above like the rest.
+        //
+        // Two steps. First, the seller's part stops being theirs: exactly
+        // what the reversal took off the wallet net of the refunds (`take`,
+        // above), at most the credit's gross G, taken wherever they hold it —
+        // their rupees first, then any taka (TRE-8, clamped). Capping at the
+        // courier's figure R instead left a short-paid order's gap (G − R)
+        // "theirs" while their wallet said nothing was owed. Then the cash
+        // itself leaves as OURS: all of R, from the account it was taken out
+        // of. Net, capital is charged R − (what the seller gave up), which
+        // is positive by the shortfall capital absorbed when the order was
+        // first paid short.
+        for (const c of clawbacks) {
+          const fromSeller =
+            c.sellerId === null || c.take.lessThanOrEqualTo(0)
+              ? ZERO
+              : await this.attribution.takeToCapital(tx, {
+                  sellerId: c.sellerId,
+                  amount: c.take,
+                  reference,
+                  note: `COD reversed by the courier on ${reference} — the credit is gone, so is their cash`,
+                });
+          if (c.amount.gt(0)) {
+            await this.bank.post(
+              {
+                accountId: receivingAccount.id,
+                type: BankEntryType.COURIER_SETTLEMENT,
+                signedAmount: c.amount.negated(),
+                amountCurrency: Currency.INR,
+                owner: { kind: BankOwnerKind.CAPITAL },
+                occurredAt: receivedAt,
+                reference,
+                settlementId: row.id,
+                staffId,
+                note:
+                  c.sellerId === null
+                    ? `COD reversed by the courier on ${reference} — an order never credited`
+                    : fromSeller.lt(c.gross)
+                      ? `COD reversed by the courier on ${reference} — the seller held ${fromSeller.toFixed(2)} of it; their wallet owes the rest`
+                      : `COD reversed by the courier on ${reference}`,
+              },
+              tx,
+            );
+          }
+        }
+        if (earlyCodFee.gt(0)) {
+          const category = await tx.expenseCategory.upsert({
+            where: { code: COD_FEE_EXPENSE_CATEGORY },
+            update: {},
+            create: {
+              code: COD_FEE_EXPENSE_CATEGORY,
+              name: 'Courier COD fees',
+              hint: 'Early-COD fees a courier kept back from a COD payout. Booked automatically when the payout is recorded — do not file these by hand, or the P&L counts them twice.',
+            },
+            select: { id: true },
+          });
+          await this.bank.post(
+            {
+              accountId: receivingAccount.id,
+              type: BankEntryType.EXPENSE,
+              signedAmount: earlyCodFee.negated(),
+              amountCurrency: Currency.INR,
+              owner: { kind: BankOwnerKind.CAPITAL },
+              occurredAt: receivedAt,
+              reference,
+              settlementId: row.id,
+              expenseCategoryId: category.id,
+              staffId,
+              note: `Early-COD fee the courier kept back from payout ${reference}`,
+            },
+            tx,
+          );
+        }
+        if (freightKept.gt(0)) {
+          const topUpRef = `COD-${reference}`;
+          const entry = await this.bank.post(
+            {
+              accountId: receivingAccount.id,
+              type: BankEntryType.COURIER_WALLET_RECHARGE,
+              signedAmount: freightKept.negated(),
+              amountCurrency: Currency.INR,
+              owner: { kind: BankOwnerKind.CAPITAL },
+              occurredAt: receivedAt,
+              reference: topUpRef,
+              settlementId: row.id,
+              staffId,
+              note: `Moved from COD payout ${reference} into the courier wallet (freight from COD)`,
+            },
+            tx,
+          );
+          // Its recharge record, already matched: the money provably went
+          // to their wallet, because they say so in the payout itself. The
+          // wallet sync cross-checks that the credit shows up there.
+          await tx.courierWalletRecharge.create({
+            data: {
+              courierAccountId: input.courierAccountId,
+              externalTxnId: topUpRef,
+              bankTxnRef: topUpRef,
+              amountInr: freightKept,
+              status: 'Success',
+              occurredAt: receivedAt,
+              bankEntryId: entry.id,
+              matchState: CourierRechargeMatch.MATCHED,
+            },
+          });
+        }
+        const unexplained = amount.add(keptBack).sub(allocated);
 
-      await this.audit.log(
-        {
-          actorType: ActorType.STAFF,
-          staffUserId: staffId,
-          action: 'wallet.courier_settlement.recorded',
-          entityType: 'courier_settlement',
-          entityId: row.id,
-          // MEDIUM normally; HIGH when the payout does not add up, because
-          // an unexplained difference between what landed in the bank (plus
-          // what the courier says it kept) and what we attributed is
-          // exactly what this ledger exists to catch.
-          severity: unexplained.isZero() ? 'MEDIUM' : 'HIGH',
-          metadata: {
-            courierAccountId: input.courierAccountId,
-            reference,
-            amountInr: amount.toString(),
-            allocatedInr: allocated.toString(),
-            unallocatedInr: unexplained.toString(),
-            earlyCodFeeInr: earlyCodFee.toString(),
-            freightDeductedInr: freightKept.toString(),
-            rtoReversalInr: rtoKept.toString(),
-            rtoReversals: rtoReversals.map((r) => ({
-              orderId: r.orderId,
-              amountInr: r.amount.toString(),
-            })),
-            orderCount: lineData.length,
-            ipAddress: ctx?.ipAddress ?? null,
-            userAgent: ctx?.userAgent ?? null,
-            requestId: ctx?.requestId ?? null,
+        await this.audit.log(
+          {
+            actorType: ActorType.STAFF,
+            staffUserId: staffId,
+            action: 'wallet.courier_settlement.recorded',
+            entityType: 'courier_settlement',
+            entityId: row.id,
+            // MEDIUM normally; HIGH when the payout does not add up, because
+            // an unexplained difference between what landed in the bank (plus
+            // what the courier says it kept) and what we attributed is
+            // exactly what this ledger exists to catch.
+            severity: unexplained.isZero() ? 'MEDIUM' : 'HIGH',
+            metadata: {
+              courierAccountId: input.courierAccountId,
+              reference,
+              amountInr: amount.toString(),
+              allocatedInr: allocated.toString(),
+              unallocatedInr: unexplained.toString(),
+              earlyCodFeeInr: earlyCodFee.toString(),
+              freightDeductedInr: freightKept.toString(),
+              rtoReversalInr: rtoKept.toString(),
+              rtoReversals: rtoReversals.map((r) => ({
+                orderId: r.orderId,
+                amountInr: r.amount.toString(),
+              })),
+              orderCount: lineData.length,
+              ipAddress: ctx?.ipAddress ?? null,
+              userAgent: ctx?.userAgent ?? null,
+              requestId: ctx?.requestId ?? null,
+            },
           },
-        },
-        tx,
-      );
-      return row;
-    });
+          tx,
+        );
+        return row;
+      },
+      {
+        /*
+          ── WHY THIS TRANSACTION STATES ITS OWN TIMEOUT ──────────────
+          Prisma's interactive-transaction default is FIVE SECONDS, and
+          nothing else in this codebase overrides it — which was fine
+          until a payout carried more than a handful of orders. Measured
+          on a demo box: twelve orders took 5,091 ms and the request died
+          with `P2028 Transaction already closed`, a 500 from a form that
+          had filled in perfectly and reported "Fully allocated". A real
+          Delhivery remittance covers HUNDREDS of parcels, so this was
+          not a tail case; it is the ordinary one.
+
+          Splitting it is not available: TRE-3 says the cash side is
+          written in the SAME transaction as the business event, and
+          WAL-6 reads each order's prior payments under its own advisory
+          lock inside this one. A payout half-recorded is a bank line
+          with no story and credits with no payout behind them, which is
+          the thing those rules exist to make unrepresentable.
+
+          So it is given room instead. Two minutes is roughly an order of
+          magnitude over the worst measured rate, and it is still a
+          CEILING — a payout that cannot finish in two minutes fails
+          loudly rather than holding a pooled connection for ever, which
+          matters because SCALE-2's pool is five connections wide.
+
+          `maxWait` is raised with it for the same reason: the default
+          two seconds to ACQUIRE a connection is tight when sixteen
+          in-process workers share that pool (SCALE-1), and timing out
+          before the transaction even starts reads identically to the
+          failure above.
+        */
+        timeout: SETTLEMENT_TX_TIMEOUT_MS,
+        maxWait: SETTLEMENT_TX_MAX_WAIT_MS,
+      },
+    );
 
     // Balances are cached; the credits and reversals above changed them.
     for (const sellerId of touchedSellers) {
@@ -1067,197 +1117,209 @@ export class CourierSettlementService {
     }
 
     const credited = new Set<string>();
-    await this.prisma.client.$transaction(async (tx) => {
-      // The payout re-read under ITS lock. What is left to allocate was
-      // read above outside any transaction: two operators each saw the
-      // same remainder and together allocated past the cash that landed,
-      // and each wrote `stale + adding`, so one addition vanished from
-      // `allocatedInr` while its lines and credits stayed.
-      await takeAdvisoryLock(tx, AdvisoryLock.SETTLEMENT, settlement.id);
-      const fresh = await tx.courierSettlement.findUnique({
-        where: { id: settlement.id },
-        select: {
-          amountInr: true,
-          allocatedInr: true,
-          earlyCodFeeInr: true,
-          freightDeductedInr: true,
-          lines: { select: { orderId: true } },
-        },
-      });
-      if (!fresh) {
-        throw new NotFoundException({
-          code: 'SETTLEMENT_NOT_FOUND',
-          message: `Settlement ${settlementId} not found`,
+    await this.prisma.client.$transaction(
+      async (tx) => {
+        // The payout re-read under ITS lock. What is left to allocate was
+        // read above outside any transaction: two operators each saw the
+        // same remainder and together allocated past the cash that landed,
+        // and each wrote `stale + adding`, so one addition vanished from
+        // `allocatedInr` while its lines and credits stayed.
+        await takeAdvisoryLock(tx, AdvisoryLock.SETTLEMENT, settlement.id);
+        const fresh = await tx.courierSettlement.findUnique({
+          where: { id: settlement.id },
+          select: {
+            amountInr: true,
+            allocatedInr: true,
+            earlyCodFeeInr: true,
+            freightDeductedInr: true,
+            lines: { select: { orderId: true } },
+          },
         });
-      }
-      const onPayout = new Set(fresh.lines.map((l) => l.orderId));
-      const allocatedMeanwhile = parsedLines
-        .filter((l) => onPayout.has(l.orderId))
-        .map((l) => l.orderId);
-      if (allocatedMeanwhile.length > 0) {
-        throw new BadRequestException({
-          code: 'SETTLEMENT_ORDER_ALREADY_ALLOCATED',
-          message: `Already allocated on this payout: ${allocatedMeanwhile.join(', ')}`,
-        });
-      }
-      const remainingNow = fresh.amountInr.add(explainedKeptBackOf(fresh)).sub(fresh.allocatedInr);
-      if (adding.gt(remainingNow)) {
-        throw new BadRequestException({
-          code: 'SETTLEMENT_OVER_ALLOCATED',
-          message:
-            `This payout has ${remainingNow.toFixed(2)} left to allocate and you named ` +
-            `${adding.toFixed(2)}. Record a separate payout for cash that landed separately.`,
-        });
-      }
-
-      // Priors read under each order's lock, as in `record`.
-      const touched = [...new Set(parsedLines.map((l) => l.orderId))].sort();
-      for (const id of touched) {
-        await takeAdvisoryLock(tx, AdvisoryLock.SETTLEMENT_ORDER, id);
-      }
-      const prior = await this.priorByOrder(tx, touched);
-      // Every seller's wallet up front, sorted — as in `record`.
-      const sellers = [
-        ...new Set(
-          touched.map((id) => byId.get(id)?.sellerId).filter((s): s is string => s !== undefined),
-        ),
-      ].sort();
-      for (const s of sellers) {
-        await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${s}|${Currency.INR}`);
-      }
-      // As in `record`: the receiving account's key before any pair.
-      await lockAccountsForPosting(tx, [receivingAccount.id]);
-      const lineData = parsedLines.map((line) => {
-        const expected = byId.get(line.orderId)?.codAmountInr ?? ZERO;
-        const p = prior.get(line.orderId) ?? NO_PRIOR;
-        return {
-          orderId: line.orderId,
-          expectedInr: expected,
-          settledInr: line.settled,
-          shortfallInr: recognisedShortfall({
-            expected,
-            priorPaid: p.paid,
-            priorRecognised: p.recognised,
-            settled: line.settled,
-            reversal: false,
-          }),
-          note: line.note,
-        };
-      });
-      await tx.courierSettlementLine.createMany({
-        data: lineData.map((l) => ({ ...l, settlementId: settlement.id })),
-      });
-      await tx.courierSettlement.update({
-        where: { id: settlement.id },
-        data: { allocatedInr: fresh.allocatedInr.add(adding) },
-      });
-
-      // The zero-sum pair. No new cash arrived, so the account total
-      // must not move: what changes is WHOSE the money already there
-      // is. Same shape as TRE-8's reclassification, for the same
-      // reason — a single entry would change the balance and make the
-      // book disagree with the statement. Each seller THIS allocation
-      // credits is moved their COD before the credit (so its tax and fee
-      // find it), less any part that repays what they owe — that stays
-      // capital's.
-      let moved = ZERO;
-      for (const line of lineData) {
-        const order = byId.get(line.orderId);
-        if (!order) continue;
-        // Whatever the seller's CURRENT mode: an order this payout covers
-        // and nobody has credited yet (delivered before a switch to Instant
-        // Pay, or whose Instant Pay credit never ran) is owed now, as a
-        // settlement credit. One Instant Pay already credited at delivery
-        // is caught by `isCredited` below, and its cash repays our front.
-        if (line.expectedInr.lessThanOrEqualTo(0)) continue;
-        if (order.storeKind === SellerStoreKind.RESELLER) {
-          // RS-6 phase 3c — as `record`: the line stays capital's and the
-          // parties' due credits are fronted out of it.
-          await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
-          await this.resellerMoney.onPayoutLine(tx, {
-            orderId: order.id,
-            accountId: receivingAccount.id,
-            at: new Date(),
+        if (!fresh) {
+          throw new NotFoundException({
+            code: 'SETTLEMENT_NOT_FOUND',
+            message: `Settlement ${settlementId} not found`,
           });
-          credited.add(order.sellerId);
-          continue;
         }
-        await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
-        if (await this.codCredit.isCredited(tx, order.id)) continue;
-        const split = await this.attribution.debtSplit(tx, order.sellerId, line.expectedInr);
-        if (split.toSeller.gt(0)) {
+        const onPayout = new Set(fresh.lines.map((l) => l.orderId));
+        const allocatedMeanwhile = parsedLines
+          .filter((l) => onPayout.has(l.orderId))
+          .map((l) => l.orderId);
+        if (allocatedMeanwhile.length > 0) {
+          throw new BadRequestException({
+            code: 'SETTLEMENT_ORDER_ALREADY_ALLOCATED',
+            message: `Already allocated on this payout: ${allocatedMeanwhile.join(', ')}`,
+          });
+        }
+        const remainingNow = fresh.amountInr
+          .add(explainedKeptBackOf(fresh))
+          .sub(fresh.allocatedInr);
+        if (adding.gt(remainingNow)) {
+          throw new BadRequestException({
+            code: 'SETTLEMENT_OVER_ALLOCATED',
+            message:
+              `This payout has ${remainingNow.toFixed(2)} left to allocate and you named ` +
+              `${adding.toFixed(2)}. Record a separate payout for cash that landed separately.`,
+          });
+        }
+
+        // Priors read under each order's lock, as in `record`.
+        const touched = [...new Set(parsedLines.map((l) => l.orderId))].sort();
+        for (const id of touched) {
+          await takeAdvisoryLock(tx, AdvisoryLock.SETTLEMENT_ORDER, id);
+        }
+        const prior = await this.priorByOrder(tx, touched);
+        // Every seller's wallet up front, sorted — as in `record`.
+        const sellers = [
+          ...new Set(
+            touched.map((id) => byId.get(id)?.sellerId).filter((s): s is string => s !== undefined),
+          ),
+        ].sort();
+        for (const s of sellers) {
+          await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${s}|${Currency.INR}`);
+        }
+        // As in `record`: the receiving account's key before any pair.
+        await lockAccountsForPosting(tx, [receivingAccount.id]);
+        const lineData = parsedLines.map((line) => {
+          const expected = byId.get(line.orderId)?.codAmountInr ?? ZERO;
+          const p = prior.get(line.orderId) ?? NO_PRIOR;
+          return {
+            orderId: line.orderId,
+            expectedInr: expected,
+            settledInr: line.settled,
+            shortfallInr: recognisedShortfall({
+              expected,
+              priorPaid: p.paid,
+              priorRecognised: p.recognised,
+              settled: line.settled,
+              reversal: false,
+            }),
+            note: line.note,
+          };
+        });
+        await tx.courierSettlementLine.createMany({
+          data: lineData.map((l) => ({ ...l, settlementId: settlement.id })),
+        });
+        await tx.courierSettlement.update({
+          where: { id: settlement.id },
+          data: { allocatedInr: fresh.allocatedInr.add(adding) },
+        });
+
+        // The zero-sum pair. No new cash arrived, so the account total
+        // must not move: what changes is WHOSE the money already there
+        // is. Same shape as TRE-8's reclassification, for the same
+        // reason — a single entry would change the balance and make the
+        // book disagree with the statement. Each seller THIS allocation
+        // credits is moved their COD before the credit (so its tax and fee
+        // find it), less any part that repays what they owe — that stays
+        // capital's.
+        let moved = ZERO;
+        for (const line of lineData) {
+          const order = byId.get(line.orderId);
+          if (!order) continue;
+          // Whatever the seller's CURRENT mode: an order this payout covers
+          // and nobody has credited yet (delivered before a switch to Instant
+          // Pay, or whose Instant Pay credit never ran) is owed now, as a
+          // settlement credit. One Instant Pay already credited at delivery
+          // is caught by `isCredited` below, and its cash repays our front.
+          if (line.expectedInr.lessThanOrEqualTo(0)) continue;
+          if (order.storeKind === SellerStoreKind.RESELLER) {
+            // RS-6 phase 3c — as `record`: the line stays capital's and the
+            // parties' due credits are fronted out of it.
+            await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
+            await this.resellerMoney.onPayoutLine(tx, {
+              orderId: order.id,
+              accountId: receivingAccount.id,
+              at: new Date(),
+            });
+            credited.add(order.sellerId);
+            continue;
+          }
+          await takeAdvisoryLock(tx, AdvisoryLock.WALLET, `${order.sellerId}|${Currency.INR}`);
+          if (await this.codCredit.isCredited(tx, order.id)) continue;
+          const split = await this.attribution.debtSplit(tx, order.sellerId, line.expectedInr);
+          if (split.toSeller.gt(0)) {
+            await this.bank.post(
+              {
+                accountId: receivingAccount.id,
+                type: BankEntryType.COURIER_SETTLEMENT,
+                signedAmount: split.toSeller,
+                amountCurrency: Currency.INR,
+                owner: { kind: BankOwnerKind.SELLER, sellerId: order.sellerId },
+                occurredAt: settlement.receivedAt,
+                reference: settlement.reference,
+                settlementId: settlement.id,
+                staffId,
+                note: `COD allocated later — ${settlement.reference}`,
+              },
+              tx,
+            );
+            moved = moved.add(split.toSeller);
+          }
+          const credit = await this.codCredit.creditForOrder(tx, {
+            orderId: order.id,
+            sellerId: order.sellerId,
+            grossInr: line.expectedInr,
+            mode: 'SETTLEMENT',
+          });
+          if (!credit.credited) {
+            throw new ConflictException({
+              code: 'SETTLEMENT_CREDIT_RACED',
+              message: `Order ${order.id} was credited by another payout meanwhile — allocate again.`,
+            });
+          }
+          credited.add(order.sellerId);
+        }
+        if (!moved.isZero()) {
           await this.bank.post(
             {
               accountId: receivingAccount.id,
               type: BankEntryType.COURIER_SETTLEMENT,
-              signedAmount: split.toSeller,
+              signedAmount: moved.negated(),
               amountCurrency: Currency.INR,
-              owner: { kind: BankOwnerKind.SELLER, sellerId: order.sellerId },
+              owner: { kind: BankOwnerKind.CAPITAL },
               occurredAt: settlement.receivedAt,
               reference: settlement.reference,
               settlementId: settlement.id,
               staffId,
-              note: `COD allocated later — ${settlement.reference}`,
+              note: `Reattributed to clients on ${settlement.reference}`,
             },
             tx,
           );
-          moved = moved.add(split.toSeller);
         }
-        const credit = await this.codCredit.creditForOrder(tx, {
-          orderId: order.id,
-          sellerId: order.sellerId,
-          grossInr: line.expectedInr,
-          mode: 'SETTLEMENT',
-        });
-        if (!credit.credited) {
-          throw new ConflictException({
-            code: 'SETTLEMENT_CREDIT_RACED',
-            message: `Order ${order.id} was credited by another payout meanwhile — allocate again.`,
-          });
-        }
-        credited.add(order.sellerId);
-      }
-      if (!moved.isZero()) {
-        await this.bank.post(
+
+        await this.audit.log(
           {
-            accountId: receivingAccount.id,
-            type: BankEntryType.COURIER_SETTLEMENT,
-            signedAmount: moved.negated(),
-            amountCurrency: Currency.INR,
-            owner: { kind: BankOwnerKind.CAPITAL },
-            occurredAt: settlement.receivedAt,
-            reference: settlement.reference,
-            settlementId: settlement.id,
-            staffId,
-            note: `Reattributed to clients on ${settlement.reference}`,
+            actorType: ActorType.STAFF,
+            staffUserId: staffId,
+            action: 'wallet.courier_settlement.allocated',
+            entityType: 'courier_settlement',
+            entityId: settlement.id,
+            changes: {
+              before: { allocatedInr: fresh.allocatedInr.toString() },
+              after: { allocatedInr: fresh.allocatedInr.add(adding).toString() },
+            },
+            metadata: {
+              reference: settlement.reference,
+              orders: parsedLines.map((l) => l.orderId),
+              addedInr: adding.toString(),
+              movedFromCapitalInr: moved.toString(),
+            },
+            severity: 'MEDIUM',
+            ...(ctx === undefined ? {} : { ctx }),
           },
           tx,
         );
-      }
-
-      await this.audit.log(
-        {
-          actorType: ActorType.STAFF,
-          staffUserId: staffId,
-          action: 'wallet.courier_settlement.allocated',
-          entityType: 'courier_settlement',
-          entityId: settlement.id,
-          changes: {
-            before: { allocatedInr: fresh.allocatedInr.toString() },
-            after: { allocatedInr: fresh.allocatedInr.add(adding).toString() },
-          },
-          metadata: {
-            reference: settlement.reference,
-            orders: parsedLines.map((l) => l.orderId),
-            addedInr: adding.toString(),
-            movedFromCapitalInr: moved.toString(),
-          },
-          severity: 'MEDIUM',
-          ...(ctx === undefined ? {} : { ctx }),
-        },
-        tx,
-      );
-    });
+      },
+      {
+        // The same ceiling as `record`, and for the same reason: this
+        // adds lines and credits to an existing payout, doing the same
+        // per-order work under the same locks. Prisma's five-second
+        // default is what made `record` 500 on twelve orders.
+        timeout: SETTLEMENT_TX_TIMEOUT_MS,
+        maxWait: SETTLEMENT_TX_MAX_WAIT_MS,
+      },
+    );
 
     // The credits changed cached balances (TRE-7 reads the cache).
     for (const sellerId of credited) {
