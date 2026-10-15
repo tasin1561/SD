@@ -34,6 +34,7 @@ import {
   ensureLifecycleParcels,
   lifecycleReport,
   settleRetiredReturns,
+  drivePickToPicked,
   LIFECYCLE_PARCELS,
   STILL_CALLABLE,
 } from './lib/lifecycle.mjs';
@@ -3581,20 +3582,51 @@ async function ensureStoreDispute(sellerId, world, log) {
  */
 async function writeRefundsFixture(sellerId, log) {
   const live = { in: ['OPEN', 'NEGOTIATING'] };
-  const pick = async (ticketType) =>
-    prisma.ticket.findFirst({
-      where: { sellerId, ticketType, status: live },
-      orderBy: { createdAt: 'desc' },
-      select: { ticketNumber: true },
-    });
 
-  const shortfall = await pick('RECEIPT_SHORTFALL');
-  const dispute = await pick('STORE_DISPUTE');
+  /*
+    THE INDIA-LEG shortfall, not merely the newest one.
+
+    A filming box carries several live short counts — the two-leg
+    consignment world leaves one on each leg, and every
+    `receive-a-consignment` take leaves another — and they do not read
+    alike. TKT-3 writes a DIFFERENT opening message per leg, because the
+    legs mean different things: a short count at the Bangladesh intake
+    (or on a DIRECT_IN) is the seller's own declaration against us and
+    asks them to confirm it, while a short count on the India leg after
+    a counted Dhaka stop is a loss in OUR hands and says we are looking
+    into it. P3 replies on the second one and its narration quotes that
+    sentence, so "the newest shortfall" filmed whichever leg happened to
+    be counted last and then waited out its timeout on a line the
+    ticket it had opened does not contain.
+
+    `goods_receipts.leg = IN_FINAL` is the structural question — the
+    same one TKT-3 asks when it chooses the wording — rather than the
+    prose, which would couple the seed to the narration, or the receipt
+    NUMBER, whose shape is an artefact of how that leg's receipt is
+    minted.
+  */
+  const shortfall = await prisma.ticket.findFirst({
+    where: {
+      sellerId,
+      ticketType: 'RECEIPT_SHORTFALL',
+      status: live,
+      goodsReceipt: { leg: 'IN_FINAL' },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { ticketNumber: true },
+  });
+  const dispute = await prisma.ticket.findFirst({
+    where: { sellerId, ticketType: 'STORE_DISPUTE', status: live },
+    orderBy: { createdAt: 'desc' },
+    select: { ticketNumber: true },
+  });
   if (shortfall === null) {
     throw new Error(
-      'refunds-and-disputes: no live RECEIPT_SHORTFALL ticket for this seller. ' +
-        'TKT-3 opens one when a goods receipt completes short, so the consignment ' +
-        'world has to be seeded before this runs.',
+      'refunds-and-disputes: no live RECEIPT_SHORTFALL ticket on an INDIA leg ' +
+        '(goods_receipts.leg = IN_FINAL) for this seller. TKT-3 opens one when a ' +
+        "two-leg consignment's Indian arrival completes short, so that world has to " +
+        'be seeded before this runs — a shortfall on the Bangladesh intake is a ' +
+        'different ticket saying a different thing and the video is not about it.',
     );
   }
   if (dispute === null) {
@@ -5994,6 +6026,189 @@ async function storeStubLabel(shipmentId, shipmentNumber, awbNumber) {
   });
 }
 
+/**
+ * J4's FOURTH parcel: picked, and carrying a label nobody printed.
+ *
+ * ── WHY IT HAS TO EXIST ──────────────────────────────────────────────
+ * The pack bench calls out every waiting parcel whose label was never
+ * printed ("… no printed label yet — a box is opened by scanning one"),
+ * and that callout is the one thing on the screen somebody has to go
+ * and DO something about — so it is what J4's `queue` scene points at
+ * and what its narration reads ("anything with no printed label is
+ * called out, because there is nothing to scan").
+ *
+ * It was never seeded. The row behind it when J4 was first filmed was a
+ * stray simulator parcel an older run had left at PICKED; a later
+ * debugging pass packed that parcel, and from then on the scene threw
+ * "No unlabelled parcel in the pack queue" — a comment in `flows.mjs`
+ * said exactly that and said what to do, and nothing did it.
+ *
+ * ── SO IT GOES THROUGH THE PER-PARCEL STATION ────────────────────────
+ * `drivePickToPicked` rather than the printing station, because the
+ * printing station is what PRINTS: its pick batch cannot be confirmed
+ * until the labels have been (WMS-1), so every parcel that reaches
+ * PICKED through it has a printed label by construction. The per-parcel
+ * station is the only route to PICKED that leaves
+ * `shipments.label_printed_at` null, which is the column the callout
+ * reads.
+ *
+ * ── AND IT CARRIES A DIFFERENT PIN, DELIBERATELY ─────────────────────
+ * `pickWorldFor`'s own assertion demands EXACTLY three parcels at
+ * `PICK_PIN`, and says why: J3 selects the label queue by that pin and
+ * a fourth would be printed and picked unnarrated. This parcel must be
+ * in the pack LIST and in none of that, so it is addressed elsewhere
+ * and named for somebody J4 never mentions. J4's own scenes reach for
+ * their parcels by recipient name, so it is never the one acted on.
+ *
+ * Idempotent: a parcel already PICKED with an unprinted label is
+ * exactly what is wanted and is left alone, so a re-run costs nothing.
+ * Only J4 — every other video in this world would be showing a callout
+ * its narration does not explain.
+ */
+const PICK_UNLABELLED = {
+  ref: 'RSH-PICK-NOLABEL',
+  recipientName: 'Shruti Kamath',
+  phone: '+919845090304',
+  line1: '12, Begur Main Road',
+  line2: 'Beside the Yelenahalli water tank',
+  postalCode: '560068',
+  codAmountInr: '1850',
+  lines: [{ sku: 'RSH-KANTHA-BLUE', quantity: 1, unitPriceInr: '1850' }],
+};
+
+async function ensureUnlabelledPackParcel(slug, sellerId, sellerToken, staffToken) {
+  if (slug !== 'pack-a-parcel') return;
+  const o = PICK_UNLABELLED;
+
+  const existing = await prisma.order.findFirst({
+    where: { sellerId, sellerOrderRef: o.ref },
+    select: { id: true, orderNumber: true, status: true },
+  });
+  if (existing !== null) {
+    // The bench's own predicate (WMS-2) plus the column the callout
+    // reads: still live, not yet packed, and never printed.
+    const ready =
+      existing.status === 'PICKED' &&
+      (await prisma.orderShipment.count({
+        where: {
+          orderId: existing.id,
+          shipment: {
+            deletedAt: null,
+            status: 'CREATED',
+            packCompletedAt: null,
+            labelPrintedAt: null,
+          },
+        },
+      })) > 0;
+    if (ready) {
+      console.log(
+        `  · ${existing.orderNumber} (${o.ref}) is picked with no printed label — ` +
+          'the unlabelled callout has its row',
+      );
+      return;
+    }
+    const parked = await prisma.order.count({
+      where: { sellerId, sellerOrderRef: { startsWith: `${o.ref}-SPENT-` } },
+    });
+    const retiredRef = `${o.ref}-SPENT-${parked + 1}`;
+    await prisma.order.update({ where: { id: existing.id }, data: { sellerOrderRef: retiredRef } });
+    console.log(
+      `  · ${o.ref} is spent — ${existing.orderNumber} is ${existing.status}. ` +
+        `Renamed ${retiredRef}; a fresh one follows`,
+    );
+    /*
+      Cancelled for the reason the three live ones are: left at PICKED it
+      stays in the bench's list for ever, holding a phase-2 reservation,
+      and the callout's count climbs by one a take. PICKED →
+      CANCELLED_BY_ADMIN carries RELEASE_STOCK, so the unit comes back.
+    */
+    if (existing.status === 'PICKED' || existing.status === 'CONFIRMED') {
+      await call(`/admin/orders/${existing.id}/cancel`, {
+        method: 'POST',
+        token: staffToken,
+        body: { reason: 'Tutorial demo world: a previous take spent this parcel.' },
+      }).catch((e) => {
+        console.log(`  · could not cancel ${existing.orderNumber}, leaving it: ${String(e)}`);
+      });
+    }
+  }
+
+  const variant = await prisma.productVariant.findFirst({
+    where: { skuCode: o.lines[0].sku, product: { sellerId } },
+    select: { id: true },
+  });
+  if (variant === null) {
+    throw new Error(`No ${o.lines[0].sku} for this seller — the catalogue seeding runs first.`);
+  }
+  const token = await sellerToken();
+  const order = await call('/seller/orders', {
+    method: 'POST',
+    token,
+    body: {
+      recipientName: o.recipientName,
+      recipientPhoneE164: o.phone,
+      recipientAddressLine1: o.line1,
+      recipientAddressLine2: o.line2,
+      recipientPostalCode: o.postalCode,
+      paymentMode: 'COD',
+      codAmountInr: o.codAmountInr,
+      sellerOrderRef: o.ref,
+      items: [
+        {
+          variantId: variant.id,
+          quantity: o.lines[0].quantity,
+          unitPriceInr: o.lines[0].unitPriceInr,
+        },
+      ],
+      acknowledgeDuplicate: true,
+    },
+  });
+  await call(`/seller/orders/${order.id}/submit`, { method: 'POST', token });
+
+  const entry = await waitFor(`${o.ref} to reach the call queue`, () =>
+    prisma.callQueueEntry.findFirst({
+      where: { orderId: order.id, status: 'PENDING' },
+      select: { id: true },
+    }),
+  );
+  await call(`/admin/call-queue/${entry.id}/force-outcome`, {
+    method: 'POST',
+    token: staffToken,
+    body: {
+      outcome: 'CONFIRMED',
+      startedAt: new Date(Date.now() - 20 * 60_000).toISOString(),
+      endedAt: new Date(Date.now() - 19 * 60_000).toISOString(),
+      outcomeNotes: 'Confirmed on the phone; happy to pay cash at the door.',
+    },
+  });
+
+  // The waybill lands POST-COMMIT of the confirmation (CUR-2b), and the
+  // bench needs one to open a box at all — this parcel is never opened
+  // on camera, but a row with no waybill is a different defect from the
+  // one being staged.
+  const booked = await waitFor(
+    `${o.ref} to be given a waybill`,
+    async () => {
+      const link = await prisma.orderShipment.findFirst({
+        where: { orderId: order.id, shipment: { deletedAt: null, awbNumber: { not: null } } },
+        select: { shipment: { select: { id: true, shipmentNumber: true, awbNumber: true } } },
+      });
+      return link?.shipment ?? null;
+    },
+    { tries: 45 },
+  );
+  // The label is STORED but never confirmed printed — stored is what the
+  // courier leg would have left, and `label_printed_at` is what the
+  // printing station writes and what the callout reads.
+  await storeStubLabel(booked.id, booked.shipmentNumber, booked.awbNumber);
+
+  await drivePickToPicked(order.id, staffToken, (m) => console.log(m));
+  console.log(
+    `  · ${order.orderNumber} (${o.ref}) picked at the per-parcel station, label unprinted — ` +
+      'J4 has its unlabelled callout',
+  );
+}
+
 async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
   const stage = PICK_STAGE.get(slug ?? '');
   if (stage === undefined) return;
@@ -6369,6 +6584,8 @@ async function pickWorldFor(slug, sellerId, sellerToken, staffToken) {
       console.log(`  · ${o.orderNumber} boxed at the bench — ${parcel.shipmentNumber} is packed`);
     }
   }
+
+  await ensureUnlabelledPackParcel(slug, sellerId, sellerToken, staffToken);
 
   /*
     AND THE WORLD IS ASSERTED AT WHICHEVER STAGE WAS ASKED FOR. J3's flow
@@ -9215,8 +9432,8 @@ async function writeRemittanceExport(sellerId) {
     select: { id: true, orderNumber: true, codAmountInr: true },
     orderBy: { createdAt: 'asc' },
   });
-  const rows = [];
-  for (const [i, o] of orders.entries()) {
+  const byAccount = new Map();
+  for (const o of orders) {
     const shipment = await prisma.shipment.findFirst({
       where: {
         orderShipments: { some: { orderId: o.id } },
@@ -9224,13 +9441,42 @@ async function writeRemittanceExport(sellerId) {
         deletedAt: null,
         awbNumber: { not: null },
       },
-      select: { awbNumber: true },
+      select: { awbNumber: true, courierAccount: { select: { id: true, label: true } } },
       orderBy: { createdAt: 'desc' },
     });
     if (shipment?.awbNumber == null) continue;
+    // CACC-1: the shipment records WHICH account carried it, and that is
+    // the only honest answer to "whose payout is this".
+    const account = shipment.courierAccount;
+    if (account == null) continue;
     const cod = Number(o.codAmountInr);
-    rows.push({ awb: shipment.awbNumber, cod, payable: cod, ref: o.orderNumber });
+    const bucket = byAccount.get(account.id) ?? { label: account.label, rows: [] };
+    bucket.rows.push({ awb: shipment.awbNumber, cod, payable: cod, ref: o.orderNumber });
+    byAccount.set(account.id, bucket);
   }
+
+  /*
+    ONE ACCOUNT'S PARCELS, because a payout belongs to ONE ACCOUNT.
+
+    This used to take every unsettled delivered COD whatever carried it,
+    and this box has five courier accounts — the two lanes, the sandbox,
+    the simulator, and the one M1's video adds on camera. A file mixing
+    two of them cannot be recorded AT ALL: `CourierSettlementService`
+    refuses a line whose order was carried by another account
+    (`SETTLEMENT_ORDER_OTHER_COURIER`, WAL-6), so the form filled
+    perfectly, said "Fully allocated", and the dialog simply never
+    closed. The scene timed out waiting for it, thirty seconds after a
+    400 nobody was reading.
+
+    The busiest account wins, because the scene wants a file with
+    several lines in it and one of them short.
+  */
+  let picked = null;
+  for (const bucket of byAccount.values()) {
+    if (picked === null || bucket.rows.length > picked.rows.length) picked = bucket;
+  }
+  const rows = picked?.rows ?? [];
+  const accountLabel = picked?.label ?? null;
   /*
     THE LAST ROW IS THE SHORT ONE, and which row it is matters because a
     scene points at it. It used to be the one at index 1 of every
@@ -9247,7 +9493,8 @@ async function writeRemittanceExport(sellerId) {
   if (short !== undefined) short.payable = short.cod - DESK_PAYOUT_SHORT_INR;
   if (rows.length < 2) {
     throw new Error(
-      `N5 needs two delivered COD parcels with waybills; found ${rows.length}. ` +
+      `N5 needs two delivered COD parcels with waybills carried by ONE courier account; ` +
+        `the busiest account (${accountLabel ?? 'none'}) has ${rows.length}. ` +
         'Run the lifecycle pass first.',
     );
   }
@@ -9273,6 +9520,11 @@ async function writeRemittanceExport(sellerId) {
     totalInr: total,
     shortInr: DESK_PAYOUT_SHORT_INR,
     parcels: rows.length,
+    // WHICH account the operator picks in the dialog. The scene used to
+    // take the second option in the list and this box has five
+    // accounts, so it was choosing by position among rows nothing
+    // orders on purpose.
+    accountLabel,
   });
   console.log(
     `  · remittance export written: ${rows.length} parcel(s), ₹${total} payable ` +

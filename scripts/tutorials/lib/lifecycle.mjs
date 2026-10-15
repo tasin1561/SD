@@ -815,8 +815,24 @@ async function releaseStalePickClaim(orderId, staffToken, log) {
   log(`    released a stale pick claim on ${stuck.id}`);
 }
 
-/** Everything between a confirmed order and a parcel a courier has taken. */
-async function driveToDispatched(orderId, staffToken, log) {
+/**
+ * An order's parcel, picked at the PER-PARCEL station and left there.
+ *
+ * EXPORTED, and the reason is a screen rather than a tidy-up: the pack
+ * bench calls out any parcel whose label was never printed ("these
+ * products have no labels to scan", LBL-4's escape hatch), and the
+ * per-parcel pick station is the ONLY route to PICKED that does not
+ * print one — the printing station's batch is gated on labels being
+ * confirmed (WMS-1). So a video about that callout needs a parcel
+ * driven through HERE, and `pack-a-parcel`'s flow carried a comment
+ * saying so and nothing that did it.
+ *
+ * Split out of `driveToDispatched` rather than copied: the two want the
+ * same pick and differ only in whether a box is then packed, and two
+ * copies of the phase-2 reservation walk is how they come to disagree
+ * about which bin a unit was taken from.
+ */
+export async function drivePickToPicked(orderId, staffToken, log) {
   await releaseStalePickClaim(orderId, staffToken, log);
 
   let shipmentId = null;
@@ -878,6 +894,12 @@ async function driveToDispatched(orderId, staffToken, log) {
     });
   }
   await call(`/warehouse/picks/${shipmentId}/complete`, { method: 'POST', token: staffToken });
+  return shipmentId;
+}
+
+/** Everything between a confirmed order and a parcel a courier has taken. */
+async function driveToDispatched(orderId, staffToken, log) {
+  const shipmentId = await drivePickToPicked(orderId, staffToken, log);
 
   for (let i = 0; i < 40; i += 1) {
     const pulled = await call('/warehouse/packs/next', { method: 'POST', token: staffToken });

@@ -42,7 +42,7 @@ screen label into Bengali or Devanagari — the viewer is matching letters.
 | parcel | পার্সেল | पार्सल |
 | courier | কুরিয়ার | कूरियर |
 | customer | ক্রেতা | ग्राहक |
-| client | বিক্রেতা † | विक्रेता † |
+| client | `client` † | `client` † |
 | order | অর্ডার | ऑर्डर |
 | price | দাম | कीमत |
 | delivery fee | ডেলিভারি চার্জ | डिलीवरी शुल्क |
@@ -52,16 +52,40 @@ screen label into Bengali or Devanagari — the viewer is matching letters.
 
 Fixed on first use so three videos in two languages cannot drift.
 
-† **Needs a decision from somebody who speaks the language.** CON-2 renamed
-the English words: the business shipping the stock is a **client** rather
-than a seller, and a business reselling that stock under its own name is a
-**member store** rather than a reseller store. বিক্রেতা and विक्रेता both say
-*seller*, so the two cells marked † are the OLD wording — left standing only
-so the lines already translated can be found and re-checked, not because
-they are right. **member store** has no row at all for the same reason.
-**Do not invent either one here**: a word guessed in this table is a word
-three videos in two languages then drift from, which is what the table
-exists to stop.
+† **Said in English, in Latin script — and that is a DECISION, open to
+being overruled by somebody who speaks the language.**
+
+CON-2 renamed the English words: the business shipping the stock is a
+**client** rather than a seller, and a business reselling that stock under
+its own name is a **member store** rather than a reseller store. বিক্রেতা
+and विक्रेता both say *seller*, so both cells used to carry those words
+with a note saying they were the old wording and must not be guessed at.
+
+Twenty-three lines in each language then said *seller* while every screen
+the viewer was looking at said **Client** — which is the exact defect
+CON-2 existed to remove, in the flagship deliverable. Waiting on a word
+was costing more than deciding, and there was a decision available that
+invents nothing:
+
+**use the English word.** It is what the table's own first rule says to
+do with anything the viewer reads on screen, and the member-store portal
+says *client* on screen 241 times. It is also already this file's
+convention for the sibling word — `member store` is written in Latin
+inside the very first Bangla scene, and `portal`, `Terms`, `Catalogue`,
+`Wallet`, `Place order`, `ticket`, `transfer price`, `You pay`,
+`Out for delivery` and `sign up` all are too. Bangla case endings attach
+with a hyphen exactly as they already do on `portal-গুলোতে`:
+`client-এর`, `client-কে`. Hindi needs nothing — its postpositions are
+separate words already (`client का`, `client को`).
+
+**What is still open, and what overruling it costs.** If a Bangla or
+Hindi word is the better call, it is one substitution across
+`reseller.mjs` and `seller.mjs` (46 lines) plus a re-voice: the clips are
+cached on a hash of their text, so changing the words is all that is
+needed and the audio rebuilds itself. What must NOT happen is a word
+appearing in one video and not the others — that is what this table is
+for. **member store** still has no row, and is still written in English
+everywhere for the same reason as above.
 
 ## Tone
 

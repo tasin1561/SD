@@ -630,9 +630,9 @@ export const narration = {
       id: 'route-pick',
       say: 'Via our Bangladesh warehouse means you ship to Dhaka and we move it on. That is the one we charge inbound freight for, and the one most clients use.',
       sayBn:
-        'Via our Bangladesh warehouse মানে আপনি ঢাকায় পাঠাচ্ছেন আর আমরা সেটা এগিয়ে দিচ্ছি। এই পথটার জন্যই আমরা inbound ফ্রেইট নিই, আর বেশির ভাগ বিক্রেতা এই পথটাই নেন।',
+        'Via our Bangladesh warehouse মানে আপনি ঢাকায় পাঠাচ্ছেন আর আমরা সেটা এগিয়ে দিচ্ছি। এই পথটার জন্যই আমরা inbound ফ্রেইট নিই, আর বেশির ভাগ client এই পথটাই নেন।',
       sayHi:
-        'Via our Bangladesh warehouse का मतलब आप ढाका भेज रहे हैं और हम उसे आगे बढ़ाते हैं। इसी रास्ते के लिए हम inbound freight लेते हैं, और ज़्यादातर विक्रेता यही रास्ता लेते हैं।',
+        'Via our Bangladesh warehouse का मतलब आप ढाका भेज रहे हैं और हम उसे आगे बढ़ाते हैं। इसी रास्ते के लिए हम inbound freight लेते हैं, और ज़्यादातर client यही रास्ता लेते हैं।',
     },
     {
       id: 'line-kurti',

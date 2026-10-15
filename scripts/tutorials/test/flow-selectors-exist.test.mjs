@@ -249,6 +249,169 @@ function stripComments(src) {
   return out;
 }
 
+/**
+ * Comments stripped AND string contents blanked — the CODE alone.
+ *
+ * `stripComments` keeps strings, because the selector corpus is made of
+ * them. This one is the other half, for the question below: which bare
+ * identifiers does this file actually reference? Prose in a comment and
+ * copy in a string both read exactly like code to a regex, and the five
+ * false positives a crude `replace` produced here were all one or the
+ * other.
+ *
+ * A template literal's `${...}` holes ARE code and are kept; everything
+ * between them is blanked, which is why this walks the same state
+ * machine rather than running a regex over the file.
+ */
+/**
+ * Could a `/` at this point open a regex rather than divide?
+ *
+ * Decided from the last significant character already emitted: after a
+ * value (an identifier, a number, a closing bracket) a slash divides;
+ * after an operator, an opening bracket, a comma or a keyword it opens
+ * a pattern. This is the ordinary JavaScript lexer heuristic, and it is
+ * enough here because the rig never divides by anything.
+ */
+function regexCanStartHere(emitted) {
+  const before = emitted.replace(/\s+$/, '');
+  if (before === '') return true;
+  const last = before[before.length - 1];
+  if ('([{,;:=!&|?+-*%~^<>'.includes(last)) return true;
+  // `return /x/`, `typeof /x/`, `case /x/` and friends.
+  return /\b(return|typeof|instanceof|in|of|new|delete|void|case|do|else|yield|await)$/.test(
+    before,
+  );
+}
+
+function codeOnly(src) {
+  let out = '';
+  let state = 'code';
+  let inClass = false;
+  // One entry per template literal we are inside a `${...}` hole of, so
+  // nesting closes back to the right place.
+  const holes = [];
+  for (let i = 0; i < src.length; ) {
+    const c = src[i];
+    const d = src[i + 1];
+    if (state === 'code') {
+      if (c === '/' && d === '/') {
+        state = 'line';
+        i += 2;
+        continue;
+      }
+      if (c === '/' && d === '*') {
+        state = 'block';
+        i += 2;
+        continue;
+      }
+      /*
+        A REGEX LITERAL, and it has to be recognised or this whole
+        function is wrong rather than merely incomplete. `flows.mjs`
+        reaches for copy by regex constantly
+        (`getByText(/Forced CUSTOMER_DECLINED/i)`), and a `/` read as
+        DIVISION leaves the pattern's text being scanned as code — six
+        enum values were reported as undeclared constants that way. A
+        pattern containing `//` or an escaped slash is worse than a
+        false positive: it starts a comment and silently swallows the
+        rest of the line.
+
+        Whether `/` opens a regex or divides depends on what came
+        before, which is the standard heuristic — after a value a `/`
+        divides; after an operator, an opening bracket or a keyword it
+        opens a pattern.
+      */
+      if (c === '/' && regexCanStartHere(out)) {
+        state = 're';
+        out += ' ';
+        i += 1;
+        continue;
+      }
+      // The close of a `${...}` hole: back into the template literal.
+      if (c === '}' && holes.length > 0) {
+        holes.pop();
+        state = 'tpl';
+        out += ' ';
+        i += 1;
+        continue;
+      }
+      if (c === "'") {
+        state = 'sq';
+        out += ' ';
+        i += 1;
+        continue;
+      }
+      if (c === '"') {
+        state = 'dq';
+        out += ' ';
+        i += 1;
+        continue;
+      }
+      if (c === '`') {
+        state = 'tpl';
+        out += ' ';
+        i += 1;
+        continue;
+      }
+      out += c;
+      i += 1;
+      continue;
+    }
+    if (state === 'line') {
+      if (c === '\n') {
+        state = 'code';
+        out += c;
+      }
+      i += 1;
+      continue;
+    }
+    if (state === 'block') {
+      if (c === '*' && d === '/') {
+        state = 'code';
+        i += 2;
+      } else {
+        if (c === '\n') out += c;
+        i += 1;
+      }
+      continue;
+    }
+    // Inside a string, a template literal's text, or a regex pattern.
+    if (c === '\\') {
+      out += '  ';
+      i += 2;
+      continue;
+    }
+    if (state === 're') {
+      // A character class may hold an unescaped `/`, so it is tracked:
+      // `/[a-z/]+/` ends at the LAST slash, not the one inside `[...]`.
+      if (c === '[') inClass = true;
+      else if (c === ']') inClass = false;
+      else if (c === '/' && !inClass) state = 'code';
+      out += c === '\n' ? c : ' ';
+      i += 1;
+      continue;
+    }
+    // A hole's CONTENTS are code — an identifier used only inside one
+    // is still used, and blanking it would make this gate miss it.
+    if (state === 'tpl' && c === '$' && d === '{') {
+      holes.push(true);
+      state = 'code';
+      out += '  ';
+      i += 2;
+      continue;
+    }
+    if (
+      (state === 'sq' && c === "'") ||
+      (state === 'dq' && c === '"') ||
+      (state === 'tpl' && c === '`')
+    ) {
+      state = 'code';
+    }
+    out += c === '\n' ? c : ' ';
+    i += 1;
+  }
+  return out;
+}
+
 const ENTITIES = [
   [/&amp;/g, '&'],
   [/&nbsp;/g, ' '],
@@ -376,4 +539,87 @@ describe('every text a flow clicks exists in the product', () => {
         missing.join('\n  '),
     );
   });
+});
+
+/**
+ * Every constant a flow NAMES is a constant that exists.
+ *
+ * ── WHY THIS IS ITS OWN GATE ────────────────────────────────────────
+ * `flows.mjs` is a module, so a bare identifier nothing declares is a
+ * RUNTIME `ReferenceError` — not a parse error. It survives
+ * `node --check`, it survives importing the module (the throw happens
+ * when the STEP runs), and the rig scripts are linted by nothing: lint
+ * is per-package through turbo and no config covers `scripts/`. So the
+ * first thing that notices is a filming run, half an hour in, on
+ * whichever slug happens to use it.
+ *
+ * It really happened: the commit that rewrote `staff-and-broadcasts`
+ * for RBAC-1b's multi-select wrote `O5_INVITE_ROLE_TIER`,
+ * `O5_INVITE_ROLE_JOB` and `O5_HELD_ROLE_NAME` into the steps and
+ * declared none of them. The scene threw on its first line and the
+ * library carried a stale take for eleven days.
+ *
+ * ── WHAT IT LOOKS AT ────────────────────────────────────────────────
+ * SCREAMING_SNAKE names only. That is the rig's convention for exactly
+ * the things this class of mistake happens to — the shared labels,
+ * emails, refs and role names a flow and the seeding have to agree on —
+ * and it keeps the gate free of the parameters, locals and properties a
+ * general-purpose check would have to model a scope chain to handle.
+ * Lower-case identifiers are left to the day something lints this file.
+ *
+ * Comments and strings are removed by `codeOnly` BEFORE the scan,
+ * because prose naming a constant (`see PICK_ORDERS in
+ * seed-demo-data.mjs`) and copy holding an enum value
+ * (`selectOption('HOLD_DAMAGED')`) both read exactly like a reference.
+ * A crude `replace`-based strip reported five of those and zero real
+ * ones, which is how a gate teaches people to ignore it.
+ */
+describe('no flow file names a constant it does not have', () => {
+  /*
+    Globals that happen to be SCREAMING_SNAKE-shaped. Listed rather
+    than pattern-matched, so a genuinely missing constant can never be
+    waved through by a loose rule.
+  */
+  const GLOBALS = new Set(['NaN', 'Infinity']);
+
+  /*
+    EVERY flow file, not just `flows.mjs`: the long tutorials and the
+    section files are the same kind of module written the same way, and
+    a name missing from one of those fails at filming exactly as
+    loudly. Each is checked against its OWN imports, because a constant
+    declared in `flows.mjs` reaches a section file only by being
+    imported there.
+  */
+  for (const rel of FLOW_FILES) {
+    const code = codeOnly(fs.readFileSync(path.join(TUTORIALS, rel), 'utf8'));
+
+    const used = new Set(code.match(/\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g) ?? []);
+    const declared = new Set(
+      [
+        ...code.matchAll(/(?:^|[\s;{(,])(?:const|let|var|function|class)\s+([A-Z][A-Z0-9_]+)\b/g),
+      ].map((m) => m[1]),
+    );
+    const imported = new Set(
+      [...code.matchAll(/import\s*\{([^}]*)\}\s*from/g)].flatMap((m) =>
+        m[1]
+          .split(',')
+          .map((part) => part.split(' as ').pop().trim())
+          .filter(Boolean),
+      ),
+    );
+
+    const undeclared = [...used]
+      .filter((n) => !declared.has(n) && !imported.has(n) && !GLOBALS.has(n))
+      .sort();
+
+    it(`${rel} declares or imports every constant it references`, () => {
+      assert.deepEqual(
+        undeclared,
+        [],
+        `${rel} references these names and declares them nowhere, so the step using one ` +
+          'throws ReferenceError the moment it is filmed:\n  ' +
+          undeclared.join('\n  '),
+      );
+    });
+  }
 });

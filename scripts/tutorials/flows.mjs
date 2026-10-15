@@ -1536,6 +1536,32 @@ const O5_BROADCAST_TITLE = 'Call centre closing at six on Friday';
 /** What her role is changed TO on camera; the seeding puts it back. */
 const O5_NEW_ROLE_NAME = 'Seller approval admin';
 
+/**
+ * What she HOLDS before that change, and the two roles the invitation
+ * hands out.
+ *
+ * All three were USED and never DECLARED — the scene threw
+ * `ReferenceError: O5_INVITE_ROLE_TIER is not defined` the moment it
+ * ran, which no parse and no selector check can see because an
+ * undeclared identifier in a module is a RUNTIME error. The commit that
+ * rewrote this scene for RBAC-1b's multi-select wrote the uses and not
+ * the names.
+ *
+ * `O5_HELD_ROLE_NAME` must be the display name of the role the seeding
+ * grants her (`O5_STAFF_ROLE_KEY = 'finance'` in `seed-demo-data.mjs`),
+ * because the `role` scene takes it OFF her before adding the new one
+ * so the take shows a replacement rather than an accumulation.
+ *
+ * The invitation hands out a TIER plus a JOB because the field's hint
+ * asks for exactly that, and this pair is the product's own worked
+ * example — `staff-role-presets.ts` says "somebody who takes calls AND
+ * handles tickets holds Call agent and Support" — which is the whole
+ * reason a person may hold several roles at all.
+ */
+const O5_HELD_ROLE_NAME = 'Finance';
+const O5_INVITE_ROLE_TIER = 'Support';
+const O5_INVITE_ROLE_JOB = 'Call agent';
+
 /** The audience it sends to — two people, which is the whole point. */
 const O5_BROADCAST_ROLE_KEY = 'call_agent';
 
@@ -9122,7 +9148,22 @@ export const FLOWS = {
         await page.getByLabel('Status', { exact: true }).first().selectOption('ARRIVING');
         await page.waitForLoadState('networkidle').catch(() => {});
         await page.waitForTimeout(600);
-        const receipt = page.getByRole('link', { name: /^GR-\d{4}-\d{2}-\d{4}$/ }).first();
+        /*
+          BY ITS LINK, not by its NUMBER. This used to match
+          `/^GR-\d{4}-\d{2}-\d{4}$/`, and a two-leg consignment's Indian
+          arrival is numbered after the CONSIGNMENT
+          (`CN-2026-10-000001-000012`) rather than `GR-…` — and that leg
+          is created ALREADY ARRIVING by the dispatch, so on a box
+          carrying one the ARRIVING list is exactly where it shows up.
+          The step then waited out its timeout on a list that was full
+          of the thing it wanted.
+
+          The list is already filtered to ARRIVING, which IS the
+          condition this scene needs (the only state carrying a Complete
+          button), so the href shape is the honest handle: every row
+          links to its own receipt and no number format is assumed.
+        */
+        const receipt = page.locator('a[href*="/warehouse/receive/"]').first();
         await receipt.waitFor({ state: 'visible', timeout: 25_000 });
         await stage.clickIt(receipt, { after: 1400 });
         await page.waitForURL(/\/warehouse\/receive\/[0-9a-f-]{36}$/, { timeout: 30_000 });
@@ -13348,10 +13389,22 @@ export const FLOWS = {
         const dialog = page.getByRole('dialog');
         await dialog.waitFor({ state: 'visible', timeout: 20_000 });
         await page.waitForTimeout(600);
+        /*
+          BY NAME, not by POSITION. This took `{ index: 1 }` — the
+          second entry of a list whose order nothing promises — and the
+          filming box carries five courier accounts (two lanes, the
+          sandbox, the simulator, and the one M1 adds on camera). A
+          payout belongs to ONE account, and a line whose order was
+          carried by a different one is refused
+          (`SETTLEMENT_ORDER_OTHER_COURIER`, WAL-6) — so the form filled
+          in perfectly, said "Fully allocated", and the dialog never
+          closed. The seeding now writes the file from one account's
+          parcels and names it here.
+        */
         await dialog
           .getByLabel(/^Courier account/)
           .first()
-          .selectOption({ index: 1 });
+          .selectOption({ label: payout.accountLabel });
         await page.waitForTimeout(500);
         await stage.typeIn(dialog.getByLabel(/^Amount received/).first(), String(payout.totalInr), {
           after: 600,
