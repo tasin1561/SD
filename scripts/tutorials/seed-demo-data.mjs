@@ -1839,6 +1839,73 @@ async function reopenMonthsAfter(month) {
     `  \u00b7 reopened ${later.map((p) => p.month).join(', ')} \u2014 ` +
       'the auto-close had closed it provisionally between takes',
   );
+
+  await stopTheAutoClose();
+}
+
+/**
+ * Take the hourly auto-close OFF this filming stack for the take.
+ *
+ * Deleting the periods is not enough on its own, and the measurement
+ * says why: `PNL_AUTO_CLOSE_CRON` is `0 * * * *` in `Asia/Kolkata` —
+ * every hour, every day, not just the 1st — so the job re-closed August
+ * and September between the seed finishing and the recorder reaching
+ * the month scene, and the picker was back to "closed (provisional)"
+ * with nothing to choose. Three takes died that way before the hour
+ * boundary was the obvious suspect.
+ *
+ * So the repeatable is removed rather than raced. It is registered in
+ * `PnlPeriodWorker.onApplicationBootstrap`, so the next time this
+ * stack's API starts it comes back by itself — nothing is permanently
+ * disabled and no product behaviour is edited, which is the same shape
+ * as the pending-accrual sweep being asked to run early rather than
+ * bypassed.
+ *
+ * LOCAL REDIS ONLY, for the reason `letTheClockRun` refuses a remote
+ * one: this reaches into a queue, and the queue on a real deployment
+ * closes real months.
+ */
+async function stopTheAutoClose() {
+  const url = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
+  const host = new globalThis.URL(url);
+  if (!['localhost', '127.0.0.1', '::1', 'redis'].includes(host.hostname)) {
+    throw new Error(
+      `Refusing to touch the pnl-period queue on "${host.hostname}" — this is a local ` +
+        'recording convenience and that job closes real months.',
+    );
+  }
+  const queue = new BullMQ.Queue('pnl-period', {
+    connection: {
+      host: host.hostname,
+      port: Number(host.port === '' ? 6379 : host.port),
+      // The logical DB index off the URL PATH — building the connection
+      // field by field drops it, and stack B would reach into stack A.
+      db: Number(host.pathname.replace('/', '')) || 0,
+      maxRetriesPerRequest: null,
+    },
+  });
+  try {
+    /*
+      FOUND BY NAME, REMOVED BY KEY. A scheduler's id is a HASH of its
+      repeat options, not the `jobId` the worker passes to `add` — so
+      `removeJobScheduler('pnl-auto-close-cron')` returns false and
+      removes nothing, which is exactly as quiet as leaving it alone.
+      The entry carries the job NAME, which is the stable handle.
+    */
+    const scheduler = (await queue.getJobSchedulers()).find((j) => j.name === 'pnl-auto-close');
+    const removed =
+      scheduler === undefined
+        ? false
+        : await queue.removeJobScheduler(scheduler.key).catch(() => false);
+    console.log(
+      removed
+        ? '  \u00b7 took the hourly P&L auto-close off this stack so it cannot re-close ' +
+            'August mid-take (it returns when the API restarts)'
+        : '  \u00b7 the hourly P&L auto-close was already off this stack',
+    );
+  } finally {
+    await queue.close();
+  }
 }
 
 async function walletWorldFor(slug, sellerId, sellerToken, staffToken) {
