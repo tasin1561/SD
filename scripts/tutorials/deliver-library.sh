@@ -46,6 +46,7 @@ playable() { ffprobe -v error -show_entries format=duration -of csv=p=0 "$1" >/d
 
 copied=0; missing=0; truncated=0
 MISSING_LIST=""
+MANIFEST=""
 
 place() { # slug, folder
   local slug="$1" dir="$2" src="$SRC/$1.mp4"
@@ -60,6 +61,11 @@ place() { # slug, folder
   mkdir -p "$DEST/$dir"
   cp -f "$src" "$DEST/$dir/$slug.mp4"
   copied=$((copied + 1))
+  # Remembered for the manifest. The duration is the one ffprobe just
+  # read, so a row in the list is a file that played.
+  local secs
+  secs=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$src" 2>/dev/null)
+  MANIFEST="$MANIFEST$(printf '%s\t%s\t%.0f' "$dir" "$slug" "${secs:-0}")\n"
 }
 
 # ── the short library, filed by the console it films ────────────────
@@ -87,7 +93,26 @@ find "$DEST" -mindepth 1 -maxdepth 2 -type d | sort | while read -r d; do
   n=$(find "$d" -maxdepth 1 -name '*.mp4' | wc -l)
   [ "$n" -gt 0 ] && printf "  %-34s %3d video(s)\n" "${d#$DEST/}" "$n"
 done
+# ── a manifest, so "is anything missing" is answerable ──────────────
+# The handover is 127 files across seven folders, and counting them by
+# eye is exactly the check nobody does. This lists every video that was
+# COPIED, with the duration ffprobe read out of it, grouped the way the
+# folders are — plus anything that could not be copied, by name.
+{
+  printf 'Skydrop video library\n'
+  printf 'Prepared %s\n\n' "$(date '+%d %B %Y, %H:%M')"
+  printf '%s video(s) in this folder.\n\n' "$copied"
+  printf '%b' "$MANIFEST" | awk -F'\t' '
+    { if ($1 != last) { if (last != "") printf "\n"; printf "%s\n", $1; last = $1 }
+      printf "   %-44s %2d:%02d\n", $2, $3/60, $3%60 }'
+  if [ -n "$MISSING_LIST" ]; then
+    printf '\nNOT INCLUDED\n'
+    printf '%b\n' "$MISSING_LIST"
+  fi
+} > "$DEST/CONTENTS.txt"
+
 echo
 echo "copied $copied · missing $missing · unreadable $truncated"
+echo "manifest: $DEST/CONTENTS.txt"
 [ -n "$MISSING_LIST" ] && printf "%b\n" "$MISSING_LIST"
 exit 0
