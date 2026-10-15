@@ -1818,10 +1818,21 @@ async function reopenMonthsAfter(month) {
   }
 
   const ids = later.map((p) => p.id);
+  const months = later.map((p) => p.month);
   await prisma.$transaction([
     prisma.pnlSnapshotRow.deleteMany({ where: { periodId: { in: ids } } }),
     prisma.pnlSnapshotVersion.deleteMany({ where: { periodId: { in: ids } } }),
-    prisma.pnlCarryForward.deleteMany({ where: { periodId: { in: ids } } }),
+    /*
+      `originPeriodId`, NOT `periodId` — a carry-forward is keyed on the
+      month it came OUT of and the month it LANDED in, and it has no
+      plain period column at all. It is `onDelete: Restrict` too, so
+      this is not optional: the period cannot go while one points at it.
+      Rows that LANDED in a reopened month go as well, or the month
+      reads as carrying changes from a close that no longer exists.
+    */
+    prisma.pnlCarryForward.deleteMany({
+      where: { OR: [{ originPeriodId: { in: ids } }, { landedMonth: { in: months } }] },
+    }),
     prisma.pnlPeriod.deleteMany({ where: { id: { in: ids } } }),
   ]);
   console.log(
