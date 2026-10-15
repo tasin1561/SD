@@ -17372,7 +17372,7 @@ export const FLOWS = {
       },
 
       async held({ page, stage }) {
-        const sec = roSection(page, 'Sent to your seller to approve');
+        const sec = roSection(page, 'Sent to your client to approve');
         if ((await sec.count()) > 0) {
           await sec.scrollIntoViewIfNeeded();
           await page.waitForTimeout(400);
@@ -18221,7 +18221,7 @@ export const FLOWS = {
       async position({ page, stage }) {
         await stage.dwellOn(kpiCard(page, 'Wallet balance'), 1600);
         await stage.dwellOn(kpiCard(page, 'You are owed'), 1600);
-        await stage.dwellOn(kpiCard(page, 'You owe your seller'), 1600);
+        await stage.dwellOn(kpiCard(page, 'You owe your client'), 1600);
       },
 
       async period({ page, stage }) {

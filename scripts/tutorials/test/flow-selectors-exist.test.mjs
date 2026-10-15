@@ -97,7 +97,54 @@ const SOURCES = [
 ];
 
 /** Helpers whose argument IS a visible-text label. Add a new one here. */
-const HELPERS = ['moneyKpi', 'moneyCard', 'pnlLine'];
+/**
+ * Helpers that take VISIBLE TEXT as an argument, FOUND rather than
+ * listed.
+ *
+ * This was a hand-written array of three, with a docblock warning that
+ * "a NEW label-taking helper must be added or its selectors are
+ * unchecked — and the gate will look just as green". It was: there are
+ * THIRTY-NINE of them, so thirty-six helpers' worth of selectors were
+ * never checked, and `kpiCard(page, 'You owe your seller')` sat through
+ * CON-2 pointing at a card the product now labels "You owe your
+ * client".
+ *
+ * A list whose own documentation says it will go stale should not be a
+ * list. A helper qualifies when one of its parameters reaches a TEXT
+ * matcher in its body — `getByText(p)`, `hasText: p`, `name: p`,
+ * `getByLabel(p)` — which is the same question "does this argument end
+ * up being matched against what a person reads" asked of the code
+ * rather than of somebody's memory.
+ */
+function labelHelpers(src) {
+  const fns = [...src.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*\{/gm)];
+  const byArg = new Map();
+  for (const [i, m] of fns.entries()) {
+    const name = m[1];
+    const body = src.slice(
+      m.index + m[0].length,
+      i + 1 < fns.length ? fns[i + 1].index : src.length,
+    );
+    const params = m[2]
+      .split(',')
+      .map((p) => p.trim().split('=')[0].trim())
+      .filter(Boolean);
+    for (const [idx, param] of params.entries()) {
+      // Index 0 is the page or a locator by convention here.
+      if (idx === 0 || !/^[A-Za-z_$][\w$]*$/.test(param)) continue;
+      const p = param.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const reaches = new RegExp(
+        `getByText\\(\\s*${p}\\b|hasText:\\s*${p}\\b|name:\\s*${p}\\b|getByLabel\\(\\s*${p}\\b`,
+      );
+      if (reaches.test(body)) {
+        if (!byArg.has(idx)) byArg.set(idx, []);
+        byArg.get(idx).push(name);
+        break;
+      }
+    }
+  }
+  return byArg;
+}
 
 /**
  * Literals a flow uses that the product cannot render, each with its
@@ -106,6 +153,20 @@ const HELPERS = ['moneyKpi', 'moneyCard', 'pnlLine'];
  * in the gap.
  */
 const EXPECTED_ABSENT = new Map([
+  /*
+    ── Rendered from the DATABASE, not from a source literal ──────────
+    A staff role's NAME is a seeded row an admin may rename, so it is on
+    screen and in no source file. The corpus is source strings, so these
+    can only ever be exemptions — and they are exempt as DATA, not as
+    copy that was renamed and missed.
+  */
+  ['Warehouse supervisor', 'seeded staff role name — rendered from staff_role_definitions'],
+  /*
+    ── Split across JSX nodes by an expression in the middle ──────────
+    The import preview renders `{n} row{s} will not import · …`, so the
+    phrase exists on screen and never as one literal.
+  */
+  ['will not import', 'composed: `{n} row{s} will not import` in the import preview'],
   // ── Composed at runtime: correct selectors, unfindable as literals ──
   ['Delivery fee — store pays (%)', 'composed: `${f.label} — store pays (%)` in terms-section'],
   ['Return fee — store pays (%)', 'composed: as above'],
@@ -490,11 +551,19 @@ function selectors(src) {
   )) {
     found.push({ text: m[1], exact: Boolean(m[2]), line: at(m.index) });
   }
-  // A label handed to a helper is a plain ARGUMENT, invisible above.
-  for (const m of src.matchAll(
-    new RegExp(`\\b(?:${HELPERS.join('|')})\\(\\s*\\w+\\s*,\\s*'([^'\\\\]{2,})'`, 'g'),
-  )) {
-    found.push({ text: m[1], exact: true, line: at(m.index) });
+  /*
+    A label handed to a HELPER is a plain argument and is invisible to
+    everything above. The helpers are discovered from this very file, at
+    whichever argument position each one takes its text — two of them
+    take it third.
+  */
+  for (const [idx, names] of labelHelpers(src)) {
+    const skip = '\\s*[^,()]+\\s*,'.repeat(idx);
+    for (const m of src.matchAll(
+      new RegExp(`\\b(?:${names.join('|')})\\(${skip}\\s*'([^'\\\\]{2,})'`, 'g'),
+    )) {
+      found.push({ text: m[1], exact: true, line: at(m.index) });
+    }
   }
   return found;
 }
