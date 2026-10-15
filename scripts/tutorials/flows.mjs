@@ -8650,7 +8650,7 @@ export const FLOWS = {
         await stage.dwellOn(dialog.locator('.sk-confirm__consequence').first(), 4000);
       },
 
-      async store({ page, stage, baseUrl }) {
+      async store({ page, stage, baseUrl, tickets }) {
         // CANCEL FIRST, in the previous scene's tail — a scene must open
         // on the thing it is about, not on a closing modal.
         await stage.clickIt(
@@ -8662,9 +8662,13 @@ export const FLOWS = {
           after: 1200,
         });
         await page.waitForURL(`${baseUrl}/tickets`, { timeout: 30_000 });
-        await stage.clickIt(page.getByRole('row').filter({ hasText: 'TK-2026-000004' }).first(), {
-          after: 1400,
-        });
+        // Off the fixture, like the two before it — a ticket number comes
+        // from a per-year sequence, so writing one in here pins the
+        // scene to the box it was filmed on.
+        await stage.clickIt(
+          page.getByRole('row').filter({ hasText: tickets.disputeTicket }).first(),
+          { after: 1400 },
+        );
         await page.waitForURL(/\/tickets\/[0-9a-f-]{36}$/, { timeout: 30_000 });
         // The STORE's own words, named — which is what the attribution
         // fix of 2026-10-04 is about and what the line claims.

@@ -1506,12 +1506,69 @@ async function systemIssueWorldFor(slug, staffToken) {
   }
 }
 
+/**
+ * A top-up claim waiting for somebody to accept it.
+ *
+ * The RUPEE account on purpose: a claim's amount is in its account's
+ * own currency, and against the taka one every figure a narration
+ * quotes would be a different number by the exchange rate.
+ *
+ * The reference is unique per call, because it is what an operator
+ * matches against the bank statement and two claims sharing one teach
+ * the opposite of what the money-desk videos say.
+ *
+ * Shared by the money desk (which wants two, and makes them) and by
+ * `what-we-cannot-undo` (which wants exactly one and never spends it) —
+ * extracted rather than written twice, because the account lookup and
+ * the body shape are the parts that drift.
+ */
+async function createTopupClaim(sellerId, sellerToken, amountInr, salt = 0) {
+  const { accounts } = await call('/seller/wallet/topups/bank-accounts', {
+    token: await sellerToken(),
+  });
+  const account = (accounts ?? []).find((a) => a.currency === 'INR');
+  if (account === undefined) {
+    throw new Error('No active rupee platform bank account — run the db seed first.');
+  }
+  return call('/seller/wallet/topups', {
+    method: 'POST',
+    token: await sellerToken(),
+    body: {
+      bankAccountId: account.id,
+      amount: amountInr,
+      transactionRef: `NEFT${(Date.now() + salt).toString().slice(-10)}`,
+    },
+  });
+}
+
 async function dangerousActsWorldFor(slug, sellerId, sellerToken, staffToken) {
   if (slug !== 'what-we-cannot-undo') return;
 
   await pendingBankChange(sellerId, sellerToken);
   await closeAnEndedMonth(staffToken);
   await aReceiptReadyToComplete(staffToken);
+
+  /*
+    AND A CLAIM TO POINT AT. The video's top-up scene dwells on the
+    Accept button — the point being that accepting credits a wallet and
+    cannot be taken back — and nothing here seeded one, so the scene
+    waited out its timeout on a queue reading "no claims". It is in
+    none of `MONEY_DESK_SLUGS`, which is what makes those claims.
+
+    IDEMPOTENT, because this video never presses the button: the claim
+    is still waiting after a take, and creating one unconditionally
+    would leave a queue growing by one a run under a narration about
+    "a claim".
+  */
+  const waiting = await prisma.walletTopupRequest.count({
+    where: { sellerId, status: 'PENDING' },
+  });
+  if (waiting === 0) {
+    await createTopupClaim(sellerId, sellerToken, DESK_TOPUP_INR);
+    console.log(`  \u00b7 one top-up claim waiting, for the scene about accepting one`);
+  } else {
+    console.log(`  \u00b7 ${waiting} top-up claim(s) already waiting — the scene has its row`);
+  }
 }
 
 /**
@@ -3610,7 +3667,25 @@ async function writeRefundsFixture(sellerId, log) {
       sellerId,
       ticketType: 'RECEIPT_SHORTFALL',
       status: live,
-      goodsReceipt: { leg: 'IN_FINAL' },
+      /*
+        `leg: IN_FINAL` is NOT the question, and asking it picked the
+        wrong ticket: a DIRECT_IN consignment has ONE leg and it is the
+        Indian arrival, so its short count is IN_FINAL too — and it is
+        the seller's declaration against us, which reads nothing like a
+        loss in our hands.
+
+        This is `ReceiptShortfallTicketService`'s own test, restated:
+        the receipt was DISPATCHED from Bangladesh, and the Dhaka stop
+        COUNTED what left (a stop that forwarded unopened makes India
+        the first count, so a gap there is leg (a) again).
+      */
+      goodsReceipt: {
+        leg: 'IN_FINAL',
+        dispatchedAt: { not: null },
+        consignment: {
+          receipts: { some: { leg: 'BD_INTAKE', forwardedWithoutCount: false } },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
     select: { ticketNumber: true },
@@ -3622,8 +3697,8 @@ async function writeRefundsFixture(sellerId, log) {
   });
   if (shortfall === null) {
     throw new Error(
-      'refunds-and-disputes: no live RECEIPT_SHORTFALL ticket on an INDIA leg ' +
-        '(goods_receipts.leg = IN_FINAL) for this seller. TKT-3 opens one when a ' +
+      'refunds-and-disputes: no live RECEIPT_SHORTFALL ticket on an India leg that ' +
+        'was DISPATCHED from a COUNTED Bangladesh stop. TKT-3 opens one when a ' +
         "two-leg consignment's Indian arrival completes short, so that world has to " +
         'be seeded before this runs — a shortfall on the Bangladesh intake is a ' +
         'different ticket saying a different thing and the video is not about it.',
@@ -9085,31 +9160,8 @@ async function moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken) {
   }
 
   if (slug === 'how-seller-money-works' || slug === 'accept-a-top-up') {
-    const { accounts } = await call('/seller/wallet/topups/bank-accounts', {
-      token: await sellerToken(),
-    });
-    // The RUPEE account. A claim's amount is in the account's own
-    // currency, and N2's narration quotes the figure the operator is
-    // about to credit — against the taka one it would be a different
-    // number by the exchange rate, which is a different video (E1).
-    const account = (accounts ?? []).find((a) => a.currency === 'INR');
-    if (account === undefined) {
-      throw new Error('No active rupee platform bank account — run the db seed first.');
-    }
-    await call('/seller/wallet/topups', {
-      method: 'POST',
-      token: await sellerToken(),
-      body: {
-        bankAccountId: account.id,
-        amount: DESK_TOPUP_INR,
-        // What a seller would copy off their own banking app. Unique per
-        // run, because the reference is what an operator matches against
-        // the statement and two claims sharing one would teach the
-        // opposite of what N2 says.
-        transactionRef: `NEFT${Date.now().toString().slice(-10)}`,
-      },
-    });
-    console.log(`  · one top-up claim waiting for review (₹${DESK_TOPUP_INR})`);
+    await createTopupClaim(sellerId, sellerToken, DESK_TOPUP_INR);
+    console.log(`  \u00b7 one top-up claim waiting for review (\u20b9${DESK_TOPUP_INR})`);
 
     // N2 needs a SECOND claim, and it is not decoration. The video
     // accepts one and then opens the REJECT dialog to read the reason
@@ -9119,15 +9171,7 @@ async function moneyDeskWorldFor(slug, sellerId, sellerToken, staffToken) {
     // ordinary, and a queue of exactly one makes the screen look like a
     // form rather than a queue.
     if (slug === 'accept-a-top-up') {
-      await call('/seller/wallet/topups', {
-        method: 'POST',
-        token: await sellerToken(),
-        body: {
-          bankAccountId: account.id,
-          amount: DESK_SECOND_TOPUP_INR,
-          transactionRef: `NEFT${(Date.now() + 7919).toString().slice(-10)}`,
-        },
-      });
+      await createTopupClaim(sellerId, sellerToken, DESK_SECOND_TOPUP_INR, 7919);
       console.log(
         `  · a second claim for the refusal scene to point at (₹${DESK_SECOND_TOPUP_INR})`,
       );
