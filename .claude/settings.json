@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "BASH_MAX_OUTPUT_LENGTH": "15000",
+    "MAX_MCP_OUTPUT_TOKENS": "12000",
+    "DISABLE_TELEMETRY": "1",
+    "GRAPHIFY_QUERY_LOG_DISABLE": "1"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(graphify query:*)",
+      "Bash(graphify explain:*)",
+      "Bash(graphify path:*)",
+      "Bash(graphify update:*)",
+      "Bash(graphify affected:*)",
+      "Bash(pnpm turbo run:*)",
+      "Bash(pnpm -F:*)",
+      "Bash(pnpm --filter:*)",
+      "Bash(pnpm gate:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm lint:*)",
+      "Bash(pnpm format:*)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm build:*)",
+      "Bash(git push:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git checkout:*)",
+      "Bash(ssh skydrop:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)"
+    ],
+    "deny": [
+      "Read(./**/node_modules/**)",
+      "Read(./**/.next/**)",
+      "Read(./**/dist/**)",
+      "Read(./**/build/**)",
+      "Read(./**/.turbo/**)",
+      "Read(./**/coverage/**)",
+      "Read(./**/playwright-report/**)",
+      "Read(./**/test-results/**)",
+      "Read(./pnpm-lock.yaml)",
+      "Read(./graphify-out/graph.json)",
+      "Read(./graphify-out/graph.html)",
+      "Read(./**/*.min.js)",
+      "Read(./**/*.map)",
+      "Read(./**/.env)",
+      "Read(./**/.env.local)",
+      "Read(./**/.env.production)",
+      "Bash(pm2:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/talha/.local/bin/graphify hook-guard search",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/talha/.local/bin/graphify hook-guard read",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

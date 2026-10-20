@@ -106,7 +106,14 @@ docker-compose.override.yml
 tmp/
 
 # ----- Claude Code -----
-.claude/
+# Ignore local Claude state, but track the shared project config.
+.claude/*
+!.claude/settings.json
+!.claude/agents/
+!.claude/commands/
+
+# graphify knowledge graph (rebuilt locally)
+graphify-out/
 
 # ----- Local dev artifacts -----
 *.local

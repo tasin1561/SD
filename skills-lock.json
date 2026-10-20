@@ -54,6 +54,12 @@
       "sourceType": "github",
       "skillPath": "skills/web-app-penetration-testing/SKILL.md",
       "computedHash": "734aaa972fd526b3962ff3ff29ef701c2eae6191f27c8dc479f9c37f9445de69"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "a6a44d5498f7e8f68289902f3dedfc6f38ae0cee1e96527c80724cf27f727c2a"
     }
   }
 }

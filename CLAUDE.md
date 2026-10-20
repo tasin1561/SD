@@ -4,6 +4,29 @@ This file is loaded at the start of every Claude Code session. Read it carefully
 
 ---
 
+## Token discipline (follow on every task)
+
+1. **Graph first, files second.** For "where/how/what calls X" questions run
+   `graphify query "<question>"`, `graphify explain "<Symbol>"` or `graphify path A B`
+   before Grep/Read. Read `graphify-out/GRAPH_REPORT.md` only for architecture-wide questions.
+2. **Read narrowly.** Use Grep with a glob, then Read with `offset`/`limit`. Never read whole
+   generated files, lockfiles, `dist/`, `.next/`, `.turbo/`, `node_modules/`, migrations history or seed dumps.
+3. **Scope inner-loop commands to one package**, e.g. `pnpm turbo run typecheck --filter=@skydrop/api --output-logs=errors-only`
+   or `pnpm --filter @skydrop/seller test`. Pipe long output through `| tail -n 60`.
+   This is the fast inner loop only — the pre-commit gate is still `pnpm gate`, run whole (see Git Workflow).
+4. **Edit, don't rewrite.** Make the smallest Edit that works. Don't paste whole files back into chat;
+   summarise what changed in ≤5 lines.
+5. **Delegate searches.** Broad sweeps (>5 files) go to the Explore subagent; keep only its conclusion.
+6. **No narration.** Skip plans for tasks under ~3 steps. No restating the request. No recap at the end.
+7. **One task per session.** When a task finishes, run `/handoff`, then `/clear`. Use `/compact` when context passes ~60%.
+8. Only load a skill when the task matches it. Don't open skills "just in case".
+9. **UI work in ANY app** (not only apps/marketing) uses the `premium-ui-motion` skill: premium motion, light/dark,
+   `prefers-reduced-motion` respected, no layout shift, animate transform/opacity only. Changes to `@skydrop/ui`
+   restart every app on deploy — keep them minimal and flag them.
+10. After a change, the `skydrop-reviewer` agent (read-only) can check the diff for removed features and money-path risk.
+
+---
+
 ## What is Skydrop
 
 Skydrop is a **cross-border courier aggregator + light WMS** for Bangladeshi e-commerce sellers shipping to Indian customers.
@@ -1620,3 +1643,14 @@ NON-NEGOTIABLE constraints (these are still law):
    remittance, invite-only beta).
 6. pnpm only. All new deps go into apps/marketing via pnpm --filter.
 7. 21st.dev: search/install tools only — generation is blocked, never attempt it.
+
+## graphify
+
+This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- When graphify-out/graph.json exists, run `graphify query "<question>"` before your first grep, search or source-file read for a codebase question, and put this rule in every subagent prompt that explores code. Read raw files only for lines the graph or an earlier read already located. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+- A committed graphify-out/graph.json is rewritten whole on every build, so a large diff to it in a pull request is expected. Do not flag it as churn or suggest skipping the graph rebuild or its hooks.
