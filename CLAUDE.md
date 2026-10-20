@@ -107,6 +107,26 @@ Everything that used to live below this point was moved **verbatim** into `docs/
 
 ---
 
+## Model routing (always)
+
+- **Opus (you, main session):** understand the request, plan, decide, and write
+  code yourself ONLY for wallet/ledger/remittance/COD amounts, courier
+  integrations (Delhivery, Shiprocket), auth, DB migrations, cross-package
+  architecture, and debugging unclear failures.
+- Delegate to `implementer` (Sonnet): any well-scoped change you can describe
+  in a clear spec (files, behaviour, acceptance check).
+- Delegate to `quick-fix` (Haiku): trivial edits.
+- Searches across many files → Explore agent. After non-trivial changes →
+  `skydrop-reviewer` (Haiku) before reporting done.
+- Pass subagents a tight spec, not the whole conversation. Review their
+  result briefly; if it's wrong, fix the spec and re-delegate once, then do
+  it yourself.
+- Don't delegate tasks smaller than the spec would be. Just do those.
+- Start each reply that delegates with one line: `→ implementer (Sonnet)`
+  or `→ quick-fix (Haiku)` so I can see the routing.
+
+---
+
 ## Git Workflow
 
 - Solo dev for now. `main` branch, no feature branches required for trivial work.
