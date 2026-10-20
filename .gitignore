@@ -138,3 +138,6 @@ screenshots/apps-restyle/
 
 # The UI audit is a diagnostic run, not a build artefact.
 scripts/ui-audit/out/
+
+# Per-session handoff note — scratch for the next session, not history.
+.claude/HANDOFF.md

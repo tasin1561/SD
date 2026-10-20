@@ -87,7 +87,18 @@ Everything that used to live below this point was moved **verbatim** into `docs/
    summarise what changed in ≤5 lines.
 5. **Delegate searches.** Broad sweeps (>5 files) go to the Explore subagent; keep only its conclusion.
 6. **No narration.** Skip plans for tasks under ~3 steps. No restating the request. No recap at the end.
-7. **One task per session.** When a task finishes, run `/handoff`, then `/clear`. Use `/compact` when context passes ~60%.
+7. **Session management (always):**
+   - When a task is finished, or I switch to an unrelated task, write
+     `.claude/HANDOFF.md` yourself (same format as `.claude/commands/handoff.md`,
+     max 25 lines) without being asked, then end your reply with exactly:
+     `✅ Done — handoff saved. Type /clear for the next task.`
+   - If a single task has run long (many large reads/outputs, or roughly
+     half the context used), say: `⚠ Context getting large — type
+     /compact keep: <one-line focus>` with the focus filled in.
+   - At session start, if HANDOFF.md content is in context, continue from it.
+     Don't re-read files it already summarises unless needed.
+   - If I start an unrelated task without clearing, write the handoff first,
+     then tell me to `/clear` before you begin.
 8. Only load a skill when the task matches it. Don't open skills "just in case".
 9. **UI work in ANY app** (not only apps/marketing) uses the `premium-ui-motion` skill: premium motion, light/dark,
    `prefers-reduced-motion` respected, no layout shift, animate transform/opacity only. Changes to `@skydrop/ui`

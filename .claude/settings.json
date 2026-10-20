@@ -54,6 +54,18 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "test -f .claude/HANDOFF.md && { echo '--- Previous session handoff ---'; head -n 30 .claude/HANDOFF.md; } || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|Grep",
