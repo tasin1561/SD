@@ -1,4 +1,4 @@
-# Code conventions, module patterns, testing, MUST list 1-18
+# Code conventions, module patterns, testing
 
 > Moved verbatim from `CLAUDE.md` on 2026-10-20 (split into `docs/invariants/`). The `<!-- from CLAUDE.md … -->` markers record where each block sat; the text below them is unchanged.
 
@@ -82,28 +82,3 @@ The canonical reference implementation is `OrderWriteService.transitionStatus()`
 - shadcn/ui components copied into `packages/ui` and re-exported.
 
 ---
-
-
-<!-- from CLAUDE.md lines 850-871 · MUST / MUST NOT -->
-## MUST / MUST NOT
-
-### MUST
-
-1. Read `docs/db-schema.md` before any code touching the database.
-2. Read this `CLAUDE.md` at session start (you're doing it now).
-3. Read `docs/phase-1a-debt.md` to know what's intentionally deferred.
-4. Run `pnpm prisma format && pnpm prisma validate` after schema edits.
-5. Run `pnpm tsc --noEmit` before committing.
-6. Write tests for service-layer rules (state machines, transactions, idempotency).
-7. Use the `prisma` singleton from `@skydrop/db`, never `new PrismaClient()`.
-8. Wrap multi-write operations in `prisma.$transaction` — except where saga pattern applies (see "Cross-module integration with M5 stock services" above).
-9. Use BullMQ for async work (notifications, webhook delivery, cleanup jobs). No background work in HTTP request handlers.
-10. Snapshot data when immutability matters (order recipient address, order item SKU info, shipment dest address).
-11. Add new enums to `packages/db/src/enums.ts` after adding them to `schema.prisma`.
-12. When adding tables with FKs to existing entities, add a `reset<Module>State()` helper and chain it into the central e2e reset before the parent reset.
-13. Use `CatalogReadService` for cross-module variant **reads**; never query `product_variants` directly from outside the catalog modules. *Clarification (Module 5): this governs cross-module READS so inheritance precedence stays centralized. A column owned by another domain that lives on a catalog table for storage convenience — e.g., inventory's `product_variants.low_stock_threshold` — may be written by the owning domain directly, with an explicit code comment; its reads still go via `CatalogReadService` as a raw passthrough.*
-14. Use `makeTestEnv()` in test fixtures instead of inline literal env objects.
-15. All stock writes go through `StockMutationService` (INV-1); never write `stock_movements` or `stock_levels.qtyOnHand` elsewhere. Honor INV-2 (cache reads-only via method-name split), INV-3 (use `StockAvailabilityService.compute()` for the canonical scalar), INV-4 (`qtyReserved` = phase-2 only). For cross-module stock needs, import only the three services exported by `inventory-stock`.
-16. All cross-module order writes go through `OrderWriteService.transitionStatus()` (ORD-3). Never UPDATE `orders.status` directly from outside the order module. God mode (ORD-2) is the single sanctioned bypass and only via `OrderAdminOverrideService.forceMutate()` with full guardrails. For M5 integration, use the saga pattern (pre-tx reserve, compensating release on tx-fail, post-commit idempotent for release/fulfill).
-17. Honor CC-1 through CC-7 (Module 7). The ONLY cross-module call-queue surface is `CallQueueService` (from the standalone `call-queue` module); never query `call_queue_entries` / `call_attempts` from another domain. Outcome→transition mapping lives ONLY in `CallOutcomeMappingService` (CC-2). The order transition is POST-COMMIT of the attempt and its failure never rolls back the attempt (CC-3). When a cross-cutting primitive would create a module cycle, apply the R3 extraction (own dependency-free module), not `forwardRef`.
-18. Honor WMS-1 through WMS-9 (Module 8). The ONLY cross-module shipment-provision surface is `ShipmentProvisionService` (from the standalone `shipment-provision` R3 module); never query `shipments` / `manifests` directly from another domain. Warehouse direct stock writes go through `StockMutationService` (INV-1) via `InventorySharedModule` import (same shape as `inventory-adjustment`) — NEVER write `stock_movements` / `stock_levels.qtyOnHand` from a warehouse module directly. The pick-allocation source-of-truth is the phase-2 `stock_reservations`; `shipment_items.picked*` / `shipment_items.rto*` are operational hints (WMS-9). For sagas where a cross-module service owns its own tx, order steps for visible-vs-silent failure recovery (see "Saga: visible-vs-silent failure ordering" above); apply the R3 snapshot-DTO refinement when a primitive needs upstream data.
