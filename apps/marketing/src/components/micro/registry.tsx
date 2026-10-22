@@ -912,7 +912,7 @@ function DoorDemo(): ReactElement {
   return (
     <div className="flex gap-4">
       <DoorLink href="#" label="Client sign-in" />
-      <DoorLink href="#" label="Store sign-in" />
+      <DoorLink href="#" label="Member store sign-in" />
     </div>
   );
 }

@@ -102,7 +102,7 @@ export function AuthedShell({
       <ToastProvider>
         <Shell
           subtitle="Sales"
-          sectionLabel="Sales portal"
+          sectionLabel="Associate portal"
           navGroups={visible}
           identityPrimary={identity.store.displayName ?? identity.store.name}
           identitySecondary={identity.emailDisplay}

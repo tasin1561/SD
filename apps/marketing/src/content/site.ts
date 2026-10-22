@@ -48,10 +48,25 @@ export const platform = {
      * the page a visitor lands on agree.
      */
     signIn: [
-      { href: 'https://client.skydrop.global/login', label: 'Client sign-in' },
-      { href: 'https://member.skydrop.global/login', label: 'Store sign-in' },
-      { href: 'https://associate.skydrop.global/login', label: 'Sales sign-in' },
-    ],
+      {
+        key: 'client',
+        href: 'https://client.skydrop.global/login',
+        label: 'Client sign-in',
+        short: 'Client',
+      },
+      {
+        key: 'store',
+        href: 'https://member.skydrop.global/login',
+        label: 'Member store sign-in',
+        short: 'Member store',
+      },
+      {
+        key: 'associate',
+        href: 'https://associate.skydrop.global/login',
+        label: 'Associate sign-in',
+        short: 'Associate',
+      },
+    ] as const,
     cta: { href: '/request-invite', label: 'Request an invite' },
     track: { href: 'https://track.skydrop.global', label: 'Track a parcel' },
     /** Mega-menu rows (u21) under two of the primary items; the rest are plain links. */
@@ -586,10 +601,14 @@ export const platform = {
         links: [
           { href: '/request-invite', label: 'Request an invite' },
           { href: 'https://client.skydrop.global/login', label: 'Client sign-in', external: true },
-          { href: 'https://member.skydrop.global/login', label: 'Store sign-in', external: true },
+          {
+            href: 'https://member.skydrop.global/login',
+            label: 'Member store sign-in',
+            external: true,
+          },
           {
             href: 'https://associate.skydrop.global/login',
-            label: 'Sales sign-in',
+            label: 'Associate sign-in',
             external: true,
           },
           { href: 'https://track.skydrop.global', label: 'Track a parcel', external: true },

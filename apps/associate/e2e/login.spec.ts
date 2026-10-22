@@ -6,10 +6,10 @@ import { expect, test } from '@playwright/test';
  * on the page and on the server's own generic 401.
  */
 test.describe('associate login', () => {
-  test('the login page renders the sales portal chrome', async ({ page }) => {
+  test('the login page renders the associate portal chrome', async ({ page }) => {
     await page.goto('/login');
     await expect(page.getByText('Skydrop', { exact: true })).toBeVisible();
-    await expect(page.getByText('sales portal', { exact: true })).toBeVisible();
+    await expect(page.getByText('associate portal', { exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
     await expect(page.locator('#email')).toBeVisible();
     await expect(page.locator('#password')).toBeVisible();

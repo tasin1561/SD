@@ -5,7 +5,7 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
 /**
  * Every signed-out screen of the associate portal — sign in, reset a
  * password, accept an invitation — on the ONE shared sign-in frame: the
- * corridor map after first paint, the Skydrop mark and "sales portal",
+ * corridor map after first paint, the Skydrop mark and "associate portal",
  * and one card with the page's own content.
  *
  * The THEME SWITCH is mounted here, and that is the half that goes
@@ -29,7 +29,7 @@ export function AuthFrame({
   readonly footer?: ReactNode;
 }): ReactElement {
   return (
-    <SignInFrame portal="sales portal" themeControl={<ThemeSwitch />}>
+    <SignInFrame portal="associate portal" themeControl={<ThemeSwitch />}>
       <SignInCard title={title} note={subtitle} footer={footer}>
         {children}
       </SignInCard>

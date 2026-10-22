@@ -18,7 +18,7 @@ export default function ImpersonationHandoffLayout({
   children: ReactNode;
 }): ReactElement {
   return (
-    <SignInFrame portal="store portal" themeControl={<ThemeSwitch />}>
+    <SignInFrame portal="member store portal" themeControl={<ThemeSwitch />}>
       {children}
     </SignInFrame>
   );

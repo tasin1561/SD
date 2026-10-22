@@ -73,14 +73,14 @@ export const CONSOLES: readonly ConsoleEntry[] = [
   {
     key: 'store',
     origin: 'https://member.skydrop.global',
-    portal: 'Store portal',
+    portal: 'Member store portal',
     who: "You sell a client's stock under your own name",
     Icon: Store,
   },
   {
     key: 'associate',
     origin: 'https://associate.skydrop.global',
-    portal: 'Sales portal',
+    portal: 'Associate portal',
     who: 'You sell for a store',
     Icon: UserRound,
   },

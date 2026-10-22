@@ -6,7 +6,7 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
  * Every signed-out screen of the store portal — sign in, reset a password,
  * accept an invitation, verify an email — on the ONE shared sign-in frame
  * (apps restyle, Phase 4): the corridor map after first paint, the Skydrop
- * mark and "store portal", the theme switch (so a signed-out visitor can
+ * mark and "member store portal", the theme switch (so a signed-out visitor can
  * always change it), and one card with the page's own content unchanged.
  *
  * `section`, `note` and `alert` fed the old console's panel band ("access
@@ -29,7 +29,7 @@ export function AuthFrame({
   readonly alert?: boolean;
 }): ReactElement {
   return (
-    <SignInFrame portal="store portal" themeControl={<ThemeSwitch />}>
+    <SignInFrame portal="member store portal" themeControl={<ThemeSwitch />}>
       <SignInCard title={title} note={subtitle} footer={footer}>
         {children}
       </SignInCard>
