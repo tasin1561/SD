@@ -1,22 +1,7 @@
-import { Building2, Clock, LogIn, Phone, Store, UserRound, type LucideIcon } from 'lucide-react';
+import { Clock, LogIn, Phone } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { business, platform } from '@/content/site';
-
-/**
- * The console each sign-in pill leads to, by the same `key` the shared
- * console directory uses (`@skydrop/ui/app/sign-in` → `ConsoleKey`), and
- * THE SAME THREE ICONS that directory draws on every console's sign-in
- * page. That repetition is the point: a returning member store sees the
- * shop mark here, clicks it, and the page that opens is headed by the
- * same mark and the same two words. Icons are the one thing a visitor
- * recognises before they have read anything, which is what makes this
- * row findable at a glance rather than four more words of grey text.
- */
-const CONSOLE_ICON: Record<string, LucideIcon> = {
-  client: Building2,
-  store: Store,
-  associate: UserRound,
-};
+import { CONSOLE_ICON } from './console-icons';
 
 /**
  * The thin bar ABOVE the header — the corporate-courier convention every

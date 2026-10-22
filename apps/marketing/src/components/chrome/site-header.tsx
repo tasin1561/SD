@@ -22,6 +22,7 @@ import { RowLink } from '@/components/micro/list-row';
 import { IconButton } from '@/components/micro/icon-button';
 import { SweepLink } from '@/components/micro/sweep';
 import { HeaderNav } from './header-nav';
+import { CONSOLE_ICON } from './console-icons';
 import { ScrollProgress } from './scroll-progress';
 import './chrome.css';
 
@@ -262,16 +263,34 @@ export function SiteHeader(): ReactElement {
               <SweepLink href={platform.nav.cta.href} className="drawer__cta">
                 {platform.nav.cta.label}
               </SweepLink>
-              {platform.nav.signIn.map((l) => (
-                <a
-                  key={l.href}
-                  href={l.href}
-                  onClick={() => setOpen(false)}
-                  className="drawer__ghost"
-                >
-                  {l.label}
-                </a>
-              ))}
+              {/*
+                THE SAME GROUP THE UTILITY BAR CARRIES, for the audience
+                that cannot see it. The bar is `hidden md:block`, so on a
+                phone — budget Androids being the primary audience here —
+                these three were the only part of the sign-in treatment
+                nobody got: three identical grey outline pills under the
+                blue invite button, named by three phrases that all ended
+                in the same two words. They now take the heading, the
+                icons and the blue the desktop rail uses, so a returning
+                user meets one treatment on both and the icon they tap is
+                the icon heading the page they land on.
+              */}
+              <p className="drawer__signin-head">Sign in</p>
+              {platform.nav.signIn.map((l) => {
+                const Icon = CONSOLE_ICON[l.key];
+                return (
+                  <a
+                    key={l.href}
+                    href={l.href}
+                    onClick={() => setOpen(false)}
+                    aria-label={l.label}
+                    className="drawer__ghost drawer__signin"
+                  >
+                    {Icon ? <Icon size={18} aria-hidden="true" /> : null}
+                    {l.short}
+                  </a>
+                );
+              })}
             </div>
             <div className="drawer__contact">
               <a href={business.hotlineHref} className="drawer__hotline">

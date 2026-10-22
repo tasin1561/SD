@@ -248,6 +248,38 @@
 .drawer__ghost:hover {
   background: var(--surface-3);
 }
+/*
+  The drawer's three sign-ins, matched to the desktop utility bar's rail.
+  A heading carries the verb once so each row can be named by its console
+  alone — "Client", "Member store", "Associate" — instead of three rows
+  ending in the same two words. The full phrase stays on `aria-label`, so
+  what a screen reader announces is unchanged.
+
+  Colours are the same semantic role pairs the rail uses (tint / on-tint,
+  fill / on-fill, line) per MKT-1, so both themes resolve by construction
+  and no raw step appears. `.drawer__ghost` is kept and composed with,
+  not replaced: it still owns the 3rem touch target (FE-7) and the shape,
+  and anything else using it is untouched.
+*/
+.drawer__signin-head {
+  margin-top: 0.25rem;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+.drawer__signin {
+  gap: 0.625rem;
+  border-color: var(--blue-line);
+  background: var(--blue-tint);
+  color: var(--blue-on-tint);
+}
+.drawer__signin:hover,
+.drawer__signin:active {
+  background: var(--blue-fill);
+  color: var(--blue-on-fill);
+}
 .drawer__contact {
   display: grid;
   gap: 0.5rem;
