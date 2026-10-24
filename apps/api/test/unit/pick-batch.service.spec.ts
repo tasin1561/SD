@@ -8,6 +8,7 @@ import type { PickAllocationService } from '../../src/modules/pick-allocation/pi
 import type { StockReservationService } from '../../src/modules/inventory-stock/services/stock-reservation.service';
 import type { InventoryModeService } from '../../src/modules/inventory-shared/inventory-mode.service';
 import type { OrderWriteService } from '../../src/modules/order/services/order-write.service';
+import type { CatalogReadService } from '../../src/modules/catalog-read/services/catalog-read.service';
 
 type Any = Record<string, unknown>;
 
@@ -30,6 +31,8 @@ function makeService(opts: {
   /** Per-variant mode, beating `mode` — for a batch mixing both kinds. */
   modeByVariant?: Record<string, InventoryMode>;
   claimCount?: number;
+  /** Product pictures the catalog hands back, per variant. */
+  thumbnails?: Map<string, Buffer>;
 }) {
   const shipments = opts.shipments ?? [shipment()];
   const shipmentUpdateMany = jest.fn(async () => ({
@@ -104,6 +107,11 @@ function makeService(opts: {
       transitionStatus: jest.fn(async () => ({ status: 'PENDING_PICK' })),
     } as unknown as OrderWriteService,
     pdf,
+    {
+      printableThumbnailsByVariant: jest.fn(
+        async () => opts.thumbnails ?? new Map<string, Buffer>(),
+      ),
+    } as unknown as CatalogReadService,
   );
   return { svc, shipmentUpdateMany, allocateForPick, client, render };
 }

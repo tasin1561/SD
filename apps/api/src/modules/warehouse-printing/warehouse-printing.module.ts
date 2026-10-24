@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { CatalogReadModule } from '../catalog-read/catalog-read.module';
 import { InventorySharedModule } from '../inventory-shared/inventory-shared.module';
 import { InventoryStockModule } from '../inventory-stock/inventory-stock.module';
 import { OrderModule } from '../order/order.module';
@@ -29,6 +30,9 @@ import { ProductLocationService } from './services/product-location.service';
 @Module({
   imports: [
     AuthCommonModule,
+    // The picking sheet prints each product's picture; the catalog read
+    // boundary is the only sanctioned way to reach one (MUST #13).
+    CatalogReadModule,
     InventorySharedModule,
     InventoryStockModule,
     OrderModule,

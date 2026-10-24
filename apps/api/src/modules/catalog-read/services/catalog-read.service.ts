@@ -5,6 +5,18 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { displayImageKey } from '../../catalog-image/image-key';
 
 const GST_SETTING_KEY = 'pricing.gst_rate';
+
+/** Printed at ~30pt wide; 160px keeps it sharp on a laser print without
+ *  carrying a 400px thumbnail's bytes into every row of the PDF. */
+const PRINT_THUMB_WIDTH_PX = 160;
+/** A picking sheet runs to tens of lines, not hundreds. Past this the
+ *  remaining lines print without a picture rather than holding the sheet. */
+const MAX_PRINTABLE_THUMBS = 120;
+/** Decoding happens in the process that serves HTTP (SCALE-1). */
+const PRINTABLE_FETCH_CONCURRENCY = 6;
+/** Same ceiling the image worker decodes under, and for the same reason:
+ *  bytes bound what a seller may upload, not what it decodes to. */
+const MAX_DECODE_PIXELS = 50_000_000;
 /** Used only if the system_settings row is missing — schema seeds 18.00. */
 const GST_FALLBACK = new Prisma.Decimal('18');
 
@@ -147,6 +159,69 @@ export class CatalogReadService {
     const info = await this.displayInfoByVariant(variantIds);
     const out = new Map<string, string>();
     for (const [id, v] of info) if (v.thumbnailUrl !== null) out.set(id, v.thumbnailUrl);
+    return out;
+  }
+
+  /**
+   * The same picture, as PNG BYTES — for paper.
+   *
+   * A presigned URL is useless to a PDF: pdfkit embeds bytes, it does
+   * not fetch. And the stored thumbnail is WEBP, which pdfkit cannot
+   * embed at all, so the conversion is not optional — it is the reason
+   * this method exists rather than the caller reusing the URL one.
+   *
+   * FAILS OPEN, per variant. A picture that cannot be fetched or decoded
+   * costs that line its thumbnail and nothing else: a picking sheet that
+   * refuses to print because one product photograph is corrupt is a far
+   * worse outcome on a warehouse floor than a sheet with a blank square.
+   *
+   * Bounded twice, because this one decodes images inside the process
+   * that also serves HTTP: at most `MAX_PRINTABLE_THUMBS` variants, and
+   * `PRINTABLE_FETCH_CONCURRENCY` at a time. A sheet longer than the cap
+   * prints its remaining lines without pictures rather than queueing
+   * hundreds of decodes behind a picker standing at a printer.
+   */
+  async printableThumbnailsByVariant(
+    variantIds: readonly string[],
+  ): Promise<ReadonlyMap<string, Buffer>> {
+    const ids = [...new Set(variantIds)].slice(0, MAX_PRINTABLE_THUMBS);
+    const out = new Map<string, Buffer>();
+    if (ids.length === 0) return out;
+
+    const images = await this.prisma.client.productImage.findMany({
+      where: { variantId: { in: ids }, deletedAt: null },
+      orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }, { createdAt: 'asc' }],
+      select: { variantId: true, spacesKey: true, thumbnailUrl: true },
+    });
+
+    const firstKey = new Map<string, string>();
+    for (const img of images) {
+      if (!firstKey.has(img.variantId)) firstKey.set(img.variantId, displayImageKey(img));
+    }
+
+    const entries = [...firstKey.entries()];
+    for (let i = 0; i < entries.length; i += PRINTABLE_FETCH_CONCURRENCY) {
+      await Promise.all(
+        entries.slice(i, i + PRINTABLE_FETCH_CONCURRENCY).map(async ([variantId, key]) => {
+          try {
+            const bytes = await this.spaces.getObject(key);
+            if (bytes === null) return;
+            const sharp = (await import('sharp')).default;
+            out.set(
+              variantId,
+              await sharp(bytes, { limitInputPixels: MAX_DECODE_PIXELS })
+                .resize({ width: PRINT_THUMB_WIDTH_PX, withoutEnlargement: true })
+                .png()
+                .toBuffer(),
+            );
+          } catch (e) {
+            this.logger.debug(
+              `No printable thumbnail for variant ${variantId}: ${e instanceof Error ? e.message : String(e)}`,
+            );
+          }
+        }),
+      );
+    }
     return out;
   }
 

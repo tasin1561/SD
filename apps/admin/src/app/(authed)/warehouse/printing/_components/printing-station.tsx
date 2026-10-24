@@ -455,6 +455,10 @@ function PickingTab(): ReactElement {
 
 // ── reprint ───────────────────────────────────────────────────────────
 
+/** `ReprintLabelsDto.reason` is `@MinLength(10)`. Said on the field, so a
+ *  dead button is never the first thing that explains the rule. */
+const MIN_REPRINT_REASON = 10;
+
 /**
  * Print a label again for a parcel that has not been packed.
  *
@@ -526,13 +530,24 @@ function ReprintTab(): ReactElement {
           id="reprint-reason"
           label="Why is it being reprinted?"
           value={reason}
+          requiredMark
           placeholder="e.g. label torn off the carton in the aisle"
+          hint={`At least ${MIN_REPRINT_REASON} characters. It is the only record of why a second label exists for a parcel.`}
           onChange={(e) => setReason(e.target.value)}
         />
         <Button
           size="lg"
           onClick={() => void onReprint()}
-          disabled={selected.size === 0 || reason.trim().length < 10 || reprint.isPending}
+          disabled={
+            selected.size === 0 || reason.trim().length < MIN_REPRINT_REASON || reprint.isPending
+          }
+          title={
+            selected.size === 0
+              ? 'Tick the parcel(s) whose label you are reprinting'
+              : reason.trim().length < MIN_REPRINT_REASON
+                ? `Give a reason of at least ${MIN_REPRINT_REASON} characters`
+                : undefined
+          }
           icon={<Printer size={16} />}
         >
           {reprint.isPending ? 'Building…' : `Reprint ${selected.size === 0 ? '' : selected.size}`}

@@ -23,6 +23,16 @@ export interface PickListLine {
   /** Which parcels this line is destined for — printed small, so a
    *  picker holding a short line knows which orders are affected. */
   readonly forShipments: readonly string[];
+  /**
+   * The product's picture, as PNG bytes ready to embed.
+   *
+   * A picker recognises a product by sight long before they parse a SKU
+   * code, and two variants of one product differ by a word in a name and
+   * by everything in a photograph. Null when the seller has uploaded no
+   * image, or when the fetch failed — the sheet prints either way
+   * (`CatalogReadService.printableThumbnailsByVariant` fails open).
+   */
+  readonly imagePng?: Buffer | null;
 }
 
 export interface PickListPayload {
@@ -61,6 +71,13 @@ export interface PickListPayload {
  * wrong thing and having it accepted. Its cell says so in words instead,
  * which is what stops a mixed sheet being read as "scan the SKU" for
  * every line. The column exists whenever any line is NORMAL.
+ *
+ * The PICTURE (2026-10-24) follows the same shape: its column exists
+ * whenever any line has one. Every screen that lists a product has shown
+ * its photograph since 2026-09-13 and the paper the floor actually works
+ * from showed none — so a picker matched a shelf against a SKU code,
+ * which is the one thing on the sheet that two colourways of a product
+ * share almost all of.
  */
 @Injectable()
 export class PickListPdfService {
@@ -122,11 +139,17 @@ export class PickListPdfService {
     doc.moveTo(left, y).lineTo(right, y).lineWidth(1).strokeColor('#000000').stroke();
     y += 8;
 
-    const cols = this.columns(left, right, !showBarcodes);
+    // The picture column exists only when there is a picture to put in
+    // it. A sheet of products nobody has photographed keeps the width
+    // for the product name, exactly as it printed before.
+    const showImages = p.lines.some((l) => l.imagePng != null);
+
+    const cols = this.columns(left, right, !showBarcodes, showImages);
     doc.fontSize(8).font('Helvetica-Bold').fillColor('#000000');
     doc.text('DONE', cols.tick, y);
     doc.text('LOCATION', cols.loc, y);
     doc.text('QTY', cols.qty, y);
+    if (showImages) doc.text('ITEM', cols.image, y);
     doc.text('SKU / PRODUCT', cols.sku, y);
     if (showBarcodes) doc.text('BARCODE', cols.barcode, y);
     y += 12;
@@ -139,7 +162,7 @@ export class PickListPdfService {
         doc.addPage();
         y = 40;
       }
-      y = this.drawRow(doc, line, cols, y, showBarcodes, left, right);
+      y = this.drawRow(doc, line, cols, y, showBarcodes, showImages, left, right);
     }
 
     if (p.lines.length === 0) {
@@ -189,11 +212,31 @@ export class PickListPdfService {
     left: number,
     right: number,
     strict: boolean,
-  ): { tick: number; loc: number; qty: number; sku: number; barcode: number; skuWidth: number } {
+    images: boolean,
+  ): {
+    tick: number;
+    loc: number;
+    locWidth: number;
+    qty: number;
+    image: number;
+    sku: number;
+    barcode: number;
+    skuWidth: number;
+  } {
     const tick = left;
     const loc = left + 34;
-    const qty = loc + 92;
-    const sku = qty + 32;
+    /*
+      The location column gives up 16pt when pictures are printing.
+
+      A bin code is `A-01-03` or `FLOOR` — short, and it was printing at
+      11pt into 88pt of space it never used. The product NAME is what
+      runs long, so the width the picture costs comes from here rather
+      than from the one column where a truncation loses information.
+    */
+    const locWidth = images ? 70 : 88;
+    const qty = loc + locWidth + 4;
+    const image = qty + 32;
+    const sku = image + (images ? IMAGE_COLUMN_WIDTH + 4 : 0);
     /*
       WIDE ENOUGH TO SCAN, which is a measured constraint and not a
       layout preference. A Code 128 symbol for a 16-character SKU is
@@ -204,7 +247,16 @@ export class PickListPdfService {
       which reads to a packer as a broken scanner.
     */
     const barcode = right - BARCODE_COLUMN_WIDTH;
-    return { tick, loc, qty, sku, barcode, skuWidth: (strict ? right : barcode - 10) - sku };
+    return {
+      tick,
+      loc,
+      locWidth,
+      qty,
+      image,
+      sku,
+      barcode,
+      skuWidth: (strict ? right : barcode - 10) - sku,
+    };
   }
 
   private drawRow(
@@ -213,6 +265,7 @@ export class PickListPdfService {
     cols: ReturnType<PickListPdfService['columns']>,
     y: number,
     showBarcodes: boolean,
+    showImages: boolean,
     left: number,
     right: number,
   ): number {
@@ -225,14 +278,16 @@ export class PickListPdfService {
       .stroke();
 
     doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000');
-    doc.text(line.binCode, cols.loc, y, { width: 88, ellipsis: true });
+    doc.text(line.binCode, cols.loc, y, { width: cols.locWidth, ellipsis: true });
     if (line.zoneName !== null) {
       doc.fontSize(6).font('Helvetica').fillColor('#666666');
-      doc.text(line.zoneName, cols.loc, y + 13, { width: 88, ellipsis: true });
+      doc.text(line.zoneName, cols.loc, y + 13, { width: cols.locWidth, ellipsis: true });
     }
 
     doc.fontSize(14).font('Helvetica-Bold').fillColor('#000000');
     doc.text(String(line.quantity), cols.qty, y - 1, { width: 28 });
+
+    const drewImage = showImages && this.drawImageCell(doc, line.imagePng, cols.image, y);
 
     doc.fontSize(9).font('Helvetica-Bold');
     doc.text(line.skuCode, cols.sku, y, { width: cols.skuWidth, ellipsis: true });
@@ -266,7 +321,7 @@ export class PickListPdfService {
     // value printed under them need it, and a row that shrinks to fit
     // would put the next line's location on top of this one's barcode.
     // A strict row draws none, so the old height stands.
-    const next = y + (drawsBars || hasShipmentLine ? ROW_HEIGHT : 28);
+    const next = y + (drawsBars || hasShipmentLine || drewImage ? ROW_HEIGHT : 28);
     doc
       .moveTo(left, next - 4)
       .lineTo(right, next - 4)
@@ -274,6 +329,43 @@ export class PickListPdfService {
       .strokeColor('#cccccc')
       .stroke();
     return next;
+  }
+
+  /**
+   * The product's picture, boxed, or nothing at all.
+   *
+   * Returns whether it drew, because a row carrying a picture is always
+   * full height — a 28pt row would run its image through the divider
+   * and into the next line's bin code.
+   *
+   * NEVER throws. pdfkit rejects an image it cannot decode by throwing,
+   * and one unreadable photograph must not cost a picker the other forty
+   * lines on the sheet (same rule as an unencodable barcode, LBL-3).
+   */
+  private drawImageCell(
+    doc: InstanceType<typeof PDFDocument>,
+    png: Buffer | null | undefined,
+    x: number,
+    y: number,
+  ): boolean {
+    if (png == null || png.length === 0) return false;
+    try {
+      doc.image(png, x, y + 1, {
+        fit: [IMAGE_COLUMN_WIDTH, IMAGE_HEIGHT],
+        align: 'center',
+        valign: 'center',
+      });
+    } catch {
+      return false;
+    }
+    // A hairline box, so a product photographed against white still
+    // reads as a picture of something rather than as a printing gap.
+    doc
+      .rect(x, y + 1, IMAGE_COLUMN_WIDTH, IMAGE_HEIGHT)
+      .lineWidth(0.25)
+      .strokeColor('#cccccc')
+      .stroke();
+    return true;
   }
 
   /**
@@ -343,6 +435,11 @@ export class PickListPdfService {
 /** Points. A4 minus margins is 523pt wide; this is what is left after
  *  the location, quantity and product columns have what they need. */
 const BARCODE_COLUMN_WIDTH = 165;
+/** The picture: square, and as big as a 34pt row has room for. Small
+ *  enough to cost the product name little, large enough to tell two
+ *  colourways of one sunglass apart at arm's length. */
+const IMAGE_COLUMN_WIDTH = 28;
+const IMAGE_HEIGHT = 28;
 const BAR_HEIGHT = 17;
 const ROW_HEIGHT = 34;
 /** ~0.19mm, the narrowest bar a warehouse scanner reads reliably off a

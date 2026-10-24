@@ -10,6 +10,7 @@ import {
 
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
+import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { InventoryModeService } from '../../inventory-shared/inventory-mode.service';
 import { PickAllocationService } from '../../pick-allocation/pick-allocation.service';
 import { StockReservationService } from '../../inventory-stock/services/stock-reservation.service';
@@ -88,6 +89,7 @@ export class PickBatchService {
     private readonly modes: InventoryModeService,
     private readonly orderWrite: OrderWriteService,
     private readonly pdf: PickListPdfService,
+    private readonly catalog: CatalogReadService,
   ) {}
 
   /**
@@ -772,7 +774,7 @@ export class PickBatchService {
     );
     const strictMode = [...modeByKey.values()].some((m) => m === InventoryMode.STRICT);
 
-    const grouped = new Map<string, PickListLine & { forSet: Set<string> }>();
+    const grouped = new Map<string, PickListLine & { forSet: Set<string>; variantId: string }>();
     let totalUnits = 0;
     for (const r of reservations) {
       totalUnits += r.qtyReserved;
@@ -821,13 +823,35 @@ export class PickBatchService {
         strict: lineStrict,
         forShipments: [],
         forSet: new Set(forShipment === '' ? [] : [forShipment]),
+        variantId: r.variantId,
       });
     }
 
+    /*
+      The product's picture, for the person doing the walking.
+
+      A picker reads a photograph faster than a SKU code, and two
+      colourways of one product differ by one word in the name and by
+      everything in the picture. Through `CatalogReadService` (MUST #13,
+      catalog rule 5b) — the picking sheet is named in that method's own
+      comment as a consumer, and it was the only one not yet wired.
+
+      Fails open by construction: a variant missing from the map prints
+      the line without a picture, which is exactly how every sheet
+      printed before today.
+    */
+    const thumbs = await this.catalog.printableThumbnailsByVariant(
+      [...grouped.values()].map((l) => l.variantId),
+    );
+
     const lines = [...grouped.values()]
-      .map((l) => ({ ...l, forShipments: [...l.forSet].sort() }))
+      .map((l) => ({
+        ...l,
+        forShipments: [...l.forSet].sort(),
+        imagePng: thumbs.get(l.variantId) ?? null,
+      }))
       .sort((a, b) => a.binCode.localeCompare(b.binCode) || a.skuCode.localeCompare(b.skuCode))
-      .map(({ forSet: _forSet, ...line }) => line);
+      .map(({ forSet: _forSet, variantId: _variantId, ...line }) => line);
 
     /*
       Parcels that contributed no line.
