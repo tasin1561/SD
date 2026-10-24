@@ -545,7 +545,7 @@ const systemSettings: SystemSettingSeed[] = [
     valueBoolean: true,
     displayName: 'Shiprocket wallet sync — run nightly',
     description:
-      'Each night (03:50 IST) sign in to the Shiprocket panel through the Bangalore tunnel and read the Passbook (every wallet movement), the Recharge History and the Ledger. Stores each movement once, nets each parcel’s cost from them the way Delhivery’s are (COST-1), matches recharges to our bank book, and checks the Ledger’s credits against the Passbook.',
+      'Each night (03:50 IST) sign in to the Shiprocket panel through the India egress route and read the Passbook (every wallet movement), the Recharge History and the Ledger. Stores each movement once, nets each parcel’s cost from them the way Delhivery’s are (COST-1), matches recharges to our bank book, and checks the Ledger’s credits against the Passbook.',
   },
   {
     key: 'courier.shiprocket_wallet_sync_writes_enabled',

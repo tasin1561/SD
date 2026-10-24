@@ -5,6 +5,7 @@ import {
   ShiprocketPortalCredentialsMissingError,
   ShiprocketPortalEgressError,
   ShiprocketPortalSignInRejectedError,
+  SR_PORTAL_PROXY_SETTING,
 } from './shiprocket-portal-session.service';
 
 export type ShiprocketOpenFailure = 'CHALLENGE' | 'NO_LOGIN' | 'REJECTED' | 'EGRESS' | 'FAILED';
@@ -34,8 +35,19 @@ export async function raiseShiprocketOpenFailure(
       title: `Shiprocket panel asked ${account.label} for a ${err.challenge} — automation stopped`,
       detail:
         `Signing in to app.shiprocket.in stopped at a ${err.challenge} challenge (${err.url}). ` +
+        // THE ROUTE IS NAMED BY WHAT IT IS, NOT BY WHERE IT USED TO GO.
+        // This said "the Bangalore tunnel" until 2026-10-24, which had
+        // been wrong since 2026-09-28 when
+        // `courier.shiprocket_portal_proxy` was pointed at the NordVPN
+        // container; the tunnel was retired outright on the 24th. An
+        // operator following it reached a dead SOCKS port, on the one
+        // screen that exists to tell somebody how to unblock the sync.
+        // A recovery instruction that names a specific route has to be
+        // re-read whenever that route moves — so it now names the
+        // SETTING, which is the thing that is true by construction.
         'Nothing will try again until this issue is resolved. Sign in once by hand from a ' +
-        'browser using the Bangalore tunnel, then resolve this issue.' +
+        `browser pointed through the same India egress the sync uses (${SR_PORTAL_PROXY_SETTING}), ` +
+        'then resolve this issue.' +
         (err.artifactPath === null ? '' : ` Screenshot on the server: ${err.artifactPath}`),
       source,
       dedupeKey: `shiprocket-portal-challenge:${account.id}`,

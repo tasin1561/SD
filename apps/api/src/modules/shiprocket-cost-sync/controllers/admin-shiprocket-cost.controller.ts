@@ -72,7 +72,7 @@ export class AdminShiprocketCostController {
   @RequirePermissions('courier.accounts.manage')
   @ApiOperation({
     summary:
-      'Sign in to Shiprocket’s panel (through the Bangalore tunnel) and save what the Passbook, Ledger and Recharge History pages show. Queued; reads only.',
+      'Sign in to Shiprocket’s panel (through the India egress route) and save what the Passbook, Ledger and Recharge History pages show. Queued; reads only.',
   })
   async portalProbe(
     @CurrentStaff() staff: AuthenticatedStaff,
@@ -96,7 +96,7 @@ export class AdminShiprocketCostController {
   @RequirePermissions('courier.accounts.manage')
   @ApiOperation({
     summary:
-      'Run the Shiprocket wallet sync now: sign in through the Bangalore tunnel, read the Passbook, Recharge History and Ledger, store each movement once and net each parcel’s cost. Queued.',
+      'Run the Shiprocket wallet sync now: sign in through the India egress route, read the Passbook, Recharge History and Ledger, store each movement once and net each parcel’s cost. Queued.',
   })
   async walletSync(
     @CurrentStaff() staff: AuthenticatedStaff,
@@ -120,7 +120,7 @@ export class AdminShiprocketCostController {
   @RequirePermissions('courier.accounts.manage')
   @ApiOperation({
     summary:
-      'Check Shiprocket’s invoices now: sign in through the Bangalore tunnel, read the Invoices page and each Freight and VAS invoice’s itemized file, and compare every line with what the wallet charged. Reads only. Queued.',
+      'Check Shiprocket’s invoices now: sign in through the India egress route, read the Invoices page and each Freight and VAS invoice’s itemized file, and compare every line with what the wallet charged. Reads only. Queued.',
   })
   async invoiceCheck(
     @CurrentStaff() staff: AuthenticatedStaff,

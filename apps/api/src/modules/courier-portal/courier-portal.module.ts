@@ -91,7 +91,10 @@ import { DelhiveryInvoiceCheckService } from './services/delhivery-invoice-check
     DelhiveryInvoiceCheckService,
     ConsigneeVerifyService,
     ConsigneeVerifyWorker,
-    // Shiprocket's panel: its own browser, out through the Bangalore tunnel.
+    // Shiprocket's panel: its own browser, out through the India egress
+    // route named by `courier.shiprocket_portal_proxy` (the NordVPN
+    // container since 2026-09-28; the Bangalore tunnel it replaced was
+    // retired on 2026-10-24).
     ShiprocketPortalSessionService,
     ShiprocketPortalProbeService,
     ShiprocketWalletSyncService,

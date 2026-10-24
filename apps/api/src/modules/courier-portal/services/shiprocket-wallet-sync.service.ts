@@ -106,7 +106,8 @@ const blank = (
  * filter). Their Passbook lists every wallet movement with the balance
  * after it; their Recharge History lists every top-up with the bank's
  * reference. Both exist only in the panel, which is India-only — hence
- * the Bangalore tunnel the session goes out through.
+ * the India egress route the session goes out through
+ * (`courier.shiprocket_portal_proxy`).
  *
  * ── ONE SOURCE OF COST ───────────────────────────────────────────────
  * The passbook is netted through the SAME importer as Delhivery's file

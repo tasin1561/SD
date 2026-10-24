@@ -54,9 +54,13 @@ const EDGE_PROBE_TIMEOUT_MS = 15_000;
 export class ShiprocketPortalProxyMissingError extends Error {
   constructor() {
     super(
+      // Names the ROUTE'S PURPOSE rather than one implementation of it:
+      // this said "the Bangalore tunnel" while the setting had pointed at
+      // the NordVPN container since 2026-09-28, and the tunnel was retired
+      // on 2026-10-24.
       `${SR_PORTAL_PROXY_SETTING} is empty. Shiprocket's panel is India-only, so the browser ` +
-        'goes out through the Bangalore tunnel and NEVER directly — a login from a foreign ' +
-        'address is exactly what the tunnel exists to avoid.',
+        'goes out through the India egress route and NEVER directly — a login from a foreign ' +
+        'address is exactly what that route exists to avoid.',
     );
     this.name = 'ShiprocketPortalProxyMissingError';
   }
