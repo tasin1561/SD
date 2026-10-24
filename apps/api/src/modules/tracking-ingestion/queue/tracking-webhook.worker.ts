@@ -55,7 +55,22 @@ export class TrackingWebhookWorker implements OnModuleInit, OnModuleDestroy {
       TRACKING_WEBHOOK_QUEUE_NAME,
       async (job: Job<ProcessWebhookJob>): Promise<void> => {
         if (job.name === JOB_PROCESS_WEBHOOK) {
-          await this.processor.process(job.data.webhookId);
+          try {
+            await this.processor.process(job.data.webhookId);
+          } catch (err) {
+            // TRK-11: write WHY onto the webhook row before letting the
+            // job die. Without this the row keeps no trace of the
+            // failure at all, which is how seven dropped Shiprocket
+            // scans sat at RECEIVED for six weeks with `error_message`
+            // null — and why the watchdog that found them could only
+            // say that they existed, never why.
+            //
+            // The re-throw is the point of the whole block: BullMQ's
+            // retry policy stays in charge, and the row stays RECEIVED
+            // so both the watchdog and a later replay can still see it.
+            await this.processor.recordProcessingFailure(job.data.webhookId, err);
+            throw err;
+          }
           return;
         }
         this.logger.warn({ name: job.name }, 'Unknown tracking-webhook job; ignoring');

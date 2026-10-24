@@ -21,6 +21,8 @@ import { TrackingWebhookWorker } from './queue/tracking-webhook.worker';
 import { PublicDocumentWebhookController } from './controllers/public-document-webhook.controller';
 import { PublicWebhookController } from './controllers/public-webhook.controller';
 import { CourierDocumentIngestService } from './services/courier-document-ingest.service';
+import { AdminTrackingWebhookController } from './controllers/admin-tracking-webhook.controller';
+import { WebhookReplayService } from './services/webhook-replay.service';
 
 /**
  * Module 10 — tracking-ingestion. M10 commit 4 added the auth skeleton;
@@ -57,7 +59,11 @@ import { CourierDocumentIngestService } from './services/courier-document-ingest
     CourierSharedModule,
     OrderModule,
   ],
-  controllers: [PublicWebhookController, PublicDocumentWebhookController],
+  controllers: [
+    PublicWebhookController,
+    PublicDocumentWebhookController,
+    AdminTrackingWebhookController,
+  ],
   providers: [
     {
       // Same list the poller sweeps. A webhook is normalised by the
@@ -76,6 +82,9 @@ import { CourierDocumentIngestService } from './services/courier-document-ingest
     WebhookProcessorService,
     TrackingWebhookQueue,
     TrackingWebhookWorker,
+    // TRK-11's other half: the hand-operated replay the watchdog's
+    // alert has always implied and never had.
+    WebhookReplayService,
     // Bounds the size of courier_webhooks, the largest table per order.
     WebhookPayloadRetentionService,
     WebhookRetentionQueue,

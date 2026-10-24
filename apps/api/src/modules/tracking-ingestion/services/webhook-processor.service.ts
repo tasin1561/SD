@@ -77,6 +77,15 @@ export type ProcessOutcome =
 const DELIVERY_ATTEMPTS_LOCK_NAMESPACE = 0x04d48;
 
 /**
+ * `error_message` and `error_stack` are `@db.Text`, so these caps are
+ * not a column limit — they keep one pathological error (a driver that
+ * echoes the whole payload back) from making the row unreadable in the
+ * watchdog's listing, which is the only place anybody reads them.
+ */
+const MAX_ERROR_CHARS = 2_000;
+const MAX_STACK_CHARS = 8_000;
+
+/**
  * Module 10 (TRK-1/2/3/4/5/7/8) — the webhook PROCESSOR. The BullMQ
  * worker (commit 8 sibling file) delegates to `process(webhookId)`.
  *
@@ -795,6 +804,52 @@ export class WebhookProcessorService {
         ...(trackingEventId !== null ? { trackingEventId } : {}),
       },
     });
+  }
+
+  /**
+   * TRK-11: record WHY a job died, on the row it died for.
+   *
+   * Until now a thrown job wrote NOTHING here — no message, no counter,
+   * no status — so an orphaned webhook was indistinguishable from one
+   * that was never enqueued at all, and `checkUnprocessedWebhooks`
+   * selected `errorMessage` only to report null for every row. The seven
+   * Shiprocket rows from 12-13 September had to be diagnosed from a git
+   * commit rather than from the ledger that exists to hold exactly this.
+   *
+   * THE ROW STAYS AT `RECEIVED`, and that is load-bearing twice over:
+   *   - TRK-11's watchdog counts `status = RECEIVED`, so moving a
+   *     failure to FAILED would hide a dropped scan from the one
+   *     detector built to find it;
+   *   - TRK-2's master gate is `status !== RECEIVED`, so a FAILED row
+   *     could never be replayed — the processor would refuse it, and
+   *     the recovery lever would be useless on the only rows that need
+   *     it.
+   * `WebhookStatus.FAILED` therefore stays unwritten, exactly as before.
+   *
+   * Guarded on RECEIVED like every other writer here, so a row that a
+   * concurrent attempt already carried to PROCESSED is never reopened.
+   */
+  async recordProcessingFailure(webhookId: string, err: unknown): Promise<void> {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    try {
+      await this.prisma.client.courierWebhook.updateMany({
+        where: { id: webhookId, status: WebhookStatus.RECEIVED },
+        data: {
+          errorMessage: message.slice(0, MAX_ERROR_CHARS),
+          ...(stack !== undefined ? { errorStack: stack.slice(0, MAX_STACK_CHARS) } : {}),
+          retryCount: { increment: 1 },
+        },
+      });
+    } catch (e) {
+      // Bookkeeping must never replace the real failure: the caller
+      // re-throws the original error so BullMQ's retry policy stays in
+      // charge, and losing the note is strictly better than losing that.
+      this.logger.warn(
+        { webhookId, err: String(e) },
+        'Could not record why the webhook job failed; the job failure itself still stands',
+      );
+    }
   }
 
   private async markIgnored(webhookId: string, reason: string): Promise<void> {

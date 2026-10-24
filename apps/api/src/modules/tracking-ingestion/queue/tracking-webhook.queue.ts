@@ -73,6 +73,41 @@ export class TrackingWebhookQueue implements OnModuleInit, OnModuleDestroy {
     return String(job.id);
   }
 
+  /**
+   * Re-enqueue a stored webhook for a SECOND pass, by hand (TRK-11).
+   *
+   * `enqueueWebhook` CANNOT do this, and the way it fails is the reason
+   * this method exists: `jobId = webhookId` is the dedup key, and BullMQ
+   * answers an `add` whose jobId already exists by returning the OLD job
+   * without scheduling anything — silently, with a job id that looks
+   * exactly like success. That is the worst possible shape for a
+   * recovery lever, so the finished job is removed first and the id is
+   * free to be used again.
+   *
+   * A job that is still waiting, delayed or running is NOT disturbed:
+   * it is already going to do the work, and removing a locked job
+   * throws. Its id comes back instead, so a second press is a no-op
+   * rather than an error or a duplicate.
+   *
+   * This is only ever reached from an explicitly-invoked admin endpoint.
+   * TRK-11 forbids re-queueing on a timer — "one bad body becomes a job
+   * that fails for ever" — and that rule is about the WATCHDOG, which
+   * still only names the rows and stops. A person deciding is the
+   * sanctioned path, and the thing the worker's own comment assumed
+   * existed.
+   */
+  async replayWebhook(webhookId: string): Promise<{ jobId: string; alreadyQueued: boolean }> {
+    const existing = await this.queue.getJob(webhookId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state === 'active' || state === 'waiting' || state === 'delayed') {
+        return { jobId: String(existing.id), alreadyQueued: true };
+      }
+      await existing.remove();
+    }
+    return { jobId: await this.enqueueWebhook(webhookId), alreadyQueued: false };
+  }
+
   private async retryMax(): Promise<number> {
     const row = await this.prisma.client.systemSetting.findUnique({
       where: { key: RETRY_MAX_KEY },
