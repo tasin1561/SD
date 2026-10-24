@@ -788,9 +788,47 @@ export class OrderAttentionService {
    * ignored. It clears itself the moment the rate is set.
    */
   private async checkStaleFeeFxRate(now: Date): Promise<number> {
-    // A code constant rather than a setting: widening it only delays an
-    // alarm, and one more tunable earns less than it costs here.
-    const STALE_DAYS = 7;
+    /*
+      WAS a hard-coded `const STALE_DAYS = 7`, justified as "widening it
+      only delays an alarm, and one more tunable earns less than it costs
+      here". That reasoning assumed the rate gets refreshed every week or
+      two, so a week of silence was a nudge somebody would act on.
+
+      Skydrop's actual pricing policy (owner, 2026-10-24) is a FIXED rate,
+      held deliberately until a material FX move, because re-pricing on
+      every wiggle is worse for a client than the drift is. Under that
+      policy an age-based alarm is permanent BY CONSTRUCTION — this one
+      had raised 820 times and would have raised hourly for ever. The
+      note under this method's own MEDIUM severity says that an alert
+      which "will be true every day until a human updates a number is how
+      an alert gets ignored"; left alone, this became exactly that, and a
+      board carrying permanent noise is what trains somebody to skim past
+      the alert that does matter.
+
+      So the POLICY is now expressible rather than the check deleted.
+      `ops.fee_fx_rate_review_days` is how long a rate may stand before
+      anybody is asked to look at it, and **0 means never ask** — the
+      fixed-rate policy, stated. The check itself is untouched and an
+      operator who does track the market gets the alarm back by setting a
+      number.
+
+      WHY THE DEFAULT IS 0 AND NOT 7: the fallback has to match the house
+      policy, because a default nobody has set is what every environment
+      runs on, and this one would otherwise re-create the noise in every
+      fresh database. It is a deliberate answer, not a silenced defect —
+      and the distinction is real, because the system CANNOT detect the
+      event the policy actually waits for: nothing fetches rates (M16
+      deferred that to Phase 1B), so age is the only signal available and
+      it is not the one that should trigger a re-price.
+    */
+    const STALE_DAYS = await this.globalInt('ops.fee_fx_rate_review_days', 0);
+    if (STALE_DAYS <= 0) {
+      await this.issues.resolveByKey(
+        staleFeeFxRateKey(),
+        'Fee exchange rates are held fixed by policy and reviewed when the market moves, not on a timer (ops.fee_fx_rate_review_days = 0).',
+      );
+      return 0;
+    }
     // Read from the pricing engine's own map rather than restated here.
     // A fourth fee then joins this sweep by existing, and there is no
     // second list to drift — the CNS-2 / BIN-1 discipline.
