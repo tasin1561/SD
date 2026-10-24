@@ -351,8 +351,26 @@ the panel automation outright. Two routes exist on the app server, and
 
 | Route | Setting value | What it is |
 |---|---|---|
-| Bangalore SSH tunnel | `socks5://127.0.0.1:1081` | `shiprocket-egress-tunnel.service` — `ssh -D` to the egress droplet `143.110.188.167` |
+| ~~Bangalore SSH tunnel~~ **RETIRED 2026-10-24** | `socks5://127.0.0.1:1081` | `shiprocket-egress-tunnel.service` — `ssh -D` to the egress droplet `143.110.188.167` |
 | NordVPN container | `http://127.0.0.1:1082` | `shiprocket-vpn.service` — gluetun pinned by digest, WireGuard to a NordVPN India server, exits in Mumbai |
+
+**The Bangalore route is RETIRED (owner, 2026-10-24) and only the VPN
+remains.** It had not carried traffic since 2026-09-28, when
+`courier.shiprocket_portal_proxy` was pointed at the VPN — and the row
+below already recorded that Shiprocket's edge answers its address with a
+403, so it was a rollback to a route that does not work. On 2026-10-19
+between 06:10 and 07:10 UTC the egress droplet's SSH host keys changed
+(both ED25519 and ECDSA; identical fingerprints seen from two
+independent networks, so a rebuild rather than anything hostile), after
+which `shiprocket-egress-tunnel.service` crash-looped every ten seconds
+for five days and the hourly backup's `india egress settings` step failed
+on every run — see `scripts/backup/skydrop-backup.sh` for what that cost.
+What was done: the unit was `disable --now`'d and
+`~/.config/skydrop-backup/india-host` renamed to `india-host.retired-2026-10-24`.
+**Nothing was deleted** — the unit file, `shiprocket-vpn.sh`'s rollback
+path and the config are all still there, so this is reversible by
+renaming the file back. **The droplet itself still exists and is the
+owner's to destroy**; nothing on this server reaches it any more.
 
 Both bind to **loopback only**. The host's own routing is untouched: the
 API, Postgres, Redis, Caddy, Cloudflare and Spaces keep the egress they

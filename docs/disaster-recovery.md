@@ -148,6 +148,16 @@ cron and the Shiprocket tunnel are running.
 
 Estimate: 20 min. Only the nightly Shiprocket panel reading stops meanwhile.
 
+**OBSOLETE from 2026-10-24 — the Bangalore egress droplet is retired and
+this scenario needs no action.** Shiprocket has egressed through the
+NordVPN container since 2026-09-28 and the tunnel's address was refused
+by Shiprocket's edge anyway; `india-host` is renamed aside and the unit
+is disabled, so nothing reaches that droplet. The steps below are kept
+for the case where the route is deliberately revived — note that the
+newest `india-egress.tar.gz` in any secrets bundle is from
+**2026-10-19T06:10**, because the host-key change that prompted the
+retirement stopped that step from running. See `docs/infrastructure.md`.
+
 New Ubuntu 24.04 droplet in BLR1, restore its settings from
 `india-egress.tar.gz` inside the secrets bundle (the authorized key is the
 main server's tunnel key), `ufw allow OpenSSH && ufw enable`, update the

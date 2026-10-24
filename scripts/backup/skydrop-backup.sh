@@ -50,6 +50,10 @@ main() {
   DB_BYTES=0
   SECRETS_BYTES=0
   FILES_SUMMARY=""
+  # Steps that could not run but must not stop the rest. Empty is the
+  # normal case; anything here lands in the audit row so a partial run
+  # cannot pass for a whole one.
+  DEGRADED=""
   trap 'on_exit $?' EXIT
 
   local -a rc_flags=(--contimeout 30s --timeout 10m --retries 3 --low-level-retries 10 --log-level NOTICE --log-file "$log")
@@ -103,16 +107,37 @@ main() {
   # The India egress droplet (Bangalore) holds almost nothing — who may log
   # in, sshd and firewall settings, DigitalOcean's peering route — but a
   # rebuilt one must match. Its address is config, not code.
+  # BEST EFFORT, and the reason is the whole point of this block.
+  #
+  # From 2026-10-19T07:10 to 2026-10-24 this one step failed every hour —
+  # the Bangalore droplet's SSH host key had changed, so `ssh` refused
+  # under StrictHostKeyChecking. Because the script runs under `set -e`,
+  # that aborted EVERYTHING AFTER IT: the secrets bundle never uploaded
+  # (newest stayed 2026-10-19T06:10), the Spaces mirror never synced, and
+  # no `system.backup.completed` row was written, so the watchdog reported
+  # "no off-site backup for 118 hours". The DATABASE was in fact uploading
+  # every hour throughout — but only because step 1 happens before this
+  # line. That is ordering, not design.
+  #
+  # So: a secondary host that "holds almost nothing" must never be able to
+  # hold the primary backup hostage. A failure here is recorded and
+  # skipped. It is NOT silent — `DEGRADED` reaches the audit row, because
+  # a partial backup quietly passing for a whole one is the exact failure
+  # this script was built to make impossible.
   STEP="india egress settings"
   if [ -r "$conf/india-host" ]; then
     local india
     india="$(tr -d '[:space:]' <"$conf/india-host")"
-    ssh -o BatchMode=yes -o ConnectTimeout=20 "$india" \
-      'tar -czf - --absolute-names --ignore-failed-read /root/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys /etc/ssh/sshd_config /etc/ssh/sshd_config.d /etc/ufw /etc/systemd/system/vpc-peering.service /var/lib/cloud/scripts/peering.sh 2>/dev/null' \
-      >"$work/india-egress.tar.gz" 2>>"$log"
-    # An empty archive means the droplet answered nothing useful.
-    [ "$(tar -tzf "$work/india-egress.tar.gz" | wc -l)" -gt 0 ]
-    secret_files+=("$work/india-egress.tar.gz")
+    if ssh -o BatchMode=yes -o ConnectTimeout=20 "$india" \
+         'tar -czf - --absolute-names --ignore-failed-read /root/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys /etc/ssh/sshd_config /etc/ssh/sshd_config.d /etc/ufw /etc/systemd/system/vpc-peering.service /var/lib/cloud/scripts/peering.sh 2>/dev/null' \
+         >"$work/india-egress.tar.gz" 2>>"$log" &&
+       # An empty archive means the droplet answered nothing useful.
+       [ "$(tar -tzf "$work/india-egress.tar.gz" 2>/dev/null | wc -l)" -gt 0 ]; then
+      secret_files+=("$work/india-egress.tar.gz")
+    else
+      DEGRADED="india egress settings"
+      echo "$(date -Is) degraded: could not read $india — its settings are NOT in this bundle; the rest of the backup continued" >>"$log"
+    fi
   fi
 
   STEP="secrets"
@@ -240,8 +265,11 @@ print(json.dumps({
     "databaseDumpBytes": int(sys.argv[4]), "secretsBytes": int(sys.argv[5]),
     "storedFiles": files.get("count"), "storedFileBytes": files.get("bytes"),
     "host": sys.argv[7],
-}))' "$STEP" "$rc" "$duration" "$DB_BYTES" "$SECRETS_BYTES" "$FILES_SUMMARY" "$(hostname)")"
-  echo "$(date -Is) $outcome step=$STEP seconds=$duration" >>"$log"
+    # Present only when a best-effort step was skipped, so "completed"
+    # never means more than it should.
+    **({"degraded": sys.argv[8]} if sys.argv[8] else {}),
+}))' "$STEP" "$rc" "$duration" "$DB_BYTES" "$SECRETS_BYTES" "$FILES_SUMMARY" "$(hostname)" "$DEGRADED")"
+  echo "$(date -Is) $outcome step=$STEP seconds=$duration${DEGRADED:+ degraded=$DEGRADED}" >>"$log"
   (cd "$app/packages/db" && node "$SCRIPT_DIR/record-backup-run.cjs" "$outcome" "$meta") >>"$log" 2>&1 ||
     echo "$(date -Is) could not record the run in audit_logs" >>"$log"
   # Keep the log bounded.
