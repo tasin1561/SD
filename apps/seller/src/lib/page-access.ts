@@ -42,6 +42,12 @@ import type { SellerMe } from '@skydrop/api-client';
  */
 export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permission: string]> = [
   ['/orders/new', 'orders.create'], // POST   /seller/orders
+  // Order page v2 — the same permission as the page it copies. Whether
+  // it is REACHABLE at all is a separate question, answered by
+  // `orders.page_v2_audience` and enforced by the API (the page itself
+  // only hides, FE-2). A route absent from this table falls through to
+  // `/orders`, so the entry has to exist even while the flag is off.
+  ['/orders/new-v2', 'orders.create'], // POST /seller/orders + seller/address-check/*
   ['/orders/*/edit', 'orders.create'], // PATCH  /seller/orders/:id
   ['/orders/import', 'orders.import'], // @Controller seller/order-imports
   ['/orders/pending', 'orders.pending.manage'], // @Controller seller/orders-pending
