@@ -413,6 +413,108 @@
   color: var(--blue-on-tint);
 }
 
+/* ── "Built by solustation" credit (legal bar) ───────────────────────────
+ * Ink and paper are the legal bar's own tokens, so the logo follows both
+ * themes; the one brand colour that is not Skydrop's lives in a variable
+ * scoped to this component rather than in theme.css (it is a third-party
+ * mark, not a Skydrop role, and theme.css's four blocks are gated). */
+.sol-credit {
+  --sol-accent: #e85d2a;
+  --sol-ink: var(--fg-strong);
+  --sol-paper: var(--surface-band);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-height: 28px;
+  padding: 0 0.7rem 0 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--sol-paper);
+  color: var(--fg-muted);
+  font-size: 12.5px;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+/* The legal bar's last item sits under FloatingContact (fixed bottom-6
+ * right-6, md: and up) once the page is scrolled to the end — keep the
+ * credit clear of it. Below md that button is hidden. */
+@media (min-width: 768px) {
+  .sol-credit {
+    margin-right: 5rem;
+  }
+}
+/* The globals.css touch floor is an element selector, so this class's
+ * 28px would beat it — restate the 30px floor for coarse pointers. */
+@media (pointer: coarse) {
+  .sol-credit {
+    min-height: 30px;
+  }
+}
+.sol-credit svg {
+  flex: none;
+  width: 18px;
+  height: auto;
+  transition: transform 260ms cubic-bezier(0.3, 1, 0.3, 1);
+}
+.sol-credit path {
+  fill: none;
+  stroke: var(--sol-accent);
+  stroke-width: 6.5;
+  stroke-linecap: round;
+}
+.sol-credit circle {
+  fill: var(--sol-paper);
+  stroke: var(--sol-ink);
+  stroke-width: 2.6;
+}
+.sol-credit circle:last-child {
+  fill: var(--sol-ink);
+  stroke: var(--sol-accent);
+  stroke-width: 3;
+}
+.sol-credit b {
+  color: var(--sol-ink);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+.sol-credit::after {
+  content: '\2197';
+  font-size: 11px;
+  opacity: 0.7;
+}
+.sol-credit:hover,
+.sol-credit:focus-visible {
+  transform: translateY(-1px);
+  border-color: var(--line-strong);
+  color: var(--fg-body);
+}
+.sol-credit:hover svg,
+.sol-credit:focus-visible svg {
+  transform: rotate(-8deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sol-credit,
+  .sol-credit svg {
+    transition: none;
+  }
+  .sol-credit:hover,
+  .sol-credit:focus-visible,
+  .sol-credit:hover svg,
+  .sol-credit:focus-visible svg {
+    transform: none;
+  }
+}
+:root[data-reduced='1'] .sol-credit,
+:root[data-reduced='1'] .sol-credit svg {
+  transition: none;
+  transform: none;
+}
+
 /* ── Mega-menus (u21 rows under two nav items) ────────────────────────── */
 .hnav__item {
   position: relative;
