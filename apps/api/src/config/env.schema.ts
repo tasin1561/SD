@@ -197,6 +197,25 @@ export const envSchema = z.object({
   CHATWOOT_API_TOKEN: z.string().optional().default(''),
   CHATWOOT_HMAC_SECRET: z.string().optional().default(''),
 
+  // --- Order page v2 — Solustation Address ---------------------------
+  // The Bearer key for address-api.solustation.site. `sa_live_…` in
+  // production (set on the droplet, never committed), `sa_test_…`
+  // locally and in CI — the test key is never billed and returns the
+  // same shapes.
+  //
+  // ENV, not `courier_credentials`: that table exists because a courier
+  // token is per (courier, environment, account) and every decrypt is
+  // audited (CUR-1). This is one key for one company-internal service,
+  // which is the same shape as CHATWOOT_API_TOKEN, RESEND_API_KEY and
+  // the SES pair — all env, with the non-secret half (base URL) in
+  // system_settings.
+  //
+  // Empty is valid and means STUB: the page shows "Address check
+  // unavailable" and every order still saves. An address check is
+  // advice about a delivery, and a delivery that was going to be
+  // attempted is still attempted.
+  SOLADDR_API_KEY: z.string().optional().default(''),
+
   // --- Phase 1B #2 — Bank account number encryption ------------------
   // AES-256-GCM key (32 bytes / 64 hex chars) for encrypting the
   // `sellers.bank_account_number` plaintext at rest. Same shape as

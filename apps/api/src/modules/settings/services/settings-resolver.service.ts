@@ -38,6 +38,14 @@ export const ENUM_VALUED_STRING_KEYS: Readonly<Record<string, readonly string[]>
     InboundFreightMode.PAY_NOW,
     InboundFreightMode.PAY_LATER,
   ],
+  // Order page v2 (2026-10-25). Stored UPPER-CASE because that is what
+  // this validator writes; the brief and the UI say them in lower case
+  // and the readers normalise, so the two spellings cannot drift into
+  // meaning different things. Values rather than a Prisma enum because
+  // nothing in the DATABASE is shaped by them — they gate a route and a
+  // refusal, both read at runtime.
+  'orders.page_v2_audience': ['OFF', 'STAFF', 'ALL'],
+  'address_check.mode': ['SHADOW', 'ENFORCE'],
 };
 
 /**
@@ -150,6 +158,11 @@ export const URL_VALUED_STRING_KEYS: Readonly<Record<string, readonly RegExp[]>>
   // same host; there is no legitimate remote value, and it is the one
   // fetched with no guard and its result reported back.
   'courier.shiprocket_portal_egress_check_url': [/^localhost$/i, /^127\./, /^\[?::1\]?$/],
+  // Order page v2 — every request to it carries `Authorization: Bearer
+  // <SOLADDR_API_KEY>`, which is the whole reason this map exists. Our
+  // own company's service, but a separate product reached only over
+  // HTTPS, so it is allow-listed exactly like a courier's host.
+  'address_check.base_url': [/^address-api\.solustation\.site$/i, ...COURIER_SIM_HOSTS],
 };
 
 /**
