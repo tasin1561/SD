@@ -1,4 +1,9 @@
 import { Module } from '@nestjs/common';
+import { AuthCommonModule } from '../auth-common/auth-common.module';
+import { SellerAddressCheckController } from './controllers/seller-address-check.controller';
+import { StoreAddressCheckController } from './controllers/store-address-check.controller';
+import { AddressCheckService } from './services/address-check.service';
+import { OrderPageV2GateService } from './services/order-page-v2-gate.service';
 import { SolustationHttpService } from './services/solustation-http.service';
 
 /**
@@ -24,7 +29,9 @@ import { SolustationHttpService } from './services/solustation-http.service';
  * reimplement base-URL resolution, auth or failure classification.
  */
 @Module({
-  providers: [SolustationHttpService],
-  exports: [SolustationHttpService],
+  imports: [AuthCommonModule],
+  controllers: [SellerAddressCheckController, StoreAddressCheckController],
+  providers: [SolustationHttpService, AddressCheckService, OrderPageV2GateService],
+  exports: [SolustationHttpService, AddressCheckService, OrderPageV2GateService],
 })
 export class AddressCheckModule {}

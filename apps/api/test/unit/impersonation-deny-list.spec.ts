@@ -525,6 +525,27 @@ const DELIBERATELY_ALLOWED: ReadonlyArray<readonly [string, string]> = [
   ['/store/issues', 'Raising it with Skydrop.'],
   ['/store/call-reviews', 'Answering “keep trying?” on one of their own orders.'],
   ['/store/expenses', 'The store’s own book. No bank entry and no wallet entry (RS-8).'],
+
+  // ── Order page v2 — the address check ─────────────────────────────
+  // ALLOWED, and it has to be: impersonation is one of the two ways an
+  // account reaches the new page at all (`orders.page_v2_audience` =
+  // STAFF), because the three v2 pages live in consoles staff do not
+  // have accounts in and admin has no order-creation page. Refusing
+  // these would mean the pilot could not be tested by the only person
+  // meant to be testing it.
+  //
+  // What it does is bounded: it writes one `address_checks` row about
+  // an address nobody has yet committed to, creates no access, moves
+  // no money of ours, and cannot change an order — an order is linked
+  // to a check only when the order itself is created, through
+  // `/seller/orders`, which is allowed above for its own reasons. The
+  // one real cost is a billable unit at Solustation, which is what
+  // testing the feature IS.
+  [
+    '/seller/address-check',
+    'Checking an address that is being typed. One row about an uncommitted address; no access, no money of ours, no order touched.',
+  ],
+  ['/store/address-check', 'The store side of the same.'],
 ];
 
 describe('every mutating seller/store route is decided, one way or the other', () => {
