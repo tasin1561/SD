@@ -85,6 +85,7 @@ import { EarlyReservationModule } from './modules/early-reservation/early-reserv
 import { EarlyReservationDecisionModule } from './modules/early-reservation-decision/early-reservation-decision.module';
 import { SellerWebhookModule } from './modules/seller-webhook/seller-webhook.module';
 import { SellerWebhookDeliveryModule } from './modules/seller-webhook-delivery/seller-webhook-delivery.module';
+import { AddressCheckModule } from './modules/address-check/address-check.module';
 import { SellerWalletModule } from './modules/seller-wallet/seller-wallet.module';
 import { InboundFreightModule } from './modules/inbound-freight/inbound-freight.module';
 import { SellerWalletAccrualModule } from './modules/seller-wallet-accrual/seller-wallet-accrual.module';
@@ -242,6 +243,9 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     EarlyReservationDecisionModule,
     SellerWebhookModule,
     SellerWebhookDeliveryModule,
+    // Order page v2 — ships inert: no controllers yet, and the two
+    // flags that gate it default to OFF/SHADOW.
+    AddressCheckModule,
     SellerWalletModule,
     InboundFreightModule,
     SellerWalletAccrualModule,
