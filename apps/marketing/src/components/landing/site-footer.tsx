@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { Facebook, Instagram, Linkedin, MessageCircle } from 'lucide-react';
 import { business, features, platform } from '@/content/site';
+import { SolustationCredit } from '@/components/chrome/solustation-credit';
 import '@/components/chrome/chrome.css';
 
 const SOCIAL_ICONS: Record<string, ReactElement> = {
@@ -116,6 +117,7 @@ export function SiteFooter(): ReactElement {
         <div className="safe-x mx-auto flex max-w-7xl flex-col items-start justify-between gap-2 py-3 text-[13px] text-fg-muted sm:flex-row sm:items-center sm:px-6">
           <span>{platform.footer.legal}</span>
           <span>Invite-only while we scale the warehouse.</span>
+          <SolustationCredit source="skydrop.global" />
         </div>
       </div>
     </footer>
