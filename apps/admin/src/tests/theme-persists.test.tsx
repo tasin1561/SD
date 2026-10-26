@@ -3,6 +3,7 @@ import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {
   pinnedTheme,
+  resolvedTheme,
   ThemeToggle,
   THEME_COOKIE_NAME,
   THEME_STORAGE_KEY,
@@ -126,10 +127,23 @@ describe('the theme survives a reload and reaches every tab', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
-  it('no stored choice leaves the attribute unset, so dark wins', () => {
+  it('no stored choice stamps LIGHT — it used to leave the attribute unset', () => {
+    /*
+      AMENDED 2026-10-26 (owner). This asserted that an unchosen theme
+      left `data-theme` absent so the dark `:root` won, which was the
+      old locked decision. The decision changed: the product opens
+      light everywhere, the switch has two positions instead of three,
+      and nothing reads `prefers-color-scheme` any more.
+
+      The attribute being ALWAYS present is the mechanism — it is what
+      makes the dark default unreachable without rewriting a stylesheet,
+      and `check-theme.mjs` requires those blocks to stay.
+    */
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.removeItem(THEME_STORAGE_KEY);
     // eslint-disable-next-line no-eval
     eval(themeInitScript);
-    expect(document.documentElement.getAttribute('data-theme')).toBeNull();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 
   it('follows a change made in another tab', () => {
@@ -158,5 +172,51 @@ describe('the theme survives a reload and reaches every tab', () => {
     const { unmount } = render(<ThemeToggle />);
     unmount();
     expect(remove).toHaveBeenCalledWith('storage', expect.any(Function));
+  });
+});
+
+/**
+ * Light is what an unchosen theme means now (owner, 2026-10-26).
+ *
+ * It used to mean "ask the operating system", and the switch carried a
+ * third position, System, which worked by CLEARING the pin — so "no
+ * pin" and "follow the OS" were the same state. The owner's decision is
+ * light everywhere and only two positions, which makes the absence of a
+ * choice an answer rather than a question.
+ *
+ * These pin the two halves that have to agree. If the server rendered
+ * nothing and the script stamped light, React 19's hydration-mismatch
+ * recovery would reset <html> to the server's props and the console
+ * would turn dark mid-session — the exact bug the cookie was added to
+ * fix, arriving through a different door.
+ */
+describe('an unchosen theme is LIGHT, on both halves', () => {
+  it('the server renders light when no cookie is pinned', () => {
+    expect(resolvedTheme(undefined)).toBe('light');
+    expect(resolvedTheme(null)).toBe('light');
+    expect(resolvedTheme('')).toBe('light');
+    // A value left over from the three-position switch is not a pin.
+    expect(resolvedTheme('system')).toBe('light');
+  });
+
+  it('a real pin still wins, in both directions', () => {
+    expect(resolvedTheme('dark')).toBe('dark');
+    expect(resolvedTheme('light')).toBe('light');
+  });
+
+  it('the init script ALWAYS stamps data-theme, never leaves it unset', () => {
+    // What makes the dark `:root` default unreachable without touching
+    // a stylesheet — check-theme.mjs needs those blocks to stay.
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.removeItem(THEME_STORAGE_KEY);
+    new Function(themeInitScript)();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+  });
+
+  it('the init script still honours a stored pin', () => {
+    document.documentElement.removeAttribute('data-theme');
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    new Function(themeInitScript)();
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 });

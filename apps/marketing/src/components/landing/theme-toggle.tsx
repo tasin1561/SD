@@ -5,11 +5,19 @@ import { cn } from '@/lib/cn';
 import { PAGE_BG, type ThemeName } from '@/lib/theme-colors';
 import { ThemeSwitch } from '@/components/micro/theme-switch';
 
+/**
+ * What the toggle should show on mount.
+ *
+ * The init script stamps `data-theme` before first paint and always
+ * stamps SOMETHING (owner, 2026-10-26 — the site opens light and the OS
+ * is no longer consulted), so reading the attribute is the whole
+ * answer. `prefers-color-scheme` is deliberately not consulted here
+ * either: a toggle that disagreed with the page it sits on would be
+ * worse than one that is briefly wrong.
+ */
 function resolveInitial(): ThemeName {
-  if (typeof document === 'undefined') return 'dark';
-  const explicit = document.documentElement.getAttribute('data-theme');
-  if (explicit === 'dark' || explicit === 'light') return explicit;
-  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  if (typeof document === 'undefined') return 'light';
+  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
 }
 
 function apply(next: ThemeName): void {

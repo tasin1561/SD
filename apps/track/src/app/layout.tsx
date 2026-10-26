@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import localFont from 'next/font/local';
-import { pinnedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
+import { resolvedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
 import { getActiveLocale } from '@/lib/locale';
 import './globals.css';
 
@@ -90,7 +90,11 @@ export default async function RootLayout({
   const nonce = (await headers()).get('x-nonce') ?? undefined;
   // A pinned theme is also server-rendered from the `sd-theme` cookie, so a
   // hydration recovery cannot drop it (FE-7).
-  const theme = pinnedTheme((await cookies()).get(THEME_COOKIE_NAME)?.value);
+  // No pin means LIGHT (owner, 2026-10-26) — the System position is
+  // gone and nothing reads the operating system any more. Rendered
+  // here as well as stamped by the init script so a hydration-mismatch
+  // recovery cannot reset <html> to an unthemed state.
+  const theme = resolvedTheme((await cookies()).get(THEME_COOKIE_NAME)?.value);
   return (
     <html
       lang={locale}

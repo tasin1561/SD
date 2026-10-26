@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
-import { pinnedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
+import { resolvedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
 import { motionInitScript } from '@skydrop/ui/app/motion-init';
 import localFont from 'next/font/local';
 import './globals.css';
@@ -77,7 +77,11 @@ export default async function RootLayout({
   // React 19 recovers from a hydration mismatch it resets <html>'s
   // attributes to these server props, which used to wipe the pin the init
   // script had stamped — a light console turning dark mid-session.
-  const theme = pinnedTheme((await cookies()).get(THEME_COOKIE_NAME)?.value);
+  // No pin means LIGHT (owner, 2026-10-26) — the System position is
+  // gone and nothing reads the operating system any more. Rendered
+  // here as well as stamped by the init script so a hydration-mismatch
+  // recovery cannot reset <html> to an unthemed state.
+  const theme = resolvedTheme((await cookies()).get(THEME_COOKIE_NAME)?.value);
   return (
     // `suppressHydrationWarning`: the init script below stamps
     // `data-theme` on this element BEFORE hydration (from localStorage,
