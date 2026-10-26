@@ -1,7 +1,7 @@
 'use client';
 
 import { clsx } from 'clsx';
-import { Monitor, Moon, Sun } from 'lucide-react';
+import { Moon, Sun } from 'lucide-react';
 import {
   useEffect,
   useRef,
@@ -11,8 +11,8 @@ import {
   type ReactElement,
 } from 'react';
 import {
+  DEFAULT_THEME,
   pinnedTheme,
-  THEME_COOKIE_NAME,
   THEME_STORAGE_KEY,
   writeThemeCookie,
   type PinnedTheme,
@@ -20,37 +20,25 @@ import {
 import { reducedMotion } from '../motion/motion';
 import './theme-switch.css';
 
-export type ThemeMode = 'system' | PinnedTheme;
+/**
+ * Light or dark, and nothing else (owner, 2026-10-26).
+ *
+ * There was a third position, System, which worked by clearing the pin
+ * and letting `prefers-color-scheme` decide. It is gone: the product
+ * now opens light for everybody and the only question the switch asks
+ * is which of the two you want. `ThemeMode` is kept as a name for
+ * `PinnedTheme` so call sites outside this file do not have to change.
+ */
+export type ThemeMode = PinnedTheme;
 
 const MODES: readonly { mode: ThemeMode; label: string; Icon: typeof Sun }[] = [
-  { mode: 'system', label: 'System', Icon: Monitor },
   { mode: 'light', label: 'Light', Icon: Sun },
   { mode: 'dark', label: 'Dark', Icon: Moon },
 ];
 
-function clearThemeCookie(): void {
-  try {
-    document.cookie = `${THEME_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax${
-      window.location.protocol === 'https:' ? '; Secure' : ''
-    }`;
-  } catch {
-    // Cookies disabled: nothing was stored there either.
-  }
-}
-
 /** Put a mode on <html>, localStorage and the cookie the server renders from. Never throws. */
 function applyMode(mode: ThemeMode): void {
   const root = document.documentElement;
-  if (mode === 'system') {
-    root.removeAttribute('data-theme');
-    try {
-      localStorage.removeItem(THEME_STORAGE_KEY);
-    } catch {
-      // Storage blocked: the page still follows the OS now.
-    }
-    clearThemeCookie();
-    return;
-  }
   root.setAttribute('data-theme', mode);
   try {
     localStorage.setItem(THEME_STORAGE_KEY, mode);
@@ -92,14 +80,17 @@ export function ThemeSwitch({ className }: { className?: string | undefined }): 
     } catch {
       // Storage unavailable: trust <html>.
     }
-    setMode(pinned ?? 'system');
+    // No pin means light: the same default the init script stamps
+    // and the root layout renders, so the knob agrees with the page.
+    setMode(pinned ?? DEFAULT_THEME);
 
     function onStorage(e: StorageEvent): void {
       if (e.key !== THEME_STORAGE_KEY) return;
-      const next = pinnedTheme(e.newValue);
-      if (next === undefined) document.documentElement.removeAttribute('data-theme');
-      else document.documentElement.setAttribute('data-theme', next);
-      setMode(next ?? 'system');
+      // A cleared value in another tab falls back to light rather than
+      // to an unthemed <html>, which would show the dark `:root`.
+      const next = pinnedTheme(e.newValue) ?? DEFAULT_THEME;
+      document.documentElement.setAttribute('data-theme', next);
+      setMode(next);
     }
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);

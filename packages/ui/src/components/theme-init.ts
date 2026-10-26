@@ -49,6 +49,36 @@ export const THEME_COOKIE_NAME = THEME_STORAGE_KEY;
 export type PinnedTheme = 'dark' | 'light';
 
 /**
+ * What everybody sees before they choose (owner, 2026-10-26).
+ *
+ * ── THE SYSTEM OPTION IS GONE ────────────────────────────────────────
+ * The switch used to have three positions and "System" worked by
+ * CLEARING the pin, so "no pin" and "follow the OS" were the same
+ * state. The owner's decision is light everywhere, light initially, and
+ * only light or dark on the switch — so the absence of a choice now
+ * means LIGHT rather than "ask the operating system", and nothing reads
+ * `prefers-color-scheme` any more.
+ *
+ * The media-query block in the brand stylesheets
+ * (`:root:not([data-theme])`) is therefore UNREACHABLE: every root
+ * layout server-renders `data-theme` and the init script stamps it
+ * before hydration, so the attribute is always present. It is left in
+ * place deliberately — `check-theme.mjs` requires those three blocks to
+ * exist and compares them against each other, and deleting one to prove
+ * a point would cost a gate that catches real theme drift.
+ */
+export const DEFAULT_THEME: PinnedTheme = 'light';
+
+/**
+ * The theme to render for a stored value — the pin when there is one,
+ * light when there is not. The one place that decision is made, so a
+ * root layout cannot quietly disagree with the init script.
+ */
+export function resolvedTheme(value: string | null | undefined): PinnedTheme {
+  return pinnedTheme(value) ?? DEFAULT_THEME;
+}
+
+/**
  * Not HttpOnly — the client writes it, and a theme is not sensitive.
  * Lax, a year, the whole origin. `Secure` is added only on https (see
  * `themeCookieString`): a browser drops a Secure cookie set over plain
@@ -77,21 +107,29 @@ export function writeThemeCookie(theme: PinnedTheme): void {
 }
 
 /**
- * Runs before hydration. Only a PINNED choice is applied — with no
- * stored value the attribute stays unset and the CSS default (dark)
- * wins, which is the locked decision for the consoles.
+ * Runs before hydration. Stamps the pinned choice, or LIGHT when there
+ * is none — the attribute is never left unset, which is what makes the
+ * dark `:root` default unreachable without touching a stylesheet.
  *
  * It also brings the cookie into line with the stored choice: that is
  * the migration for everybody who picked a theme before the cookie
  * existed, and the repair for a cookie that was cleared on its own.
- * localStorage is the truth here because ThemeToggle writes both.
+ * localStorage is the truth here because the switch writes both.
+ *
+ * A value of `system` left over from the three-position switch is NOT a
+ * pin, so it falls through to light and the next choice overwrites it.
+ * Somebody who had deliberately chosen System will land on light and
+ * can pick dark if they want it — there is no way to tell them apart
+ * from somebody who never chose at all, because the old design stored
+ * both as an absence.
  */
 export const themeInitScript = `
 (function () {
   try {
     var stored = localStorage.getItem('${THEME_STORAGE_KEY}');
+    var theme = (stored === 'dark' || stored === 'light') ? stored : '${DEFAULT_THEME}';
+    document.documentElement.setAttribute('data-theme', theme);
     if (stored === 'dark' || stored === 'light') {
-      document.documentElement.setAttribute('data-theme', stored);
       var current = null;
       var parts = document.cookie.split(';');
       for (var i = 0; i < parts.length; i++) {
