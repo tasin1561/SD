@@ -12,7 +12,7 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
-import type { CSSProperties, ReactElement } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import { ComboSelect } from '../combo-select';
 import './address-check.css';
 
@@ -37,6 +37,60 @@ import './address-check.css';
  */
 
 export type AddressCheckAction = 'approve' | 'confirm_with_customer' | 'reject';
+
+/** sessionStorage key holding the draft id of the order being filled in. */
+const DRAFT_KEY = 'sd-order-v2-draft';
+
+/**
+ * The draft id an order form checks its address under.
+ *
+ * ONE PER ORDER FORM, in sessionStorage, because Solustation bills a
+ * unit per `reference_id` per month: minting a fresh one on every mount
+ * would charge again for the same address every time an operator
+ * refreshed mid-order.
+ *
+ * `clear()` is called once an order is created, and that half matters
+ * more than the billing. Carrying a spent reference into the NEXT order
+ * is worse than paying twice — a repeat `/v1/validate` on it returns
+ * their STORED answer, so the second customer would be shown the
+ * verdict on the first customer's address.
+ *
+ * Minted in an effect rather than a lazy initialiser: these forms
+ * server-render first, and a uuid generated there would not match the
+ * one the browser makes.
+ *
+ * It lives HERE, not in each console, deliberately. Three v2 forms need
+ * it and the logic is subtle in three different ways; three copies is
+ * three chances for one of them to quietly stop clearing.
+ */
+export function useDraftReference(): { referenceId: string; clear: () => void } {
+  const [referenceId, setReferenceId] = useState('');
+  useEffect(() => {
+    try {
+      const held = window.sessionStorage.getItem(DRAFT_KEY);
+      if (held !== null && held !== '') {
+        setReferenceId(held);
+        return;
+      }
+      const fresh = `draft-${crypto.randomUUID()}`;
+      window.sessionStorage.setItem(DRAFT_KEY, fresh);
+      setReferenceId(fresh);
+    } catch {
+      // Private browsing, blocked site data: the check still works for
+      // this mount, it just cannot survive a refresh. Better than no
+      // check at all, and nothing here may throw at an operator.
+      setReferenceId(`draft-${crypto.randomUUID()}`);
+    }
+  }, []);
+  const clear = (): void => {
+    try {
+      window.sessionStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* nothing to do — the next mount mints a new one anyway */
+    }
+  };
+  return { referenceId, clear };
+}
 
 export interface AddressCheckResult {
   readonly available: boolean;

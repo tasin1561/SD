@@ -32,6 +32,7 @@ import { Select } from '@skydrop/ui/app/select';
 import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
 import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { useToast } from '@skydrop/ui/app/toast';
+import { useUatField } from '@skydrop/ui/app/uat-fields';
 import { BackLink, Notice, OrdSection } from '../../_components/orders-parts';
 import { ApiError } from '@skydrop/api-client';
 import {
@@ -146,6 +147,15 @@ export function NewOrderForm(): ReactElement {
   // Asked while they type, so a bad pin is caught before they commit
   // rather than after the order exists. Cached server-side for a day.
   const serviceability = useServiceability(form.recipientPostalCode, form.paymentMode);
+
+  // Hidden for UAT (owner, 2026-10-26), code intact. Hidden means the
+  // input is not rendered, so each stays at its initial value and the
+  // payload omits it — landing on the server defaults the API has
+  // always applied: fee 0, discount 0, and a declared value computed
+  // from the catalogue. Reversible from UAT Settings when that lands.
+  const showDeliveryFee = useUatField('orderDeliveryFee');
+  const showDiscount = useUatField('orderDiscount');
+  const showDeclaredValue = useUatField('orderDeclaredValue');
   // Pre-select the default once the list arrives, and only while the
   // field is untouched: a seller who has already picked a shopfront
   // must not have it changed underneath them by a late response.
@@ -666,6 +676,20 @@ export function NewOrderForm(): ReactElement {
             action={serviceabilityChip}
           >
             <div className="ord-stack ord-stack--tight">
+              {/* The seller's own order id, FIRST — owner, 2026-10-26.
+                  It is the number they already have in their own system
+                  and the one they will quote when they ring about this
+                  parcel, so it is the first thing they copy across
+                  rather than the last. */}
+              <TextField
+                label="Order ID"
+                hint="Optional. Your own order ID — unique per store."
+                value={form.sellerOrderRef}
+                onChange={(e) => set('sellerOrderRef', e.target.value)}
+                maxLength={120}
+                placeholder="ORD-2024-9981"
+                inputClassName="sk-ident"
+              />
               {/* The seller code is CHROME, exactly like the +91 below:
                   it cannot be edited or deleted, and the field holds only
                   the customer's name. The API composes the stored value,
@@ -800,17 +824,8 @@ export function NewOrderForm(): ReactElement {
                   <span className="ord-faint">{storeHint}</span>
                 </div>
               )}
-              <TextField
-                label="Your reference"
-                hint="Optional. Your own order ID — unique per store."
-                value={form.sellerOrderRef}
-                onChange={(e) => set('sellerOrderRef', e.target.value)}
-                maxLength={120}
-                placeholder="ORD-2024-9981"
-                inputClassName="sk-ident"
-              />
               <TextArea
-                label="Notes for the call agent"
+                label="Delivery Notes"
                 hint="Read out on the confirmation call — a preferred time, a fragile item, a second number."
                 rows={3}
                 value={form.sellerNotes}
@@ -909,90 +924,12 @@ export function NewOrderForm(): ReactElement {
               ]}
             />
 
-            <div className="ord-grid-2" style={{ marginTop: 'var(--sp-3)' }}>
-              <TextField
-                label="Delivery fee (INR)"
-                hint={
-                  feeDefault.data === undefined
-                    ? 'Added to the collectable amount.'
-                    : `Added to the collectable. Your default is ₹${feeDefault.data.amountInr}; change it in Settings.`
-                }
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.deliveryFeeInr}
-                onChange={(e) => set('deliveryFeeInr', e.target.value)}
-                inputClassName="sk-figure"
-              />
-              <TextField
-                label="Advance already paid (INR)"
-                hint="Deducted from the collectable."
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.advanceAmountInr}
-                onChange={(e) => set('advanceAmountInr', e.target.value)}
-                placeholder="0"
-                inputClassName="sk-figure"
-              />
-              <TextField
-                label="Discount (INR)"
-                hint="Deducted from the collectable."
-                type="number"
-                step="0.01"
-                value={form.discountInr}
-                onChange={(e) => set('discountInr', e.target.value)}
-                placeholder="0"
-                inputClassName="sk-figure"
-              />
-              <TextField
-                label="Declared value (INR)"
-                hint={
-                  computedDeclaredValue > 0
-                    ? `For customs, not collection. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue.`
-                    : "The parcel's value for customs — not what is collected."
-                }
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.declaredValueInr}
-                onChange={(e) => set('declaredValueInr', e.target.value)}
-                inputClassName="sk-figure"
-                placeholder={
-                  computedDeclaredValue > 0
-                    ? computedDeclaredValue.toLocaleString('en-IN')
-                    : 'Sum of the line values'
-                }
-              />
-              <div className="ord-span-2">
-                <TextField
-                  // The unit is the suffix on the field itself; saying
-                  // it twice reads as two different things being asked for.
-                  label="Total weight"
-                  hint={
-                    computedWeight > 0
-                      ? `Adds up to ${computedWeight.toLocaleString('en-IN')} g from the catalogue. Type a number to override it.`
-                      : 'None of these products has a recorded weight, so this stays 0 unless you set it.'
-                  }
-                  type="number"
-                  min={0}
-                  inputClassName="sk-figure"
-                  value={form.totalWeightGrams}
-                  onChange={(e) => set('totalWeightGrams', e.target.value)}
-                  placeholder={computedWeight > 0 ? computedWeight.toLocaleString('en-IN') : '0'}
-                  // A SUFFIX. The unit follows the figure when it is
-                  // spoken, and a "grams" box in front of an empty
-                  // field reads as a label for the wrong thing.
-                  trail={
-                    <span className="ord-suffix" aria-hidden>
-                      <Scale size={13} />
-                      grams
-                    </span>
-                  }
-                />
-              </div>
-            </div>
-
+            {/* The collectable sits DIRECTLY under the payment mode
+                (owner, 2026-10-26). It is the number the call centre
+                reads to the customer and the one the driver asks for,
+                so it belongs with the choice that decides whether it is
+                collected at all — not at the bottom behind the parcel's
+                weight. */}
             {form.paymentMode === 'COD' ? (
               /*
                 The one figure the customer is asked for at the door,
@@ -1068,6 +1005,96 @@ export function NewOrderForm(): ReactElement {
                 </span>
               </Notice>
             )}
+
+            <div className="ord-grid-2" style={{ marginTop: 'var(--sp-3)' }}>
+              {showDeliveryFee ? (
+                <TextField
+                  label="Delivery fee (INR)"
+                  hint={
+                    feeDefault.data === undefined
+                      ? 'Added to the collectable amount.'
+                      : `Added to the collectable. Your default is ₹${feeDefault.data.amountInr}; change it in Settings.`
+                  }
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.deliveryFeeInr}
+                  onChange={(e) => set('deliveryFeeInr', e.target.value)}
+                  inputClassName="sk-figure"
+                />
+              ) : null}
+              <TextField
+                label="Advance already paid (INR)"
+                hint="Deducted from the collectable."
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.advanceAmountInr}
+                onChange={(e) => set('advanceAmountInr', e.target.value)}
+                placeholder="0"
+                inputClassName="sk-figure"
+              />
+              {showDiscount ? (
+                <TextField
+                  label="Discount (INR)"
+                  hint="Deducted from the collectable."
+                  type="number"
+                  step="0.01"
+                  value={form.discountInr}
+                  onChange={(e) => set('discountInr', e.target.value)}
+                  placeholder="0"
+                  inputClassName="sk-figure"
+                />
+              ) : null}
+              {showDeclaredValue ? (
+                <TextField
+                  label="Declared value (INR)"
+                  hint={
+                    computedDeclaredValue > 0
+                      ? `For customs, not collection. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue.`
+                      : "The parcel's value for customs — not what is collected."
+                  }
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.declaredValueInr}
+                  onChange={(e) => set('declaredValueInr', e.target.value)}
+                  inputClassName="sk-figure"
+                  placeholder={
+                    computedDeclaredValue > 0
+                      ? computedDeclaredValue.toLocaleString('en-IN')
+                      : 'Sum of the line values'
+                  }
+                />
+              ) : null}
+              <div className="ord-span-2">
+                <TextField
+                  // The unit is the suffix on the field itself; saying
+                  // it twice reads as two different things being asked for.
+                  label="Total weight"
+                  hint={
+                    computedWeight > 0
+                      ? `Adds up to ${computedWeight.toLocaleString('en-IN')} g from the catalogue. Type a number to override it.`
+                      : 'None of these products has a recorded weight, so this stays 0 unless you set it.'
+                  }
+                  type="number"
+                  min={0}
+                  inputClassName="sk-figure"
+                  value={form.totalWeightGrams}
+                  onChange={(e) => set('totalWeightGrams', e.target.value)}
+                  placeholder={computedWeight > 0 ? computedWeight.toLocaleString('en-IN') : '0'}
+                  // A SUFFIX. The unit follows the figure when it is
+                  // spoken, and a "grams" box in front of an empty
+                  // field reads as a label for the wrong thing.
+                  trail={
+                    <span className="ord-suffix" aria-hidden>
+                      <Scale size={13} />
+                      grams
+                    </span>
+                  }
+                />
+              </div>
+            </div>
           </OrdSection>
         </div>
       </div>

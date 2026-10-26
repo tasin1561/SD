@@ -25,6 +25,7 @@ import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
+import { useUatField } from '@skydrop/ui/app/uat-fields';
 import { Notice, OrdSection } from '../../../_components/orders-parts';
 import { OrderedProducts, ProductCatalogue, type PickedLine } from '@/components/product-picker';
 import {
@@ -145,6 +146,13 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   const discard = useDiscardDraftOrder(orderId);
 
   const [form, setForm] = useState<FormState | null>(null);
+  // Hidden for UAT (owner, 2026-10-26), code intact. Hidden on EDIT as
+  // well as on create, deliberately: hiding a field on one and not the
+  // other would mean an order could still acquire a discount after it
+  // was placed, which is the same field arriving by the back door.
+  const showDeliveryFee = useUatField('orderDeliveryFee');
+  const showDiscount = useUatField('orderDiscount');
+  const showDeclaredValue = useUatField('orderDeclaredValue');
   const [busy, setBusy] = useState<'save' | 'submit' | 'discard' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
@@ -666,15 +674,17 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             ]}
           />
           <div className="ord-grid-2">
-            <TextField
-              label="Delivery fee charged to the customer (INR)"
-              type="number"
-              min={0}
-              step="0.01"
-              value={form.deliveryFeeInr}
-              onChange={(e) => set('deliveryFeeInr', e.target.value)}
-              inputClassName="sk-figure"
-            />
+            {showDeliveryFee ? (
+              <TextField
+                label="Delivery fee charged to the customer (INR)"
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.deliveryFeeInr}
+                onChange={(e) => set('deliveryFeeInr', e.target.value)}
+                inputClassName="sk-figure"
+              />
+            ) : null}
             <TextField
               label="Advance already paid (INR)"
               type="number"
@@ -684,15 +694,17 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               onChange={(e) => set('advanceAmountInr', e.target.value)}
               inputClassName="sk-figure"
             />
-            <TextField
-              label="Discount (INR)"
-              type="number"
-              min={0}
-              step="0.01"
-              value={form.discountInr}
-              onChange={(e) => set('discountInr', e.target.value)}
-              inputClassName="sk-figure"
-            />
+            {showDiscount ? (
+              <TextField
+                label="Discount (INR)"
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.discountInr}
+                onChange={(e) => set('discountInr', e.target.value)}
+                inputClassName="sk-figure"
+              />
+            ) : null}
             {form.paymentMode === 'COD' && (
               <TextField
                 label="COD amount (INR)"
@@ -730,15 +742,17 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 }
               />
             )}
-            <TextField
-              label="Declared value (INR)"
-              type="number"
-              min={0}
-              step="0.01"
-              value={form.declaredValueInr}
-              onChange={(e) => set('declaredValueInr', e.target.value)}
-              inputClassName="sk-figure"
-            />
+            {showDeclaredValue ? (
+              <TextField
+                label="Declared value (INR)"
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.declaredValueInr}
+                onChange={(e) => set('declaredValueInr', e.target.value)}
+                inputClassName="sk-figure"
+              />
+            ) : null}
             <TextField
               label="Total weight (grams)"
               type="number"
@@ -760,7 +774,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               ))}
             </Select>
             <TextField
-              label="Your reference"
+              label="Order ID"
               value={form.sellerOrderRef}
               maxLength={100}
               placeholder="e.g. the number your shop gave it"
@@ -770,7 +784,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             {openStores.length > 1 && (
               <Select
                 label="Store"
-                hint="Which of your shops this order belongs to. Your reference has to be unique within one shop, not across them."
+                hint="Which of your shops this order belongs to. The Order ID has to be unique within one shop, not across them."
                 value={form.storeId}
                 onChange={(e) => set('storeId', e.target.value)}
               >
@@ -794,7 +808,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       {/* Notes — always editable */}
       <OrdSection id="eo-notes" title="Notes" note="For us, never the customer.">
         <TextArea
-          label="Notes for the call agent"
+          label="Delivery Notes"
           rows={3}
           maxLength={2000}
           value={form.sellerNotes}
