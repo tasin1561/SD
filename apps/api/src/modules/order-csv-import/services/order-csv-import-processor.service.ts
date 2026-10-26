@@ -4,6 +4,7 @@ import Papa from 'papaparse';
 import { PrismaService } from '../../../infrastructure/prisma/prisma.service';
 import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EnvService } from '../../../config/env.service';
+import { UatFieldsService } from '../../uat-settings/services/uat-fields.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CatalogReadService } from '../../catalog-read/services/catalog-read.service';
 import { OrderService, type BulkOrderPatchInput } from '../../order/services/order.service';
@@ -88,6 +89,7 @@ export class OrderCsvImportProcessorService {
     private readonly prisma: PrismaService,
     private readonly spaces: SpacesService,
     private readonly env: EnvService,
+    private readonly uat: UatFieldsService,
     private readonly audit: AuditLogService,
     private readonly parser: OrderCsvParserService,
     private readonly catalog: CatalogReadService,
@@ -254,7 +256,7 @@ export class OrderCsvImportProcessorService {
           existing.status === OrderStatus.DRAFT ||
           existing.status === OrderStatus.PENDING_CONFIRMATION
         ) {
-          await this.orders.applyBulkPatch(sellerId, existing.id, this.toPatch(row), actor);
+          await this.orders.applyBulkPatch(sellerId, existing.id, await this.toPatch(row), actor);
           counters.rowsSkipped += rowsInOrder; // matched an existing order (patched/unchanged)
         } else {
           errorRows.push({
@@ -551,7 +553,21 @@ export class OrderCsvImportProcessorService {
     // The figures the collectable was built from — `create` records them
     // whatever the payment mode and re-applies none of them.
     if (row.advanceAmount !== undefined) dto.advanceAmountInr = row.advanceAmount;
-    if (row.discountInr !== undefined) dto.discountInr = row.discountInr;
+    /*
+      The discount columns follow the FORM (owner, 2026-10-26): while the
+      field is hidden for UAT, a file carrying `Discount Value` /
+      `Discount Type` has them ignored rather than applied, so the bulk
+      route cannot do what the form will not.
+
+      Nothing about the money moves either way. `codAmount` is
+      authoritative and already has any discount inside it; this figure
+      is the readback of what the collectable was BUILT from, and
+      `create` re-applies none of it. Hiding it costs the breakdown, not
+      the total.
+    */
+    if (row.discountInr !== undefined && (await this.uat.isShown('orderDiscount'))) {
+      dto.discountInr = row.discountInr;
+    }
     // A stated PACKED weight beats our Σ(catalogue unit weight × qty)
     // default: it is the parcel that will actually be handed over.
     if (row.totalWeightGrams !== undefined) dto.totalWeightGrams = row.totalWeightGrams;
@@ -563,7 +579,7 @@ export class OrderCsvImportProcessorService {
     });
   }
 
-  private toPatch(row: CoercedOrderGroup): BulkOrderPatchInput {
+  private async toPatch(row: CoercedOrderGroup): Promise<BulkOrderPatchInput> {
     const patch: BulkOrderPatchInput = {
       lines: row.lines.map((l) => ({
         productSku: l.productSku,
@@ -583,7 +599,12 @@ export class OrderCsvImportProcessorService {
     if (row.codAmount !== undefined) patch.codAmount = row.codAmount;
     if (row.paymentMode !== undefined) patch.paymentMode = row.paymentMode;
     if (row.advanceAmount !== undefined) patch.advanceAmount = row.advanceAmount;
-    if (row.discountInr !== undefined) patch.discountInr = row.discountInr;
+    // Same gate on the staged-row path: a row that reaches an order
+    // through the pending queue must not carry what the direct import
+    // would have dropped.
+    if (row.discountInr !== undefined && (await this.uat.isShown('orderDiscount'))) {
+      patch.discountInr = row.discountInr;
+    }
     if (row.totalWeightGrams !== undefined) patch.totalWeightGrams = row.totalWeightGrams;
     return patch;
   }
