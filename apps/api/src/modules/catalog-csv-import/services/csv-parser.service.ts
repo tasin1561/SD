@@ -37,6 +37,13 @@ export interface CoercedVariantRow {
   declaredValueInr?: number;
   barcode?: string;
   attributes?: Record<string, string | number | boolean>;
+  description?: string;
+  /** "Black / Black". Derived from the attributes when no column states it. */
+  variantLabel?: string;
+  /** One picture, by URL. Fetched and stored after the row commits. */
+  imageUrl?: string;
+  lowStockThreshold?: number;
+  gstRate?: number;
 }
 
 @Injectable()
@@ -160,6 +167,35 @@ export class CsvParserService {
     const bc = get('barcode');
     if (bc !== undefined) row.barcode = bc;
     if (attributes !== undefined) row.attributes = attributes;
+    const desc = get('description');
+    if (desc !== undefined) row.description = desc;
+    const img = get('imageUrl');
+    if (img !== undefined) row.imageUrl = img;
+    const lst = num('lowStockThreshold');
+    if (lst !== undefined) row.lowStockThreshold = Math.round(lst);
+    const gst = num('gstRate');
+    if (gst !== undefined) row.gstRate = gst;
+    /*
+      The variant's human name.
+
+      Taken from the column when the file states one, and otherwise
+      COMPOSED from the attributes the row already carries — "Black /
+      Black" out of `{colour: Black, lens: Black}`. Deriving it is the
+      point: nothing composed a label on import, so every CSV-created
+      variant was unlabelled, and four SKUs of one product read as four
+      identical rows in the picker and on the picking sheet. A file
+      written before this existed gains labels without being edited.
+    */
+    const stated = get('variantLabel');
+    if (stated !== undefined) {
+      row.variantLabel = stated;
+    } else if (attributes !== undefined) {
+      const derived = Object.values(attributes)
+        .map((v) => String(v).trim())
+        .filter((v) => v !== '')
+        .join(' / ');
+      if (derived !== '') row.variantLabel = derived;
+    }
     return { row, errors: [] };
   }
 

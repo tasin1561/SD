@@ -55,10 +55,14 @@ export interface CoercedOrderRow extends CoercedOrderLine {
   externalRef: string;
   customerName?: string;
   customerPhone?: string;
-  customerEmail?: string;
   addressLine1?: string;
   /** The landmark — required on the assembled order. See ORD-5. */
   addressLine2?: string;
+  /** Read out on the confirmation call. */
+  notes?: string;
+  /** Which shopfront, BY NAME — a seller knows their shop's name, not
+   *  its uuid. Resolved to a store id when the order is built. */
+  storeName?: string;
   landmark?: string;
   /** Optional: Delhivery resolves the locality from the PIN. */
   city?: string;
@@ -68,6 +72,8 @@ export interface CoercedOrderRow extends CoercedOrderLine {
   /** Stated `*Payment Mode`. Absent ⇒ inferred from the COD amount. */
   paymentMode?: PaymentMode;
   advanceAmount?: number;
+  deliveryFee?: number;
+  declaredValue?: number;
   /** Raw `Discount Value` + `Discount Type`; resolved to rupees per group. */
   discountValue?: number;
   discountType?: string;
@@ -81,7 +87,8 @@ export interface CoercedOrderGroup {
   rowNumbers: number[];
   customerName: string;
   customerPhone: string;
-  customerEmail?: string;
+  notes?: string;
+  storeName?: string;
   addressLine1: string;
   addressLine2: string;
   landmark?: string;
@@ -91,6 +98,8 @@ export interface CoercedOrderGroup {
   codAmount?: number;
   paymentMode?: PaymentMode;
   advanceAmount?: number;
+  deliveryFee?: number;
+  declaredValue?: number;
   /** Resolved to rupees — a percentage is applied to the group's own goods total. */
   discountInr?: number;
   totalWeightGrams?: number;
@@ -131,7 +140,8 @@ const MAX_LINES_PER_ORDER = 200;
 const GROUPED_FIELDS = [
   'customerName',
   'customerPhone',
-  'customerEmail',
+  'notes',
+  'storeName',
   'addressLine1',
   'addressLine2',
   'landmark',
@@ -141,6 +151,8 @@ const GROUPED_FIELDS = [
   'codAmount',
   'paymentMode',
   'advanceAmount',
+  'deliveryFee',
+  'declaredValue',
   'discountValue',
   'discountType',
   'totalWeightGrams',
@@ -342,6 +354,8 @@ export class OrderCsvParserService {
     const advanceAmount = money('advanceAmount');
     const retailUnitPrice = money('retailUnitPrice');
     const discountValue = money('discountValue');
+    const deliveryFee = money('deliveryFee');
+    const declaredValue = money('declaredValue');
 
     let totalWeightGrams: number | undefined;
     const weightRaw = get('totalWeightGrams');
@@ -388,7 +402,8 @@ export class OrderCsvParserService {
         ? undefined
         : normalizeIndianPhone(get('customerPhone') as string),
     );
-    set('customerEmail', get('customerEmail'));
+    set('notes', get('notes'));
+    set('storeName', get('storeName'));
     set('addressLine1', get('addressLine1'));
     set('addressLine2', get('addressLine2'));
     set('landmark', get('landmark'));
@@ -401,6 +416,8 @@ export class OrderCsvParserService {
     set('paymentMode', paymentMode);
     set('advanceAmount', advanceAmount);
     set('discountValue', discountValue);
+    set('deliveryFee', deliveryFee);
+    set('declaredValue', declaredValue);
     set('discountType', get('discountType'));
     set('totalWeightGrams', totalWeightGrams);
     set('retailUnitPrice', retailUnitPrice);
@@ -631,7 +648,8 @@ export class OrderCsvParserService {
     const set = <K extends keyof CoercedOrderGroup>(key: K, v: CoercedOrderGroup[K]): void => {
       if (v !== undefined) group[key] = v;
     };
-    set('customerEmail', str('customerEmail'));
+    set('notes', str('notes'));
+    set('storeName', str('storeName'));
     set('landmark', str('landmark'));
     set('city', str('city'));
     set('state', str('state'));
@@ -657,6 +675,10 @@ export class OrderCsvParserService {
       was built from" and re-applies none of them, which is exactly the
       readback this is for.
     */
+    const df = num('deliveryFee');
+    if (df !== undefined) group.deliveryFee = df;
+    const dvl = num('declaredValue');
+    if (dvl !== undefined) group.declaredValue = dvl;
     const discountValue = num('discountValue');
     if (discountValue !== undefined && discountValue > 0) {
       if (!isPercentageDiscount(str('discountType'))) {

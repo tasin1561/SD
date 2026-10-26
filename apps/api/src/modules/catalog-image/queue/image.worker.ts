@@ -9,15 +9,26 @@ import { deriveThumbnailKey } from '../image-key';
 import { OrphanCleanupService } from '../services/orphan-cleanup.service';
 import {
   IMAGE_QUEUE_NAME,
+  ImageQueue,
   JOB_DELETE_OBJECTS,
+  JOB_FETCH_IMAGE,
   JOB_GENERATE_THUMBNAIL,
   JOB_ORPHAN_SWEEP,
   type DeleteObjectsJob,
+  type FetchImageJob,
   type GenerateThumbnailJob,
 } from './image.queue';
+import { assertPublicHttpsUrl } from '../../../common/net/ssrf-guard';
+import { buildOriginalKey } from '../image-key';
 import { SystemIssueService } from '../../system-issues/services/system-issue.service';
 
 const THUMB_WIDTH_PX = 400;
+/** Three seconds is plenty for an image host, and the worker has other
+ *  rows waiting behind this one. */
+const FETCH_TIMEOUT_MS = 10_000;
+/** Measured from the bytes we actually received — `content-length` is
+ *  the remote end's claim, not a measurement. */
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 /**
  * The decode ceiling, in PIXELS.
@@ -56,6 +67,10 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
     private readonly orphanCleanup: OrphanCleanupService,
     private readonly workerRole: WorkerRoleService,
     private readonly issues: SystemIssueService,
+    // Its own queue, to hand a fetched picture straight to the
+    // thumbnail job that already exists rather than growing a second
+    // path to the same work.
+    private readonly queue: ImageQueue,
   ) {}
 
   onModuleInit(): void {
@@ -71,6 +86,10 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
         }
         if (job.name === JOB_DELETE_OBJECTS) {
           await this.deleteObjects(job.data as DeleteObjectsJob);
+          return;
+        }
+        if (job.name === JOB_FETCH_IMAGE) {
+          await this.fetchImage(job.data as FetchImageJob);
           return;
         }
         if (job.name === JOB_ORPHAN_SWEEP) {
@@ -103,6 +122,90 @@ export class ImageWorker implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy(): Promise<void> {
     if (this.worker) await this.worker.close();
+  }
+
+  /**
+   * Fetch one picture a seller named by URL in a product CSV.
+   *
+   * ── EVERY URL HERE IS A STRANGER'S ──────────────────────────────────
+   * It arrives in a spreadsheet cell, so it is as untrusted as anything
+   * gets: `assertPublicHttpsUrl` is what stops a row reading
+   * `http://169.254.169.254/latest/meta-data/` and handing a seller the
+   * droplet's credentials. Re-checked HERE rather than at import time,
+   * because DNS can change between the two and the fetch is what
+   * matters.
+   *
+   * ── BOUNDED, BECAUSE THE OTHER END IS NOT OURS ──────────────────────
+   * A timeout, a byte ceiling read from the stream rather than trusted
+   * from a header, and a decode ceiling. A seller who points a row at a
+   * 2 GB file must not take the worker down with them, and
+   * `content-length` is a claim, not a measurement.
+   *
+   * ── IT NEVER COSTS THE PRODUCT ──────────────────────────────────────
+   * The variant was committed by the import; this adds its photograph.
+   * A picture that cannot be had is logged and dropped — one row with
+   * a broken link must not make a seller re-upload a catalogue.
+   */
+  private async fetchImage(data: FetchImageJob): Promise<void> {
+    const exists = await this.prisma.client.productImage.findFirst({
+      where: { variantId: data.variantId, deletedAt: null },
+      select: { id: true },
+    });
+    // Already has one. A re-uploaded CSV must not stack duplicates of
+    // the same photograph on a variant.
+    if (exists) return;
+
+    const url = await assertPublicHttpsUrl(data.url);
+    const res = await fetch(url, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      headers: { accept: 'image/*' },
+    });
+    if (!res.ok) throw new Error(`image fetch ${res.status} for variant ${data.variantId}`);
+
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength > MAX_IMAGE_BYTES) {
+      throw new Error(`image is ${buf.byteLength} bytes, over the ${MAX_IMAGE_BYTES} ceiling`);
+    }
+
+    // What it IS, not what it said it was: a content-type header is the
+    // remote end's claim, and the decode is the only proof.
+    const meta = await sharp(buf, { limitInputPixels: MAX_DECODE_PIXELS }).metadata();
+    const mime =
+      meta.format === 'jpeg'
+        ? 'image/jpeg'
+        : meta.format === 'png'
+          ? 'image/png'
+          : meta.format === 'webp'
+            ? 'image/webp'
+            : null;
+    if (mime === null) throw new Error(`unsupported image format: ${String(meta.format)}`);
+
+    const key = buildOriginalKey(data.sellerId, data.variantId, mime);
+    await this.spaces.putObject(key, buf, mime);
+
+    const image = await this.prisma.client.productImage.create({
+      data: {
+        variantId: data.variantId,
+        spacesKey: key,
+        url: key,
+        mimeType: mime,
+        sizeBytes: buf.byteLength,
+        widthPx: meta.width ?? null,
+        heightPx: meta.height ?? null,
+        // The first picture a variant gets is the one every screen
+        // shows, so a CSV-imported one has to be primary or the
+        // catalogue would import pictures nothing displays.
+        isPrimary: true,
+        uploadedBySellerId: data.sellerId,
+      },
+      select: { id: true },
+    });
+    await this.queue.enqueueThumbnail({ imageId: image.id });
+    this.logger.log(
+      { variantId: data.variantId, bytes: buf.byteLength, format: meta.format },
+      'Fetched a product picture named in a CSV',
+    );
   }
 
   private async generateThumbnail(data: GenerateThumbnailJob): Promise<void> {

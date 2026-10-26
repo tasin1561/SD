@@ -6,11 +6,29 @@ export const IMAGE_QUEUE_NAME = 'catalog-image';
 export const JOB_GENERATE_THUMBNAIL = 'generate-thumbnail';
 export const JOB_DELETE_OBJECTS = 'delete-objects';
 export const JOB_ORPHAN_SWEEP = 'orphan-sweep';
+/** A picture named by URL in a product CSV, fetched after the row commits. */
+export const JOB_FETCH_IMAGE = 'fetch-image';
 /** Daily at 03:15 UTC. */
 export const ORPHAN_SWEEP_CRON = '15 3 * * *';
 
 export interface GenerateThumbnailJob {
   imageId: string;
+}
+
+/**
+ * One picture to fetch and store, from a URL a seller put in a CSV.
+ *
+ * A JOB rather than part of the import, because an upload of four
+ * hundred rows would otherwise make four hundred outbound requests
+ * inside one HTTP handler and time out long before it finished — and a
+ * picture that cannot be fetched must not fail the product row that
+ * named it. The variant exists either way; this adds its photograph
+ * when it can.
+ */
+export interface FetchImageJob {
+  sellerId: string;
+  variantId: string;
+  url: string;
 }
 
 export interface DeleteObjectsJob {
@@ -63,6 +81,16 @@ export class ImageQueue implements OnModuleInit, OnModuleDestroy {
 
   async enqueueThumbnail(data: GenerateThumbnailJob): Promise<string> {
     const job = await this.queue.add(JOB_GENERATE_THUMBNAIL, data);
+    return String(job.id);
+  }
+
+  async enqueueFetchImage(data: FetchImageJob): Promise<string> {
+    // Keyed on the variant: a CSV re-uploaded with the same row must
+    // not queue the same picture twice. BullMQ returns the existing job
+    // for a jobId it already holds.
+    const job = await this.queue.add(JOB_FETCH_IMAGE, data, {
+      jobId: `fetch-image:${data.variantId}`,
+    });
     return String(job.id);
   }
 

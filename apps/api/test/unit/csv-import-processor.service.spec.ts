@@ -131,6 +131,9 @@ function makeSut(csvByKey: Record<string, string>) {
     makeEnv(),
     new AuditLogService(prisma),
     new CsvParserService(),
+    // The image queue: a CSV picture is fetched by the image worker,
+    // never inside the import.
+    { enqueueFetchImage: jest.fn(async () => 'job-1') } as never,
   );
   return { svc, products, variants, bulk, putObjects };
 }

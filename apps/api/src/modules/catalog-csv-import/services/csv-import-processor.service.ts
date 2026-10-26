@@ -6,6 +6,7 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { EnvService } from '../../../config/env.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { CsvParserService, type CoercedVariantRow } from './csv-parser.service';
+import { ImageQueue } from '../../catalog-image/queue/image.queue';
 import type { CsvTargetField } from '../csv-fields';
 import { errorReportKeyFor } from '../csv-import-key';
 
@@ -36,6 +37,7 @@ export class CsvImportProcessorService {
     private readonly env: EnvService,
     private readonly audit: AuditLogService,
     private readonly parser: CsvParserService,
+    private readonly images: ImageQueue,
   ) {}
 
   /**
@@ -122,6 +124,10 @@ export class CsvImportProcessorService {
         counters.productsUpdated += outcome.productUpdated ? 1 : 0;
         counters.variantsCreated += outcome.variantCreated ? 1 : 0;
         counters.variantsUpdated += outcome.variantUpdated ? 1 : 0;
+        // The picture, once the row is safely committed.
+        if (row.imageUrl !== undefined && outcome.variantId !== null) {
+          await this.queueImage(sellerId, outcome.variantId, row.imageUrl);
+        }
         if (
           !outcome.productCreated &&
           !outcome.productUpdated &&
@@ -184,6 +190,8 @@ export class CsvImportProcessorService {
     productUpdated: boolean;
     variantCreated: boolean;
     variantUpdated: boolean;
+    /** The variant this row landed on, so its picture can be fetched. */
+    variantId: string | null;
   }> {
     return this.prisma.client.$transaction(async (tx) => {
       const existingVariant = await tx.productVariant.findFirst({
@@ -195,6 +203,7 @@ export class CsvImportProcessorService {
       let productUpdated = false;
       let variantCreated = false;
       let variantUpdated = false;
+      let newVariantId: string | null = null;
       let productId: string;
 
       if (existingVariant) {
@@ -225,7 +234,8 @@ export class CsvImportProcessorService {
           row,
         );
       } else {
-        await tx.productVariant.create({
+        const created = await tx.productVariant.create({
+          select: { id: true },
           data: {
             productId,
             sellerId,
@@ -237,13 +247,47 @@ export class CsvImportProcessorService {
             heightCm: num(row.heightCm) ?? null,
             declaredValueInr: num(row.declaredValueInr) ?? null,
             barcode: row.barcode ?? null,
+            // Stated by the file, or composed from the attributes the
+            // row already carries. Without it a CSV-created variant is
+            // unlabelled, and four SKUs of one product read as four
+            // identical rows wherever a variant is listed.
+            variantLabel: row.variantLabel ?? null,
+            lowStockThreshold: row.lowStockThreshold ?? null,
+            gstRate: num(row.gstRate) ?? null,
           },
         });
         variantCreated = true;
+        newVariantId = created.id;
       }
 
-      return { productCreated, productUpdated, variantCreated, variantUpdated };
+      return {
+        productCreated,
+        productUpdated,
+        variantCreated,
+        variantUpdated,
+        variantId: existingVariant?.id ?? newVariantId,
+      };
     });
+  }
+
+  /**
+   * Hand a row's picture to the image worker.
+   *
+   * AFTER the transaction, and never inside it: fetching somebody
+   * else's URL is slow, fails often, and must not hold a database
+   * transaction open or roll back a product that imported perfectly.
+   * The enqueue is best-effort for the same reason — a queue that will
+   * not take the job costs the picture, not the catalogue.
+   */
+  private async queueImage(sellerId: string, variantId: string, url: string): Promise<void> {
+    try {
+      await this.images.enqueueFetchImage({ sellerId, variantId, url });
+    } catch (e) {
+      this.logger.warn(
+        { variantId, err: e instanceof Error ? e.message : String(e) },
+        'could not queue the picture named in this row — the product imported',
+      );
+    }
   }
 
   private async createProduct(
@@ -256,6 +300,9 @@ export class CsvImportProcessorService {
         sellerId,
         name: row.productName,
         externalRef: row.productExternalRef ?? null,
+        // What the call centre reads out when a customer asks what the
+        // thing is. The manual form has always had it.
+        description: row.description ?? null,
         defaultWeightGrams: row.weightGrams ?? null,
         defaultLengthCm: num(row.lengthCm) ?? null,
         defaultWidthCm: num(row.widthCm) ?? null,

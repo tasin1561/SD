@@ -381,7 +381,9 @@ export class OrderCsvImportProcessorService {
       paymentMode: PaymentMode.COD,
       items,
     } as CreateStoreOrderDto;
-    if (row.customerEmail !== undefined) dto.recipientEmail = row.customerEmail;
+    // Delivery Notes — what the call centre reads out. The form has
+    // always had this and the CSV never did (owner, 2026-10-26).
+    if (row.notes !== undefined) dto.notes = row.notes;
     if (row.landmark !== undefined) dto.recipientLandmark = row.landmark;
     if (row.city !== undefined) dto.recipientCity = row.city;
     if (row.state !== undefined) dto.recipientStateProvince = row.state;
@@ -463,7 +465,9 @@ export class OrderCsvImportProcessorService {
       recipientPostalCode: row.pinCode,
       items,
     };
-    if (row.customerEmail !== undefined) dto.recipientEmail = row.customerEmail;
+    // Delivery Notes — what the call centre reads out. The form has
+    // always had this and the CSV never did (owner, 2026-10-26).
+    if (row.notes !== undefined) dto.sellerNotes = row.notes;
     if (row.landmark !== undefined) dto.recipientLandmark = row.landmark;
     // A row that omits city/state leaves the stored value alone, exactly
     // as the seller's own CSV patch does — `?? null` would blank a
@@ -542,7 +546,16 @@ export class OrderCsvImportProcessorService {
       paymentMode: isCod ? PaymentMode.COD : PaymentMode.PREPAID,
       items,
     } as CreateOrderDto;
-    if (row.customerEmail !== undefined) dto.recipientEmail = row.customerEmail;
+    // Delivery Notes — what the call centre reads out. The form has
+    // always had this and the CSV never did (owner, 2026-10-26).
+    if (row.notes !== undefined) dto.sellerNotes = row.notes;
+    // WHICH SHOPFRONT (owner, 2026-10-26). Omitted, the server falls
+    // back to the seller's default store, which is what every bulk row
+    // did before this column existed — so a file without it behaves
+    // exactly as it always has.
+    if (row.storeName !== undefined) {
+      dto.storeId = await this.resolveStoreId(sellerId, row.storeName);
+    }
     if (row.landmark !== undefined) dto.recipientLandmark = row.landmark;
     // Optional since the seller form stopped asking, but a CSV that DOES
     // carry them should still store them — and a supplied state is still
@@ -568,6 +581,16 @@ export class OrderCsvImportProcessorService {
     if (row.discountInr !== undefined && (await this.uat.isShown('orderDiscount'))) {
       dto.discountInr = row.discountInr;
     }
+    // The other two UAT fields, same gate, same reason: a file must not
+    // do what the form will not. Both are MAPPED whatever the switch
+    // says — so turning the field on is one settings edit and not a
+    // deploy — and applied only while it is on.
+    if (row.deliveryFee !== undefined && (await this.uat.isShown('orderDeliveryFee'))) {
+      dto.deliveryFeeInr = row.deliveryFee;
+    }
+    if (row.declaredValue !== undefined && (await this.uat.isShown('orderDeclaredValue'))) {
+      dto.declaredValueInr = row.declaredValue;
+    }
     // A stated PACKED weight beats our Σ(catalogue unit weight × qty)
     // default: it is the parcel that will actually be handed over.
     if (row.totalWeightGrams !== undefined) dto.totalWeightGrams = row.totalWeightGrams;
@@ -592,7 +615,7 @@ export class OrderCsvImportProcessorService {
       addressLine2: row.addressLine2,
       pinCode: row.pinCode,
     };
-    if (row.customerEmail !== undefined) patch.customerEmail = row.customerEmail;
+    if (row.notes !== undefined) patch.notes = row.notes;
     if (row.landmark !== undefined) patch.landmark = row.landmark;
     if (row.city !== undefined) patch.city = row.city;
     if (row.state !== undefined) patch.state = row.state;
@@ -607,6 +630,36 @@ export class OrderCsvImportProcessorService {
     }
     if (row.totalWeightGrams !== undefined) patch.totalWeightGrams = row.totalWeightGrams;
     return patch;
+  }
+
+  /**
+   * A shopfront named in a CSV, resolved to its id.
+   *
+   * BY NAME because a seller knows what their shop is called and not
+   * its uuid, and a spreadsheet is written by a person. Matched
+   * case-insensitively and trimmed, scoped to this seller's own stores
+   * — a name is not unique across the estate and must never resolve to
+   * somebody else's shopfront.
+   *
+   * An unknown name REFUSES THE ROW by name rather than falling back to
+   * the default store. Quietly filing an order under the wrong brand is
+   * the failure this column exists to prevent, and it would be
+   * invisible until somebody noticed their orders in the wrong place.
+   */
+  private async resolveStoreId(sellerId: string, name: string): Promise<string> {
+    const wanted = name.trim();
+    const stores = await this.prisma.client.sellerStore.findMany({
+      where: { sellerId, deletedAt: null },
+      select: { id: true, name: true },
+    });
+    const hit = stores.find((s) => s.name.trim().toLowerCase() === wanted.toLowerCase());
+    if (hit !== undefined) return hit.id;
+    throw new BadRequestException({
+      code: 'UNKNOWN_STORE_NAME',
+      message:
+        `No shopfront of yours is called "${wanted}". ` +
+        `You have: ${stores.map((s) => s.name).join(', ') || 'none'}.`,
+    });
   }
 
   private async writeErrorReport(

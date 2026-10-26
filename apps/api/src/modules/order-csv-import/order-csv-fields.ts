@@ -27,7 +27,8 @@ export type OrderCsvField =
   | 'quantity'
   | 'customerName'
   | 'customerPhone'
-  | 'customerEmail'
+  | 'notes'
+  | 'storeName'
   | 'addressLine1'
   | 'addressLine2'
   | 'landmark'
@@ -57,6 +58,8 @@ export type OrderCsvField =
     already taken), `discountValue`/`discountType` their discount pair.
   */
   | 'advanceAmount'
+  | 'deliveryFee'
+  | 'declaredValue'
   | 'discountValue'
   | 'discountType'
   /*
@@ -99,7 +102,25 @@ export const ORDER_CSV_ALIAS_MAP: Record<OrderCsvField, string[]> = {
   quantity: ['quantity', 'qty', 'units', 'quantity ordered'],
   customerName: ['customer name', 'recipient name', 'name'],
   customerPhone: ['customer phone', 'recipient phone', 'phone', 'mobile'],
-  customerEmail: ['customer email', 'recipient email', 'email'],
+  // What the call centre reads out on the confirmation call. The form
+  // has always asked for it and the CSV never could, so a seller who
+  // uploads in bulk simply had no way to say "ring before 6" (owner,
+  // 2026-10-26).
+  notes: [
+    'delivery notes',
+    'notes',
+    'note',
+    'notes for the call centre',
+    'notes for the call agent',
+    'remarks',
+    'special instructions',
+    'instructions',
+  ],
+  // WHICH SHOPFRONT the sale came from. Without it every bulk row lands
+  // in the seller's default store — right for one brand, wrong for a
+  // seller running several, who had no way to say so at all. Matched by
+  // NAME because a seller knows their shop's name and not its uuid.
+  storeName: ['store', 'store name', 'shop', 'shop name', 'channel', 'brand'],
   addressLine1: [
     'address line1',
     'address line 1',
@@ -144,6 +165,13 @@ export const ORDER_CSV_ALIAS_MAP: Record<OrderCsvField, string[]> = {
   ],
   paymentMode: ['payment mode', 'payment type', 'payment method'],
   advanceAmount: ['advance amount', 'amount paid', 'advance', 'paid amount'],
+  // The three UAT-controlled fields. They are mapped here ALWAYS so a
+  // file carrying them can be understood, and applied only while
+  // `uat.order_*_field` says the field is shown — the same switch the
+  // forms read, so a spreadsheet can never do what the form will not
+  // (owner, 2026-10-26).
+  deliveryFee: ['delivery fee', 'delivery charge', 'shipping fee', 'shipping charge'],
+  declaredValue: ['declared value', 'customs value', 'invoice value'],
   discountValue: ['discount value', 'discount', 'discount amount'],
   discountType: ['discount type'],
   totalWeightGrams: [
@@ -182,6 +210,16 @@ export const ORDER_CSV_ALIAS_MAP: Record<OrderCsvField, string[]> = {
  * shown to the seller verbatim.
  */
 export const ORDER_CSV_IGNORED_HEADERS: Record<string, string> = {
+  // The order form never asks for an email and the CSV used to accept
+  // one, so the two routes disagreed about what an order carries
+  // (owner, 2026-10-26: remove it). IGNORED rather than deleted: an
+  // alias removed outright reports as an UNKNOWN column with a guessed
+  // suggestion beside it, which invites a seller to map their email
+  // column onto something it is not. A file that still has the column
+  // keeps uploading; the column is simply not used.
+  'customer email': 'we do not email the customer — the call centre rings them',
+  'recipient email': 'we do not email the customer — the call centre rings them',
+  email: 'we do not email the customer — the call centre rings them',
   'pickup location name': 'we choose the warehouse and the pickup location ourselves, per parcel',
   'transport mode': 'we choose the courier and the service level, per your courier settings',
   'item sku name':

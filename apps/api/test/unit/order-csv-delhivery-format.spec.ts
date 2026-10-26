@@ -135,7 +135,6 @@ describe("Delhivery's bulk template maps onto our fields", () => {
       totalWeightGrams: 'Packaged Product Weight (gm)',
       discountType: 'Discount Type',
       discountValue: 'Discount Value',
-      customerEmail: 'Customer Email',
     });
     expect(d.missingRequired).toEqual([]);
   });
@@ -144,6 +143,12 @@ describe("Delhivery's bulk template maps onto our fields", () => {
     const d = svc.detectMapping(HEADERS);
     const ignored = d.ignoredHeaders.map((i) => i.header);
     expect(ignored).toEqual(expect.arrayContaining(['*Pickup Location Name', 'Seller Name']));
+    // The order form never asks for an email, so the CSV no longer
+    // applies one either (owner, 2026-10-26). IGNORED rather than
+    // unmapped: a file that still carries the column keeps uploading
+    // and is told the column is not used, instead of being offered a
+    // guessed suggestion for it.
+    expect(ignored).toEqual(expect.arrayContaining(['Customer Email']));
     for (const entry of d.ignoredHeaders) expect(entry.reason.length).toBeGreaterThan(10);
     // ...and NONE of them is left as an unknown column with a guess
     // beside it — "Pickup Location Name (did you mean customerName?)"

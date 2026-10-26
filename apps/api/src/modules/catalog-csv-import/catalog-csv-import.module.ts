@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SellerJwtGuard } from '../../common/guards/seller-jwt.guard';
 import { CatalogVariantModule } from '../catalog-variant/catalog-variant.module';
+import { CatalogImageModule } from '../catalog-image/catalog-image.module';
 import { SellerCsvImportController } from './seller-csv-import.controller';
 import { SellerCsvMappingController } from './seller-csv-mapping.controller';
 import { CsvParserService } from './services/csv-parser.service';
@@ -17,7 +18,9 @@ import { CsvImportWorker } from './queue/csv-import.worker';
  * preview/process (17).
  */
 @Module({
-  imports: [CatalogVariantModule],
+  // The picture named by a CSV row is fetched by the image worker on
+  // its own queue — the import enqueues and moves on.
+  imports: [CatalogVariantModule, CatalogImageModule],
   controllers: [SellerCsvImportController, SellerCsvMappingController],
   providers: [
     CsvParserService,
