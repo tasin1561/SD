@@ -60,6 +60,35 @@ const mono = localFont({
   ],
 });
 
+/**
+ * Bangla: Noto Sans Bengali (OFL, licence beside the file), ONE variable woff2
+ * (wght 400-700, 69.9 KB) subset to Bengali + danda, ZWJ/ZWNJ, ₹ and the dotted
+ * circle. Same shape as track's Devanagari face: the @font-face is declared
+ * everywhere, but the family is only NAMED in the font stack under
+ * `html[lang='bn']` (globals.css), and `unicode-range` is Bengali-only, so an
+ * English visitor never requests the file. Not preloaded for the same reason.
+ * It is listed BEFORE Plus Jakarta there so ZWJ/ZWNJ stay with the Bengali run
+ * (Jakarta's range also covers U+200C-D, which would split a conjunct).
+ */
+const bengali = localFont({
+  src: [
+    {
+      path: './fonts/noto-sans-bengali-400-700.woff2',
+      weight: '400 700',
+      style: 'normal',
+    },
+  ],
+  variable: '--font-bn-face',
+  display: 'swap',
+  preload: false,
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value: 'U+0964-0965, U+0980-09FF, U+200C-200D, U+20B9, U+25CC',
+    },
+  ],
+});
+
 export async function generateMetadata(): Promise<Metadata> {
   const { t } = await getT();
   return {
@@ -101,7 +130,7 @@ export default async function RootLayout({
       dir={localeDir(locale)}
       suppressHydrationWarning
       data-theme={theme}
-      className={`${sans.variable} ${mono.variable}`}
+      className={`${sans.variable} ${mono.variable}${locale === 'bn' ? ` ${bengali.variable}` : ''}`}
     >
       <head>
         {/* `suppressHydrationWarning` on the SCRIPT, not just on
