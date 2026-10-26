@@ -255,23 +255,70 @@ export function NewOrderForm(): ReactElement {
   }
 
   /**
-   * Apply one of their suggested values.
+   * Apply one of their suggested values, then ask again.
    *
-   * `pincode` is the only field this console holds on its own; every
-   * other suggestion names a part of the address that lives inside
-   * line 1 here, so it is appended rather than replacing anything the
-   * operator typed. TODO(verify): their live responses have carried an
-   * empty `suggestions` array so far, so the shape of a real one is
-   * documented but unseen.
+   * ── WHAT ARRIVES HERE, AND WHAT DOES NOT ─────────────────────────
+   * Verified live on 2026-10-26, which is where the shape below comes
+   * from rather than from a guess:
+   *
+   *   - `post_office` with SEVERAL candidates — the pincode has more
+   *     than one office and the address names none clearly (one real
+   *     pincode has 26, of which they offer 10). Their first candidate
+   *     is their best guess, NOT an answer, and nothing here picks it:
+   *     the operator chooses, or types an office that was never
+   *     offered.
+   *   - `police_station` with one candidate — the customer's spelling
+   *     is kept and the known one offered.
+   *
+   * A `district`, `city` or `state` suggestion never reaches this
+   * function: the panel renders those as "confirm with the customer"
+   * text, because that suggestion means the address and the pincode
+   * DISAGREE and neither we nor they can know which is wrong.
+   * Applying it would quietly make a wrong address self-consistent.
+   *
+   * ── WHY IT RE-CHECKS ─────────────────────────────────────────────
+   * The verdict stored against this order has to be the verdict on the
+   * text that was saved. Editing the address and leaving the old
+   * answer on screen would store a judgement about words nobody kept.
+   * The re-check goes through the same draft, so it takes the
+   * corrections path and is not billed again.
    */
   function applySuggestion(field: string, value: string): void {
+    let nextLine1 = form.recipientAddressLine1;
     if (field === 'pincode') {
       set('recipientPostalCode', value.replace(/\D/g, '').slice(0, 6));
-      return;
+    } else {
+      const line1 = form.recipientAddressLine1;
+      if (line1.toLowerCase().includes(value.toLowerCase())) return;
+      nextLine1 = line1.trim() === '' ? value : `${line1.trim()}, ${value}`;
+      set('recipientAddressLine1', nextLine1);
     }
-    const line1 = form.recipientAddressLine1;
-    if (line1.toLowerCase().includes(value.toLowerCase())) return;
-    set('recipientAddressLine1', line1.trim() === '' ? value : `${line1.trim()}, ${value}`);
+
+    // Re-check against what the form will hold AFTER this edit. React
+    // state has not settled yet, so the text is composed here rather
+    // than read back — reading `form` would re-send the address the
+    // operator just changed, which is the exact failure the
+    // corrections path exists to avoid.
+    const nextAddress = [nextLine1.trim(), form.recipientAddressLine2.trim()]
+      .filter((part) => part !== '')
+      .join(', ');
+    const nextPincode =
+      field === 'pincode' ? value.replace(/\D/g, '').slice(0, 6) : form.recipientPostalCode.trim();
+    if (referenceId === '' || nextAddress.length < 3 || !/^[1-9]\d{5}$/.test(nextPincode)) return;
+    addressCheck.mutate(
+      {
+        referenceId,
+        address: nextAddress,
+        pincode: nextPincode,
+        paymentType: form.paymentMode === 'COD' ? 'cod' : 'prepaid',
+      },
+      {
+        onSuccess: (r) => {
+          setCheckResult(r);
+          setConfirmedWithCustomer(false);
+        },
+      },
+    );
   }
   // Pre-select the default once the list arrives, and only while the
   // field is untouched: a seller who has already picked a shopfront
@@ -923,6 +970,9 @@ export function NewOrderForm(): ReactElement {
               canCheck={canCheckAddress}
               onCheck={runAddressCheck}
               onApplySuggestion={applySuggestion}
+              // Already fetched for the district/state line above and
+              // cached per pincode, so the fuller list costs nothing.
+              allPostOffices={pincodeInfo.data?.post_offices}
               confirmedWithCustomer={confirmedWithCustomer}
               onConfirmedWithCustomerChange={setConfirmedWithCustomer}
             />
