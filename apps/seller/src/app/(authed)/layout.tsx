@@ -6,6 +6,7 @@ import { AuthProvider } from '@skydrop/auth/client';
 import { MoneyDisplayProvider } from '@skydrop/ui/components';
 import type { SellerMe } from '@skydrop/api-client';
 import { QueryProvider } from '@/components/query-provider';
+import { UatFieldsBoundary } from '@/components/uat-fields-boundary';
 import { apiOrigin } from '@/lib/api-origin';
 import { AuthedShell } from './_components/authed-shell';
 import { RoleBoundary } from './_components/role-boundary';
@@ -63,8 +64,13 @@ export default async function AuthedLayout({
 
   return (
     <QueryProvider>
-      <AuthProvider<SellerMe> identityKind="seller" initialIdentity={identity}>
-        {/* Every figure in the app is rendered in the money this seller
+      {/* UAT field switches, fetched once per session. Inside
+          QueryProvider and outside everything that renders a form, so a
+          form never asks for itself. Each console reads its OWN origin
+          (FE-3). */}
+      <UatFieldsBoundary>
+        <AuthProvider<SellerMe> identityKind="seller" initialIdentity={identity}>
+          {/* Every figure in the app is rendered in the money this seller
             thinks in. INR stays canonical everywhere it is STORED and
             everywhere it is TYPED — this turns the display over, and
             only the display. A null rate keeps rupees, because a wrong
@@ -72,25 +78,26 @@ export default async function AuthedLayout({
 
             Mounted here, from the SSR-resolved identity, so the app
             never paints rupees and then flips them to taka. */}
-        <MoneyDisplayProvider
-          value={{
-            currency: identity.displayCurrency === 'BDT' ? 'BDT' : 'INR',
-            rate: identity.displayFxRate,
-            // And the OTHER currency beside every figure. A BD seller
-            // reading rupees still prices in taka, and doing that sum in
-            // their head on every screen is the tax this removes.
-            equivalentRate: identity.equivalentFxRate,
-          }}
-        >
-          <AuthedShell identity={identity}>
-            {/* Cosmetic permission gating (FE-2) — the API refuses the
+          <MoneyDisplayProvider
+            value={{
+              currency: identity.displayCurrency === 'BDT' ? 'BDT' : 'INR',
+              rate: identity.displayFxRate,
+              // And the OTHER currency beside every figure. A BD seller
+              // reading rupees still prices in taka, and doing that sum in
+              // their head on every screen is the tax this removes.
+              equivalentRate: identity.equivalentFxRate,
+            }}
+          >
+            <AuthedShell identity={identity}>
+              {/* Cosmetic permission gating (FE-2) — the API refuses the
               requests regardless; this stops somebody being shown a
               page they cannot use. Wraps the whole tree so no page can
               be forgotten. */}
-            <RoleBoundary permissions={identity.permissions}>{children}</RoleBoundary>
-          </AuthedShell>
-        </MoneyDisplayProvider>
-      </AuthProvider>
+              <RoleBoundary permissions={identity.permissions}>{children}</RoleBoundary>
+            </AuthedShell>
+          </MoneyDisplayProvider>
+        </AuthProvider>
+      </UatFieldsBoundary>
     </QueryProvider>
   );
 }

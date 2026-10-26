@@ -129,6 +129,14 @@ describe('seller permission surface', () => {
         // no existing role, so every ops / finance / viewer login in
         // production would have had a bell that rendered and refused.
         'seller-notification.controller.ts',
+        // Which order-form FIELDS to draw. Opened as self-service for
+        // the same reason the bell above was: a permission is a thing
+        // somebody has to GRANT, and a key added today reaches no
+        // existing role — so every client whose role predates it would
+        // have had a form that could not decide what to render. It
+        // reveals no data: the answer is the same for everyone and says
+        // only whether a field is on a screen.
+        'seller-uat-fields.controller.ts',
       ].sort(),
     );
   });

@@ -5,6 +5,7 @@ import { resolveStoreSsrIdentity } from '@skydrop/auth/server';
 import { AuthProvider } from '@skydrop/auth/client';
 import type { StoreMe } from '@skydrop/api-client';
 import { QueryProvider } from '@/components/query-provider';
+import { UatFieldsBoundary } from '@/components/uat-fields-boundary';
 import { apiOrigin } from '@/lib/api-origin';
 import { AuthedShell } from './_components/authed-shell';
 import { RoleBoundary } from './_components/role-boundary';
@@ -41,12 +42,18 @@ export default async function AuthedLayout({
 
   return (
     <QueryProvider>
-      <AuthProvider<StoreMe> identityKind="store" initialIdentity={identity}>
-        <AuthedShell identity={identity}>
-          {/* Cosmetic (FE-2): the API refuses regardless of what renders. */}
-          <RoleBoundary permissions={identity.permissions}>{children}</RoleBoundary>
-        </AuthedShell>
-      </AuthProvider>
+      {/* UAT field switches, fetched once per session. Inside
+          QueryProvider and outside everything that renders a form, so a
+          form never asks for itself. Each console reads its OWN origin
+          (FE-3). */}
+      <UatFieldsBoundary>
+        <AuthProvider<StoreMe> identityKind="store" initialIdentity={identity}>
+          <AuthedShell identity={identity}>
+            {/* Cosmetic (FE-2): the API refuses regardless of what renders. */}
+            <RoleBoundary permissions={identity.permissions}>{children}</RoleBoundary>
+          </AuthedShell>
+        </AuthProvider>
+      </UatFieldsBoundary>
     </QueryProvider>
   );
 }

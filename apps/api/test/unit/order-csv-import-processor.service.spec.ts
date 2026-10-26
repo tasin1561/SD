@@ -71,6 +71,10 @@ function makeService(opts: {
     { client } as unknown as PrismaService,
     spaces as never,
     env,
+    // UAT field switches. Discount SHOWN here so the existing
+    // expectations about `discountInr` keep asserting what they always
+    // did; the gate itself is covered by uat-fields.service.spec.ts.
+    { isShown: jest.fn(async () => true) } as never,
     audit as never,
     parser,
     catalog as never,

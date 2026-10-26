@@ -1919,6 +1919,42 @@ const systemSettings: SystemSettingSeed[] = [
       "What a bad address verdict DOES. 'SHADOW' (default) — the page shows the score, the issues and the suggestions, and saving behaves exactly as it always has: nothing is blocked, nothing is refused, and the check is advice. 'ENFORCE' — a 'reject' verdict needs an ops override with a reason, and 'confirm_with_customer' needs the operator to tick that they confirmed it; an 'approve' saves normally. Ops can always override, and who overrode and why is stored on the check. Leave this on shadow until the scores have been watched against real deliveries for long enough to trust them.",
     sellerOverridable: false,
   },
+  // ── UAT Settings (2026-10-26) ──────────────────────────────────────
+  // Fields the client asked to have taken off a form during UAT. HIDDEN,
+  // never deleted: UAT opinions change weekly, and a field deleted in
+  // October is one somebody rebuilds in November from memory, including
+  // the money arithmetic hanging off it. One key per field so they can
+  // be turned back on one at a time, which is how they went off.
+  {
+    key: 'uat.order_delivery_fee_field',
+    category: 'uat',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'UAT — show the delivery fee field',
+    description:
+      "Whether the order forms show 'Delivery fee', the charge a client adds to what their customer pays at the door. OFF (default) — the field is not shown and every order is placed without one, which is the same 0 the system has defaulted to since 26 October; the bulk CSV ignores a delivery fee column too. ON — the field comes back on all three consoles, on the edit form, and as a CSV column. Nothing about past orders changes either way.",
+    sellerOverridable: false,
+  },
+  {
+    key: 'uat.order_discount_field',
+    category: 'uat',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'UAT — show the discount field',
+    description:
+      "Whether the order forms show 'Discount'. OFF (default) — not shown, and the bulk CSV ignores its discount columns. ON — the field returns everywhere, including the CSV's 'Discount Value' and 'Discount Type' (which can be a percentage). NOTE: a discount can still be recorded while this is OFF — typing a collectable amount that differs from the goods total moves the difference into the discount so the figures still add up. Turning this on shows that figure rather than creating it.",
+    sellerOverridable: false,
+  },
+  {
+    key: 'uat.order_declared_value_field',
+    category: 'uat',
+    valueType: SettingValueType.BOOLEAN,
+    valueBoolean: false,
+    displayName: 'UAT — show the declared value field',
+    description:
+      "Whether the order forms show 'Declared value' — the parcel's worth for CUSTOMS, not what is collected, and what triggers an e-waybill above ₹50,000. OFF (default) — not shown, and the value is worked out from the catalogue instead (each line's declared value × quantity), which is what the field's own placeholder always promised. Turn it ON if a product ever reaches the courier declaring ₹0, because with the field hidden nobody can see or correct that.",
+    sellerOverridable: false,
+  },
   {
     key: 'address_check.base_url',
     category: 'ops',

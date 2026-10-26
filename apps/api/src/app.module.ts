@@ -86,6 +86,7 @@ import { EarlyReservationDecisionModule } from './modules/early-reservation-deci
 import { SellerWebhookModule } from './modules/seller-webhook/seller-webhook.module';
 import { SellerWebhookDeliveryModule } from './modules/seller-webhook-delivery/seller-webhook-delivery.module';
 import { AddressCheckModule } from './modules/address-check/address-check.module';
+import { UatSettingsModule } from './modules/uat-settings/uat-settings.module';
 import { SellerWalletModule } from './modules/seller-wallet/seller-wallet.module';
 import { InboundFreightModule } from './modules/inbound-freight/inbound-freight.module';
 import { SellerWalletAccrualModule } from './modules/seller-wallet-accrual/seller-wallet-accrual.module';
@@ -243,9 +244,12 @@ import { WarehousePrintingModule } from './modules/warehouse-printing/warehouse-
     EarlyReservationDecisionModule,
     SellerWebhookModule,
     SellerWebhookDeliveryModule,
-    // Order page v2 — ships inert: no controllers yet, and the two
-    // flags that gate it default to OFF/SHADOW.
+    // Order page v2 — ships inert: the two flags that gate it default
+    // to OFF/SHADOW.
     AddressCheckModule,
+    // UAT Settings — @Global, because the CSV importer asks the same
+    // question the order forms do.
+    UatSettingsModule,
     SellerWalletModule,
     InboundFreightModule,
     SellerWalletAccrualModule,

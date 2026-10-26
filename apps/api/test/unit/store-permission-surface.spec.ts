@@ -115,7 +115,18 @@ describe('store permission surface (RS-2)', () => {
     const files = [
       ...new Set(HANDLERS.filter((h) => h.permissions === 'self-service').map((h) => h.file)),
     ];
-    expect(files.sort()).toEqual(['store-auth.controller.ts', 'store-notification.controller.ts']);
+    expect(files.sort()).toEqual([
+      'store-auth.controller.ts',
+      'store-notification.controller.ts',
+      // Which order-form FIELDS to draw. Self-service for the same
+      // reason the bell above is: a permission is a thing somebody has
+      // to GRANT, and a key added today reaches no existing store role
+      // — so every store whose role predates it would have had a form
+      // that could not decide what to render. It reveals no data: the
+      // answer is identical for everyone and says only whether a field
+      // is on a screen.
+      'store-uat-fields.controller.ts',
+    ]);
   });
 
   it('every store permission is held by at least one endpoint', () => {

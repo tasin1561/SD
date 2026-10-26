@@ -38,7 +38,8 @@ export type SettingGroup =
   | 'Alerts'
   | 'Member stores'
   | 'Live chat'
-  | 'Capacity';
+  | 'Capacity'
+  | 'UAT';
 
 /** Page order of the groups. */
 export const SETTING_GROUP_ORDER: readonly SettingGroup[] = [
@@ -61,6 +62,7 @@ export const SETTING_GROUP_ORDER: readonly SettingGroup[] = [
   'Member stores',
   'Live chat',
   'Capacity',
+  'UAT',
 ];
 
 export interface SettingGuide {
@@ -830,6 +832,58 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   },
 
   // ── Orders ──────────────────────────────────────────────────────────
+  // ── UAT ─────────────────────────────────────────────────────────────
+  'uat.order_delivery_fee_field': {
+    name: 'Show the delivery fee field',
+    group: 'UAT',
+    what: "Whether the order forms show 'Delivery fee' — the charge a client adds to what their customer pays at the door. Turned off for UAT; the field and everything behind it still exist, so turning it back on costs nothing and loses nothing.",
+    example:
+      'Off, an order is placed with no delivery fee and the bulk CSV ignores a delivery fee column. On, the field returns on all three consoles, on the edit form, and as a CSV column. Past orders are untouched either way.',
+    values: onOff(
+      [
+        'The field is back on all three consoles and on the edit form, and the bulk upload accepts a delivery fee column again.',
+        'A client can add ₹60 to what the customer pays at the door.',
+      ],
+      [
+        'The field is not shown anywhere and every order is placed without one — the same 0 the system has defaulted to since 26 October. A delivery fee column in a CSV is ignored.',
+        'Nothing changes about orders already placed; they keep whatever fee they were given.',
+      ],
+    ),
+  },
+  'uat.order_discount_field': {
+    name: 'Show the discount field',
+    group: 'UAT',
+    what: "Whether the order forms show 'Discount'. Off for UAT, which also makes the bulk upload ignore its 'Discount Value' and 'Discount Type' columns, so a spreadsheet cannot do what the form will not.",
+    example:
+      'A discount can still end up on an order while this is off: typing a collectable amount different from the goods total moves the difference into the discount so the figures still add up. Turning this on shows that figure rather than creating it.',
+    values: onOff(
+      [
+        "The field returns everywhere, and the bulk upload applies 'Discount Value' and 'Discount Type' again — including percentage discounts, which the form itself has never offered.",
+        'A ₹100 discount typed on the form is recorded as one.',
+      ],
+      [
+        'The field is not shown and the CSV ignores its discount columns, so a spreadsheet cannot do what the form will not.',
+        'A discount can still reach an order: typing a collectable that differs from the goods total moves the difference into it so the figures add up. This switch shows that figure; it does not create it.',
+      ],
+    ),
+  },
+  'uat.order_declared_value_field': {
+    name: 'Show the declared value field',
+    group: 'UAT',
+    what: "Whether the order forms show 'Declared value' — what the parcel is worth for CUSTOMS, not what is collected, and what makes an e-waybill necessary above ₹50,000. Off for UAT; the figure is worked out from the catalogue instead, which is what that field's own placeholder always promised.",
+    example:
+      'Turn it on if a parcel ever reaches the courier declaring ₹0 — that happens when a product has no declared value of its own and none on its product either, and with the field hidden nobody can see it, let alone correct it.',
+    values: onOff(
+      [
+        'The field returns, and whoever is placing the order can see and correct the customs figure before it goes to the courier.',
+        'A parcel of unpriced samples can be declared at ₹500 instead of ₹0.',
+      ],
+      [
+        "The field is hidden and the figure is worked out from the catalogue — each line's declared value times its quantity — which is what the field's own placeholder always promised.",
+        'All three live products carry a declared value today, so nothing reaches customs at ₹0. Turn this on if that stops being true.',
+      ],
+    ),
+  },
   'orders.page_v2_audience': {
     name: 'New order page — who sees it',
     group: 'Orders',
