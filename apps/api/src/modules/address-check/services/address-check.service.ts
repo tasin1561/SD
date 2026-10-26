@@ -147,7 +147,7 @@ export class AddressCheckService {
       await this.persist(actor, input.referenceId, judgement);
       return this.view(input.referenceId, judgement, validationId !== null);
     } catch (e) {
-      await this.persistUnavailable(actor, input.referenceId, e);
+      await this.persistUnavailable(actor, input.referenceId, e, input);
       return this.unavailableView(input.referenceId);
     }
   }
@@ -255,12 +255,36 @@ export class AddressCheckService {
     actor: CheckActor,
     referenceId: string,
     err: unknown,
+    asked?: CheckAddressInput,
   ): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     const retryable = isSolustationError(err) ? err.retryable : false;
     const data = {
       status: 'unavailable',
       lastError: message.slice(0, 1_000),
+      /*
+        The request, kept so a retry can repeat it VERBATIM.
+
+        Their response echoes the reference and not the address, so the
+        only recoverable copy is the one we store. It cannot be
+        reconstructed from the order either: an order saved with an
+        unavailable check may since have been edited, and re-checking
+        the edited text would store a verdict about words the customer
+        was never quoted.
+      */
+      ...(asked === undefined
+        ? {}
+        : {
+            result: {
+              _asked: {
+                referenceId: asked.referenceId,
+                address: asked.address,
+                pincode: asked.pincode,
+                ...(asked.landmark === undefined ? {} : { landmark: asked.landmark }),
+                paymentType: asked.paymentType,
+              },
+            } as unknown as Prisma.InputJsonValue,
+          }),
       lastRequestId: isSolustationError(err) ? (err.requestId ?? null) : null,
       // Only a failure worth asking again about gets a retry time. A
       // 422 is our own bug and a 401 is the key — both would retry
