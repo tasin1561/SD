@@ -5,6 +5,11 @@ import { StoreAddressCheckController } from './controllers/store-address-check.c
 import { AddressCheckService } from './services/address-check.service';
 import { OrderPageV2GateService } from './services/order-page-v2-gate.service';
 import { SolustationHttpService } from './services/solustation-http.service';
+import { AddressCheckQueue } from './queue/address-check.queue';
+import { AddressCheckWorker } from './queue/address-check.worker';
+import { AddressCheckRetryService } from './services/address-check-retry.service';
+import { AddressFeedbackService } from './services/address-feedback.service';
+import { SystemIssuesModule } from '../system-issues/system-issues.module';
 
 /**
  * Order page v2 — address checking against Solustation Address.
@@ -29,9 +34,20 @@ import { SolustationHttpService } from './services/solustation-http.service';
  * reimplement base-URL resolution, auth or failure classification.
  */
 @Module({
-  imports: [AuthCommonModule],
+  imports: [AuthCommonModule, SystemIssuesModule],
   controllers: [SellerAddressCheckController, StoreAddressCheckController],
-  providers: [SolustationHttpService, AddressCheckService, OrderPageV2GateService],
+  providers: [
+    SolustationHttpService,
+    AddressCheckService,
+    OrderPageV2GateService,
+    // The background half: re-asking a check that could not be made,
+    // and telling Solustation what the courier did. Neither has
+    // anybody waiting on it, which is exactly why they are jobs.
+    AddressCheckQueue,
+    AddressCheckRetryService,
+    AddressFeedbackService,
+    AddressCheckWorker,
+  ],
   exports: [SolustationHttpService, AddressCheckService, OrderPageV2GateService],
 })
 export class AddressCheckModule {}
