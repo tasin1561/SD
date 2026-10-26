@@ -263,7 +263,16 @@ export interface BulkOrderPatchInput {
   lines: ReadonlyArray<{ productSku: string; quantity: number; unitPriceInr?: number }>;
   customerName: string;
   customerPhone: string;
+  /**
+   * Kept although the CSV no longer maps an email column (owner,
+   * 2026-10-26). The field is still part of this patch's shape and the
+   * update path below still honours it; nothing SETS it from a file any
+   * more. Removing it would be a change to how an order is updated,
+   * which is not what "take the column off the importer" asked for.
+   */
   customerEmail?: string | null;
+  /** Delivery Notes — read out on the confirmation call. */
+  notes?: string | null;
   addressLine1: string;
   /** The landmark. Required — see ORDER_CSV_REQUIRED_FIELDS. */
   addressLine2: string;
@@ -2027,6 +2036,7 @@ export class OrderService {
         recipientName: true,
         recipientPhoneE164: true,
         recipientEmail: true,
+        sellerNotes: true,
         recipientAddressLine1: true,
         recipientAddressLine2: true,
         recipientLandmark: true,
@@ -2101,6 +2111,7 @@ export class OrderService {
     setIf(order.recipientName, patch.customerName, 'recipientName');
     setIf(order.recipientPhoneE164, patch.customerPhone.trim(), 'recipientPhoneE164');
     setIf(order.recipientEmail, patch.customerEmail ?? null, 'recipientEmail');
+    setIf(order.sellerNotes, patch.notes ?? null, 'sellerNotes');
     setIf(order.recipientAddressLine1, patch.addressLine1, 'recipientAddressLine1');
     setIf(order.recipientAddressLine2, patch.addressLine2 ?? null, 'recipientAddressLine2');
     setIf(order.recipientLandmark, patch.landmark ?? null, 'recipientLandmark');

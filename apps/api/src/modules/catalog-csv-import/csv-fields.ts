@@ -17,7 +17,12 @@ export type CsvTargetField =
   | 'heightCm'
   | 'declaredValueInr'
   | 'barcode'
-  | 'variantAttributes';
+  | 'variantAttributes'
+  | 'description'
+  | 'variantLabel'
+  | 'imageUrl'
+  | 'lowStockThreshold'
+  | 'gstRate';
 
 export const CSV_ALIAS_MAP: Record<CsvTargetField, string[]> = {
   productName: ['product name', 'name', 'title', 'product title'],
@@ -31,6 +36,22 @@ export const CSV_ALIAS_MAP: Record<CsvTargetField, string[]> = {
   declaredValueInr: ['price', 'value', 'declared value', 'price inr'],
   barcode: ['barcode', 'ean', 'upc'],
   variantAttributes: ['attributes', 'variant attributes', 'options'],
+  // What the call centre reads out when a customer asks what the thing
+  // IS. The manual product form has always had it; the CSV never did.
+  description: ['description', 'product description', 'details', 'about'],
+  // The human name for a variant — "Black / Black". Nothing composed it
+  // on import, so every CSV-created variant was UNLABELLED: four SKUs
+  // of one product showed as four identical rows in the picker and on
+  // the picking sheet. Derived from the attributes when the column is
+  // absent, so an existing file gains labels without being edited.
+  variantLabel: ['variant label', 'variant', 'option label', 'variant name'],
+  // One picture per variant, by URL. Production has ZERO product images
+  // today, which is why the picking sheet prints an empty square beside
+  // every line — and the only way to add one was the UI, one variant at
+  // a time.
+  imageUrl: ['image', 'image url', 'photo', 'photo url', 'picture', 'image link'],
+  lowStockThreshold: ['low stock threshold', 'low stock', 'reorder level', 'reorder point'],
+  gstRate: ['gst rate', 'gst', 'gst percent', 'tax rate'],
 };
 
 /** Required mapped fields for a row to be importable. */
