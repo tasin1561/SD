@@ -1,0 +1,254 @@
+/* AddressCheckPanel — the verdict on one address.
+
+   Names no colour of its own: the three --ac-* roles are set inline
+   from the verdict's status kind (`var(--st-{kind}-*)`), exactly as
+   StatusChip does, so light and dark and any future palette follow for
+   free. Reduced motion is handled globally in brand/app.css. */
+.sk-ac {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--ac-line, var(--line));
+  border-radius: var(--r-lg);
+  background: var(--ac-bg, var(--surface-2));
+  font-family: var(--app-font);
+  font-size: var(--fs-sm);
+  color: var(--fg-body);
+}
+
+.sk-ac__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sk-ac__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: var(--fw-semibold);
+  color: var(--ac-fg, var(--fg-strong));
+}
+/* Pushes the button to the end without a margin-auto on a flex child
+   that may wrap. */
+.sk-ac__head > .sk-ac__go {
+  margin-inline-start: auto;
+}
+
+.sk-ac__go {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--fg-strong);
+  font: inherit;
+  font-weight: var(--fw-semibold);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.sk-ac__go:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.sk-ac__go:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sk-ac__spin {
+  animation: sk-ac-spin 900ms linear infinite;
+}
+@keyframes sk-ac-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── score ─────────────────────────────────────────────────────────── */
+.sk-ac__score {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.sk-ac__score-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-bold);
+  font-size: var(--fs-md);
+  color: var(--ac-fg, var(--fg-strong));
+}
+.sk-ac__score-track {
+  display: block;
+  width: 64px;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--line);
+  overflow: hidden;
+}
+.sk-ac__score-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ac-fg, var(--fg-strong));
+  /* Scale, never width — width animates layout. */
+  transform-origin: left center;
+  transition: transform var(--dur-slow) var(--ease-out);
+}
+
+/* ── body ──────────────────────────────────────────────────────────── */
+.sk-ac__body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.sk-ac__verdict {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-weight: var(--fw-semibold);
+  color: var(--ac-fg, var(--fg-strong));
+}
+.sk-ac__re {
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--surface-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+}
+.sk-ac__hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  max-width: 68ch;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.sk-ac__issues {
+  margin: 0;
+  padding-inline-start: 18px;
+  color: var(--fg-body);
+  font-size: var(--fs-xs);
+  line-height: 1.6;
+}
+
+/* ── suggestions ───────────────────────────────────────────────────── */
+.sk-ac__sugg {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.sk-ac__sugg-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+}
+.sk-ac__sugg-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sk-ac__cand {
+  min-height: 28px;
+  padding: 3px 11px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--fg-strong);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.sk-ac__cand:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.sk-ac__cand:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ── extracted fields ──────────────────────────────────────────────── */
+.sk-ac__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 7px 14px;
+  margin: 0;
+}
+.sk-ac__field {
+  /* A grid item will not shrink below its content without this, and a
+     long locality then pushes the row wider than the card. */
+  min-width: 0;
+}
+.sk-ac__field dt {
+  color: var(--fg-faint);
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sk-ac__field dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-xs);
+  color: var(--fg-strong);
+}
+.sk-ac__src {
+  display: block;
+  color: var(--fg-faint);
+  font-size: var(--fs-2xs);
+}
+
+.sk-ac__label-addr {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.sk-ac__label-addr strong {
+  display: block;
+  color: var(--fg-strong);
+}
+
+.sk-ac__rto {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-2xs);
+}
+
+.sk-ac__confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* 44px touch floor — this is the one control that changes whether an
+     order may be saved in enforce mode. */
+  min-height: 44px;
+  font-size: var(--fs-xs);
+  color: var(--fg-strong);
+  cursor: pointer;
+}
+.sk-ac__confirm input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--ac-fg, var(--fg-strong));
+}
+
+@media (max-width: 480px) {
+  .sk-ac__head > .sk-ac__go {
+    margin-inline-start: 0;
+    width: 100%;
+    justify-content: center;
+  }
+}

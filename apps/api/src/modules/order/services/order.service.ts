@@ -605,6 +605,19 @@ export class OrderService {
             storeNameSnapshot: store.name,
             sellerOrderRef: input.sellerOrderRef ?? null,
             source,
+            /*
+              WHICH SCREEN placed it (order page v2, 2026-10-25).
+
+              Derived from the presence of an address-check reference
+              rather than taken as its own field, so the two pages
+              cannot disagree about which one they are: the old page
+              sends no reference and gets null, which is what every
+              order ever placed has.
+
+              `source` is untouched — it answers "how did this reach
+              us", and a v2 order is still MANUAL by that reckoning.
+            */
+            createdVia: input.addressCheckReferenceId === undefined ? null : 'order_page_v2',
             status: initialStatus,
             bulkUploadId: options.bulkUploadId ?? null,
             recipientName: prefixedRecipientName,
@@ -760,7 +773,55 @@ export class OrderService {
     // M15→M6: auto-compute order charges post-commit (best-effort).
     await this.computeChargesAsync(created.id);
 
+    // Order page v2: tie the address check to the order it produced.
+    await this.linkAddressCheckAsync(created.id, sellerId, input.addressCheckReferenceId);
+
     return created;
+  }
+
+  /**
+   * Attach an address check to the order it was filled in for.
+   *
+   * POST-COMMIT and BEST-EFFORT, deliberately outside the order's
+   * transaction. The check is advice about a delivery; the order is the
+   * durable fact. An order that failed to save because the bookkeeping
+   * of its advice failed would be the integration doing real harm, and
+   * this runs for every v2 order, so it is the one place that could.
+   *
+   * Guarded on `orderId: null` so a reference already claimed by an
+   * order cannot be re-pointed at a second one — a page reopened from
+   * browser history carries the same draft id, and two orders claiming
+   * one check would make the sweep's feedback ambiguous. The second
+   * order simply has no check, which is true.
+   *
+   * Scoped to the seller: a reference is not a secret, and without this
+   * one seller could attach another's check by guessing it.
+   */
+  private async linkAddressCheckAsync(
+    orderId: string,
+    sellerId: string,
+    referenceId: string | undefined,
+  ): Promise<void> {
+    if (referenceId === undefined) return;
+    try {
+      const { count } = await this.prisma.client.addressCheck.updateMany({
+        where: { referenceId, sellerId, orderId: null },
+        data: { orderId },
+      });
+      if (count === 0) {
+        // Not an error: a draft whose check never completed, or one
+        // already claimed. The order stands either way.
+        this.logger.debug(
+          { orderId, referenceId },
+          'no unclaimed address check for this reference',
+        );
+      }
+    } catch (e) {
+      this.logger.warn(
+        { orderId, err: e instanceof Error ? e.message : String(e) },
+        'could not link the address check — the order is unaffected',
+      );
+    }
   }
 
   // ── helpers ────────────────────────────────────────────────────────

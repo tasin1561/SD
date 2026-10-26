@@ -1,0 +1,25 @@
+/* Order page v2 only.
+
+   A NEW stylesheet rather than two rules added to the shared
+   `orders/_components/orders.css`, which the old order page, the edit
+   form and the tracking timeline all import. Nothing the v2 page needs
+   is worth a change to a file five other screens render through. */
+
+/* What the PIN code resolved to — read-only, and never stored (ORD-5).
+   Small and quiet on purpose: it confirms a typed PIN at a glance and
+   is not a field anybody fills in. */
+.ord-pin-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: -2px 0 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+}
+.ord-pin-facts > span {
+  color: var(--fg-faint);
+  font-weight: var(--fw-regular);
+  font-size: var(--fs-2xs);
+}

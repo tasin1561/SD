@@ -3425,6 +3425,22 @@ model Order {
 
   sellerOrderRef          String?      @map("seller_order_ref")
   source                  OrderSource  @default(MANUAL)
+  /// WHICH SCREEN placed it (order page v2, 2026-10-25).
+  ///
+  /// Deliberately NOT a new value on `source`. `source` answers "how did
+  /// this order reach us" — by hand, by CSV, by API, by an admin — and
+  /// a v2 order is still MANUAL by that reckoning; widening the enum
+  /// would make every existing reader's switch wrong about orders that
+  /// arrived exactly as they always did.
+  ///
+  /// NULLABLE and free TEXT: null means the old page (every order ever
+  /// placed before today), and a backfill would be a claim about a
+  /// screen that did not exist. The only value written today is
+  /// `order_page_v2`. It exists so the two pages can be COMPARED —
+  /// without it there is no way to ask whether the new page's orders
+  /// deliver better than the old one's, which is the whole reason for
+  /// running them side by side.
+  createdVia              String?      @map("created_via")
   bulkUploadId            String?      @map("bulk_upload_id") @db.Uuid
   recipientName           String       @map("recipient_name")
   recipientPhoneE164      String       @map("recipient_phone_e164")
@@ -3550,6 +3566,11 @@ model Order {
   earlyReservationReview EarlyReservationReview?
   courierSettlementLines CourierSettlementLine[]
   packBoxes              PackBox[]
+  /// Order page v2 — the Solustation address check this order was saved
+  /// with, if any. Optional in both directions: a check exists before
+  /// the order does (it is keyed on the page's draft id), and an order
+  /// from the old page has none.
+  addressCheck           AddressCheck?
 
   /// Per STORE, not per seller. Two shopfronts each running their own
   /// Shopify will both produce order `#1001`, and under the old
@@ -3662,6 +3683,113 @@ model OrderEvent {
   /// and this table only grows.
   @@index([toStatus, createdAt])
   @@map("order_events")
+}
+
+/// One address, as Solustation Address judged it (order page v2, 2026-10-25).
+///
+/// ── KEYED ON THE DRAFT, NOT THE ORDER ────────────────────────────────
+/// The page mints a `reference_id` when it OPENS and the first check can
+/// happen minutes before anything is saved — so a row keyed on
+/// `order_id` could not hold the very thing it exists to record. The
+/// order id arrives later, or never: an abandoned form leaves a row with
+/// a judgement and no order, which is the honest shape and is also the
+/// only way to notice how often operators give up at the address step.
+///
+/// The reference id is also the BILLING key — one unit per reference per
+/// month at their end — which is why the page keeps it in sessionStorage
+/// rather than minting a fresh one on every mount. A refresh in the
+/// middle of an order must not become a second billable address.
+///
+/// ── WHY THE VENDOR'S WORDS ARE TEXT, NOT ENUMS ───────────────────────
+/// `status`, `action` and `poConfidence` hold Solustation's vocabulary,
+/// not ours. A Prisma enum would make the day they add a fourth
+/// `recommended_action` the day existing rows stop being readable at the
+/// client layer — the failure arriving at every reader at once, far from
+/// the change that caused it. They are validated where they are USED and
+/// stored as given.
+///
+/// ── NOTHING HERE MAY BLOCK AN ORDER ──────────────────────────────────
+/// `status = 'unavailable'` is a first-class value, not an error state:
+/// the API being down saves the order anyway and leaves the retry to
+/// `nextRetryAt`. An address check is advice about a delivery, and a
+/// delivery that was going to be attempted is still attempted.
+model AddressCheck {
+  id String @id @default(dbgenerated("uuidv7()")) @db.Uuid
+
+  /// The page's draft id (`draft-<uuid>`), minted on open. Unique
+  /// because it is what every later call about this address carries.
+  referenceId String  @unique @map("reference_id")
+  /// Set when the order is saved. Unique: one check per order.
+  orderId     String? @unique @map("order_id") @db.Uuid
+
+  /// Whose order this will be. Resolved at page open — the seller
+  /// directly in the client console, the store's seller in the other
+  /// two — so a read can always be scoped without a join.
+  sellerId           String    @map("seller_id") @db.Uuid
+  storeId            String?   @map("store_id") @db.Uuid
+  /// Who was at the screen. Ownership of the row for read/update: only
+  /// the actor who opened the draft may go on checking it.
+  createdByActorType ActorType @map("created_by_actor_type")
+  createdByActorId   String    @map("created_by_actor_id") @db.Uuid
+
+  /// Their id for the FIRST check. Every re-check of an edited address
+  /// goes to /v1/corrections carrying this, because re-sending
+  /// /v1/validate on the same reference returns the STORED answer and
+  /// would show the operator the verdict on text they already changed.
+  validationId String? @map("validation_id")
+
+  /// `valid` / `needs_review` / `invalid` as they say it, or our own
+  /// `unavailable` when the call could not be made.
+  status       String    @map("status")
+  /// `approve` / `confirm_with_customer` / `reject`. Null while unavailable.
+  action       String?   @map("action")
+  /// 0-100.
+  score        Int?      @map("score")
+  /// `high` / `medium` / null. Only `high` may reach a courier label.
+  poConfidence String?   @map("po_confidence")
+  /// The whole last response, verbatim. Stored so a judgement can be
+  /// re-read months later against a delivery that failed, without
+  /// asking them to re-derive it.
+  result       Json?     @map("result")
+  checkedAt    DateTime? @map("checked_at") @db.Timestamptz
+
+  // ── Retry of a check that could not be made ────────────────────────
+  attempts      Int       @default(0)
+  nextRetryAt   DateTime? @map("next_retry_at") @db.Timestamptz
+  lastError     String?   @map("last_error") @db.Text
+  /// Their `X-Request-Id`, kept so a question about one call can be
+  /// asked in their logs by its own name.
+  lastRequestId String?   @map("last_request_id")
+
+  // ── enforce mode: how a refusal was got past ───────────────────────
+  /// Ops may always override; this is who, and why. Null in shadow
+  /// mode, which blocks nothing and therefore needs no override.
+  overrideActorType       ActorType? @map("override_actor_type")
+  overrideActorId         String?    @map("override_actor_id") @db.Uuid
+  overrideReason          String?    @map("override_reason") @db.Text
+  overriddenAt            DateTime?  @map("overridden_at") @db.Timestamptz
+  /// Set when the operator ticked "Confirmed with customer", which also
+  /// sends a correction with `source: customer_confirmed`.
+  confirmedWithCustomerAt DateTime?  @map("confirmed_with_customer_at") @db.Timestamptz
+
+  /// How far the courier-status feedback sweep has got for this order.
+  /// A watermark rather than a per-event row: their endpoint ignores
+  /// duplicates, so the cost of re-sending one event is nothing and the
+  /// cost of a second table is permanent.
+  feedbackWatermarkAt DateTime? @map("feedback_watermark_at") @db.Timestamptz
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// The retry worklist: unavailable checks whose turn has come.
+  @@index([status, nextRetryAt])
+  /// The feedback sweep: saved orders with a validation id, oldest
+  /// watermark first.
+  @@index([feedbackWatermarkAt])
+  @@index([sellerId, createdAt])
+  @@map("address_checks")
 }
 
 /// Why a row is sitting here instead of being an order.

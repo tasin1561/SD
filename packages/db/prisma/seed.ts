@@ -1887,6 +1887,48 @@ const systemSettings: SystemSettingSeed[] = [
     overrideMinInt: 1,
     overrideMaxInt: 30,
   },
+
+  // ── Order page v2 + Solustation address checks (2026-10-25) ────────
+  {
+    key: 'orders.page_v2_audience',
+    category: 'ops',
+    valueType: SettingValueType.STRING,
+    valueString: 'OFF',
+    displayName: 'Order page v2 — who sees it',
+    description:
+      "Which accounts reach the new order creation page. 'OFF' (default) — nobody; the v2 route is not there, and every console uses the page it has always used. 'STAFF' — only accounts named in Order page v2 — pilot accounts, plus any session where staff are impersonating; everybody else keeps the old page. 'ALL' — every account that could use the old page is sent to the new one, and the old route redirects. Rolling back is setting this back to 'STAFF' or 'OFF'; the old page's code stays in place for at least two weeks after 'ALL', so a rollback needs no deploy.",
+    sellerOverridable: false,
+  },
+  {
+    key: 'orders.page_v2_allowlist',
+    category: 'ops',
+    valueType: SettingValueType.JSON,
+    valueJson: [],
+    displayName: 'Order page v2 — pilot accounts',
+    description:
+      "The accounts that see the new order page while the audience is 'STAFF'. A flat list of ids — a client id, a member store id, or an associate's store-user id; they are UUIDs and cannot collide, so one list serves all three consoles. Empty means the pilot is nobody, which is what it should be until a real account is named. Ignored when the audience is 'OFF' or 'ALL'.",
+    sellerOverridable: false,
+  },
+  {
+    key: 'address_check.mode',
+    category: 'ops',
+    valueType: SettingValueType.STRING,
+    valueString: 'SHADOW',
+    displayName: 'Address check — shadow or enforce',
+    description:
+      "What a bad address verdict DOES. 'SHADOW' (default) — the page shows the score, the issues and the suggestions, and saving behaves exactly as it always has: nothing is blocked, nothing is refused, and the check is advice. 'ENFORCE' — a 'reject' verdict needs an ops override with a reason, and 'confirm_with_customer' needs the operator to tick that they confirmed it; an 'approve' saves normally. Ops can always override, and who overrode and why is stored on the check. Leave this on shadow until the scores have been watched against real deliveries for long enough to trust them.",
+    sellerOverridable: false,
+  },
+  {
+    key: 'address_check.base_url',
+    category: 'ops',
+    valueType: SettingValueType.STRING,
+    valueString: 'https://address-api.solustation.site',
+    displayName: 'Address check — API base URL',
+    description:
+      'Where the Solustation Address API lives. Always the public HTTPS URL even though it runs on the same server — it is a separate product with its own API, and reaching it any other way would couple two things that are deliberately only joined over HTTP. Every request to it carries our Bearer key, which is why the host it may name is allow-listed in code.',
+    sellerOverridable: false,
+  },
 ];
 
 async function seedSystemSettings() {

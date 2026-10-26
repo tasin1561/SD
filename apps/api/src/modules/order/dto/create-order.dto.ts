@@ -77,6 +77,31 @@ export class CreateOrderDto {
   @MaxLength(120)
   sellerOrderRef?: string;
 
+  /**
+   * Order page v2 — the address check this order was filled in with.
+   *
+   * OPTIONAL and additive: the old page does not send it and behaves
+   * exactly as it always has. Its PRESENCE is what marks the order as
+   * v2 (`orders.created_via`), so there is no second field the two
+   * pages could disagree about, and no way for an order to claim a
+   * check it does not have.
+   *
+   * An unknown or already-used reference is IGNORED rather than
+   * refused: the check is advice about a delivery, and an order must
+   * never fail to save over the bookkeeping of the advice.
+   */
+  @ApiProperty({
+    required: false,
+    maxLength: 64,
+    description:
+      'The draft id of this order’s address check, from the new order page. Ignored when it names no check.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  @Matches(/^draft-[A-Za-z0-9-]{8,}$/, { message: 'must look like draft-<uuid>' })
+  addressCheckReferenceId?: string;
+
   // ── Recipient (immutable snapshot) ──────────────────────────────────
 
   @ApiProperty({ maxLength: 160 })

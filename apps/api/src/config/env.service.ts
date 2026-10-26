@@ -100,6 +100,15 @@ export class EnvService {
     return this.env.CHATWOOT_HMAC_SECRET;
   }
 
+  // Order page v2 — Solustation Address. Stub mode when the key is
+  // empty: checks report `unavailable` and nothing is ever blocked.
+  get soladdrApiKey(): string {
+    return this.env.SOLADDR_API_KEY;
+  }
+  get hasSoladdrApiKey(): boolean {
+    return this.env.SOLADDR_API_KEY.trim() !== '';
+  }
+
   get sellerAppUrl(): string {
     return this.env.SELLER_APP_URL;
   }

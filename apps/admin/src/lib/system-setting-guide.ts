@@ -461,6 +461,32 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   },
 
   // ── Inbound freight ─────────────────────────────────────────────────
+  'address_check.mode': {
+    name: 'Address check — advice or gate',
+    group: 'Orders',
+    what: 'What a poor address verdict actually does on the new order page. On "Advice only" nothing is ever blocked and the check is information; on "Ask before saving" a bad verdict asks the operator to confirm or to give a reason. A check that could not be made never blocks a save either way — an outage at their end must not stop orders here.',
+    example:
+      'On "Ask before saving", an address scored 31 with "no house number" asks the operator to tick that they rang the customer before the order can be saved.',
+    values: {
+      SHADOW: opt(
+        'Advice only',
+        'The score, the problems found and any suggestions are shown, and saving behaves exactly as it always has. Nothing is refused and nothing needs a reason.',
+        'Leave it here until the scores have been watched against real deliveries for long enough to trust them.',
+      ),
+      ENFORCE: opt(
+        'Ask before saving',
+        'A "do not ship as written" verdict needs an override with a reason; a "confirm with the customer" verdict needs the operator to tick that they did. Ops can always override, and who did it and why is recorded.',
+        'Turn this on only once the pilot agrees the scores match what actually gets delivered.',
+      ),
+    },
+  },
+  'address_check.base_url': {
+    name: 'Address check — where the service lives',
+    group: 'Orders',
+    what: 'The public web address of Solustation Address, the service that checks an address on the new order page. Always the public address even though it runs on the same server — it is a separate product, and reaching it any other way would tie the two together. Only their real host is accepted here.',
+    example:
+      'Leave this alone unless Solustation move the service. The key that goes with it lives in the server’s environment and is never shown or typed on this screen.',
+  },
   'wallet.inbound_freight_mode': {
     name: 'How Bangladesh → India freight is paid',
     group: 'Inbound freight',
@@ -804,6 +830,37 @@ export const SETTING_GUIDE: Readonly<Record<string, SettingGuide>> = {
   },
 
   // ── Orders ──────────────────────────────────────────────────────────
+  'orders.page_v2_audience': {
+    name: 'New order page — who sees it',
+    group: 'Orders',
+    what: 'Which accounts get the new order creation page, the one that checks an address against Solustation while it is typed. The old page is untouched and is what everybody else keeps using, so turning this back is a real rollback and needs no deploy.',
+    example:
+      'On "Pilot accounts only", the client and member store named in the pilot list see the new page and every other client carries on exactly as before.',
+    values: {
+      OFF: opt(
+        'Nobody — the old page only',
+        'The new page is not there. Every console uses the order page it has always used, and the address check is never called.',
+        'The first deploy ships like this: the code is live and the feature is not.',
+      ),
+      STAFF: opt(
+        'Pilot accounts only',
+        'Only the accounts named in the pilot list below, plus any session where staff are signed in as somebody (there is no admin order page, so that is how we test it).',
+        'Menev Store sees the new page; every other client sees the old one.',
+      ),
+      ALL: opt(
+        'Everybody',
+        'Every account that could use the old page is sent to the new one. The old page stays in place, unused, so this can still be undone by setting this back.',
+        'Set this only after the pilot has placed real orders on the new page for a day or two.',
+      ),
+    },
+  },
+  'orders.page_v2_allowlist': {
+    name: 'New order page — pilot accounts',
+    group: 'Orders',
+    what: 'The accounts that see the new order page while the setting above is on "Pilot accounts only". One flat list: a client id, a member store id or an associate id all go in the same place. Ignored entirely when the audience is "Nobody" or "Everybody".',
+    example:
+      'Adding a member store id here lets that one store try the new page without anyone else noticing a change.',
+  },
   'ops.allowed_indian_states': {
     name: 'States and territories we deliver to',
     group: 'Orders',
@@ -1801,6 +1858,8 @@ export const FREE_TEXT_SETTINGS: Readonly<Record<string, string>> = {
   'courier.shiprocket_portal_egress_country': 'A country name, or empty for anywhere.',
   'courier.delhivery_support_email': 'An email address copied from Delhivery’s panel.',
   'courier.shiprocket_support_email': 'An email address copied from Shiprocket’s panel.',
+  'address_check.base_url':
+    'The Solustation Address API’s public HTTPS address. Only their real host is accepted; the key that goes with it lives in the server’s environment and never in this screen.',
   'courier.delhivery_api_base_url': 'A URL; empty means practice mode.',
   'courier.shiprocket_api_base_url': 'A URL; empty means practice mode.',
   'courier.default_pickup_time': 'A clock time (HH:mm:ss); any minute is valid.',
