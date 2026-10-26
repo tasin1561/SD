@@ -32,7 +32,8 @@ import { Select } from '@skydrop/ui/app/select';
 import { ChoiceCards } from '@skydrop/ui/app/choice-cards';
 import { Checkbox } from '@skydrop/ui/app/checkbox';
 import { useToast } from '@skydrop/ui/app/toast';
-import { AddressCheckPanel } from '@skydrop/ui/app/address-check';
+import { useUatField } from '@skydrop/ui/app/uat-fields';
+import { AddressCheckPanel, useDraftReference } from '@skydrop/ui/app/address-check';
 import './order-v2.css';
 import { BackLink, Notice, OrdSection } from '../../_components/orders-parts';
 import {
@@ -119,54 +120,6 @@ interface FormState {
  */
 const MAX_ITEMS = 50;
 
-/**
- * The draft id this form checks its address under.
- *
- * ONE PER ORDER FORM, and kept in sessionStorage, because Solustation
- * bills a unit per reference per month: minting a fresh one on every
- * mount would charge again for the same address every time the
- * operator refreshed mid-order.
- *
- * It is CLEARED once an order is created. Carrying it into the next
- * order would be worse than paying twice — a repeat `/v1/validate` on
- * a spent reference returns their STORED answer, so the second
- * customer would be shown the verdict on the first customer's address.
- *
- * Minted in an effect rather than in a lazy initialiser: this file is
- * rendered on the server first, and a uuid generated there would not
- * match the one the browser makes.
- */
-const DRAFT_KEY = 'sd-order-v2-draft';
-
-function useDraftReference(): { referenceId: string; clear: () => void } {
-  const [referenceId, setReferenceId] = useState('');
-  useEffect(() => {
-    try {
-      const held = window.sessionStorage.getItem(DRAFT_KEY);
-      if (held !== null && held !== '') {
-        setReferenceId(held);
-        return;
-      }
-      const fresh = `draft-${crypto.randomUUID()}`;
-      window.sessionStorage.setItem(DRAFT_KEY, fresh);
-      setReferenceId(fresh);
-    } catch {
-      // Private browsing, blocked site data: the check still works for
-      // this mount, it just cannot survive a refresh. Better than no
-      // check at all, and nothing here may throw at an operator.
-      setReferenceId(`draft-${crypto.randomUUID()}`);
-    }
-  }, []);
-  const clear = (): void => {
-    try {
-      window.sessionStorage.removeItem(DRAFT_KEY);
-    } catch {
-      /* nothing to do — the next mount mints a new one anyway */
-    }
-  };
-  return { referenceId, clear };
-}
-
 const INITIAL: FormState = {
   recipientName: '',
   recipientPhoneE164: IN_DIAL,
@@ -201,6 +154,15 @@ export function NewOrderForm(): ReactElement {
   // Asked while they type, so a bad pin is caught before they commit
   // rather than after the order exists. Cached server-side for a day.
   const serviceability = useServiceability(form.recipientPostalCode, form.paymentMode);
+
+  // Hidden for UAT (owner, 2026-10-26), code intact. Hidden means the
+  // input is not rendered, so each stays at its initial value and the
+  // payload omits it — landing on the server defaults the API has
+  // always applied: fee 0, discount 0, and a declared value computed
+  // from the catalogue. Reversible from UAT Settings when that lands.
+  const showDeliveryFee = useUatField('orderDeliveryFee');
+  const showDiscount = useUatField('orderDiscount');
+  const showDeclaredValue = useUatField('orderDeclaredValue');
 
   // ── Solustation address check (order page v2) ──────────────────────
   // Advice, never a gate: nothing below disables a button or refuses a
@@ -255,23 +217,70 @@ export function NewOrderForm(): ReactElement {
   }
 
   /**
-   * Apply one of their suggested values.
+   * Apply one of their suggested values, then ask again.
    *
-   * `pincode` is the only field this console holds on its own; every
-   * other suggestion names a part of the address that lives inside
-   * line 1 here, so it is appended rather than replacing anything the
-   * operator typed. TODO(verify): their live responses have carried an
-   * empty `suggestions` array so far, so the shape of a real one is
-   * documented but unseen.
+   * ── WHAT ARRIVES HERE, AND WHAT DOES NOT ─────────────────────────
+   * Verified live on 2026-10-26, which is where the shape below comes
+   * from rather than from a guess:
+   *
+   *   - `post_office` with SEVERAL candidates — the pincode has more
+   *     than one office and the address names none clearly (one real
+   *     pincode has 26, of which they offer 10). Their first candidate
+   *     is their best guess, NOT an answer, and nothing here picks it:
+   *     the operator chooses, or types an office that was never
+   *     offered.
+   *   - `police_station` with one candidate — the customer's spelling
+   *     is kept and the known one offered.
+   *
+   * A `district`, `city` or `state` suggestion never reaches this
+   * function: the panel renders those as "confirm with the customer"
+   * text, because that suggestion means the address and the pincode
+   * DISAGREE and neither we nor they can know which is wrong.
+   * Applying it would quietly make a wrong address self-consistent.
+   *
+   * ── WHY IT RE-CHECKS ─────────────────────────────────────────────
+   * The verdict stored against this order has to be the verdict on the
+   * text that was saved. Editing the address and leaving the old
+   * answer on screen would store a judgement about words nobody kept.
+   * The re-check goes through the same draft, so it takes the
+   * corrections path and is not billed again.
    */
   function applySuggestion(field: string, value: string): void {
+    let nextLine1 = form.recipientAddressLine1;
     if (field === 'pincode') {
       set('recipientPostalCode', value.replace(/\D/g, '').slice(0, 6));
-      return;
+    } else {
+      const line1 = form.recipientAddressLine1;
+      if (line1.toLowerCase().includes(value.toLowerCase())) return;
+      nextLine1 = line1.trim() === '' ? value : `${line1.trim()}, ${value}`;
+      set('recipientAddressLine1', nextLine1);
     }
-    const line1 = form.recipientAddressLine1;
-    if (line1.toLowerCase().includes(value.toLowerCase())) return;
-    set('recipientAddressLine1', line1.trim() === '' ? value : `${line1.trim()}, ${value}`);
+
+    // Re-check against what the form will hold AFTER this edit. React
+    // state has not settled yet, so the text is composed here rather
+    // than read back — reading `form` would re-send the address the
+    // operator just changed, which is the exact failure the
+    // corrections path exists to avoid.
+    const nextAddress = [nextLine1.trim(), form.recipientAddressLine2.trim()]
+      .filter((part) => part !== '')
+      .join(', ');
+    const nextPincode =
+      field === 'pincode' ? value.replace(/\D/g, '').slice(0, 6) : form.recipientPostalCode.trim();
+    if (referenceId === '' || nextAddress.length < 3 || !/^[1-9]\d{5}$/.test(nextPincode)) return;
+    addressCheck.mutate(
+      {
+        referenceId,
+        address: nextAddress,
+        pincode: nextPincode,
+        paymentType: form.paymentMode === 'COD' ? 'cod' : 'prepaid',
+      },
+      {
+        onSuccess: (r) => {
+          setCheckResult(r);
+          setConfirmedWithCustomer(false);
+        },
+      },
+    );
   }
   // Pre-select the default once the list arrives, and only while the
   // field is untouched: a seller who has already picked a shopfront
@@ -804,6 +813,20 @@ export function NewOrderForm(): ReactElement {
             action={serviceabilityChip}
           >
             <div className="ord-stack ord-stack--tight">
+              {/* The seller's own order id, FIRST — owner, 2026-10-26.
+                  It is the number they already have in their own system
+                  and the one they will quote when they ring about this
+                  parcel, so it is the first thing they copy across
+                  rather than the last. */}
+              <TextField
+                label="Order ID"
+                hint="Optional. Your own order ID — unique per store."
+                value={form.sellerOrderRef}
+                onChange={(e) => set('sellerOrderRef', e.target.value)}
+                maxLength={120}
+                placeholder="ORD-2024-9981"
+                inputClassName="sk-ident"
+              />
               {/* The seller code is CHROME, exactly like the +91 below:
                   it cannot be edited or deleted, and the field holds only
                   the customer's name. The API composes the stored value,
@@ -923,6 +946,9 @@ export function NewOrderForm(): ReactElement {
               canCheck={canCheckAddress}
               onCheck={runAddressCheck}
               onApplySuggestion={applySuggestion}
+              // Already fetched for the district/state line above and
+              // cached per pincode, so the fuller list costs nothing.
+              allPostOffices={pincodeInfo.data?.post_offices}
               confirmedWithCustomer={confirmedWithCustomer}
               onConfirmedWithCustomerChange={setConfirmedWithCustomer}
             />
@@ -972,17 +998,8 @@ export function NewOrderForm(): ReactElement {
                   <span className="ord-faint">{storeHint}</span>
                 </div>
               )}
-              <TextField
-                label="Your reference"
-                hint="Optional. Your own order ID — unique per store."
-                value={form.sellerOrderRef}
-                onChange={(e) => set('sellerOrderRef', e.target.value)}
-                maxLength={120}
-                placeholder="ORD-2024-9981"
-                inputClassName="sk-ident"
-              />
               <TextArea
-                label="Notes for the call agent"
+                label="Delivery Notes"
                 hint="Read out on the confirmation call — a preferred time, a fragile item, a second number."
                 rows={3}
                 value={form.sellerNotes}
@@ -1081,90 +1098,12 @@ export function NewOrderForm(): ReactElement {
               ]}
             />
 
-            <div className="ord-grid-2" style={{ marginTop: 'var(--sp-3)' }}>
-              <TextField
-                label="Delivery fee (INR)"
-                hint={
-                  feeDefault.data === undefined
-                    ? 'Added to the collectable amount.'
-                    : `Added to the collectable. Your default is ₹${feeDefault.data.amountInr}; change it in Settings.`
-                }
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.deliveryFeeInr}
-                onChange={(e) => set('deliveryFeeInr', e.target.value)}
-                inputClassName="sk-figure"
-              />
-              <TextField
-                label="Advance already paid (INR)"
-                hint="Deducted from the collectable."
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.advanceAmountInr}
-                onChange={(e) => set('advanceAmountInr', e.target.value)}
-                placeholder="0"
-                inputClassName="sk-figure"
-              />
-              <TextField
-                label="Discount (INR)"
-                hint="Deducted from the collectable."
-                type="number"
-                step="0.01"
-                value={form.discountInr}
-                onChange={(e) => set('discountInr', e.target.value)}
-                placeholder="0"
-                inputClassName="sk-figure"
-              />
-              <TextField
-                label="Declared value (INR)"
-                hint={
-                  computedDeclaredValue > 0
-                    ? `For customs, not collection. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue.`
-                    : "The parcel's value for customs — not what is collected."
-                }
-                type="number"
-                min={0}
-                step="0.01"
-                value={form.declaredValueInr}
-                onChange={(e) => set('declaredValueInr', e.target.value)}
-                inputClassName="sk-figure"
-                placeholder={
-                  computedDeclaredValue > 0
-                    ? computedDeclaredValue.toLocaleString('en-IN')
-                    : 'Sum of the line values'
-                }
-              />
-              <div className="ord-span-2">
-                <TextField
-                  // The unit is the suffix on the field itself; saying
-                  // it twice reads as two different things being asked for.
-                  label="Total weight"
-                  hint={
-                    computedWeight > 0
-                      ? `Adds up to ${computedWeight.toLocaleString('en-IN')} g from the catalogue. Type a number to override it.`
-                      : 'None of these products has a recorded weight, so this stays 0 unless you set it.'
-                  }
-                  type="number"
-                  min={0}
-                  inputClassName="sk-figure"
-                  value={form.totalWeightGrams}
-                  onChange={(e) => set('totalWeightGrams', e.target.value)}
-                  placeholder={computedWeight > 0 ? computedWeight.toLocaleString('en-IN') : '0'}
-                  // A SUFFIX. The unit follows the figure when it is
-                  // spoken, and a "grams" box in front of an empty
-                  // field reads as a label for the wrong thing.
-                  trail={
-                    <span className="ord-suffix" aria-hidden>
-                      <Scale size={13} />
-                      grams
-                    </span>
-                  }
-                />
-              </div>
-            </div>
-
+            {/* The collectable sits DIRECTLY under the payment mode
+                (owner, 2026-10-26). It is the number the call centre
+                reads to the customer and the one the driver asks for,
+                so it belongs with the choice that decides whether it is
+                collected at all — not at the bottom behind the parcel's
+                weight. */}
             {form.paymentMode === 'COD' ? (
               /*
                 The one figure the customer is asked for at the door,
@@ -1240,6 +1179,96 @@ export function NewOrderForm(): ReactElement {
                 </span>
               </Notice>
             )}
+
+            <div className="ord-grid-2" style={{ marginTop: 'var(--sp-3)' }}>
+              {showDeliveryFee ? (
+                <TextField
+                  label="Delivery fee (INR)"
+                  hint={
+                    feeDefault.data === undefined
+                      ? 'Added to the collectable amount.'
+                      : `Added to the collectable. Your default is ₹${feeDefault.data.amountInr}; change it in Settings.`
+                  }
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.deliveryFeeInr}
+                  onChange={(e) => set('deliveryFeeInr', e.target.value)}
+                  inputClassName="sk-figure"
+                />
+              ) : null}
+              <TextField
+                label="Advance already paid (INR)"
+                hint="Deducted from the collectable."
+                type="number"
+                min={0}
+                step="0.01"
+                value={form.advanceAmountInr}
+                onChange={(e) => set('advanceAmountInr', e.target.value)}
+                placeholder="0"
+                inputClassName="sk-figure"
+              />
+              {showDiscount ? (
+                <TextField
+                  label="Discount (INR)"
+                  hint="Deducted from the collectable."
+                  type="number"
+                  step="0.01"
+                  value={form.discountInr}
+                  onChange={(e) => set('discountInr', e.target.value)}
+                  placeholder="0"
+                  inputClassName="sk-figure"
+                />
+              ) : null}
+              {showDeclaredValue ? (
+                <TextField
+                  label="Declared value (INR)"
+                  hint={
+                    computedDeclaredValue > 0
+                      ? `For customs, not collection. Adds up to ₹${computedDeclaredValue.toLocaleString('en-IN')} from the catalogue.`
+                      : "The parcel's value for customs — not what is collected."
+                  }
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={form.declaredValueInr}
+                  onChange={(e) => set('declaredValueInr', e.target.value)}
+                  inputClassName="sk-figure"
+                  placeholder={
+                    computedDeclaredValue > 0
+                      ? computedDeclaredValue.toLocaleString('en-IN')
+                      : 'Sum of the line values'
+                  }
+                />
+              ) : null}
+              <div className="ord-span-2">
+                <TextField
+                  // The unit is the suffix on the field itself; saying
+                  // it twice reads as two different things being asked for.
+                  label="Total weight"
+                  hint={
+                    computedWeight > 0
+                      ? `Adds up to ${computedWeight.toLocaleString('en-IN')} g from the catalogue. Type a number to override it.`
+                      : 'None of these products has a recorded weight, so this stays 0 unless you set it.'
+                  }
+                  type="number"
+                  min={0}
+                  inputClassName="sk-figure"
+                  value={form.totalWeightGrams}
+                  onChange={(e) => set('totalWeightGrams', e.target.value)}
+                  placeholder={computedWeight > 0 ? computedWeight.toLocaleString('en-IN') : '0'}
+                  // A SUFFIX. The unit follows the figure when it is
+                  // spoken, and a "grams" box in front of an empty
+                  // field reads as a label for the wrong thing.
+                  trail={
+                    <span className="ord-suffix" aria-hidden>
+                      <Scale size={13} />
+                      grams
+                    </span>
+                  }
+                />
+              </div>
+            </div>
           </OrdSection>
         </div>
       </div>

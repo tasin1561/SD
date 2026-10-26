@@ -252,3 +252,40 @@
     justify-content: center;
   }
 }
+
+/* A suggestion that may NOT be clicked into the form: the address and
+   the pincode disagree and only the customer can say which is wrong.
+   Dashed candidates are kept as the same shape so the two read as one
+   family, but they are spans, not buttons. */
+.sk-ac__sugg--confirm {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--ac-line, var(--line));
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.sk-ac__sugg--confirm .sk-ac__sugg-label {
+  color: var(--ac-fg, var(--fg-strong));
+  font-weight: var(--fw-semibold);
+}
+.sk-ac__sugg-why {
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+}
+.sk-ac__cand--static {
+  cursor: default;
+  border-style: solid;
+  color: var(--fg-muted);
+}
+
+/* The fuller post-office list sits under the offered candidates and
+   belongs to the same suggestion, so it is indented to read as part of
+   it rather than as a new question. */
+.sk-ac__others {
+  width: 100%;
+  max-width: 340px;
+  margin-block-start: 2px;
+}

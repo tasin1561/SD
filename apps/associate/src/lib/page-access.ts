@@ -28,6 +28,12 @@ export const PAGE_PERMISSIONS: ReadonlyArray<readonly [pattern: string, permissi
   ['/orders', 'orders.view'],
   // POST /store/orders. The longer entries win over '/orders' above.
   ['/orders/new', 'orders.create'],
+  // Order page v2 — the same permission as the page it copies. WHETHER
+  // it is reachable at all is a separate question, answered by
+  // `orders.page_v2_audience` and enforced by the API; the page itself
+  // only hides (FE-2). The entry has to exist even while the flag is
+  // off: a route absent from this table falls through to `/orders`.
+  ['/orders/new-v2', 'orders.create'],
   // /store/order-imports/*
   ['/orders/import', 'orders.create'],
   // GET /store/catalogue/sell — what THIS person may sell, at their own

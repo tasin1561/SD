@@ -33,6 +33,7 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { useStoreCatalogue, type StoreCatalogueItem } from '@/lib/catalogue-hooks';
 import { useCreateStoreOrder } from '@/lib/order-hooks';
 import { BackLink, LinkButton, Notice, RoSection } from '../_components/orders-parts';
+import { useUatField } from '@skydrop/ui/app/uat-fields';
 
 interface Line {
   readonly key: number;
@@ -93,6 +94,10 @@ export default function NewStoreOrderPage(): ReactElement {
   const [pin, setPin] = useState('');
   const [reference, setReference] = useState('');
   const [deliveryFee, setDeliveryFee] = useState('');
+  // Hidden for UAT (owner, 2026-10-26), code intact. Not rendered means
+  // it stays '' and the payload omits it, which is the same 0 the
+  // server has always defaulted to. Reversible from UAT Settings.
+  const showDeliveryFee = useUatField('orderDeliveryFee');
   const [codAmount, setCodAmount] = useState('');
   const [notes, setNotes] = useState('');
   const [acknowledgeDuplicate, setAcknowledgeDuplicate] = useState(false);
@@ -365,6 +370,15 @@ export default function NewStoreOrderPage(): ReactElement {
 
       <RoSection id="ro-new-customer" title="Customer">
         <div className="ro-grid-2">
+          {/* The store's own order id, FIRST — owner, 2026-10-26. It is
+              the number they already have in their own system and the
+              one they quote when they ring about this parcel, so it is
+              the first thing they copy across, not the last. */}
+          <TextField
+            label="Order ID (optional)"
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+          />
           <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
           <TextField
             label="Phone"
@@ -432,15 +446,17 @@ export default function NewStoreOrderPage(): ReactElement {
           <div className="ro-grid-3">
             {prepaid ? null : (
               <>
-                <TextField
-                  label="Delivery charge to the customer (₹, optional)"
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  step="0.01"
-                  value={deliveryFee}
-                  onChange={(e) => setDeliveryFee(e.target.value)}
-                />
+                {showDeliveryFee ? (
+                  <TextField
+                    label="Delivery charge to the customer (₹, optional)"
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    step="0.01"
+                    value={deliveryFee}
+                    onChange={(e) => setDeliveryFee(e.target.value)}
+                  />
+                ) : null}
                 <TextField
                   label="Cash to collect (₹)"
                   hint={
@@ -457,14 +473,9 @@ export default function NewStoreOrderPage(): ReactElement {
                 />
               </>
             )}
-            <TextField
-              label="Your reference (optional)"
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-            />
           </div>
           <TextArea
-            label="Notes for the call centre (optional)"
+            label="Delivery Notes (optional)"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             maxLength={2000}
