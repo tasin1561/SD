@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import type { Metadata } from 'next';
 import { OtherPortals } from '@skydrop/ui/app/sign-in';
+import { getT } from '@/i18n/server';
 import { AuthFrame } from '@/components/auth-frame';
 
 /**
@@ -16,19 +17,20 @@ import { AuthFrame } from '@/components/auth-frame';
  * have a next step rather than a 404. The answer is one line long and
  * names who to ask.
  */
-export const metadata: Metadata = {
-  title: 'Get a sales login',
-  description: 'How to get a Skydrop sales login from the store you sell for.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: t('auth.signUp.title'), description: t('auth.signUp.description') };
+}
 
-export default function SignUpPage(): ReactElement {
+export default async function SignUpPage(): Promise<ReactElement> {
+  const { t, locale } = await getT();
   return (
     <AuthFrame
-      title="Get a sales login"
-      subtitle="Sales logins are created by the store you sell for."
+      title={t('auth.signUp.title')}
+      subtitle={t('auth.signUp.subtitle')}
       footer={
         <>
-          Already invited? The invitation email carries your link. <a href="/login">Sign in</a>
+          {t('auth.signUp.invited')} <a href="/login">{t('auth.signUp.signIn')}</a>
           {/*
             NOT wrapped in a <span>: `OtherPortals` renders a <nav>,
             and flow content inside phrasing content is invalid HTML.
@@ -39,19 +41,17 @@ export default function SignUpPage(): ReactElement {
             props, wiping the pinned theme. The footer slot is a <div>,
             so the nav belongs there directly.
           */}
-          <OtherPortals self="associate" path="/sign-up" title="Looking for a different portal?" />
+          <OtherPortals
+            self="associate"
+            path="/sign-up"
+            title={t('auth.signUp.otherPortal')}
+            locale={locale}
+          />
         </>
       }
     >
-      <p className="sk-signin__lead">
-        Ask whoever runs the store to invite you from their team screen. The invitation sets your
-        password and opens the orders you place and the customers you sell to — your own, not the
-        whole store&apos;s.
-      </p>
-      <p className="sk-signin__lead">
-        They also set the price you sell each product at, so there is nothing for you to configure
-        before your first order.
-      </p>
+      <p className="sk-signin__lead">{t('auth.signUp.lead1')}</p>
+      <p className="sk-signin__lead">{t('auth.signUp.lead2')}</p>
     </AuthFrame>
   );
 }

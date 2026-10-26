@@ -7,7 +7,6 @@ import { useApiClient } from '@skydrop/auth/client';
 import type { StoreMe } from '@skydrop/api-client';
 import { Toaster } from '@skydrop/ui/components';
 import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
 import { ToastProvider } from '@skydrop/ui/app/toast';
 import {
   Bell,
@@ -19,7 +18,9 @@ import {
   Upload,
   UserRound,
 } from 'lucide-react';
+import { useT } from '@/i18n/client';
 import { canSeePath } from '@/lib/page-access';
+import { PrefsControl } from '@/components/prefs-control';
 import { NotificationBellContainer } from '@/components/notification-bell-container';
 
 /**
@@ -39,8 +40,8 @@ import { NotificationBellContainer } from '@/components/notification-bell-contai
  * any of it. A link that would 403 is not here at all: one that bounces
  * teaches somebody to stop reading the nav.
  *
- * `ThemeSwitch` is mounted here AND in the signed-out `AuthFrame` — the
- * second mount is the one that goes missing silently (FE-7).
+ * `PrefsControl` (language + theme) is mounted here AND in the signed-out
+ * `AuthFrame` — the second mount is the one that goes missing silently (FE-7).
  */
 export function AuthedShell({
   identity,
@@ -49,6 +50,7 @@ export function AuthedShell({
   identity: StoreMe;
   children: ReactNode;
 }): ReactElement {
+  const t = useT();
   const pathname = usePathname();
   const client = useApiClient();
   const [signingOut, setSigningOut] = useState(false);
@@ -64,29 +66,29 @@ export function AuthedShell({
 
   const navGroups: NavGroup[] = [
     {
-      heading: 'Selling',
+      heading: t('nav.selling'),
       items: [
-        { href: '/orders/new', label: 'New order', icon: <PlusCircle size={15} /> },
-        { href: '/catalogue', label: 'What I sell', icon: <Package size={15} /> },
-        { href: '/orders/import', label: 'Upload a CSV', icon: <Upload size={15} /> },
+        { href: '/orders/new', label: t('nav.newOrder'), icon: <PlusCircle size={15} /> },
+        { href: '/catalogue', label: t('nav.whatISell'), icon: <Package size={15} /> },
+        { href: '/orders/import', label: t('nav.uploadCsv'), icon: <Upload size={15} /> },
       ],
     },
     {
-      heading: 'Following up',
+      heading: t('nav.following'),
       items: [
-        { href: '/orders', label: 'My orders', icon: <ShoppingBag size={15} /> },
-        { href: '/customers', label: 'My customers', icon: <Contact size={15} /> },
-        { href: '/tickets', label: 'Issues', icon: <MessagesSquare size={15} /> },
+        { href: '/orders', label: t('nav.myOrders'), icon: <ShoppingBag size={15} /> },
+        { href: '/customers', label: t('nav.myCustomers'), icon: <Contact size={15} /> },
+        { href: '/tickets', label: t('nav.issues'), icon: <MessagesSquare size={15} /> },
       ],
     },
     {
-      heading: 'You',
+      heading: t('nav.you'),
       items: [
         // Ungated on purpose (NOTIF-11): a person's own inbox is
         // self-service, so it is absent from PAGE_PERMISSIONS and
         // `canSeePath` lets everybody through.
-        { href: '/notifications', label: 'Notifications', icon: <Bell size={15} /> },
-        { href: '/account', label: 'My account', icon: <UserRound size={15} /> },
+        { href: '/notifications', label: t('nav.notifications'), icon: <Bell size={15} /> },
+        { href: '/account', label: t('nav.myAccount'), icon: <UserRound size={15} /> },
       ],
     },
   ];
@@ -101,8 +103,8 @@ export function AuthedShell({
     <Toaster>
       <ToastProvider>
         <Shell
-          subtitle="Sales"
-          sectionLabel="Associate portal"
+          subtitle={t('shell.subtitle')}
+          sectionLabel={t('shell.section')}
           navGroups={visible}
           identityPrimary={identity.store.displayName ?? identity.store.name}
           identitySecondary={identity.emailDisplay}
@@ -119,7 +121,7 @@ export function AuthedShell({
             void signOut();
           }}
           signingOut={signingOut}
-          themeControl={<ThemeSwitch />}
+          themeControl={<PrefsControl />}
         >
           {children}
         </Shell>

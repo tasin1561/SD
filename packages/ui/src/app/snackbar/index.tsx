@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { reducedMotion } from '../motion/motion';
 import './snackbar.css';
+import { useUiT } from '../i18n-client';
 
 export interface SnackbarProps {
   open: boolean;
@@ -48,6 +49,7 @@ export function Snackbar({
   inline = false,
   className,
 }: SnackbarProps): ReactElement | null {
+  const t = useUiT();
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
   const paused = hover || focus;
@@ -109,7 +111,12 @@ export function Snackbar({
           {action.label}
         </button>
       ) : null}
-      <button type="button" className="sk-snack__close" aria-label="Dismiss" onClick={onClose}>
+      <button
+        type="button"
+        className="sk-snack__close"
+        aria-label={t('ui.dismiss')}
+        onClick={onClose}
+      >
         <X size={15} aria-hidden />
       </button>
       {showBar ? <span className="sk-snack__bar" aria-hidden /> : null}

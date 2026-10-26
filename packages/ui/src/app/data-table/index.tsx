@@ -18,6 +18,7 @@ import {
 } from 'react';
 import { Checkbox } from '../checkbox';
 import './data-table.css';
+import { useUiT } from '../i18n-client';
 
 /**
  * DataTable (u07) — the legacy Table API (`Table`, `THead`, `TBody`,
@@ -384,6 +385,7 @@ export function TableToolbar({
   readonly children?: ReactNode;
   readonly className?: string | undefined;
 }): ReactElement {
+  const t = useUiT();
   const bulk = selectedCount > 0 && bulkActions !== undefined;
   return (
     <div className={clsx('sk-toolbar', className)} data-bulk={bulk ? '1' : undefined}>
@@ -402,7 +404,9 @@ export function TableToolbar({
       )}
       {bulk ? (
         <div className="sk-toolbar__bulk" aria-live="polite">
-          <span className="sk-toolbar__bulk-count sk-figure">{selectedCount} selected</span>
+          <span className="sk-toolbar__bulk-count sk-figure">
+            {t('ui.table.selected', { n: selectedCount })}
+          </span>
           {bulkActions}
         </div>
       ) : (

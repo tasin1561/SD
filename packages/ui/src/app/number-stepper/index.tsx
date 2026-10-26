@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { useFieldText, useMergedRef } from '../text-field/field-shell';
 import './number-stepper.css';
+import { useUiT } from '../i18n-client';
 
 /**
  * NumberStepper (u12). A native `type="number"` input between − and +
@@ -70,6 +71,7 @@ export const NumberStepper = forwardRef<HTMLInputElement, NumberStepperProps>(
     },
     ref,
   ): ReactElement {
+    const t = useUiT();
     const autoId = useId();
     const id = idProp ?? `sk-ns-${autoId}`;
     const [node, setRef] = useMergedRef<HTMLInputElement>(ref);
@@ -117,7 +119,7 @@ export const NumberStepper = forwardRef<HTMLInputElement, NumberStepperProps>(
           <button
             type="button"
             className="sk-stepper__btn"
-            aria-label={`Decrease ${inSentence(label)}`}
+            aria-label={t('ui.stepper.decrease', { label: inSentence(label) })}
             aria-controls={id}
             disabled={disabled === true || atLow}
             onClick={() => bump(-1)}
@@ -144,7 +146,7 @@ export const NumberStepper = forwardRef<HTMLInputElement, NumberStepperProps>(
           <button
             type="button"
             className="sk-stepper__btn"
-            aria-label={`Increase ${inSentence(label)}`}
+            aria-label={t('ui.stepper.increase', { label: inSentence(label) })}
             aria-controls={id}
             disabled={disabled === true || atHigh}
             onClick={() => bump(1)}

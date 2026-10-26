@@ -17,6 +17,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { useUiT } from '../i18n-client';
 import './shell.css';
 
 const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -467,7 +468,8 @@ export function Shell({
 }): ReactElement {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const activeHref = resolveActiveHref(navGroups, pathname);
-  const signOutLabel = signingOut ? 'Signing out…' : 'Sign out';
+  const t = useUiT();
+  const signOutLabel = signingOut ? t('ui.shell.signingOut') : t('ui.shell.signOut');
 
   // Close on navigation: the route changes under an open drawer otherwise.
   useEffect(() => {
@@ -485,7 +487,7 @@ export function Shell({
             <span className="sk-brand__sub">{subtitle}</span>
           </span>
         </div>
-        <nav className="sk-rail__nav" aria-label="Main">
+        <nav className="sk-rail__nav" aria-label={t('ui.shell.main')}>
           <NavList groups={navGroups} activeHref={activeHref} Link={Link} variant="rail" />
         </nav>
         {footerNote !== undefined && <div className="sk-rail__note">{footerNote}</div>}
@@ -505,13 +507,17 @@ export function Shell({
         <header className="sk-top">
           <Dialog.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
             <Dialog.Trigger asChild>
-              <button type="button" aria-label="Open navigation menu" className="sk-top__menu">
+              <button type="button" aria-label={t('ui.shell.openMenu')} className="sk-top__menu">
                 <Menu size={18} aria-hidden />
               </button>
             </Dialog.Trigger>
             <Dialog.Portal>
               <Dialog.Overlay className="sk-drawer__overlay" />
-              <Dialog.Content aria-label="Navigation" data-slot="nav-drawer" className="sk-drawer">
+              <Dialog.Content
+                aria-label={t('ui.shell.navigation')}
+                data-slot="nav-drawer"
+                className="sk-drawer"
+              >
                 <div className="sk-drawer__head">
                   <div className="sk-brand">
                     <BrandMark src={logoSrc} height={26} />
@@ -523,7 +529,7 @@ export function Shell({
                   <Dialog.Close asChild>
                     <button
                       type="button"
-                      aria-label="Close navigation menu"
+                      aria-label={t('ui.shell.closeMenu')}
                       className="sk-iconbtn sk-drawer__close"
                     >
                       <span className="sk-iconbtn__icon" aria-hidden>
@@ -533,9 +539,9 @@ export function Shell({
                   </Dialog.Close>
                 </div>
                 <Dialog.Description className="sk-shell__sr">
-                  Main navigation and account actions
+                  {t('ui.shell.drawerDescription')}
                 </Dialog.Description>
-                <nav className="sk-drawer__nav" aria-label="Main">
+                <nav className="sk-drawer__nav" aria-label={t('ui.shell.main')}>
                   <NavList
                     groups={navGroups}
                     activeHref={activeHref}

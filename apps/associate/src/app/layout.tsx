@@ -1,8 +1,11 @@
 import type { Metadata } from 'next';
 import { cookies, headers } from 'next/headers';
 import { resolvedTheme, THEME_COOKIE_NAME, themeInitScript } from '@skydrop/ui/components';
+import { langInitScript, localeDir } from '@skydrop/ui/app/i18n';
 import { motionInitScript } from '@skydrop/ui/app/motion-init';
 import localFont from 'next/font/local';
+import { AppLocaleProvider } from '@/i18n/client';
+import { getLocale, getT } from '@/i18n/server';
 import './globals.css';
 
 /**
@@ -57,11 +60,14 @@ const mono = localFont({
   ],
 });
 
-export const metadata: Metadata = {
-  title: 'Skydrop Sales',
-  description: 'Skydrop associate portal — place orders for your store and follow them.',
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return {
+    title: t('shell.meta.title'),
+    description: t('shell.meta.description'),
+    robots: { index: false, follow: false },
+  };
+}
 
 export default async function RootLayout({
   children,
@@ -78,6 +84,11 @@ export default async function RootLayout({
   // here as well as stamped by the init script so a hydration-mismatch
   // recovery cannot reset <html> to an unthemed state.
   const theme = resolvedTheme((await cookies()).get(THEME_COOKIE_NAME)?.value);
+  // The UI language, from the `sd-lang` cookie, rendered on <html> for the same
+  // reason as the theme: React 19 resets <html>'s attributes to its SERVER props on
+  // a hydration-mismatch recovery, so a client-only `lang` would silently revert to
+  // English. English when there is no cookie.
+  const locale = await getLocale();
   return (
     // `suppressHydrationWarning`: the init script below stamps
     // `data-theme` on this element BEFORE hydration (from localStorage,
@@ -86,7 +97,8 @@ export default async function RootLayout({
     // attribute. React does not descend, so this does not mask
     // mismatches in the app tree.
     <html
-      lang="en"
+      lang={locale}
+      dir={localeDir(locale)}
       suppressHydrationWarning
       data-theme={theme}
       className={`${sans.variable} ${mono.variable}`}
@@ -103,6 +115,13 @@ export default async function RootLayout({
           suppressHydrationWarning
           dangerouslySetInnerHTML={{ __html: themeInitScript }}
         />
+        {/* The UI language: repairs the `sd-lang` cookie from localStorage and
+            stamps `lang` before first paint. Nonce'd like the theme script. */}
+        <script
+          nonce={nonce}
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{ __html: langInitScript }}
+        />
         {/* The per-user "Reduce motion" choice (localStorage only), applied
             before first paint like the theme. */}
         <script
@@ -111,7 +130,9 @@ export default async function RootLayout({
           dangerouslySetInnerHTML={{ __html: motionInitScript }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <AppLocaleProvider initialLocale={locale}>{children}</AppLocaleProvider>
+      </body>
     </html>
   );
 }

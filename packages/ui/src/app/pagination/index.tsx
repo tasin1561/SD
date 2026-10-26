@@ -10,6 +10,7 @@ import {
   type FormEvent,
   type ReactElement,
 } from 'react';
+import { richMessage, useUiT } from '../i18n-client';
 import { Select } from '../select';
 import './pagination.css';
 
@@ -48,7 +49,7 @@ export function Pagination({
   onPageSizeChange,
   pageSizes = [10, 20, 50, 100],
   showJump = true,
-  label = 'Pagination',
+  label,
   className,
 }: {
   readonly page: number;
@@ -61,6 +62,9 @@ export function Pagination({
   readonly label?: string;
   readonly className?: string | undefined;
 }): ReactElement {
+  const t = useUiT();
+  const navLabel = label ?? t('ui.pagination.label');
+  const idBase = label ?? 'Pagination';
   const totalPages = Math.max(1, Math.ceil(total / Math.max(1, pageSize)));
   const current = Math.min(Math.max(1, page), totalPages);
   const start = total === 0 ? 0 : (current - 1) * pageSize + 1;
@@ -102,16 +106,19 @@ export function Pagination({
   const sizeOptions = (pageSizes.includes(pageSize) ? pageSizes : [...pageSizes, pageSize])
     .slice()
     .sort((a, b) => a - b)
-    .map((n) => ({ value: String(n), label: `${n} / page` }));
+    .map((n) => ({ value: String(n), label: t('ui.pagination.perPage', { n }) }));
 
   return (
-    <nav className={clsx('sk-pg', className)} aria-label={label}>
+    <nav className={clsx('sk-pg', className)} aria-label={navLabel}>
       <div className="sk-pg__summary" aria-live="polite">
-        Showing{' '}
-        <span className="sk-figure sk-pg__strong">
-          {start}–{end}
-        </span>{' '}
-        of <span className="sk-figure sk-pg__strong">{total}</span>
+        {richMessage(t('ui.pagination.summary'), {
+          range: (
+            <span className="sk-figure sk-pg__strong">
+              {start}–{end}
+            </span>
+          ),
+          total: <span className="sk-figure sk-pg__strong">{total}</span>,
+        })}
       </div>
       <div className="sk-pg__bar">
         <button
@@ -119,7 +126,7 @@ export function Pagination({
           className="sk-pg__arrow"
           onClick={() => go(current - 1)}
           disabled={current <= 1}
-          aria-label="Previous page"
+          aria-label={t('ui.pagination.previous')}
         >
           <ChevronLeft size={16} aria-hidden />
         </button>
@@ -133,7 +140,7 @@ export function Pagination({
                 className="sk-pg__page sk-figure"
                 aria-current={it === current ? 'page' : undefined}
                 data-edge={it === 1 || it === totalPages || it === current ? '1' : undefined}
-                aria-label={`Page ${it} of ${totalPages}`}
+                aria-label={t('ui.pagination.pageOf', { page: it, total: totalPages })}
                 onClick={() => go(it)}
               >
                 {it}
@@ -150,7 +157,7 @@ export function Pagination({
           className="sk-pg__arrow"
           onClick={() => go(current + 1)}
           disabled={current >= totalPages}
-          aria-label="Next page"
+          aria-label={t('ui.pagination.next')}
         >
           <ChevronRight size={16} aria-hidden />
         </button>
@@ -160,7 +167,7 @@ export function Pagination({
           {onPageSizeChange !== undefined && (
             <div className="sk-pg__size">
               <Select
-                label="Rows per page"
+                label={t('ui.pagination.rowsPerPage')}
                 value={String(pageSize)}
                 onChange={(e) => onPageSizeChange(Number(e.currentTarget.value))}
               >
@@ -174,21 +181,21 @@ export function Pagination({
           )}
           {showJump && totalPages > 7 && (
             <form className="sk-pg__jump" onSubmit={onJump}>
-              <label className="sk-pg__jump-label" htmlFor={`${label}-jump`}>
-                Go to page
+              <label className="sk-pg__jump-label" htmlFor={`${idBase}-jump`}>
+                {t('ui.pagination.goTo')}
               </label>
               <input
-                id={`${label}-jump`}
+                id={`${idBase}-jump`}
                 className="sk-pg__jump-input sk-figure"
                 inputMode="numeric"
                 pattern="[0-9]*"
                 value={jump}
                 onChange={(e) => setJump(e.target.value.replace(/\D/g, ''))}
                 placeholder={String(current)}
-                aria-describedby={`${label}-jump-max`}
+                aria-describedby={`${idBase}-jump-max`}
               />
-              <span id={`${label}-jump-max`} className="sk-pg__jump-max">
-                of {totalPages}
+              <span id={`${idBase}-jump-max`} className="sk-pg__jump-max">
+                {t('ui.pagination.ofTotal', { total: totalPages })}
               </span>
             </form>
           )}

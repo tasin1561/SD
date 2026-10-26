@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, type ReactElement } from 'react';
+import { useUiT } from '../i18n-client';
 import { MOTION_STORAGE_KEY, motionPreference, type MotionPreference } from '../motion-init';
 import {
   applyMotionPreference,
@@ -63,9 +64,8 @@ export function MotionSwitch({
     };
   }, []);
 
-  const description = osReduced
-    ? 'Your device already asks for reduced motion, so animation stays off whatever this says.'
-    : 'Animations settle instantly. Saved in this browser.';
+  const t = useUiT();
+  const description = osReduced ? t('ui.motion.osReduced') : t('ui.motion.description');
 
   return (
     <div className="sk-motionsw">
@@ -76,7 +76,7 @@ export function MotionSwitch({
           writeMotionPreference(next);
           setPref(next);
         }}
-        label="Reduce motion"
+        label={t('ui.motion.label')}
         description={description}
         disabled={pref === null}
         data-size={size}

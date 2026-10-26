@@ -42,6 +42,16 @@ import {
   StoreAddressChangeStatus,
   StoreOrderRequestStatus,
 } from '@skydrop/db';
+import type { Locale } from '../app/i18n';
+import {
+  DELIVERY_ACTION_STATUS_BN,
+  STATUS_LABEL_BN,
+  TICKET_STATUS_BN,
+  UPLOAD_STATUS_BN,
+} from './bn';
+
+/** The Bangla tables, for a consumer's own consistency spec. Additive. */
+export { STATUS_LABEL_BN, STATUS_LABEL_BN_SOURCES } from './bn';
 
 export const STATUS_KINDS = [
   'draft',
@@ -211,7 +221,8 @@ export function shipmentStatusKind(status: ShipmentStatus): StatusKind {
  * F2-exhaustive: a new TicketStatus fails to compile until somebody
  * decides how it reads.
  */
-export function ticketStatusLabel(status: TicketStatus): string {
+export function ticketStatusLabel(status: TicketStatus, locale: Locale = 'en'): string {
+  if (locale === 'bn') return TICKET_STATUS_BN[status];
   switch (status) {
     case TicketStatus.OPEN:
       return 'Open';
@@ -441,7 +452,8 @@ export function uploadStatusKind(status: BulkUploadStatus): StatusKind {
   }
 }
 
-export function uploadStatusLabel(status: BulkUploadStatus): string {
+export function uploadStatusLabel(status: BulkUploadStatus, locale: Locale = 'en'): string {
+  if (locale === 'bn') return UPLOAD_STATUS_BN[status];
   switch (status) {
     case BulkUploadStatus.PENDING:
       return 'Waiting';
@@ -550,7 +562,11 @@ export function deliveryActionStatusKind(status: DeliveryActionStatus): StatusKi
 }
 
 /** The same five states in the words the store and the seller read. */
-export function deliveryActionStatusLabel(status: DeliveryActionStatus): string {
+export function deliveryActionStatusLabel(
+  status: DeliveryActionStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return DELIVERY_ACTION_STATUS_BN[status];
   switch (status) {
     case DeliveryActionStatus.PENDING:
       return 'Waiting on the client';
@@ -796,7 +812,11 @@ export function stockUnitStatusKind(status: StockUnitStatus): StatusKind {
  * underscores → spaces + title case; overrides for the few statuses
  * where the enum name reads awkwardly. UI calls this when it needs
  * a one-line display string; for richer copy the consumer composes
- * its own (we don't ship i18n in M12 — that's M16/i18n package).
+ * its own.
+ *
+ * `locale` (default `en`, so every existing caller is unchanged) selects the
+ * Bangla words in `./bn.ts`. A value with no Bangla entry falls back to the
+ * English word rather than to nothing.
  */
 export function statusLabel(
   status:
@@ -807,7 +827,12 @@ export function statusLabel(
     | WithdrawalRequestStatus
     | EarlyReservationReviewStatus
     | StockUnitStatus,
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'bn') {
+    const bn = STATUS_LABEL_BN[String(status)];
+    if (bn !== undefined) return bn;
+  }
   // "Voided" is the enum's word; WITHDRAWN is the one every sentence
   // beside the badge uses, and a badge that disagrees with its own
   // caption reads as two different things having happened. Safe as a

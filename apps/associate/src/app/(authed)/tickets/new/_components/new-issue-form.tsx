@@ -9,7 +9,8 @@ import { Select } from '@skydrop/ui/app/select';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { useMyOrders } from '@/lib/order-hooks';
 import { useRaiseTicket } from '@/lib/ticket-hooks';
 import { BackLink, LinkButton, Notice, Section } from '../../../_components/parts';
@@ -29,6 +30,7 @@ import '../../../_components/as.css';
  * happened, and nothing else.
  */
 export function NewIssueForm(): ReactElement {
+  const t = useT();
   const router = useRouter();
   const params = useSearchParams();
   const [orderId, setOrderId] = useState(params.get('orderId') ?? '');
@@ -51,22 +53,17 @@ export function NewIssueForm(): ReactElement {
       });
       router.push(`/tickets/${ticket.id}`);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
-  const header = (
-    <PageHeader
-      title="Raise an issue"
-      subtitle="Say which order it is about and what has gone wrong. Skydrop and your store read it and reply on the same thread."
-    />
-  );
+  const header = <PageHeader title={t('ticketNew.title')} subtitle={t('ticketNew.subtitle')} />;
 
   if (orders.isPending) {
     return (
       <div className="as-page">
         {header}
-        <SkeletonRows rows={3} cols={1} label="Loading your orders" />
+        <SkeletonRows rows={3} cols={1} label={t('ticketNew.loadingOrders')} />
       </div>
     );
   }
@@ -74,7 +71,7 @@ export function NewIssueForm(): ReactElement {
     return (
       <div className="as-page">
         {header}
-        <ErrorState message={serverVerdict(orders.error)} retry={() => void orders.refetch()} />
+        <ErrorState message={verdict(orders.error, t)} retry={() => void orders.refetch()} />
       </div>
     );
   }
@@ -83,11 +80,11 @@ export function NewIssueForm(): ReactElement {
       <div className="as-page">
         {header}
         <EmptyState
-          title="Nothing to raise an issue about"
-          description="An issue hangs off one of your orders, and you have not placed any yet."
+          title={t('ticketNew.noOrders.title')}
+          description={t('ticketNew.noOrders.body')}
           action={
             <LinkButton href="/orders/new" variant="primary">
-              Place an order
+              {t('ticketNew.placeOrder')}
             </LinkButton>
           }
         />
@@ -98,19 +95,19 @@ export function NewIssueForm(): ReactElement {
   return (
     <form className="as-page" onSubmit={(e) => void submit(e)}>
       <BackLink href="/tickets" icon={<ArrowLeft size={14} aria-hidden />}>
-        Issues
+        {t('tickets.title')}
       </BackLink>
       {header}
 
-      <Section title="The issue">
+      <Section title={t('ticketNew.section')}>
         <div className="as-stack as-stack--tight">
           <Select
-            label="Which order?"
+            label={t('ticketNew.which')}
             value={orderId}
             onChange={(e) => setOrderId(e.target.value)}
             required
           >
-            <option value="">Choose one of your orders</option>
+            <option value="">{t('ticketNew.choose')}</option>
             {orders.data.items.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.orderNumber} — {o.recipientName}
@@ -118,8 +115,8 @@ export function NewIssueForm(): ReactElement {
             ))}
           </Select>
           <TextField
-            label="What is it about?"
-            hint="One line, so it can be found later — “Parcel arrived damaged”"
+            label={t('ticketNew.subject')}
+            hint={t('ticketNew.subjectHint')}
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             maxLength={120}
@@ -127,7 +124,7 @@ export function NewIssueForm(): ReactElement {
             required
           />
           <TextArea
-            label="What happened? (optional)"
+            label={t('ticketNew.description')}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             maxLength={2000}
@@ -143,7 +140,11 @@ export function NewIssueForm(): ReactElement {
               type="submit"
               variant="primary"
               icon={<Send size={15} />}
-              labels={{ idle: 'Raise it', busy: 'Sending…', error: 'Not sent' }}
+              labels={{
+                idle: t('ticketNew.raise'),
+                busy: t('ticket.sending'),
+                error: t('ticket.notSent'),
+              }}
               state={raise.isPending ? 'busy' : error !== null ? 'error' : 'idle'}
               disabled={raise.isPending || orderId === '' || subject.trim() === ''}
             />

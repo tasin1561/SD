@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactElement } from 'react';
 import Link from 'next/link';
 import { ArrowRight, BellOff, CheckCheck, Trash2 } from 'lucide-react';
+import type { Locale } from '@skydrop/ui/app/i18n';
 import { agoLabel, humaniseTopic, notificationKindStyle } from '@skydrop/ui/components';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { Button } from '@skydrop/ui/app/button';
@@ -10,7 +11,8 @@ import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useLocale, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import {
   useDismissAllNotifications,
   useDismissNotification,
@@ -42,6 +44,8 @@ import '../../_components/as.css';
  * "load earlier" is the honest shape for it.
  */
 export function NotificationsView(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   /** Pages accumulate — "load earlier" appends rather than replacing. */
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [older, setOlder] = useState<readonly FeedItem[]>([]);
@@ -67,7 +71,7 @@ export function NotificationsView(): ReactElement {
   // match on the topic string, which is how a second taxonomy starts.
   const byTopic = useMemo(() => {
     const m = new Map<string, { group: string; label: string }>();
-    for (const t of topics.data ?? []) m.set(t.topic, { group: t.group, label: t.label });
+    for (const tp of topics.data ?? []) m.set(tp.topic, { group: tp.group, label: tp.label });
     return m;
   }, [topics.data]);
 
@@ -103,8 +107,8 @@ export function NotificationsView(): ReactElement {
   return (
     <div className="as-page" data-width="narrow">
       <PageHeader
-        title="Notifications"
-        subtitle="Everything sent to you — what was delivered, what came back, and what could not be delivered. Clearing one hides it from your list; the record of what was sent is kept."
+        title={t('ntf.title')}
+        subtitle={t('ntf.subtitle')}
         action={
           <div className="as-row">
             <Button
@@ -113,7 +117,7 @@ export function NotificationsView(): ReactElement {
               onClick={() => setConfirmMarkAll(true)}
               disabled={unread === 0}
             >
-              Mark all read
+              {t('ntf.markAllRead')}
             </Button>
             <Button
               variant="ghost"
@@ -121,7 +125,7 @@ export function NotificationsView(): ReactElement {
               onClick={() => setConfirmDismissAll(true)}
               disabled={items.length === 0}
             >
-              Clear all
+              {t('ntf.clearAll')}
             </Button>
           </div>
         }
@@ -129,26 +133,26 @@ export function NotificationsView(): ReactElement {
 
       <section className="as-section">
         <SectionHeading
-          title="Inbox"
+          title={t('ntf.inbox')}
           note={
             items.length === 0
               ? undefined
-              : `${items.length} ${items.length === 1 ? 'message' : 'messages'}${
-                  unread === 0 ? '' : ` · ${unread} unread`
+              : `${t(items.length === 1 ? 'ntf.count.one' : 'ntf.count.other', { n: items.length })}${
+                  unread === 0 ? '' : t('ntf.unreadSuffix', { n: unread })
                 }`
           }
         />
 
         {feed.isPending && items.length === 0 ? (
-          <SkeletonRows rows={5} cols={1} label="Loading your notifications" />
+          <SkeletonRows rows={5} cols={1} label={t('ntf.loading')} />
         ) : feed.isError && items.length === 0 ? (
-          <ErrorState message={serverVerdict(feed.error)} retry={() => void feed.refetch()} />
+          <ErrorState message={verdict(feed.error, t)} retry={() => void feed.refetch()} />
         ) : items.length === 0 ? (
           <EmptyState
             icon={<BellOff size={20} />}
             tone="positive"
-            title="Nothing yet"
-            description="Each day you will be told here what was delivered, what came back, and what the courier could not deliver."
+            title={t('ntf.empty.title')}
+            description={t('ntf.empty.body')}
           />
         ) : (
           <>
@@ -158,6 +162,7 @@ export function NotificationsView(): ReactElement {
                   key={n.id}
                   item={n}
                   now={now}
+                  locale={locale}
                   group={byTopic.get(n.topic)?.group ?? null}
                   label={byTopic.get(n.topic)?.label ?? null}
                   expanded={expanded === n.id}
@@ -183,7 +188,7 @@ export function NotificationsView(): ReactElement {
                     setCursor(more);
                   }}
                 >
-                  Load earlier
+                  {t('ntf.loadEarlier')}
                 </Button>
               </div>
             ) : null}
@@ -194,11 +199,11 @@ export function NotificationsView(): ReactElement {
       <ConfirmDialog
         open={confirmMarkAll}
         onOpenChange={setConfirmMarkAll}
-        title="Mark everything read?"
-        entity={`${unread} unread`}
-        consequence="Every message in your inbox is marked read. Nothing is removed."
-        confirmLabel="Mark all read"
-        cancelLabel="Not now"
+        title={t('ntf.markAll.title')}
+        entity={t('ntf.unreadCount', { n: unread })}
+        consequence={t('ntf.markAll.consequence')}
+        confirmLabel={t('ntf.markAllRead')}
+        cancelLabel={t('ntf.markAll.notNow')}
         onConfirm={() =>
           markAll.mutateAsync().then(
             () => undefined,
@@ -210,11 +215,11 @@ export function NotificationsView(): ReactElement {
       <ConfirmDialog
         open={confirmDismissAll}
         onOpenChange={setConfirmDismissAll}
-        title="Clear your whole inbox?"
-        entity={`${items.length} ${items.length === 1 ? 'message' : 'messages'}`}
-        consequence="They are hidden from your list and cannot be brought back from here. The record of what was sent to you is kept."
-        confirmLabel="Clear all"
-        cancelLabel="Keep them"
+        title={t('ntf.clearAll.title')}
+        entity={t(items.length === 1 ? 'ntf.count.one' : 'ntf.count.other', { n: items.length })}
+        consequence={t('ntf.clearAll.consequence')}
+        confirmLabel={t('ntf.clearAll')}
+        cancelLabel={t('ntf.clearAll.keep')}
         destructive
         onConfirm={() =>
           dismissAll.mutateAsync().then(
@@ -234,11 +239,11 @@ export function NotificationsView(): ReactElement {
         onOpenChange={(open) => {
           if (!open) setPendingDismiss(null);
         }}
-        title="Clear this from your list?"
+        title={t('ntf.clearOne.title')}
         entity={pendingDismiss === null ? '' : titleOf(pendingDismiss, byTopic)}
-        consequence="It is hidden from your list and cannot be brought back from here."
-        confirmLabel="Clear it"
-        cancelLabel="Keep it"
+        consequence={t('ntf.clearOne.consequence')}
+        confirmLabel={t('ntf.clearOne.confirm')}
+        cancelLabel={t('ntf.clearOne.keep')}
         destructive
         onConfirm={() =>
           pendingDismiss === null
@@ -262,6 +267,7 @@ function titleOf(n: FeedItem, byTopic: Map<string, { group: string; label: strin
 function Row({
   item,
   now,
+  locale,
   group,
   label,
   expanded,
@@ -271,6 +277,7 @@ function Row({
 }: {
   readonly item: FeedItem;
   readonly now: number;
+  readonly locale: Locale;
   readonly group: string | null;
   readonly label: string | null;
   readonly expanded: boolean;
@@ -278,6 +285,7 @@ function Row({
   readonly onUnread: () => Promise<unknown>;
   readonly onDismiss: () => void;
 }): ReactElement {
+  const t = useT();
   const { Icon, tone } = notificationKindStyle(group);
   const isUnread = item.readAt === null;
   // The kind's colours, read from the status tokens BY NAME — never a hex.
@@ -309,8 +317,10 @@ function Row({
             <span className="as-ntf-item__title" data-unread={isUnread ? '1' : undefined}>
               {item.title ?? label ?? humaniseTopic(item.topic)}
             </span>
-            {isUnread && <span className="as-ntf-item__new">New</span>}
-            <span className="as-ntf-item__when sk-figure">{agoLabel(item.createdAt, now)}</span>
+            {isUnread && <span className="as-ntf-item__new">{t('ntf.row.new')}</span>}
+            <span className="as-ntf-item__when sk-figure">
+              {agoLabel(item.createdAt, now, locale)}
+            </span>
           </span>
           <span className="as-ntf-item__text" data-open={expanded ? '1' : undefined}>
             {item.body}
@@ -321,19 +331,23 @@ function Row({
           <div className="as-ntf-item__actions">
             {item.orderId !== null && (
               <Link href={`/orders/${item.orderId}`} className="as-ntf-item__order">
-                Open the order <ArrowRight size={12} aria-hidden />
+                {t('ntf.row.openOrder')} <ArrowRight size={12} aria-hidden />
               </Link>
             )}
             {item.readAt !== null && (
               <AsyncButton
                 variant="ghost"
                 size="sm"
-                labels={{ idle: 'Mark unread', busy: 'Marking…', done: 'Unread' }}
+                labels={{
+                  idle: t('ntf.row.markUnread'),
+                  busy: t('ntf.row.marking'),
+                  done: t('ntf.row.unread'),
+                }}
                 onAction={onUnread}
               />
             )}
             <Button variant="ghost" size="sm" icon={<Trash2 size={13} />} onClick={onDismiss}>
-              Clear from my list
+              {t('ntf.row.clear')}
             </Button>
             <span className={label === null ? 'as-ntf-item__topic sk-ident' : 'as-ntf-item__topic'}>
               {label ?? item.topic}

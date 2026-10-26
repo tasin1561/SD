@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, makeTranslator, type Locale } from '../app/i18n';
+import { UI_MESSAGES } from '../app/i18n/ui-messages';
 import {
   AlertTriangle,
   Bell,
@@ -66,17 +68,22 @@ export function notificationKindStyle(group: string | null): NotificationKindSty
  * subtraction; a relative one on something from August makes them do
  * worse.
  */
-export function agoLabel(iso: string, now: number): string {
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return '';
-  const mins = Math.floor((now - t) / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+export function agoLabel(iso: string, now: number, locale: Locale = DEFAULT_LOCALE): string {
+  const t = makeTranslator(UI_MESSAGES[locale], UI_MESSAGES.en);
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return '';
+  const mins = Math.floor((now - ts) / 60_000);
+  if (mins < 1) return t('ui.ago.now');
+  if (mins < 60) return t('ui.ago.minutes', { n: mins });
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return t('ui.ago.hours', { n: hours });
   const days = Math.floor(hours / 24);
-  if (days === 1) return 'Yesterday';
-  return new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  if (days === 1) return t('ui.ago.yesterday');
+  // Latin digits in Bangla too (`-u-nu-latn`): numerals stay 0-9 everywhere.
+  return new Date(ts).toLocaleDateString(locale === 'bn' ? 'bn-BD-u-nu-latn' : undefined, {
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 /**

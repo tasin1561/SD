@@ -1,4 +1,5 @@
 import { Suspense, type ReactElement } from 'react';
+import { getT } from '@/i18n/server';
 import { AuthFrame } from '@/components/auth-frame';
 import { ResetForm } from './_components/reset-form';
 
@@ -15,9 +16,10 @@ import { ResetForm } from './_components/reset-form';
  * it. The invitation path had the rule right from the start
  * (`invitationAppUrl`); the reset path never got it.
  */
-export default function ResetPasswordPage(): ReactElement {
+export default async function ResetPasswordPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
-    <AuthFrame title="Set a new password" subtitle="At least 10 characters.">
+    <AuthFrame title={t('auth.reset.title')} subtitle={t('auth.reset.subtitle')}>
       <Suspense fallback={null}>
         <ResetForm />
       </Suspense>

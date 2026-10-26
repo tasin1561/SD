@@ -15,6 +15,7 @@ import { useAsyncState, type AsyncOutcome } from '../async-button';
 import { Button, type ButtonSize, type ButtonVariant } from '../button';
 import { ms, reducedMotion } from '../motion/motion';
 import './van-drive-off.css';
+import { useUiT } from '../i18n-client';
 
 export type VanDriveOffButtonProps = Omit<
   ButtonHTMLAttributes<HTMLButtonElement>,
@@ -83,9 +84,9 @@ const REVERSE_MS = 520;
 export function VanDriveOffButton({
   onAction,
   label,
-  busyLabel = 'Working…',
-  doneLabel = 'Done',
-  errorLabel = 'Failed, try again',
+  busyLabel: busyLabelProp,
+  doneLabel: doneLabelProp,
+  errorLabel: errorLabelProp,
   variant = 'primary',
   size = 'md',
   fullWidth = false,
@@ -99,6 +100,10 @@ export function VanDriveOffButton({
   className,
   ...rest
 }: VanDriveOffButtonProps): ReactElement {
+  const t = useUiT();
+  const busyLabel = busyLabelProp ?? t('ui.working');
+  const doneLabel = doneLabelProp ?? t('ui.done');
+  const errorLabel = errorLabelProp ?? t('ui.failedRetry');
   const [driving, setDriving] = useState(0);
   const [reversing, setReversing] = useState(0);
   const [shownError, setShownError] = useState(false);

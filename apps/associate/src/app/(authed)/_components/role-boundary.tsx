@@ -6,6 +6,7 @@ import { ShoppingBag } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import { EmptyState } from '@skydrop/ui/app/empty-state';
 import { PageHeader } from '@skydrop/ui/app/page-header';
+import { useT } from '@/i18n/client';
 import { canSeePath, FALLBACK_PATH, permissionForPath } from '@/lib/page-access';
 import './as.css';
 
@@ -22,16 +23,19 @@ export function RoleBoundary({
   readonly permissions: readonly string[];
   readonly children: ReactNode;
 }): ReactElement {
+  const t = useT();
   const pathname = usePathname();
   const router = useRouter();
   if (canSeePath({ permissions }, pathname)) return <>{children}</>;
   const needed = permissionForPath(pathname);
   return (
     <div className="as-page" data-width="narrow">
-      <PageHeader title="Not available" />
+      <PageHeader title={t('boundary.title')} />
       <EmptyState
-        title="This is not part of your access"
-        description={`This page needs the “${needed ?? 'unknown'}” permission and your role does not have it. Whoever runs your store can change that.`}
+        title={t('boundary.empty')}
+        description={t('boundary.description', {
+          permission: needed ?? t('boundary.unknownPermission'),
+        })}
         action={
           <Button
             variant="primary"
@@ -39,7 +43,7 @@ export function RoleBoundary({
             icon={<ShoppingBag size={15} />}
             onClick={() => router.push(FALLBACK_PATH)}
           >
-            Go to my orders
+            {t('boundary.goOrders')}
           </Button>
         }
       />

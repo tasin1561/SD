@@ -15,6 +15,7 @@ import {
 } from 'react';
 import { useMergedRef } from '../text-field/field-shell';
 import './drop-zone.css';
+import { useUiT } from '../i18n-client';
 
 /**
  * DropZone (u15). A dashed area that lifts and tints while a file is dragged
@@ -72,10 +73,10 @@ function sizeText(bytes: number): string {
 export const DropZone = forwardRef<HTMLInputElement, DropZoneProps>(function DropZone(
   {
     onFiles,
-    label = 'Drop files here',
+    label,
     hint,
     error,
-    buttonText = 'Choose files',
+    buttonText,
     showFiles = true,
     filterDropped = true,
     accept,
@@ -87,6 +88,7 @@ export const DropZone = forwardRef<HTMLInputElement, DropZoneProps>(function Dro
   },
   ref,
 ): ReactElement {
+  const t = useUiT();
   const autoId = useId();
   const id = idProp ?? `sk-dz-${autoId}`;
   const [node, setRef] = useMergedRef<HTMLInputElement>(ref);
@@ -169,9 +171,9 @@ export const DropZone = forwardRef<HTMLInputElement, DropZoneProps>(function Dro
         <span className="sk-drop__icon" aria-hidden>
           <CloudUpload size={22} />
         </span>
-        <span className="sk-drop__label">{label}</span>
+        <span className="sk-drop__label">{label ?? t('ui.dropzone.label')}</span>
         <span className="sk-drop__or" aria-hidden>
-          or
+          {t('ui.dropzone.or')}
         </span>
         <button
           type="button"
@@ -180,7 +182,7 @@ export const DropZone = forwardRef<HTMLInputElement, DropZoneProps>(function Dro
           aria-describedby={described}
           onClick={() => node.current?.click()}
         >
-          {buttonText}
+          {buttonText ?? t('ui.dropzone.button')}
         </button>
         <input
           ref={setRef}
@@ -211,7 +213,7 @@ export const DropZone = forwardRef<HTMLInputElement, DropZoneProps>(function Dro
         {left}
       </p>
       {showFiles && files.length > 0 ? (
-        <ul className="sk-drop__files" aria-label="Chosen files">
+        <ul className="sk-drop__files" aria-label={t('ui.dropzone.chosen')}>
           {files.map((f, i) => (
             <li key={`${f.name}-${f.size}-${i}`} className="sk-drop__file">
               <FileText size={16} aria-hidden className="sk-drop__file-icon" />
@@ -220,7 +222,7 @@ export const DropZone = forwardRef<HTMLInputElement, DropZoneProps>(function Dro
               <button
                 type="button"
                 className="sk-drop__remove"
-                aria-label={`Remove ${f.name}`}
+                aria-label={t('ui.dropzone.remove', { name: f.name })}
                 disabled={disabled}
                 onClick={() => remove(i)}
               >

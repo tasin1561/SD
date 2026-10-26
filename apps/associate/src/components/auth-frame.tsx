@@ -1,6 +1,9 @@
+'use client';
+
 import type { ReactElement, ReactNode } from 'react';
 import { SignInCard, SignInFrame } from '@skydrop/ui/app/sign-in';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { useT } from '@/i18n/client';
+import { PrefsControl } from './prefs-control';
 
 /**
  * Every signed-out screen of the associate portal — sign in, reset a
@@ -8,7 +11,11 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
  * corridor map after first paint, the Skydrop mark and "associate portal",
  * and one card with the page's own content.
  *
- * The THEME SWITCH is mounted here, and that is the half that goes
+ * It is a CLIENT component because it is imported by server pages (login)
+ * and by client ones (password reset): a hook-free server component could
+ * not carry the translated portal label, and a client one works from both.
+ *
+ * The THEME and LANGUAGE switches are mounted here (`PrefsControl`), and that is the half that goes
  * missing (FE-7, 2026-09-20): `AppShell` carries one, but that is the
  * AUTHENTICATED chrome, so without this mount no signed-out page would
  * have a toggle at all — and the sign-in screen is exactly where
@@ -28,8 +35,9 @@ export function AuthFrame({
   readonly children: ReactNode;
   readonly footer?: ReactNode;
 }): ReactElement {
+  const t = useT();
   return (
-    <SignInFrame portal="associate portal" themeControl={<ThemeSwitch />}>
+    <SignInFrame portal={t('auth.portal')} themeControl={<PrefsControl />}>
       <SignInCard title={title} note={subtitle} footer={footer}>
         {children}
       </SignInCard>

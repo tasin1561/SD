@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import './parachute-progress.css';
+import { useUiT } from '../i18n-client';
 
 export type ParachuteState = 'running' | 'done' | 'failed';
 
@@ -44,10 +45,11 @@ export function ParachuteProgress({
   value,
   state = 'running',
   detail,
-  doneLabel = 'Complete',
-  failedLabel = 'Failed',
+  doneLabel,
+  failedLabel,
   className,
 }: ParachuteProgressProps): ReactElement {
+  const t = useUiT();
   const root = useRef<HTMLDivElement>(null);
   const [paused, setPaused] = useState(false);
   const num = typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -78,12 +80,12 @@ export function ParachuteProgress({
 
   const status =
     state === 'done'
-      ? doneLabel
+      ? (doneLabel ?? t('ui.complete'))
       : state === 'failed'
-        ? failedLabel
+        ? (failedLabel ?? t('ui.failed'))
         : known
           ? `${Math.round(pct)}%`
-          : 'Working…';
+          : t('ui.working');
 
   return (
     <div

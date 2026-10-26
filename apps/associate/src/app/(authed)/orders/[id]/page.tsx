@@ -16,7 +16,9 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import { useCancelOrder, useMyOrder, useMyOrderEvents } from '@/lib/order-hooks';
 import { BackLink, Facts, LinkButton, Notice, Section } from '../../_components/parts';
 import { Reattempt } from './_components/reattempt';
@@ -24,10 +26,6 @@ import '../../_components/as.css';
 
 /** Where a customer looks their own parcel up. */
 const TRACK_URL = process.env.NEXT_PUBLIC_TRACK_URL ?? 'https://track.skydrop.global';
-
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 /**
  * One of this person's own orders.
@@ -54,6 +52,9 @@ function when(iso: string): string {
  * send-back turns a parcel round at somebody's cost on one click.
  */
 export default function OrderDetailPage(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const when = (iso: string): string => formatDateTime(iso, locale);
   const params = useParams<{ id: string }>();
   const id = typeof params.id === 'string' ? params.id : '';
   const me = useStoreIdentity();
@@ -70,16 +71,16 @@ export default function OrderDetailPage(): ReactElement {
   if (order.isPending) {
     return (
       <div className="as-page">
-        <PageHeader title="Order" />
-        <SkeletonRows rows={5} cols={2} label="Loading the order" />
+        <PageHeader title={t('order.title')} />
+        <SkeletonRows rows={5} cols={2} label={t('order.loading')} />
       </div>
     );
   }
   if (order.isError) {
     return (
       <div className="as-page">
-        <PageHeader title="Order" />
-        <ErrorState message={serverVerdict(order.error)} retry={() => void order.refetch()} />
+        <PageHeader title={t('order.title')} />
+        <ErrorState message={verdict(order.error, t)} retry={() => void order.refetch()} />
       </div>
     );
   }
@@ -97,13 +98,13 @@ export default function OrderDetailPage(): ReactElement {
       });
       if (outcome.applied) {
         setHeld(null);
-        toast.success('The order is cancelled.');
+        toast.success(t('order.cancelled'));
       } else {
         setHeld(outcome.request.label);
       }
       setNote('');
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       throw err;
     }
   }
@@ -111,11 +112,11 @@ export default function OrderDetailPage(): ReactElement {
   return (
     <div className="as-page">
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        My orders
+        {t('nav.myOrders')}
       </BackLink>
       <PageHeader
         title={o.orderNumber}
-        subtitle={`Placed ${when(o.placedAt)}`}
+        subtitle={t('order.placed', { when: when(o.placedAt) })}
         action={
           <div className="as-row">
             <LinkButton
@@ -123,7 +124,7 @@ export default function OrderDetailPage(): ReactElement {
               variant="ghost"
               icon={<MessagesSquare size={15} />}
             >
-              Raise an issue
+              {t('order.raiseIssue')}
             </LinkButton>
             {mayCancel ? (
               <Button
@@ -132,7 +133,7 @@ export default function OrderDetailPage(): ReactElement {
                 icon={<OctagonX size={15} />}
                 onClick={() => setConfirming(true)}
               >
-                Cancel this order
+                {t('order.cancel')}
               </Button>
             ) : null}
           </div>
@@ -140,25 +141,24 @@ export default function OrderDetailPage(): ReactElement {
       />
 
       <div className="as-row">
-        <StatusChip kind={orderStatusKind(o.status)} label={statusLabel(o.status)} />
+        <StatusChip kind={orderStatusKind(o.status)} label={statusLabel(o.status, locale)} />
         {o.sellerOrderRef !== null && o.sellerOrderRef !== '' ? (
           <span className="as-muted">
-            your reference <span className="sk-ident">{o.sellerOrderRef}</span>
+            {richMessage(t('order.yourRef'), {
+              ref: <span className="sk-ident">{o.sellerOrderRef}</span>,
+            })}
           </span>
         ) : null}
       </div>
 
       {held !== null ? (
-        <Notice tone="warn" title="Waiting on your store" role="status">
-          <span>
-            {held} — whoever runs your store has to approve it before the order is cancelled. The
-            order carries on until they do.
-          </span>
+        <Notice tone="warn" title={t('order.held.title')} role="status">
+          <span>{t('order.held.body', { held })}</span>
         </Notice>
       ) : null}
 
       <div className="as-split">
-        <Section title="What is inside">
+        <Section title={t('order.inside')}>
           <ul className="as-items">
             {o.lines.map((l) => (
               <li key={l.id} className="as-item">
@@ -182,28 +182,28 @@ export default function OrderDetailPage(): ReactElement {
             ))}
           </ul>
           <p className="as-total">
-            <span>Sold for</span>
+            <span>{t('order.soldFor')}</span>
             <Money amount={o.totals.retailInr} convert={false} />
           </p>
         </Section>
 
-        <Section title="Where it is going">
+        <Section title={t('order.goingTo')}>
           <Facts
             items={[
-              { label: 'Name', value: o.recipient.name },
+              { label: t('order.name'), value: o.recipient.name },
               {
-                label: 'Phone',
+                label: t('order.phone'),
                 value: <span className="sk-ident">{o.recipient.phoneE164}</span>,
               },
-              { label: 'Email', value: o.recipient.email ?? '—' },
+              { label: t('order.email'), value: o.recipient.email ?? '—' },
               {
-                label: 'Address',
+                label: t('order.address'),
                 value: [o.recipient.addressLine1, o.recipient.addressLine2]
                   .filter((v) => v !== null && v !== '')
                   .join(', '),
               },
               {
-                label: 'PIN code',
+                label: t('order.pin'),
                 value: <span className="sk-ident">{o.recipient.postalCode}</span>,
               },
             ]}
@@ -212,24 +212,24 @@ export default function OrderDetailPage(): ReactElement {
       </div>
 
       <div className="as-split">
-        <Section title="How it is paid for">
+        <Section title={t('order.paidFor')}>
           <Facts
             items={[
               {
-                label: 'Payment',
-                value: o.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid',
+                label: t('order.payment'),
+                value: o.paymentMode === 'COD' ? t('order.cod') : t('order.prepaid'),
               },
               {
-                label: 'To collect',
+                label: t('order.toCollect'),
                 value:
                   o.codAmountInr === null ? (
-                    'Nothing — already paid'
+                    t('order.alreadyPaid')
                   ) : (
                     <Money amount={o.codAmountInr} convert={false} />
                   ),
               },
               {
-                label: 'Delivery charge',
+                label: t('order.deliveryCharge'),
                 value:
                   o.deliveryFeeInr === null ? (
                     '—'
@@ -237,17 +237,14 @@ export default function OrderDetailPage(): ReactElement {
                     <Money amount={o.deliveryFeeInr} convert={false} />
                   ),
               },
-              { label: 'Notes', value: o.notes ?? '—' },
+              { label: t('order.notes'), value: o.notes ?? '—' },
             ]}
           />
         </Section>
 
-        <Section title="The parcel">
+        <Section title={t('order.parcel')}>
           {live.length === 0 ? (
-            <p className="as-p">
-              No waybill yet. One is booked once Skydrop's call centre has confirmed the order with
-              your customer.
-            </p>
+            <p className="as-p">{t('order.noWaybill')}</p>
           ) : (
             <Facts
               items={live.map((s) => ({
@@ -261,7 +258,7 @@ export default function OrderDetailPage(): ReactElement {
                       rel="noreferrer noopener"
                       className="as-link"
                     >
-                      <Truck size={13} aria-hidden /> Track it{' '}
+                      <Truck size={13} aria-hidden /> {t('order.trackIt')}{' '}
                       <ExternalLink size={11} aria-hidden />
                     </Link>
                   </span>
@@ -277,14 +274,14 @@ export default function OrderDetailPage(): ReactElement {
           nothing has ever been asked for on this parcel. */}
       <Reattempt orderId={o.id} orderNumber={o.orderNumber} stageOpen={o.stages.deliveryActions} />
 
-      <Section title="What has happened" bare>
+      <Section title={t('order.history')} bare>
         <div className="as-card">
           {events.isPending ? (
-            <SkeletonRows rows={3} cols={1} label="Loading the order's history" />
+            <SkeletonRows rows={3} cols={1} label={t('order.historyLoading')} />
           ) : events.isError ? (
-            <ErrorState message={serverVerdict(events.error)} retry={() => void events.refetch()} />
+            <ErrorState message={verdict(events.error, t)} retry={() => void events.refetch()} />
           ) : events.data.length === 0 ? (
-            <p className="as-p">Nothing has happened yet.</p>
+            <p className="as-p">{t('order.noEvents')}</p>
           ) : (
             <ol className="as-events">
               {[...events.data]
@@ -296,7 +293,7 @@ export default function OrderDetailPage(): ReactElement {
                       {e.description !== null && e.description !== ''
                         ? e.description
                         : e.toStatus !== null
-                          ? statusLabel(e.toStatus)
+                          ? statusLabel(e.toStatus, locale)
                           : e.type}
                     </p>
                   </li>
@@ -309,18 +306,18 @@ export default function OrderDetailPage(): ReactElement {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Cancel this order?"
+        title={t('order.cancelDialog.title')}
         entity={o.orderNumber}
         entityIsIdentifier
-        consequence="Nothing is delivered and nothing is collected. If your store has to approve a cancel first, this is sent to them instead and the order carries on until they answer."
-        confirmLabel="Cancel the order"
-        cancelLabel="Keep it"
+        consequence={t('order.cancelDialog.consequence')}
+        confirmLabel={t('order.cancelDialog.confirm')}
+        cancelLabel={t('order.cancelDialog.keep')}
         destructive
         error={error}
         onConfirm={doCancel}
       >
         <TextArea
-          label="Why? (optional)"
+          label={t('order.cancelDialog.why')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
           maxLength={500}

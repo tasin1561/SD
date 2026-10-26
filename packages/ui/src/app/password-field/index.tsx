@@ -2,6 +2,7 @@
 
 import { Check, Eye, EyeOff } from 'lucide-react';
 import { forwardRef, useState, type ChangeEvent, type ReactElement } from 'react';
+import { useUiT } from '../i18n-client';
 import { TextField, type TextFieldProps } from '../text-field';
 import './password-field.css';
 
@@ -29,7 +30,13 @@ export type PasswordFieldProps = Omit<TextFieldProps, 'type' | 'trail'> & {
   readonly toggleLabel?: string | undefined;
 };
 
-const WORDS = ['Weak', 'Weak', 'Fair', 'Good', 'Strong'] as const;
+const WORDS = [
+  'ui.password.weak',
+  'ui.password.weak',
+  'ui.password.fair',
+  'ui.password.good',
+  'ui.password.strong',
+] as const;
 const LEVELS = ['weak', 'weak', 'fair', 'good', 'strong'] as const;
 
 export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
@@ -37,7 +44,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
     {
       criteria,
       showStrength = true,
-      toggleLabel = 'Show password',
+      toggleLabel,
       value,
       defaultValue,
       onChange,
@@ -49,6 +56,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
     },
     ref,
   ): ReactElement {
+    const t = useUiT();
     const [shown, setShown] = useState(false);
     const [own, setOwn] = useState<string>(
       defaultValue === undefined || defaultValue === null ? '' : String(defaultValue),
@@ -63,7 +71,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
     const rules = criteria ?? [];
     const met = rules.filter((c) => c.test(text)).length;
     const steps = rules.length === 0 ? 0 : Math.ceil((met / rules.length) * 4);
-    const word = WORDS[steps] ?? 'Weak';
+    const word = t(WORDS[steps] ?? 'ui.password.weak');
     const level = LEVELS[steps] ?? 'weak';
 
     const toggle = (
@@ -71,7 +79,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
         type="button"
         className="sk-field__btn sk-pw__toggle"
         aria-pressed={shown}
-        aria-label={toggleLabel}
+        aria-label={toggleLabel ?? t('ui.password.show')}
         aria-controls={id}
         disabled={disabled}
         onMouseDown={(e) => e.preventDefault()}
@@ -91,11 +99,11 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
               <div
                 className="sk-pw__bars"
                 role="meter"
-                aria-label="Password strength"
+                aria-label={t('ui.password.strength')}
                 aria-valuemin={0}
                 aria-valuemax={rules.length}
                 aria-valuenow={met}
-                aria-valuetext={text === '' ? 'Not set' : word}
+                aria-valuetext={text === '' ? t('ui.password.notSet') : word}
               >
                 {[0, 1, 2, 3].map((i) => (
                   <span key={i} className="sk-pw__bar" data-on={i < steps || undefined} />
@@ -106,7 +114,7 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
               </span>
             </div>
           ) : null}
-          <ul className="sk-pw__chips" aria-label="Password requirements">
+          <ul className="sk-pw__chips" aria-label={t('ui.password.requirements')}>
             {rules.map((c) => {
               const ok = c.test(text);
               return (
@@ -115,7 +123,9 @@ export const PasswordField = forwardRef<HTMLInputElement, PasswordFieldProps>(
                     <Check size={12} />
                   </span>
                   <span>{c.label}</span>
-                  <span className="sk-field__sr">{ok ? ', met' : ', not met'}</span>
+                  <span className="sk-field__sr">
+                    {ok ? t('ui.password.met') : t('ui.password.notMet')}
+                  </span>
                 </li>
               );
             })}

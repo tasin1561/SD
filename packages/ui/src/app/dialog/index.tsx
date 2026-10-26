@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { Check, Info, OctagonX, TriangleAlert, X } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Button } from '../button';
+import { useUiT } from '../i18n-client';
 import './dialog.css';
 
 export type DialogSize = 'sm' | 'md' | 'lg' | 'xl';
@@ -48,6 +49,7 @@ export function Dialog({
   locked = false,
   className,
 }: DialogProps): ReactElement {
+  const t = useUiT();
   return (
     <RDialog.Root
       open={open}
@@ -80,7 +82,7 @@ export function Dialog({
               <button
                 type="button"
                 className="sk-dialog__close"
-                aria-label="Close"
+                aria-label={t('ui.close')}
                 disabled={locked}
               >
                 <X size={16} aria-hidden />
@@ -147,13 +149,14 @@ export function ConfirmDialog({
   amount,
   consequence,
   confirmLabel,
-  cancelLabel = 'Cancel',
+  cancelLabel,
   onConfirm,
   error,
   destructive = false,
   children,
   closeOnSuccess = true,
 }: ConfirmDialogProps): ReactElement {
+  const t = useUiT();
   const [busy, setBusy] = useState(false);
   const alive = useRef(true);
   useEffect(() => {
@@ -190,7 +193,7 @@ export function ConfirmDialog({
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)} disabled={busy}>
-            {cancelLabel}
+            {cancelLabel ?? t('ui.cancel')}
           </Button>
           <Button
             variant={destructive ? 'destructive' : 'primary'}
@@ -247,9 +250,10 @@ export function SuccessDialog({
   onOpenChange,
   title,
   body,
-  continueLabel = 'Continue',
+  continueLabel,
   onContinue,
 }: SuccessDialogProps): ReactElement {
+  const t = useUiT();
   return (
     <RDialog.Root open={open} onOpenChange={onOpenChange}>
       <RDialog.Portal>
@@ -272,7 +276,7 @@ export function SuccessDialog({
               onOpenChange(false);
             }}
           >
-            {continueLabel}
+            {continueLabel ?? t('ui.continue')}
           </button>
         </RDialog.Content>
       </RDialog.Portal>

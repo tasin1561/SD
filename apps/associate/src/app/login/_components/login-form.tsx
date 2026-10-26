@@ -6,7 +6,8 @@ import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { PasswordField } from '@skydrop/ui/app/password-field';
 import { TextField } from '@skydrop/ui/app/text-field';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { AuthNotice } from './auth-notice';
 
 /**
@@ -22,6 +23,7 @@ import { AuthNotice } from './auth-notice';
  * the button by that name.
  */
 export function LoginForm(): ReactElement {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -38,9 +40,9 @@ export function LoginForm(): ReactElement {
       window.location.assign('/orders');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setError('Invalid email or password.');
+        setError(t('auth.signIn.invalid'));
       } else if (err instanceof ApiError && err.status === 429) {
-        setError('Too many attempts. Try again in a few minutes.');
+        setError(t('auth.signIn.tooMany'));
       } else if (err instanceof ApiError && err.status >= 500) {
         /*
           A 5xx is NOT a verdict, so there is nothing to surface verbatim:
@@ -50,10 +52,10 @@ export function LoginForm(): ReactElement {
           who needs to know it is us and not them. FE-2 is untouched: this
           pre-empts no guardrail, because no guardrail answered.
         */
-        setError('We could not reach Skydrop just now. Your login is fine — try again shortly.');
+        setError(t('auth.signIn.unreachable'));
       } else {
         // A closed or paused store says so in the server's own words (FE-2).
-        setError(serverVerdict(err, 'Sign-in failed. Please try again.'));
+        setError(verdict(err, t, t('auth.signIn.failed')));
       }
       setSubmitting(false);
     }
@@ -71,7 +73,7 @@ export function LoginForm(): ReactElement {
       <TextField
         id="email"
         type="email"
-        label="Email"
+        label={t('common.email')}
         icon={<Mail size={15} />}
         autoComplete="email"
         required
@@ -81,7 +83,7 @@ export function LoginForm(): ReactElement {
       />
       <PasswordField
         id="password"
-        label="Password"
+        label={t('common.password')}
         autoComplete="current-password"
         required
         value={password}
@@ -98,7 +100,11 @@ export function LoginForm(): ReactElement {
         variant="primary"
         size="lg"
         fullWidth
-        labels={{ idle: 'Sign in', busy: 'Signing in…', error: 'Try again' }}
+        labels={{
+          idle: t('auth.signIn.title'),
+          busy: t('auth.signIn.busy'),
+          error: t('common.tryAgain'),
+        }}
         state={submitting ? 'busy' : error !== null ? 'error' : 'idle'}
         disabled={submitting}
       />

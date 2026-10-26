@@ -27,7 +27,8 @@ import { Pagination } from '@skydrop/ui/app/pagination';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { ordersPaused } from '@/lib/orders-paused';
 import { BackLink, Notice, Section } from '../../_components/parts';
 import '../../_components/as.css';
@@ -81,6 +82,8 @@ function save(text: string, fileName: string): void {
  * error row rather than changing an order you have already placed.
  */
 export default function OrderImportPage(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const client = useApiClient();
   const me = useStoreIdentity();
   const qc = useQueryClient();
@@ -125,7 +128,7 @@ export default function OrderImportPage(): ReactElement {
       const body = await client.request<unknown>(path);
       save(typeof body === 'string' ? body : JSON.stringify(body), fileName);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     } finally {
       setDownloading(null);
     }
@@ -135,7 +138,7 @@ export default function OrderImportPage(): ReactElement {
     setError(null);
     const f = pickedFile ?? fileRef.current?.files?.[0];
     if (f === undefined) {
-      setError('Choose a CSV file first.');
+      setError(t('import.chooseFirst'));
       return;
     }
     setBusy('checking');
@@ -149,14 +152,14 @@ export default function OrderImportPage(): ReactElement {
         headers: { 'Content-Type': 'text/csv' },
         body: f,
       });
-      if (!put.ok) throw new Error(`The upload failed (${put.status}). Try again.`);
+      if (!put.ok) throw new Error(t('import.uploadFailed', { status: put.status }));
       const preview = await client.request<Preview>(`${BASE}/preview`, {
         method: 'POST',
         body: { spacesKey: presign.spacesKey },
       });
       setPending({ spacesKey: presign.spacesKey, fileName: f.name, preview });
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     } finally {
       setBusy(null);
     }
@@ -171,7 +174,7 @@ export default function OrderImportPage(): ReactElement {
         method: 'POST',
         body: { spacesKey: pending.spacesKey, fileName: pending.fileName },
       });
-      toast.success('Import started. Rows become orders in a moment.');
+      toast.success(t('import.started'));
       setWatching(typeof started?.id === 'string' ? started.id : null);
       setPending(null);
       setPicked('');
@@ -182,7 +185,7 @@ export default function OrderImportPage(): ReactElement {
       void qc.invalidateQueries({ queryKey: ['my-order-imports'] });
       void qc.invalidateQueries({ queryKey: ['my-orders'] });
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     } finally {
       setBusy(null);
     }
@@ -194,12 +197,9 @@ export default function OrderImportPage(): ReactElement {
   return (
     <div className="as-page">
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        My orders
+        {t('nav.myOrders')}
       </BackLink>
-      <PageHeader
-        title="Upload orders"
-        subtitle="One row is one product line — give two rows the same reference and they become one order with two items. You do not set a price in the file: each product is sold at the price your store set for you. A reference you have already used comes back as an error row; re-uploading never changes an order you have already placed."
-      />
+      <PageHeader title={t('import.title')} subtitle={t('import.subtitle')} />
 
       {/* Importing creates orders, so the same pause applies. The form
           stays usable and the server's refusal is the honest one. */}
@@ -207,25 +207,22 @@ export default function OrderImportPage(): ReactElement {
         <Notice
           tone="warn"
           icon={<PauseCircle size={16} />}
-          title="Your store has paused new orders from you"
+          title={t('import.paused.title')}
           role="status"
         >
-          <span>
-            An upload will be refused until it is switched back on. Everything you have already
-            placed carries on.
-          </span>
+          <span>{t('import.paused.body')}</span>
         </Notice>
       ) : null}
 
       <Section
-        title="Upload"
+        title={t('import.upload')}
         action={
           <AsyncButton
             variant="ghost"
             size="sm"
             icon={<Download size={14} />}
             state={downloading === `${BASE}/template` ? 'busy' : undefined}
-            labels={{ idle: 'Download the template', busy: 'Downloading…' }}
+            labels={{ idle: t('import.template'), busy: t('import.downloading') }}
             onClick={() => void downloadText(`${BASE}/template`, 'skydrop-order-template.csv')}
           />
         }
@@ -235,9 +232,9 @@ export default function OrderImportPage(): ReactElement {
             key={zoneKey}
             ref={fileRef}
             accept=".csv,text/csv"
-            aria-label="Order CSV"
-            label={picked !== '' ? picked : 'Drop your CSV here'}
-            buttonText="Choose CSV…"
+            aria-label={t('import.dropAria')}
+            label={picked !== '' ? picked : t('import.dropLabel')}
+            buttonText={t('import.choose')}
             showFiles={false}
             disabled={busy !== null}
             onFiles={(files) => {
@@ -252,7 +249,7 @@ export default function OrderImportPage(): ReactElement {
               variant="primary"
               icon={<Upload size={15} />}
               state={busy === 'checking' ? 'busy' : undefined}
-              labels={{ idle: 'Upload and check', busy: 'Checking…' }}
+              labels={{ idle: t('import.check'), busy: t('import.checking') }}
               onClick={() => void check()}
               disabled={busy !== null || picked === ''}
             />
@@ -262,36 +259,55 @@ export default function OrderImportPage(): ReactElement {
             <div className="as-card">
               <div className="as-stack as-stack--tight">
                 <p className="as-body">
-                  <span className="as-file-name">{pending.fileName}</span>:{' '}
-                  {pending.preview.rowCount} row{pending.preview.rowCount === 1 ? '' : 's'}
-                  {pending.preview.orderCount !== pending.preview.rowCount
-                    ? `, making ${pending.preview.orderCount} order${
-                        pending.preview.orderCount === 1 ? '' : 's'
-                      }`
-                    : ''}
-                  .
+                  {richMessage(
+                    t(
+                      pending.preview.orderCount !== pending.preview.rowCount
+                        ? 'import.preview.making'
+                        : 'import.preview.same',
+                    ),
+                    {
+                      file: <span className="as-file-name">{pending.fileName}</span>,
+                      rows: t(
+                        pending.preview.rowCount === 1 ? 'import.rows.one' : 'import.rows.other',
+                        { n: pending.preview.rowCount },
+                      ),
+                      orders: t(
+                        pending.preview.orderCount === 1
+                          ? 'import.orders.one'
+                          : 'import.orders.other',
+                        { n: pending.preview.orderCount },
+                      ),
+                    },
+                  )}
                 </p>
                 {pending.preview.rowsWithProblems > 0 && (
                   <Notice tone="warn" icon={<FileWarning size={15} />}>
                     <span>
-                      {pending.preview.rowsWithProblems} row
-                      {pending.preview.rowsWithProblems === 1 ? '' : 's'} will not import ·{' '}
-                      {pending.preview.problems
-                        .map((p) => `Row ${p.rowNumber}: ${p.reason}`)
-                        .join(' · ')}
+                      {t(
+                        pending.preview.rowsWithProblems === 1
+                          ? 'import.problems.one'
+                          : 'import.problems.other',
+                        {
+                          n: pending.preview.rowsWithProblems,
+                          list: pending.preview.problems
+                            .map((p) =>
+                              t('import.problem.row', { n: p.rowNumber, reason: p.reason }),
+                            )
+                            .join(' · '),
+                        },
+                      )}
                     </span>
                   </Notice>
                 )}
                 {pending.preview.missingRequired.length > 0 ? (
                   <Notice tone="bad" icon={<FileWarning size={16} />}>
                     <span>
-                      Missing columns: {pending.preview.missingRequired.join(', ')}. Fix the file
-                      and upload it again.
+                      {t('import.missing', { columns: pending.preview.missingRequired.join(', ') })}
                     </span>
                   </Notice>
                 ) : pending.preview.exceedsRowLimit ? (
                   <Notice tone="bad" icon={<FileWarning size={16} />}>
-                    <span>More than {pending.preview.rowLimit} rows. Split the file.</span>
+                    <span>{t('import.tooMany', { limit: pending.preview.rowLimit })}</span>
                   </Notice>
                 ) : (
                   <div className="as-row">
@@ -300,8 +316,10 @@ export default function OrderImportPage(): ReactElement {
                       icon={<FileSpreadsheet size={15} />}
                       state={busy === 'importing' ? 'busy' : undefined}
                       labels={{
-                        idle: `Import ${pending.preview.orderCount} orders`,
-                        busy: 'Importing…',
+                        idle: t('import.importN', {
+                          orders: t('import.orders.other', { n: pending.preview.orderCount }),
+                        }),
+                        busy: t('import.importing'),
                       }}
                       onClick={() => setConfirmImport(true)}
                       disabled={busy !== null}
@@ -322,26 +340,26 @@ export default function OrderImportPage(): ReactElement {
 
       {run !== undefined ? <ImportRunProgress job={run} /> : null}
 
-      <Section title="Recent uploads" bare>
+      <Section title={t('import.recent')} bare>
         {uploads.isPending ? (
-          <SkeletonRows rows={3} cols={5} label="Loading uploads" />
+          <SkeletonRows rows={3} cols={5} label={t('import.recentLoading')} />
         ) : uploads.isError ? (
-          <ErrorState message={serverVerdict(uploads.error)} retry={() => void uploads.refetch()} />
+          <ErrorState message={verdict(uploads.error, t)} retry={() => void uploads.refetch()} />
         ) : uploads.data.items.length === 0 ? (
           <EmptyState
             icon={<Inbox size={20} />}
-            title="No uploads yet"
-            description="Upload a CSV above to place many orders at once."
+            title={t('import.empty.title')}
+            description={t('import.empty.body')}
           />
         ) : (
           <div className="as-card" data-flush="1">
-            <Table caption="Recent uploads">
+            <Table caption={t('import.recent')}>
               <THead>
                 <Tr>
-                  <Th>File</Th>
-                  <Th>Status</Th>
-                  <Th align="right">Orders</Th>
-                  <Th align="right">Failed</Th>
+                  <Th>{t('import.col.file')}</Th>
+                  <Th>{t('import.col.status')}</Th>
+                  <Th align="right">{t('import.col.orders')}</Th>
+                  <Th align="right">{t('import.col.failed')}</Th>
                   <Th />
                 </Tr>
               </THead>
@@ -354,7 +372,7 @@ export default function OrderImportPage(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={uploadStatusKind(u.status)}
-                        label={uploadStatusLabel(u.status)}
+                        label={uploadStatusLabel(u.status, locale)}
                         size="sm"
                       />
                     </Td>
@@ -373,7 +391,7 @@ export default function OrderImportPage(): ReactElement {
                           state={
                             downloading === `${BASE}/${u.id}/error-report` ? 'busy' : undefined
                           }
-                          labels={{ idle: 'Error report', busy: 'Downloading…' }}
+                          labels={{ idle: t('import.errorReport'), busy: t('import.downloading') }}
                           onClick={() =>
                             void downloadText(
                               `${BASE}/${u.id}/error-report`,
@@ -393,7 +411,7 @@ export default function OrderImportPage(): ReactElement {
                 pageSize={UPLOADS_PAGE_SIZE}
                 total={uploads.data.total}
                 onPageChange={setUploadsPage}
-                label="Upload pages"
+                label={t('import.pages')}
               />
             </div>
           </div>
@@ -403,18 +421,24 @@ export default function OrderImportPage(): ReactElement {
       <ConfirmDialog
         open={confirmImport}
         onOpenChange={setConfirmImport}
-        title="Import these orders?"
+        title={t('import.confirm.title')}
         entity={pending?.fileName ?? ''}
         amount={
           pending === null
             ? undefined
-            : `${pending.preview.orderCount} ${
-                pending.preview.orderCount === 1 ? 'order' : 'orders'
-              }`
+            : t(pending.preview.orderCount === 1 ? 'import.orders.one' : 'import.orders.other', {
+                n: pending.preview.orderCount,
+              })
         }
-        consequence="Each row becomes one of your orders and goes to Skydrop's call centre to be confirmed. A row that fails lands in the error report; nothing else is changed."
-        confirmLabel={pending === null ? 'Import' : `Import ${pending.preview.orderCount} orders`}
-        cancelLabel="Not yet"
+        consequence={t('import.confirm.consequence')}
+        confirmLabel={
+          pending === null
+            ? t('import.confirm.import')
+            : t('import.importN', {
+                orders: t('import.orders.other', { n: pending.preview.orderCount }),
+              })
+        }
+        cancelLabel={t('import.confirm.notYet')}
         // Closes at once: the import button on the page carries the busy
         // state (importIt() never throws — it reports on the page).
         onConfirm={() => {
@@ -432,6 +456,7 @@ export default function OrderImportPage(): ReactElement {
  * counted, so the parachute says it does not know rather than guessing.
  */
 function ImportRunProgress({ job }: { readonly job: UploadRow }): ReactElement {
+  const t = useT();
   const handled = job.ordersCreated + job.rowsFailed;
   const running = job.status === 'PENDING' || job.status === 'PROCESSING';
   const state: ParachuteState = running
@@ -446,12 +471,15 @@ function ImportRunProgress({ job }: { readonly job: UploadRow }): ReactElement {
   return (
     <div className="as-card">
       <ParachuteProgress
-        label={`Importing ${job.fileName}`}
+        label={t('import.run.label', { file: job.fileName })}
         value={state === 'running' ? value : 100}
         state={state}
-        doneLabel="Import finished"
-        failedLabel="Import stopped"
-        detail={`${handled} of ${job.rowCount} ${job.rowCount === 1 ? 'row' : 'rows'} handled`}
+        doneLabel={t('import.run.finished')}
+        failedLabel={t('import.run.stopped')}
+        detail={t(job.rowCount === 1 ? 'import.run.detail.one' : 'import.run.detail.other', {
+          handled,
+          total: job.rowCount,
+        })}
       />
     </div>
   );

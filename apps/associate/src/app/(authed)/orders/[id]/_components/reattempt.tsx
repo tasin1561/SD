@@ -14,31 +14,14 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 // The shell mounts the legacy <Toaster>; the app `useToast` would throw
 // outside its own provider, so this keeps the legacy hook (same API).
 import { useToast } from '@skydrop/ui/components';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import { useMyOrderActions, useRequestReattempt } from '@/lib/order-hooks';
 import { Notice, Section } from '../../../_components/parts';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-/** How the history names the other two, which the store may also have asked for. */
-function actionLabel(action: MyAction): string {
-  switch (action) {
-    case 'REATTEMPT':
-      return 'Try delivering again';
-    case 'RECALL':
-      return 'Call the customer again';
-    case 'RTO':
-      return 'Send it back';
-    default: {
-      const exhaustive: never = action;
-      throw new Error(`Unhandled action: ${String(exhaustive)}`);
-    }
-  }
-}
-
-type MyAction = 'RECALL' | 'REATTEMPT' | 'RTO';
+// The history names all three actions (`reattempt.action.*`): the key is built from
+// the action itself, so a new action fails to compile here until it has both words.
 
 /**
  * ASSOC-1 — "can cancel and ask for a reattempt" (the owner's words).
@@ -79,6 +62,8 @@ export function Reattempt({
   /** The parcel is out for delivery or has just failed — the only time this applies. */
   readonly stageOpen: boolean;
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const actions = useMyOrderActions(orderId);
   const submit = useRequestReattempt();
   const toast = useToast();
@@ -88,12 +73,10 @@ export function Reattempt({
   const [error, setError] = useState<string | null>(null);
 
   if (actions.isPending) {
-    return <SkeletonRows rows={2} cols={3} label="Loading what you can ask for" />;
+    return <SkeletonRows rows={2} cols={3} label={t('reattempt.loading')} />;
   }
   if (actions.isError) {
-    return (
-      <ErrorState message={serverVerdict(actions.error)} retry={() => void actions.refetch()} />
-    );
+    return <ErrorState message={verdict(actions.error, t)} retry={() => void actions.refetch()} />;
   }
 
   const mode = actions.data.allowed.reattempt ?? 'OFF';
@@ -101,9 +84,7 @@ export function Reattempt({
   // Nothing to offer and nothing to show: the section does not exist.
   if (mode === 'OFF' && history.length === 0) return <></>;
   const waits = mode === 'ASK_SELLER';
-  const words = waits
-    ? 'Your store has to approve this. Nothing happens to the parcel until they answer, so do not tell your customer a van is coming yet.'
-    : 'The courier is asked to attempt the delivery again, as soon as you send this.';
+  const words = waits ? t('reattempt.words.waits') : t('reattempt.words.direct');
 
   async function send(): Promise<void> {
     setError(null);
@@ -111,36 +92,26 @@ export function Reattempt({
       const out = await submit.mutateAsync({ orderId, reason: reason.trim() });
       // The courier can turn it down; that comes back FAILED with why.
       if (out.request.status === 'FAILED') {
-        setError(out.request.executionError ?? 'It could not be carried out.');
+        setError(out.request.executionError ?? t('reattempt.couldNot'));
         return;
       }
-      toast.success(
-        out.awaitingSeller
-          ? 'Your store has to approve this — we have asked them. Nothing happens until they answer.'
-          : 'The courier has been asked to try again.',
-      );
+      toast.success(out.awaitingSeller ? t('reattempt.toast.waits') : t('reattempt.toast.sent'));
       setAsking(false);
       setReason('');
     } catch (err) {
       // Verbatim (FE-2): DELIVERY_ACTION_REASON_TOO_SHORT,
       // DELIVERY_ACTION_ALREADY_OPEN, STORE_ACTION_NOT_ALLOWED…
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   return (
-    <Section
-      title="The delivery did not work?"
-      note="Ask the courier to try again. What you can ask for is set by your store."
-    >
+    <Section title={t('reattempt.title')} note={t('reattempt.note')}>
       <div className="as-stack as-stack--tight">
         {mode === 'OFF' ? (
-          <p className="as-p">Your store has not enabled this for you.</p>
+          <p className="as-p">{t('reattempt.off')}</p>
         ) : !stageOpen ? (
-          <p className="as-p">
-            Another delivery attempt can be asked for only while the parcel is out for delivery or
-            has just failed to deliver.
-          </p>
+          <p className="as-p">{t('reattempt.closedStage')}</p>
         ) : (
           <div className="as-offer">
             <Button
@@ -152,44 +123,46 @@ export function Reattempt({
                 setAsking(true);
               }}
             >
-              Try delivering again
+              {t('reattempt.try')}
             </Button>
             <span className="as-offer__note">
               {waits ? <Clock size={13} aria-hidden /> : <Zap size={13} aria-hidden />}
-              {waits
-                ? 'Your store approves this before anything happens'
-                : 'Happens as soon as you ask'}
+              {waits ? t('reattempt.offer.waits') : t('reattempt.offer.direct')}
             </span>
           </div>
         )}
 
         {history.length > 0 ? (
-          <Table caption="What has been asked for on this parcel">
+          <Table caption={t('reattempt.table.caption')}>
             <THead>
               <Tr>
-                <Th>What was asked</Th>
-                <Th>When</Th>
-                <Th>Where it got to</Th>
+                <Th>{t('reattempt.col.asked')}</Th>
+                <Th>{t('reattempt.col.when')}</Th>
+                <Th>{t('reattempt.col.status')}</Th>
               </Tr>
             </THead>
             <TBody>
               {history.map((r) => (
                 <Tr key={r.id}>
                   <Td>
-                    <div>{actionLabel(r.action)}</div>
+                    <div>{t(`reattempt.action.${r.action}`)}</div>
                     <span className="as-sub">{r.reason}</span>
                   </Td>
                   <Td>
-                    <span className="as-muted sk-figure">{when(r.createdAt)}</span>
+                    <span className="as-muted sk-figure">
+                      {formatDateTime(r.createdAt, locale)}
+                    </span>
                   </Td>
                   <Td>
                     <StatusChip
                       kind={deliveryActionStatusKind(r.status)}
-                      label={deliveryActionStatusLabel(r.status)}
+                      label={deliveryActionStatusLabel(r.status, locale)}
                       size="sm"
                     />
                     {r.decisionNote !== null ? (
-                      <p className="as-quote">They said: “{r.decisionNote}”</p>
+                      <p className="as-quote">
+                        {t('reattempt.theySaid', { note: r.decisionNote })}
+                      </p>
                     ) : null}
                     {r.executionError !== null ? (
                       <span className="as-sub as-tone-bad">{r.executionError}</span>
@@ -205,7 +178,7 @@ export function Reattempt({
       <Dialog
         open={asking}
         onOpenChange={setAsking}
-        title="Try delivering again"
+        title={t('reattempt.try')}
         description={words}
         icon={<Truck size={18} />}
         locked={submit.isPending}
@@ -217,13 +190,13 @@ export function Reattempt({
               onClick={() => setAsking(false)}
               disabled={submit.isPending}
             >
-              Never mind
+              {t('reattempt.dialog.neverMind')}
             </Button>
             <AsyncButton
               type="button"
               variant="primary"
               state={submit.isPending ? 'busy' : undefined}
-              labels={{ idle: 'Send it', busy: 'Sending…' }}
+              labels={{ idle: t('reattempt.dialog.send'), busy: t('reattempt.dialog.sending') }}
               onClick={() => setConfirming(true)}
               disabled={submit.isPending}
             />
@@ -233,15 +206,15 @@ export function Reattempt({
         <div className="as-stack as-stack--tight">
           <TextArea
             id="reattempt-reason"
-            label="What happened"
-            hint="At least a sentence — a person reads this before a van is sent."
+            label={t('reattempt.dialog.what')}
+            hint={t('reattempt.dialog.hint')}
             requiredMark
             rows={4}
             maxLength={2000}
             showCount
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Say what changed — a corrected landmark, a time they will be in."
+            placeholder={t('reattempt.dialog.placeholder')}
           />
           {error !== null ? (
             <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
@@ -254,12 +227,12 @@ export function Reattempt({
       <ConfirmDialog
         open={confirming && asking}
         onOpenChange={setConfirming}
-        title="Ask for another delivery attempt?"
+        title={t('reattempt.confirm.title')}
         entity={orderNumber}
         entityIsIdentifier
         consequence={words}
-        confirmLabel="Send it"
-        cancelLabel="Back"
+        confirmLabel={t('reattempt.dialog.send')}
+        cancelLabel={t('reattempt.confirm.back')}
         // Resolves whatever the answer: a refusal is shown in the dialog
         // behind, which stays open where the words being sent still are.
         onConfirm={() => send()}

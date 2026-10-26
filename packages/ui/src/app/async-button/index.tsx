@@ -14,6 +14,7 @@ import {
 import { Button, type ButtonSize, type ButtonVariant } from '../button';
 import { reducedMotion, sleep } from '../motion/motion';
 import './async-button.css';
+import { useUiT } from '../i18n-client';
 
 export type AsyncPhase = 'idle' | 'busy' | 'success' | 'error';
 
@@ -158,10 +159,11 @@ export function AsyncButton({
   'aria-label': ariaLabel,
   ...rest
 }: AsyncButtonProps): ReactElement {
+  const t = useUiT();
   const s = useAsyncState<unknown>({ minBusyMs, settleMs, onSettled });
   const phase: AsyncPhase = state ?? s.phase;
-  const done = labels.done ?? 'Done';
-  const failed = labels.error ?? 'Failed, try again';
+  const done = labels.done ?? t('ui.done');
+  const failed = labels.error ?? t('ui.failedRetry');
 
   const lead =
     phase === 'busy' ? (

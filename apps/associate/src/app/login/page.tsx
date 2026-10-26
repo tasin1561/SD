@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { resolveStoreSsrIdentity } from '@skydrop/auth/server';
 import { OtherPortals } from '@skydrop/ui/app/sign-in';
 import { apiOrigin } from '@/lib/api-origin';
+import { getT } from '@/i18n/server';
 import { AuthFrame } from '@/components/auth-frame';
 import { LoginForm } from './_components/login-form';
 import './_components/as-auth.css';
@@ -14,6 +15,7 @@ import './_components/as-auth.css';
  * /me (FE-4), never a refresh.
  */
 export default async function LoginPage(): Promise<ReactElement> {
+  const { t, locale } = await getT();
   const cookieValue = (await cookies()).get('__Host-storeRefresh')?.value ?? '';
   if (cookieValue) {
     const result = await resolveStoreSsrIdentity({
@@ -26,13 +28,13 @@ export default async function LoginPage(): Promise<ReactElement> {
 
   return (
     <AuthFrame
-      title="Sign in"
-      subtitle="Use the login from the invitation your store sent you."
+      title={t('auth.signIn.title')}
+      subtitle={t('auth.signIn.subtitle')}
       footer={
         <>
-          Forgot your password? <a href="/password-reset">Reset it</a>
+          {t('auth.signIn.forgot')} <a href="/password-reset">{t('auth.signIn.resetIt')}</a>
           <span className="as-auth-alt">
-            No login yet? <a href="/sign-up">How to get one</a>
+            {t('auth.signIn.noLogin')} <a href="/sign-up">{t('auth.signIn.howToGet')}</a>
           </span>
           {/*
            * The way OUT to the other consoles, from the shared directory
@@ -44,7 +46,7 @@ export default async function LoginPage(): Promise<ReactElement> {
            * perfectly and then shows them a far smaller app than the one
            * they are looking for.
            */}
-          <OtherPortals self="associate" />
+          <OtherPortals self="associate" locale={locale} />
         </>
       }
     >
