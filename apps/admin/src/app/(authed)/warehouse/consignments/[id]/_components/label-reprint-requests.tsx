@@ -54,6 +54,7 @@ export function LabelReprintRequests({
   readonly consignmentId: string;
   readonly onSheet: (sheet: LabelSheet) => void;
 }): ReactElement | null {
+  const tr = useT();
   const t = useT();
   const toast = useToast();
   const requests = useLabelReprintRequests(consignmentId);
@@ -78,7 +79,12 @@ export function LabelReprintRequests({
     setError(null);
     try {
       await approve.mutateAsync({ requestId: r.id });
-      toast.success(`Approved — ${r.requestedBy.email ?? 'the requester'} can print it now`);
+      toast.success(
+        tr('warehouseConsignmentsIdLabelReprintRequests.approvedCanPrintItNow', {
+          value:
+            r.requestedBy.email ?? tr('warehouseConsignmentsIdLabelReprintRequests.theRequester'),
+        }),
+      );
     } catch (e) {
       setError(serverVerdict(e));
     }
@@ -240,7 +246,11 @@ export function LabelReprintRequests({
         title={t('warehouseConsignmentsIdLabelReprintRequests.approveThisReprint')}
         entity={approving?.serials.join(', ') ?? ''}
         entityIsIdentifier
-        consequence={`${approving?.requestedBy.email ?? 'The person who asked'} can then print these labels once, and each reprint is recorded on the unit's own ledger.`}
+        consequence={tr('warehouseConsignmentsIdLabelReprintRequests.canThenPrintTheseLabels', {
+          value:
+            approving?.requestedBy.email ??
+            tr('warehouseConsignmentsIdLabelReprintRequests.thePersonWhoAsked2'),
+        })}
         confirmLabel={t('warehouseConsignmentsIdLabelReprintRequests.approve')}
         onConfirm={async () => {
           if (approving !== null) await onApprove(approving);

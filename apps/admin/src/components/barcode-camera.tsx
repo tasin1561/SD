@@ -137,24 +137,20 @@ function cameraFailure(t: Translate<MessageKey>, err: unknown): string {
   const name = err instanceof Error ? err.name : '';
   const tail = t('barcodeCamera.youCanTypeOrScan');
   if (typeof navigator === 'undefined' || navigator.mediaDevices === undefined) {
-    return 'This page is not served over https, so the browser will not give it a camera.' + tail;
+    return t('barcodeCamera.noHttps') + tail;
   }
   switch (name) {
     case 'NotAllowedError':
     case 'SecurityError':
-      return (
-        'The browser blocked the camera. Allow it for this site from the icon in the address bar, ' +
-        'then try again.' +
-        tail
-      );
+      return t('barcodeCamera.blocked') + tail;
     case 'NotFoundError':
     case 'OverconstrainedError':
-      return 'No camera on this machine — nothing to open.' + tail;
+      return t('barcodeCamera.noCamera') + tail;
     case 'NotReadableError':
     case 'AbortError':
-      return 'Another app is already using the camera. Close it and try again.' + tail;
+      return t('barcodeCamera.busy') + tail;
     default:
-      return 'The camera could not be opened.' + tail;
+      return t('barcodeCamera.failed') + tail;
   }
 }
 

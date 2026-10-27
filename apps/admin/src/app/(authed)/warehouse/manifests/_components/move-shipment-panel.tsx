@@ -91,8 +91,13 @@ export function MoveShipmentPanel({
       // as a real move is how someone concludes the wrong parcel moved.
       toast.success(
         result.alreadyOnTarget
-          ? `${moved?.shipmentNumber ?? 'Shipment'} was already on that manifest — nothing changed.`
-          : `${moved?.shipmentNumber ?? 'Shipment'} moved off ${manifestNumber}.`,
+          ? t('warehouseManifestsMoveShipmentPanel.wasAlreadyOnThatManifest', {
+              value: moved?.shipmentNumber ?? t('warehouseManifestsMoveShipmentPanel.shipment'),
+            })
+          : t('warehouseManifestsMoveShipmentPanel.movedOff', {
+              value: moved?.shipmentNumber ?? t('warehouseManifestsMoveShipmentPanel.shipment'),
+              manifestNumber,
+            }),
       );
     } catch (err) {
       setError(serverVerdict(err));

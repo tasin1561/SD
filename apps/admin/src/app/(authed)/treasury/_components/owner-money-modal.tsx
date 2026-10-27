@@ -223,7 +223,15 @@ export function OwnerMoneyModal({
             />
           )
         }
-        consequence={`${direction === 'IN' ? 'Adds this to' : 'Takes this from'} our own ${currency} money in ${accountLabel} on ${onLabel}, as owner equity — never counted as income or an expense.`}
+        consequence={t('treasuryOwnerMoneyModal.ourOwnMoneyInOn', {
+          value:
+            direction === 'IN'
+              ? t('treasuryOwnerMoneyModal.addsThisTo')
+              : t('treasuryOwnerMoneyModal.takesThisFrom'),
+          currency,
+          accountLabel,
+          onLabel,
+        })}
         confirmLabel={t('treasuryOwnerMoneyModal.record')}
         onConfirm={save}
         error={confirming ? (error ?? undefined) : undefined}

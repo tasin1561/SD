@@ -54,7 +54,7 @@ export function TrackingLookupPanel(): ReactElement | null {
       const r = await lookup.mutateAsync(awbNumbers);
       setResults(r.results);
       if (r.stubMode) {
-        toast.error('Stub mode is on — no courier was asked anything. Set the API base URLs.');
+        toast.error(t('delhiveryTrackingLookupPanel.stubModeOn'));
         return;
       }
       const known = r.results.filter((x) => x.known).length;
@@ -63,12 +63,11 @@ export function TrackingLookupPanel(): ReactElement | null {
       const unasked = r.unaskedCouriers ?? [];
       if (unasked.length > 0) {
         toast.error(
-          `${unasked.join(', ')} could not be asked — no active courier account, so no token. ` +
-            'A waybill of theirs will read as unknown whatever its real state.',
+          t('delhiveryTrackingLookupPanel.unaskedCouriers', { couriers: unasked.join(', ') }),
         );
       }
       toast.success(
-        `${known} of ${r.results.length} known to the couriers asked.` +
+        t('delhiveryTrackingLookupPanel.knownOfTotal', { known, total: r.results.length }) +
           (known < r.results.length
             ? t('delhiveryTrackingLookupPanel.theRestReturnedNoScans')
             : ''),

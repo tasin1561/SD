@@ -17,6 +17,8 @@ import {
 } from '@/lib/restriction-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useT } from '@/i18n/client';
+import { tEn, type MessageKey } from '@/i18n/catalog';
+import type { Translate } from '@skydrop/ui/app/i18n';
 import { richMessage } from '@/i18n/client';
 
 /**
@@ -31,20 +33,20 @@ import { richMessage } from '@/i18n/client';
  * knowingly rather than by ticking the next box down a flat list.
  */
 const SAFE = [
-  ['ORDER_CREATE', 'Placing new orders'],
-  ['ORDER_CONFIRM', 'Confirming orders'],
-  ['CONSIGNMENT_CREATE', 'Declaring new inbound stock'],
-  ['WITHDRAWAL_REQUEST', 'Requesting withdrawals'],
+  ['ORDER_CREATE', 'sellersRestrictionPanel.capOrderCreate'],
+  ['ORDER_CONFIRM', 'sellersRestrictionPanel.capOrderConfirm'],
+  ['CONSIGNMENT_CREATE', 'sellersRestrictionPanel.capConsignmentCreate'],
+  ['WITHDRAWAL_REQUEST', 'sellersRestrictionPanel.capWithdrawalRequest'],
 ] as const;
 
 const IN_FLIGHT = [
-  ['SHIPMENT_DISPATCH', 'Handing their parcels to the courier'],
+  ['SHIPMENT_DISPATCH', 'sellersRestrictionPanel.capShipmentDispatch'],
   // Offered from the change that BUILT the seller tracking page and
   // guarded it in the same commit. It was held back while the page was
   // a placeholder: a checkbox that ticks and stops nothing tells an
   // operator they have blocked something they have not.
-  ['TRACKING_VIEW', 'Seeing where their parcels are'],
-  ['RTO_RECEIVE', 'Booking their returns back in'],
+  ['TRACKING_VIEW', 'sellersRestrictionPanel.capTrackingView'],
+  ['RTO_RECEIVE', 'sellersRestrictionPanel.capRtoReceive'],
 ] as const;
 
 /**
@@ -62,12 +64,17 @@ const IN_FLIGHT = [
  * unknown value falls back to the raw code rather than disappearing:
  * a blocked capability nobody can see is worse than an ugly one.
  */
-const CAPABILITY_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+const CAPABILITY_LABELS: Readonly<Record<string, MessageKey>> = Object.fromEntries(
   [...SAFE, ...IN_FLIGHT].map(([key, label]) => [key, label]),
 );
 
+export function capabilityLabelIn(tr: Translate<MessageKey>, key: string): string {
+  const k = CAPABILITY_LABELS[key];
+  return k === undefined ? key : tr(k);
+}
+
 export function capabilityLabel(key: string): string {
-  return CAPABILITY_LABELS[key] ?? key;
+  return capabilityLabelIn(tEn, key);
 }
 
 export function RestrictionPanel({
@@ -151,7 +158,7 @@ export function RestrictionPanel({
           <p className="ac-text">{hold.reason}</p>
           <p className="ac-muted">
             {t('sellersRestrictionPanel.blocked', {
-              value: hold.blockedCapabilities.map(capabilityLabel).join(', '),
+              value: hold.blockedCapabilities.map((c) => capabilityLabelIn(t, c)).join(', '),
             })}
           </p>
           <p className="ac-muted">
@@ -212,7 +219,7 @@ export function RestrictionPanel({
             {SAFE.map(([key, label]) => (
               <Checkbox
                 key={key}
-                label={label}
+                label={t(label)}
                 checked={picked.includes(key)}
                 onChange={() => toggle(key)}
               />
@@ -225,7 +232,7 @@ export function RestrictionPanel({
             {IN_FLIGHT.map(([key, label]) => (
               <Checkbox
                 key={key}
-                label={label}
+                label={t(label)}
                 checked={picked.includes(key)}
                 onChange={() => toggle(key)}
               />

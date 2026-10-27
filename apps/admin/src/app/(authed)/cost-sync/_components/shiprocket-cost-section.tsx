@@ -78,13 +78,21 @@ const BROWSER_RUNS = (
  * from a VPN the browser does not go through vouches for nothing, and
  * that is exactly the mistake this line exists to make visible.
  */
-function egressLine(t: Translate<MessageKey>, e: ShiprocketEgressView): string {
+function egressLine(
+  tr: Translate<MessageKey>,
+  t: Translate<MessageKey>,
+  e: ShiprocketEgressView,
+): string {
   const route =
     e.proxy === null
       ? t('costSyncShiprocketCostSection.noRouteIsSetSo')
       : t('costSyncShiprocketCostSection.goesOutThrough', { proxy: e.proxy });
   if (!e.checked) return t('costSyncShiprocketCostSection.whereItComesOutIs', { route });
-  if (e.status === 'DOWN') return `${route} Runs are refused: ${e.summary ?? 'the check failed'}.`;
+  if (e.status === 'DOWN')
+    return tr('costSyncShiprocketCostSection.runsAreRefused', {
+      route,
+      value: e.summary ?? tr('costSyncShiprocketCostSection.theCheckFailed'),
+    });
   const where = e.summary ?? 'somewhere';
   return e.countryMismatch
     ? t('costSyncShiprocketCostSection.runsAreRefusedItComes', {
@@ -154,15 +162,27 @@ function InvoiceResult({ r }: { readonly r: ShiprocketInvoiceRowView }): ReactEl
   }
   if (r.status === 'UNREADABLE') {
     return (
-      <span className="af-bad">Could not be read{r.problem !== null && ` — ${r.problem}`}</span>
+      <span className="af-bad">
+        {t('costSyncShiprocketCostSection.couldNotBeRead')}
+        {r.problem !== null && ` — ${r.problem}`}
+      </span>
     );
   }
   const parts: string[] = [];
-  if (r.totalsAgree === false) parts.push(`its file adds up to ₹${r.itemizedInr ?? '?'}`);
+  if (r.totalsAgree === false)
+    parts.push(t('costSyncShiprocketCostSection.fileAddsUpTo', { amount: r.itemizedInr ?? '?' }));
   if (r.differenceCount > 0) {
-    parts.push(`${r.differenceCount} order(s) billed differently (net ₹${r.differenceInr})`);
+    parts.push(
+      t('costSyncShiprocketCostSection.ordersBilledDifferently', {
+        count: r.differenceCount,
+        net: r.differenceInr,
+      }),
+    );
   }
-  if (r.unknownServices.length > 0) parts.push(`unknown service: ${r.unknownServices.join(', ')}`);
+  if (r.unknownServices.length > 0)
+    parts.push(
+      t('costSyncShiprocketCostSection.unknownService', { services: r.unknownServices.join(', ') }),
+    );
   return <span className="af-bad">{parts.join(' · ')}</span>;
 }
 
@@ -351,6 +371,7 @@ function WalletAccountLine({ a }: { readonly a: ShiprocketWalletAccountView }): 
  * with what the wallet charged. Two writers would take turns.
  */
 export function ShiprocketCostSection(): ReactElement {
+  const tr = useT();
   const t = useT();
 
   const panel = useShiprocketCostPanel();
@@ -623,7 +644,7 @@ export function ShiprocketCostSection(): ReactElement {
                   : 'af-small'
               }
             >
-              {egressLine(t, d.egress)}
+              {egressLine(tr, t, d.egress)}
             </p>
             {d.portalProbe === null ? (
               <p className="af-small">{t('costSyncShiprocketCostSection.neverChecked')}</p>

@@ -116,7 +116,11 @@ export function ReconcileModal({
   const ownerWords =
     sellerId === ''
       ? t('treasuryReconcileModal.ourOwnMoney')
-      : `the holding for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'the client'}`;
+      : t('treasuryReconcileModal.theHoldingFor', {
+          name:
+            bySeller.find((b) => b.sellerId === sellerId)?.companyName ??
+            t('treasuryReconcileModal.theClient'),
+        });
 
   return (
     <>
@@ -163,8 +167,12 @@ export function ReconcileModal({
               money: <Money amount={currentBook} currency={currency} convert={false} />,
             })}{' '}
             {sellerId === ''
-              ? 'ours'
-              : `held for ${bySeller.find((b) => b.sellerId === sellerId)?.companyName ?? 'them'}`}{' '}
+              ? t('treasuryReconcileModal.ours')
+              : t('treasuryReconcileModal.heldFor', {
+                  name:
+                    bySeller.find((b) => b.sellerId === sellerId)?.companyName ??
+                    t('treasuryReconcileModal.them'),
+                })}{' '}
             {t('treasuryReconcileModal.inThisAccount')}
           </p>
           <TextField
@@ -277,7 +285,13 @@ export function ReconcileModal({
             )}
           </span>
         }
-        consequence={`Posts the ${currency} difference as a new entry against ${ownerWords} in ${accountLabel}${sellerId === '' && opening ? ', marked as the opening balance' : ''}; nothing is overwritten.`}
+        consequence={t('treasuryReconcileModal.postsTheDifferenceAsA2', {
+          currency,
+          ownerWords,
+          accountLabel,
+          value:
+            sellerId === '' && opening ? t('treasuryReconcileModal.markedAsTheOpeningBalance') : '',
+        })}
         confirmLabel={t('treasuryReconcileModal.postAdjustment')}
         destructive={false}
         onConfirm={save}

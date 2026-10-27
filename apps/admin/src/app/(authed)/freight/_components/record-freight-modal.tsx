@@ -60,14 +60,12 @@ const MODE_OPTIONS = (t: Translate<MessageKey>) =>
     },
   ] as const;
 
-const LEG_WORDS = { BD_INTAKE: 'Bangladesh intake', IN_FINAL: 'India arrival' } as const;
-
 /** `null` is a goods receipt that belongs to no consignment leg — the
  *  picker never offers one, so this only guards the type. */
-function legWords(leg: string | null): string {
-  if (leg === 'BD_INTAKE') return LEG_WORDS.BD_INTAKE;
-  if (leg === 'IN_FINAL') return LEG_WORDS.IN_FINAL;
-  return 'stop';
+function legWords(tr: Translate<MessageKey>, leg: string | null): string {
+  if (leg === 'BD_INTAKE') return tr('freightRecordFreightModal.legBdIntake');
+  if (leg === 'IN_FINAL') return tr('freightRecordFreightModal.legInFinal');
+  return tr('freightRecordFreightModal.legStop');
 }
 
 const SOURCE_WORDS = (
@@ -153,7 +151,7 @@ export function RecordFreightModal({
       .map((r) => ({
         id: r.id,
         leg: r.leg,
-        legWords: legWords(r.leg),
+        legWords: legWords(t, r.leg),
         receiptNumber: r.receiptNumber,
         consignmentNumber: c.consignmentNumber,
         company: c.seller.companyName,
@@ -364,11 +362,11 @@ export function RecordFreightModal({
               {freightMode.data.locked ? t('freightRecordFreightModal.andFixedNowABill') : ''}.{' '}
               {legDisagrees
                 ? t('freightRecordFreightModal.thatBillsTheAndThis', {
-                    value: legWords(expectedLeg).toLowerCase(),
-                    value2: legWords(selectedLeg).toLowerCase(),
+                    value: legWords(t, expectedLeg).toLowerCase(),
+                    value2: legWords(t, selectedLeg).toLowerCase(),
                   })
                 : t('freightRecordFreightModal.thisIsTheWhichIs', {
-                    value: legWords(selectedLeg).toLowerCase(),
+                    value: legWords(t, selectedLeg).toLowerCase(),
                   })}
             </p>
           </MkCallout>

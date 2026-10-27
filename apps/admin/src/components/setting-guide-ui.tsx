@@ -347,13 +347,17 @@ function SourcedChoices({
 type RenderChoices = (extra: readonly Choice[], loading: boolean) => ReactElement;
 
 function CourierChoices({ render }: { readonly render: RenderChoices }): ReactElement {
+  const tr = useT();
   const t = useT();
   const couriers = useCouriers();
   const extra: Choice[] = (couriers.data ?? []).map((c) => [
     c.code,
     {
       label: c.name,
-      does: `New parcels are booked with ${c.name}${c.isActive ? '' : ' (switched off for new parcels right now)'}.`,
+      does: tr('settingGuideUi.newParcelsAreBookedWith', {
+        name: c.name,
+        value: c.isActive ? '' : tr('settingGuideUi.switchedOffForNewParcels'),
+      }),
       example: t('settingGuideUi.anOrderConfirmedTodayIs', { name: c.name }),
     },
   ]);

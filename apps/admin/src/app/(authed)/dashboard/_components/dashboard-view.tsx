@@ -415,7 +415,13 @@ export function DashboardView(): ReactElement {
             note={
               needingAttention === 0
                 ? t('dashboardDashboardView.nothingIsWaitingOnA')
-                : `${needingAttention} ${needingAttention === 1 ? 'queue needs' : 'queues need'} staff attention`
+                : t('dashboardDashboardView.staffAttention', {
+                    needingAttention,
+                    value:
+                      needingAttention === 1
+                        ? t('dashboardDashboardView.queueNeeds')
+                        : t('dashboardDashboardView.queuesNeed'),
+                  })
             }
           />
           <div className="db-attn-grid">

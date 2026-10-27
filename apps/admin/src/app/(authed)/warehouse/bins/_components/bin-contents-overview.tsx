@@ -25,7 +25,7 @@ import {
   ToneText,
   Toolbar,
 } from '../../../inventory/_components/stock-kit';
-import { BinNote, binTypeLabel } from './bin-note';
+import { BinNote, binTypeLabelIn } from './bin-note';
 import './bins.css';
 import { useT } from '@/i18n/client';
 
@@ -113,7 +113,7 @@ export function BinContentsOverview(): ReactElement {
           <option value="">{tr('warehouseBinsBinContentsOverview.allTypes')}</option>
           {types.map((t) => (
             <option key={t} value={t}>
-              {binTypeLabel(t)}
+              {binTypeLabelIn(tr, t)}
             </option>
           ))}
         </Select>
@@ -198,7 +198,7 @@ function BinCard({
           <Link href={`/warehouse/bins/${bin.id}`} className="stk-link sk-ident bin-card__code">
             {bin.code}
           </Link>
-          <ToneText tone="muted">{binTypeLabel(bin.type)}</ToneText>
+          <ToneText tone="muted">{binTypeLabelIn(tr, bin.type)}</ToneText>
           <ToneText tone="faint">
             {tr('warehouseBinsBinContentsOverview.zone', { value: bin.zoneCode ?? '—' })}
           </ToneText>

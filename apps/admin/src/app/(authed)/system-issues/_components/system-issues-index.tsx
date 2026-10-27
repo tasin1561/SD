@@ -273,7 +273,9 @@ export function SystemIssuesIndex(): ReactElement {
                   <div className="af-qcard__actions si-actions">
                     {r.resolvedAt !== null ? (
                       <span className="af-faint">
-                        closed {since(t, r.resolvedAt)}
+                        {t('systemIssuesSystemIssuesIndex.closedAgo', {
+                          ago: since(t, r.resolvedAt),
+                        })}
                         {r.resolutionNote !== null && ` · ${r.resolutionNote}`}
                       </span>
                     ) : (

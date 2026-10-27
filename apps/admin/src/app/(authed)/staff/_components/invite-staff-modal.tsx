@@ -113,10 +113,9 @@ export function InviteStaffModal({
         ) : roles.isError ? (
           <AcAlert
             tone="warn"
-            message={`The role list did not load, so there is nothing to choose from. ${serverVerdict(
-              roles.error,
-              'Could not load roles.',
-            )}`}
+            message={t('staffInviteStaffModal.theRoleListDidNot', {
+              value: serverVerdict(roles.error, 'Could not load roles.'),
+            })}
           />
         ) : (
           <MultiSelect

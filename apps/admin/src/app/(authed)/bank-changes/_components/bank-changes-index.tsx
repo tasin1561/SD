@@ -25,6 +25,7 @@ import {
 } from '@/lib/ops-hooks';
 import { MkAlert, MkCard } from '../../seller-wallets/_components/money-parts';
 import { useT } from '@/i18n/client';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The review queue for a seller's withdrawal destination.
@@ -55,13 +56,15 @@ import { useT } from '@/i18n/client';
  * Account name and number first: those two ARE the destination. Bank
  * and branch are context, routing and SWIFT are how it gets routed.
  */
-const FIELDS: ReadonlyArray<readonly [key: keyof BankDetailsView, label: string, mono: boolean]> = [
-  ['bankAccountName', 'Account name', false],
-  ['bankAccountNumber', 'Account number', true],
-  ['bankName', 'Bank', false],
-  ['bankBranchName', 'Branch', false],
-  ['bankRoutingNumber', 'Routing number', true],
-  ['bankSwiftCode', 'SWIFT', true],
+const FIELDS: ReadonlyArray<
+  readonly [key: keyof BankDetailsView, label: MessageKey, mono: boolean]
+> = [
+  ['bankAccountName', 'bankChangesBankChangesIndex.fieldAccountName', false],
+  ['bankAccountNumber', 'bankChangesBankChangesIndex.fieldAccountNumber', true],
+  ['bankName', 'bankChangesBankChangesIndex.fieldBank', false],
+  ['bankBranchName', 'bankChangesBankChangesIndex.fieldBranch', false],
+  ['bankRoutingNumber', 'bankChangesBankChangesIndex.fieldRoutingNumber', true],
+  ['bankSwiftCode', 'bankChangesBankChangesIndex.fieldSwift', true],
 ];
 
 function changedKeys(req: BankChangeRequestView): ReadonlySet<keyof BankDetailsView> {
@@ -196,16 +199,16 @@ export function BankChangesIndex(): ReactElement {
                 flush
                 icon={<Landmark size={18} />}
                 title={req.companyName}
-                subtitle={`Submitted ${new Date(req.submittedAt).toISOString().slice(0, 10)} · ${
-                  // Zero is possible and is NOT a no-op request: the
-                  // account number is shown in full on both sides, so a
-                  // change confined to it shows up as no visible
-                  // difference. Saying that is better than a bare
-                  // "0 of 6" the reader has to explain to themselves.
-                  changed.size === 0
-                    ? 'nothing visibly different — read the note below'
-                    : `${changed.size} of ${FIELDS.length} fields changed`
-                }`}
+                subtitle={t('bankChangesBankChangesIndex.submitted', {
+                  value: new Date(req.submittedAt).toISOString().slice(0, 10),
+                  value2:
+                    changed.size === 0
+                      ? t('bankChangesBankChangesIndex.nothingVisiblyDifferentReadThe')
+                      : t('bankChangesBankChangesIndex.ofFieldsChanged', {
+                          size: changed.size,
+                          length: FIELDS.length,
+                        }),
+                })}
                 aside={
                   mayReview ? (
                     <>
@@ -242,7 +245,8 @@ export function BankChangesIndex(): ReactElement {
                     </Tr>
                   </THead>
                   <TBody>
-                    {FIELDS.map(([key, label, mono]) => {
+                    {FIELDS.map(([key, labelKey, mono]) => {
+                      const label = t(labelKey);
                       const isChanged = changed.has(key);
                       return (
                         <Tr key={key} className="mk-diff-row" data-changed={isChanged ? '1' : '0'}>
@@ -279,7 +283,9 @@ export function BankChangesIndex(): ReactElement {
         locked={busy}
         title={
           intent === 'APPROVE'
-            ? `Pay ${reviewing?.companyName ?? 'this client'} into the new account?`
+            ? t('bankChangesBankChangesIndex.payIntoTheNewAccount', {
+                value: reviewing?.companyName ?? t('bankChangesBankChangesIndex.thisClient'),
+              })
             : t('bankChangesBankChangesIndex.rejectBankChange', {
                 value: reviewing?.companyName ?? t('bankChangesBankChangesIndex.this'),
               })

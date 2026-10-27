@@ -14,7 +14,7 @@ import { useBinContents } from '@/lib/bin-contents-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { BatchCell, ProductCell } from '../../_components/bin-contents-overview';
-import { BinNote, binTypeLabel } from '../../_components/bin-note';
+import { BinNote, binTypeLabelIn } from '../../_components/bin-note';
 import {
   Actions,
   AreaPage,
@@ -60,7 +60,15 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
         subtitle={
           bin === undefined
             ? t('warehouseBinsBinIdBinDetail.whatThisBinHolds')
-            : `${bin.warehouseCode} — ${bin.warehouseName} · zone ${bin.zoneCode ?? '—'} · ${binTypeLabel(bin.type)} · ${bin.pickable ? 'pickable' : 'not pickable'}`
+            : t('warehouseBinsBinIdBinDetail.subtitleLine', {
+                warehouseCode: bin.warehouseCode,
+                warehouseName: bin.warehouseName,
+                zone: bin.zoneCode ?? '—',
+                type: binTypeLabelIn(t, bin.type),
+                pickable: bin.pickable
+                  ? t('warehouseBinsBinIdBinDetail.pickable')
+                  : t('warehouseBinsBinIdBinDetail.notPickable'),
+              })
         }
         action={
           <Actions>
@@ -155,7 +163,10 @@ export function BinDetail({ binId }: { readonly binId: string }): ReactElement {
                           binId: bin.id,
                           binType: bin.type,
                         })}
-                        aria-label={`Adjust ${l.skuCode ?? 'this line'} in bin ${bin.code}`}
+                        aria-label={t('warehouseBinsBinIdBinDetail.adjustAria', {
+                          line: l.skuCode ?? t('warehouseBinsBinIdBinDetail.thisLine'),
+                          code: bin.code,
+                        })}
                       >
                         {bin.type === 'DAMAGED'
                           ? t('warehouseBinsBinIdBinDetail.returnOrScrap')

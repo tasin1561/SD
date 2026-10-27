@@ -59,7 +59,12 @@ export function CourierMasterSwitches(): ReactElement {
     try {
       const r = await setActive.mutateAsync({ courierCode: c.code, isActive: next, reason });
       const said = r.changed
-        ? `${c.name} is now ${r.isActive ? 'taking new parcels' : 'off for new parcels'}.`
+        ? t('courierAccountsCourierMasterSwitches.isNow', {
+            name: c.name,
+            value: r.isActive
+              ? t('courierAccountsCourierMasterSwitches.takingNewParcels')
+              : t('courierAccountsCourierMasterSwitches.offForNewParcels2'),
+          })
         : t('courierAccountsCourierMasterSwitches.wasAlready', {
             name: c.name,
             value: r.isActive

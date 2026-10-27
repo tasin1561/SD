@@ -54,7 +54,15 @@ export function AdminRequestReturnDialog({
             toast.success(
               r.alreadyRequested
                 ? t('ordersAdminRequestReturnDialog.wasAlreadyComingBack', { orderNumber })
-                : `Return booked for ${orderNumber}${r.reverseAwbNumber === null ? '' : ` · pickup ${r.reverseAwbNumber}`}.`,
+                : t('ordersAdminRequestReturnDialog.returnBookedFor', {
+                    orderNumber,
+                    value:
+                      r.reverseAwbNumber === null
+                        ? ''
+                        : t('ordersAdminRequestReturnDialog.pickup', {
+                            reverseAwbNumber: r.reverseAwbNumber,
+                          }),
+                  }),
             );
           }
           setReason('');

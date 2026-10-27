@@ -54,7 +54,10 @@ export function PhoneToCall({
           type="button"
           onClick={() => void copy(value)}
           className="text-text-muted hover:text-text-bright inline-flex items-center gap-1 rounded-[4px] px-1.5 py-1 text-xs"
-          aria-label={`Copy ${label ?? 'phone number'} ${value}`}
+          aria-label={t('phoneToCall.copy', {
+            value: label ?? t('phoneToCall.phoneNumber'),
+            value2: value,
+          })}
         >
           {copied === value ? (
             <>

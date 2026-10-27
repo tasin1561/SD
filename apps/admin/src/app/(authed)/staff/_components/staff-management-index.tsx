@@ -139,10 +139,9 @@ export function StaffManagementIndex(): ReactElement {
       {canWrite && canReadRoles && roles.isError && (
         <AcAlert
           tone="warn"
-          message={`Roles could not be loaded, so they cannot be changed here. ${serverVerdict(
-            roles.error,
-            'The role list did not load.',
-          )}`}
+          message={t('staffStaffManagementIndex.rolesCouldNotBeLoaded', {
+            value: serverVerdict(roles.error, 'The role list did not load.'),
+          })}
         />
       )}
       {canWrite && !canReadRoles && (

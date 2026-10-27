@@ -293,7 +293,11 @@ export function TransferModal({
             notice={
               heldHere === null
                 ? undefined
-                : `${from?.label ?? 'This account'} holds ${heldHere} ${from?.currency ?? ''} for them. A transfer cannot move more than that.`
+                : t('treasuryTransferModal.holdsForThemATransfer', {
+                    value: from?.label ?? t('treasuryTransferModal.thisAccount'),
+                    heldHere,
+                    value2: from?.currency ?? '',
+                  })
             }
             value={sellerId}
             onChange={(e) => setSellerId(e.target.value)}
@@ -423,7 +427,17 @@ export function TransferModal({
             </span>
           </span>
         }
-        consequence={`Records ${from?.currency ?? ''} leaving ${from?.label ?? 'the sending account'} and ${to?.currency ?? ''} arriving in ${to?.label ?? 'the receiving account'} on ${whenLabel}, as ${sellerName === null ? 'our own money' : `money held for ${sellerName}`}; both balances change at once.`}
+        consequence={t('treasuryTransferModal.recordsLeavingAndArrivingIn', {
+          value: from?.currency ?? '',
+          value2: from?.label ?? t('treasuryTransferModal.theSendingAccount'),
+          value3: to?.currency ?? '',
+          value4: to?.label ?? t('treasuryTransferModal.theReceivingAccount'),
+          whenLabel,
+          value5:
+            sellerName === null
+              ? t('treasuryTransferModal.ourOwnMoney')
+              : t('treasuryTransferModal.moneyHeldFor', { sellerName }),
+        })}
         confirmLabel={t('treasuryTransferModal.recordTransfer')}
         onConfirm={save}
         error={confirming ? (error ?? undefined) : undefined}

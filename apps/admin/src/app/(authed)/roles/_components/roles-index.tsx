@@ -217,7 +217,9 @@ export function RolesIndex(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setPendingDelete(null);
         }}
-        title={`Delete ${pendingDelete?.name ?? 'this role'}?`}
+        title={t('rolesRolesIndex.delete2', {
+          value: pendingDelete?.name ?? t('rolesRolesIndex.thisRole2'),
+        })}
         entity={pendingDelete?.name ?? t('rolesRolesIndex.thisRole')}
         consequence={t('rolesRolesIndex.thisCannotBeUndoneNobody')}
         confirmLabel={t('rolesRolesIndex.deleteRole')}

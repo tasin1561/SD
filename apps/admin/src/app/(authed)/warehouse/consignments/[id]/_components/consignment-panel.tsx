@@ -784,7 +784,10 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
             state={
               finalLegs.length === 0
                 ? t('warehouseConsignmentsIdConsignmentPanel.nothingHasArrivedYet')
-                : `${finalLegs.filter((l) => l.status === 'COMPLETED').length} of ${finalLegs.length} shipment(s) counted`
+                : t('warehouseConsignmentsIdConsignmentPanel.shipmentsCounted', {
+                    done: finalLegs.filter((l) => l.status === 'COMPLETED').length,
+                    total: finalLegs.length,
+                  })
             }
           >
             <Stack>

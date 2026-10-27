@@ -275,7 +275,10 @@ export function RtoStation(): ReactElement {
           ? tr('warehouseRtoRtoStation.alreadyReceivedEarlierOpeningShipment', {
               value: r.shipmentId.slice(0, 8),
             })
-          : `Received — order ${r.orderId.slice(0, 8)} → ${r.orderStatus}.` +
+          : tr('warehouseRtoRtoStation.receivedOrderArrow', {
+              orderId: r.orderId.slice(0, 8),
+              orderStatus: r.orderStatus,
+            }) +
               // WMS-8e: said plainly, because the stock ledger will not
               // show this return until it is finalised.
               (r.holdBooking?.outcome === 'NO_HOLD_BIN'
@@ -294,8 +297,12 @@ export function RtoStation(): ReactElement {
       const r = await finalize.mutateAsync({ shipmentId });
       // Units, not lines: a split line is one line and two outcomes.
       toast.success(
-        `Finalized — ${r.restockedUnits} unit(s) put back in stock, ${r.heldDamagedUnits} kept aside damaged, ` +
-          `${r.writtenOffUnits} written off. Order ${r.status}.`,
+        tr('warehouseRtoRtoStation.finalizedSummary', {
+          restocked: r.restockedUnits,
+          held: r.heldDamagedUnits,
+          writtenOff: r.writtenOffUnits,
+          status: r.status,
+        }),
       );
       setShipmentId(null);
       setAwb('');

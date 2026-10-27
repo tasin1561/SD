@@ -122,6 +122,7 @@ export function BinOpsPanel({
    *  already chosen one. */
   readonly warehouseId?: string;
 }): ReactElement | null {
+  const tr = useT();
   const t = useT();
 
   // COSMETIC (FE-2). The page is gated on warehouse.view; both endpoints
@@ -214,9 +215,11 @@ export function BinOpsPanel({
       // we never knew what was in there, and guessing would report a
       // number nobody moved.
       toast.success(
-        `Moved ${r.unitsMoved} unit(s) across ${r.linesMoved} line(s) into ${
-          byId.get(destBinId)?.code ?? 'the destination bin'
-        }.`,
+        tr('warehouseBinsBinOpsPanel.movedUnitSAcrossLine', {
+          unitsMoved: r.unitsMoved,
+          linesMoved: r.linesMoved,
+          value: byId.get(destBinId)?.code ?? tr('warehouseBinsBinOpsPanel.theDestinationBin'),
+        }),
       );
     } catch (err) {
       setConfirmMove(false);
@@ -489,7 +492,9 @@ export function BinOpsPanel({
         onOpenChange={(next) => {
           if (!next) setConfirmMove(false);
         }}
-        title={`Move everything in ${byId.get(sourceBinId)?.code ?? 'this bin'}?`}
+        title={tr('warehouseBinsBinOpsPanel.moveEverythingIn', {
+          value: byId.get(sourceBinId)?.code ?? tr('warehouseBinsBinOpsPanel.thisBin'),
+        })}
         entity={`${sourceCode} → ${destCode}`}
         entityIsIdentifier
         consequence={t('warehouseBinsBinOpsPanel.everyUnitStandingInThe')}

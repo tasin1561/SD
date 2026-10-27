@@ -98,7 +98,13 @@ export function TrackingPollPanel(): ReactElement | null {
               <p className="af-muted">
                 {minutes === null
                   ? t('delhiveryTrackingPollPanel.noCycleHasEverCompleted')
-                  : `Last cycle ${minutes === 0 ? 'less than a minute' : `${minutes} minute${minutes === 1 ? '' : 's'}`} ago. Scheduled ${health.data?.cronPattern ?? ''}.`}
+                  : t('delhiveryTrackingPollPanel.lastCycleAgoScheduled', {
+                      value:
+                        minutes === 0
+                          ? t('delhiveryTrackingPollPanel.lessThanAMinute')
+                          : `${minutes} minute${minutes === 1 ? '' : t('common.pluralS')}`,
+                      value2: health.data?.cronPattern ?? '',
+                    })}
               </p>
               {stale ? (
                 <p className="af-muted">

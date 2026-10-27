@@ -35,41 +35,61 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { Facts, Notice, OoCard } from '../../orders/_components/order-ops-parts';
 import './call-center.css';
 import { useT } from '@/i18n/client';
+import type { MessageKey } from '@/i18n/catalog';
+import type { Translate } from '@skydrop/ui/app/i18n';
 import { richMessage } from '@/i18n/client';
 
-const OUTCOME_OPTIONS: ReadonlyArray<{
+interface OutcomeOption {
   value: CallOutcome;
   label: string;
   helper: string;
-}> = [
+}
+
+const outcomeOptions = (tr: Translate<MessageKey>): ReadonlyArray<OutcomeOption> => [
   {
     value: 'CONFIRMED' as CallOutcome,
-    label: 'Confirmed',
-    helper: 'Customer agreed → reserves stock + advances order',
+    label: tr('callCenterCallCenterStation.outcomeConfirmed'),
+    helper: tr('callCenterCallCenterStation.outcomeConfirmedHelper'),
   },
   {
     value: 'CUSTOMER_DECLINED' as CallOutcome,
-    label: 'Declined',
-    helper: 'Customer no longer wants the order',
+    label: tr('callCenterCallCenterStation.outcomeDeclined'),
+    helper: tr('callCenterCallCenterStation.outcomeDeclinedHelper'),
   },
-  { value: 'WRONG_NUMBER' as CallOutcome, label: 'Wrong number', helper: 'Reached someone else' },
-  { value: 'NO_ANSWER' as CallOutcome, label: 'No answer', helper: 'Did not pick up' },
-  { value: 'BUSY' as CallOutcome, label: 'Busy', helper: 'Line was busy' },
-  { value: 'VOICEMAIL_LEFT' as CallOutcome, label: 'Voicemail', helper: 'Left a message' },
+  {
+    value: 'WRONG_NUMBER' as CallOutcome,
+    label: tr('callCenterCallCenterStation.outcomeWrongNumber'),
+    helper: tr('callCenterCallCenterStation.outcomeWrongNumberHelper'),
+  },
+  {
+    value: 'NO_ANSWER' as CallOutcome,
+    label: tr('callCenterCallCenterStation.outcomeNoAnswer'),
+    helper: tr('callCenterCallCenterStation.outcomeNoAnswerHelper'),
+  },
+  {
+    value: 'BUSY' as CallOutcome,
+    label: tr('callCenterCallCenterStation.outcomeBusy'),
+    helper: tr('callCenterCallCenterStation.outcomeBusyHelper'),
+  },
+  {
+    value: 'VOICEMAIL_LEFT' as CallOutcome,
+    label: tr('callCenterCallCenterStation.outcomeVoicemail'),
+    helper: tr('callCenterCallCenterStation.outcomeVoicemailHelper'),
+  },
   {
     value: 'CALLBACK_REQUESTED' as CallOutcome,
-    label: 'Callback requested',
-    helper: 'Customer asked to call back at a specific time',
+    label: tr('callCenterCallCenterStation.outcomeCallback'),
+    helper: tr('callCenterCallCenterStation.outcomeCallbackHelper'),
   },
   {
     value: 'TECHNICAL_FAILURE' as CallOutcome,
-    label: 'Technical failure',
-    helper: 'Line dropped, system fault — no order transition',
+    label: tr('callCenterCallCenterStation.outcomeTechnical'),
+    helper: tr('callCenterCallCenterStation.outcomeTechnicalHelper'),
   },
   {
     value: 'LANGUAGE_BARRIER' as CallOutcome,
-    label: 'Language barrier',
-    helper: 'Could not communicate — no order transition',
+    label: tr('callCenterCallCenterStation.outcomeLanguage'),
+    helper: tr('callCenterCallCenterStation.outcomeLanguageHelper'),
   },
 ];
 
@@ -158,14 +178,14 @@ export function CallCenterStation(): ReactElement {
    * an order which must not move.
    */
   const orderedOutcomes = isConfirmationCall
-    ? OUTCOME_OPTIONS
+    ? outcomeOptions(tr)
     : ([
         {
           value: 'SPOKE_TO_CUSTOMER' as CallOutcome,
           label: tr('callCenterCallCenterStation.called'),
           helper: tr('callCenterCallCenterStation.whatTheySaidGoesIn'),
         },
-      ] as typeof OUTCOME_OPTIONS);
+      ] as ReadonlyArray<OutcomeOption>);
   /** Whether the held-call check has answered — the auto-advance must
    *  not pull before it has, or the first tick races it to a certain
    *  AGENT_AT_CAPACITY. */
@@ -960,7 +980,7 @@ function PriorAttempts({
       state: 'done',
       label: (
         <>
-          {OUTCOME_OPTIONS.find((o) => o.value === a.outcome)?.label ?? a.outcome}
+          {outcomeOptions(tr).find((o) => o.value === a.outcome)?.label ?? a.outcome}
           {!a.isThisOrder && (
             <>
               {' '}

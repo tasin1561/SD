@@ -17,6 +17,7 @@ import { Select } from '@skydrop/ui/app/select';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import './order-core.css';
 import { serverVerdict } from '@/lib/server-verdict';
+import type { MessageKey } from '@/i18n/catalog';
 import { useT } from '@/i18n/client';
 import { richMessage } from '@/i18n/client';
 
@@ -54,56 +55,118 @@ const CANCELLATION_REASONS = Object.values(OrderCancellationReason);
 type FieldKey = keyof ForceMutationFields;
 
 const FIELD_GROUPS: ReadonlyArray<{
-  readonly title: string;
+  readonly titleKey: MessageKey;
   readonly fields: ReadonlyArray<{
     readonly key: FieldKey;
-    readonly label: string;
+    readonly labelKey: MessageKey;
     readonly kind: 'text' | 'long-text' | 'number' | 'bool' | 'select';
     readonly options?: ReadonlyArray<string>;
   }>;
 }> = [
   {
-    title: 'Recipient',
+    titleKey: 'ordersForceMutationDialog.fieldRecipient',
     fields: [
-      { key: 'recipientName', label: 'Name', kind: 'text' },
-      { key: 'recipientPhoneE164', label: 'Phone (E.164)', kind: 'text' },
-      { key: 'recipientAltPhoneE164', label: 'Alt phone (E.164)', kind: 'text' },
-      { key: 'recipientEmail', label: 'Email', kind: 'text' },
-      { key: 'recipientAddressLine1', label: 'Address line 1', kind: 'text' },
-      { key: 'recipientAddressLine2', label: 'Address line 2', kind: 'text' },
-      { key: 'recipientLandmark', label: 'Landmark', kind: 'text' },
-      { key: 'recipientCity', label: 'City', kind: 'text' },
-      { key: 'recipientStateProvince', label: 'State / province', kind: 'text' },
-      { key: 'recipientPostalCode', label: 'Postal code', kind: 'text' },
-      { key: 'recipientCountryCode', label: 'Country (ISO)', kind: 'text' },
+      { key: 'recipientName', labelKey: 'ordersForceMutationDialog.fieldName', kind: 'text' },
+      {
+        key: 'recipientPhoneE164',
+        labelKey: 'ordersForceMutationDialog.fieldPhoneE164',
+        kind: 'text',
+      },
+      {
+        key: 'recipientAltPhoneE164',
+        labelKey: 'ordersForceMutationDialog.fieldAltPhoneE164',
+        kind: 'text',
+      },
+      { key: 'recipientEmail', labelKey: 'ordersForceMutationDialog.fieldEmail', kind: 'text' },
+      {
+        key: 'recipientAddressLine1',
+        labelKey: 'ordersForceMutationDialog.fieldAddressLine1',
+        kind: 'text',
+      },
+      {
+        key: 'recipientAddressLine2',
+        labelKey: 'ordersForceMutationDialog.fieldAddressLine2',
+        kind: 'text',
+      },
+      {
+        key: 'recipientLandmark',
+        labelKey: 'ordersForceMutationDialog.fieldLandmark',
+        kind: 'text',
+      },
+      { key: 'recipientCity', labelKey: 'ordersForceMutationDialog.fieldCity', kind: 'text' },
+      {
+        key: 'recipientStateProvince',
+        labelKey: 'ordersForceMutationDialog.fieldStateProvince',
+        kind: 'text',
+      },
+      {
+        key: 'recipientPostalCode',
+        labelKey: 'ordersForceMutationDialog.fieldPostalCode',
+        kind: 'text',
+      },
+      {
+        key: 'recipientCountryCode',
+        labelKey: 'ordersForceMutationDialog.fieldCountryIso',
+        kind: 'text',
+      },
     ],
   },
   {
-    title: 'Payment + value',
+    titleKey: 'ordersForceMutationDialog.fieldPaymentValue',
     fields: [
-      { key: 'paymentMode', label: 'Payment mode', kind: 'select', options: PAYMENT_MODES },
-      { key: 'codAmountInr', label: 'COD amount (INR)', kind: 'number' },
-      { key: 'declaredValueInr', label: 'Declared value (INR)', kind: 'number' },
+      {
+        key: 'paymentMode',
+        labelKey: 'ordersForceMutationDialog.fieldPaymentMode',
+        kind: 'select',
+        options: PAYMENT_MODES,
+      },
+      {
+        key: 'codAmountInr',
+        labelKey: 'ordersForceMutationDialog.fieldCodAmountInr',
+        kind: 'number',
+      },
+      {
+        key: 'declaredValueInr',
+        labelKey: 'ordersForceMutationDialog.fieldDeclaredValueInr',
+        kind: 'number',
+      },
     ],
   },
   {
-    title: 'Physical',
+    titleKey: 'ordersForceMutationDialog.fieldPhysical',
     fields: [
-      { key: 'totalWeightGrams', label: 'Total weight (g)', kind: 'number' },
-      { key: 'packageType', label: 'Package type', kind: 'select', options: PACKAGE_TYPES },
-      { key: 'isUrgent', label: 'Urgent', kind: 'bool' },
-      { key: 'isHighRisk', label: 'High risk', kind: 'bool' },
+      {
+        key: 'totalWeightGrams',
+        labelKey: 'ordersForceMutationDialog.fieldTotalWeightG',
+        kind: 'number',
+      },
+      {
+        key: 'packageType',
+        labelKey: 'ordersForceMutationDialog.fieldPackageType',
+        kind: 'select',
+        options: PACKAGE_TYPES,
+      },
+      { key: 'isUrgent', labelKey: 'ordersForceMutationDialog.fieldUrgent', kind: 'bool' },
+      { key: 'isHighRisk', labelKey: 'ordersForceMutationDialog.fieldHighRisk', kind: 'bool' },
     ],
   },
   {
-    title: 'Notes + cancellation',
+    titleKey: 'ordersForceMutationDialog.fieldNotesCancellation',
     fields: [
-      { key: 'sellerNotes', label: 'Client notes', kind: 'long-text' },
-      { key: 'internalNotes', label: 'Internal notes', kind: 'long-text' },
-      { key: 'callNotes', label: 'Call notes', kind: 'long-text' },
+      {
+        key: 'sellerNotes',
+        labelKey: 'ordersForceMutationDialog.fieldClientNotes',
+        kind: 'long-text',
+      },
+      {
+        key: 'internalNotes',
+        labelKey: 'ordersForceMutationDialog.fieldInternalNotes',
+        kind: 'long-text',
+      },
+      { key: 'callNotes', labelKey: 'ordersForceMutationDialog.fieldCallNotes', kind: 'long-text' },
       {
         key: 'cancellationReason',
-        label: 'Cancellation reason',
+        labelKey: 'ordersForceMutationDialog.fieldCancellationReason',
         kind: 'select',
         options: CANCELLATION_REASONS,
       },
@@ -310,8 +373,8 @@ export function ForceMutationDialog({
 
           {FIELD_GROUPS.map((group) => (
             <FieldGroupBlock
-              key={group.title}
-              title={group.title}
+              key={group.titleKey}
+              title={t(group.titleKey)}
               fields={group.fields}
               fieldStates={fieldStates}
               order={order}
@@ -440,7 +503,7 @@ function FieldGroupBlock({
   readonly title: string;
   readonly fields: ReadonlyArray<{
     readonly key: FieldKey;
-    readonly label: string;
+    readonly labelKey: MessageKey;
     readonly kind: 'text' | 'long-text' | 'number' | 'bool' | 'select';
     readonly options?: ReadonlyArray<string>;
   }>;
@@ -472,7 +535,7 @@ function FieldGroupBlock({
               checked={enabled}
               onChange={() => onToggle(f.key, currentValue)}
               disabled={disabled}
-              label={f.label}
+              label={t(f.labelKey)}
               description={
                 currentValue !== null && currentValue !== undefined ? (
                   <span className="oc-wl__was sk-ident">
@@ -484,7 +547,7 @@ function FieldGroupBlock({
             {enabled && (
               <FieldInput
                 kind={f.kind}
-                label={f.label}
+                label={t(f.labelKey)}
                 {...(f.options !== undefined ? { options: f.options } : {})}
                 value={state?.value ?? ''}
                 disabled={disabled}

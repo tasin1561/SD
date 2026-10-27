@@ -100,7 +100,7 @@ function groupByGuide(
   for (const s of [...items].sort((a, b) => compareByGuide(a.key, b.key))) {
     const title =
       settingGuide(s.key)?.group ??
-      t('settingsSettingsIndex.other', { value: categoryLabel(s.category) });
+      t('settingsSettingsIndex.other', { value: categoryLabel(t, s.category) });
     const bucket = byTitle.get(title);
     if (bucket === undefined) byTitle.set(title, [s]);
     else bucket.push(s);
@@ -182,13 +182,14 @@ function SettingRow({
  * heading is DERIVED from the key below, not written as a string, so
  * there was nothing for a search for "Reseller" to match.
  */
-const CATEGORY_LABELS: Record<string, string> = {
-  reseller: 'Member stores',
+const CATEGORY_LABELS: Record<string, MessageKey> = {
+  reseller: 'settingsSettingsIndex.categoryReseller',
 };
 
-function categoryLabel(category: string): string {
+function categoryLabel(tr: Translate<MessageKey>, category: string): string {
+  const known = CATEGORY_LABELS[category];
   return (
-    CATEGORY_LABELS[category] ??
+    (known === undefined ? undefined : tr(known)) ??
     category
       .split('_')
       .map((p) => p.charAt(0).toUpperCase() + p.slice(1))

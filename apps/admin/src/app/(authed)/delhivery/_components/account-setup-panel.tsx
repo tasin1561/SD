@@ -110,7 +110,13 @@ export function AccountSetupPanel(): ReactElement | null {
         toast.info('Stub mode — nothing left the box. This proves nothing about the real account.');
       } else if (r.reachedLiveApi) {
         toast.success(
-          `Reached Delhivery. ${r.pincode ?? ''} is ${r.detail?.serviceable === true ? 'serviceable' : 'not serviceable'}.`,
+          t('delhiveryAccountSetupPanel.reachedDelhiveryIs', {
+            value: r.pincode ?? '',
+            value2:
+              r.detail?.serviceable === true
+                ? t('delhiveryAccountSetupPanel.serviceable')
+                : t('delhiveryAccountSetupPanel.notServiceable'),
+          }),
         );
       } else {
         toast.error(r.error ?? t('delhiveryAccountSetupPanel.didNotReachTheLive'));
