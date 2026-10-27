@@ -62,6 +62,27 @@ const devanagari = localFont({
   ],
 });
 
+/**
+ * Bangla: Noto Sans Bengali (OFL, licence beside the file), ONE variable woff2
+ * (wght 400-700, 69.9 KB), same file and subset as apps/associate. Same shape
+ * as the Devanagari face: @font-face declared everywhere, not preloaded,
+ * unicode-range Bengali-only, and only NAMED in the font stack (track.css)
+ * and its class only set on <html> when Bangla is active — an English or
+ * Hindi visitor never requests it, not even for the "বাংলা" switcher label.
+ */
+const bengali = localFont({
+  src: [{ path: './fonts/noto-sans-bengali-400-700.woff2', weight: '400 700', style: 'normal' }],
+  variable: '--font-bn-face',
+  display: 'swap',
+  preload: false,
+  declarations: [
+    {
+      prop: 'unicode-range',
+      value: 'U+0964-0965, U+0980-09FF, U+200C-200D, U+20B9, U+25CC',
+    },
+  ],
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL('https://track.skydrop.global'),
   title: 'Skydrop tracking',
@@ -100,7 +121,7 @@ export default async function RootLayout({
       lang={locale}
       data-lang={locale}
       data-theme={theme}
-      className={`${sans.variable} ${mono.variable}${locale === 'hi' ? ` ${devanagari.variable}` : ''}`}
+      className={`${sans.variable} ${mono.variable}${locale === 'hi' ? ` ${devanagari.variable}` : ''}${locale === 'bn' ? ` ${bengali.variable}` : ''}`}
       suppressHydrationWarning
     >
       <head>
