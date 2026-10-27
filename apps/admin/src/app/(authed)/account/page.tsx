@@ -1,8 +1,12 @@
 import type { Metadata } from 'next';
 import type { ReactElement } from 'react';
 import { AccountSecurityView } from './_components/account-security-view';
+import { getT } from '@/i18n/server';
 
-export const metadata: Metadata = { title: 'Your account · Skydrop Admin' };
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: t('accountPage.yourAccountSkydropAdmin') };
+}
 
 /**
  * The signed-in staff member's own account — identity facts, and the

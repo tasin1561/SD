@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Camera, X } from 'lucide-react';
 import { Button } from '@skydrop/ui/app/button';
 import { Dialog } from '@skydrop/ui/app/dialog';
+import { useT } from '@/i18n/client';
 
 /**
  * Read a barcode with the device camera.
@@ -29,13 +30,15 @@ export function BarcodeCamera({
   open,
   onClose,
   onScan,
-  title = 'Scan with the camera',
+  title: titleProp,
 }: {
   open: boolean;
   onClose: () => void;
   onScan: (code: string) => void;
   title?: string;
 }): ReactElement {
+  const t = useT();
+  const title = titleProp ?? t('barcodeCamera.scanWithTheCamera');
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stopRef = useRef<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +113,7 @@ export function BarcodeCamera({
               muted
             />
             <p className="m-0 text-xs text-[var(--fg-muted)]">
-              Hold the barcode steady in the frame. It reads automatically.
+              {t('barcodeCamera.holdTheBarcodeSteadyIn')}
             </p>
           </>
         ) : (
@@ -118,7 +121,7 @@ export function BarcodeCamera({
         )}
         <div>
           <Button variant="secondary" onClick={onClose} icon={<X size={14} />}>
-            Close camera
+            {t('barcodeCamera.closeCamera')}
           </Button>
         </div>
       </div>
@@ -154,6 +157,7 @@ function cameraFailure(err: unknown): string {
 
 /** The button that opens it — hidden where there is no camera at all. */
 export function CameraScanButton({ onClick }: { onClick: () => void }): ReactElement | null {
+  const t = useT();
   const [supported, setSupported] = useState(false);
   useEffect(() => {
     setSupported(
@@ -165,10 +169,10 @@ export function CameraScanButton({ onClick }: { onClick: () => void }): ReactEle
     <Button
       variant="secondary"
       onClick={onClick}
-      aria-label="Scan with the camera"
+      aria-label={t('barcodeCamera.scanWithTheCamera')}
       icon={<Camera size={16} />}
     >
-      Camera
+      {t('barcodeCamera.camera')}
     </Button>
   );
 }

@@ -12,6 +12,7 @@ import {
   type TopicDef,
 } from '@/lib/notification-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * What reaches this person, per topic.
@@ -22,6 +23,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * came to see what had happened.
  */
 export function NotificationSettingsView(): ReactElement {
+  const tr = useT();
   const topics = useNotificationTopics();
   const subs = useNotificationSubscriptions();
   const setSub = useSetNotificationSubscription();
@@ -39,9 +41,15 @@ export function NotificationSettingsView(): ReactElement {
   return (
     <AcPage width="narrow">
       <AcHeader
-        crumbs={[{ label: 'Notifications', href: '/notifications' }, { label: 'What reaches you' }]}
-        title="What reaches you"
-        subtitle="Switch off anything you would rather not see. Messages about your account and credentials are not listed — they only ever go to your email, and cannot be silenced."
+        crumbs={[
+          {
+            label: tr('notificationsSettingsNotificationSettingsView.notifications'),
+            href: '/notifications',
+          },
+          { label: tr('notificationsSettingsNotificationSettingsView.whatReachesYou') },
+        ]}
+        title={tr('notificationsSettingsNotificationSettingsView.whatReachesYou')}
+        subtitle={tr('notificationsSettingsNotificationSettingsView.switchOffAnythingYouWould')}
       />
 
       {error !== null && <AcAlert message={error} />}
@@ -65,7 +73,10 @@ export function NotificationSettingsView(): ReactElement {
                       <div className="ac-row__side">
                         <Switch
                           checked={on}
-                          aria-label={`Notify me about: ${d.label}`}
+                          aria-label={tr(
+                            'notificationsSettingsNotificationSettingsView.notifyMeAbout',
+                            { label: d.label },
+                          )}
                           onCheckedChange={() => {
                             setError(null);
                             if (on) {

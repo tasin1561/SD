@@ -13,6 +13,7 @@ import { SettingName, compareByGuide } from '@/components/setting-guide-ui';
 import { SETTING_GROUP_ORDER, settingGuide, settingValueLabel } from '@/lib/system-setting-guide';
 import { AcFact, AcHeader, AcPage, AcSection } from './ac-parts';
 import { EditSettingDialog } from './edit-setting-dialog';
+import { useT } from '@/i18n/client';
 
 /**
  * Admin /settings — every system setting, grouped by what it is about.
@@ -32,27 +33,28 @@ import { EditSettingDialog } from './edit-setting-dialog';
  * authoritative valueDisplay (masked for sensitive).
  */
 export function SettingsIndex(): ReactElement {
+  const t = useT();
   const list = useSystemSettingsList();
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   return (
     <AcPage>
       <AcHeader
-        title="System settings"
-        subtitle="How the whole system behaves, one setting at a time. Hover or tap (i) for what a setting decides and an example. Every edit is audited with its before and after."
+        title={t('settingsSettingsIndex.systemSettings')}
+        subtitle={t('settingsSettingsIndex.howTheWholeSystemBehaves')}
       />
 
       {list.isLoading ? (
-        <SkeletonRows rows={8} cols={3} label="Loading settings…" />
+        <SkeletonRows rows={8} cols={3} label={t('settingsSettingsIndex.loadingSettings')} />
       ) : list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load settings.'}
+          message={list.error?.message ?? t('settingsSettingsIndex.failedToLoadSettings')}
           retry={() => void list.refetch()}
         />
       ) : !list.data || list.data.length === 0 ? (
         <EmptyState
-          title="No settings"
-          description="The seed should provision these — check the database."
+          title={t('settingsSettingsIndex.noSettings')}
+          description={t('settingsSettingsIndex.theSeedShouldProvisionThese')}
         />
       ) : (
         groupByGuide(list.data.flatMap((g) => g.items)).map((group) => (
@@ -108,6 +110,7 @@ function SettingRow({
   setting: SystemSettingView;
   onEdit: () => void;
 }): ReactElement {
+  const t = useT();
   const shown = setting.isSensitive
     ? setting.valueDisplay
     : settingValueLabel(setting.key, setting.valueDisplay);
@@ -121,14 +124,20 @@ function SettingRow({
             label={setting.valueType.toLowerCase()}
             size="sm"
           />
-          {setting.isSensitive && <AcFact tone="warn">Sensitive</AcFact>}
-          {setting.requiresRestart && <AcFact tone="bad">Restart</AcFact>}
-          {!setting.isEditableByAdmin && <AcFact>Read-only</AcFact>}
+          {setting.isSensitive && (
+            <AcFact tone="warn">{t('settingsSettingsIndex.sensitive')}</AcFact>
+          )}
+          {setting.requiresRestart && (
+            <AcFact tone="bad">{t('settingsSettingsIndex.restart')}</AcFact>
+          )}
+          {!setting.isEditableByAdmin && <AcFact>{t('settingsSettingsIndex.readOnly')}</AcFact>}
         </div>
         <div className="ac-row__value">{shown}</div>
         {setting.lastEditedAt && (
           <span className="ac-faint sk-figure">
-            Last edit: {new Date(setting.lastEditedAt).toISOString().replace('T', ' ').slice(0, 16)}
+            {t('settingsSettingsIndex.lastEdit', {
+              value: new Date(setting.lastEditedAt).toISOString().replace('T', ' ').slice(0, 16),
+            })}
           </span>
         )}
       </div>
@@ -140,7 +149,7 @@ function SettingRow({
           onClick={onEdit}
           disabled={!setting.isEditableByAdmin}
         >
-          Edit
+          {t('settingsSettingsIndex.edit')}
         </Button>
       </div>
     </li>

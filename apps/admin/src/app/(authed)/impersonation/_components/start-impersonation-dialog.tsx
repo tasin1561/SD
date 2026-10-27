@@ -18,6 +18,7 @@ import { useStartImpersonation, useVerifyImpersonation } from '@/lib/impersonati
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AcAlert, AcCallout, phaseOf } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Opening a support session inside somebody's account, in two steps.
@@ -63,6 +64,7 @@ export function StartImpersonationDialog({
   readonly subjectName: string;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const mayWritePermission = usePermission('support.impersonate.write');
   const start = useStartImpersonation();
   const verify = useVerifyImpersonation();
@@ -97,7 +99,7 @@ export function StartImpersonationDialog({
         }),
       );
     } catch (err) {
-      setError(serverVerdict(err, 'The session could not be opened.'));
+      setError(serverVerdict(err, t('impersonationStartImpersonationDialog.theSessionCouldNotBe')));
     } finally {
       setBusy(false);
     }
@@ -118,7 +120,9 @@ export function StartImpersonationDialog({
       // the console believing it had.
       window.location.assign(result.handoff.redirectUrl);
     } catch (err) {
-      setError(serverVerdict(err, 'That code was not accepted.'));
+      setError(
+        serverVerdict(err, t('impersonationStartImpersonationDialog.thatCodeWasNotAccepted')),
+      );
       setBusy(false);
     }
   }
@@ -130,8 +134,8 @@ export function StartImpersonationDialog({
         onOpenChange={(o) => {
           if (!o) onClose();
         }}
-        title={`Open a support session in ${subjectName}'s account`}
-        description="You will see their account exactly as they see it, and everything you do is recorded under both names."
+        title={t('impersonationStartImpersonationDialog.openASupportSessionIn', { subjectName })}
+        description={t('impersonationStartImpersonationDialog.youWillSeeTheirAccount')}
         icon={<ShieldAlert size={18} />}
         size="md"
         tone="critical"
@@ -139,7 +143,7 @@ export function StartImpersonationDialog({
       >
         <form onSubmit={(e) => void onSubmitReason(e)} className="ac-form">
           <TextArea
-            label="Why are you going in?"
+            label={t('impersonationStartImpersonationDialog.whyAreYouGoingIn')}
             rows={3}
             value={reason}
             onChange={(e) => {
@@ -150,16 +154,22 @@ export function StartImpersonationDialog({
             showCount
             maxLength={1000}
             requiredMark
-            hint={`Say WHY, not what — a sentence somebody reading this in six weeks can act on. “Checking the payout ${subjectName} queried on the 6th”, not “looking at wallet”. At least ${MIN_IMPERSONATION_REASON} characters.`}
+            hint={t('impersonationStartImpersonationDialog.sayWhyNotWhatA', {
+              subjectName,
+              minImpersonationReason: MIN_IMPERSONATION_REASON,
+            })}
             {...(reasonTouched && tooShort
               ? {
-                  error: `${MIN_IMPERSONATION_REASON} characters at the least — ${trimmed.length} so far. This sentence is the whole of what a reviewer will have.`,
+                  error: t('impersonationStartImpersonationDialog.charactersAtTheLeastSo', {
+                    minImpersonationReason: MIN_IMPERSONATION_REASON,
+                    length: trimmed.length,
+                  }),
                 }
               : {})}
           />
 
           <ChoiceCards
-            label="What may you do in there?"
+            label={t('impersonationStartImpersonationDialog.whatMayYouDoIn')}
             columns={2}
             value={mayWrite ? 'WRITE' : 'READ_ONLY'}
             onChange={(v) => {
@@ -169,8 +179,10 @@ export function StartImpersonationDialog({
             options={[
               {
                 value: 'READ_ONLY',
-                title: 'Read-only',
-                description: 'Look at everything, change nothing. Every write is refused.',
+                title: t('impersonationStartImpersonationDialog.readOnly'),
+                description: t(
+                  'impersonationStartImpersonationDialog.lookAtEverythingChangeNothing',
+                ),
                 icon: <Eye size={16} />,
               },
               // Hidden rather than disabled without the permission: a
@@ -180,8 +192,10 @@ export function StartImpersonationDialog({
                 ? [
                     {
                       value: 'WRITE',
-                      title: 'Act as them',
-                      description: 'Do things in their account, under their name.',
+                      title: t('impersonationStartImpersonationDialog.actAsThem'),
+                      description: t(
+                        'impersonationStartImpersonationDialog.doThingsInTheirAccount',
+                      ),
                       icon: <PenLine size={16} />,
                     },
                   ]
@@ -189,8 +203,8 @@ export function StartImpersonationDialog({
             ]}
             hint={
               mayWritePermission
-                ? 'Pick read-only unless you already know you will have to change something. A session can be opened again, not widened.'
-                : 'Read-only is the only mode you hold. Acting inside somebody’s account needs the separate “Act inside a client’s or store’s account” permission.'
+                ? t('impersonationStartImpersonationDialog.pickReadOnlyUnlessYou')
+                : t('impersonationStartImpersonationDialog.readOnlyIsTheOnly')
             }
           />
 
@@ -199,14 +213,11 @@ export function StartImpersonationDialog({
               tone="critical"
               icon={<TriangleAlert size={15} />}
               role="status"
-              title={`Anything you do will look like ${subjectName} did it`}
+              title={t('impersonationStartImpersonationDialog.anythingYouDoWillLook', {
+                subjectName,
+              })}
             >
-              <p>
-                The audit trail names you as well, but the account’s own history will show their
-                name on it. Passwords, their email address, bank details, withdrawals, API keys,
-                webhooks, team and roles, and accepting terms stay out of reach whatever you hold —
-                the server refuses them and says why.
-              </p>
+              <p>{t('impersonationStartImpersonationDialog.theAuditTrailNamesYou')}</p>
             </AcCallout>
           )}
 
@@ -214,7 +225,7 @@ export function StartImpersonationDialog({
 
           <DialogFooter>
             <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
-              Cancel
+              {t('impersonationStartImpersonationDialog.cancel')}
             </Button>
             <AsyncButton
               type="submit"
@@ -222,7 +233,11 @@ export function StartImpersonationDialog({
               size="md"
               icon={<KeyRound size={15} />}
               state={phaseOf(busy, error)}
-              labels={{ idle: 'Send me a code', busy: 'Opening…', error: 'Not opened' }}
+              labels={{
+                idle: t('impersonationStartImpersonationDialog.sendMeACode'),
+                busy: t('impersonationStartImpersonationDialog.opening'),
+                error: t('impersonationStartImpersonationDialog.notOpened'),
+              }}
             />
           </DialogFooter>
         </form>
@@ -236,8 +251,10 @@ export function StartImpersonationDialog({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title="Enter the code to go in"
-      description={`The session is recorded against ${subjectName}. It starts the moment the code is accepted.`}
+      title={t('impersonationStartImpersonationDialog.enterTheCodeToGo')}
+      description={t('impersonationStartImpersonationDialog.theSessionIsRecordedAgainst', {
+        subjectName,
+      })}
       icon={<KeyRound size={18} />}
       size="sm"
       tone="critical"
@@ -246,7 +263,7 @@ export function StartImpersonationDialog({
       <form onSubmit={(e) => void onSubmitCode(e)} className="ac-form">
         <SegmentedCode
           length={IMPERSONATION_OTP_LENGTH}
-          label="One-time code"
+          label={t('impersonationStartImpersonationDialog.oneTimeCode')}
           charset="numeric"
           autoFocus
           value={code}
@@ -258,22 +275,21 @@ export function StartImpersonationDialog({
           // The address is named rather than implied: a staff member
           // with a work address and a personal one otherwise waits at
           // the wrong inbox and concludes the code was never sent.
-          hint={`Sent to ${opened.otpSentTo}. It is yours, not theirs.`}
+          hint={t('impersonationStartImpersonationDialog.sentToItIsYours', {
+            otpSentTo: opened.otpSentTo,
+          })}
           disabled={busy}
         />
 
         {error !== null && <AcAlert message={error} />}
 
         <AcCallout tone="warn" icon={<TriangleAlert size={15} />} role="status">
-          <p>
-            The next page is {subjectName}’s account, not yours. A red bar across the top will say
-            so for as long as the session lasts, and it has the button that ends the session.
-          </p>
+          <p>{t('impersonationStartImpersonationDialog.theNextPageIsS', { subjectName })}</p>
         </AcCallout>
 
         <DialogFooter>
           <Button type="button" variant="ghost" size="md" disabled={busy} onClick={onClose}>
-            Cancel
+            {t('impersonationStartImpersonationDialog.cancel')}
           </Button>
           <AsyncButton
             type="submit"
@@ -282,9 +298,9 @@ export function StartImpersonationDialog({
             icon={<ShieldAlert size={15} />}
             state={phaseOf(busy, error)}
             labels={{
-              idle: `Go into ${subjectName}'s account`,
-              busy: 'Verifying…',
-              error: 'Not accepted',
+              idle: t('impersonationStartImpersonationDialog.goIntoSAccount', { subjectName }),
+              busy: t('impersonationStartImpersonationDialog.verifying'),
+              error: t('impersonationStartImpersonationDialog.notAccepted'),
             }}
           />
         </DialogFooter>

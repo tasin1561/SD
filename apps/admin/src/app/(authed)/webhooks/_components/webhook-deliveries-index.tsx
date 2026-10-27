@@ -17,6 +17,7 @@ import './webhooks.css';
 import { useRetryWebhookDelivery, useWebhookDeliveriesList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 const STATUSES = [
   '',
@@ -29,6 +30,7 @@ const STATUSES = [
 ] as const;
 
 export function WebhookDeliveriesIndex(): ReactElement {
+  const t = useT();
   const canRetry = usePermission('webhooks.retry');
   const [status, setStatus] = useState<string>('');
   const list = useWebhookDeliveriesList({
@@ -52,9 +54,11 @@ export function WebhookDeliveriesIndex(): ReactElement {
     setRetryingId(id);
     try {
       const res = await retry.mutateAsync({ id });
-      toast.success(`Re-enqueued (job ${res.jobId.slice(0, 8)}…)`);
+      toast.success(
+        t('webhooksWebhookDeliveriesIndex.reEnqueuedJob', { value: res.jobId.slice(0, 8) }),
+      );
     } catch (e) {
-      toast.error(serverVerdict(e, 'Retry failed'));
+      toast.error(serverVerdict(e, t('webhooksWebhookDeliveriesIndex.retryFailed')));
     } finally {
       setRetryingId(null);
     }
@@ -63,18 +67,25 @@ export function WebhookDeliveriesIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'System' }, { label: 'Webhook deliveries' }]}
+        breadcrumbs={[
+          { label: t('webhooksWebhookDeliveriesIndex.system') },
+          { label: t('webhooksWebhookDeliveriesIndex.webhookDeliveries') },
+        ]}
         Link={Link}
-        title="Webhook deliveries"
-        subtitle="Outbound HMAC-signed POSTs to client-configured endpoints. Read-only diagnostic view."
+        title={t('webhooksWebhookDeliveriesIndex.webhookDeliveries')}
+        subtitle={t('webhooksWebhookDeliveriesIndex.outboundHmacSignedPostsTo')}
       />
 
       <AfCard>
         <div className="wh-filter">
-          <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+          <Select
+            label={t('webhooksWebhookDeliveriesIndex.status')}
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+          >
             {STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s === '' ? 'All' : s}
+                {s === '' ? t('webhooksWebhookDeliveriesIndex.all') : s}
               </option>
             ))}
           </Select>
@@ -83,28 +94,35 @@ export function WebhookDeliveriesIndex(): ReactElement {
 
       {list.isLoading ? (
         <AfCard flush>
-          <SkeletonRows rows={6} cols={6} label="Loading deliveries…" />
+          <SkeletonRows
+            rows={6}
+            cols={6}
+            label={t('webhooksWebhookDeliveriesIndex.loadingDeliveries')}
+          />
         </AfCard>
       ) : list.isError ? (
-        <ErrorState message={list.error?.message ?? 'Failed.'} retry={() => void list.refetch()} />
+        <ErrorState
+          message={list.error?.message ?? t('webhooksWebhookDeliveriesIndex.failed')}
+          retry={() => void list.refetch()}
+        />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
-          title="No webhook deliveries match the filter."
-          description="Deliveries appear here as clients' endpoints are sent events."
+          title={t('webhooksWebhookDeliveriesIndex.noWebhookDeliveriesMatchThe')}
+          description={t('webhooksWebhookDeliveriesIndex.deliveriesAppearHereAsClients')}
         />
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>When</Th>
-              <Th>Client</Th>
-              <Th>Event</Th>
+              <Th>{t('webhooksWebhookDeliveriesIndex.when')}</Th>
+              <Th>{t('webhooksWebhookDeliveriesIndex.client')}</Th>
+              <Th>{t('webhooksWebhookDeliveriesIndex.event')}</Th>
               <Th>URL</Th>
-              <Th align="right">Attempt</Th>
-              <Th>Status</Th>
+              <Th align="right">{t('webhooksWebhookDeliveriesIndex.attempt')}</Th>
+              <Th>{t('webhooksWebhookDeliveriesIndex.status')}</Th>
               <Th align="right">HTTP</Th>
-              <Th align="right">Time</Th>
-              <Th align="right">Action</Th>
+              <Th align="right">{t('webhooksWebhookDeliveriesIndex.time')}</Th>
+              <Th align="right">{t('webhooksWebhookDeliveriesIndex.action')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -168,7 +186,7 @@ export function WebhookDeliveriesIndex(): ReactElement {
                         })
                       }
                     >
-                      Retry
+                      {t('webhooksWebhookDeliveriesIndex.retry')}
                     </Button>
                   )}
                 </Td>
@@ -183,14 +201,14 @@ export function WebhookDeliveriesIndex(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setConfirming(null);
         }}
-        title="Retry this webhook delivery?"
+        title={t('webhooksWebhookDeliveriesIndex.retryThisWebhookDelivery')}
         entity={confirming === null ? '' : `${confirming.event} · ${confirming.seller}`}
         consequence={
           confirming === null
             ? ''
-            : `The signed event is queued to be POSTed again to ${confirming.url}; the client's system may act on it a second time.`
+            : t('webhooksWebhookDeliveriesIndex.theSignedEventIsQueued', { url: confirming.url })
         }
-        confirmLabel="Retry"
+        confirmLabel={t('webhooksWebhookDeliveriesIndex.retry')}
         onConfirm={() => {
           if (confirming === null) return;
           const id = confirming.id;

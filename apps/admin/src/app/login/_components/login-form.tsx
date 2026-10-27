@@ -5,6 +5,7 @@ import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { PasswordField } from '@skydrop/ui/app/password-field';
 import { Button } from '@skydrop/ui/app/button';
+import { useT } from '@/i18n/client';
 
 /**
  * Login form. The login page isn't wrapped in an AuthProvider (the
@@ -27,6 +28,7 @@ import { Button } from '@skydrop/ui/app/button';
  * the symmetry is worth more than the savings.)
  */
 export function LoginForm(): ReactElement {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -46,11 +48,11 @@ export function LoginForm(): ReactElement {
       window.location.assign('/dashboard');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setError('Invalid email or password.');
+        setError(t('loginLoginForm.invalidEmailOrPassword'));
       } else if (err instanceof ApiError && err.status === 429) {
-        setError('Too many attempts. Try again in a few minutes.');
+        setError(t('loginLoginForm.tooManyAttemptsTryAgain'));
       } else {
-        setError('Sign-in failed. Please try again.');
+        setError(t('loginLoginForm.signInFailedPleaseTry'));
       }
       setSubmitting(false);
     }
@@ -67,7 +69,7 @@ export function LoginForm(): ReactElement {
       <TextField
         id="email"
         type="email"
-        label="Email"
+        label={t('loginLoginForm.email')}
         autoComplete="email"
         required
         value={email}
@@ -76,7 +78,7 @@ export function LoginForm(): ReactElement {
       />
       <PasswordField
         id="password"
-        label="Password"
+        label={t('loginLoginForm.password')}
         autoComplete="current-password"
         required
         value={password}
@@ -89,7 +91,7 @@ export function LoginForm(): ReactElement {
         </div>
       )}
       <Button type="submit" size="lg" fullWidth loading={submitting}>
-        {submitting ? 'Signing in…' : 'Sign in'}
+        {submitting ? t('loginLoginForm.signingIn') : t('loginLoginForm.signIn')}
       </Button>
     </form>
   );

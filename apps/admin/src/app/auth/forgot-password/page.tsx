@@ -2,8 +2,12 @@ import type { Metadata } from 'next';
 import type { ReactElement } from 'react';
 import { SignInCard } from '@skydrop/ui/app/sign-in';
 import { ForgotPasswordForm } from './_components/forgot-form';
+import { getT } from '@/i18n/server';
 
-export const metadata: Metadata = { title: 'Reset your password · Skydrop Admin' };
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: t('authForgotPasswordPage.resetYourPasswordSkydropAdmin') };
+}
 
 /**
  * Step 1 of the staff password reset.
@@ -12,11 +16,12 @@ export const metadata: Metadata = { title: 'Reset your password · Skydrop Admin
  * page told staff to "contact your admin", which for the SUPER_ADMIN
  * reading it means contact yourself.
  */
-export default function ForgotPasswordPage(): ReactElement {
+export default async function ForgotPasswordPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <SignInCard
-      title="Forgot your password?"
-      note="We will email you a link to set a new one. It expires in 30 minutes."
+      title={t('authForgotPasswordPage.forgotYourPassword')}
+      note={t('authForgotPasswordPage.weWillEmailYouA')}
     >
       <ForgotPasswordForm />
     </SignInCard>

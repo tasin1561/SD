@@ -20,6 +20,9 @@ import {
   type SettingOption,
 } from '@/lib/system-setting-guide';
 import './setting-guide-ui.css';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The words from `system-setting-guide`, drawn the same way on both
@@ -67,11 +70,12 @@ export function SettingValueEditor({
   /** Replaces the hint under a number input. */
   readonly numberHint?: string | undefined;
 }): ReactElement {
+  const t = useT();
   if (masked) {
     return valueType === 'JSON' ? (
-      <TextArea label="Value (JSON)" rows={4} value={MASK} disabled readOnly />
+      <TextArea label={t('settingGuideUi.valueJson')} rows={4} value={MASK} disabled readOnly />
     ) : (
-      <TextField label="Value" value={MASK} disabled readOnly />
+      <TextField label={t('settingGuideUi.value')} value={MASK} disabled readOnly />
     );
   }
   if (hasChoiceList(settingKey, valueType)) {
@@ -102,8 +106,8 @@ export function SettingValueEditor({
     case 'JSON':
       return (
         <TextArea
-          label="Value (JSON)"
-          hint="Must parse as a JSON object or array."
+          label={t('settingGuideUi.valueJson')}
+          hint={t('settingGuideUi.mustParseAsAJson')}
           rows={8}
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -114,8 +118,13 @@ export function SettingValueEditor({
     case 'DECIMAL':
       return (
         <TextField
-          label="Value"
-          hint={numberHint ?? (valueType === 'INT' ? 'A whole number' : 'A number, e.g. 18.00')}
+          label={t('settingGuideUi.value')}
+          hint={
+            numberHint ??
+            (valueType === 'INT'
+              ? t('settingGuideUi.aWholeNumber')
+              : t('settingGuideUi.aNumberEG18'))
+          }
           type="number"
           inputMode={valueType === 'INT' ? 'numeric' : 'decimal'}
           step={valueType === 'INT' ? 1 : 'any'}
@@ -127,8 +136,8 @@ export function SettingValueEditor({
     case 'DATE':
       return (
         <TextField
-          label="Value"
-          hint="ISO-8601 (YYYY-MM-DDTHH:mm:ss)"
+          label={t('settingGuideUi.value')}
+          hint={t('settingGuideUi.iso8601YyyyMmDdthh')}
           type="datetime-local"
           floatLabel
           value={value}
@@ -139,8 +148,8 @@ export function SettingValueEditor({
     default:
       return (
         <TextField
-          label="Value"
-          hint={FREE_TEXT_SETTINGS[settingKey] ?? 'Plain text'}
+          label={t('settingGuideUi.value')}
+          hint={FREE_TEXT_SETTINGS[settingKey] ?? t('settingGuideUi.plainText')}
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
@@ -158,6 +167,7 @@ export function SettingName({
   readonly settingKey: string;
   readonly showGroup?: boolean | undefined;
 }): ReactElement {
+  const t = useT();
   const guide = settingGuide(settingKey);
   const name = guide?.name ?? fallbackSettingName(settingKey);
   return (
@@ -172,12 +182,16 @@ export function SettingName({
               <>
                 <span className="sss-tip__what">{guide.what}</span>
                 <span className="sss-tip__example">
-                  <strong>Example:</strong> {guide.example}
+                  <strong>{t('settingGuideUi.example')}</strong> {guide.example}
                 </span>
               </>
             }
           >
-            <button type="button" className="sss-info" aria-label={`What "${name}" means`}>
+            <button
+              type="button"
+              className="sss-info"
+              aria-label={t('settingGuideUi.whatMeans', { name })}
+            >
               <Info size={14} aria-hidden />
             </button>
           </TooltipCard>
@@ -197,11 +211,12 @@ export function SettingName({
 
 /** What the setting decides, with its example — the top of an edit dialog. */
 export function SettingExplanation({ guide }: { readonly guide: SettingGuide }): ReactElement {
+  const t = useT();
   return (
     <div className="sss-explain">
       <p className="ac-text">{guide.what}</p>
       <p className="ac-muted">
-        <strong>Example:</strong> {guide.example}
+        <strong>{t('settingGuideUi.example')}</strong> {guide.example}
       </p>
     </div>
   );
@@ -240,14 +255,18 @@ export function hasMultiChoice(settingKey: string, valueType: string): boolean {
   return valueType === 'JSON' && settingGuide(settingKey)?.multi !== undefined;
 }
 
-const SWITCH_FALLBACK: Readonly<Record<string, SettingOption>> = {
-  true: { label: 'On', does: 'Turns this on.', example: 'The behaviour described above happens.' },
-  false: {
-    label: 'Off',
-    does: 'Turns this off.',
-    example: 'The behaviour described above does not happen.',
+const SWITCH_FALLBACK = (t: Translate<MessageKey>): Readonly<Record<string, SettingOption>> => ({
+  true: {
+    label: t('settingGuideUi.on'),
+    does: t('settingGuideUi.turnsThisOn'),
+    example: t('settingGuideUi.theBehaviourDescribedAboveHappens'),
   },
-};
+  false: {
+    label: t('settingGuideUi.off'),
+    does: t('settingGuideUi.turnsThisOff'),
+    example: t('settingGuideUi.theBehaviourDescribedAboveDoes'),
+  },
+});
 
 type Choice = readonly [code: string, option: SettingOption];
 
@@ -263,7 +282,7 @@ export function SettingChoiceField({
   value,
   onChange,
   disabled,
-  label = 'Value',
+  label: labelProp,
   placeholder,
   keepValues = [],
 }: {
@@ -278,9 +297,11 @@ export function SettingChoiceField({
   /** Values that must stay offered (what is set now), known or not. */
   readonly keepValues?: readonly string[] | undefined;
 }): ReactElement {
+  const t = useT();
+  const label = labelProp ?? t('settingGuideUi.value');
   const guide = settingGuide(settingKey);
   const base: Readonly<Record<string, SettingOption>> =
-    guide?.values ?? (valueType === 'BOOLEAN' ? SWITCH_FALLBACK : {});
+    guide?.values ?? (valueType === 'BOOLEAN' ? SWITCH_FALLBACK(t) : {});
   const source = guide?.source;
   const field = (extra: readonly Choice[], loading: boolean): ReactElement => (
     <ChoiceSelect
@@ -325,13 +346,14 @@ function SourcedChoices({
 type RenderChoices = (extra: readonly Choice[], loading: boolean) => ReactElement;
 
 function CourierChoices({ render }: { readonly render: RenderChoices }): ReactElement {
+  const t = useT();
   const couriers = useCouriers();
   const extra: Choice[] = (couriers.data ?? []).map((c) => [
     c.code,
     {
       label: c.name,
       does: `New parcels are booked with ${c.name}${c.isActive ? '' : ' (switched off for new parcels right now)'}.`,
-      example: `An order confirmed today is handed to ${c.name} for its waybill.`,
+      example: t('settingGuideUi.anOrderConfirmedTodayIs', { name: c.name }),
     },
   ]);
   return render(extra, couriers.isLoading);
@@ -344,6 +366,7 @@ function WarehouseChoices({
   readonly fulfils: boolean;
   readonly render: RenderChoices;
 }): ReactElement {
+  const t = useT();
   const warehouses = useWarehouses();
   const extra: Choice[] = (warehouses.data ?? [])
     .filter((w) => w.fulfilsOrders === fulfils)
@@ -352,11 +375,11 @@ function WarehouseChoices({
       {
         label: `${w.code} — ${w.name}`,
         does: fulfils
-          ? `Requests that name no warehouse use ${w.code}.`
-          : `Consignments sent via Bangladesh are received at ${w.code} first.`,
+          ? t('settingGuideUi.requestsThatNameNoWarehouse', { code: w.code })
+          : t('settingGuideUi.consignmentsSentViaBangladeshAre', { code: w.code }),
         example: fulfils
-          ? `A consignment created without a warehouse is received at ${w.code} (${w.name}).`
-          : `A client choosing "via Bangladesh" delivers to ${w.name}, and it is counted there before flying.`,
+          ? t('settingGuideUi.aConsignmentCreatedWithoutA', { code: w.code, name: w.name })
+          : t('settingGuideUi.aClientChoosingViaBangladesh', { name: w.name }),
       },
     ]);
   return render(extra, warehouses.isLoading);
@@ -369,13 +392,14 @@ function AccountChoices({
   readonly courierCode: string;
   readonly render: RenderChoices;
 }): ReactElement {
+  const t = useT();
   const accounts = useCourierAccounts({ courierCode });
   const extra: Choice[] = (accounts.data ?? []).map((a) => [
     a.id,
     {
       label: `${a.label} (${a.environment.toLowerCase()}${a.isActive ? '' : ', inactive'})`,
-      does: `Parcels of clients without their own accounts go to the "${a.label}" account.`,
-      example: `A default-routed parcel is booked, billed and tracked on "${a.label}".`,
+      does: t('settingGuideUi.parcelsOfClientsWithoutTheir', { label: a.label }),
+      example: t('settingGuideUi.aDefaultRoutedParcelIs', { label: a.label }),
     },
   ]);
   return render(extra, accounts.isLoading);
@@ -426,6 +450,7 @@ function ChoiceSelect({
   readonly placeholder: string | undefined;
   readonly loading: boolean;
 }): ReactElement {
+  const t = useT();
   const id = useId();
   const explainId = `${id}-explain`;
   const selected = choices.find(([code]) => code === value)?.[1] ?? null;
@@ -439,7 +464,7 @@ function ChoiceSelect({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         aria-describedby={explainId}
-        hint={loading ? 'Loading the choices…' : undefined}
+        hint={loading ? t('settingGuideUi.loadingTheChoices') : undefined}
       >
         {showPlaceholder && <option value="">{placeholder}</option>}
         {choices.map(([code, option]) => (
@@ -450,14 +475,14 @@ function ChoiceSelect({
       </Select>
       <div id={explainId} className="scf-now" aria-live="polite">
         {selected === null ? (
-          <p className="ac-muted">Pick a choice to see what it does.</p>
+          <p className="ac-muted">{t('settingGuideUi.pickAChoiceToSee')}</p>
         ) : (
           <>
             <p className="ac-text">
               <strong>{selected.label}:</strong> {selected.does}
             </p>
             <p className="ac-muted">
-              <strong>Example:</strong> {selected.example}
+              <strong>{t('settingGuideUi.example')}</strong> {selected.example}
             </p>
           </>
         )}
@@ -475,6 +500,7 @@ function ChoiceList({
   readonly choices: readonly Choice[];
   readonly current: string;
 }): ReactElement | null {
+  const t = useT();
   if (choices.length < 2) return null;
   const items = (
     <ul className="scf-list">
@@ -489,14 +515,16 @@ function ChoiceList({
   if (choices.length <= 6) {
     return (
       <div className="scf-compare">
-        <p className="scf-compare__title">The choices</p>
+        <p className="scf-compare__title">{t('settingGuideUi.theChoices')}</p>
         {items}
       </div>
     );
   }
   return (
     <details className="scf-compare">
-      <summary className="scf-compare__title">Compare all {choices.length} choices</summary>
+      <summary className="scf-compare__title">
+        {t('settingGuideUi.compareAllChoices', { length: choices.length })}
+      </summary>
       {items}
     </details>
   );
@@ -511,7 +539,7 @@ export function SettingMultiField({
   value,
   onChange,
   disabled,
-  label = 'Value',
+  label: labelProp,
 }: {
   readonly settingKey: string;
   readonly value: readonly string[];
@@ -519,6 +547,8 @@ export function SettingMultiField({
   readonly disabled?: boolean | undefined;
   readonly label?: string | undefined;
 }): ReactElement {
+  const t = useT();
+  const label = labelProp ?? t('settingGuideUi.value');
   const multi = settingGuide(settingKey)?.multi ?? {};
   const known = Object.entries(multi);
   const unknown = value.filter((code) => multi[code] === undefined);
@@ -532,7 +562,11 @@ export function SettingMultiField({
   return (
     <fieldset className="ac-fieldset scf-multi" data-compact={compact || undefined}>
       <legend>
-        {label} — {value.length} of {known.length + unknown.length} ticked
+        {t('settingGuideUi.ofTicked', {
+          label,
+          length: value.length,
+          value: known.length + unknown.length,
+        })}
       </legend>
       <div className="scf-multi__grid">
         {known.map(([code, option]) => (
@@ -542,7 +576,7 @@ export function SettingMultiField({
             description={
               compact ? undefined : (
                 <>
-                  {option.does} <em>Example:</em> {option.example}
+                  {option.does} <em>{t('settingGuideUi.example')}</em> {option.example}
                 </>
               )
             }
@@ -554,8 +588,8 @@ export function SettingMultiField({
         {unknown.map((code) => (
           <Checkbox
             key={code}
-            label={`${code} (set now)`}
-            description="Not one of the known choices; untick to remove it."
+            label={t('settingGuideUi.setNow', { code })}
+            description={t('settingGuideUi.notOneOfTheKnown')}
             checked
             onChange={(e) => toggle(code, e.target.checked)}
             disabled={disabled}

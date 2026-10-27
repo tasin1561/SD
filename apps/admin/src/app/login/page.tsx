@@ -5,6 +5,7 @@ import { resolveStaffSsrIdentity } from '@skydrop/auth/server';
 import { apiOrigin } from '@/lib/api-origin';
 import { SignInCard } from '@skydrop/ui/app/sign-in';
 import { LoginForm } from './_components/login-form';
+import { getT } from '@/i18n/server';
 
 /**
  * Login entry. If the visitor already has a valid __Host- cookie,
@@ -12,6 +13,7 @@ import { LoginForm } from './_components/login-form';
  * for already-authed users who bookmarked /login.
  */
 export default async function LoginPage(): Promise<ReactElement> {
+  const { t } = await getT();
   const jar = await cookies();
   const cookieValue = jar.get('__Host-staffRefresh')?.value ?? '';
   if (cookieValue) {
@@ -27,14 +29,14 @@ export default async function LoginPage(): Promise<ReactElement> {
 
   return (
     <SignInCard
-      title="Sign in"
-      note="Staff portal — accounts are created by invitation."
+      title={t('loginPage.signIn')}
+      note={t('loginPage.staffPortalAccountsAreCreated')}
       footer={
         // It used to say "contact your admin", which for the SUPER_ADMIN
         // reading it means contact yourself — and for everyone else meant
         // waiting on somebody with a database console. The API and the
         // reset page both existed; only the way in was missing.
-        <a href="/auth/forgot-password">Forgot your password?</a>
+        <a href="/auth/forgot-password">{t('loginPage.forgotYourPassword')}</a>
       }
     >
       <LoginForm />

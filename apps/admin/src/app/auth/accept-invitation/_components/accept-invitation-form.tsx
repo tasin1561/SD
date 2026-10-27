@@ -7,10 +7,17 @@ import { Button, ButtonLink } from '@skydrop/ui/app/button';
 import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
 import { SignInCard } from '@skydrop/ui/app/sign-in';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /** Display only — the submit handler below is what enforces the length. */
-const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
-  { id: 'length', label: 'At least 12 characters', test: (v) => v.length >= 12 },
+const PASSWORD_CRITERIA = (t: Translate<MessageKey>): readonly PasswordCriterion[] => [
+  {
+    id: 'length',
+    label: t('authAcceptInvitationAcceptInvitationForm.atLeast12Characters'),
+    test: (v) => v.length >= 12,
+  },
 ];
 
 interface AccessTokenResponse {
@@ -62,6 +69,7 @@ export function AcceptInvitationForm({
 }: {
   readonly initialToken: string;
 }): ReactElement {
+  const t = useT();
   const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -80,22 +88,22 @@ export function AcceptInvitationForm({
   const [dead, setDead] = useState<{ code: string; message: string } | null>(null);
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Failed to accept invitation');
+    return serverVerdict(e, t('authAcceptInvitationAcceptInvitationForm.failedToAcceptInvitation'));
   }
 
   async function onSubmit(e: FormEvent): Promise<void> {
     e.preventDefault();
     setError(null);
     if (!initialToken) {
-      setError('Invitation token is missing from the URL.');
+      setError(t('authAcceptInvitationAcceptInvitationForm.invitationTokenIsMissingFrom'));
       return;
     }
     if (password.length < 12) {
-      setError('Password must be at least 12 characters.');
+      setError(t('authAcceptInvitationAcceptInvitationForm.passwordMustBeAtLeast'));
       return;
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError(t('authAcceptInvitationAcceptInvitationForm.passwordsDoNotMatch'));
       return;
     }
     setSubmitting(true);
@@ -115,7 +123,9 @@ export function AcceptInvitationForm({
         const msg =
           typeof body?.message === 'string'
             ? body.message
-            : `Request failed with status ${res.status}`;
+            : t('authAcceptInvitationAcceptInvitationForm.requestFailedWithStatus', {
+                status: res.status,
+              });
         throw new ApiError(res.status, code ? `[${code}] ${msg}` : msg, body);
       }
       const json = (await res.json()) as AccessTokenResponse;
@@ -151,16 +161,23 @@ export function AcceptInvitationForm({
         <SignInCard
           title={<span id="dead-title">{copy.title}</span>}
           note={<span id="dead-body">{copy.body}</span>}
-          footer={<a href="/auth/forgot-password">Forgot your password?</a>}
+          footer={
+            <a href="/auth/forgot-password">
+              {t('authAcceptInvitationAcceptInvitationForm.forgotYourPassword')}
+            </a>
+          }
         >
           {/* The server's own words, kept verbatim underneath ours (FE-2)
               — the prose above is our reading of the code, and if the two
               ever disagree the server is right. */}
           <p className="text-text-faint mb-4 text-xs">
-            Server said: [{dead.code}] {dead.message}
+            {t('authAcceptInvitationAcceptInvitationForm.serverSaid', {
+              code: dead.code,
+              message: dead.message,
+            })}
           </p>
           <ButtonLink href="/login" variant="primary" fullWidth>
-            Go to sign in
+            {t('authAcceptInvitationAcceptInvitationForm.goToSignIn')}
           </ButtonLink>
         </SignInCard>
       </div>
@@ -168,13 +185,17 @@ export function AcceptInvitationForm({
   }
 
   const confirmCriteria: readonly PasswordCriterion[] = [
-    { id: 'match', label: 'Matches the password', test: (v) => v !== '' && v === password },
+    {
+      id: 'match',
+      label: t('authAcceptInvitationAcceptInvitationForm.matchesThePassword'),
+      test: (v) => v !== '' && v === password,
+    },
   ];
 
   return (
     <SignInCard
-      title="Set up your staff account"
-      note="Choose a password of at least 12 characters. You will be signed in straight after."
+      title={t('authAcceptInvitationAcceptInvitationForm.setUpYourStaffAccount')}
+      note={t('authAcceptInvitationAcceptInvitationForm.chooseAPasswordOfAt')}
     >
       <form
         // A refusal belongs to the value that earned it: any edit retires
@@ -185,7 +206,7 @@ export function AcceptInvitationForm({
       >
         <PasswordField
           id="password"
-          label="Password"
+          label={t('authAcceptInvitationAcceptInvitationForm.password')}
           autoComplete="new-password"
           required
           minLength={12}
@@ -193,12 +214,12 @@ export function AcceptInvitationForm({
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           disabled={submitting}
-          criteria={PASSWORD_CRITERIA}
+          criteria={PASSWORD_CRITERIA(t)}
         />
         <PasswordField
           id="confirm-password"
-          toggleLabel="Show confirm password"
-          label="Confirm password"
+          toggleLabel={t('authAcceptInvitationAcceptInvitationForm.showConfirmPassword')}
+          label={t('authAcceptInvitationAcceptInvitationForm.confirmPassword')}
           autoComplete="new-password"
           required
           minLength={12}
@@ -220,7 +241,9 @@ export function AcceptInvitationForm({
         )}
 
         <Button type="submit" fullWidth loading={submitting}>
-          {submitting ? 'Creating account…' : 'Create account + sign in'}
+          {submitting
+            ? t('authAcceptInvitationAcceptInvitationForm.creatingAccount')
+            : t('authAcceptInvitationAcceptInvitationForm.createAccountSignIn')}
         </Button>
       </form>
     </SignInCard>

@@ -24,6 +24,9 @@ import {
   type AudienceSelector,
 } from '@/lib/notification-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Sending a message to an audience.
@@ -49,91 +52,102 @@ import { serverVerdict } from '@/lib/server-verdict';
  * for exactly that reason — the capability existed and no person could
  * reach it.
  */
-const AUDIENCES: ReadonlyArray<{
+const AUDIENCES = (
+  t: Translate<MessageKey>,
+): ReadonlyArray<{
   readonly label: string;
   readonly hint: string;
   readonly fields: readonly string[];
   readonly build: (v: readonly string[]) => AudienceSelector;
-}> = [
+}> => [
   {
-    label: 'Every client',
-    hint: 'every active user at every company',
+    label: t('notificationsBroadcastsBroadcastsView.everyClient'),
+    hint: t('notificationsBroadcastsBroadcastsView.everyActiveUserAtEvery'),
     fields: [],
     build: () => ({ kind: 'ALL_SELLERS' }),
   },
   {
-    label: 'One company',
-    hint: 'everyone at that client',
-    fields: ['Seller id'],
+    label: t('notificationsBroadcastsBroadcastsView.oneCompany'),
+    hint: t('notificationsBroadcastsBroadcastsView.everyoneAtThatClient'),
+    fields: [t('notificationsBroadcastsBroadcastsView.sellerId')],
     build: (v) => ({ kind: 'SELLER_ORG', sellerId: v[0] ?? '' }),
   },
   {
-    label: 'A role at one company',
-    hint: 'a company can rename its own roles, so prefer a permission where one fits',
-    fields: ['Seller id', 'Role key, e.g. finance'],
+    label: t('notificationsBroadcastsBroadcastsView.aRoleAtOneCompany'),
+    hint: t('notificationsBroadcastsBroadcastsView.aCompanyCanRenameIts'),
+    fields: [
+      t('notificationsBroadcastsBroadcastsView.sellerId'),
+      t('notificationsBroadcastsBroadcastsView.roleKeyEGFinance'),
+    ],
     build: (v) => ({ kind: 'SELLER_ROLE', sellerId: v[0] ?? '', roleKey: v[1] ?? '' }),
   },
   {
-    label: 'Whoever holds a permission at one company',
-    hint: 'the durable way to say "whoever handles orders there"',
-    fields: ['Seller id', 'Permission key, e.g. orders.view'],
+    label: t('notificationsBroadcastsBroadcastsView.whoeverHoldsAPermissionAt'),
+    hint: t('notificationsBroadcastsBroadcastsView.theDurableWayToSay'),
+    fields: [
+      t('notificationsBroadcastsBroadcastsView.sellerId'),
+      t('notificationsBroadcastsBroadcastsView.permissionKeyEGOrders'),
+    ],
     build: (v) => ({ kind: 'SELLER_PERMISSION', sellerId: v[0] ?? '', permission: v[1] ?? '' }),
   },
   {
-    label: 'One person at a client',
-    hint: 'a single client user',
-    fields: ['Seller user id'],
+    label: t('notificationsBroadcastsBroadcastsView.onePersonAtAClient'),
+    hint: t('notificationsBroadcastsBroadcastsView.aSingleClientUser'),
+    fields: [t('notificationsBroadcastsBroadcastsView.sellerUserId')],
     build: (v) => ({ kind: 'SELLER_USER', sellerUserId: v[0] ?? '' }),
   },
   {
-    label: 'Every staff member',
-    hint: 'everyone with an admin login',
+    label: t('notificationsBroadcastsBroadcastsView.everyStaffMember'),
+    hint: t('notificationsBroadcastsBroadcastsView.everyoneWithAnAdminLogin'),
     fields: [],
     build: () => ({ kind: 'ALL_STAFF' }),
   },
   {
-    label: 'A staff role',
-    hint: 'roles can be invented and renamed; a permission survives that',
-    fields: ['Role key, e.g. warehouse_supervisor'],
+    label: t('notificationsBroadcastsBroadcastsView.aStaffRole'),
+    hint: t('notificationsBroadcastsBroadcastsView.rolesCanBeInventedAnd'),
+    fields: [t('notificationsBroadcastsBroadcastsView.roleKeyEGWarehouse')],
     build: (v) => ({ kind: 'STAFF_ROLE', roleKey: v[0] ?? '' }),
   },
   {
-    label: 'Whoever holds a staff permission',
-    hint: 'the durable fact about what somebody does here',
-    fields: ['Permission key, e.g. warehouse.pack'],
+    label: t('notificationsBroadcastsBroadcastsView.whoeverHoldsAStaffPermission'),
+    hint: t('notificationsBroadcastsBroadcastsView.theDurableFactAboutWhat'),
+    fields: [t('notificationsBroadcastsBroadcastsView.permissionKeyEGWarehouse')],
     build: (v) => ({ kind: 'STAFF_PERMISSION', permission: v[0] ?? '' }),
   },
   {
-    label: 'One staff member',
-    hint: 'a single admin user',
-    fields: ['Staff id'],
+    label: t('notificationsBroadcastsBroadcastsView.oneStaffMember'),
+    hint: t('notificationsBroadcastsBroadcastsView.aSingleAdminUser'),
+    fields: [t('notificationsBroadcastsBroadcastsView.staffId')],
     build: (v) => ({ kind: 'STAFF_USER', staffId: v[0] ?? '' }),
   },
   // RS-2's third identity (2026-09-19). Scoped to ONE store by
   // construction — there is deliberately no "every reseller store",
   // because such a message would cross seller boundaries.
   {
-    label: 'Everyone at one member store',
-    hint: 'every login at that store',
-    fields: ['Store id'],
+    label: t('notificationsBroadcastsBroadcastsView.everyoneAtOneMemberStore'),
+    hint: t('notificationsBroadcastsBroadcastsView.everyLoginAtThatStore'),
+    fields: [t('notificationsBroadcastsBroadcastsView.storeId')],
     build: (v) => ({ kind: 'STORE_ORG', storeId: v[0] ?? '' }),
   },
   {
-    label: 'Everyone at a member store with a permission',
-    hint: 'preferred over a role: a store can rename its own roles, and what somebody may DO is the durable fact',
-    fields: ['Store id', 'Permission key, e.g. orders.actions'],
+    label: t('notificationsBroadcastsBroadcastsView.everyoneAtAMemberStore'),
+    hint: t('notificationsBroadcastsBroadcastsView.preferredOverARoleA'),
+    fields: [
+      t('notificationsBroadcastsBroadcastsView.storeId'),
+      t('notificationsBroadcastsBroadcastsView.permissionKeyEGOrders2'),
+    ],
     build: (v) => ({ kind: 'STORE_PERMISSION', storeId: v[0] ?? '', permission: v[1] ?? '' }),
   },
   {
-    label: 'One member store user',
-    hint: 'a single person at a store',
-    fields: ['Store user id'],
+    label: t('notificationsBroadcastsBroadcastsView.oneMemberStoreUser'),
+    hint: t('notificationsBroadcastsBroadcastsView.aSinglePersonAtA'),
+    fields: [t('notificationsBroadcastsBroadcastsView.storeUserId')],
     build: (v) => ({ kind: 'STORE_USER', storeUserId: v[0] ?? '' }),
   },
   {
-    label: 'Everyone subscribed to a topic',
-    hint: 'people who opted IN to this topic on their own notifications page',
-    fields: ['Topic key, e.g. seller.order_dispatched'],
+    label: t('notificationsBroadcastsBroadcastsView.everyoneSubscribedToATopic'),
+    hint: t('notificationsBroadcastsBroadcastsView.peopleWhoOptedInTo'),
+    fields: [t('notificationsBroadcastsBroadcastsView.topicKeyEGSeller')],
     build: (v) => ({ kind: 'SUBSCRIBERS', topic: v[0] ?? '' }),
   },
 ];
@@ -144,6 +158,7 @@ function people(n: number): string {
 }
 
 export function BroadcastsView(): ReactElement {
+  const t = useT();
   const [audienceIdx, setAudienceIdx] = useState(0);
   const [audienceValues, setAudienceValues] = useState<string[]>([]);
   const [channels, setChannels] = useState<string[]>(['IN_APP']);
@@ -156,7 +171,7 @@ export function BroadcastsView(): ReactElement {
   const send = useSendBroadcast();
   const history = useBroadcasts();
 
-  const pick = AUDIENCES[audienceIdx] ?? AUDIENCES[0]!;
+  const pick = AUDIENCES(t)[audienceIdx] ?? AUDIENCES(t)[0]!;
   const audience: AudienceSelector[] = [pick.build(audienceValues.map((v) => v.trim()))];
   // Every named field has to be filled: a selector missing half of
   // itself resolves to nobody, and "0 people" is a confusing way to
@@ -174,9 +189,15 @@ export function BroadcastsView(): ReactElement {
   return (
     <AcPage width="narrow">
       <AcHeader
-        crumbs={[{ label: 'Notifications', href: '/notifications' }, { label: 'Broadcast' }]}
-        title="Broadcast"
-        subtitle="A message you choose to send. It cannot be recalled, so the count comes first."
+        crumbs={[
+          {
+            label: t('notificationsBroadcastsBroadcastsView.notifications'),
+            href: '/notifications',
+          },
+          { label: t('notificationsBroadcastsBroadcastsView.broadcast') },
+        ]}
+        title={t('notificationsBroadcastsBroadcastsView.broadcast')}
+        subtitle={t('notificationsBroadcastsBroadcastsView.aMessageYouChooseTo')}
       />
 
       {error !== null && <AcAlert message={error} />}
@@ -191,7 +212,7 @@ export function BroadcastsView(): ReactElement {
         <div className="ac-form">
           <div className="ac-card__body">
             <Select
-              label="Who it reaches"
+              label={t('notificationsBroadcastsBroadcastsView.whoItReaches')}
               id="bc-audience"
               hint={pick.hint}
               value={audienceIdx}
@@ -201,7 +222,7 @@ export function BroadcastsView(): ReactElement {
                 preview.reset();
               }}
             >
-              {AUDIENCES.map((a, i) => (
+              {AUDIENCES(t).map((a, i) => (
                 <option key={a.label} value={i}>
                   {a.label}
                 </option>
@@ -229,12 +250,16 @@ export function BroadcastsView(): ReactElement {
           </div>
 
           <fieldset className="ac-fieldset">
-            <legend>Channels</legend>
+            <legend>{t('notificationsBroadcastsBroadcastsView.channels')}</legend>
             <div className="ac-buttons" data-align="start">
               {['IN_APP', 'EMAIL'].map((c) => (
                 <Checkbox
                   key={c}
-                  label={c === 'IN_APP' ? 'In app' : 'Email'}
+                  label={
+                    c === 'IN_APP'
+                      ? t('notificationsBroadcastsBroadcastsView.inApp')
+                      : t('notificationsBroadcastsBroadcastsView.email')
+                  }
                   checked={channels.includes(c)}
                   onChange={() => toggleChannel(c)}
                 />
@@ -243,7 +268,7 @@ export function BroadcastsView(): ReactElement {
           </fieldset>
 
           <TextField
-            label="Title"
+            label={t('notificationsBroadcastsBroadcastsView.title')}
             id="bc-title"
             requiredMark
             value={title}
@@ -251,7 +276,7 @@ export function BroadcastsView(): ReactElement {
           />
 
           <TextArea
-            label="Message"
+            label={t('notificationsBroadcastsBroadcastsView.message')}
             id="bc-body"
             requiredMark
             rows={5}
@@ -264,7 +289,10 @@ export function BroadcastsView(): ReactElement {
               variant="secondary"
               icon={<Users size={15} />}
               state={preview.isPending ? 'busy' : 'idle'}
-              labels={{ idle: 'How many is that?', busy: 'Counting…' }}
+              labels={{
+                idle: t('notificationsBroadcastsBroadcastsView.howManyIsThat'),
+                busy: t('notificationsBroadcastsBroadcastsView.counting'),
+              }}
               disabled={preview.isPending || channels.length === 0 || !audienceComplete}
               onClick={() => {
                 setError(null);
@@ -294,8 +322,10 @@ export function BroadcastsView(): ReactElement {
                   icon={<Send size={15} />}
                   state={send.isPending ? 'busy' : 'idle'}
                   labels={{
-                    idle: `Send to ${people(previewed.recipientCount)}`,
-                    busy: 'Sending…',
+                    idle: t('notificationsBroadcastsBroadcastsView.sendTo', {
+                      value: people(previewed.recipientCount),
+                    }),
+                    busy: t('notificationsBroadcastsBroadcastsView.sending'),
                   }}
                   disabled={!ready}
                   onClick={() => {
@@ -312,7 +342,10 @@ export function BroadcastsView(): ReactElement {
                       {
                         onSuccess: (r) => {
                           setSent(
-                            `Sent to ${people(r.recipientCount)} (${r.delivered} delivered).`,
+                            t('notificationsBroadcastsBroadcastsView.sentToDelivered', {
+                              value: people(r.recipientCount),
+                              delivered: r.delivered,
+                            }),
                           );
                           setTitle('');
                           setBody('');
@@ -325,27 +358,26 @@ export function BroadcastsView(): ReactElement {
                 />
               </div>
               <p className="ac-muted">
-                This cannot be recalled. If anyone joined or left that audience since the count
-                above, the server refuses rather than sending to a number you were not shown.
+                {t('notificationsBroadcastsBroadcastsView.thisCannotBeRecalledIf')}
               </p>
             </AcCallout>
           )}
         </div>
       </AcCard>
 
-      <AcSection title="What has been sent" flush>
+      <AcSection title={t('notificationsBroadcastsBroadcastsView.whatHasBeenSent')} flush>
         {(history.data ?? []).length === 0 ? (
-          <EmptyState bare title="Nothing sent yet." />
+          <EmptyState bare title={t('notificationsBroadcastsBroadcastsView.nothingSentYet')} />
         ) : (
-          <Table caption="Broadcasts sent">
+          <Table caption={t('notificationsBroadcastsBroadcastsView.broadcastsSent')}>
             <THead>
               <Tr>
-                <Th>Sent</Th>
-                <Th>Title</Th>
-                <Th align="right">Reached</Th>
-                <Th align="right">Delivered</Th>
-                <Th align="right">Failed</Th>
-                <Th>Status</Th>
+                <Th>{t('notificationsBroadcastsBroadcastsView.sent')}</Th>
+                <Th>{t('notificationsBroadcastsBroadcastsView.title')}</Th>
+                <Th align="right">{t('notificationsBroadcastsBroadcastsView.reached')}</Th>
+                <Th align="right">{t('notificationsBroadcastsBroadcastsView.delivered')}</Th>
+                <Th align="right">{t('notificationsBroadcastsBroadcastsView.failed')}</Th>
+                <Th>{t('notificationsBroadcastsBroadcastsView.status')}</Th>
               </Tr>
             </THead>
             <TBody>

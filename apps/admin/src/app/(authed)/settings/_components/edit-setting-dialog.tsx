@@ -13,6 +13,7 @@ import { AcAlert, AcFact, phaseOf } from './ac-parts';
 import { fallbackSettingName, settingGuide } from '@/lib/system-setting-guide';
 import { SettingExplanation, SettingValueEditor } from '@/components/setting-guide-ui';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
 
 /**
  * Edit a system setting. The dialog opens with what the setting decides
@@ -40,6 +41,7 @@ export function EditSettingDialog({
   settingKey: string;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const canWrite = usePermission('system.settings.manage');
   const detail = useSystemSetting(settingKey);
   const update = useUpdateSystemSetting(settingKey);
@@ -90,7 +92,7 @@ export function EditSettingDialog({
       await update.mutateAsync({ valueType: detail.data.valueType, value: parsed });
       onClose();
     } catch (err) {
-      setServerError(serverVerdict(err, 'Update failed. Please try again.'));
+      setServerError(serverVerdict(err, t('settingsEditSettingDialog.updateFailedPleaseTryAgain')));
     }
   }
 
@@ -107,7 +109,9 @@ export function EditSettingDialog({
         detail.data ? (
           <span className="ac-inline">
             <span className="sk-ident ac-code">{detail.data.key}</span>
-            {detail.data.requiresRestart && <AcFact tone="bad">Restart required</AcFact>}
+            {detail.data.requiresRestart && (
+              <AcFact tone="bad">{t('settingsEditSettingDialog.restartRequired')}</AcFact>
+            )}
           </span>
         ) : undefined
       }
@@ -116,7 +120,7 @@ export function EditSettingDialog({
       {detail.isLoading ? (
         <SkeletonRows rows={3} cols={1} />
       ) : !detail.data ? (
-        <p className="ac-muted">Setting not found.</p>
+        <p className="ac-muted">{t('settingsEditSettingDialog.settingNotFound')}</p>
       ) : (
         <form onSubmit={handleSubmit} className="ac-form">
           {guide !== null && <SettingExplanation guide={guide} />}
@@ -152,14 +156,16 @@ export function EditSettingDialog({
                 onClick={() => setReveal((r) => !r)}
                 disabled={update.isPending}
               >
-                {reveal ? 'Mask' : 'Show value'}
+                {reveal
+                  ? t('settingsEditSettingDialog.mask')
+                  : t('settingsEditSettingDialog.showValue')}
               </Button>
             </div>
           )}
 
           {detail.data.description && (
             <details className="sss-detail">
-              <summary>Technical detail</summary>
+              <summary>{t('settingsEditSettingDialog.technicalDetail')}</summary>
               <p>{detail.data.description}</p>
             </details>
           )}
@@ -168,13 +174,17 @@ export function EditSettingDialog({
 
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={onClose} disabled={update.isPending}>
-              Cancel
+              {t('settingsEditSettingDialog.cancel')}
             </Button>
             <AsyncButton
               type="submit"
               variant="primary"
               state={phaseOf(update.isPending, serverError)}
-              labels={{ idle: 'Save', busy: 'Saving…', error: 'Not saved' }}
+              labels={{
+                idle: t('settingsEditSettingDialog.save'),
+                busy: t('settingsEditSettingDialog.saving'),
+                error: t('settingsEditSettingDialog.notSaved'),
+              }}
             />
           </DialogFooter>
         </form>
