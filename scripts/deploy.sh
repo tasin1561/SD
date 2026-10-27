@@ -136,8 +136,29 @@ did_change '^packages/db/prisma/seed\.ts$|^packages/db/prisma/schema\.prisma$|^p
 echo "── pnpm install ──"
 pnpm install --frozen-lockfile
 
+# Node's default heap cap is derived from the box, and on a 4 GB droplet
+# that lands near 2 GB — which is where `next build` for apps/admin died
+# on 2026-10-27, at 1.93 GB, with "Reached heap limit" and a build worker
+# killed by SIGABRT. The console had just gained its Bangla catalogue:
+# 262 translated files and 6,372 message lookups, all of which the type
+# checker holds at once.
+#
+# CI has carried --max-old-space-size=4096 for its own build the whole
+# time (.github/workflows/ci.yml), which is precisely why this passed
+# every check and then failed here. A build that is verified under one
+# heap and run under another is not the same build.
+#
+# 3072 rather than CI's 4096: this box has ~2.5 GB free beside 4 GB of
+# swap, and the ceiling is a promise to V8 that it may grow that far, not
+# a reservation. Too high simply moves the failure from a clean V8 abort
+# to the kernel's OOM killer, which takes whichever process it likes —
+# possibly the API serving traffic. The builds are sequential, so one cap
+# covers them all.
+export NODE_OPTIONS="--max-old-space-size=3072"
+
 # ── 3. Build packages ────────────────────────────────────────────────
 echo "── build packages ──"
+echo "   NODE_OPTIONS=$NODE_OPTIONS"
 pnpm --filter @skydrop/db build
 pnpm --filter @skydrop/api-client build
 pnpm --filter @skydrop/ui build
