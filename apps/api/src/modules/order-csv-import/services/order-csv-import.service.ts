@@ -18,6 +18,7 @@ import type {
   PreviewOrderCsvDto,
   ProcessOrderCsvDto,
 } from '../dto/order-csv-import.dto';
+import { CSV_TEMPLATE_PREFIX } from '../../../common/text/csv-separator-hint';
 
 const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
 
@@ -35,7 +36,7 @@ const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
  * same reference are lines of one order (ORD-9), and a template that
  * never showed that left every seller believing otherwise.
  */
-const TEMPLATE_COLUMNS: Array<[string, string, string]> = [
+export const TEMPLATE_COLUMNS: Array<[string, string, string]> = [
   ['Product SKU', 'TSHIRT-001-RED-M', 'CAP-001-NAVY'],
   ['Quantity', '2', '1'],
   ['Payment Mode', 'COD', 'COD'],
@@ -147,7 +148,7 @@ export class OrderCsvImportService {
     const headers = TEMPLATE_COLUMNS.map(([h]) => h).join(',');
     const first = TEMPLATE_COLUMNS.map(([, a]) => cell(a)).join(',');
     const second = TEMPLATE_COLUMNS.map(([, , b]) => cell(b)).join(',');
-    return `${headers}\n${first}\n${second}\n`;
+    return `${CSV_TEMPLATE_PREFIX}${headers}\n${first}\n${second}\n`;
   }
 
   async presign(sellerId: string, _input: PresignOrderCsvDto): Promise<CsvPresignResult> {

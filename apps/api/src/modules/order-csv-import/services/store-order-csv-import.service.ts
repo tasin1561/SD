@@ -24,6 +24,7 @@ import type {
   CsvPresignResult,
   OrderCsvPreviewResult,
 } from './order-csv-import.service';
+import { CSV_TEMPLATE_PREFIX } from '../../../common/text/csv-separator-hint';
 
 /**
  * The store's template: the seller's columns plus the SELLING PRICE.
@@ -33,7 +34,7 @@ import type {
  * stays on the template because stating it is the common case and a
  * column nobody can see is a column nobody fills in.
  */
-const STORE_TEMPLATE_COLUMNS: Array<[string, string, string]> = [
+export const STORE_TEMPLATE_COLUMNS: Array<[string, string, string]> = [
   ['Product SKU', 'TSHIRT-001-RED-M', 'CAP-001-NAVY'],
   ['Quantity', '2', '1'],
   ['Retail Price', '499', '299'],
@@ -123,7 +124,7 @@ export class StoreOrderCsvImportService {
     // Two rows sharing `STORE-1001`: one order, two lines (ORD-9).
     const first = STORE_TEMPLATE_COLUMNS.map(([, a]) => cell(a)).join(',');
     const second = STORE_TEMPLATE_COLUMNS.map(([, , b]) => cell(b)).join(',');
-    return `${headers}\n${first}\n${second}\n`;
+    return `${CSV_TEMPLATE_PREFIX}${headers}\n${first}\n${second}\n`;
   }
 
   async presign(user: StoreUserRef, _input: PresignOrderCsvDto): Promise<CsvPresignResult> {

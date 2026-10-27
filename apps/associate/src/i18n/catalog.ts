@@ -4,6 +4,7 @@ import { auth } from './messages/auth';
 import { common } from './messages/common';
 import { notifications } from './messages/notifications';
 import { orderImport } from './messages/orderImport';
+import { csvColumns } from './messages/csvColumns';
 import { orderNew } from './messages/orderNew';
 import { orders } from './messages/orders';
 import { shell } from './messages/shell';
@@ -23,6 +24,7 @@ export const NAMESPACES = [
   tickets,
   orders,
   orderImport,
+  csvColumns,
   orderNew,
 ] as const;
 
@@ -35,6 +37,7 @@ const ALL = {
   ...tickets,
   ...orders,
   ...orderImport,
+  ...csvColumns,
   ...orderNew,
 };
 

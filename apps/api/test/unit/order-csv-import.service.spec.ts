@@ -72,7 +72,11 @@ describe('OrderCsvImportService', () => {
   it('buildTemplate emits headers + one example row', () => {
     const { svc } = makeService();
     const t = svc.buildTemplate();
-    const [h, ex] = t.trim().split('\n');
+    // Line 0 is the Excel `sep=,` hint; the header row follows it.
+    const [, h, ex] = t
+      .replace(/^\uFEFF/, '')
+      .trim()
+      .split('\n');
     expect(h).toContain('Product SKU');
     expect(h).toContain('External Ref');
     expect(ex!.split(',').length).toBe(h!.split(',').length);

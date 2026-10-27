@@ -30,7 +30,14 @@ import type {
   CsvPresignResult,
   OrderCsvPreviewResult,
 } from '../services/order-csv-import.service';
-import { StoreOrderCsvImportService } from '../services/store-order-csv-import.service';
+import {
+  STORE_TEMPLATE_COLUMNS,
+  StoreOrderCsvImportService,
+} from '../services/store-order-csv-import.service';
+import { UatFieldsService } from '../../uat-settings/services/uat-fields.service';
+import { buildOrderColumnGuide } from '../order-csv-column-guide';
+import { ORDER_CSV_STORE_REQUIRED_FIELDS } from '../order-csv-fields';
+import type { CsvColumnGuide } from '../../../common/text/csv-column-guide';
 
 /**
  * RS-5 — a reseller store's order CSV: template, upload, preview, process,
@@ -44,7 +51,23 @@ import { StoreOrderCsvImportService } from '../services/store-order-csv-import.s
 @RequireStorePermissions('orders.create')
 @Controller('store/order-imports')
 export class StoreOrderCsvImportController {
-  constructor(private readonly svc: StoreOrderCsvImportService) {}
+  constructor(
+    private readonly svc: StoreOrderCsvImportService,
+    private readonly uat: UatFieldsService,
+  ) {}
+
+  @Get('template/columns')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Which template columns are required (per row / per order) or optional',
+  })
+  async columns(): Promise<CsvColumnGuide> {
+    return buildOrderColumnGuide(
+      STORE_TEMPLATE_COLUMNS.map(([h]) => h),
+      ORDER_CSV_STORE_REQUIRED_FIELDS,
+      await this.uat.all(),
+    );
+  }
 
   @Get('template')
   @HttpCode(HttpStatus.OK)

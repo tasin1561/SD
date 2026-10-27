@@ -11,6 +11,7 @@ import {
   Upload,
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CsvColumnGuide, type CsvColumnGuideColumn } from '@skydrop/ui/app/csv-column-guide';
 import { useApiClient, useStoreIdentity } from '@skydrop/auth/client';
 // The shell mounts the legacy <Toaster>; the app `useToast` would throw
 // outside its own provider, so this keeps the legacy hook (same API).
@@ -62,7 +63,9 @@ interface Preview {
 
 /** Save text the API returned as a file. The request carried the bearer token (FE-1). */
 function save(text: string, fileName: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
+  const url = URL.createObjectURL(
+    new Blob(['\uFEFF', text.replace(/^\uFEFF/, '')], { type: 'text/csv' }),
+  );
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;
@@ -108,6 +111,14 @@ export default function OrderImportPage(): ReactElement {
   /** Which download is running — drives its button's busy label only. */
   const [downloading, setDownloading] = useState<string | null>(null);
   const paused = ordersPaused(me);
+
+  // Required/optional columns come from the API (the importer's own sets),
+  // never from a list in this file; see CsvColumnGuide.
+  const columnGuide = useQuery<{ columns: CsvColumnGuideColumn[] }>({
+    queryKey: ['store-order-csv-columns'],
+    queryFn: () => client.request<{ columns: CsvColumnGuideColumn[] }>(`${BASE}/template/columns`),
+    staleTime: 60_000,
+  });
 
   const uploads = useQuery({
     queryKey: ['my-order-imports', uploadsPage],
@@ -228,6 +239,22 @@ export default function OrderImportPage(): ReactElement {
         }
       >
         <div className="as-stack as-stack--tight">
+          {columnGuide.data !== undefined ? (
+            <CsvColumnGuide
+              columns={columnGuide.data.columns}
+              notes={{ addressLine2: t('csvcols.landmarkNote') }}
+              labels={{
+                title: t('csvcols.title'),
+                everyRow: t('csvcols.everyRow'),
+                everyRowHint: t('csvcols.everyRowHint'),
+                oncePerOrder: t('csvcols.oncePerOrder'),
+                oncePerOrderHint: t('csvcols.oncePerOrderHint'),
+                optional: t('csvcols.optional'),
+                optionalHint: t('csvcols.optionalHint'),
+                uat: t('csvcols.uat'),
+              }}
+            />
+          ) : null}
           <DropZone
             key={zoneKey}
             ref={fileRef}

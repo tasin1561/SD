@@ -1,0 +1,106 @@
+/* CsvColumnGuide: static, no motion beyond a one-off fade-in (opacity). */
+.sk-csvg {
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+  box-shadow: var(--elev-1);
+  animation: sk-csvg-in var(--dur-slow) var(--ease-out) both;
+}
+@keyframes sk-csvg-in {
+  from {
+    opacity: 0;
+  }
+}
+.sk-csvg__title {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+  color: var(--fg-strong);
+}
+.sk-csvg__group {
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.sk-csvg__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  color: var(--fg-strong);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.sk-csvg__icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--sky);
+}
+.sk-csvg__group[data-level='EVERY_ROW'] .sk-csvg__icon,
+.sk-csvg__group[data-level='ONCE_PER_ORDER'] .sk-csvg__icon {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+}
+.sk-csvg__hint {
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+}
+.sk-csvg__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sk-csvg__item {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+}
+.sk-csvg__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  max-width: 100%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--chip-line);
+  border-radius: var(--r-pill);
+  background: var(--chip-bg);
+  color: var(--chip-fg);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  overflow-wrap: anywhere;
+}
+.sk-csvg__group[data-level='EVERY_ROW'] .sk-csvg__chip,
+.sk-csvg__group[data-level='ONCE_PER_ORDER'] .sk-csvg__chip {
+  border-color: var(--accent-line);
+  background: var(--accent-tint);
+  color: var(--fg-strong);
+}
+.sk-csvg__uat {
+  font-size: var(--fs-2xs);
+  color: var(--fg-muted);
+}
+.sk-csvg__note {
+  max-width: 36ch;
+  padding-left: var(--sp-3);
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-csvg {
+    animation: none;
+  }
+}
