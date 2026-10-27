@@ -143,17 +143,29 @@ export class ApiClient {
    * retries ONCE.
    */
   async request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+    return this.handleResponse<T>(await this.send(path, init));
+  }
+
+  /**
+   * A binary download (an `.xlsx`), carrying the same bearer token and the
+   * same single-flight refresh-and-retry as `request`. `request` reads the
+   * body as text and would corrupt a zip. Non-2xx throws `ApiError`.
+   */
+  async requestBlob(path: string, init: ApiRequestInit = {}): Promise<Blob> {
+    const res = await this.send(path, init);
+    if (!res.ok) await this.handleResponse<unknown>(res);
+    return res.blob();
+  }
+
+  private async send(path: string, init: ApiRequestInit): Promise<Response> {
     const first = await this.doFetch(path, init);
     if (first.status === 401 && !init.suppressRefresh) {
       const outcome = await this.refresher.run();
-      if (outcome === 'OK') {
-        const second = await this.doFetch(path, init);
-        return this.handleResponse<T>(second);
-      }
+      if (outcome === 'OK') return this.doFetch(path, init);
       // Refresh failed → surface the original 401 to the caller. The
       // app's React layer reacts (redirect to /login).
     }
-    return this.handleResponse<T>(first);
+    return first;
   }
 
   private async doFetch(path: string, init: ApiRequestInit): Promise<Response> {

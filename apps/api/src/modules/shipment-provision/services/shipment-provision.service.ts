@@ -5,6 +5,7 @@ import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import type { ClientContext } from '../../seller-auth/seller-auth.service';
 import { ShipmentNumberingService } from './shipment-numbering.service';
 import { AdvisoryLock, takeAdvisoryLock } from '../../../common/db/advisory-lock';
+import { parcelBox } from './parcel-box';
 
 const SETTING_DEFAULT_WAREHOUSE = 'ops.default_warehouse_id';
 
@@ -17,6 +18,10 @@ export interface ProvisionShipmentItemInput {
   productName: string;
   variantLabel?: string | null;
   unitWeightGrams?: number | null;
+  /** The box as sold, snapshotted on the order line (ORD-6). */
+  unitLengthCm?: number | null;
+  unitWidthCm?: number | null;
+  unitHeightCm?: number | null;
   unitDeclaredValueInr?: DecimalIn | null;
   unitPriceInr?: DecimalIn | null;
 }
@@ -130,6 +135,8 @@ export class ShipmentProvisionService {
       input.totalWeightGrams ??
       input.items.reduce((s, i) => s + (i.unitWeightGrams ?? 0) * i.quantity, 0);
 
+    const parcel = parcelBox(input.items);
+
     const outcome = await this.prisma.client.$transaction(async (tx) => {
       // Read-then-create is not a guard under READ COMMITTED: two writers
       // of CONFIRMED (a transition and a god-mode force, or the AWB-less
@@ -156,6 +163,9 @@ export class ShipmentProvisionService {
           destPostalCode: input.recipient.postalCode,
           destCountryCode: input.recipient.countryCode ?? 'IN',
           totalWeightGrams,
+          lengthCm: parcel === null ? null : new Prisma.Decimal(parcel.lengthCm),
+          widthCm: parcel === null ? null : new Prisma.Decimal(parcel.widthCm),
+          heightCm: parcel === null ? null : new Prisma.Decimal(parcel.heightCm),
           declaredValueInr: new Prisma.Decimal(input.declaredValueInr),
           codAmountInr: input.codAmountInr == null ? null : new Prisma.Decimal(input.codAmountInr),
           status: ShipmentStatus.CREATED,

@@ -15,7 +15,7 @@ export class PresignOrderCsvDto {
   @ApiProperty({ example: 'orders-batch.csv' })
   @IsString()
   @MaxLength(255)
-  @Matches(/\.csv$/i, { message: 'fileName must end in .csv' })
+  @Matches(/\.(csv|xlsx)$/i, { message: 'fileName must end in .csv or .xlsx' })
   fileName!: string;
 }
 

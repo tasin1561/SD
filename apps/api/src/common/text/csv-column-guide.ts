@@ -11,7 +11,12 @@ export type CsvColumnLevel =
   | 'EVERY_ROW'
   /** Judged on the assembled order: state it once, later rows of that order may blank it. */
   | 'ONCE_PER_ORDER'
-  | 'OPTIONAL';
+  | 'OPTIONAL'
+  /**
+   * A column the template carries and the importer deliberately ignores.
+   * It must never read as "optional": that would tell a seller it does something.
+   */
+  | 'NOT_USED';
 
 export interface CsvColumnGuideEntry {
   /** The importer's internal field key; the console keys its own wording off it. */
@@ -23,6 +28,10 @@ export interface CsvColumnGuideEntry {
   uatControlled: boolean;
   /** True when the downloadable template already carries this column. */
   inTemplate: boolean;
+  /** The template's own sample cell for this column (first non-empty), '' when none. */
+  sample: string;
+  /** Why we ignore the column (NOT_USED only); null otherwise. Written for a person. */
+  description: string | null;
 }
 
 export interface CsvColumnGuide {

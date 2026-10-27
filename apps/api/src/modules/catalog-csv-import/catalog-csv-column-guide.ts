@@ -6,9 +6,11 @@ import { CSV_REQUIRED_FIELDS, lookupFieldForHeader } from './csv-fields';
  * so "required" is always per row; derived from `CSV_REQUIRED_FIELDS`, the
  * same list the importer's mapping check reads.
  */
-export function buildCatalogColumnGuide(templateHeaders: readonly string[]): CsvColumnGuide {
+export function buildCatalogColumnGuide(
+  templateColumns: ReadonlyArray<readonly string[]>,
+): CsvColumnGuide {
   const columns: CsvColumnGuideEntry[] = [];
-  for (const header of templateHeaders) {
+  for (const [header = '', ...samples] of templateColumns) {
     const field = lookupFieldForHeader(header);
     if (field === null) continue;
     columns.push({
@@ -17,6 +19,8 @@ export function buildCatalogColumnGuide(templateHeaders: readonly string[]): Csv
       level: CSV_REQUIRED_FIELDS.includes(field) ? 'EVERY_ROW' : 'OPTIONAL',
       uatControlled: false,
       inTemplate: true,
+      sample: samples.find((v) => v !== '') ?? '',
+      description: null,
     });
   }
   return { columns };

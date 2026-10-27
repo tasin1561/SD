@@ -30,6 +30,7 @@ import type {
   CsvPresignResult,
   OrderCsvPreviewResult,
 } from '../services/order-csv-import.service';
+import { XLSX_CONTENT_TYPE } from '../order-xlsx';
 import {
   STORE_TEMPLATE_COLUMNS,
   StoreOrderCsvImportService,
@@ -63,7 +64,7 @@ export class StoreOrderCsvImportController {
   })
   async columns(): Promise<CsvColumnGuide> {
     return buildOrderColumnGuide(
-      STORE_TEMPLATE_COLUMNS.map(([h]) => h),
+      STORE_TEMPLATE_COLUMNS,
       ORDER_CSV_STORE_REQUIRED_FIELDS,
       await this.uat.all(),
     );
@@ -76,6 +77,15 @@ export class StoreOrderCsvImportController {
   @ApiOperation({ summary: 'The store order CSV template (with Retail Price)' })
   template(@Res() res: Response): void {
     res.send(this.svc.buildTemplate());
+  }
+
+  @Get('template/xlsx')
+  @HttpCode(HttpStatus.OK)
+  @Header('Content-Type', XLSX_CONTENT_TYPE)
+  @Header('Content-Disposition', 'attachment; filename="skydrop-store-order-template.xlsx"')
+  @ApiOperation({ summary: 'The store order template as .xlsx (phone column formatted as Text)' })
+  async templateXlsx(@Res() res: Response): Promise<void> {
+    res.send(await this.svc.buildTemplateXlsx());
   }
 
   @Post('presign')
@@ -139,14 +149,17 @@ export class StoreOrderCsvImportController {
     @CurrentStoreUser() user: AuthenticatedStoreUser,
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
     @Res() res: Response,
+    @Query('format') format?: string,
   ): Promise<void> {
     // The rejected rows carry customers' names, phones and addresses —
     // a colleague's file is a 404 here (ASSOC-1).
-    const { buffer, fileName } = await this.svc.getErrorReport(user.storeId, id, {
-      storeUserId: user.id,
-      orderScope: user.orderScope,
-    });
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    const { buffer, fileName, contentType } = await this.svc.getErrorReport(
+      user.storeId,
+      id,
+      { storeUserId: user.id, orderScope: user.orderScope },
+      format === 'xlsx' ? 'xlsx' : 'csv',
+    );
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(buffer);
   }

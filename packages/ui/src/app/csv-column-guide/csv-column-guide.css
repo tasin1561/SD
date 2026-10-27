@@ -1,7 +1,8 @@
-/* CsvColumnGuide: static, no motion beyond a one-off fade-in (opacity). */
+/* CsvColumnGuide (Glossary): a one-off opacity fade-in only; no layout animation. */
 .sk-csvg {
   display: grid;
   gap: var(--sp-3);
+  min-width: 0;
   padding: var(--sp-4);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
@@ -20,87 +21,154 @@
   font-weight: var(--fw-semibold);
   color: var(--fg-strong);
 }
-.sk-csvg__group {
+.sk-csvg__legend {
   display: grid;
-  gap: var(--sp-2);
-  min-width: 0;
-}
-.sk-csvg__head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   margin: 0;
-  color: var(--fg-strong);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-semibold);
-}
-.sk-csvg__icon {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-md);
-  background: var(--accent-tint);
-  color: var(--sky);
-}
-.sk-csvg__group[data-level='EVERY_ROW'] .sk-csvg__icon,
-.sk-csvg__group[data-level='ONCE_PER_ORDER'] .sk-csvg__icon {
-  background: var(--accent-fill);
-  color: var(--accent-fg);
-}
-.sk-csvg__hint {
-  margin: 0;
+  padding: 0;
+  list-style: none;
   color: var(--fg-muted);
   font-size: var(--fs-xs);
   line-height: var(--lh-body);
 }
-.sk-csvg__list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.sk-csvg__legend strong {
+  color: var(--fg-strong);
 }
-.sk-csvg__item {
+.sk-csvg__table {
   display: grid;
-  gap: 2px;
   min-width: 0;
-  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
 }
-.sk-csvg__chip {
+.sk-csvg__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--sp-1) var(--sp-3);
+  align-items: start;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--sp-3);
+  border-top: 1px solid var(--line);
+  transition: background-color var(--dur-fast) var(--ease-out);
+}
+.sk-csvg__row:first-child {
+  border-top: 0;
+}
+.sk-csvg__row:not(.sk-csvg__row--head):hover {
+  background: var(--accent-tint);
+}
+/* Phone: a header row would be four orphan words, so it hides; each row is a card. */
+.sk-csvg__row--head {
+  display: none;
+}
+.sk-csvg__cell {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-sm);
+  color: var(--fg);
+}
+.sk-csvg__cell--title {
+  grid-column: 1;
+  font-weight: var(--fw-semibold);
+  color: var(--fg-strong);
+}
+.sk-csvg__cell--flag {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+}
+.sk-csvg__cell--desc {
+  grid-column: 1 / -1;
+  color: var(--fg-muted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
+}
+.sk-csvg__cell--desc:empty,
+.sk-csvg__cell--sample:empty {
+  display: none;
+}
+.sk-csvg__cell--sample {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--fg-strong);
+}
+.sk-csvg__uat {
+  margin-left: var(--sp-2);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-medium);
+  color: var(--fg-muted);
+}
+.sk-csvg__pill {
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-2);
-  max-width: 100%;
-  padding: var(--sp-2) var(--sp-3);
+  padding: 2px var(--sp-3);
   border: 1px solid var(--chip-line);
   border-radius: var(--r-pill);
   background: var(--chip-bg);
   color: var(--chip-fg);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-medium);
-  overflow-wrap: anywhere;
-}
-.sk-csvg__group[data-level='EVERY_ROW'] .sk-csvg__chip,
-.sk-csvg__group[data-level='ONCE_PER_ORDER'] .sk-csvg__chip {
-  border-color: var(--accent-line);
-  background: var(--accent-tint);
-  color: var(--fg-strong);
-}
-.sk-csvg__uat {
-  font-size: var(--fs-2xs);
-  color: var(--fg-muted);
-}
-.sk-csvg__note {
-  max-width: 36ch;
-  padding-left: var(--sp-3);
-  color: var(--fg-muted);
   font-size: var(--fs-xs);
-  line-height: var(--lh-body);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+.sk-csvg__pill[data-state='yes'] {
+  border-color: var(--accent-line);
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+}
+.sk-csvg__pill[data-state='notUsed'] {
+  border-style: dashed;
+  background: transparent;
+  color: var(--fg-muted);
+}
+.sk-csvg__grain {
+  color: var(--fg-muted);
+  font-size: var(--fs-2xs);
+  text-align: right;
+}
+@media (min-width: 720px) {
+  .sk-csvg__row,
+  .sk-csvg__row--head {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 2fr) minmax(0, 1.2fr);
+    gap: var(--sp-3);
+    align-items: center;
+  }
+  .sk-csvg__row--head {
+    background: var(--surface-1, var(--surface-2));
+    color: var(--fg-muted);
+    font-size: var(--fs-2xs);
+    font-weight: var(--fw-semibold);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .sk-csvg__cell--title,
+  .sk-csvg__cell--flag,
+  .sk-csvg__cell--desc,
+  .sk-csvg__cell--sample {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .sk-csvg__cell--flag {
+    justify-items: start;
+  }
+  .sk-csvg__grain {
+    text-align: left;
+  }
+  /* An empty cell must keep its column, or the row's cells slide left. */
+  .sk-csvg__cell--desc:empty,
+  .sk-csvg__cell--sample:empty {
+    display: block;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .sk-csvg {
     animation: none;
+  }
+  .sk-csvg__row {
+    transition: none;
   }
 }

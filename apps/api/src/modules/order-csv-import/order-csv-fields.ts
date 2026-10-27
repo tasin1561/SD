@@ -164,7 +164,9 @@ export const ORDER_CSV_ALIAS_MAP: Record<OrderCsvField, string[]> = {
     'order number',
   ],
   paymentMode: ['payment mode', 'payment type', 'payment method'],
-  advanceAmount: ['advance amount', 'amount paid', 'advance', 'paid amount'],
+  // `advanced amount` is the owner's template spelling (2026-10-27); the
+  // `(Optional)` suffix on it is stripped by `normalizeHeader`.
+  advanceAmount: ['advance amount', 'advanced amount', 'amount paid', 'advance', 'paid amount'],
   // The three UAT-controlled fields. They are mapped here ALWAYS so a
   // file carrying them can be understood, and applied only while
   // `uat.order_*_field` says the field is shown — the same switch the
@@ -220,6 +222,7 @@ export const ORDER_CSV_IGNORED_HEADERS: Record<string, string> = {
   'customer email': 'we do not email the customer — the call centre rings them',
   'recipient email': 'we do not email the customer — the call centre rings them',
   email: 'we do not email the customer — the call centre rings them',
+  'pickup location': 'we choose the warehouse and the pickup location ourselves, per parcel',
   'pickup location name': 'we choose the warehouse and the pickup location ourselves, per parcel',
   'transport mode': 'we choose the courier and the service level, per your courier settings',
   'item sku name':
@@ -232,6 +235,10 @@ export const ORDER_CSV_IGNORED_HEADERS: Record<string, string> = {
   'height cm': 'parcel dimensions come from the product in your catalogue',
   'product weight gm': 'the per-unit weight comes from the product in your catalogue',
   'product weight g': 'the per-unit weight comes from the product in your catalogue',
+  'volumetric product weight gm':
+    'we work the parcel weight out from the product in your catalogue, so this column is not used',
+  'volumetric product weight g':
+    'we work the parcel weight out from the product in your catalogue, so this column is not used',
   'fragile shipment': 'we do not carry a fragile flag',
   'tax class code': 'tax on the goods comes from your catalogue and our GST settings',
   'billing address same as shipping address': 'we hold one delivery address per order',
@@ -327,11 +334,21 @@ export function orderCsvFieldLabel(field: OrderCsvField): string {
  * of their own.
  */
 export function normalizeHeader(raw: string): string {
-  return raw
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
+  return (
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+      // A TRAILING marker word is punctuation in spirit, like Delhivery's `*`:
+      // `Customer Email(Optional)` and `Customer Phone (Mandatory)` are the
+      // columns `customer email` and `customer phone`. Trailing only — a marker
+      // mid-name is part of the name — and no alias or ignored key ends in one
+      // (pinned by order-csv-template-v2.spec.ts).
+      .replace(TRAILING_MARKER, '')
+  );
 }
+
+const TRAILING_MARKER = / (?:optional|mandatory|required)$/;
 
 const ALIAS_INDEX: Map<string, OrderCsvField> = (() => {
   const idx = new Map<string, OrderCsvField>();

@@ -80,6 +80,17 @@ export const orderImport = defineMessages({
   'orderImport.failed': ['Failed', 'ব্যর্থ'],
   'orderImport.when': ['When', 'কখন'],
   'orderImport.errorReport': ['Error report', 'ত্রুটির রিপোর্ট'],
+  'orderImport.downloadTemplateXlsx': ['Download Excel template', 'Excel টেমপ্লেট ডাউনলোড'],
+  'orderImport.downloadTemplateCsv': ['CSV template', 'CSV টেমপ্লেট'],
+  'orderImport.errorsXlsx': ['Errors (Excel)', 'ত্রুটি (Excel)'],
+  'orderImport.fileMustBeCsvOrXlsx': [
+    'File must be a .xlsx or .csv',
+    'ফাইল অবশ্যই .xlsx বা .csv হতে হবে',
+  ],
+  'orderImport.dropYourSheetHere': [
+    'Drop your Excel or CSV file here',
+    'আপনার Excel বা CSV ফাইল এখানে ছাড়ুন',
+  ],
   'orderImport.errorsCsv': ['Errors CSV', 'ত্রুটির CSV'],
   'orderImport.importing': ['Importing {fileName}', '{fileName} ইম্পোর্ট হচ্ছে'],
   'orderImport.importFinished': ['Import finished', 'ইম্পোর্ট শেষ হয়েছে'],

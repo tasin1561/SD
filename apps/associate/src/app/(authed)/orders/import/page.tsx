@@ -145,6 +145,27 @@ export default function OrderImportPage(): ReactElement {
     }
   }
 
+  /** A binary download (`.xlsx`): `request` reads text and would corrupt a zip. */
+  async function downloadBlob(path: string, fileName: string): Promise<void> {
+    setError(null);
+    setDownloading(path);
+    try {
+      const blob = await client.requestBlob(path);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(verdict(err, t));
+    } finally {
+      setDownloading(null);
+    }
+  }
+
   async function check(): Promise<void> {
     setError(null);
     const f = pickedFile ?? fileRef.current?.files?.[0];
@@ -160,7 +181,11 @@ export default function OrderImportPage(): ReactElement {
       );
       const put = await fetch(presign.uploadUrl, {
         method: 'PUT',
-        headers: { 'Content-Type': 'text/csv' },
+        headers: {
+          'Content-Type': f.name.toLowerCase().endsWith('.xlsx')
+            ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            : 'text/csv',
+        },
         body: f,
       });
       if (!put.ok) throw new Error(t('import.uploadFailed', { status: put.status }));
@@ -228,29 +253,75 @@ export default function OrderImportPage(): ReactElement {
       <Section
         title={t('import.upload')}
         action={
-          <AsyncButton
-            variant="ghost"
-            size="sm"
-            icon={<Download size={14} />}
-            state={downloading === `${BASE}/template` ? 'busy' : undefined}
-            labels={{ idle: t('import.template'), busy: t('import.downloading') }}
-            onClick={() => void downloadText(`${BASE}/template`, 'skydrop-order-template.csv')}
-          />
+          <>
+            <AsyncButton
+              variant="primary"
+              size="sm"
+              icon={<Download size={14} />}
+              state={downloading === `${BASE}/template/xlsx` ? 'busy' : undefined}
+              labels={{ idle: t('import.templateXlsx'), busy: t('import.downloading') }}
+              onClick={() =>
+                void downloadBlob(`${BASE}/template/xlsx`, 'skydrop-order-template.xlsx')
+              }
+            />
+            <AsyncButton
+              variant="ghost"
+              size="sm"
+              icon={<Download size={14} />}
+              state={downloading === `${BASE}/template` ? 'busy' : undefined}
+              labels={{ idle: t('import.templateCsv'), busy: t('import.downloading') }}
+              onClick={() => void downloadText(`${BASE}/template`, 'skydrop-order-template.csv')}
+            />
+          </>
         }
       >
         <div className="as-stack as-stack--tight">
           {columnGuide.data !== undefined ? (
             <CsvColumnGuide
               columns={columnGuide.data.columns}
-              notes={{ addressLine2: t('csvcols.landmarkNote') }}
+              notes={{
+                externalRef: t('csvcols.d.externalRef'),
+                paymentMode: t('csvcols.d.paymentMode'),
+                customerName: t('csvcols.d.customerName'),
+                customerPhone: t('csvcols.d.customerPhone'),
+                addressLine1: t('csvcols.d.addressLine1'),
+                city: t('csvcols.d.city'),
+                state: t('csvcols.d.state'),
+                pinCode: t('csvcols.d.pinCode'),
+                productSku: t('csvcols.d.productSku'),
+                quantity: t('csvcols.d.quantity'),
+                retailUnitPrice: t('csvcols.d.retailUnitPrice'),
+                advanceAmount: t('csvcols.d.advanceAmount'),
+                codAmount: t('csvcols.d.codAmount'),
+                deliveryFee: t('csvcols.d.deliveryFee'),
+                discountValue: t('csvcols.d.discountValue'),
+                discountType: t('csvcols.d.discountType'),
+                declaredValue: t('csvcols.d.declaredValue'),
+                productName: t('csvcols.d.productName'),
+                productExternalRef: t('csvcols.d.productExternalRef'),
+                variantSkuCode: t('csvcols.d.variantSkuCode'),
+                weightGrams: t('csvcols.d.weightGrams'),
+                lengthCm: t('csvcols.d.lengthCm'),
+                widthCm: t('csvcols.d.widthCm'),
+                heightCm: t('csvcols.d.heightCm'),
+                declaredValueInr: t('csvcols.d.declaredValueInr'),
+                barcode: t('csvcols.d.barcode'),
+                variantAttributes: t('csvcols.d.variantAttributes'),
+                addressLine2: t('csvcols.landmarkNote'),
+              }}
               labels={{
                 title: t('csvcols.title'),
+                colTitle: t('csvcols.colTitle'),
+                colMandatory: t('csvcols.colMandatory'),
+                colDescription: t('csvcols.colDescription'),
+                colSample: t('csvcols.colSample'),
+                yes: t('csvcols.yes'),
+                no: t('csvcols.no'),
+                notUsed: t('csvcols.notUsed'),
                 everyRow: t('csvcols.everyRow'),
                 everyRowHint: t('csvcols.everyRowHint'),
                 oncePerOrder: t('csvcols.oncePerOrder'),
                 oncePerOrderHint: t('csvcols.oncePerOrderHint'),
-                optional: t('csvcols.optional'),
-                optionalHint: t('csvcols.optionalHint'),
                 uat: t('csvcols.uat'),
               }}
             />
@@ -258,7 +329,7 @@ export default function OrderImportPage(): ReactElement {
           <DropZone
             key={zoneKey}
             ref={fileRef}
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx,text/csv"
             aria-label={t('import.dropAria')}
             label={picked !== '' ? picked : t('import.dropLabel')}
             buttonText={t('import.choose')}
@@ -411,21 +482,46 @@ export default function OrderImportPage(): ReactElement {
                     </Td>
                     <Td align="right">
                       {u.errorReportKey !== null ? (
-                        <AsyncButton
-                          variant="ghost"
-                          size="sm"
-                          icon={<Download size={14} />}
-                          state={
-                            downloading === `${BASE}/${u.id}/error-report` ? 'busy' : undefined
-                          }
-                          labels={{ idle: t('import.errorReport'), busy: t('import.downloading') }}
-                          onClick={() =>
-                            void downloadText(
-                              `${BASE}/${u.id}/error-report`,
-                              `errors-${u.fileName}`,
-                            )
-                          }
-                        />
+                        <>
+                          <AsyncButton
+                            variant="ghost"
+                            size="sm"
+                            icon={<Download size={14} />}
+                            state={
+                              downloading === `${BASE}/${u.id}/error-report?format=xlsx`
+                                ? 'busy'
+                                : undefined
+                            }
+                            labels={{
+                              idle: t('import.errorReportXlsx'),
+                              busy: t('import.downloading'),
+                            }}
+                            onClick={() =>
+                              void downloadBlob(
+                                `${BASE}/${u.id}/error-report?format=xlsx`,
+                                `errors-${u.fileName.replace(/\.(csv|xlsx)$/i, '')}.xlsx`,
+                              )
+                            }
+                          />
+                          <AsyncButton
+                            variant="ghost"
+                            size="sm"
+                            icon={<Download size={14} />}
+                            state={
+                              downloading === `${BASE}/${u.id}/error-report` ? 'busy' : undefined
+                            }
+                            labels={{
+                              idle: t('import.errorReport'),
+                              busy: t('import.downloading'),
+                            }}
+                            onClick={() =>
+                              void downloadText(
+                                `${BASE}/${u.id}/error-report`,
+                                `errors-${u.fileName}`,
+                              )
+                            }
+                          />
+                        </>
                       ) : null}
                     </Td>
                   </Tr>

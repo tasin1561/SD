@@ -3618,6 +3618,12 @@ model OrderItem {
   imageUrl             String?  @map("image_url")
   quantity             Int
   unitWeightGrams      Int?     @map("unit_weight_grams")
+  /// The box as sold (ORD-6). Snapshotted beside the weight so the
+  /// courier is told the parcel the seller ordered, not whatever the
+  /// catalogue says on the day it ships.
+  unitLengthCm         Decimal? @map("unit_length_cm") @db.Decimal(6, 2)
+  unitWidthCm          Decimal? @map("unit_width_cm") @db.Decimal(6, 2)
+  unitHeightCm         Decimal? @map("unit_height_cm") @db.Decimal(6, 2)
   unitDeclaredValueInr Decimal? @map("unit_declared_value_inr") @db.Decimal(12, 2)
   unitPriceInr         Decimal? @map("unit_price_inr") @db.Decimal(12, 2)
   qtyReserved          Int      @default(0) @map("qty_reserved")

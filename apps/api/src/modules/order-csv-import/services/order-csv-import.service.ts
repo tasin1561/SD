@@ -11,51 +11,194 @@ import { SpacesService } from '../../../infrastructure/spaces/spaces.service';
 import { AuditLogService } from '../../auth-common/services/audit-log.service';
 import { OrderCsvParserService } from './order-csv-parser.service';
 import { ORDER_CSV_REQUIRED_FIELDS, type OrderCsvField } from '../order-csv-fields';
-import { buildOrderCsvKey, parseOrderCsvKey } from '../order-csv-key';
+import { buildOrderCsvKey, parseOrderCsvKey, xlsxReportKeyFor } from '../order-csv-key';
 import { OrderCsvImportQueue } from '../queue/order-csv-import.queue';
 import type {
   PresignOrderCsvDto,
   PreviewOrderCsvDto,
   ProcessOrderCsvDto,
 } from '../dto/order-csv-import.dto';
+import { buildTemplateXlsx, XLSX_CONTENT_TYPE } from '../order-xlsx';
 import { CSV_TEMPLATE_PREFIX } from '../../../common/text/csv-separator-hint';
 
 const CSV_PRESIGN_CONTENT_TYPE = 'text/csv';
 
+/** The content type a presigned PUT is signed for: the file name decides, the bytes are re-checked on read. */
+export function presignContentType(input: PresignOrderCsvDto): string {
+  return /\.xlsx$/i.test(input.fileName) ? XLSX_CONTENT_TYPE : CSV_PRESIGN_CONTENT_TYPE;
+}
+
 /**
- * Canonical template columns (header → example value).
+ * The order template, exactly as the owner supplied it (2026-10-27).
  *
- * Our own shape, deliberately narrower than Delhivery's 36-column bulk
- * template — but the importer ACCEPTS that template as it comes (see
- * `ORDER_CSV_ALIAS_MAP` and `ORDER_CSV_IGNORED_HEADERS`), so this file
- * and that one must not drift apart in meaning. `Payment Mode` is here
- * because the importer used to INFER it from the COD amount, which is
- * wrong on any file that states it.
+ * The column names are THEIRS and are not to be tidied: `Customer Email(Optional)`
+ * and `Advanced Amount(Optional)` keep their suffix, which the importer strips
+ * on read (`normalizeHeader`). Several columns are ones we deliberately do not
+ * use (`ORDER_CSV_IGNORED_HEADERS`); they stay so a seller sees the same sheet
+ * their courier hands them.
  *
- * The two rows share `SD-1001`: one order, two lines. Rows carrying the
- * same reference are lines of one order (ORD-9), and a template that
- * never showed that left every seller believing otherwise.
+ * `SD-1003` carries two rows: one order, two lines (ORD-9). `SD-1002` is
+ * Prepaid with an empty COD Amount; `SD-1003` states its COD on both rows.
  */
-export const TEMPLATE_COLUMNS: Array<[string, string, string]> = [
-  ['Product SKU', 'TSHIRT-001-RED-M', 'CAP-001-NAVY'],
-  ['Quantity', '2', '1'],
-  ['Payment Mode', 'COD', 'COD'],
-  ['Customer Name', 'Asha Verma', 'Asha Verma'],
-  ['Customer Phone', '+919876543210', '+919876543210'],
-  ['Customer Email', 'asha@example.com', 'asha@example.com'],
-  ['Address Line1', '12 MG Road', '12 MG Road'],
-  // Line 2 is the LANDMARK and is required — the courier address is
-  // line 1 + line 2, so this is the field that makes a rural address
-  // findable. City/State stay as supported columns but are optional:
-  // Delhivery resolves the locality from the PIN.
-  ['Address Line2', 'Near City Hospital', 'Near City Hospital'],
-  ['City', 'Bengaluru', 'Bengaluru'],
-  ['State', 'Karnataka', 'Karnataka'],
-  ['Pin Code', '560001', '560001'],
-  ['Unit Price', '499', '299'],
-  ['COD Amount', '1297', '1297'],
-  ['External Ref', 'SD-1001', 'SD-1001'],
+export const TEMPLATE_HEADERS: readonly string[] = [
+  'Order ID',
+  'Payment Mode',
+  'Pickup Location',
+  'Transport Mode',
+  'Customer Name',
+  'Customer Phone',
+  'Customer Email(Optional)',
+  'Address Line1',
+  'Address Line2',
+  'City',
+  'State',
+  'Pin Code',
+  'Product SKU',
+  'Quantity',
+  'Unit Price',
+  'Advanced Amount(Optional)',
+  'COD Amount',
+  'Packaging Type',
+  'Length (cm)',
+  'Breadth (cm)',
+  'Height (cm)',
+  'Volumetric Product Weight (gm)',
+  'Billing Address same as Shipping Address',
+  'Billing Address Line1',
+  'Billing Address Line2',
+  'Billing City',
+  'Billing State',
+  'Billing Pincode',
 ];
+
+export const TEMPLATE_ROWS: ReadonlyArray<readonly string[]> = [
+  [
+    'SD-1001',
+    'COD',
+    'Skydrop',
+    'Surface',
+    'Asha Verma',
+    '9876543210',
+    'asha@example.com',
+    '12 MG Road',
+    'Near City Hospital',
+    'Bengaluru',
+    'Karnataka',
+    '560001',
+    'TSHIRT-001-RED-M',
+    '1',
+    '1500',
+    '',
+    '1500',
+    'Flyer',
+    '18',
+    '13',
+    '3',
+    '170',
+    'YES',
+    '',
+    '',
+    '',
+    '',
+    '',
+  ],
+  [
+    'SD-1002',
+    'Prepaid',
+    'Skydrop',
+    'Surface',
+    'Rahul Nair',
+    '9812345678',
+    'rahul@example.com',
+    '44 Linking Road',
+    'Opposite Bata Showroom',
+    'Mumbai',
+    'Maharashtra',
+    '400050',
+    'CAP-001-NAVY',
+    '2',
+    '850',
+    '',
+    '',
+    'Flyer',
+    '15',
+    '10',
+    '5',
+    '110',
+    'YES',
+    '',
+    '',
+    '',
+    '',
+    '',
+  ],
+  [
+    'SD-1003',
+    'COD',
+    'Skydrop',
+    'Surface',
+    'Priya Menon',
+    '9700112233',
+    'priya@example.com',
+    '8 Residency Road',
+    'Beside Jyothi Theatre',
+    'Kochi',
+    'Kerala',
+    '682016',
+    'TSHIRT-001-RED-M',
+    '1',
+    '1500',
+    '',
+    '2350',
+    'Flyer',
+    '18',
+    '13',
+    '3',
+    '170',
+    'YES',
+    '',
+    '',
+    '',
+    '',
+    '',
+  ],
+  [
+    'SD-1003',
+    'COD',
+    'Skydrop',
+    'Surface',
+    'Priya Menon',
+    '9700112233',
+    'priya@example.com',
+    '8 Residency Road',
+    'Beside Jyothi Theatre',
+    'Kochi',
+    'Kerala',
+    '682016',
+    'CAP-001-NAVY',
+    '1',
+    '850',
+    '',
+    '2350',
+    'Flyer',
+    '15',
+    '10',
+    '5',
+    '110',
+    'YES',
+    '',
+    '',
+    '',
+    '',
+    '',
+  ],
+];
+
+/** `[header, sample row 1, sample row 2, …]` per column — derived, never restated. */
+export const TEMPLATE_COLUMNS: Array<[string, ...string[]]> = TEMPLATE_HEADERS.map((h, i) => [
+  h,
+  ...TEMPLATE_ROWS.map((r) => r[i] ?? ''),
+]);
 
 export interface CsvPresignResult {
   spacesKey: string;
@@ -143,18 +286,21 @@ export class OrderCsvImportService {
     private readonly queue: OrderCsvImportQueue,
   ) {}
 
-  buildTemplate(): string {
-    const cell = (v: string): string => (v.includes(',') ? `"${v}"` : v);
-    const headers = TEMPLATE_COLUMNS.map(([h]) => h).join(',');
-    const first = TEMPLATE_COLUMNS.map(([, a]) => cell(a)).join(',');
-    const second = TEMPLATE_COLUMNS.map(([, , b]) => cell(b)).join(',');
-    return `${CSV_TEMPLATE_PREFIX}${headers}\n${first}\n${second}\n`;
+  /** The same sheet as the CSV, as `.xlsx`, with the phone column formatted as Text. */
+  buildTemplateXlsx(): Promise<Buffer> {
+    return buildTemplateXlsx(TEMPLATE_HEADERS, TEMPLATE_ROWS);
   }
 
-  async presign(sellerId: string, _input: PresignOrderCsvDto): Promise<CsvPresignResult> {
+  buildTemplate(): string {
+    const cell = (v: string): string => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+    const line = (cells: readonly string[]): string => cells.map(cell).join(',');
+    return `${CSV_TEMPLATE_PREFIX}${[TEMPLATE_HEADERS, ...TEMPLATE_ROWS].map(line).join('\n')}\n`;
+  }
+
+  async presign(sellerId: string, input: PresignOrderCsvDto): Promise<CsvPresignResult> {
     const key = buildOrderCsvKey(sellerId);
     const ttl = this.env.csvPresignTtlSeconds;
-    const uploadUrl = await this.spaces.presignPutUrl(key, CSV_PRESIGN_CONTENT_TYPE, ttl);
+    const uploadUrl = await this.spaces.presignPutUrl(key, presignContentType(input), ttl);
     return { spacesKey: key, uploadUrl, expiresInSeconds: ttl };
   }
 
@@ -176,7 +322,7 @@ export class OrderCsvImportService {
 
   async preview(sellerId: string, input: PreviewOrderCsvDto): Promise<OrderCsvPreviewResult> {
     const buffer = await this.loadOwnedCsv(sellerId, input.spacesKey);
-    const parsed = this.parser.parse(buffer);
+    const parsed = await this.parser.parseUpload(buffer, this.env.csvMaxRows);
     const detected = this.parser.detectMapping(parsed.headers);
     const mapping = this.resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
     const missingRequired = ORDER_CSV_REQUIRED_FIELDS.filter((f) => mapping[f] === undefined);
@@ -213,7 +359,7 @@ export class OrderCsvImportService {
   ): Promise<BulkOrderUploadView> {
     const buffer = await this.loadOwnedCsv(sellerId, input.spacesKey);
     const head = await this.spaces.headObject(input.spacesKey);
-    const parsed = this.parser.parse(buffer);
+    const parsed = await this.parser.parseUpload(buffer, this.env.csvMaxRows);
     const detected = this.parser.detectMapping(parsed.headers);
     const mapping = this.resolveMapping(parsed.headers, detected.mapping, input.mappingOverride);
 
@@ -308,7 +454,8 @@ export class OrderCsvImportService {
   async getErrorReport(
     sellerId: string,
     id: string,
-  ): Promise<{ buffer: Buffer; fileName: string }> {
+    format: 'csv' | 'xlsx' = 'csv',
+  ): Promise<{ buffer: Buffer; fileName: string; contentType: string }> {
     const upload = await this.prisma.client.bulkOrderUpload.findFirst({
       where: { id, sellerId, resellerStoreId: null, deletedAt: null },
       select: { id: true, fileName: true, errorReportKey: true },
@@ -325,6 +472,13 @@ export class OrderCsvImportService {
         message: 'This import has no error report (no failed rows)',
       });
     }
+    const base = upload.fileName.replace(/\.(csv|xlsx)$/i, '');
+    // The `.xlsx` report sits beside the CSV one; an import that predates it
+    // simply has none, and the CSV is returned instead rather than a 404.
+    if (format === 'xlsx') {
+      const x = await this.spaces.getObject(xlsxReportKeyFor(upload.errorReportKey));
+      if (x) return { buffer: x, fileName: `${base}-errors.xlsx`, contentType: XLSX_CONTENT_TYPE };
+    }
     const buffer = await this.spaces.getObject(upload.errorReportKey);
     if (!buffer) {
       throw new NotFoundException({
@@ -332,8 +486,7 @@ export class OrderCsvImportService {
         message: 'Error report could not be read from storage',
       });
     }
-    const base = upload.fileName.replace(/\.csv$/i, '');
-    return { buffer, fileName: `${base}-errors.csv` };
+    return { buffer, fileName: `${base}-errors.csv`, contentType: 'text/csv; charset=utf-8' };
   }
 
   async loadOwnedCsv(sellerId: string, spacesKey: string): Promise<Buffer> {

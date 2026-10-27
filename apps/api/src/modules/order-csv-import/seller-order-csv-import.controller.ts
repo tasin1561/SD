@@ -35,6 +35,7 @@ import {
 import { UatFieldsService } from '../uat-settings/services/uat-fields.service';
 import { buildOrderColumnGuide } from './order-csv-column-guide';
 import { ORDER_CSV_REQUIRED_FIELDS } from './order-csv-fields';
+import { XLSX_CONTENT_TYPE } from './order-xlsx';
 import { TEMPLATE_COLUMNS } from './services/order-csv-import.service';
 import type { CsvColumnGuide } from '../../common/text/csv-column-guide';
 import { RequireSellerPermissions } from '../../common/auth/require-seller-permissions.decorator';
@@ -58,11 +59,7 @@ export class SellerOrderCsvImportController {
     summary: 'Which template columns are required (per row / per order) or optional',
   })
   async columns(): Promise<CsvColumnGuide> {
-    return buildOrderColumnGuide(
-      TEMPLATE_COLUMNS.map(([h]) => h),
-      ORDER_CSV_REQUIRED_FIELDS,
-      await this.uat.all(),
-    );
+    return buildOrderColumnGuide(TEMPLATE_COLUMNS, ORDER_CSV_REQUIRED_FIELDS, await this.uat.all());
   }
 
   @Get('template')
@@ -73,6 +70,18 @@ export class SellerOrderCsvImportController {
   @ApiOperation({ summary: 'Download the canonical order CSV template' })
   template(@Res() res: Response): void {
     res.send(this.svc.buildTemplate());
+  }
+
+  @Get('template/xlsx')
+  @SellerAuthAllowSuspended()
+  @HttpCode(HttpStatus.OK)
+  @Header('Content-Type', XLSX_CONTENT_TYPE)
+  @Header('Content-Disposition', 'attachment; filename="skydrop-order-import-template.xlsx"')
+  @ApiOperation({
+    summary: 'Download the order template as .xlsx (phone column formatted as Text)',
+  })
+  async templateXlsx(@Res() res: Response): Promise<void> {
+    res.send(await this.svc.buildTemplateXlsx());
   }
 
   @Post('presign')
@@ -137,9 +146,14 @@ export class SellerOrderCsvImportController {
     @Param('id', new ParseUUIDPipe({ version: '7' })) id: string,
     @CurrentSeller() seller: AuthenticatedSeller,
     @Res() res: Response,
+    @Query('format') format?: string,
   ): Promise<void> {
-    const { buffer, fileName } = await this.svc.getErrorReport(seller.id, id);
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    const { buffer, fileName, contentType } = await this.svc.getErrorReport(
+      seller.id,
+      id,
+      format === 'xlsx' ? 'xlsx' : 'csv',
+    );
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(buffer);
   }

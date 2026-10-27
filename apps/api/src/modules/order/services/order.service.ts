@@ -147,6 +147,9 @@ const ORDER_VIEW_INCLUDE = {
       imageUrl: true,
       quantity: true,
       unitWeightGrams: true,
+      unitLengthCm: true,
+      unitWidthCm: true,
+      unitHeightCm: true,
       unitDeclaredValueInr: true,
       unitPriceInr: true,
       qtyReserved: true,
@@ -310,6 +313,9 @@ interface ResolvedLine {
   imageUrl: string | null;
   quantity: number;
   unitWeightGrams: number | null;
+  unitLengthCm: Prisma.Decimal | null;
+  unitWidthCm: Prisma.Decimal | null;
+  unitHeightCm: Prisma.Decimal | null;
   unitDeclaredValueInr: Prisma.Decimal | null;
   unitPriceInr: Prisma.Decimal | null;
 }
@@ -563,12 +569,17 @@ export class OrderService {
             new Prisma.Decimal(0),
           );
 
+    // CATALOGUE FIRST, the stated weight only when the catalogue is silent
+    // (owner, 2026-10-27). It used to be the other way round — an explicit
+    // weight beat the catalogue — which let a spreadsheet column overrule the
+    // product's own record. A line with no catalogue weight makes the sum
+    // unknowable, so then (and only then) the stated figure applies.
+    const catalogueWeightGrams = lines.every((l) => l.unitWeightGrams !== null)
+      ? lines.reduce((sum, l) => sum + (l.unitWeightGrams ?? 0) * l.quantity, 0)
+      : null;
     const totalWeightGrams =
-      input.totalWeightGrams !== undefined
-        ? input.totalWeightGrams
-        : lines.every((l) => l.unitWeightGrams !== null)
-          ? lines.reduce((sum, l) => sum + (l.unitWeightGrams ?? 0) * l.quantity, 0)
-          : null;
+      catalogueWeightGrams ??
+      (input.totalWeightGrams !== undefined ? input.totalWeightGrams : null);
 
     let created;
     try {
@@ -700,6 +711,9 @@ export class OrderService {
                   imageUrl: l.imageUrl,
                   quantity: l.quantity,
                   unitWeightGrams: l.unitWeightGrams,
+                  unitLengthCm: l.unitLengthCm,
+                  unitWidthCm: l.unitWidthCm,
+                  unitHeightCm: l.unitHeightCm,
                   unitDeclaredValueInr: l.unitDeclaredValueInr,
                   unitPriceInr: terms?.retailUnitInr ?? l.unitPriceInr,
                   ...(terms === undefined
@@ -961,6 +975,12 @@ export class OrderService {
         imageUrl: v.imageUrl,
         quantity: item.quantity,
         unitWeightGrams: v.weightGrams,
+        // The box as sold. `CatalogReadService` has already resolved the
+        // product default behind a variant that states none, so this is
+        // the figure the courier should be told (ORD-6 snapshot).
+        unitLengthCm: v.lengthCm,
+        unitWidthCm: v.widthCm,
+        unitHeightCm: v.heightCm,
         unitDeclaredValueInr: v.declaredValueInr,
         unitPriceInr:
           item.unitPriceInr !== undefined ? new Prisma.Decimal(item.unitPriceInr) : null,
