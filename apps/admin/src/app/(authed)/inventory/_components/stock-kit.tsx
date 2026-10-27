@@ -7,6 +7,7 @@ import type { AsyncPhase } from '@skydrop/ui/app/async-button';
 import { buttonClassName, type ButtonSize, type ButtonVariant } from '@skydrop/ui/app/button';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import './stock-kit.css';
+import { useT } from '@/i18n/client';
 
 /**
  * The presentational pieces shared by the admin warehouse-records and
@@ -231,13 +232,14 @@ export function InlineError({
   readonly message: string;
   readonly retry?: (() => void) | undefined;
 }): ReactElement {
+  const t = useT();
   return (
     <div className="stk-error" role="alert">
       <OctagonX size={16} aria-hidden className="stk-error__icon" />
       <p className="stk-error__text">{message}</p>
       {retry !== undefined && (
         <button type="button" onClick={retry} className="stk-error__retry">
-          Retry
+          {t('inventoryStockKit.retry')}
         </button>
       )}
     </div>

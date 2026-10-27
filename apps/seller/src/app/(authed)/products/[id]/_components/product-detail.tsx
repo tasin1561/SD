@@ -23,7 +23,7 @@ import {
   useProductVariants,
   useUpdateProduct,
 } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { Money } from '@skydrop/ui/components';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { Button } from '@skydrop/ui/app/button';
@@ -54,6 +54,8 @@ import {
   rawCount,
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { useRouter } from 'next/navigation';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Seller product detail. Inline edit (no separate edit page) — write
@@ -67,6 +69,7 @@ import { useRouter } from 'next/navigation';
  * of validation.
  */
 export function ProductDetailView({ productId }: { productId: string }): ReactElement {
+  const t = useT();
   const [addingVariant, setAddingVariant] = useState(false);
   const router = useRouter();
   const detail = useProductDetail(productId);
@@ -89,11 +92,11 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
       await archive.mutateAsync({ archived: !isArchived });
       toast.success(
         isArchived
-          ? 'Restored. Its variants stay archived — restore the ones you want back.'
-          : 'Archived. It and its variants can no longer be ordered or received.',
+          ? t('productDetail.restoredItsVariantsStay')
+          : t('productDetail.archivedItAndIts'),
       );
     } catch (err) {
-      setArchiveError(serverVerdict(err));
+      setArchiveError(verdict(err, t));
       throw err;
     }
   }
@@ -109,24 +112,24 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
   return (
     <AreaPage>
       <BackLink href="/products">
-        <ArrowLeft size={14} /> Products
+        <ArrowLeft size={14} /> {t('productDetail.products2')}
       </BackLink>
 
       {detail.isLoading ? (
-        <SkeletonRows rows={6} label="Loading product…" />
+        <SkeletonRows rows={6} label={t('productDetail.loadingProduct')} />
       ) : detail.isError ? (
         <ErrorState
-          message={detail.error?.message ?? 'Failed to load product.'}
+          message={detail.error?.message ?? t('productDetail.failedToLoadProduct')}
           retry={() => void detail.refetch()}
         />
       ) : !detail.data ? (
-        <ErrorState message="Product not found." />
+        <ErrorState message={t('productDetail.productNotFound')} />
       ) : (
         <>
           <PageHeader
             breadcrumbs={[
-              { label: 'Client console' },
-              { label: 'Products', href: '/products' },
+              { label: t('productDetail.clientConsole') },
+              { label: t('productDetail.products'), href: '/products' },
               { label: detail.data.name },
             ]}
             Link={Link}
@@ -134,7 +137,9 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
             subtitle={
               detail.data.externalRef ? (
                 <span>
-                  Your ref: <span className="sk-ident">{detail.data.externalRef}</span>
+                  {richMessage(t('productDetail.yourRef'), {
+                    span: <span className="sk-ident">{detail.data.externalRef}</span>,
+                  })}
                 </span>
               ) : undefined
             }
@@ -170,26 +175,26 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
           <KpiGrid>
             {variants.data === undefined ? (
               <KpiCard
-                label="Variants"
+                label={t('productDetail.variants')}
                 icon={<Layers size={14} />}
                 figure={<Dash />}
                 tone="neutral"
               />
             ) : (
               <KpiCard
-                label="Variants"
+                label={t('productDetail.variants')}
                 icon={<Layers size={14} />}
                 value={variants.data.length}
                 format={rawCount}
-                unit="SKUs"
+                unit={t('productDetail.skus')}
                 tone="neutral"
                 foot={[
                   {
-                    label: 'Sellable',
+                    label: t('productDetail.sellable'),
                     value: variants.data.filter((v) => v.status === 'ACTIVE').length,
                   },
                   {
-                    label: 'Archived',
+                    label: t('productDetail.archived'),
                     value: variants.data.filter((v) => v.status === 'ARCHIVED').length,
                   },
                 ]}
@@ -197,29 +202,29 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
             )}
             {detail.data.defaultWeightGrams === null ? (
               <KpiCard
-                label="Default weight"
+                label={t('productDetail.defaultWeight')}
                 icon={<Boxes size={14} />}
-                figure={<span className="inv-faint">Not set</span>}
+                figure={<span className="inv-faint">{t('productDetail.notSet')}</span>}
                 tone="pending"
-                hint="A variant that sets none then has none at all."
+                hint={t('productDetail.aVariantThatSets')}
               />
             ) : (
               <KpiCard
-                label="Default weight"
+                label={t('productDetail.defaultWeight')}
                 icon={<Boxes size={14} />}
                 value={detail.data.defaultWeightGrams}
                 format={rawCount}
                 unit="g"
                 tone="neutral"
-                hint="Used by any variant that sets none."
+                hint={t('productDetail.usedByAnyVariant')}
               />
             )}
             <KpiCard
-              label="Default box"
+              label={t('productDetail.defaultBox')}
               icon={<Ruler size={14} />}
               figure={
                 detail.data.defaultLengthCm === null ? (
-                  <span className="inv-faint">Not set</span>
+                  <span className="inv-faint">{t('productDetail.notSet')}</span>
                 ) : (
                   <span>
                     {detail.data.defaultLengthCm} × {detail.data.defaultWidthCm ?? '—'} ×{' '}
@@ -231,23 +236,23 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
               tone="neutral"
             />
             <KpiCard
-              label="Declared value"
+              label={t('productDetail.declaredValue')}
               icon={<Wallet size={14} />}
               figure={
                 detail.data.defaultDeclaredValueInr === null ? (
-                  <span className="inv-faint">Not set</span>
+                  <span className="inv-faint">{t('productDetail.notSet')}</span>
                 ) : (
                   <Money amount={detail.data.defaultDeclaredValueInr} />
                 )
               }
               tone="neutral"
-              hint="What a parcel of this is worth for customs."
+              hint={t('productDetail.whatAParcelOf')}
             />
           </KpiGrid>
 
           <AreaSection
-            title="Details"
-            note="The defaults every variant inherits."
+            title={t('productDetail.details')}
+            note={t('productDetail.theDefaultsEveryVariant')}
             action={
               !editing && (
                 <Actions>
@@ -257,7 +262,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                     icon={<Pencil size={14} />}
                     onClick={() => setEditing(true)}
                   >
-                    Edit product
+                    {t('productDetail.editProduct')}
                   </Button>
                   {/* ARCHIVED blocks new orders and stock receiving while
                       leaving history intact — the normal way to stop
@@ -269,8 +274,10 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                     size="sm"
                     icon={isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
                     labels={{
-                      idle: isArchived ? 'Restore product' : 'Archive product',
-                      busy: 'Saving…',
+                      idle: isArchived
+                        ? t('productDetail.restoreProduct')
+                        : t('productDetail.archiveProduct'),
+                      busy: t('productDetail.saving'),
                     }}
                     state={mutationPhase(archive)}
                     disabled={archive.isPending}
@@ -299,25 +306,29 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
           <ConfirmDialog
             open={confirmArchive}
             onOpenChange={setConfirmArchive}
-            title={isArchived ? 'Restore this product?' : 'Archive this product?'}
+            title={
+              isArchived
+                ? t('productDetail.restoreThisProduct')
+                : t('productDetail.archiveThisProduct')
+            }
             entity={
               detail.data.externalRef
                 ? `${detail.data.name} · ${detail.data.externalRef}`
                 : detail.data.name
             }
             consequence={
-              isArchived
-                ? 'It can be ordered and received again. Its variants stay archived — restore the ones you want back.'
-                : 'It and its variants can no longer be ordered or received. History stays, and you can restore it later.'
+              isArchived ? t('productDetail.itCanBeOrdered') : t('productDetail.itAndItsVariants')
             }
-            confirmLabel={isArchived ? 'Restore product' : 'Archive product'}
+            confirmLabel={
+              isArchived ? t('productDetail.restoreProduct') : t('productDetail.archiveProduct')
+            }
             destructive={!isArchived}
             error={archiveError ?? undefined}
             onConfirm={onToggleArchive}
           />
 
           <AreaSection
-            title="Variants"
+            title={t('productDetail.variants')}
             note={
               variants.data === undefined
                 ? undefined
@@ -331,7 +342,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                   icon={<Plus size={14} />}
                   onClick={() => setAddingVariant(true)}
                 >
-                  Add variant
+                  {t('productDetail.addVariant')}
                 </Button>
               )
             }
@@ -344,12 +355,12 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
               )}
               {variants.isLoading ? (
                 <PanelPad>
-                  <SkeletonRows rows={3} cols={5} label="Loading variants…" />
+                  <SkeletonRows rows={3} cols={5} label={t('productDetail.loadingVariants')} />
                 </PanelPad>
               ) : variants.isError ? (
                 <PanelPad>
                   <ErrorState
-                    message={variants.error?.message ?? 'Failed to load variants.'}
+                    message={variants.error?.message ?? t('productDetail.failedToLoadVariants')}
                     retry={() => void variants.refetch()}
                   />
                 </PanelPad>
@@ -357,8 +368,8 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                 <PanelPad>
                   <EmptyState
                     bare
-                    title="No variants yet"
-                    description="A product needs at least one variant before it can be ordered — nothing can be stocked or picked against the product itself."
+                    title={t('productDetail.noVariantsYet')}
+                    description={t('productDetail.aProductNeedsAt')}
                     action={
                       <Button
                         variant="primary"
@@ -366,20 +377,20 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                         icon={<Plus size={15} />}
                         onClick={() => setAddingVariant(true)}
                       >
-                        Add variant
+                        {t('productDetail.addVariant')}
                       </Button>
                     }
                   />
                 </PanelPad>
               ) : (
-                <Table caption="Variants">
+                <Table caption={t('productDetail.variants')}>
                   <THead>
                     <Tr>
-                      <Th aria-label="Image" />
-                      <Th>SKU</Th>
-                      <Th>Label</Th>
-                      <Th align="right">Weight (g)</Th>
-                      <Th>Status</Th>
+                      <Th aria-label={t('productDetail.image')} />
+                      <Th>{t('productDetail.sku')}</Th>
+                      <Th>{t('productDetail.label')}</Th>
+                      <Th align="right">{t('productDetail.weightG')}</Th>
+                      <Th>{t('productDetail.status')}</Th>
                     </Tr>
                   </THead>
                   <TBody>
@@ -426,7 +437,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
                             // weight this variant ships at, so dressing it up
                             // as second-class only invites the question the
                             // dash used to raise.
-                            <span title="From the product default">
+                            <span title={t('productDetail.fromTheProductDefault')}>
                               {detail.data.defaultWeightGrams}
                             </span>
                           ) : (
@@ -454,6 +465,7 @@ export function ProductDetailView({ productId }: { productId: string }): ReactEl
  * one drew a second border a hair inside the first.
  */
 function ProductReadCard({ product }: { product: SellerProductView }): ReactElement {
+  const t = useT();
   return (
     <Facts
       columns={2}
@@ -461,13 +473,13 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
         ...(product.description
           ? [
               {
-                label: 'Description',
+                label: t('productDetail.description'),
                 value: <span style={{ whiteSpace: 'pre-wrap' }}>{product.description}</span>,
               },
             ]
           : []),
         {
-          label: 'Your reference',
+          label: t('productDetail.yourReference'),
           value:
             product.externalRef === null ? (
               <Dash />
@@ -476,7 +488,7 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
             ),
         },
         {
-          label: 'Default weight',
+          label: t('productDetail.defaultWeight'),
           value:
             product.defaultWeightGrams === null ? (
               <Dash />
@@ -485,7 +497,7 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
             ),
         },
         {
-          label: 'Default box (L × W × H)',
+          label: t('productDetail.defaultBoxLW'),
           value:
             product.defaultLengthCm === null ? (
               <Dash />
@@ -497,7 +509,7 @@ function ProductReadCard({ product }: { product: SellerProductView }): ReactElem
             ),
         },
         {
-          label: 'Default declared value',
+          label: t('productDetail.defaultDeclaredValue'),
           value:
             product.defaultDeclaredValueInr === null ? (
               <Dash />
@@ -519,6 +531,7 @@ function ProductEditForm({
   onCancel: () => void;
   onSaved: () => void;
 }): ReactElement {
+  const t = useT();
   const [name, setName] = useState(product.name);
   const [description, setDescription] = useState(product.description ?? '');
   const [externalRef, setExternalRef] = useState(product.externalRef ?? '');
@@ -559,7 +572,7 @@ function ProductEditForm({
       if (err instanceof ApiError) {
         setServerError(`[${err.code}] ${err.message}`);
       } else {
-        setServerError('Update failed. Please try again.');
+        setServerError(t('productDetail.updateFailedPleaseTry'));
       }
     }
   }
@@ -568,7 +581,7 @@ function ProductEditForm({
     <form onSubmit={handleSave} className="inv-stack">
       <FieldGrid columns={2}>
         <TextField
-          label="Name"
+          label={t('productDetail.name')}
           id="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -577,7 +590,7 @@ function ProductEditForm({
         />
       </FieldGrid>
       <TextArea
-        label="Description"
+        label={t('productDetail.description')}
         id="description"
         rows={3}
         value={description}
@@ -586,7 +599,7 @@ function ProductEditForm({
       />
       <FieldGrid columns={3}>
         <TextField
-          label="External ref"
+          label={t('productDetail.externalRef')}
           id="externalRef"
           value={externalRef}
           onChange={(e) => setExternalRef(e.target.value)}
@@ -594,7 +607,7 @@ function ProductEditForm({
           inputClassName="sk-ident"
         />
         <TextField
-          label="Default weight (g)"
+          label={t('productDetail.defaultWeightG')}
           id="defaultWeight"
           type="number"
           min="0"
@@ -603,7 +616,7 @@ function ProductEditForm({
           disabled={update.isPending}
         />
         <TextField
-          label="Default length (cm)"
+          label={t('productDetail.defaultLengthCm')}
           id="defaultLength"
           type="number"
           min="0"
@@ -613,7 +626,7 @@ function ProductEditForm({
           disabled={update.isPending}
         />
         <TextField
-          label="Default width (cm)"
+          label={t('productDetail.defaultWidthCm')}
           id="defaultWidth"
           type="number"
           min="0"
@@ -623,7 +636,7 @@ function ProductEditForm({
           disabled={update.isPending}
         />
         <TextField
-          label="Default height (cm)"
+          label={t('productDetail.defaultHeightCm')}
           id="defaultHeight"
           type="number"
           min="0"
@@ -633,7 +646,7 @@ function ProductEditForm({
           disabled={update.isPending}
         />
         <TextField
-          label="Default declared (INR)"
+          label={t('productDetail.defaultDeclaredInr')}
           id="defaultDeclared"
           type="number"
           step="0.01"
@@ -647,11 +660,11 @@ function ProductEditForm({
         <AsyncButton
           type="submit"
           variant="primary"
-          labels={{ idle: 'Save changes', busy: 'Saving…' }}
+          labels={{ idle: t('productDetail.saveChanges'), busy: t('productDetail.saving') }}
           state={mutationPhase(update)}
         />
         <Button variant="ghost" onClick={onCancel} disabled={update.isPending}>
-          Cancel
+          {t('productDetail.cancel')}
         </Button>
       </Actions>
     </form>

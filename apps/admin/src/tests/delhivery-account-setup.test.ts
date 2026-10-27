@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withCatalogEnglish } from './i18n-source';
 
 /**
  * The two things that must be true before a real parcel moves, neither
@@ -74,7 +75,7 @@ describe('the name is treated as the irreversible field it is', () => {
 
   it('surrounding whitespace is surfaced as an error at the field', () => {
     expect(PANEL).toContain('form.name !== form.name.trim()');
-    expect(flat(PANEL)).toContain('leading or trailing space');
+    expect(flat(withCatalogEnglish(PANEL))).toContain('leading or trailing space');
   });
 
   it('registering requires the name typed twice; updating does not', () => {
@@ -116,7 +117,7 @@ describe('the connectivity check does not overclaim', () => {
     // call. Reporting stub mode as reachability would be the worst
     // possible outcome here, because it looks exactly like proof.
     expect(PANEL).toContain('result.stubMode');
-    expect(flat(PANEL)).toContain('never left the box');
+    expect(flat(withCatalogEnglish(PANEL))).toContain('never left the box');
   });
 
   it('reads reachedLiveApi, not merely a serviceable answer', () => {

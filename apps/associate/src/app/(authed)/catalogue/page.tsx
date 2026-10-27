@@ -7,7 +7,8 @@ import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { Table, TableToolbar, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { itemThumb, useSellCatalogue } from '@/lib/catalogue-hooks';
 import { LinkButton, Notice } from '../_components/parts';
 import '../_components/as.css';
@@ -38,6 +39,7 @@ import '../_components/as.css';
  * catalogue in one call.
  */
 export default function CataloguePage(): ReactElement {
+  const t = useT();
   const catalogue = useSellCatalogue();
   const [query, setQuery] = useState('');
 
@@ -57,11 +59,11 @@ export default function CataloguePage(): ReactElement {
 
   const header = (
     <PageHeader
-      title="What I sell"
-      subtitle="The products your store has given you, what you sell each for, and how many are left. Your store sets these prices."
+      title={t('catalogue.title')}
+      subtitle={t('catalogue.subtitle')}
       action={
         <LinkButton href="/orders/new" variant="primary">
-          New order
+          {t('catalogue.newOrder')}
         </LinkButton>
       }
     />
@@ -71,7 +73,7 @@ export default function CataloguePage(): ReactElement {
     return (
       <div className="as-page">
         {header}
-        <SkeletonRows rows={6} cols={4} label="Loading what you can sell" />
+        <SkeletonRows rows={6} cols={4} label={t('catalogue.loading')} />
       </div>
     );
   }
@@ -79,10 +81,7 @@ export default function CataloguePage(): ReactElement {
     return (
       <div className="as-page">
         {header}
-        <ErrorState
-          message={serverVerdict(catalogue.error)}
-          retry={() => void catalogue.refetch()}
-        />
+        <ErrorState message={verdict(catalogue.error, t)} retry={() => void catalogue.refetch()} />
       </div>
     );
   }
@@ -92,8 +91,8 @@ export default function CataloguePage(): ReactElement {
         {header}
         <EmptyState
           icon={<PackageSearch size={20} />}
-          title="Nothing to sell yet"
-          description="Your store has not given you any products to sell. Ask whoever runs it to add some."
+          title={t('catalogue.empty.title')}
+          description={t('catalogue.empty.body')}
         />
       </div>
     );
@@ -108,46 +107,48 @@ export default function CataloguePage(): ReactElement {
           and here it is listed in the table too, marked, because this is
           the screen somebody checks a price on. */}
       {unpricedCount > 0 ? (
-        <Notice tone="info" icon={<Tag size={16} />} title="Waiting for a price">
+        <Notice tone="info" icon={<Tag size={16} />} title={t('catalogue.unpriced.title')}>
           <span>
-            {unpricedCount === 1 ? 'One product has' : `${unpricedCount} products have`} no price
-            set for you, so {unpricedCount === 1 ? 'it cannot' : 'they cannot'} go on an order yet.
-            Ask whoever runs your store to set one.
+            {unpricedCount === 1
+              ? t('catalogue.unpriced.one')
+              : t('catalogue.unpriced.many', { n: unpricedCount })}
           </span>
         </Notice>
       ) : null}
 
       <section className="as-section">
         <SectionHeading
-          title="Your products"
+          title={t('catalogue.products')}
           note={
             shown.length === items.length
-              ? `${items.length} ${items.length === 1 ? 'product' : 'products'}`
-              : `${shown.length} of ${items.length}`
+              ? t(items.length === 1 ? 'catalogue.count.one' : 'catalogue.count.other', {
+                  n: items.length,
+                })
+              : t('catalogue.countOf', { shown: shown.length, total: items.length })
           }
         />
         <TableToolbar
           search={{
             value: query,
             onChange: setQuery,
-            label: 'Search what you sell',
-            placeholder: 'Product, variant or SKU',
+            label: t('catalogue.search.label'),
+            placeholder: t('catalogue.search.placeholder'),
           }}
         />
         {shown.length === 0 ? (
           <EmptyState
             icon={<Search size={20} />}
-            title="Nothing matches"
-            description="Try a different product name or SKU."
+            title={t('catalogue.noMatch.title')}
+            description={t('catalogue.noMatch.body')}
           />
         ) : (
           <div className="as-card" data-flush="1">
-            <Table caption="What I sell">
+            <Table caption={t('catalogue.title')}>
               <THead>
                 <Tr>
-                  <Th>Product</Th>
-                  <Th align="right">You sell it for</Th>
-                  <Th align="right">Available</Th>
+                  <Th>{t('catalogue.col.product')}</Th>
+                  <Th align="right">{t('catalogue.col.price')}</Th>
+                  <Th align="right">{t('catalogue.col.available')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -173,7 +174,7 @@ export default function CataloguePage(): ReactElement {
                       {i.retailPriceInr === null ? (
                         <span className="as-flag" data-tone="warn">
                           <TriangleAlert size={12} aria-hidden />
-                          No price — ask your store
+                          {t('catalogue.noPrice')}
                         </span>
                       ) : (
                         <Money amount={i.retailPriceInr} convert={false} />
@@ -183,7 +184,7 @@ export default function CataloguePage(): ReactElement {
                       {i.availableQuantity === 0 ? (
                         <span className="as-flag" data-tone="bad">
                           <PackageX size={12} aria-hidden />
-                          None left
+                          {t('catalogue.noneLeft')}
                         </span>
                       ) : (
                         <span className="sk-figure">{i.availableQuantity}</span>

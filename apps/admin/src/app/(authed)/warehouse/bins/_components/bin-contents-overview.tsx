@@ -25,8 +25,9 @@ import {
   ToneText,
   Toolbar,
 } from '../../../inventory/_components/stock-kit';
-import { BinNote, binTypeLabel } from './bin-note';
+import { BinNote, binTypeLabelIn } from './bin-note';
 import './bins.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Every bin, and what is in it — the answer to "where can I see what
@@ -40,6 +41,7 @@ import './bins.css';
  * it never received.
  */
 export function BinContentsOverview(): ReactElement {
+  const tr = useT();
   const overview = useBinOverview();
   const [warehouseId, setWarehouseId] = useState('');
   const [type, setType] = useState('');
@@ -83,18 +85,18 @@ export function BinContentsOverview(): ReactElement {
 
   return (
     <AreaSection
-      title="What's in every bin"
-      note="Each bin with the product, client and batch on it. Returns-hold, damaged and in-transit stock is shown but cannot be sold."
+      title={tr('warehouseBinsBinContentsOverview.whatSInEveryBin')}
+      note={tr('warehouseBinsBinContentsOverview.eachBinWithTheProduct')}
     >
       <Toolbar>
         {all.length > 1 && (
           <Select
             id="bc-wh"
-            label="Warehouse"
+            label={tr('warehouseBinsBinContentsOverview.warehouse')}
             value={warehouseId}
             onChange={(e) => setWarehouseId(e.target.value)}
           >
-            <option value="">All warehouses</option>
+            <option value="">{tr('warehouseBinsBinContentsOverview.allWarehouses')}</option>
             {all.map((w) => (
               <option key={w.id} value={w.id}>
                 {w.code} — {w.name}
@@ -104,24 +106,24 @@ export function BinContentsOverview(): ReactElement {
         )}
         <Select
           id="bc-type"
-          label="Bin type"
+          label={tr('warehouseBinsBinContentsOverview.binType')}
           value={type}
           onChange={(e) => setType(e.target.value)}
         >
-          <option value="">All types</option>
+          <option value="">{tr('warehouseBinsBinContentsOverview.allTypes')}</option>
           {types.map((t) => (
             <option key={t} value={t}>
-              {binTypeLabel(t)}
+              {binTypeLabelIn(tr, t)}
             </option>
           ))}
         </Select>
         <Select
           id="bc-seller"
-          label="Client"
+          label={tr('warehouseBinsBinContentsOverview.client')}
           value={sellerId}
           onChange={(e) => setSellerId(e.target.value)}
         >
-          <option value="">All clients</option>
+          <option value="">{tr('warehouseBinsBinContentsOverview.allClients')}</option>
           {sellers.map(([id, name]) => (
             <option key={id} value={id}>
               {name}
@@ -130,9 +132,9 @@ export function BinContentsOverview(): ReactElement {
         </Select>
         <TextField
           id="bc-search"
-          label="Product, SKU or batch"
+          label={tr('warehouseBinsBinContentsOverview.productSkuOrBatch')}
           value={search}
-          placeholder="e.g. KRT-RED-L"
+          placeholder={tr('warehouseBinsBinContentsOverview.eGKrtRedL')}
           onChange={(e) => setSearch(e.target.value)}
         />
       </Toolbar>
@@ -146,11 +148,15 @@ export function BinContentsOverview(): ReactElement {
         />
       ) : shown.length === 0 ? (
         <EmptyState
-          title={all.length === 0 ? 'No warehouses yet' : 'Nothing matches'}
+          title={
+            all.length === 0
+              ? tr('warehouseBinsBinContentsOverview.noWarehousesYet')
+              : tr('warehouseBinsBinContentsOverview.nothingMatches')
+          }
           description={
             all.length === 0
-              ? 'Create a warehouse below; it gets a FLOOR bin automatically.'
-              : 'Clear a filter to see every bin again.'
+              ? tr('warehouseBinsBinContentsOverview.createAWarehouseBelowIt')
+              : tr('warehouseBinsBinContentsOverview.clearAFilterToSee')
           }
         />
       ) : (
@@ -161,7 +167,7 @@ export function BinContentsOverview(): ReactElement {
                 {warehouse.code} — {warehouse.name}
                 {!warehouse.binTrackingEnabled && (
                   <span className="stk-faint">
-                    location tracking off — stock with no recorded shelf is in FLOOR
+                    {tr('warehouseBinsBinContentsOverview.locationTrackingOffStockWith')}
                   </span>
                 )}
               </h3>
@@ -183,6 +189,7 @@ function BinCard({
   readonly bin: BinWithLines;
   readonly lineFilterOn: boolean;
 }): ReactElement {
+  const tr = useT();
   const empty = bin.lineCount === 0;
   return (
     <Panel>
@@ -191,17 +198,19 @@ function BinCard({
           <Link href={`/warehouse/bins/${bin.id}`} className="stk-link sk-ident bin-card__code">
             {bin.code}
           </Link>
-          <ToneText tone="muted">{binTypeLabel(bin.type)}</ToneText>
-          <ToneText tone="faint">zone {bin.zoneCode ?? '—'}</ToneText>
+          <ToneText tone="muted">{binTypeLabelIn(tr, bin.type)}</ToneText>
+          <ToneText tone="faint">
+            {tr('warehouseBinsBinContentsOverview.zone', { value: bin.zoneCode ?? '—' })}
+          </ToneText>
           {bin.pickable ? (
             <ToneText tone="faint">pickable</ToneText>
           ) : (
-            <ToneText tone="bad">not pickable</ToneText>
+            <ToneText tone="bad">{tr('warehouseBinsBinContentsOverview.notPickable')}</ToneText>
           )}
         </div>
         <div className="bin-card__total sk-figure" data-testid={`bin-total-${bin.code}`}>
           {empty ? (
-            <ToneText tone="faint">Empty</ToneText>
+            <ToneText tone="faint">{tr('warehouseBinsBinContentsOverview.empty')}</ToneText>
           ) : (
             <>
               <Num value={bin.unitsOnHand} suffix=" units" /> ·{' '}
@@ -209,7 +218,8 @@ function BinCard({
               {bin.unitsReserved > 0 && (
                 <ToneText tone="muted">
                   {' '}
-                  · <Num value={bin.unitsReserved} /> reserved for picks
+                  · <Num value={bin.unitsReserved} />{' '}
+                  {tr('warehouseBinsBinContentsOverview.reservedForPicks')}
                 </ToneText>
               )}
             </>
@@ -224,9 +234,13 @@ function BinCard({
 
       {bin.linesNotShown > 0 && (
         <p className="stk-note">
-          {lineFilterOn ? 'Filters apply to the lines shown here. ' : ''}
+          {lineFilterOn ? tr('warehouseBinsBinContentsOverview.filtersApplyToTheLines') : ''}
           <TextLink href={`/warehouse/bins/${bin.id}`}>
-            {bin.linesNotShown} more line{bin.linesNotShown === 1 ? '' : 's'} — open {bin.code}
+            {tr('warehouseBinsBinContentsOverview.moreLineOpen', {
+              linesNotShown: bin.linesNotShown,
+              value: bin.linesNotShown === 1 ? '' : tr('common.pluralS'),
+              code: bin.code,
+            })}
           </TextLink>
         </p>
       )}
@@ -236,16 +250,17 @@ function BinCard({
 
 /** Shared by the overview and a bin's own page. */
 export function LinesTable({ lines }: { readonly lines: readonly BinStockLine[] }): ReactElement {
+  const tr = useT();
   return (
     <Table>
       <THead>
         <Tr>
-          <Th>Product</Th>
+          <Th>{tr('warehouseBinsBinContentsOverview.product')}</Th>
           <Th>SKU</Th>
-          <Th>Client</Th>
-          <Th>Batch</Th>
-          <Th align="right">On hand</Th>
-          <Th align="right">Reserved</Th>
+          <Th>{tr('warehouseBinsBinContentsOverview.client')}</Th>
+          <Th>{tr('warehouseBinsBinContentsOverview.batch')}</Th>
+          <Th align="right">{tr('warehouseBinsBinContentsOverview.onHand')}</Th>
+          <Th align="right">{tr('warehouseBinsBinContentsOverview.reserved')}</Th>
         </Tr>
       </THead>
       <TBody>
@@ -273,13 +288,14 @@ export function LinesTable({ lines }: { readonly lines: readonly BinStockLine[] 
 }
 
 export function ProductCell({ line }: { readonly line: BinStockLine }): ReactElement {
+  const tr = useT();
   return (
     <span className="bin-product">
       <ProductThumb src={line.thumbnailUrl} size={36} alt={line.productName ?? ''} />
       {line.productName === null ? (
         // The variant was deleted from the catalogue; the stock is still real.
         <span className="stk-muted">
-          Deleted product <Ident value={line.variantId} />
+          {tr('warehouseBinsBinContentsOverview.deletedProduct')} <Ident value={line.variantId} />
         </span>
       ) : (
         <span>
@@ -292,12 +308,15 @@ export function ProductCell({ line }: { readonly line: BinStockLine }): ReactEle
 }
 
 export function BatchCell({ line }: { readonly line: BinStockLine }): ReactElement {
+  const tr = useT();
   return (
     <span>
       <Code>{line.batchCode}</Code>
       {line.batchExpiresAt !== null && (
         <span className="stk-sub">
-          expires {new Date(line.batchExpiresAt).toLocaleDateString('en-IN')}
+          {tr('warehouseBinsBinContentsOverview.expires', {
+            value: new Date(line.batchExpiresAt).toLocaleDateString('en-IN'),
+          })}
         </span>
       )}
     </span>

@@ -5,6 +5,8 @@ import { resolveSellerSsrIdentity } from '@skydrop/auth/server';
 import { SignInCard } from '@skydrop/ui/app/sign-in';
 import { apiOrigin } from '@/lib/api-origin';
 import { AcceptTeamInvitationForm } from './_components/accept-team-invitation-form';
+import { getT } from '@/i18n/server';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Public landing page for the seller-TEAM invitation email link. Reads
@@ -22,6 +24,7 @@ export default async function AcceptTeamInvitationPage({
 }: {
   searchParams: Promise<{ readonly token?: string | string[] }>;
 }): Promise<ReactElement> {
+  const { t } = await getT();
   const params = await searchParams;
   const rawToken = Array.isArray(params.token) ? params.token[0] : params.token;
   const token = (rawToken ?? '').trim();
@@ -41,19 +44,21 @@ export default async function AcceptTeamInvitationPage({
 
   const footer = (
     <p>
-      Already have an account? <a href="/login">Sign in</a>
+      {richMessage(t('authAcceptTeam.alreadyHaveAnAccount'), {
+        a: <a href="/login">{t('authAcceptTeam.signIn')}</a>,
+      })}
     </p>
   );
 
   if (token === '') {
     return (
       <SignInCard
-        title="Invalid invitation link"
+        title={t('authAcceptTeam.invalidInvitationLink')}
         note={
           <>
-            The link you used is missing the invitation token. Open the email and click the button
-            there, or paste the full URL including the <span className="font-mono">?token=…</span>{' '}
-            parameter.
+            {richMessage(t('authAcceptTeam.theLinkYouUsed'), {
+              span: <span className="font-mono">?token=…</span>,
+            })}
           </>
         }
         footer={footer}
@@ -65,8 +70,8 @@ export default async function AcceptTeamInvitationPage({
 
   return (
     <SignInCard
-      title="Join the team"
-      note="Set your name and password to accept the invitation."
+      title={t('authAcceptTeam.joinTheTeam')}
+      note={t('authAcceptTeam.setYourNameAnd')}
       footer={footer}
     >
       <AcceptTeamInvitationForm token={token} />

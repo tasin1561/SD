@@ -1,6 +1,5 @@
 import type { ReactNode, ReactElement } from 'react';
-import { SignInFrame } from '@skydrop/ui/app/sign-in';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { SellerSignInFrame } from '@/components/auth-frame';
 
 /**
  * The support-session arrival screen, in the shared unauthenticated
@@ -17,9 +16,5 @@ export default function ImpersonationHandoffLayout({
 }: {
   children: ReactNode;
 }): ReactElement {
-  return (
-    <SignInFrame portal="client portal" themeControl={<ThemeSwitch />}>
-      {children}
-    </SignInFrame>
-  );
+  return <SellerSignInFrame>{children}</SellerSignInFrame>;
 }

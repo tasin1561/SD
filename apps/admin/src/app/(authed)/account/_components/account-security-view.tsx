@@ -12,8 +12,10 @@ import { AcCard, AcDl, AcHeader, AcPage } from '../../settings/_components/ac-pa
 import { useAccountIdentity, useRequestEmailVerification } from '@/lib/account-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { SessionRevocationCard } from './session-revocation-card';
+import { useT } from '@/i18n/client';
 
 export function AccountSecurityView(): ReactElement {
+  const t = useT();
   const me = useAccountIdentity();
   const toast = useToast();
   const verify = useRequestEmailVerification();
@@ -24,28 +26,35 @@ export function AccountSecurityView(): ReactElement {
       // Nothing changes here until the link is clicked, so "sent" is
       // the whole honest outcome — refetching would show the same
       // "not verified" and read as a failure.
-      toast.success('Sent. Check your inbox — the link confirms this address.');
+      toast.success(t('accountAccountSecurityView.sentCheckYourInboxThe'));
     } catch (e) {
-      toast.error(serverVerdict(e, 'Could not send a verification link.'));
+      toast.error(serverVerdict(e, t('accountAccountSecurityView.couldNotSendAVerification')));
     }
   }
 
   return (
     <AcPage width="narrow">
       <AcHeader
-        title="Your account"
-        subtitle="Who you are signed in as, and how to end the sessions you are not sitting in front of."
+        title={t('accountAccountSecurityView.yourAccount')}
+        subtitle={t('accountAccountSecurityView.whoYouAreSignedIn')}
       />
 
       <AcCard
-        title="Signed in as"
-        note="Read from the API each time this page opens, so the last sign-in below is current."
+        title={t('accountAccountSecurityView.signedInAs')}
+        note={t('accountAccountSecurityView.readFromTheApiEach')}
       >
         {me.isLoading ? (
-          <SkeletonRows rows={3} cols={2} label="Loading your account…" />
+          <SkeletonRows
+            rows={3}
+            cols={2}
+            label={t('accountAccountSecurityView.loadingYourAccount')}
+          />
         ) : me.isError ? (
           <ErrorState
-            message={serverVerdict(me.error, 'Could not load your account.')}
+            message={serverVerdict(
+              me.error,
+              t('accountAccountSecurityView.couldNotLoadYourAccount'),
+            )}
             retry={() => void me.refetch()}
           />
         ) : me.data === undefined ? (
@@ -53,30 +62,37 @@ export function AccountSecurityView(): ReactElement {
           // produce; saying so beats rendering an empty grid that
           // reads as "you have no email address".
           <ErrorState
-            message="The server answered without an account. Reload, or sign in again."
+            message={t('accountAccountSecurityView.theServerAnsweredWithoutAn')}
             retry={() => void me.refetch()}
           />
         ) : (
           <AcDl
             columns={2}
             items={[
-              { label: 'Email', value: me.data.emailDisplay },
-              { label: 'Role', value: me.data.roleName },
+              { label: t('accountAccountSecurityView.email'), value: me.data.emailDisplay },
+              { label: t('accountAccountSecurityView.role'), value: me.data.roleName },
               {
-                label: 'Email verified',
+                label: t('accountAccountSecurityView.emailVerified'),
                 value:
                   me.data.emailVerifiedAt === null ? (
                     // Showing the problem without offering the fix is
                     // what this page did before: the request endpoint
                     // existed and nothing called it.
                     <span className="ac-inline">
-                      <StatusChip kind="pending" label="Not verified" size="sm" />
+                      <StatusChip
+                        kind="pending"
+                        label={t('accountAccountSecurityView.notVerified')}
+                        size="sm"
+                      />
                       <AsyncButton
                         variant="ghost"
                         size="sm"
                         icon={<MailCheck size={14} />}
                         state={verify.isPending ? 'busy' : 'idle'}
-                        labels={{ idle: 'Send a new link', busy: 'Sending…' }}
+                        labels={{
+                          idle: t('accountAccountSecurityView.sendANewLink'),
+                          busy: t('accountAccountSecurityView.sending'),
+                        }}
                         onClick={() => void onVerify()}
                       />
                     </span>
@@ -85,14 +101,14 @@ export function AccountSecurityView(): ReactElement {
                   ),
               },
               {
-                label: 'Permissions held',
+                label: t('accountAccountSecurityView.permissionsHeld'),
                 value: <span className="sk-figure">{`${me.data.permissions.length}`}</span>,
               },
               {
                 // The single most useful line on the page: an
                 // hour you do not recognise is the reason somebody
                 // came looking for the button below.
-                label: 'Last sign-in',
+                label: t('accountAccountSecurityView.lastSignIn'),
                 value: (
                   <span className="sk-figure">
                     {me.data.lastLoginAt === null ? '—' : formatWhen(me.data.lastLoginAt)}
@@ -100,7 +116,7 @@ export function AccountSecurityView(): ReactElement {
                 ),
               },
               {
-                label: 'Account created',
+                label: t('accountAccountSecurityView.accountCreated'),
                 value: <span className="sk-figure">{formatWhen(me.data.createdAt)}</span>,
               },
             ]}
@@ -112,8 +128,8 @@ export function AccountSecurityView(): ReactElement {
           browser. Stored here only (localStorage), so another device keeps
           its own choice. */}
       <AcCard
-        title="This browser"
-        note="How the console moves in this browser — saved here only, so another device keeps its own choice."
+        title={t('accountAccountSecurityView.thisBrowser')}
+        note={t('accountAccountSecurityView.howTheConsoleMovesIn')}
       >
         <MotionSwitch />
       </AcCard>

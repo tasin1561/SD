@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { AlertTriangle, RotateCw } from 'lucide-react';
 import { useRef, type ReactElement, type ReactNode } from 'react';
 import { Button } from '../button';
+import { useUiT } from '../i18n-client';
 import { useLoopVisible } from '../motion/use-loop-visible';
 import './empty-state.css';
 
@@ -154,7 +155,7 @@ function PositiveArt(): ReactElement {
  */
 export function ErrorState({
   message,
-  title = 'Something went wrong',
+  title,
   retry,
   className,
 }: {
@@ -163,13 +164,14 @@ export function ErrorState({
   readonly retry?: (() => void) | undefined;
   readonly className?: string | undefined;
 }): ReactElement {
+  const t = useUiT();
   return (
     <div role="alert" className={clsx('sk-error', className)}>
       <span className="sk-error__icon" aria-hidden>
         <AlertTriangle size={18} />
       </span>
       <div className="sk-error__text">
-        <div className="sk-error__title">{title}</div>
+        <div className="sk-error__title">{title ?? t('ui.error.title')}</div>
         <div className="sk-error__message">{message}</div>
       </div>
       {retry !== undefined && (
@@ -180,7 +182,7 @@ export function ErrorState({
           onClick={retry}
           className="sk-error__retry"
         >
-          Retry
+          {t('ui.retry')}
         </Button>
       )}
     </div>

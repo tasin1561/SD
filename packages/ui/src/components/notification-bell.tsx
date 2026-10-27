@@ -7,6 +7,7 @@ import { Bell, CheckCheck, X } from 'lucide-react';
 // icon means nothing.
 import { agoLabel, humaniseTopic, notificationKindStyle } from './notification-kind';
 import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { useLocale, useUiT } from '../app/i18n-client';
 
 export interface BellItem {
   readonly id: string;
@@ -93,6 +94,8 @@ export function NotificationBell({
     onClick?: () => void;
   }) => ReactElement;
 }): ReactElement {
+  const t = useUiT();
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<string>('');
   const wrap = useRef<HTMLDivElement | null>(null);
@@ -149,7 +152,7 @@ export function NotificationBell({
     <div ref={wrap} className="relative">
       <button
         type="button"
-        aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+        aria-label={unread > 0 ? t('ui.bell.labelUnread', { n: unread }) : t('ui.bell.title')}
         aria-expanded={open}
         className="text-text-muted hover:text-text relative inline-flex h-11 w-11 items-center justify-center rounded-md"
         onClick={() => {
@@ -171,17 +174,19 @@ export function NotificationBell({
       {open && (
         <div
           role="dialog"
-          aria-label="Notifications"
+          aria-label={t('ui.bell.title')}
           className="border-border bg-surface absolute right-0 z-50 mt-1 w-[min(400px,calc(100vw-1.5rem))] overflow-hidden rounded-[10px] border shadow-xl"
         >
           {/* ── Header ─────────────────────────────────────────── */}
           <div className="border-border-subtle flex items-center justify-between gap-2 border-b px-3 py-2.5">
             <div className="flex min-w-0 items-center gap-2">
               <Bell size={15} aria-hidden className="text-text-muted shrink-0" />
-              <span className="text-text-bright truncate text-sm font-semibold">Notifications</span>
+              <span className="text-text-bright truncate text-sm font-semibold">
+                {t('ui.bell.title')}
+              </span>
               {unread > 0 && (
                 <span className="bg-accent-fill text-accent-fg shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
-                  {unread} unread
+                  {t('ui.bell.unread', { n: unread })}
                 </span>
               )}
             </div>
@@ -189,8 +194,8 @@ export function NotificationBell({
               {unread > 0 && onMarkAllRead !== undefined && (
                 <button
                   type="button"
-                  aria-label="Mark all notifications read"
-                  title="Mark all read"
+                  aria-label={t('ui.bell.markAllAria')}
+                  title={t('ui.bell.markAllTitle')}
                   className="text-text-muted hover:text-accent inline-flex items-center gap-1 rounded-[4px] px-1.5 py-1 text-xs font-medium"
                   onClick={() => onMarkAllRead()}
                 >
@@ -199,12 +204,12 @@ export function NotificationBell({
                       title, a count pill and two buttons inside 336px
                       and they collided. The icon keeps its name for a
                       screen reader and its tooltip for a mouse. */}
-                  <span className="max-sm:hidden">Mark read</span>
+                  <span className="max-sm:hidden">{t('ui.bell.markRead')}</span>
                 </button>
               )}
               <button
                 type="button"
-                aria-label="Close notifications"
+                aria-label={t('ui.bell.close')}
                 onClick={() => setOpen(false)}
                 // A round, bordered target rather than a bare glyph.
                 // An icon on its own does not read as a control until
@@ -221,14 +226,14 @@ export function NotificationBell({
           {tabs.length > 1 && (
             <div
               role="tablist"
-              aria-label="Filter notifications"
+              aria-label={t('ui.bell.filter')}
               // Scrolls sideways rather than wrapping: a second row of
               // tabs pushes the first notification off a phone screen,
               // and this strip is short by construction anyway.
               className="border-border-subtle flex gap-1 overflow-x-auto border-b px-2 py-1.5"
             >
               <TabButton
-                label="All"
+                label={t('ui.bell.all')}
                 count={items.length}
                 on={tab === ''}
                 onClick={() => setTab('')}
@@ -248,12 +253,10 @@ export function NotificationBell({
           {/* ── Feed ───────────────────────────────────────────── */}
           <div className="max-h-[min(60vh,26rem)] overflow-y-auto">
             {loading ? (
-              <p className="text-text-muted px-3 py-8 text-center text-sm">Loading…</p>
+              <p className="text-text-muted px-3 py-8 text-center text-sm">{t('ui.loading')}</p>
             ) : shown.length === 0 ? (
               <p className="text-text-muted px-3 py-8 text-center text-sm">
-                {items.length === 0
-                  ? 'Nothing yet. This is where anything needing you will appear.'
-                  : `Nothing in ${tab}.`}
+                {items.length === 0 ? t('ui.bell.empty') : t('ui.bell.emptyTab', { tab })}
               </p>
             ) : (
               <ul className="divide-border-subtle divide-y">
@@ -297,7 +300,7 @@ export function NotificationBell({
                               {chip}
                             </span>
                             <span className="text-text-faint shrink-0 text-[11px] whitespace-nowrap">
-                              {agoLabel(n.createdAt, now)}
+                              {agoLabel(n.createdAt, now, locale)}
                             </span>
                           </div>
 
@@ -339,8 +342,8 @@ export function NotificationBell({
                         {onDismiss !== undefined && (
                           <button
                             type="button"
-                            aria-label="Dismiss this notification"
-                            title="Dismiss"
+                            aria-label={t('ui.bell.dismissAria')}
+                            title={t('ui.dismiss')}
                             onClick={() => onDismiss(n.id)}
                             // Same round target, and it goes CRITICAL on
                             // hover: dismissing takes the row off this
@@ -370,7 +373,7 @@ export function NotificationBell({
                 className="text-text-muted hover:text-text-bright text-xs"
                 onClick={() => setOpen(false)}
               >
-                Preferences
+                {t('ui.bell.preferences')}
               </Link>
             )}
             <Link
@@ -378,7 +381,7 @@ export function NotificationBell({
               className="text-accent text-xs font-medium"
               onClick={() => setOpen(false)}
             >
-              See everything →
+              {t('ui.bell.seeAll')}
             </Link>
           </div>
         </div>

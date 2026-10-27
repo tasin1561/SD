@@ -19,7 +19,10 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import {
   useStoreBankAccounts,
   useStoreTopupProof,
@@ -32,19 +35,11 @@ import { LedgerSection } from './_components/ledger-section';
 import { WithdrawCard } from './_components/withdraw-card';
 import { RmAlert, RmSection, RmStateChip } from './_components/rm-parts';
 
-function when(iso: string | null): string {
-  return iso === null
-    ? '—'
-    : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-const TOPUP_WORDS: Record<string, string> = {
-  PENDING: 'Waiting for Skydrop to see it',
-  ACCEPTED: 'Credited',
-  REJECTED: 'Not credited',
+const TOPUP_WORDS: Record<string, MessageKey> = {
+  PENDING: 'wal.req.state.PENDING',
+  ACCEPTED: 'wal.req.state.ACCEPTED',
+  REJECTED: 'wal.req.state.REJECTED',
 };
-
-const HEADER_SUBTITLE = 'Your store’s balance and every movement of it.';
 
 /**
  * The store's wallet (RS-6). Who manages it decides what this page offers:
@@ -54,13 +49,14 @@ const HEADER_SUBTITLE = 'Your store’s balance and every movement of it.';
  *     wallet and pays the store directly.
  */
 export default function WalletPage(): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   const summary = useStoreWallet();
 
   if (summary.isPending || summary.isError) {
     return (
       <div className="rm-page">
-        <PageHeader title="Wallet" subtitle={HEADER_SUBTITLE} />
+        <PageHeader title={t('wal.title')} subtitle={t('wal.headerSubtitle')} />
         {summary.isPending ? (
           <>
             <div className="rm-kpis">
@@ -68,10 +64,10 @@ export default function WalletPage(): ReactElement {
               <Skeleton className="rm-kpi-skel" height={104} rounded="md" />
               <Skeleton className="rm-kpi-skel" height={104} rounded="md" />
             </div>
-            <SkeletonRows rows={4} cols={4} label="Loading the wallet" />
+            <SkeletonRows rows={4} cols={4} label={t('wal.loading')} />
           </>
         ) : (
-          <ErrorState message={serverVerdict(summary.error)} retry={() => void summary.refetch()} />
+          <ErrorState message={verdict(summary.error, t)} retry={() => void summary.refetch()} />
         )}
       </div>
     );
@@ -84,43 +80,43 @@ export default function WalletPage(): ReactElement {
   return (
     <div className="rm-page">
       <PageHeader
-        title="Wallet"
+        title={t('wal.title')}
         subtitle={
           skydrop
-            ? 'Skydrop manages this wallet: send money to our bank to top it up, and withdraw through us.'
-            : `${s.sellerCompanyName} manages this wallet: they top it up for you and pay you directly.`
+            ? t('wal.subtitle.skydrop')
+            : t('wal.subtitle.seller', { seller: s.sellerCompanyName })
         }
       />
 
       <div className="rm-kpis">
         <KpiCard
-          label="Balance"
+          label={t('wal.kpi.balance')}
           icon={<Wallet size={14} />}
           figure={<Money amount={s.balanceInr} size="lg" />}
           tone={Number(s.balanceInr) < 0 ? 'debit' : 'neutral'}
         />
         {s.withdrawableInr !== null ? (
           <KpiCard
-            label="You can withdraw"
+            label={t('wal.kpi.withdraw')}
             icon={<HandCoins size={14} />}
             figure={<Money amount={s.withdrawableInr} size="lg" convert={false} />}
-            hint="Your balance, less withdrawals already asked for."
+            hint={t('wal.kpi.withdrawHint')}
           />
         ) : null}
         <KpiCard
-          label="May go below zero by"
+          label={t('wal.kpi.negative')}
           icon={<Gauge size={14} />}
           figure={<Money amount={s.negativeLimit.effectiveInr} size="lg" />}
-          hint={`Set by ${s.sellerCompanyName}.`}
+          hint={t('wal.kpi.negativeHint', { seller: s.sellerCompanyName })}
         />
         {skydrop ? (
           <KpiCard
-            label="Waiting on Skydrop"
+            label={t('wal.kpi.waiting')}
             icon={<Clock size={14} />}
             tone="pending"
             value={s.pendingTopups.count + s.pendingWithdrawals.count}
             format={(n) => `${n}`}
-            hint="Top-ups to be seen and withdrawals to be paid."
+            hint={t('wal.kpi.waitingHint')}
           />
         ) : null}
       </div>
@@ -136,9 +132,7 @@ export default function WalletPage(): ReactElement {
       <LedgerSection
         sellerCompanyName={s.sellerCompanyName}
         emptyDescription={
-          skydrop
-            ? 'Top up the wallet to get started.'
-            : `${s.sellerCompanyName} tops it up for you.`
+          skydrop ? t('wal.empty.skydrop') : t('wal.empty.seller', { seller: s.sellerCompanyName })
         }
       />
     </div>
@@ -146,6 +140,7 @@ export default function WalletPage(): ReactElement {
 }
 
 function TopupCard(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const accounts = useStoreBankAccounts();
   const submit = useSubmitStoreTopup();
@@ -179,13 +174,13 @@ function TopupCard(): ReactElement {
         ...(proof === null ? {} : { proof }),
         idempotencyKey,
       });
-      toast.success('Sent to Skydrop. Your wallet is credited once they see the money arrive.');
+      toast.success(t('wal.topup.toast'));
       setAmount('');
       setReference('');
       setProof(null);
       setIdempotencyKey(crypto.randomUUID());
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     } finally {
       setConfirming(false);
     }
@@ -201,26 +196,23 @@ function TopupCard(): ReactElement {
         </span>
         <div className="rm-card__titles">
           <h2 id="tu-title" className="rm-card__title">
-            Top up
+            {t('wal.topup.title')}
           </h2>
-          <p className="rm-card__sub">
-            Send money to one of Skydrop’s accounts, then tell us here. Nothing is credited until we
-            see it on our statement.
-          </p>
+          <p className="rm-card__sub">{t('wal.topup.sub')}</p>
         </div>
       </div>
       {accounts.isError ? (
-        <ErrorState message={serverVerdict(accounts.error)} retry={() => void accounts.refetch()} />
+        <ErrorState message={verdict(accounts.error, t)} retry={() => void accounts.refetch()} />
       ) : (
         <form onSubmit={onSubmit} className="rm-form">
           <Select
             id="tu-account"
-            label="Paid into"
+            label={t('wal.topup.paidInto')}
             required
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
           >
-            <option value="">Choose the account you paid into</option>
+            <option value="">{t('wal.topup.chooseAccount')}</option>
             {(accounts.data ?? []).map((a) => (
               <option key={a.id} value={a.id}>
                 {a.label} — {a.bankName}
@@ -229,7 +221,7 @@ function TopupCard(): ReactElement {
           </Select>
           <TextField
             id="tu-amount"
-            label="Amount (₹)"
+            label={t('wal.topup.amount')}
             inputMode="decimal"
             required
             value={amount}
@@ -241,7 +233,7 @@ function TopupCard(): ReactElement {
                 {chosen.accountName} · <span className="sk-ident">{chosen.accountNumber}</span>
                 {chosen.branchCode !== null ? (
                   <>
-                    {' · IFSC '}
+                    {t('wal.topup.ifsc')}
                     <span className="sk-ident">{chosen.branchCode}</span>
                   </>
                 ) : (
@@ -255,8 +247,8 @@ function TopupCard(): ReactElement {
           ) : null}
           <TextField
             id="tu-ref"
-            label="Bank reference / UTR"
-            hint="This, or a receipt below — one of the two."
+            label={t('wal.topup.ref')}
+            hint={t('wal.topup.refHint')}
             inputClassName="sk-ident"
             value={reference}
             onChange={(e) => setReference(e.target.value)}
@@ -264,9 +256,9 @@ function TopupCard(): ReactElement {
           <DropZone
             key={idempotencyKey}
             id="tu-proof"
-            label="Receipt (optional)"
-            hint="JPEG, PNG, WEBP or PDF."
-            buttonText="Choose a file"
+            label={t('wal.topup.receipt')}
+            hint={t('wal.topup.receiptHint')}
+            buttonText={t('wal.topup.chooseFile')}
             accept="image/jpeg,image/png,image/webp,application/pdf"
             onFiles={(files) => setProof(files[0] ?? null)}
           />
@@ -278,7 +270,7 @@ function TopupCard(): ReactElement {
               size="md"
               icon={<Send size={15} />}
               state={submit.isPending ? 'busy' : 'idle'}
-              labels={{ idle: 'Tell Skydrop', busy: 'Sending…' }}
+              labels={{ idle: t('wal.topup.tell'), busy: t('wal.topup.sending') }}
             />
           </div>
         </form>
@@ -286,23 +278,21 @@ function TopupCard(): ReactElement {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={
-          <>
-            Tell Skydrop you paid <Money amount={amountShown} convert={false} />?
-          </>
-        }
+        title={richMessage(t('wal.topup.confirmTitle'), {
+          amount: <Money amount={amountShown} convert={false} />,
+        })}
         entity={
           chosen === null
-            ? 'The account you chose'
+            ? t('wal.topup.accountFallback')
             : `${chosen.label} — ${chosen.bankName} · ${chosen.accountNumber}`
         }
         amount={<Money amount={amountShown} convert={false} />}
         consequence={
           reference.trim() === ''
-            ? 'Nothing is credited until Skydrop sees the money on their statement.'
-            : `Reference ${reference.trim()}. Nothing is credited until Skydrop sees the money on their statement.`
+            ? t('wal.topup.consequence')
+            : t('wal.topup.consequenceRef', { ref: reference.trim() })
         }
-        confirmLabel="Tell Skydrop"
+        confirmLabel={t('wal.topup.tell')}
         onConfirm={send}
       />
     </section>
@@ -310,6 +300,9 @@ function TopupCard(): ReactElement {
 }
 
 function RequestsSection(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const when = (iso: string | null): string => (iso === null ? '—' : formatDateTime(iso, locale));
   const toast = useToast();
   const topups = useStoreTopups();
   const withdrawals = useStoreWithdrawals();
@@ -319,63 +312,65 @@ function RequestsSection(): ReactElement {
     try {
       await openExternalWhenReady(async () => (await proof.mutateAsync({ topupId })).url);
     } catch (err) {
-      toast.error(serverVerdict(err));
+      toast.error(verdict(err, t));
     }
   }
 
   return (
     <>
       <RmSection>
-        <SectionHeading title="Top-ups you told us about" />
+        <SectionHeading title={t('wal.req.topups')} />
         {topups.isPending ? (
-          <SkeletonRows rows={2} cols={5} label="Loading top-ups" />
+          <SkeletonRows rows={2} cols={5} label={t('wal.req.topupsLoading')} />
         ) : topups.isError ? (
-          <ErrorState message={serverVerdict(topups.error)} retry={() => void topups.refetch()} />
+          <ErrorState message={verdict(topups.error, t)} retry={() => void topups.refetch()} />
         ) : topups.data.length === 0 ? (
-          <EmptyState title="None yet" description="Use Top up above once you have sent money." />
+          <EmptyState title={t('wal.req.none')} description={t('wal.req.noneTopups')} />
         ) : (
-          <Table caption="Top-ups you told us about">
+          <Table caption={t('wal.req.topups')}>
             <THead>
               <Tr>
-                <Th>Told us</Th>
-                <Th>Paid into</Th>
-                <Th align="right">Amount</Th>
-                <Th>Reference</Th>
-                <Th>State</Th>
+                <Th>{t('wal.req.col.told')}</Th>
+                <Th>{t('wal.req.col.paidInto')}</Th>
+                <Th align="right">{t('wal.req.col.amount')}</Th>
+                <Th>{t('wal.req.col.reference')}</Th>
+                <Th>{t('wal.req.col.state')}</Th>
               </Tr>
             </THead>
             <TBody>
-              {topups.data.map((t) => (
-                <Tr key={t.id}>
-                  <Td className="rm-when sk-figure">{when(t.createdAt)}</Td>
+              {topups.data.map((tu) => (
+                <Tr key={tu.id}>
+                  <Td className="rm-when sk-figure">{when(tu.createdAt)}</Td>
                   <Td>
-                    {t.bankLabel}
-                    <div className="rm-faint sk-ident">{t.bankAccountNumber}</div>
+                    {tu.bankLabel}
+                    <div className="rm-faint sk-ident">{tu.bankAccountNumber}</div>
                   </Td>
                   <Td align="right">
-                    <Money amount={t.amountInr} />
+                    <Money amount={tu.amountInr} />
                   </Td>
                   <Td>
-                    <span className="sk-ident">{t.transactionRef ?? '—'}</span>
-                    {t.hasProof ? (
+                    <span className="sk-ident">{tu.transactionRef ?? '—'}</span>
+                    {tu.hasProof ? (
                       <div>
                         <Button
                           variant="ghost"
                           size="sm"
                           icon={<FileText size={14} />}
-                          onClick={() => void onProof(t.id)}
+                          onClick={() => void onProof(tu.id)}
                         >
-                          View receipt
+                          {t('wal.req.viewReceipt')}
                         </Button>
                       </div>
                     ) : null}
                   </Td>
                   <Td>
-                    <RmStateChip kind={topupStatusKind(t.status)}>
-                      {TOPUP_WORDS[t.status] ?? t.status}
+                    <RmStateChip kind={topupStatusKind(tu.status)}>
+                      {TOPUP_WORDS[tu.status] === undefined
+                        ? tu.status
+                        : t(TOPUP_WORDS[tu.status] as MessageKey)}
                     </RmStateChip>
-                    {t.reviewNote !== null && t.reviewNote !== '' ? (
-                      <div className="rm-faint">{t.reviewNote}</div>
+                    {tu.reviewNote !== null && tu.reviewNote !== '' ? (
+                      <div className="rm-faint">{tu.reviewNote}</div>
                     ) : null}
                   </Td>
                 </Tr>
@@ -385,24 +380,24 @@ function RequestsSection(): ReactElement {
         )}
       </RmSection>
       <RmSection>
-        <SectionHeading title="Withdrawals you asked for" />
+        <SectionHeading title={t('wal.req.withdrawals')} />
         {withdrawals.isPending ? (
-          <SkeletonRows rows={2} cols={4} label="Loading withdrawals" />
+          <SkeletonRows rows={2} cols={4} label={t('wal.req.withdrawalsLoading')} />
         ) : withdrawals.isError ? (
           <ErrorState
-            message={serverVerdict(withdrawals.error)}
+            message={verdict(withdrawals.error, t)}
             retry={() => void withdrawals.refetch()}
           />
         ) : withdrawals.data.length === 0 ? (
-          <EmptyState title="None yet" />
+          <EmptyState title={t('wal.req.none')} />
         ) : (
-          <Table caption="Withdrawals you asked for">
+          <Table caption={t('wal.req.withdrawals')}>
             <THead>
               <Tr>
-                <Th>Asked</Th>
-                <Th>To</Th>
-                <Th align="right">Amount</Th>
-                <Th>State</Th>
+                <Th>{t('wal.req.wcol.asked')}</Th>
+                <Th>{t('wal.req.wcol.to')}</Th>
+                <Th align="right">{t('wal.req.col.amount')}</Th>
+                <Th>{t('wal.req.col.state')}</Th>
               </Tr>
             </THead>
             <TBody>

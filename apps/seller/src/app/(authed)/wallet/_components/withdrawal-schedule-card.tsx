@@ -13,8 +13,10 @@ import { useToast } from '@skydrop/ui/app/toast';
 import { useWithdrawalSchedule, useSetWithdrawalSchedule } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import './wallet.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * The two wallet terms a seller owns.
@@ -46,6 +48,7 @@ function hourText(h: number): string {
 }
 
 export function WithdrawalScheduleCard(): ReactElement | null {
+  const t = useT();
   const identity = useSellerIdentity();
   const mayEdit = can(identity, 'wallet.withdraw');
   const toast = useToast();
@@ -72,13 +75,16 @@ export function WithdrawalScheduleCard(): ReactElement | null {
       setHour(next.hourLocal);
       toast.success(
         next.autoEnabled
-          ? `Automatic withdrawals on, at ${String(next.hourLocal).padStart(2, '0')}:00 ${next.timezone}.`
-          : 'Automatic withdrawals off. Withdrawals are yours to request.',
+          ? t('wallet.automaticWithdrawalsOnAt', {
+              hourLocal: String(next.hourLocal).padStart(2, '0'),
+              timezone: next.timezone,
+            })
+          : t('wallet.automaticWithdrawalsOffWithdrawals'),
       );
     } catch (err) {
-      const verdict = serverVerdict(err);
-      setConfirmError(verdict);
-      toast.error(verdict);
+      const message = verdict(err, t);
+      setConfirmError(message);
+      toast.error(message);
       // Rethrown so the confirm screen stays open with the verdict on it.
       throw err;
     }
@@ -92,35 +98,37 @@ export function WithdrawalScheduleCard(): ReactElement | null {
 
   const confirmTitle =
     pending?.autoEnabled === true
-      ? 'Turn on automatic withdrawals?'
+      ? t('wallet.turnOnAutomaticWithdrawals')
       : pending?.autoEnabled === false
-        ? 'Turn off automatic withdrawals?'
+        ? t('wallet.turnOffAutomaticWithdrawals')
         : pending?.hourLocal !== undefined
-          ? 'Change the withdrawal hour?'
-          : 'Change the balance to keep?';
+          ? t('wallet.changeTheWithdrawalHour')
+          : t('wallet.changeTheBalanceTo');
 
   const consequence = nextEnabled
-    ? `We raise a withdrawal request for you at ${hourText(nextHour)} (${data.timezone}), leaving the balance to keep in the wallet, and pay it to the bank account on your profile. Each request passes exactly the same checks as one you make by hand.`
+    ? t('wallet.weRaiseAWithdrawal', { nextHour: hourText(nextHour), timezone: data.timezone })
     : pending?.autoEnabled === false
-      ? 'We stop raising withdrawal requests for you. Withdrawals are yours to request.'
-      : `Saved for when automatic withdrawals are on: requests at ${hourText(nextHour)} (${data.timezone}), paid to the bank account on your profile.`;
+      ? t('wallet.weStopRaisingWithdrawal')
+      : t('wallet.savedForWhenAutomatic', {
+          nextHour: hourText(nextHour),
+          timezone: data.timezone,
+        });
 
   return (
     <section className="wal-section">
       <SectionHeading
-        title="Withdrawal settings"
-        note="Yours to change. Everything below is set by Skydrop."
+        title={t('wallet.withdrawalSettings')}
+        note={t('wallet.yoursToChangeEverything')}
       />
       <div className="wal-card">
         <div className="wal-settings">
           <div className="wal-setting">
             <div className="wal-setting__text">
               <div className="wal-setting__title" id="wal-auto-title">
-                Automatic withdrawals
+                {t('wallet.automaticWithdrawals')}
               </div>
               <p className="wal-setting__desc" id="wal-auto-desc">
-                We raise the request for you on a schedule. It passes exactly the same checks as a
-                request you make by hand.
+                {t('wallet.weRaiseTheRequest')}
               </p>
             </div>
             <div className="wal-setting__control">
@@ -139,13 +147,12 @@ export function WithdrawalScheduleCard(): ReactElement | null {
 
           <div className="wal-setting">
             <div className="wal-setting__text">
-              <div className="wal-setting__title">Automatic withdrawal hour</div>
+              <div className="wal-setting__title">{t('wallet.automaticWithdrawalHour')}</div>
               <p className="wal-setting__desc">
-                {/* The zone is stated, never assumed: the sweep reads the
-                    hour in the seller's own timezone, so "10:00" means
-                    different moments for different sellers. */}
-                In your timezone ({data.timezone}).
-                {!data.autoEnabled && ' Takes effect when automatic withdrawals are on.'}
+                {richMessage(t('wallet.inYourTimezone'), {
+                  timezone: data.timezone,
+                  t: !data.autoEnabled && t('wallet.takesEffectWhenAutomatic'),
+                })}
               </p>
             </div>
             <div className="wal-setting__control">
@@ -155,7 +162,7 @@ export function WithdrawalScheduleCard(): ReactElement | null {
                 value={hour ?? data.hourLocal}
                 disabled={!mayEdit || save.isPending}
                 onChange={(e) => setHour(Number(e.target.value))}
-                aria-label="Automatic withdrawal hour"
+                aria-label={t('wallet.automaticWithdrawalHour')}
               >
                 {Array.from({ length: 24 }, (_, h) => (
                   <option key={h} value={h}>
@@ -173,7 +180,7 @@ export function WithdrawalScheduleCard(): ReactElement | null {
                     setPending({ hourLocal: hour });
                   }}
                 >
-                  Save
+                  {t('wallet.save')}
                 </Button>
               )}
             </div>
@@ -190,11 +197,11 @@ export function WithdrawalScheduleCard(): ReactElement | null {
           */}
           <div className="wal-setting">
             <div className="wal-setting__text">
-              <div className="wal-setting__title">Keep this much in the wallet</div>
+              <div className="wal-setting__title">{t('wallet.keepThisMuchIn')}</div>
               <p className="wal-setting__desc">
-                The automatic withdrawal leaves this behind. Must be at least{' '}
-                <Money amount={data.platformMinimumInr} currency="INR" convert={false} />, the
-                minimum on your account.
+                {richMessage(t('wallet.theAutomaticWithdrawalLeaves'), {
+                  money: <Money amount={data.platformMinimumInr} currency="INR" convert={false} />,
+                })}
               </p>
             </div>
             <div className="wal-setting__control">
@@ -206,7 +213,7 @@ export function WithdrawalScheduleCard(): ReactElement | null {
                 onChange={(e) => setKeep(e.target.value)}
                 inputMode="decimal"
                 inputClassName="sk-figure"
-                aria-label="Balance to keep"
+                aria-label={t('wallet.balanceToKeep')}
               />
               {keep !== null && keep !== data.keepBalanceInr && (
                 <Button
@@ -218,17 +225,13 @@ export function WithdrawalScheduleCard(): ReactElement | null {
                     setPending({ keepBalanceInr: keep.trim() });
                   }}
                 >
-                  Save
+                  {t('wallet.save')}
                 </Button>
               )}
             </div>
           </div>
 
-          {!mayEdit && (
-            <p className="wal-setting__desc">
-              Changing these needs the withdrawal permission. Ask an owner or admin on your team.
-            </p>
-          )}
+          {!mayEdit && <p className="wal-setting__desc">{t('wallet.changingTheseNeedsThe')}</p>}
         </div>
       </div>
 
@@ -243,13 +246,19 @@ export function WithdrawalScheduleCard(): ReactElement | null {
         title={confirmTitle}
         entity={
           nextEnabled
-            ? `Automatic withdrawals on · ${hourText(nextHour)} ${data.timezone}`
-            : `Automatic withdrawals off · ${hourText(nextHour)} ${data.timezone}`
+            ? t('wallet.automaticWithdrawalsOn', {
+                nextHour: hourText(nextHour),
+                timezone: data.timezone,
+              })
+            : t('wallet.automaticWithdrawalsOff', {
+                nextHour: hourText(nextHour),
+                timezone: data.timezone,
+              })
         }
         amount={
           nextEnabled || pending?.keepBalanceInr !== undefined ? (
             <span className="wal-stack">
-              <span className="wal-faint">Balance to keep</span>
+              <span className="wal-faint">{t('wallet.balanceToKeep')}</span>
               {keepIsNumber ? (
                 <Money amount={nextKeep} currency="INR" convert={false} size="md" />
               ) : (
@@ -261,10 +270,10 @@ export function WithdrawalScheduleCard(): ReactElement | null {
         consequence={consequence}
         confirmLabel={
           pending?.autoEnabled === true
-            ? 'Turn on'
+            ? t('wallet.turnOn')
             : pending?.autoEnabled === false
-              ? 'Turn off'
-              : 'Save'
+              ? t('wallet.turnOff')
+              : t('wallet.save')
         }
         onConfirm={() => (pending === null ? undefined : apply(pending))}
         error={confirmError}

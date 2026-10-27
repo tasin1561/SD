@@ -27,6 +27,7 @@ import {
 } from '@/lib/bank-account-hooks';
 import { LinkButton, MoSection, Notice } from '../treasury/_components/money-parts';
 import './bank-accounts.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Where sellers are told to send money.
@@ -60,6 +61,7 @@ const EMPTY: UpsertBankAccountBody = {
 };
 
 export function BankAccountsPanel(): ReactElement | null {
+  const t = useT();
   const toast = useToast();
   const mayManage = usePermission('money.bank_accounts.manage');
   const accounts = usePlatformBankAccounts();
@@ -149,7 +151,9 @@ export function BankAccountsPanel(): ReactElement | null {
     try {
       if (editing === null) {
         await create.mutateAsync(body);
-        toast.success(`${body.label} added — clients can transfer to it now.`);
+        toast.success(
+          t('bankAccountsBankAccountsPanel.addedClientsCanTransferTo', { label: body.label }),
+        );
       } else {
         await update.mutateAsync({ id: editing.id, body });
         toast.success(`${body.label} updated.`);
@@ -164,7 +168,7 @@ export function BankAccountsPanel(): ReactElement | null {
     setError(null);
     try {
       await retire.mutateAsync({ id: a.id });
-      toast.info(`${a.label} retired — it is off the client transfer page. Past top-ups keep it.`);
+      toast.info(t('bankAccountsBankAccountsPanel.retiredItIsOffThe', { label: a.label }));
     } catch (err) {
       setError(serverVerdict(err));
       // Keeps the confirm open with the verdict on it.
@@ -178,12 +182,12 @@ export function BankAccountsPanel(): ReactElement | null {
   return (
     <div className="mo-page">
       <PageHeader
-        title="Bank accounts"
-        subtitle="Our own bank accounts — where a client sends money to top up their wallet. A client reads these details off their screen and types them into their bank, so anything wrong here becomes a payment nobody can match against a statement."
+        title={t('bankAccountsBankAccountsPanel.bankAccounts')}
+        subtitle={t('bankAccountsBankAccountsPanel.ourOwnBankAccountsWhere')}
       />
       <MoSection
-        title="Accounts offered to clients"
-        note="Retiring one keeps every past top-up that names it."
+        title={t('bankAccountsBankAccountsPanel.accountsOfferedToClients')}
+        note={t('bankAccountsBankAccountsPanel.retiringOneKeepsEveryPast')}
         flush
         action={
           <div className="mo-row">
@@ -196,11 +200,11 @@ export function BankAccountsPanel(): ReactElement | null {
               size="sm"
               icon={<History size={14} />}
             >
-              Change history
+              {t('bankAccountsBankAccountsPanel.changeHistory')}
             </LinkButton>
             {mayManage ? (
               <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={openNew}>
-                Add account
+                {t('bankAccountsBankAccountsPanel.addAccount')}
               </Button>
             ) : null}
           </div>
@@ -216,7 +220,11 @@ export function BankAccountsPanel(): ReactElement | null {
 
         {accounts.isLoading ? (
           <div className="mo-card__pad">
-            <SkeletonRows rows={3} cols={mayManage ? 6 : 5} label="Loading bank accounts" />
+            <SkeletonRows
+              rows={3}
+              cols={mayManage ? 6 : 5}
+              label={t('bankAccountsBankAccountsPanel.loadingBankAccounts')}
+            />
           </div>
         ) : accounts.isError ? (
           <div className="mo-card__pad">
@@ -226,15 +234,15 @@ export function BankAccountsPanel(): ReactElement | null {
             />
           </div>
         ) : (
-          <Table caption="Bank accounts offered to clients">
+          <Table caption={t('bankAccountsBankAccountsPanel.bankAccountsOfferedToClients')}>
             <THead>
               <Tr>
-                <Th>Label</Th>
-                <Th>Bank</Th>
-                <Th>Account</Th>
-                <Th>Currency</Th>
-                <Th>Offered</Th>
-                {mayManage && <Th align="right">Actions</Th>}
+                <Th>{t('bankAccountsBankAccountsPanel.label')}</Th>
+                <Th>{t('bankAccountsBankAccountsPanel.bank')}</Th>
+                <Th>{t('bankAccountsBankAccountsPanel.account')}</Th>
+                <Th>{t('bankAccountsBankAccountsPanel.currency')}</Th>
+                <Th>{t('bankAccountsBankAccountsPanel.offered')}</Th>
+                {mayManage && <Th align="right">{t('bankAccountsBankAccountsPanel.actions')}</Th>}
               </Tr>
             </THead>
             <TBody>
@@ -242,8 +250,8 @@ export function BankAccountsPanel(): ReactElement | null {
                 <TableEmpty colSpan={mayManage ? 6 : 5}>
                   <EmptyState
                     bare
-                    title="No bank accounts"
-                    description="Until one exists a client has nowhere to send money and cannot top up at all."
+                    title={t('bankAccountsBankAccountsPanel.noBankAccounts')}
+                    description={t('bankAccountsBankAccountsPanel.untilOneExistsAClient')}
                   />
                 </TableEmpty>
               ) : (
@@ -275,7 +283,7 @@ export function BankAccountsPanel(): ReactElement | null {
                       <Td align="right">
                         <div className="mo-row mo-row--end">
                           <Button variant="ghost" size="sm" onClick={() => openEdit(a)}>
-                            Edit
+                            {t('bankAccountsBankAccountsPanel.edit')}
                           </Button>
                           <Button
                             variant="ghost"
@@ -286,7 +294,7 @@ export function BankAccountsPanel(): ReactElement | null {
                               setRetiring(a);
                             }}
                           >
-                            Retire
+                            {t('bankAccountsBankAccountsPanel.retire')}
                           </Button>
                         </div>
                       </Td>
@@ -307,14 +315,14 @@ export function BankAccountsPanel(): ReactElement | null {
             setError(null);
           }
         }}
-        title="Retire this bank account?"
+        title={t('bankAccountsBankAccountsPanel.retireThisBankAccount')}
         entity={
           retiring === null
             ? ''
             : `${retiring.label} · ${retiring.bankName} ${retiring.accountNumber}`
         }
-        consequence="It comes off the client transfer page at once. Past top-ups keep it, and it is not deleted."
-        confirmLabel="Retire"
+        consequence={t('bankAccountsBankAccountsPanel.itComesOffTheClient')}
+        confirmLabel={t('bankAccountsBankAccountsPanel.retire')}
         destructive
         onConfirm={() => (retiring === null ? undefined : onRetire(retiring))}
         error={retiring !== null ? (error ?? undefined) : undefined}
@@ -327,18 +335,25 @@ export function BankAccountsPanel(): ReactElement | null {
         }}
         icon={<Landmark size={18} />}
         size="lg"
-        title={editing === null ? 'Add a bank account' : `Edit ${editing.label}`}
-        description="Clients read these details off their own screen and type them into their bank. Anything wrong here becomes a payment nobody can match against a statement."
+        title={
+          editing === null
+            ? t('bankAccountsBankAccountsPanel.addABankAccount')
+            : t('bankAccountsBankAccountsPanel.edit2', { label: editing.label })
+        }
+        description={t('bankAccountsBankAccountsPanel.clientsReadTheseDetailsOff')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => setOpen(false)}>
-              Cancel
+              {t('bankAccountsBankAccountsPanel.cancel')}
             </Button>
             <AsyncButton
               labels={{
-                idle: editing === null ? 'Add account' : 'Save changes',
-                busy: 'Saving…',
-                done: 'Saved',
+                idle:
+                  editing === null
+                    ? t('bankAccountsBankAccountsPanel.addAccount')
+                    : t('bankAccountsBankAccountsPanel.saveChanges'),
+                busy: t('bankAccountsBankAccountsPanel.saving'),
+                done: t('bankAccountsBankAccountsPanel.saved'),
               }}
               disabled={!complete || busy}
               state={busy ? 'busy' : undefined}
@@ -349,35 +364,35 @@ export function BankAccountsPanel(): ReactElement | null {
       >
         <div className="mo-fields">
           <TextField
-            label="Label"
+            label={t('bankAccountsBankAccountsPanel.label')}
             requiredMark
-            hint="What the client picks from, e.g. “HDFC — current”"
+            hint={t('bankAccountsBankAccountsPanel.whatTheClientPicksFrom')}
             value={form.label}
             onChange={(e) => set('label', e.target.value)}
           />
           <TextField
-            label="Bank name"
+            label={t('bankAccountsBankAccountsPanel.bankName')}
             requiredMark
             value={form.bankName}
             onChange={(e) => set('bankName', e.target.value)}
           />
           <TextField
-            label="Account holder"
+            label={t('bankAccountsBankAccountsPanel.accountHolder')}
             requiredMark
             value={form.accountName}
             onChange={(e) => set('accountName', e.target.value)}
           />
           <div className="mo-fields" data-cols="2">
             <TextField
-              label="Account number"
+              label={t('bankAccountsBankAccountsPanel.accountNumber')}
               requiredMark
               inputClassName="sk-ident"
               value={form.accountNumber}
               onChange={(e) => set('accountNumber', e.target.value)}
             />
             <TextField
-              label="IFSC / SWIFT"
-              hint="Optional"
+              label={t('bankAccountsBankAccountsPanel.ifscSwift')}
+              hint={t('bankAccountsBankAccountsPanel.optional')}
               inputClassName="sk-ident"
               value={form.branchCode ?? ''}
               onChange={(e) => set('branchCode', e.target.value)}
@@ -391,20 +406,20 @@ export function BankAccountsPanel(): ReactElement | null {
             which one to lose. */}
           <div className="ba-grid-3">
             <TextField
-              label="Branch"
-              hint="Optional"
+              label={t('bankAccountsBankAccountsPanel.branch')}
+              hint={t('bankAccountsBankAccountsPanel.optional')}
               value={form.branchName ?? ''}
               onChange={(e) => set('branchName', e.target.value)}
             />
             <TextField
-              label="District"
-              hint="Optional"
+              label={t('bankAccountsBankAccountsPanel.district')}
+              hint={t('bankAccountsBankAccountsPanel.optional')}
               value={form.district ?? ''}
               onChange={(e) => set('district', e.target.value)}
             />
             <TextField
-              label="Routing number"
-              hint="9 digits (Bangladesh)"
+              label={t('bankAccountsBankAccountsPanel.routingNumber')}
+              hint={t('bankAccountsBankAccountsPanel.9DigitsBangladesh')}
               inputMode="numeric"
               inputClassName="sk-ident"
               value={form.routingNumber ?? ''}
@@ -413,7 +428,7 @@ export function BankAccountsPanel(): ReactElement | null {
           </div>
           <div className="mo-fields" data-cols="2">
             <Select
-              label="Currency"
+              label={t('bankAccountsBankAccountsPanel.currency')}
               requiredMark
               value={form.currency}
               onChange={(e) => set('currency', e.target.value)}
@@ -422,8 +437,8 @@ export function BankAccountsPanel(): ReactElement | null {
               <option value="BDT">BDT</option>
             </Select>
             <TextField
-              label="Order"
-              hint="Lower sorts first on the client's form."
+              label={t('bankAccountsBankAccountsPanel.order')}
+              hint={t('bankAccountsBankAccountsPanel.lowerSortsFirstOnThe')}
               inputMode="numeric"
               value={String(form.displayOrder ?? 100)}
               onChange={(e) => set('displayOrder', Number(e.target.value) || 0)}
@@ -438,8 +453,8 @@ export function BankAccountsPanel(): ReactElement | null {
               overwrite. */}
           {editing === null && (
             <TextField
-              label={`Balance today (${form.currency})`}
-              hint="What is in the account right now. Recorded as an opening balance against our own money — leave blank for a new, empty account."
+              label={t('bankAccountsBankAccountsPanel.balanceToday', { currency: form.currency })}
+              hint={t('bankAccountsBankAccountsPanel.whatIsInTheAccount')}
               type="number"
               inputMode="decimal"
               step="0.01"
@@ -450,17 +465,17 @@ export function BankAccountsPanel(): ReactElement | null {
             />
           )}
           <TextField
-            label="What it is for"
-            hint="Free text — an account estate changes shape faster than a fixed list."
+            label={t('bankAccountsBankAccountsPanel.whatItIsFor')}
+            hint={t('bankAccountsBankAccountsPanel.freeTextAnAccountEstate')}
             value={form.purpose ?? ''}
             onChange={(e) => set('purpose', e.target.value)}
             maxLength={120}
             showCount
-            placeholder="COD receipts, client top-ups, operating…"
+            placeholder={t('bankAccountsBankAccountsPanel.codReceiptsClientTopUps')}
           />
           <TextArea
-            label="Transfer instructions"
-            hint="Anything the client must put in the transfer — a reference format, a note field."
+            label={t('bankAccountsBankAccountsPanel.transferInstructions')}
+            hint={t('bankAccountsBankAccountsPanel.anythingTheClientMustPut')}
             value={form.instructions ?? ''}
             onChange={(e) => set('instructions', e.target.value)}
             rows={3}
@@ -470,7 +485,7 @@ export function BankAccountsPanel(): ReactElement | null {
           <Checkbox
             checked={form.isActive ?? true}
             onChange={(e) => set('isActive', e.target.checked)}
-            label="Offer this account to clients"
+            label={t('bankAccountsBankAccountsPanel.offerThisAccountToClients')}
           />
           {error !== null && open && (
             <p className="mo-error" role="alert">

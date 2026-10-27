@@ -26,6 +26,8 @@ import {
   type AdminTopupView,
 } from '@/lib/ops-hooks';
 import { MkAlert, MkCard, TopupChip } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The queue where money enters a seller's wallet.
@@ -50,6 +52,7 @@ import { MkAlert, MkCard, TopupChip } from '../../seller-wallets/_components/mon
 const STATUSES = ['PENDING', 'ACCEPTED', 'REJECTED'] as const;
 
 export function TopupsIndex(): ReactElement {
+  const tr = useT();
   const toast = useToast();
   const mayReview = usePermission('money.topups.review');
   const [status, setStatus] = useState<string>('PENDING');
@@ -89,10 +92,15 @@ export function TopupsIndex(): ReactElement {
           topupId: reviewing.id,
           ...(note.trim() ? { note: note.trim() } : {}),
         });
-        toast.success(`Credited ${reviewing.currency} ${reviewing.amount}.`);
+        toast.success(
+          tr('topupsTopupsIndex.credited', {
+            currency: reviewing.currency,
+            amount: reviewing.amount,
+          }),
+        );
       } else {
         await reject.mutateAsync({ topupId: reviewing.id, reason: note.trim() });
-        toast.success('Rejected — the client sees your reason.');
+        toast.success(tr('topupsTopupsIndex.rejectedTheClientSeesYour'));
       }
       close();
     } catch (err) {
@@ -110,21 +118,25 @@ export function TopupsIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Wallet top-ups"
-        subtitle="Clients telling us they have sent money. Accepting one credits their wallet — check it against the statement first."
+        title={tr('topupsTopupsIndex.walletTopUps')}
+        subtitle={tr('topupsTopupsIndex.clientsTellingUsTheyHave')}
         action={
           // The accounts moved to their own page. A pointer stays,
           // because with none configured nothing can ever arrive here,
           // and an empty queue would otherwise look like quiet demand
           // rather than a missing setup step.
           <Link href="/bank-accounts" className="mk-link">
-            Bank accounts <ArrowRight size={14} aria-hidden />
+            {tr('topupsTopupsIndex.bankAccounts')} <ArrowRight size={14} aria-hidden />
           </Link>
         }
       />
 
       <div className="mk-filters">
-        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+        <Select
+          label={tr('topupsTopupsIndex.status')}
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        >
           {STATUSES.map((s) => (
             <option key={s} value={s}>
               {topupStatusLabel(s as TopupRequestStatus)}
@@ -134,30 +146,34 @@ export function TopupsIndex(): ReactElement {
       </div>
 
       {list.isLoading ? (
-        <SkeletonRows rows={4} cols={7} label="Loading top-ups…" />
+        <SkeletonRows rows={4} cols={7} label={tr('topupsTopupsIndex.loadingTopUps')} />
       ) : list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load top-ups.'}
+          message={list.error?.message ?? tr('topupsTopupsIndex.failedToLoadTopUps')}
           retry={() => void list.refetch()}
         />
       ) : rows.length === 0 ? (
         <EmptyState
           tone={status === 'PENDING' ? 'positive' : 'neutral'}
-          title={status === 'PENDING' ? 'Nothing waiting' : `No ${status.toLowerCase()} top-ups`}
-          description="Claims appear here when a client records a transfer."
+          title={
+            status === 'PENDING'
+              ? tr('topupsTopupsIndex.nothingWaiting')
+              : tr('topupsTopupsIndex.noTopUps', { value: status.toLowerCase() })
+          }
+          description={tr('topupsTopupsIndex.claimsAppearHereWhenA')}
         />
       ) : (
         <MkCard flush>
-          <Table caption="Top-up claims">
+          <Table caption={tr('topupsTopupsIndex.topUpClaims')}>
             <THead>
               <Tr>
-                <Th>Claimed</Th>
-                <Th>Client</Th>
-                <Th>Paid into</Th>
-                <Th align="right">Amount</Th>
-                <Th>Evidence</Th>
-                <Th>Status</Th>
-                <Th align="right">Review</Th>
+                <Th>{tr('topupsTopupsIndex.claimed')}</Th>
+                <Th>{tr('topupsTopupsIndex.client')}</Th>
+                <Th>{tr('topupsTopupsIndex.paidInto')}</Th>
+                <Th align="right">{tr('topupsTopupsIndex.amount')}</Th>
+                <Th>{tr('topupsTopupsIndex.evidence')}</Th>
+                <Th>{tr('topupsTopupsIndex.status')}</Th>
+                <Th align="right">{tr('topupsTopupsIndex.review')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -212,11 +228,12 @@ export function TopupsIndex(): ReactElement {
                           className="mk-inline-link"
                           onClick={() => void onViewProof(t.id)}
                         >
-                          <ReceiptText size={13} aria-hidden /> View receipt
+                          <ReceiptText size={13} aria-hidden />{' '}
+                          {tr('topupsTopupsIndex.viewReceipt')}
                         </button>
                       )}
                       {t.hasProof && !mayReview && (
-                        <span className="mk-faint">Receipt attached</span>
+                        <span className="mk-faint">{tr('topupsTopupsIndex.receiptAttached')}</span>
                       )}
                       {t.transactionRef === null && !t.hasProof && (
                         <span className="mk-faint">—</span>
@@ -252,7 +269,7 @@ export function TopupsIndex(): ReactElement {
                             setIntent('ACCEPT');
                           }}
                         >
-                          Accept
+                          {tr('topupsTopupsIndex.accept')}
                         </Button>
                         <Button
                           variant="destructive"
@@ -263,7 +280,7 @@ export function TopupsIndex(): ReactElement {
                             setIntent('REJECT');
                           }}
                         >
-                          Reject
+                          {tr('topupsTopupsIndex.reject')}
                         </Button>
                       </div>
                     ) : (
@@ -284,25 +301,34 @@ export function TopupsIndex(): ReactElement {
         }}
         title={
           intent === 'ACCEPT'
-            ? `Credit ${reviewing?.currency ?? ''} ${reviewing?.amount ?? ''}?`
-            : 'Reject this claim?'
+            ? tr('topupsTopupsIndex.credit', {
+                value: reviewing?.currency ?? '',
+                value2: reviewing?.amount ?? '',
+              })
+            : tr('topupsTopupsIndex.rejectThisClaim')
         }
         tone={intent === 'REJECT' ? 'critical' : 'default'}
         locked={busy}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={close} disabled={busy}>
-              Cancel
+              {tr('topupsTopupsIndex.cancel')}
             </Button>
             <AsyncButton
               variant={intent === 'REJECT' ? 'destructive' : 'primary'}
               size="md"
               disabled={busy || rejectTooShort}
               labels={{
-                idle: intent === 'ACCEPT' ? 'Credit the wallet' : 'Reject',
-                busy: 'Working…',
-                done: intent === 'ACCEPT' ? 'Credited' : 'Rejected',
-                error: 'Refused',
+                idle:
+                  intent === 'ACCEPT'
+                    ? tr('topupsTopupsIndex.creditTheWallet')
+                    : tr('topupsTopupsIndex.reject'),
+                busy: tr('topupsTopupsIndex.working'),
+                done:
+                  intent === 'ACCEPT'
+                    ? tr('topupsTopupsIndex.credited2')
+                    : tr('topupsTopupsIndex.rejected'),
+                error: tr('topupsTopupsIndex.refused'),
               }}
               onAction={onConfirm}
             />
@@ -312,7 +338,7 @@ export function TopupsIndex(): ReactElement {
         <div className="mk-stack">
           {reviewing !== null && (
             <div className="mk-subject">
-              <span className="mk-subject__label">Claimed by</span>
+              <span className="mk-subject__label">{tr('topupsTopupsIndex.claimedBy')}</span>
               <span className="mk-subject__main">
                 {reviewing.sellerCompanyName ?? reviewing.sellerName ?? reviewing.sellerId}
               </span>
@@ -322,7 +348,9 @@ export function TopupsIndex(): ReactElement {
                 {reviewing.transactionRef !== null ? (
                   <>
                     {' '}
-                    · ref <span className="sk-ident">{reviewing.transactionRef}</span>
+                    {richMessage(tr('topupsTopupsIndex.ref'), {
+                      span: <span className="sk-ident">{reviewing.transactionRef}</span>,
+                    })}
                   </>
                 ) : null}
               </span>
@@ -330,14 +358,18 @@ export function TopupsIndex(): ReactElement {
           )}
           <p className="mk-muted">
             {intent === 'ACCEPT'
-              ? 'This adds the money to the client’s wallet immediately. Only do it once you have seen the payment on our statement — it is not reversible without an adjusting entry.'
-              : 'The client sees this reason, so write something they can act on: what did not match, or what you need from them.'}
+              ? tr('topupsTopupsIndex.thisAddsTheMoneyTo')
+              : tr('topupsTopupsIndex.theClientSeesThisReason')}
           </p>
 
           {error !== null && <MkAlert>{error}</MkAlert>}
 
           <TextArea
-            label={intent === 'ACCEPT' ? 'Note (optional)' : 'Reason'}
+            label={
+              intent === 'ACCEPT'
+                ? tr('topupsTopupsIndex.noteOptional')
+                : tr('topupsTopupsIndex.reason')
+            }
             requiredMark={intent === 'REJECT'}
             value={note}
             onChange={(e) => setNote(e.target.value)}

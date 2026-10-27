@@ -14,6 +14,7 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import '../../treasury/_components/money.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Add a category, or — given `category` — rename it / change its hint.
@@ -32,6 +33,7 @@ export function CategoryModal({
   readonly onOpenChange: (next: boolean) => void;
   readonly category?: ExpenseCategoryView | null;
 }): ReactElement {
+  const t = useT();
   const create = useCreateExpenseCategory();
   const update = useUpdateExpenseCategory();
   const editing = category !== undefined && category !== null;
@@ -60,7 +62,7 @@ export function CategoryModal({
     try {
       if (category) {
         if (name.trim() === '') {
-          setError('A name is needed');
+          setError(t('expensesCategoryModal.aNameIsNeeded'));
           return false;
         }
         await update.mutateAsync({
@@ -70,7 +72,7 @@ export function CategoryModal({
         });
       } else {
         if (code.trim() === '' || name.trim() === '') {
-          setError('A code and a name, both');
+          setError(t('expensesCategoryModal.aCodeAndAName'));
           return false;
         }
         await create.mutateAsync({
@@ -83,7 +85,11 @@ export function CategoryModal({
       setName('');
       setHint('');
       onOpenChange(false);
-      toast.success(category ? 'Category saved' : 'Category added');
+      toast.success(
+        category
+          ? t('expensesCategoryModal.categorySaved')
+          : t('expensesCategoryModal.categoryAdded'),
+      );
       return true;
     } catch (err) {
       setError(serverVerdict(err));
@@ -99,24 +105,30 @@ export function CategoryModal({
         if (!next) setError(null);
       }}
       icon={<Tags size={18} />}
-      title={editing ? 'Edit expense category' : 'New expense category'}
+      title={
+        editing
+          ? t('expensesCategoryModal.editExpenseCategory')
+          : t('expensesCategoryModal.newExpenseCategory')
+      }
       description={
         editing
-          ? 'The code cannot change — past entries are read back through it. The name and hint can.'
-          : 'The code is permanent — past entries are read back through it. The name can change.'
+          ? t('expensesCategoryModal.theCodeCannotChangePast')
+          : t('expensesCategoryModal.theCodeIsPermanentPast')
       }
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('expensesCategoryModal.cancel')}
           </Button>
           <AsyncButton
             disabled={pending}
             labels={{
-              idle: editing ? 'Save changes' : 'Add category',
-              busy: 'Saving…',
-              done: 'Saved',
-              error: 'Not saved',
+              idle: editing
+                ? t('expensesCategoryModal.saveChanges')
+                : t('expensesCategoryModal.addCategory'),
+              busy: t('expensesCategoryModal.saving'),
+              done: t('expensesCategoryModal.saved'),
+              error: t('expensesCategoryModal.notSaved'),
             }}
             onAction={async () => {
               // The busy/failed phase follows the real outcome: a refusal
@@ -129,35 +141,39 @@ export function CategoryModal({
     >
       <div className="mo-fields">
         <TextField
-          label="Code"
+          label={t('expensesCategoryModal.code')}
           requiredMark={!editing}
-          hint={editing ? 'Permanent' : 'Upper-cased and underscored automatically'}
+          hint={
+            editing
+              ? t('expensesCategoryModal.permanent')
+              : t('expensesCategoryModal.upperCasedAndUnderscoredAutomatically')
+          }
           value={code}
           onChange={(e) => setCode(e.target.value)}
-          placeholder="e.g. OFFICE_RENT"
+          placeholder={t('expensesCategoryModal.eGOfficeRent')}
           maxLength={60}
           readOnly={editing}
           disabled={editing}
           inputClassName="sk-ident"
         />
         <TextField
-          label="Name"
+          label={t('expensesCategoryModal.name')}
           requiredMark
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Office rent"
+          placeholder={t('expensesCategoryModal.eGOfficeRent2')}
           maxLength={120}
           showCount
         />
         <TextArea
-          label="What goes here"
-          hint="For whoever records the next one"
+          label={t('expensesCategoryModal.whatGoesHere')}
+          hint={t('expensesCategoryModal.forWhoeverRecordsTheNext')}
           value={hint}
           onChange={(e) => setHint(e.target.value)}
           rows={2}
           maxLength={500}
           showCount
-          placeholder="e.g. Warehouse and office rent, excluding utilities"
+          placeholder={t('expensesCategoryModal.eGWarehouseAndOffice')}
         />
         {error !== null && (
           <p className="mo-error" role="alert">

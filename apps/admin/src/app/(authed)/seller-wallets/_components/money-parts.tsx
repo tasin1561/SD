@@ -1,3 +1,5 @@
+'use client';
+
 import type { ReactElement, ReactNode } from 'react';
 import { OctagonX } from 'lucide-react';
 import { InboundFreightStatus, TopupRequestStatus, WithdrawalRequestStatus } from '@skydrop/db';
@@ -10,6 +12,7 @@ import {
   withdrawalStatusLabel,
 } from '@skydrop/ui/status';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
+import { useLocale } from '@/i18n/client';
 import './money-kit.css';
 
 /**
@@ -190,7 +193,12 @@ export function TopupChip({ status }: { readonly status: string }): ReactElement
 
 /** An inbound freight bill status, as a chip. */
 export function FreightChip({ status }: { readonly status: InboundFreightStatus }): ReactElement {
+  const locale = useLocale();
   return (
-    <StatusChip kind={inboundFreightStatusKind(status)} label={statusLabel(status)} size="sm" />
+    <StatusChip
+      kind={inboundFreightStatusKind(status)}
+      label={statusLabel(status, locale)}
+      size="sm"
+    />
   );
 }

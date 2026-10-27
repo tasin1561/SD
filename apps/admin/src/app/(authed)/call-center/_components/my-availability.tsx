@@ -15,6 +15,7 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { OoCard } from '../../orders/_components/order-ops-parts';
 import './call-center.css';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * The agent's own availability switch.
@@ -62,6 +63,7 @@ function useSetMyAvailability(): UseMutationResult<AgentSettings, Error, { isAva
 }
 
 export function MyAvailability(): ReactElement {
+  const t = useT();
   const settings = useMySettings();
   const update = useSetMyAvailability();
 
@@ -85,12 +87,12 @@ export function MyAvailability(): ReactElement {
         <div className="cc-avail__state">
           <StatusChip
             kind={available ? 'delivered' : 'cancelled'}
-            label={available ? 'available' : 'not taking calls'}
+            label={available ? 'available' : t('callCenterMyAvailability.notTakingCalls')}
           />
           <span className="oo-muted">
             {available
-              ? 'Orders will be assigned to you.'
-              : 'Nothing new will be assigned until you turn this back on.'}
+              ? t('callCenterMyAvailability.ordersWillBeAssignedTo')
+              : t('callCenterMyAvailability.nothingNewWillBeAssigned')}
           </span>
         </div>
         <Button
@@ -100,7 +102,11 @@ export function MyAvailability(): ReactElement {
           disabled={update.isPending}
           onClick={() => update.mutate({ isAvailable: !available })}
         >
-          {update.isPending ? 'Saving…' : available ? 'Stop taking calls' : 'Start taking calls'}
+          {update.isPending
+            ? t('callCenterMyAvailability.saving')
+            : available
+              ? t('callCenterMyAvailability.stopTakingCalls')
+              : t('callCenterMyAvailability.startTakingCalls')}
         </Button>
       </div>
       {update.error !== null && (

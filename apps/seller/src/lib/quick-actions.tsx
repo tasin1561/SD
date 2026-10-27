@@ -2,6 +2,8 @@ import type { SellerMe } from '@skydrop/api-client';
 import type { MenuAction } from '@skydrop/ui/components';
 import { PackagePlus, Boxes } from 'lucide-react';
 import { can } from './page-access';
+import { makeTranslator, type Translate } from '@skydrop/ui/app/i18n';
+import { CATALOGS, type MessageKey } from '@/i18n/catalog';
 
 /**
  * What sits behind "Quick actions" in the top bar.
@@ -20,14 +22,19 @@ import { can } from './page-access';
  */
 export function quickActionsFor(
   identity: Pick<SellerMe, 'permissions'> | null,
+  translate?: Translate<MessageKey>,
 ): readonly MenuAction[] {
+  // No translator: the English catalogue, so a caller that does not care
+  // about the UI language (and the unit spec) sees the words as before.
+  const t: Translate<MessageKey> =
+    translate ?? makeTranslator<MessageKey>(CATALOGS.en, CATALOGS.en);
   const actions: MenuAction[] = [];
 
   if (can(identity, 'orders.create')) {
     actions.push({
       href: '/orders/new',
-      label: 'New order',
-      hint: 'Enter one order manually',
+      label: t('quickActions.newOrder'),
+      hint: t('quickActions.enterOneOrderManually'),
       icon: <PackagePlus size={15} />,
     });
   }
@@ -42,8 +49,8 @@ export function quickActionsFor(
   if (can(identity, 'catalog.manage')) {
     actions.push({
       href: '/products/new',
-      label: 'New product',
-      hint: 'Add a product and its variants',
+      label: t('quickActions.newProduct'),
+      hint: t('quickActions.addAProductAndItsVariants'),
       // The nav's Products icon, so the menu entry and the page it opens
       // read as the same thing.
       icon: <Boxes size={15} />,

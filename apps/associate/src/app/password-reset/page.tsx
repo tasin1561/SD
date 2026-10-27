@@ -6,8 +6,9 @@ import { Mail, Send } from 'lucide-react';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { OtherPortals } from '@skydrop/ui/app/sign-in';
 import { TextField } from '@skydrop/ui/app/text-field';
+import { useLocale, useT } from '@/i18n/client';
 import { AuthFrame } from '@/components/auth-frame';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { AuthNotice } from '../login/_components/auth-notice';
 
 /**
@@ -15,6 +16,8 @@ import { AuthNotice } from '../login/_components/auth-notice';
  * has a login, so this page says the same thing either way.
  */
 export default function PasswordResetRequestPage(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const [email, setEmail] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -32,31 +35,35 @@ export default function PasswordResetRequestPage(): ReactElement {
       });
       setState('sent');
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setState('idle');
     }
   }
 
   return (
     <AuthFrame
-      title="Reset your password"
-      subtitle="We will email you a link that works for 30 minutes."
+      title={t('auth.reset.request.title')}
+      subtitle={t('auth.reset.request.subtitle')}
       footer={
         <>
-          <a href="/login">Back to sign in</a>
+          <a href="/login">{t('auth.reset.request.back')}</a>
           {/*
            * The chooser matters more here than on /login: the API answers
            * a reset request identically whether or not the email has a
            * login here, so somebody in the wrong console is told a link
            * is on its way and then gets nothing.
            */}
-          <OtherPortals self="associate" title="Reset it somewhere else?" />
+          <OtherPortals
+            self="associate"
+            title={t('auth.reset.request.elsewhere')}
+            locale={locale}
+          />
         </>
       }
     >
       {state === 'sent' ? (
         <AuthNotice tone="good" role="status">
-          If that email has a login here, a reset link is on its way. Check your inbox.
+          {t('auth.reset.request.sent')}
         </AuthNotice>
       ) : (
         <form
@@ -69,7 +76,7 @@ export default function PasswordResetRequestPage(): ReactElement {
           <TextField
             id="email"
             type="email"
-            label="Email"
+            label={t('common.email')}
             icon={<Mail size={15} />}
             autoComplete="email"
             required
@@ -87,7 +94,11 @@ export default function PasswordResetRequestPage(): ReactElement {
             size="lg"
             fullWidth
             icon={<Send size={15} />}
-            labels={{ idle: 'Send the link', busy: 'Sending…', error: 'Not sent' }}
+            labels={{
+              idle: t('auth.reset.request.send'),
+              busy: t('auth.reset.request.sending'),
+              error: t('auth.reset.request.notSent'),
+            }}
             state={state === 'sending' ? 'busy' : error !== null ? 'error' : 'idle'}
             disabled={state === 'sending'}
           />

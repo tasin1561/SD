@@ -42,6 +42,28 @@ import {
   StoreAddressChangeStatus,
   StoreOrderRequestStatus,
 } from '@skydrop/db';
+import type { Locale } from '../app/i18n';
+import {
+  DELIVERY_ACTION_STATUS_BN,
+  FREIGHT_MODE_EXPLAINER_BN,
+  FREIGHT_MODE_WORDS_BN,
+  JOURNEY_OWNER_BN,
+  RESELLER_CREDIT_STATUS_BN,
+  RESELLER_STORE_STATUS_BN,
+  STATUS_LABEL_BN,
+  STORE_ADDRESS_CHANGE_STATUS_BN,
+  STORE_ORDER_REQUEST_STATUS_BN,
+  STORE_WALLET_DIRECTION_BN,
+  TICKET_STATUS_BN,
+  TOPUP_STATUS_BN,
+  UPLOAD_STATUS_BN,
+  WALLET_DIRECTION_BN,
+  WITHDRAWAL_STATUS_BN,
+  WITHDRAWAL_STATUS_SELLER_BN,
+} from './bn';
+
+/** The Bangla tables, for a consumer's own consistency spec. Additive. */
+export { STATUS_LABEL_BN, STATUS_LABEL_BN_SOURCES } from './bn';
 
 export const STATUS_KINDS = [
   'draft',
@@ -211,7 +233,8 @@ export function shipmentStatusKind(status: ShipmentStatus): StatusKind {
  * F2-exhaustive: a new TicketStatus fails to compile until somebody
  * decides how it reads.
  */
-export function ticketStatusLabel(status: TicketStatus): string {
+export function ticketStatusLabel(status: TicketStatus, locale: Locale = 'en'): string {
+  if (locale === 'bn') return TICKET_STATUS_BN[status];
   switch (status) {
     case TicketStatus.OPEN:
       return 'Open';
@@ -441,7 +464,8 @@ export function uploadStatusKind(status: BulkUploadStatus): StatusKind {
   }
 }
 
-export function uploadStatusLabel(status: BulkUploadStatus): string {
+export function uploadStatusLabel(status: BulkUploadStatus, locale: Locale = 'en'): string {
+  if (locale === 'bn') return UPLOAD_STATUS_BN[status];
   switch (status) {
     case BulkUploadStatus.PENDING:
       return 'Waiting';
@@ -470,7 +494,9 @@ export function uploadStatusLabel(status: BulkUploadStatus): string {
 export function topupStatusLabel(
   status: TopupRequestStatus,
   audience: 'staff' | 'payer' = 'staff',
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'bn') return TOPUP_STATUS_BN[audience][status];
   switch (status) {
     case TopupRequestStatus.PENDING:
       return audience === 'payer' ? 'Waiting for Skydrop to see it' : 'Waiting for review';
@@ -550,7 +576,11 @@ export function deliveryActionStatusKind(status: DeliveryActionStatus): StatusKi
 }
 
 /** The same five states in the words the store and the seller read. */
-export function deliveryActionStatusLabel(status: DeliveryActionStatus): string {
+export function deliveryActionStatusLabel(
+  status: DeliveryActionStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return DELIVERY_ACTION_STATUS_BN[status];
   switch (status) {
     case DeliveryActionStatus.PENDING:
       return 'Waiting on the client';
@@ -612,7 +642,11 @@ export function storeAddressChangeStatusKind(status: StoreAddressChangeStatus): 
 }
 
 /** The same five states in the words the store and seller staff read. */
-export function storeAddressChangeStatusLabel(status: StoreAddressChangeStatus): string {
+export function storeAddressChangeStatusLabel(
+  status: StoreAddressChangeStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return STORE_ADDRESS_CHANGE_STATUS_BN[status];
   switch (status) {
     case StoreAddressChangeStatus.PENDING:
       return 'Waiting on client staff';
@@ -660,7 +694,11 @@ export function storeOrderRequestStatusKind(status: StoreOrderRequestStatus): St
   }
 }
 
-export function storeOrderRequestStatusLabel(status: StoreOrderRequestStatus): string {
+export function storeOrderRequestStatusLabel(
+  status: StoreOrderRequestStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return STORE_ORDER_REQUEST_STATUS_BN[status];
   switch (status) {
     case StoreOrderRequestStatus.PENDING:
       return 'Waiting on client staff';
@@ -681,7 +719,11 @@ export function storeOrderRequestStatusLabel(status: StoreOrderRequestStatus): s
   }
 }
 
-export function resellerStoreStatusLabel(status: ResellerStoreStatus): string {
+export function resellerStoreStatusLabel(
+  status: ResellerStoreStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return RESELLER_STORE_STATUS_BN[status];
   switch (status) {
     case ResellerStoreStatus.PENDING_SELLER_APPROVAL:
       return 'awaiting approval';
@@ -725,7 +767,11 @@ export function resellerCreditStatusKind(status: ResellerCreditStatus): StatusKi
 }
 
 /** The words a person reads for a reseller order credit's status. */
-export function resellerCreditStatusLabel(status: ResellerCreditStatus): string {
+export function resellerCreditStatusLabel(
+  status: ResellerCreditStatus,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return RESELLER_CREDIT_STATUS_BN[status];
   switch (status) {
     case ResellerCreditStatus.WAITING:
       return 'waiting';
@@ -796,7 +842,11 @@ export function stockUnitStatusKind(status: StockUnitStatus): StatusKind {
  * underscores → spaces + title case; overrides for the few statuses
  * where the enum name reads awkwardly. UI calls this when it needs
  * a one-line display string; for richer copy the consumer composes
- * its own (we don't ship i18n in M12 — that's M16/i18n package).
+ * its own.
+ *
+ * `locale` (default `en`, so every existing caller is unchanged) selects the
+ * Bangla words in `./bn.ts`. A value with no Bangla entry falls back to the
+ * English word rather than to nothing.
  */
 export function statusLabel(
   status:
@@ -807,7 +857,12 @@ export function statusLabel(
     | WithdrawalRequestStatus
     | EarlyReservationReviewStatus
     | StockUnitStatus,
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'bn') {
+    const bn = STATUS_LABEL_BN[String(status)];
+    if (bn !== undefined) return bn;
+  }
   // "Voided" is the enum's word; WITHDRAWN is the one every sentence
   // beside the badge uses, and a badge that disagrees with its own
   // caption reads as two different things having happened. Safe as a
@@ -856,7 +911,14 @@ export function statusLabel(
 export function withdrawalStatusLabel(
   status: WithdrawalRequestStatus,
   audience: 'staff' | 'seller' = 'staff',
+  locale: Locale = 'en',
 ): string {
+  if (locale === 'bn') {
+    // The staff words come from the table the flat `STATUS_LABEL_BN`
+    // lookup is built from, so staff cannot read one Bangla word here
+    // and a different one on a list that renders the same enum.
+    return (audience === 'seller' ? WITHDRAWAL_STATUS_SELLER_BN : WITHDRAWAL_STATUS_BN)[status];
+  }
   switch (status) {
     case WithdrawalRequestStatus.PENDING:
       return audience === 'seller' ? 'Requested' : 'Pending';
@@ -992,7 +1054,11 @@ export function isWalletCredit(direction: WalletEntryDirection): boolean {
 }
 
 /** The human label for a ledger row. Same words on both apps. */
-export function walletDirectionLabel(direction: WalletEntryDirection): string {
+export function walletDirectionLabel(
+  direction: WalletEntryDirection,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return WALLET_DIRECTION_BN[direction];
   switch (direction) {
     case WalletEntryDirection.COD_COLLECTION:
       return 'COD collected';
@@ -1122,13 +1188,19 @@ export function isStoreWalletCredit(direction: StoreWalletEntryDirection): boole
  */
 export function storeWalletDirectionLabel(
   direction: StoreWalletEntryDirection,
-  seller = 'the client',
+  seller?: string,
+  locale: Locale = 'en',
 ): string {
+  // `seller` is optional rather than defaulted, because the fallback
+  // word differs by language: a Bangla reader must not be told the
+  // money came from "the client".
+  if (locale === 'bn') return STORE_WALLET_DIRECTION_BN[direction](seller ?? 'ক্লায়েন্ট');
+  const who = seller ?? 'the client';
   switch (direction) {
     case StoreWalletEntryDirection.SELLER_TOPUP:
-      return `Topped up by ${seller}`;
+      return `Topped up by ${who}`;
     case StoreWalletEntryDirection.SELLER_PAYOUT:
-      return `Paid by ${seller} (recorded)`;
+      return `Paid by ${who} (recorded)`;
     case StoreWalletEntryDirection.TOPUP:
       return 'Top-up received';
     case StoreWalletEntryDirection.WITHDRAWAL:
@@ -1148,13 +1220,13 @@ export function storeWalletDirectionLabel(
     case StoreWalletEntryDirection.PREPAID_REFUND:
       return 'Prepaid order refunded';
     case StoreWalletEntryDirection.TRANSFER_PRICE:
-      return `Goods at ${seller}’s transfer price`;
+      return `Goods at ${who}’s transfer price`;
     case StoreWalletEntryDirection.TRANSFER_PRICE_REFUND:
       return 'Transfer price given back';
     case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_IN:
-      return `Dispute settled — paid by ${seller}`;
+      return `Dispute settled — paid by ${who}`;
     case StoreWalletEntryDirection.DISPUTE_SETTLEMENT_OUT:
-      return `Dispute settled — paid to ${seller}`;
+      return `Dispute settled — paid to ${who}`;
     default: {
       const exhaustive: never = direction;
       throw new Error(`Unhandled StoreWalletEntryDirection: ${String(exhaustive)}`);
@@ -1207,7 +1279,12 @@ export type FreightAudience = 'STAFF' | 'SELLER';
  * places — so the risk was never an omission, it was WORDING: the same
  * mode reading two different ways on two screens of the same app.
  */
-export function freightModeWords(mode: InboundFreightMode, audience: FreightAudience): string {
+export function freightModeWords(
+  mode: InboundFreightMode,
+  audience: FreightAudience,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return FREIGHT_MODE_WORDS_BN[audience][mode];
   switch (mode) {
     case InboundFreightMode.PAY_ADVANCE:
       return audience === 'STAFF' ? 'Pay in advance' : 'Paid before it flew';
@@ -1231,7 +1308,12 @@ export function freightModeWords(mode: InboundFreightMode, audience: FreightAudi
  * other two and the one a seller most needs to recognise on a wallet
  * they have already been debited from.
  */
-export function freightModeExplainer(mode: InboundFreightMode, audience: FreightAudience): string {
+export function freightModeExplainer(
+  mode: InboundFreightMode,
+  audience: FreightAudience,
+  locale: Locale = 'en',
+): string {
+  if (locale === 'bn') return FREIGHT_MODE_EXPLAINER_BN[audience][mode];
   switch (mode) {
     case InboundFreightMode.PAY_ADVANCE:
       return audience === 'STAFF'
@@ -1301,7 +1383,8 @@ export const FREIGHT_MODES: readonly InboundFreightMode[] = [
  */
 export type MilestoneOwner = 'SKYDROP' | 'SELLER' | 'STORE' | 'COURIER';
 
-export function journeyOwnerLabel(owner: MilestoneOwner): string {
+export function journeyOwnerLabel(owner: MilestoneOwner, locale: Locale = 'en'): string {
+  if (locale === 'bn') return JOURNEY_OWNER_BN[owner];
   switch (owner) {
     case 'SKYDROP':
       return 'Skydrop';

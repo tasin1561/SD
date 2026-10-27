@@ -5,6 +5,8 @@ import { resolveSellerSsrIdentity } from '@skydrop/auth/server';
 import { OtherPortals, SignInCard } from '@skydrop/ui/app/sign-in';
 import { apiOrigin } from '@/lib/api-origin';
 import { LoginForm } from './_components/login-form';
+import { getT } from '@/i18n/server';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Login entry. If the visitor already has a valid __Host-sellerRefresh
@@ -28,6 +30,7 @@ import { LoginForm } from './_components/login-form';
  * means no console can be left off this page by omission.
  */
 export default async function LoginPage(): Promise<ReactElement> {
+  const { t, locale } = await getT();
   const jar = await cookies();
   const cookieValue = jar.get('__Host-sellerRefresh')?.value ?? '';
   if (cookieValue) {
@@ -43,17 +46,21 @@ export default async function LoginPage(): Promise<ReactElement> {
 
   return (
     <SignInCard
-      title="Sign in"
-      note="Use the credentials from your Skydrop invitation."
+      title={t('login.signIn')}
+      note={t('login.useTheCredentialsFrom')}
       footer={
         <>
           <p>
-            Forgot your password? <a href="/password-reset">Reset it</a>
+            {richMessage(t('login.forgotYourPassword'), {
+              a: <a href="/password-reset">{t('login.resetIt')}</a>,
+            })}
           </p>
           <p>
-            No account yet? <a href="/sign-up">How to get one</a>
+            {richMessage(t('login.noAccountYet'), {
+              a: <a href="/sign-up">{t('login.howToGetOne')}</a>,
+            })}
           </p>
-          <OtherPortals self="client" />
+          <OtherPortals self="client" locale={locale} />
         </>
       }
     >

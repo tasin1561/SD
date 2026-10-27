@@ -7,6 +7,7 @@ import { useOrdersList } from '@/lib/api-hooks';
 import { useSellerTickets } from '@/lib/ops-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
+import { useT } from '@/i18n/client';
 
 /**
  * A ticket number being typed — `TK-2026-000003`, or its start (`tk-2026`).
@@ -42,6 +43,7 @@ export function looksLikeTicketNumber(term: string): boolean {
  * more, and the list is the answer.
  */
 export function OrderOmnisearch(): ReactElement | null {
+  const t = useT();
   const router = useRouter();
   const identity = useSellerIdentity();
   const canSee = can(identity, 'orders.view');
@@ -117,8 +119,8 @@ export function OrderOmnisearch(): ReactElement | null {
           className="sd-field bg-bg border-border text-text-bright placeholder:text-text-faint focus:border-accent focus:ring-accent/25 min-h-[34px] w-full rounded-[5px] border py-1.5 pr-3 pl-8 text-sm transition-colors focus:ring-2 focus:outline-none"
           type="search"
           value={term}
-          placeholder="Order, AWB, ticket, name or phone…"
-          aria-label="Find an order or ticket"
+          placeholder={t('authedShell.orderAwbTicketName')}
+          aria-label={t('authedShell.findAnOrderOr')}
           onChange={(e) => {
             setTerm(e.target.value);
             setOpen(true);
@@ -167,12 +169,11 @@ export function OrderOmnisearch(): ReactElement | null {
             </ul>
           ) : null}
           {q.isFetching && items.length === 0 ? (
-            <p className="text-text-muted px-3 py-2 text-xs">Searching…</p>
+            <p className="text-text-muted px-3 py-2 text-xs">{t('authedShell.searching')}</p>
           ) : items.length === 0 ? (
             tickets.length > 0 ? null : (
               <p className="text-text-muted px-3 py-2 text-xs">
-                Nothing matches that. It searches the order number, your own reference, the
-                recipient’s name and phone, the waybill, and a ticket number (TK-…).
+                {t('authedShell.nothingMatchesThatIt')}
               </p>
             )
           ) : (

@@ -16,6 +16,7 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
 
 type Mode = 'paid' | 'reject';
 
@@ -35,6 +36,7 @@ export function ResolveWithdrawalModal({
   readonly request: WithdrawalRequestView | null;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   // Paying is only possible once approved — `markPaid` refuses anything
   // else. A PENDING request can still be rejected, so the modal opens
   // in the only mode that would work rather than offering one the
@@ -72,13 +74,13 @@ export function ResolveWithdrawalModal({
           requestId: request.id,
           linkedRemittanceId: remittanceId.trim(),
         });
-        toast.success('Withdrawal marked paid.');
+        toast.success(t('withdrawalsResolveWithdrawalModal.withdrawalMarkedPaid'));
       } else {
         await reject.mutateAsync({
           requestId: request.id,
           reason: reason.trim(),
         });
-        toast.success('Withdrawal rejected.');
+        toast.success(t('withdrawalsResolveWithdrawalModal.withdrawalRejected'));
       }
       onClose();
     } catch (err) {
@@ -99,29 +101,36 @@ export function ResolveWithdrawalModal({
       size="md"
       tone={mode === 'reject' ? 'critical' : 'default'}
       locked={busy}
-      title="Resolve withdrawal request"
+      title={t('withdrawalsResolveWithdrawalModal.resolveWithdrawalRequest')}
       description={
         request === null ? undefined : (
           <span className="mk-balances">
             <WithdrawalChip status={request.status} />
-            <span className="mk-faint">raised {new Date(request.createdAt).toLocaleString()}</span>
+            <span className="mk-faint">
+              {t('withdrawalsResolveWithdrawalModal.raised', {
+                value: new Date(request.createdAt).toLocaleString(),
+              })}
+            </span>
           </span>
         )
       }
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={onClose} disabled={busy}>
-            Cancel
+            {t('withdrawalsResolveWithdrawalModal.cancel')}
           </Button>
           <AsyncButton
             variant={mode === 'reject' ? 'destructive' : 'primary'}
             size="md"
             disabled={!canSubmit || !canResolve}
             labels={{
-              idle: mode === 'paid' ? 'Mark paid' : 'Reject request',
-              busy: 'Saving…',
-              done: 'Saved',
-              error: 'Refused',
+              idle:
+                mode === 'paid'
+                  ? t('withdrawalsResolveWithdrawalModal.markPaid')
+                  : t('withdrawalsResolveWithdrawalModal.rejectRequest'),
+              busy: t('withdrawalsResolveWithdrawalModal.saving'),
+              done: t('withdrawalsResolveWithdrawalModal.saved'),
+              error: t('withdrawalsResolveWithdrawalModal.refused'),
             }}
             onAction={submit}
           />
@@ -133,13 +142,13 @@ export function ResolveWithdrawalModal({
           <MkDl
             items={[
               {
-                label: 'Amount',
+                label: t('withdrawalsResolveWithdrawalModal.amount'),
                 value: (
                   <Money amount={request.amountRequested} currency={request.currency} size="md" />
                 ),
               },
               {
-                label: 'Client',
+                label: t('withdrawalsResolveWithdrawalModal.client'),
                 value: (
                   <Link href={`/sellers/${request.sellerId}`} className="mk-inline-link">
                     <Ident value={request.sellerId} />
@@ -147,12 +156,14 @@ export function ResolveWithdrawalModal({
                 ),
               },
               {
-                label: 'Source',
+                label: t('withdrawalsResolveWithdrawalModal.source'),
                 value:
-                  request.requestedBy === 'SYSTEM' ? 'Auto-withdraw cycle' : 'Client-initiated',
+                  request.requestedBy === 'SYSTEM'
+                    ? t('withdrawalsResolveWithdrawalModal.autoWithdrawCycle')
+                    : t('withdrawalsResolveWithdrawalModal.clientInitiated'),
               },
               {
-                label: 'Note',
+                label: t('withdrawalsResolveWithdrawalModal.note'),
                 value:
                   request.note === null || request.note === '' ? (
                     <span className="mk-faint">—</span>
@@ -164,7 +175,7 @@ export function ResolveWithdrawalModal({
           />
 
           <fieldset className="mk-radios">
-            <legend className="sr-only">Outcome</legend>
+            <legend className="sr-only">{t('withdrawalsResolveWithdrawalModal.outcome')}</legend>
             {(payable ? (['paid', 'reject'] as const) : (['reject'] as const)).map((m) => (
               <label key={m} className="mk-radio">
                 <input
@@ -174,7 +185,11 @@ export function ResolveWithdrawalModal({
                   checked={mode === m}
                   onChange={() => setMode(m)}
                 />
-                <span>{m === 'paid' ? 'Mark paid' : 'Reject'}</span>
+                <span>
+                  {m === 'paid'
+                    ? t('withdrawalsResolveWithdrawalModal.markPaid')
+                    : t('withdrawalsResolveWithdrawalModal.reject')}
+                </span>
               </label>
             ))}
           </fieldset>
@@ -182,8 +197,8 @@ export function ResolveWithdrawalModal({
           {mode === 'paid' ? (
             <TextField
               id="wd-remittance"
-              label="Remittance ID"
-              hint="The remittance that actually paid this out. Record it under Remittances first — this only links the two."
+              label={t('withdrawalsResolveWithdrawalModal.remittanceId')}
+              hint={t('withdrawalsResolveWithdrawalModal.theRemittanceThatActuallyPaid')}
               requiredMark
               value={remittanceId}
               onChange={(e) => setRemittanceId(e.target.value)}
@@ -194,13 +209,13 @@ export function ResolveWithdrawalModal({
           ) : (
             <TextArea
               id="wd-reason"
-              label="Reason"
-              hint="Shown to the client. Say what would make a resubmission succeed."
+              label={t('withdrawalsResolveWithdrawalModal.reason')}
+              hint={t('withdrawalsResolveWithdrawalModal.shownToTheClientSay')}
               requiredMark
               rows={3}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Balance is below the minimum withdrawal threshold this cycle."
+              placeholder={t('withdrawalsResolveWithdrawalModal.balanceIsBelowTheMinimum')}
             />
           )}
 

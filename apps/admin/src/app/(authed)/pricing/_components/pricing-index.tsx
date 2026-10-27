@@ -15,6 +15,9 @@ import { TriangleAlert } from 'lucide-react';
 import { Facts, MoSection, Notice } from '../../treasury/_components/money-parts';
 import './pricing.css';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * What would this shipment cost?
@@ -83,20 +86,17 @@ function usePricingPreview(): UseMutationResult<PricingResult, Error, PreviewBod
 }
 
 /** Plain-language explanations. A code alone tells you nothing actionable. */
-const FALLBACK_TEXT: Record<string, string> = {
-  NO_RATE_CARD:
-    'No rate card applies to this client — base shipping is zero, which is not a price.',
-  NO_RATE_CARD_ITEM:
-    'No rate exists for this courier, zone and weight slab. Base shipping fell back to zero.',
-  ZONE_FALLBACK_DEFAULT:
-    'The destination pincode did not resolve to a zone, so the DEFAULT zone rate was used.',
-  NO_COURIER: 'No courier resolved — the default courier setting may be unset.',
-  NO_GST_RATE: 'No GST rate configured; the built-in 18% was used.',
-  TIERED_SURCHARGE_NOT_IMPLEMENTED:
-    'A tiered surcharge rule applies but tiered calculation is not built — it contributed zero.',
-};
+const FALLBACK_TEXT = (t: Translate<MessageKey>): Record<string, string> => ({
+  NO_RATE_CARD: t('pricingPricingIndex.noRateCardAppliesTo'),
+  NO_RATE_CARD_ITEM: t('pricingPricingIndex.noRateExistsForThis'),
+  ZONE_FALLBACK_DEFAULT: t('pricingPricingIndex.theDestinationPincodeDidNot'),
+  NO_COURIER: t('pricingPricingIndex.noCourierResolvedTheDefault'),
+  NO_GST_RATE: t('pricingPricingIndex.noGstRateConfiguredThe'),
+  TIERED_SURCHARGE_NOT_IMPLEMENTED: t('pricingPricingIndex.aTieredSurchargeRuleApplies'),
+});
 
 export function PricingIndex(): ReactElement {
+  const t = useT();
   const preview = usePricingPreview();
   const [form, setForm] = useState({
     sellerId: '',
@@ -124,8 +124,8 @@ export function PricingIndex(): ReactElement {
   return (
     <div className="mo-page">
       <PageHeader
-        title="Pricing preview"
-        subtitle="What the engine would charge for a shipment, without creating an order to find out."
+        title={t('pricingPricingIndex.pricingPreview')}
+        subtitle={t('pricingPricingIndex.whatTheEngineWouldCharge')}
       />
 
       {/* Above the calculator: a shipment nobody priced is worth more
@@ -135,25 +135,25 @@ export function PricingIndex(): ReactElement {
         <BillUnbilledCard />
       </div>
 
-      <MoSection title="The shipment">
+      <MoSection title={t('pricingPricingIndex.theShipment')}>
         <div className="mo-fields" data-cols="2">
           <TextField
             id="pp-seller"
-            label="Client id"
-            hint="Their rate card and discounts apply."
+            label={t('pricingPricingIndex.clientId')}
+            hint={t('pricingPricingIndex.theirRateCardAndDiscounts')}
             value={form.sellerId}
             onChange={(e) => set('sellerId', e.target.value)}
           />
           <TextField
             id="pp-pin"
-            label="Destination pincode"
+            label={t('pricingPricingIndex.destinationPincode')}
             value={form.recipientPostalCode}
             onChange={(e) => set('recipientPostalCode', e.target.value)}
             placeholder="560001"
           />
           <TextField
             id="pp-weight"
-            label="Weight (grams)"
+            label={t('pricingPricingIndex.weightGrams')}
             type="number"
             min={1}
             value={form.totalWeightGrams}
@@ -161,7 +161,7 @@ export function PricingIndex(): ReactElement {
           />
           <TextField
             id="pp-value"
-            label="Declared value (₹)"
+            label={t('pricingPricingIndex.declaredValue')}
             type="number"
             min={0}
             value={form.declaredValueInr}
@@ -169,18 +169,18 @@ export function PricingIndex(): ReactElement {
           />
           <Select
             id="pp-mode"
-            label="Payment"
+            label={t('pricingPricingIndex.payment')}
             value={form.paymentMode}
             onChange={(e) => set('paymentMode', e.target.value)}
           >
-            <option value="PREPAID">Prepaid</option>
-            <option value="COD">Cash on delivery</option>
+            <option value="PREPAID">{t('pricingPricingIndex.prepaid')}</option>
+            <option value="COD">{t('pricingPricingIndex.cashOnDelivery')}</option>
           </Select>
           {form.paymentMode === 'COD' && (
             <TextField
               id="pp-cod"
-              label="COD amount (₹)"
-              hint="What the customer pays the courier."
+              label={t('pricingPricingIndex.codAmount')}
+              hint={t('pricingPricingIndex.whatTheCustomerPaysThe')}
               type="number"
               min={0}
               value={form.codAmountInr}
@@ -189,8 +189,8 @@ export function PricingIndex(): ReactElement {
           )}
           <TextField
             id="pp-courier"
-            label="Courier"
-            hint="Optional — defaults to the system courier."
+            label={t('pricingPricingIndex.courier')}
+            hint={t('pricingPricingIndex.optionalDefaultsToTheSystem')}
             value={form.courierCode}
             onChange={(e) => set('courierCode', e.target.value)}
             placeholder="delhivery"
@@ -200,7 +200,11 @@ export function PricingIndex(): ReactElement {
         <div className="mo-row">
           <AsyncButton
             size="md"
-            labels={{ idle: 'Calculate', busy: 'Calculating…', done: 'Calculated' }}
+            labels={{
+              idle: t('pricingPricingIndex.calculate'),
+              busy: t('pricingPricingIndex.calculating'),
+              done: t('pricingPricingIndex.calculated'),
+            }}
             disabled={!complete || preview.isPending}
             onAction={() =>
               preview.mutateAsync({
@@ -226,14 +230,14 @@ export function PricingIndex(): ReactElement {
             <Notice
               tone="warn"
               icon={<TriangleAlert size={16} />}
-              title="Read this before quoting the number"
+              title={t('pricingPricingIndex.readThisBeforeQuotingThe')}
             >
-              <p>The engine answered, but some of what it needed was missing and it fell back.</p>
+              <p>{t('pricingPricingIndex.theEngineAnsweredButSome')}</p>
               <ul className="pr-fallbacks">
                 {r.unresolved.map((u) => (
                   <li key={u.reason}>
                     <span className="mo-warn">
-                      {FALLBACK_TEXT[u.reason] ?? u.reason.replace(/_/g, ' ').toLowerCase()}
+                      {FALLBACK_TEXT(t)[u.reason] ?? u.reason.replace(/_/g, ' ').toLowerCase()}
                     </span>
                     {u.detail !== undefined && <span className="mo-faint"> ({u.detail})</span>}
                   </li>
@@ -242,36 +246,39 @@ export function PricingIndex(): ReactElement {
             </Notice>
           )}
 
-          <MoSection title="How it resolved">
+          <MoSection title={t('pricingPricingIndex.howItResolved')}>
             <Facts
               items={[
-                { label: 'Rate card', value: r.rateCardCode ?? '—' },
-                { label: 'Courier', value: r.courierCode ?? '—' },
-                { label: 'Service', value: r.serviceType },
-                { label: 'Zone', value: r.zone },
+                { label: t('pricingPricingIndex.rateCard'), value: r.rateCardCode ?? '—' },
+                { label: t('pricingPricingIndex.courier'), value: r.courierCode ?? '—' },
+                { label: t('pricingPricingIndex.service'), value: r.serviceType },
+                { label: t('pricingPricingIndex.zone'), value: r.zone },
                 {
-                  label: 'Chargeable weight',
+                  label: t('pricingPricingIndex.chargeableWeight'),
                   value: <Num value={r.chargeableWeightGrams} suffix="g" />,
                 },
                 {
-                  label: 'Client discount',
-                  value: r.sellerDiscountPercent === null ? 'None' : `${r.sellerDiscountPercent}%`,
+                  label: t('pricingPricingIndex.clientDiscount'),
+                  value:
+                    r.sellerDiscountPercent === null
+                      ? t('pricingPricingIndex.none')
+                      : `${r.sellerDiscountPercent}%`,
                 },
               ]}
             />
           </MoSection>
 
-          <MoSection title="The charge" flush>
-            <Table caption="The charge">
+          <MoSection title={t('pricingPricingIndex.theCharge')} flush>
+            <Table caption={t('pricingPricingIndex.theCharge')}>
               <THead>
                 <Tr>
-                  <Th>Line</Th>
-                  <Th align="right">Amount</Th>
+                  <Th>{t('pricingPricingIndex.line')}</Th>
+                  <Th align="right">{t('pricingPricingIndex.amount')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 <Tr>
-                  <Td>Base shipping</Td>
+                  <Td>{t('pricingPricingIndex.baseShipping')}</Td>
                   <Td align="right">
                     <Money amount={r.baseShippingInr} />
                   </Td>
@@ -285,14 +292,14 @@ export function PricingIndex(): ReactElement {
                   </Tr>
                 ))}
                 <Tr>
-                  <Td>GST at {r.gstRatePercent}%</Td>
+                  <Td>{t('pricingPricingIndex.gstAt', { gstRatePercent: r.gstRatePercent })}</Td>
                   <Td align="right">
                     <Money amount={r.gstAmountInr} />
                   </Td>
                 </Tr>
                 <Tr className="mo-total-row">
                   <Td>
-                    <strong>Total</strong>
+                    <strong>{t('pricingPricingIndex.total')}</strong>
                   </Td>
                   <Td align="right">
                     <strong>
@@ -305,26 +312,33 @@ export function PricingIndex(): ReactElement {
           </MoSection>
 
           <MoSection
-            title="Margin"
-            note="Internal only — never shown to a client and never touches their wallet."
+            title={t('pricingPricingIndex.margin')}
+            note={t('pricingPricingIndex.internalOnlyNeverShownTo')}
           >
             <Facts
               items={[
-                { label: 'We charge', value: <Money amount={r.margin.baseChargeInr} /> },
                 {
-                  label: 'Courier costs us',
+                  label: t('pricingPricingIndex.weCharge'),
+                  value: <Money amount={r.margin.baseChargeInr} />,
+                },
+                {
+                  label: t('pricingPricingIndex.courierCostsUs'),
                   value:
                     r.margin.costToSkydropInr === null ? (
-                      <span className="mo-faint">Not recorded on the rate card</span>
+                      <span className="mo-faint">
+                        {t('pricingPricingIndex.notRecordedOnTheRate')}
+                      </span>
                     ) : (
                       <Money amount={r.margin.costToSkydropInr} />
                     ),
                 },
                 {
-                  label: 'Margin',
+                  label: t('pricingPricingIndex.margin'),
                   value:
                     r.margin.marginInr === null ? (
-                      <span className="mo-faint">Unknown without a recorded cost</span>
+                      <span className="mo-faint">
+                        {t('pricingPricingIndex.unknownWithoutARecordedCost')}
+                      </span>
                     ) : (
                       <Money
                         amount={r.margin.marginInr}

@@ -12,6 +12,9 @@ import {
 import { EmptyState } from '@skydrop/ui/app/empty-state';
 import type { TrackedShipmentDetail } from '@/lib/api-hooks';
 import '../../orders/_components/orders.css';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * One parcel's story, as the u17 timeline — the same one the public
@@ -37,6 +40,8 @@ export function ParcelTimeline({
   readonly parcel: TrackedShipmentDetail;
   readonly header?: TimelineHeader | undefined;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   /**
    * A delivery attempt belongs to the scan that CAUSED it, and that scan
    * is a DELIVERY_ATTEMPTED one. Nothing else.
@@ -64,8 +69,8 @@ export function ParcelTimeline({
     return (
       <EmptyState
         bare
-        title="No scans yet"
-        description="The courier has the parcel but has not reported on it — the first scan usually appears within a day of pickup."
+        title={t('tracking.noScansYet')}
+        description={t('tracking.theCourierHasThe')}
       />
     );
   }
@@ -84,12 +89,12 @@ export function ParcelTimeline({
     const last = i === all.length - 1;
     return {
       id: e.id,
-      label: statusLabel(e.status as ShipmentStatus),
+      label: statusLabel(e.status as ShipmentStatus, locale),
       // The latest scan is where the parcel is now — unless it has
       // arrived, when there is nothing left in progress.
       state: last && latestKind !== 'delivered' ? 'current' : 'done',
       tone,
-      time: new Date(e.eventAt).toLocaleString(),
+      time: new Date(e.eventAt).toLocaleString(dateTag(locale)),
       ...(e.location !== null ? { location: e.location } : {}),
       description:
         e.description === null &&
@@ -97,19 +102,27 @@ export function ParcelTimeline({
         (attempt === undefined || attempt.outcome === 'DELIVERED') ? undefined : (
           <>
             {e.description !== null && <span>{e.description}</span>}
-            {e.source === 'MANUAL_ENTRY' && <span className="ord-sub">· entered by our team</span>}
+            {e.source === 'MANUAL_ENTRY' && (
+              <span className="ord-sub">{t('tracking.enteredByOurTeam')}</span>
+            )}
             {attempt !== undefined && attempt.outcome !== 'DELIVERED' && (
               <span className="ord-attempt">
                 <span>
-                  Attempt {attempt.attemptNumber} —{' '}
-                  {humanise(attempt.failureReason ?? attempt.outcome)}
+                  {richMessage(t('tracking.attempt'), {
+                    attemptNumber: attempt.attemptNumber,
+                    outcome: humanise(attempt.failureReason ?? attempt.outcome),
+                  })}
                 </span>
                 {attempt.failureNotes !== null && attempt.failureNotes !== '' && (
                   <span className="ord-muted">{attempt.failureNotes}</span>
                 )}
                 {attempt.nextAttemptScheduledAt !== null && (
                   <span className="ord-muted">
-                    Next attempt {new Date(attempt.nextAttemptScheduledAt).toLocaleString()}
+                    {richMessage(t('tracking.nextAttempt'), {
+                      nextAttemptScheduledAt: new Date(
+                        attempt.nextAttemptScheduledAt,
+                      ).toLocaleString(dateTag(locale)),
+                    })}
                   </span>
                 )}
               </span>
@@ -121,13 +134,13 @@ export function ParcelTimeline({
 
   return (
     <Timeline
-      label="Parcel history"
+      label={t('tracking.parcelHistory')}
       steps={steps}
       header={header}
       collapseEarlier={{
         keep: 5,
-        showLabel: 'Show {n} earlier scans',
-        hideLabel: 'Hide earlier scans',
+        showLabel: t('tracking.showEarlierScans'),
+        hideLabel: t('tracking.hideEarlierScans'),
       }}
     />
   );

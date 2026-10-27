@@ -1,12 +1,7 @@
 import type { ReactNode, ReactElement } from 'react';
-import { SignInFrame } from '@skydrop/ui/app/sign-in';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { SellerSignInFrame } from '@/components/auth-frame';
 
 /** Asking for a reset link is the same front door as signing in. */
 export default function PasswordResetLayout({ children }: { children: ReactNode }): ReactElement {
-  return (
-    <SignInFrame portal="client portal" themeControl={<ThemeSwitch />}>
-      {children}
-    </SignInFrame>
-  );
+  return <SellerSignInFrame>{children}</SellerSignInFrame>;
 }

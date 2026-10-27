@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withAppCatalogue, withCatalogEnglish } from './i18n-source';
 
 /**
  * Two more capabilities the server had and nothing could reach.
@@ -55,7 +56,7 @@ describe('a stock adjustment can be raised', () => {
 
   it('reports whether it applied or queued, which is INV-8’s whole point', () => {
     expect(src).toContain("result.status === 'PENDING'");
-    expect(src).toContain('waiting for approval');
+    expect(withCatalogEnglish(src)).toContain('waiting for approval');
   });
 
   it('is gated on the create permission', () => {
@@ -72,7 +73,7 @@ describe('a stock adjustment can be raised', () => {
 
 describe('a client can retire a product', () => {
   it('the product page offers archive and restore', () => {
-    const src = R(SELLER_PRODUCT);
+    const src = withAppCatalogue(R(SELLER_PRODUCT), 'seller');
     expect(src).toContain('Archive product');
     expect(src).toContain('Restore product');
   });
@@ -87,7 +88,7 @@ describe('a client can retire a product', () => {
   it('says that restoring does NOT bring the variants back', () => {
     // Archiving a product cascades to variants; unarchiving does not.
     // Which ones should live again is a decision, not an inference.
-    expect(R(SELLER_PRODUCT)).toContain('variants stay archived');
+    expect(withAppCatalogue(R(SELLER_PRODUCT), 'seller')).toContain('variants stay archived');
   });
 
   it('both hooks hit the archive/unarchive routes', () => {

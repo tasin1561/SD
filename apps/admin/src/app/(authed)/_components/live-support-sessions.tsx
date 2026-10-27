@@ -3,6 +3,7 @@
 import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { ShieldAlert } from 'lucide-react';
+import { useT } from '@/i18n/client';
 import { useActiveImpersonations } from '@/lib/impersonation-hooks';
 import './live-support-sessions.css';
 
@@ -34,6 +35,7 @@ import './live-support-sessions.css';
  * null — the same reason the nav link is filtered for them.
  */
 export function LiveSupportSessions(): ReactElement | null {
+  const t = useT();
   const active = useActiveImpersonations();
   const count = active.data?.length ?? 0;
   if (count === 0) return null;
@@ -44,12 +46,8 @@ export function LiveSupportSessions(): ReactElement | null {
       className="live-imp"
       // The accessible name carries the number, because the digit in the
       // chip is the whole message and "1" on its own says nothing.
-      aria-label={`${count} support ${count === 1 ? 'session' : 'sessions'} running — review`}
-      title={
-        count === 1
-          ? 'A staff member is inside a client’s or store’s account right now.'
-          : `${count} staff members are inside a client’s or store’s account right now.`
-      }
+      aria-label={t(count === 1 ? 'liveSupport.aria.one' : 'liveSupport.aria.other', { count })}
+      title={t(count === 1 ? 'liveSupport.title.one' : 'liveSupport.title.other', { count })}
     >
       <ShieldAlert size={14} aria-hidden />
       <span className="live-imp__n" aria-hidden>

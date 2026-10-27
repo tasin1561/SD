@@ -16,6 +16,9 @@ import {
   type SupersedeReasonCode,
 } from '@/lib/api-hooks';
 import { ManualPlacementPanel } from '../../orders/_components/manual-placement-panel';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Every parcel waiting on a person to arrange carriage.
@@ -71,18 +74,18 @@ function waitTone(hours: number): AgeTone {
  * shipment with nothing retired behind it, where there is no code at
  * all.
  */
-function reasonLabel(code: SupersedeReasonCode | null): string {
+function reasonLabel(t: Translate<MessageKey>, code: SupersedeReasonCode | null): string {
   switch (code) {
     case 'NON_SERVICEABLE':
-      return 'Address not served';
+      return t('manualPlacementManualPlacementIndex.addressNotServed');
     case 'AWB_REJECTED':
-      return 'Courier refused it';
+      return t('manualPlacementManualPlacementIndex.courierRefusedIt');
     case 'COURIER_FAILURE':
-      return 'Courier unreachable';
+      return t('manualPlacementManualPlacementIndex.courierUnreachable');
     case 'MANUAL_REPLACEMENT':
-      return 'Replaced by hand';
+      return t('manualPlacementManualPlacementIndex.replacedByHand');
     case null:
-      return 'Reason not recorded';
+      return t('manualPlacementManualPlacementIndex.reasonNotRecorded');
     default: {
       const never: never = code;
       return never;
@@ -91,6 +94,8 @@ function reasonLabel(code: SupersedeReasonCode | null): string {
 }
 
 function Row({ row }: { row: ManualPlacementQueueRow }): ReactElement {
+  const t = useT();
+
   return (
     <Tr>
       <Td>
@@ -105,7 +110,7 @@ function Row({ row }: { row: ManualPlacementQueueRow }): ReactElement {
       </Td>
       <Td>{row.codAmountInr === null ? '—' : <Money amount={row.codAmountInr} />}</Td>
       <Td>
-        <span className="oo-strong">{reasonLabel(row.reasonCode)}</span>
+        <span className="oo-strong">{reasonLabel(t, row.reasonCode)}</span>
         {/* The courier's own sentence, verbatim. A paraphrase of
             "[ER0005] suspicious order/consignee" loses the only part
             that tells an operator what to actually check. */}
@@ -113,14 +118,24 @@ function Row({ row }: { row: ManualPlacementQueueRow }): ReactElement {
       </Td>
       <Td>
         {row.needsPicking ? (
-          <StatusChip size="sm" kind="pending" label="Needs picking" />
+          <StatusChip
+            size="sm"
+            kind="pending"
+            label={t('manualPlacementManualPlacementIndex.needsPicking')}
+          />
         ) : (
-          <StatusChip size="sm" kind="confirmed" label="Ready to go" />
+          <StatusChip
+            size="sm"
+            kind="confirmed"
+            label={t('manualPlacementManualPlacementIndex.readyToGo')}
+          />
         )}
       </Td>
       <Td>
         <AgeChip tone={waitTone(row.waitingHours)}>
-          {row.waitingHours < 1 ? 'just now' : `${row.waitingHours}h`}
+          {row.waitingHours < 1
+            ? t('manualPlacementManualPlacementIndex.justNow')
+            : `${row.waitingHours}h`}
         </AgeChip>
       </Td>
       <Td>
@@ -135,29 +150,37 @@ function Row({ row }: { row: ManualPlacementQueueRow }): ReactElement {
 }
 
 export function ManualPlacementIndex(): ReactElement {
+  const t = useT();
   const queue = useManualPlacementQueue();
   const rows = queue.data ?? [];
 
   return (
     <div className="oo-page">
       <PageHeader
-        title="Manual placement"
-        subtitle="Parcels no integrated courier would carry. Each one is waiting on a person to arrange carriage and type the waybill back in — nothing here moves on its own."
+        title={t('manualPlacementManualPlacementIndex.manualPlacement')}
+        subtitle={t('manualPlacementManualPlacementIndex.parcelsNoIntegratedCourierWould')}
       />
 
       <OoSection
-        title="Waiting for a waybill"
+        title={t('manualPlacementManualPlacementIndex.waitingForAWaybill')}
         note={queue.data === undefined ? undefined : `${rows.length} waiting`}
         flush
       >
         {queue.isLoading ? (
           <div className="oo-card__pad">
-            <SkeletonRows rows={4} cols={7} label="Loading the worklist…" />
+            <SkeletonRows
+              rows={4}
+              cols={7}
+              label={t('manualPlacementManualPlacementIndex.loadingTheWorklist')}
+            />
           </div>
         ) : queue.isError ? (
           <div className="oo-card__pad">
             <ErrorState
-              message={queue.error?.message ?? 'Could not load the worklist.'}
+              message={
+                queue.error?.message ??
+                t('manualPlacementManualPlacementIndex.couldNotLoadTheWorklist')
+              }
               retry={() => void queue.refetch()}
             />
           </div>
@@ -166,20 +189,20 @@ export function ManualPlacementIndex(): ReactElement {
             bare
             tone="positive"
             icon={<PackageSearch size={20} />}
-            title="Nothing waiting on manual placement"
-            description="Every confirmed parcel has a courier. Orders appear here when one refuses to carry them."
+            title={t('manualPlacementManualPlacementIndex.nothingWaitingOnManualPlacement')}
+            description={t('manualPlacementManualPlacementIndex.everyConfirmedParcelHasA')}
           />
         ) : (
-          <Table caption="Parcels waiting on manual placement">
+          <Table caption={t('manualPlacementManualPlacementIndex.parcelsWaitingOnManualPlacement')}>
             <THead>
               <Tr>
-                <Th>Order</Th>
-                <Th>Destination</Th>
+                <Th>{t('manualPlacementManualPlacementIndex.order')}</Th>
+                <Th>{t('manualPlacementManualPlacementIndex.destination')}</Th>
                 <Th>COD</Th>
-                <Th>Why it is here</Th>
-                <Th>After the waybill</Th>
-                <Th>Waiting</Th>
-                <Th>Place it</Th>
+                <Th>{t('manualPlacementManualPlacementIndex.whyItIsHere')}</Th>
+                <Th>{t('manualPlacementManualPlacementIndex.afterTheWaybill')}</Th>
+                <Th>{t('manualPlacementManualPlacementIndex.waiting')}</Th>
+                <Th>{t('manualPlacementManualPlacementIndex.placeIt')}</Th>
               </Tr>
             </THead>
             <TBody>

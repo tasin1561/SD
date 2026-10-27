@@ -28,6 +28,10 @@ import { StoreWalletPanel } from './_components/store-wallet-panel';
 import { usePermission } from '@/lib/use-permission';
 import { PauseStoreModal } from '../_components/pause-store-modal';
 import { StartImpersonationDialog } from '../../impersonation/_components/start-impersonation-dialog';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/client';
 
 function when(iso: string | null): string {
   return iso === null
@@ -35,23 +39,23 @@ function when(iso: string | null): string {
     : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-const EVENT_WORDS: Record<string, string> = {
-  CREATED: 'Opened',
-  APPROVED: 'Approved by the client',
-  REJECTED: 'Rejected by the client',
-  PAUSED: 'Paused',
-  RESUMED: 'Resumed',
-  CLOSED: 'Closed',
-  WALLET_MANAGER_CHANGED: 'Wallet manager changed',
-};
+const EVENT_WORDS = (tr: Translate<MessageKey>): Record<string, string> => ({
+  CREATED: tr('resellerStoresStoreIdPage.opened'),
+  APPROVED: tr('resellerStoresStoreIdPage.approvedByTheClient'),
+  REJECTED: tr('resellerStoresStoreIdPage.rejectedByTheClient'),
+  PAUSED: tr('resellerStoresStoreIdPage.paused'),
+  RESUMED: tr('resellerStoresStoreIdPage.resumed'),
+  CLOSED: tr('resellerStoresStoreIdPage.closed'),
+  WALLET_MANAGER_CHANGED: tr('resellerStoresStoreIdPage.walletManagerChanged'),
+});
 
-const ACTOR_WORDS: Record<string, string> = {
-  STAFF: 'Skydrop staff',
-  SELLER: 'The client',
-  STORE: 'The store',
-  SYSTEM: 'System',
-  API: 'The client’s systems',
-};
+const ACTOR_WORDS = (tr: Translate<MessageKey>): Record<string, string> => ({
+  STAFF: tr('resellerStoresStoreIdPage.skydropStaff'),
+  SELLER: tr('resellerStoresStoreIdPage.theClient'),
+  STORE: tr('resellerStoresStoreIdPage.theStore'),
+  SYSTEM: tr('resellerStoresStoreIdPage.system'),
+  API: tr('resellerStoresStoreIdPage.theClientSSystems'),
+});
 
 /**
  * RS-4 — the store's terms, read-only: they are the seller's to publish and
@@ -60,8 +64,12 @@ const ACTOR_WORDS: Record<string, string> = {
  * agreed.
  */
 function TermsSection({ storeId }: { storeId: string }): ReactElement {
+  const tr = useT();
   const terms = useAdminResellerStoreTerms(storeId);
-  if (terms.isPending) return <SkeletonRows rows={3} cols={4} label="Loading the terms" />;
+  if (terms.isPending)
+    return (
+      <SkeletonRows rows={3} cols={4} label={tr('resellerStoresStoreIdPage.loadingTheTerms')} />
+    );
   if (terms.isError) {
     return <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />;
   }
@@ -69,26 +77,31 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
   const c = t.current;
   return (
     <AcSection
-      title="Terms"
-      note="Who pays which Skydrop fee on this store’s orders, and when each side is credited."
+      title={tr('resellerStoresStoreIdPage.terms')}
+      note={tr('resellerStoresStoreIdPage.whoPaysWhichSkydropFee')}
       bare
     >
       {c === null ? (
         <EmptyState
-          title="No terms published"
-          description="The store cannot place orders until the client publishes terms and the store accepts them."
+          title={tr('resellerStoresStoreIdPage.noTermsPublished')}
+          description={tr('resellerStoresStoreIdPage.theStoreCannotPlaceOrders')}
         />
       ) : (
         <AcCard flush>
           <div className="ac-pad">
             <p className="ac-text">
-              Version <span className="sk-figure">{c.version}</span>, published{' '}
-              {when(c.publishedAt)} —{' '}
+              {richMessage(tr('resellerStoresStoreIdPage.versionPublished'), {
+                span: <span className="sk-figure">{c.version}</span>,
+                value: when(c.publishedAt),
+              })}{' '}
               {c.acceptance === null
-                ? 'not accepted by the store yet.'
-                : `accepted by ${c.acceptance.acceptedByName} on ${when(c.acceptance.acceptedAt)}${
-                    c.acceptance.ipAddress === null ? '' : ` from ${c.acceptance.ipAddress}`
-                  }.`}
+                ? tr('resellerStoresStoreIdPage.notAcceptedByTheStore')
+                : tr('resellerStoresStoreIdPage.acceptedByOn', {
+                    acceptedByName: c.acceptance.acceptedByName,
+                    value: when(c.acceptance.acceptedAt),
+                    value2:
+                      c.acceptance.ipAddress === null ? '' : ` from ${c.acceptance.ipAddress}`,
+                  })}
             </p>
           </div>
           {t.needsRevision !== null ? (
@@ -96,13 +109,13 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
               <AcAlert message={t.needsRevision} />
             </div>
           ) : null}
-          <Table caption="Fee shares">
+          <Table caption={tr('resellerStoresStoreIdPage.feeShares')}>
             <THead>
               <Tr>
-                <Th>Fee</Th>
-                <Th align="right">Store pays</Th>
-                <Th align="right">Client pays</Th>
-                <Th>Example</Th>
+                <Th>{tr('resellerStoresStoreIdPage.fee')}</Th>
+                <Th align="right">{tr('resellerStoresStoreIdPage.storePays')}</Th>
+                <Th align="right">{tr('resellerStoresStoreIdPage.clientPays')}</Th>
+                <Th>{tr('resellerStoresStoreIdPage.example')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -143,14 +156,14 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
         </AcCard>
       )}
       {t.history.length > 1 ? (
-        <AcCard flush title="Earlier versions">
-          <Table caption="Terms versions">
+        <AcCard flush title={tr('resellerStoresStoreIdPage.earlierVersions')}>
+          <Table caption={tr('resellerStoresStoreIdPage.termsVersions')}>
             <THead>
               <Tr>
-                <Th>Version</Th>
-                <Th>Published</Th>
-                <Th>Accepted</Th>
-                <Th>Note</Th>
+                <Th>{tr('resellerStoresStoreIdPage.version')}</Th>
+                <Th>{tr('resellerStoresStoreIdPage.published')}</Th>
+                <Th>{tr('resellerStoresStoreIdPage.accepted')}</Th>
+                <Th>{tr('resellerStoresStoreIdPage.note')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -180,6 +193,7 @@ function TermsSection({ storeId }: { storeId: string }): ReactElement {
 
 /** One reseller store: its details, its status history and its team — read-only. */
 export default function AdminResellerStorePage(): ReactElement {
+  const tr = useT();
   const { storeId } = useParams<{ storeId: string }>();
   const store = useAdminResellerStore(storeId);
   const mayPause = usePermission('reseller.stores.pause');
@@ -190,15 +204,20 @@ export default function AdminResellerStorePage(): ReactElement {
   const canImpersonate = usePermission('support.impersonate');
   const [impersonating, setImpersonating] = useState(false);
 
-  const crumbs = [{ label: 'Member stores', href: '/reseller-stores' }] as const;
+  const crumbs = [
+    { label: tr('resellerStoresStoreIdPage.memberStores'), href: '/reseller-stores' },
+  ] as const;
   // The header and the way back stay on screen while the store loads or
   // fails, so a slow or refused read never leaves a blank page.
   if (store.isPending || store.isError) {
     return (
       <AcPage>
-        <AcHeader crumbs={[...crumbs, { label: 'Member store' }]} title="Member store" />
+        <AcHeader
+          crumbs={[...crumbs, { label: tr('resellerStoresStoreIdPage.memberStore') }]}
+          title={tr('resellerStoresStoreIdPage.memberStore')}
+        />
         {store.isPending ? (
-          <SkeletonRows rows={5} cols={2} label="Loading the store" />
+          <SkeletonRows rows={5} cols={2} label={tr('resellerStoresStoreIdPage.loadingTheStore')} />
         ) : (
           <ErrorState message={serverVerdict(store.error)} retry={() => void store.refetch()} />
         )}
@@ -233,7 +252,7 @@ export default function AdminResellerStorePage(): ReactElement {
                 icon={<ShieldAlert size={15} />}
                 onClick={() => setImpersonating(true)}
               >
-                Sign in as {s.name}
+                {tr('resellerStoresStoreIdPage.signInAs', { name: s.name })}
               </Button>
             ) : null}
             {mayPause && s.status === 'ACTIVE' ? (
@@ -243,7 +262,7 @@ export default function AdminResellerStorePage(): ReactElement {
                 icon={<PauseCircle size={15} />}
                 onClick={() => setPausing(true)}
               >
-                Pause store
+                {tr('resellerStoresStoreIdPage.pauseStore')}
               </Button>
             ) : null}
           </div>
@@ -261,12 +280,12 @@ export default function AdminResellerStorePage(): ReactElement {
         />
       ) : null}
 
-      <AcSection title="Details">
+      <AcSection title={tr('resellerStoresStoreIdPage.details')}>
         <AcDl
           columns={2}
           items={[
             {
-              label: 'Client',
+              label: tr('resellerStoresStoreIdPage.client'),
               value: (
                 <span className="ac-inline">
                   <Link href={`/sellers/${s.sellerId}`} className="ac-link">
@@ -276,21 +295,30 @@ export default function AdminResellerStorePage(): ReactElement {
                     href={`/reseller-stores?sellerId=${s.sellerId}`}
                     className="ac-link ac-faint"
                   >
-                    (their other stores)
+                    {tr('resellerStoresStoreIdPage.theirOtherStores')}
                   </Link>
                 </span>
               ),
             },
-            { label: 'Customers see', value: s.displayName ?? s.name },
-            { label: 'Opened by', value: s.origin === 'ADMIN' ? 'Skydrop' : 'The client' },
+            { label: tr('resellerStoresStoreIdPage.customersSee'), value: s.displayName ?? s.name },
             {
-              label: 'Wallet managed by',
-              value: s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'The client',
+              label: tr('resellerStoresStoreIdPage.openedBy'),
+              value:
+                s.origin === 'ADMIN'
+                  ? tr('resellerStoresStoreIdPage.skydrop')
+                  : tr('resellerStoresStoreIdPage.theClient'),
             },
-            { label: 'Contact email', value: s.contactEmail ?? '—' },
-            { label: 'Contact phone', value: s.contactPhone ?? '—' },
-            { label: 'Note', value: s.note ?? '—' },
-            { label: 'Status since', value: when(s.statusChangedAt) },
+            {
+              label: tr('resellerStoresStoreIdPage.walletManagedBy'),
+              value:
+                s.walletManagedBy === 'SKYDROP'
+                  ? tr('resellerStoresStoreIdPage.skydrop')
+                  : tr('resellerStoresStoreIdPage.theClient'),
+            },
+            { label: tr('resellerStoresStoreIdPage.contactEmail'), value: s.contactEmail ?? '—' },
+            { label: tr('resellerStoresStoreIdPage.contactPhone'), value: s.contactPhone ?? '—' },
+            { label: tr('resellerStoresStoreIdPage.note'), value: s.note ?? '—' },
+            { label: tr('resellerStoresStoreIdPage.statusSince'), value: when(s.statusChangedAt) },
           ]}
         />
       </AcSection>
@@ -299,15 +327,18 @@ export default function AdminResellerStorePage(): ReactElement {
       <TermsSection storeId={s.id} />
       <StoreWalletPanel storeId={s.id} />
 
-      <AcSection title="Status history" note="Every change to this store’s life, oldest first.">
+      <AcSection
+        title={tr('resellerStoresStoreIdPage.statusHistory')}
+        note={tr('resellerStoresStoreIdPage.everyChangeToThisStore')}
+      >
         {events.length === 0 ? (
-          <EmptyState bare title="No history" />
+          <EmptyState bare title={tr('resellerStoresStoreIdPage.noHistory')} />
         ) : (
           <Timeline
-            label="Status history"
+            label={tr('resellerStoresStoreIdPage.statusHistory')}
             steps={events.map((e, i) => ({
               id: e.id,
-              label: EVENT_WORDS[e.kind] ?? e.kind,
+              label: EVENT_WORDS(tr)[e.kind] ?? e.kind,
               state: i === events.length - 1 ? ('current' as const) : ('done' as const),
               time: when(e.createdAt),
               description: (
@@ -318,7 +349,7 @@ export default function AdminResellerStorePage(): ReactElement {
                         e.toStatus?.toLowerCase().replace(/_/g, ' ') ?? '—'
                       }`}
                   {' · '}
-                  {ACTOR_WORDS[e.actorType] ?? e.actorType}
+                  {ACTOR_WORDS(tr)[e.actorType] ?? e.actorType}
                   {e.note === null ? null : (
                     <>
                       {' · '}
@@ -333,24 +364,24 @@ export default function AdminResellerStorePage(): ReactElement {
       </AcSection>
 
       <AcSection
-        title="Team"
-        note="Logins on the member store portal, and invitations still open."
+        title={tr('resellerStoresStoreIdPage.team')}
+        note={tr('resellerStoresStoreIdPage.loginsOnTheMemberStore')}
         flush
       >
         {s.team.members.length === 0 && s.team.invitations.length === 0 ? (
           <EmptyState
             bare
-            title="Nobody on the team yet"
-            description="The client invites the store’s first user."
+            title={tr('resellerStoresStoreIdPage.nobodyOnTheTeamYet')}
+            description={tr('resellerStoresStoreIdPage.theClientInvitesTheStore')}
           />
         ) : (
-          <Table caption="Store team">
+          <Table caption={tr('resellerStoresStoreIdPage.storeTeam')}>
             <THead>
               <Tr>
-                <Th>Name</Th>
-                <Th>Email</Th>
-                <Th>Role</Th>
-                <Th>State</Th>
+                <Th>{tr('resellerStoresStoreIdPage.name')}</Th>
+                <Th>{tr('resellerStoresStoreIdPage.email')}</Th>
+                <Th>{tr('resellerStoresStoreIdPage.role')}</Th>
+                <Th>{tr('resellerStoresStoreIdPage.state')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -361,7 +392,9 @@ export default function AdminResellerStorePage(): ReactElement {
                   </Td>
                   <Td>{m.email}</Td>
                   <Td>{m.roleName}</Td>
-                  <Td>Last signed in {when(m.lastLoginAt)}</Td>
+                  <Td>
+                    {tr('resellerStoresStoreIdPage.lastSignedIn', { value: when(m.lastLoginAt) })}
+                  </Td>
                 </Tr>
               ))}
               {s.team.invitations.map((i) => (
@@ -371,7 +404,9 @@ export default function AdminResellerStorePage(): ReactElement {
                   </Td>
                   <Td>{i.email}</Td>
                   <Td>{i.roleName}</Td>
-                  <Td>Invited — expires {when(i.expiresAt)}</Td>
+                  <Td>
+                    {tr('resellerStoresStoreIdPage.invitedExpires', { value: when(i.expiresAt) })}
+                  </Td>
                 </Tr>
               ))}
             </TBody>

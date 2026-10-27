@@ -19,6 +19,9 @@ import {
   type InviteLeadStatus as LeadStatus,
 } from '@/lib/api-hooks';
 import { LeadDrawer } from './lead-drawer';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * People who asked to be let in.
@@ -39,22 +42,24 @@ import { LeadDrawer } from './lead-drawer';
  * nothing, and the number that matters is how many are still unanswered.
  */
 
-const TABS: ReadonlyArray<{ label: string; status?: LeadStatus }> = [
-  { label: 'New', status: 'NEW' },
-  { label: 'Contacted', status: 'CONTACTED' },
-  { label: 'Qualified', status: 'QUALIFIED' },
-  { label: 'Converted', status: 'CONVERTED' },
-  { label: 'Declined', status: 'DECLINED' },
-  { label: 'Spam', status: 'SPAM' },
-  { label: 'All' },
+const TABS = (tr: Translate<MessageKey>): ReadonlyArray<{ label: string; status?: LeadStatus }> => [
+  { label: tr('leadsLeadsIndex.new'), status: 'NEW' },
+  { label: tr('leadsLeadsIndex.contacted'), status: 'CONTACTED' },
+  { label: tr('leadsLeadsIndex.qualified'), status: 'QUALIFIED' },
+  { label: tr('leadsLeadsIndex.converted'), status: 'CONVERTED' },
+  { label: tr('leadsLeadsIndex.declined'), status: 'DECLINED' },
+  { label: tr('leadsLeadsIndex.spam'), status: 'SPAM' },
+  { label: tr('leadsLeadsIndex.all') },
 ];
 
 /** Short enough for a column. The full label lives in the drawer. */
-const DIRECTION_SHORT: Record<string, { text: string; unserved: boolean }> = {
-  BD_TO_IN: { text: 'BD → IN', unserved: false },
-  IN_TO_BD: { text: 'IN → BD', unserved: true },
-  BOTH: { text: 'Both', unserved: true },
-};
+const DIRECTION_SHORT = (
+  tr: Translate<MessageKey>,
+): Record<string, { text: string; unserved: boolean }> => ({
+  BD_TO_IN: { text: tr('leadsLeadsIndex.bdIn'), unserved: false },
+  IN_TO_BD: { text: tr('leadsLeadsIndex.inBd'), unserved: true },
+  BOTH: { text: tr('leadsLeadsIndex.both'), unserved: true },
+});
 
 /** "6m", "3h", "2d" — relative, because the only question a queue asks
  *  is how long somebody has been waiting. */
@@ -75,6 +80,7 @@ function waitTone(iso: string): AcTone {
 }
 
 export function LeadsIndex(): ReactElement {
+  const tr = useT();
   const [tab, setTab] = useState(0);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<InviteLead | null>(null);
@@ -94,7 +100,7 @@ export function LeadsIndex(): ReactElement {
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   };
 
-  const active = TABS[tab] ?? TABS[0]!;
+  const active = TABS(tr)[tab] ?? TABS(tr)[0]!;
   const q = useInviteLeads({
     ...(active.status ? { status: active.status } : {}),
     ...(search.trim() ? { search: search.trim() } : {}),
@@ -115,20 +121,20 @@ export function LeadsIndex(): ReactElement {
     // while a third of the screen sat unused.
     <AcPage>
       <AcHeader
-        title="Invite requests"
-        subtitle="People who asked to be let into the beta from the landing page. Newest first — a lead goes cold fast."
+        title={tr('leadsLeadsIndex.inviteRequests')}
+        subtitle={tr('leadsLeadsIndex.peopleWhoAskedToBe')}
       />
 
       <div className="ac-toolbar">
         <Tabs
-          label="Invite request status"
+          label={tr('leadsLeadsIndex.inviteRequestStatus')}
           size="sm"
           value={String(tab)}
           onChange={(id) => {
             setTab(Number(id));
             setPage(1);
           }}
-          items={TABS.map((t, i) => {
+          items={TABS(tr).map((t, i) => {
             const count = t.status ? (q.data?.counts[t.status] ?? 0) : undefined;
             return {
               id: String(i),
@@ -139,49 +145,53 @@ export function LeadsIndex(): ReactElement {
         />
         <TextField
           icon={<Search size={15} />}
-          aria-label="Search requests"
+          aria-label={tr('leadsLeadsIndex.searchRequests')}
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
             if (page > 1) setPage(1);
           }}
-          placeholder="Company, name, email or phone"
+          placeholder={tr('leadsLeadsIndex.companyNameEmailOrPhone')}
         />
       </div>
 
       {q.isLoading ? (
-        <SkeletonRows rows={6} cols={6} label="Loading requests…" />
+        <SkeletonRows rows={6} cols={6} label={tr('leadsLeadsIndex.loadingRequests')} />
       ) : q.isError ? (
         <ErrorState
-          message={q.error?.message ?? 'Could not load requests.'}
+          message={q.error?.message ?? tr('leadsLeadsIndex.couldNotLoadRequests')}
           retry={() => void q.refetch()}
         />
       ) : items.length === 0 ? (
         <EmptyState
-          title={search ? 'Nothing matches that' : 'No requests here'}
+          title={
+            search ? tr('leadsLeadsIndex.nothingMatchesThat') : tr('leadsLeadsIndex.noRequestsHere')
+          }
           description={
             search
-              ? 'Try a shorter search — it matches company, name, email and phone.'
-              : 'New requests from the landing page appear here the moment someone submits the form, and every super-admin is emailed.'
+              ? tr('leadsLeadsIndex.tryAShorterSearchIt')
+              : tr('leadsLeadsIndex.newRequestsFromTheLanding')
           }
         />
       ) : (
         <AcCard flush>
-          <Table caption="Invite requests">
+          <Table caption={tr('leadsLeadsIndex.inviteRequests')}>
             <THead>
               <Tr>
-                <Th>Company</Th>
-                <Th>Contact</Th>
-                <Th>Route</Th>
-                <Th>Volume</Th>
-                <Th>Status</Th>
-                <Th align="right">Waiting</Th>
+                <Th>{tr('leadsLeadsIndex.company')}</Th>
+                <Th>{tr('leadsLeadsIndex.contact')}</Th>
+                <Th>{tr('leadsLeadsIndex.route')}</Th>
+                <Th>{tr('leadsLeadsIndex.volume')}</Th>
+                <Th>{tr('leadsLeadsIndex.status')}</Th>
+                <Th align="right">{tr('leadsLeadsIndex.waiting')}</Th>
               </Tr>
             </THead>
             <TBody>
               {items.map((lead) => {
                 const dir =
-                  lead.shippingDirection === null ? null : DIRECTION_SHORT[lead.shippingDirection];
+                  lead.shippingDirection === null
+                    ? null
+                    : DIRECTION_SHORT(tr)[lead.shippingDirection];
                 return (
                   <Tr key={lead.id} onActivate={() => setSelected(lead)}>
                     <Td>
@@ -235,7 +245,7 @@ export function LeadsIndex(): ReactElement {
           pageSize={pageSize}
           total={total}
           onPageChange={(next) => setPage(Math.min(Math.max(1, next), lastPage))}
-          label="Invite request pages"
+          label={tr('leadsLeadsIndex.inviteRequestPages')}
         />
       )}
 

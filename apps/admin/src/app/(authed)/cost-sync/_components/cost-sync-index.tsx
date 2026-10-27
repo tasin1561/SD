@@ -26,6 +26,9 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { AfCard, AfSection } from '@/app/(authed)/system/_components/af-parts';
 import { ShiprocketCostSection } from './shiprocket-cost-section';
 import './cost-sync.css';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Is the nightly courier-cost sync actually working?
@@ -68,12 +71,12 @@ function runTone(run: WalletSyncRun): 'delivered' | 'pending' | 'failed' {
   return run.accounts.some((a) => a.error !== null) ? 'pending' : 'delivered';
 }
 
-function runLabel(run: WalletSyncRun): string {
-  if (!run.ok) return 'Failed';
-  if (run.skipped === 'DISABLED') return 'Switched off';
-  if (run.skipped === 'NO_ACCOUNTS') return 'No accounts';
-  if (run.accounts.some((a) => a.error !== null)) return 'Partly failed';
-  return run.wrote ? 'Worked' : 'Worked (dry run)';
+function runLabel(t: Translate<MessageKey>, run: WalletSyncRun): string {
+  if (!run.ok) return t('costSyncCostSyncIndex.failed');
+  if (run.skipped === 'DISABLED') return t('costSyncCostSyncIndex.switchedOff');
+  if (run.skipped === 'NO_ACCOUNTS') return t('costSyncCostSyncIndex.noAccounts');
+  if (run.accounts.some((a) => a.error !== null)) return t('costSyncCostSyncIndex.partlyFailed');
+  return run.wrote ? t('costSyncCostSyncIndex.worked') : t('costSyncCostSyncIndex.workedDryRun');
 }
 
 /** The legacy Stat tones, mapped onto the KPI card's. */
@@ -86,26 +89,26 @@ const STAT_TONE: Record<'good' | 'warn' | 'bad' | 'neutral', KpiTone> = {
 
 /** The last run, in full — the one somebody actually reads. */
 function LastRun({ run }: { readonly run: WalletSyncRun }): ReactElement {
+  const t = useT();
+
   return (
     <AfCard>
       <div className="af-row">
-        <StatusChip kind={runTone(run)} label={runLabel(run)} />
+        <StatusChip kind={runTone(run)} label={runLabel(t, run)} />
         <span className="af-body">{fmtWhen(run.at)}</span>
         {!run.wrote && run.skipped === null && (
           // Worth its own line: a dry run reads the real file and
           // records nothing, so "it worked" and "the costs moved" are
           // different statements.
-          <span className="af-small">
-            Writes are off — it parsed the real file and changed nothing.
-          </span>
+          <span className="af-small">{t('costSyncCostSyncIndex.writesAreOffItParsed')}</span>
         )}
       </div>
 
       {run.accounts.length === 0 ? (
         <p className="af-muted">
           {run.skipped === 'DISABLED'
-            ? 'The sync is switched off, so it did nothing. No courier costs are being recorded.'
-            : 'No courier accounts were eligible, so there was nothing to read.'}
+            ? t('costSyncCostSyncIndex.theSyncIsSwitchedOff')
+            : t('costSyncCostSyncIndex.noCourierAccountsWereEligible')}
         </p>
       ) : (
         <div className="af-stack">
@@ -139,26 +142,29 @@ function FailureArtifact({
 }: {
   readonly artifact: WalletSyncFailureArtifact | null;
 }): ReactElement | null {
+  const t = useT();
   if (a === null) return null;
   const hasLink = a.screenshotUrl !== null || a.pageTextUrl !== null;
   if (!hasLink && a.url === null && a.control === null && a.problem === null) return null;
   return (
     <div className="af-small cs-artifact">
-      {a.url !== null && <div>Page: {a.url}</div>}
+      {a.url !== null && <div>{t('costSyncCostSyncIndex.page', { url: a.url })}</div>}
       {/* The half the timeout cannot say: what was actually on the
           control we waited for. */}
-      {a.control !== null && <div>Control: {a.control}</div>}
+      {a.control !== null && (
+        <div>{t('costSyncCostSyncIndex.control', { control: a.control })}</div>
+      )}
       {hasLink && (
         <div>
           {a.screenshotUrl !== null && (
             <a href={a.screenshotUrl} target="_blank" rel="noreferrer">
-              Screenshot
+              {t('costSyncCostSyncIndex.screenshot')}
             </a>
           )}
           {a.screenshotUrl !== null && a.pageTextUrl !== null && ' · '}
           {a.pageTextUrl !== null && (
             <a href={a.pageTextUrl} target="_blank" rel="noreferrer">
-              Page text
+              {t('costSyncCostSyncIndex.pageText')}
             </a>
           )}
         </div>
@@ -172,6 +178,7 @@ function FailureArtifact({
 }
 
 function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount }): ReactElement {
+  const t = useT();
   if (a.error !== null) {
     return (
       <div className="af-inner" data-tone="bad">
@@ -194,20 +201,24 @@ function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount 
         <span className="af-title">{a.label}</span>
         <span className="af-small">
           {fmtDay(a.periodFrom)} → {fmtDay(a.periodTo)}
-          {a.coveredDays !== null && ` · ${a.coveredDays} days`}
+          {a.coveredDays !== null &&
+            t('costSyncCostSyncIndex.days', { coveredDays: a.coveredDays })}
         </span>
       </div>
       <div className="cs-facts">
-        <Fact label="Rows read" value={a.rowsRead === null ? '—' : String(a.rowsRead)} />
         <Fact
-          label="Our parcels"
+          label={t('costSyncCostSyncIndex.rowsRead')}
+          value={a.rowsRead === null ? '—' : String(a.rowsRead)}
+        />
+        <Fact
+          label={t('costSyncCostSyncIndex.ourParcels')}
           value={a.awbsInFile === null ? '—' : `${matched} of ${a.awbsInFile}`}
         />
         <Fact
-          label="Costs written"
+          label={t('costSyncCostSyncIndex.costsWritten')}
           value={`${a.forwardWritten ?? 0} forward · ${a.rtoWritten ?? 0} RTO`}
         />
-        <Fact label="Revised" value={String(a.revised ?? 0)} />
+        <Fact label={t('costSyncCostSyncIndex.revised')} value={String(a.revised ?? 0)} />
       </div>
       {a.writes.length > 0 && (
         // Shown here as well as in the history, because this is the card
@@ -221,16 +232,24 @@ function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount 
       <div className="af-row">
         {a.sumInr !== null && (
           <span className="af-small">
-            Export total <Money amount={a.sumInr} />
+            {t('costSyncCostSyncIndex.exportTotal')} <Money amount={a.sumInr} />
           </span>
         )}
         {a.totalsAgree === false && (
           // Their file disagreeing with itself is a real signal about
           // the export, not about us.
-          <StatusChip size="sm" kind="failed" label="Their stated total does not match the rows" />
+          <StatusChip
+            size="sm"
+            kind="failed"
+            label={t('costSyncCostSyncIndex.theirStatedTotalDoesNot')}
+          />
         )}
         {a.rangeApplied === false && (
-          <StatusChip size="sm" kind="pending" label="Date filter was not applied" />
+          <StatusChip
+            size="sm"
+            kind="pending"
+            label={t('costSyncCostSyncIndex.dateFilterWasNotApplied')}
+          />
         )}
         {a.txnsMissing > 0 && (
           // Their ledger dropped transactions we held for dates this file
@@ -239,7 +258,9 @@ function AccountResult({ account: a }: { readonly account: WalletSyncRunAccount 
           <StatusChip
             size="sm"
             kind="failed"
-            label={`${a.txnsMissing} vanished from their ledger`}
+            label={t('costSyncCostSyncIndex.vanishedFromTheirLedger', {
+              txnsMissing: a.txnsMissing,
+            })}
           />
         )}
       </div>
@@ -269,6 +290,8 @@ function Fact({ label, value }: { readonly label: string; readonly value: string
  * shape of the history — which is what this table is for.
  */
 function HistoryRow({ run }: { readonly run: WalletSyncRun }): ReactElement {
+  const t = useT();
+
   const [open, setOpen] = useState(false);
   const written = run.accounts.reduce(
     (n, a) => n + (a.forwardWritten ?? 0) + (a.rtoWritten ?? 0),
@@ -289,7 +312,7 @@ function HistoryRow({ run }: { readonly run: WalletSyncRun }): ReactElement {
           <span className="af-nowrap">{fmtWhen(run.at)}</span>
         </Td>
         <Td>
-          <StatusChip size="sm" kind={runTone(run)} label={runLabel(run)} />
+          <StatusChip size="sm" kind={runTone(run)} label={runLabel(t, run)} />
         </Td>
         <Td>
           <span className="sk-figure">{run.windowDays === null ? '—' : `${run.windowDays}d`}</span>
@@ -315,10 +338,7 @@ function HistoryRow({ run }: { readonly run: WalletSyncRun }): ReactElement {
         <Tr>
           <Td colSpan={5}>
             {detailUnavailable ? (
-              <p className="af-small">
-                This run predates us recording which parcels were written, so only the count is
-                known. Runs from here on list them.
-              </p>
+              <p className="af-small">{t('costSyncCostSyncIndex.thisRunPredatesUsRecording')}</p>
             ) : (
               <WrittenParcels writes={writes} truncated={truncated} />
             )}
@@ -336,6 +356,7 @@ function WrittenParcels({
   readonly writes: readonly WalletSyncWrite[];
   readonly truncated: number;
 }): ReactElement {
+  const t = useT();
   return (
     <div className="af-stack af-stack--tight">
       <ul className="af-list">
@@ -344,12 +365,16 @@ function WrittenParcels({
             {/* The order number first — it is what somebody recognises.
                 The AWB is what the courier charged against, so both are
                 here and the AWB is the one that pastes into search. */}
-            <span className="af-strong sk-ident">{w.orderNumber ?? 'No order linked'}</span>
+            <span className="af-strong sk-ident">
+              {w.orderNumber ?? t('costSyncCostSyncIndex.noOrderLinked')}
+            </span>
             <span className="af-small sk-ident">{w.awbNumber}</span>
             <span className="sk-figure">
               <Money amount={w.amountInr} />
             </span>
-            {w.leg === 'rto' && <StatusChip size="sm" kind="rto" label="return leg" />}
+            {w.leg === 'rto' && (
+              <StatusChip size="sm" kind="rto" label={t('costSyncCostSyncIndex.returnLeg')} />
+            )}
             {w.revised && (
               // A figure that MOVED is the normal case on a later export
               // and a different fact from a first reading — worth telling
@@ -359,20 +384,25 @@ function WrittenParcels({
               <StatusChip
                 size="sm"
                 kind="pending"
-                label={w.previousInr === null ? 'revised' : `was ₹${w.previousInr}`}
+                label={
+                  w.previousInr === null
+                    ? 'revised'
+                    : t('costSyncCostSyncIndex.was', { previousInr: w.previousInr })
+                }
               />
             )}
           </li>
         ))}
       </ul>
       {truncated > 0 && (
-        <p className="af-small">…and {truncated} more, not listed. The count above is exact.</p>
+        <p className="af-small">{t('costSyncCostSyncIndex.andMoreNotListedThe', { truncated })}</p>
       )}
     </div>
   );
 }
 
 export function CostSyncIndex(): ReactElement {
+  const t = useT();
   const panel = useWalletSyncPanel();
   const run = useRunWalletSync();
   const canRun = usePermission('courier.accounts.manage');
@@ -390,7 +420,7 @@ export function CostSyncIndex(): ReactElement {
       // and takes a minute or two; saying "finished" here would be a
       // straightforward lie, and the person would refresh, see the
       // old run, and conclude the button was broken.
-      toast.success('Queued. It runs in the portal worker — refresh in a minute or two.');
+      toast.success(t('costSyncCostSyncIndex.queuedItRunsInThe'));
     } catch (err) {
       // FE-2: the server's verdict verbatim.
       toast.error(serverVerdict(err));
@@ -405,19 +435,22 @@ export function CostSyncIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Network' }, { label: 'Courier cost sync' }]}
+        breadcrumbs={[
+          { label: t('costSyncCostSyncIndex.network') },
+          { label: t('costSyncCostSyncIndex.courierCostSync') },
+        ]}
         Link={Link}
-        title="Courier cost sync"
-        subtitle="Every night we sign in to the courier’s portal, download their wallet export and record what each parcel actually cost us. Without it every margin figure is a guess — and the way this fails is silence, so this page exists to be looked at."
+        title={t('costSyncCostSyncIndex.courierCostSync')}
+        subtitle={t('costSyncCostSyncIndex.everyNightWeSignIn')}
       />
 
       {panel.isLoading ? (
         <AfCard flush>
-          <SkeletonRows rows={4} cols={4} label="Loading the sync…" />
+          <SkeletonRows rows={4} cols={4} label={t('costSyncCostSyncIndex.loadingTheSync')} />
         </AfCard>
       ) : panel.isError || d === undefined ? (
         <ErrorState
-          message={panel.error?.message ?? 'Could not load the sync.'}
+          message={panel.error?.message ?? t('costSyncCostSyncIndex.couldNotLoadTheSync')}
           retry={() => void panel.refetch()}
         />
       ) : (
@@ -433,12 +466,15 @@ export function CostSyncIndex(): ReactElement {
                   )}
                   {d.enabled
                     ? d.writesEnabled
-                      ? 'On — reading and recording costs'
-                      : 'On, but not recording — it reads the file and writes nothing'
-                    : 'Switched off — no courier costs are being recorded at all'}
+                      ? t('costSyncCostSyncIndex.onReadingAndRecordingCosts')
+                      : t('costSyncCostSyncIndex.onButNotRecordingIt')
+                    : t('costSyncCostSyncIndex.switchedOffNoCourierCosts')}
                 </p>
                 <p className="af-small">
-                  {d.schedule} · asks for the last {d.windowDays} days each time
+                  {t('costSyncCostSyncIndex.asksForTheLastDays', {
+                    schedule: d.schedule,
+                    windowDays: d.windowDays,
+                  })}
                 </p>
               </div>
               {canRun && (
@@ -449,23 +485,16 @@ export function CostSyncIndex(): ReactElement {
                   loading={busy}
                   onClick={() => setConfirming(true)}
                 >
-                  Run it now
+                  {t('costSyncCostSyncIndex.runItNow')}
                 </Button>
               )}
             </div>
-            {canRun && (
-              <p className="af-small">
-                This queues the job for the portal worker, which is the process that owns the
-                browser — so the run starts in the background and takes a minute or two. Running it
-                twice is harmless: the second import sees the same figures and records them as
-                unchanged.
-              </p>
-            )}
+            {canRun && <p className="af-small">{t('costSyncCostSyncIndex.thisQueuesTheJobFor')}</p>}
           </AfCard>
 
           <div className="af-kpis">
             <KpiCard
-              label="Parcels with a real cost"
+              label={t('costSyncCostSyncIndex.parcelsWithARealCost')}
               figure={`${d.cost.withForwardCost} / ${d.cost.dispatched}`}
               tone={
                 STAT_TONE[
@@ -474,50 +503,50 @@ export function CostSyncIndex(): ReactElement {
               }
               // TRE-6: a missing cost is UNCOVERED, never zero. Zero
               // would report the whole of that revenue as profit.
-              hint="Dispatched parcels whose courier charge we have actually read. The rest are uncovered — their margin is unknown, not zero."
+              hint={t('costSyncCostSyncIndex.dispatchedParcelsWhoseCourierCharge')}
             />
             <KpiCard
-              label="Returns with a real cost"
+              label={t('costSyncCostSyncIndex.returnsWithARealCost')}
               figure={`${d.cost.withRtoCost} / ${d.cost.returned}`}
               tone={
                 STAT_TONE[
                   d.cost.returned === 0 || d.cost.withRtoCost === d.cost.returned ? 'good' : 'warn'
                 ]
               }
-              hint="Returns are billed separately from the delivery leg, so they are counted separately."
+              hint={t('costSyncCostSyncIndex.returnsAreBilledSeparatelyFrom')}
             />
             <KpiCard
-              label="Forward cost recorded"
+              label={t('costSyncCostSyncIndex.forwardCostRecorded')}
               figure={<Money amount={d.cost.forwardTotalInr} />}
-              hint="The sum of what the courier actually charged us to deliver."
+              hint={t('costSyncCostSyncIndex.theSumOfWhatThe')}
             />
             <KpiCard
-              label="Return cost recorded"
+              label={t('costSyncCostSyncIndex.returnCostRecorded')}
               figure={<Money amount={d.cost.rtoTotalInr} />}
-              hint="The sum of what the courier actually charged us to bring parcels back."
+              hint={t('costSyncCostSyncIndex.theSumOfWhatThe2')}
             />
           </div>
 
           {d.last !== null && <LastRun run={d.last} />}
 
-          <AfSection title="Recent runs">
+          <AfSection title={t('costSyncCostSyncIndex.recentRuns')}>
             <Table>
               <THead>
                 <Tr>
-                  <Th>When</Th>
-                  <Th>Result</Th>
-                  <Th>Window</Th>
-                  <Th>Costs written</Th>
-                  <Th>Export total</Th>
+                  <Th>{t('costSyncCostSyncIndex.when')}</Th>
+                  <Th>{t('costSyncCostSyncIndex.result')}</Th>
+                  <Th>{t('costSyncCostSyncIndex.window')}</Th>
+                  <Th>{t('costSyncCostSyncIndex.costsWritten')}</Th>
+                  <Th>{t('costSyncCostSyncIndex.exportTotal')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 {d.history.length === 0 ? (
                   <TableEmpty colSpan={5}>
                     <div className="af-stack af-stack--tight cs-empty">
-                      <span className="af-strong">No runs recorded</span>
+                      <span className="af-strong">{t('costSyncCostSyncIndex.noRunsRecorded')}</span>
                       <span className="af-small">
-                        Either it has never run, or it has never finished far enough to say so.
+                        {t('costSyncCostSyncIndex.eitherItHasNeverRun')}
                       </span>
                     </div>
                   </TableEmpty>
@@ -538,10 +567,10 @@ export function CostSyncIndex(): ReactElement {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Run the Delhivery cost sync now?"
-        entity="Delhivery wallet export"
-        consequence="The portal worker signs in to the courier's own website with our stored login and reads their wallet export; it takes a minute or two."
-        confirmLabel="Run it now"
+        title={t('costSyncCostSyncIndex.runTheDelhiveryCostSync')}
+        entity={t('costSyncCostSyncIndex.delhiveryWalletExport')}
+        consequence={t('costSyncCostSyncIndex.thePortalWorkerSignsIn')}
+        confirmLabel={t('costSyncCostSyncIndex.runItNow')}
         onConfirm={go}
       />
     </div>

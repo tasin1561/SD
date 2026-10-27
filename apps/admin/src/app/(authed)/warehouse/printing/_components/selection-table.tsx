@@ -6,6 +6,7 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Table, TBody, TableEmpty, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
 import '../../_components/benches.css';
 import type { PrintQueueRow } from '@/lib/ops-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * The queue both tabs work from.
@@ -38,10 +39,11 @@ export function SelectionTable({
    *  duplicate is already out there. */
   showPrintCount?: boolean;
 }): ReactElement {
+  const t = useT();
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.shipmentId));
 
   return (
-    <Table caption="Parcels">
+    <Table caption={t('warehousePrintingSelectionTable.parcels')}>
       <THead>
         <Tr>
           <Th>
@@ -50,17 +52,21 @@ export function SelectionTable({
               className="wh-check"
               checked={allSelected}
               onChange={onToggleAll}
-              aria-label={allSelected ? 'Clear selection' : 'Select every parcel'}
+              aria-label={
+                allSelected
+                  ? t('warehousePrintingSelectionTable.clearSelection')
+                  : t('warehousePrintingSelectionTable.selectEveryParcel')
+              }
               disabled={rows.length === 0}
             />
           </Th>
-          <Th>Order</Th>
-          <Th>Courier</Th>
+          <Th>{t('warehousePrintingSelectionTable.order')}</Th>
+          <Th>{t('warehousePrintingSelectionTable.courier')}</Th>
           <Th>AWB</Th>
-          <Th>Destination</Th>
+          <Th>{t('warehousePrintingSelectionTable.destination')}</Th>
           <Th align="right">COD</Th>
-          <Th align="right">Items</Th>
-          {showPrintCount && <Th align="right">Printed</Th>}
+          <Th align="right">{t('warehousePrintingSelectionTable.items')}</Th>
+          {showPrintCount && <Th align="right">{t('warehousePrintingSelectionTable.printed')}</Th>}
         </Tr>
       </THead>
       <TBody>
@@ -80,7 +86,9 @@ export function SelectionTable({
                   className="wh-check"
                   checked={selected.has(r.shipmentId)}
                   onChange={() => onToggle(r.shipmentId)}
-                  aria-label={`Select ${r.orderNumber}`}
+                  aria-label={t('warehousePrintingSelectionTable.select', {
+                    orderNumber: r.orderNumber,
+                  })}
                 />
               </Td>
               <Td>

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import type { ReactElement } from 'react';
 import { FileWarning, ScrollText } from 'lucide-react';
+import { useT } from '@/i18n/client';
 import { useStoreTerms } from '@/lib/terms-hooks';
 import { RdCallout } from '../settings/_components/rd-parts';
 
@@ -29,27 +30,28 @@ import { RdCallout } from '../settings/_components/rd-parts';
  * shell's permission check), so it never fires a request that would 403.
  */
 export function TermsBanner({ enabled }: { enabled: boolean }): ReactElement | null {
+  const t = useT();
   const terms = useStoreTerms(enabled);
-  const t = terms.data;
-  if (!enabled || t === undefined) return null;
-  if (t.current === null) {
+  const tv = terms.data;
+  if (!enabled || tv === undefined) return null;
+  if (tv.current === null) {
     return (
       <RdCallout tone="info" icon={<ScrollText size={15} />} role="status" className="rd-banner">
-        <p>
-          {t.sellerCompanyName} has not published terms for your store yet. You can place orders
-          once they have and you have accepted them.
-        </p>
+        <p>{t('termsbar.none', { seller: tv.sellerCompanyName })}</p>
       </RdCallout>
     );
   }
-  if (t.currentAccepted && t.needsRevision === null) return null;
+  if (tv.currentAccepted && tv.needsRevision === null) return null;
   return (
     <RdCallout tone="critical" icon={<FileWarning size={15} />} role="alert" className="rd-banner">
       <p>
-        {t.needsRevision ??
-          `${t.sellerCompanyName} published version ${t.current.version} of your terms. Your store cannot place new orders until it is accepted.`}{' '}
+        {tv.needsRevision ??
+          t('termsbar.unaccepted', {
+            seller: tv.sellerCompanyName,
+            version: tv.current.version,
+          })}{' '}
         <Link href="/terms" className="rd-link">
-          Read the terms
+          {t('termsbar.read')}
         </Link>
       </p>
     </RdCallout>

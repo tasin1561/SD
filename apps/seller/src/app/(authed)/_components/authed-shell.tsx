@@ -7,7 +7,7 @@ import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
 import { MenuButton, StripFact, Toaster } from '@skydrop/ui/components';
 import { Shell, type NavGroup } from '@skydrop/ui/app/shell';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { PrefsControl } from '@/components/prefs-control';
 import { ToastProvider } from '@skydrop/ui/app/toast';
 import { RestrictionBanner } from './restriction-banner';
 import { ImpersonationBanner } from './impersonation-banner';
@@ -37,6 +37,8 @@ import {
   Warehouse,
 } from 'lucide-react';
 import { OrderOmnisearch } from './order-omnisearch';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * The seller shell.
@@ -61,6 +63,7 @@ export function AuthedShell({
   identity: SellerMe;
   children: ReactNode;
 }): ReactElement {
+  const t = useT();
   const pathname = usePathname();
   const client = useApiClient();
   const [loggingOut, setLoggingOut] = useState(false);
@@ -91,7 +94,7 @@ export function AuthedShell({
 
   const navGroups: NavGroup[] = [
     {
-      heading: 'Selling',
+      heading: t('authedShell.selling'),
       // The ordinals are the comps' own, and they survive the permission
       // filter below on purpose: they number the SECTIONS OF THE
       // PRODUCT, not the rows this particular login can see. Renumbering
@@ -99,12 +102,16 @@ export function AuthedShell({
       // different numbers, which is the one thing a fixed label is for.
       index: '01',
       items: [
-        { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
-        { href: '/orders', label: 'Orders', icon: <Package size={15} /> },
-        { href: '/tracking', label: 'Tracking', icon: <Truck size={15} /> },
+        {
+          href: '/dashboard',
+          label: t('authedShell.dashboard'),
+          icon: <LayoutDashboard size={15} />,
+        },
+        { href: '/orders', label: t('authedShell.orders'), icon: <Package size={15} /> },
+        { href: '/tracking', label: t('authedShell.tracking'), icon: <Truck size={15} /> },
         {
           href: '/needs-attention',
-          label: 'Needs attention',
+          label: t('authedShell.needsAttention'),
           icon: <AlertTriangle size={15} />,
         },
         // 2026-09-27 — was "Held stock" under Stock, which is not where
@@ -115,43 +122,47 @@ export function AuthedShell({
         // /holds — bookmarks, and page-access.ts keys on it.
         {
           href: '/holds',
-          label: 'Unreachable customers',
+          label: t('authedShell.unreachableCustomers'),
           icon: <PhoneOff size={15} />,
         },
-        { href: '/customers', label: 'Customers', icon: <Users size={15} /> },
-        { href: '/tickets', label: 'Tickets', icon: <LifeBuoy size={15} /> },
+        { href: '/customers', label: t('authedShell.customers'), icon: <Users size={15} /> },
+        { href: '/tickets', label: t('authedShell.tickets'), icon: <LifeBuoy size={15} /> },
       ],
     },
     {
-      heading: 'Stock',
+      heading: t('authedShell.stock'),
       index: '02',
       items: [
-        { href: '/products', label: 'Products', icon: <Boxes size={15} /> },
-        { href: '/inventory', label: 'Inventory', icon: <Warehouse size={15} /> },
-        { href: '/inbound', label: 'Add stock', icon: <PackageOpen size={15} /> },
+        { href: '/products', label: t('authedShell.products'), icon: <Boxes size={15} /> },
+        { href: '/inventory', label: t('authedShell.inventory'), icon: <Warehouse size={15} /> },
+        { href: '/inbound', label: t('authedShell.addStock'), icon: <PackageOpen size={15} /> },
       ],
     },
     {
-      heading: 'Money',
+      heading: t('authedShell.money'),
       index: '03',
       items: [
-        { href: '/wallet', label: 'Wallet', icon: <Wallet size={15} /> },
-        { href: '/freight', label: 'Inbound freight', icon: <Truck size={15} /> },
+        { href: '/wallet', label: t('authedShell.wallet'), icon: <Wallet size={15} /> },
+        { href: '/freight', label: t('authedShell.inboundFreight'), icon: <Truck size={15} /> },
       ],
     },
     {
       // RS-1 — separate businesses reselling this seller's stock.
-      heading: 'Reselling',
+      heading: t('authedShell.reselling'),
       index: '04',
       items: [
-        { href: '/reseller-stores', label: 'Member stores', icon: <Store size={15} /> },
+        {
+          href: '/reseller-stores',
+          label: t('authedShell.memberStores'),
+          icon: <Store size={15} />,
+        },
         // 2026-09-16 — what the stores are waiting on the seller to decide.
         // The COUNT is the point: an approval queue nobody looks at holds
         // a store's customer waiting, and the in-app notice only covers
         // the moment a request arrives, not the next morning.
         {
           href: '/reseller-stores/requests',
-          label: 'Waiting on you',
+          label: t('authedShell.waitingOnYou'),
           icon: <Inbox size={15} />,
           ...(waitingCount > 0
             ? {
@@ -172,30 +183,30 @@ export function AuthedShell({
         // RS-3 — the default price every reseller store pays.
         {
           href: '/reseller-stores/price-list',
-          label: 'Member store price list',
+          label: t('authedShell.memberStorePriceList'),
           icon: <Tags size={15} />,
         },
         // RS-8 / RS-9 — how the stores are doing, and the stock they sell.
         {
           href: '/reseller-stores/reports',
-          label: 'Member store reports',
+          label: t('authedShell.memberStoreReports'),
           icon: <BarChart3 size={15} />,
         },
         {
           href: '/reseller-stores/stock-forecast',
-          label: 'Stock forecast',
+          label: t('authedShell.stockForecast'),
           icon: <PackageSearch size={15} />,
         },
       ],
     },
     {
-      heading: 'Account',
+      heading: t('authedShell.account'),
       index: '05',
       items: [
-        { href: '/team', label: 'Team', icon: <Users size={15} /> },
-        { href: '/team/roles', label: 'Roles', icon: <KeyRound size={15} /> },
-        { href: '/profile', label: 'Profile', icon: <Building2 size={15} /> },
-        { href: '/settings', label: 'Settings', icon: <Settings size={15} /> },
+        { href: '/team', label: t('authedShell.team'), icon: <Users size={15} /> },
+        { href: '/team/roles', label: t('authedShell.roles'), icon: <KeyRound size={15} /> },
+        { href: '/profile', label: t('authedShell.profile'), icon: <Building2 size={15} /> },
+        { href: '/settings', label: t('authedShell.settings'), icon: <Settings size={15} /> },
       ],
     },
   ];
@@ -215,14 +226,14 @@ export function AuthedShell({
     }))
     .filter((group) => group.items.length > 0);
 
-  const quickActions = quickActionsFor(identity);
+  const quickActions = quickActionsFor(identity, t);
 
   return (
     <Toaster>
       <ToastProvider>
         <Shell
-          subtitle="Client"
-          sectionLabel="Client portal"
+          subtitle={t('authedShell.client')}
+          sectionLabel={t('authedShell.clientPortal')}
           navGroups={visibleGroups}
           identityPrimary={identity.companyName}
           identitySecondary={identity.emailDisplay}
@@ -230,13 +241,20 @@ export function AuthedShell({
           // is rarely the moment they are on the orders list. In its OWN
           // slot so it does not squeeze the identity beside it.
           headerCenter={<OrderOmnisearch />}
-          headerActions={<MenuButton label="Quick actions" items={quickActions} Link={Link} />}
+          headerActions={
+            <MenuButton label={t('authedShell.quickActions')} items={quickActions} Link={Link} />
+          }
           // The bell, and ONLY the bell, survives below `lg`: it is the
           // one control that says something needs you, and the inbox has
           // no other route on a phone.
           headerAlways={<NotificationBellContainer />}
           drawerActions={
-            <MenuButton label="Quick actions" items={quickActions} Link={Link} placement="above" />
+            <MenuButton
+              label={t('authedShell.quickActions')}
+              items={quickActions}
+              Link={Link}
+              placement="above"
+            />
           }
           /*
           The bottom strip — STANDING FACTS about the ground this
@@ -259,21 +277,26 @@ export function AuthedShell({
           statusStrip={
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
               <StripFact
-                label="Account"
-                value={identity.status === 'APPROVED' ? 'Active' : identity.status}
+                label={t('authedShell.account')}
+                value={identity.status === 'APPROVED' ? t('authedShell.active') : identity.status}
                 tone={identity.status === 'APPROVED' ? 'good' : 'warn'}
               />
-              <StripFact label="Figures in" value={identity.displayCurrency} />
+              <StripFact label={t('authedShell.figuresIn')} value={identity.displayCurrency} />
               {identity.displayCurrency === 'BDT' && identity.displayFxRate !== null && (
                 <StripFact
-                  label="Rate"
+                  label={t('authedShell.rate')}
                   value={`₹1 = ৳${Number(identity.displayFxRate).toFixed(4)}`}
                 />
               )}
               {canSeeRequests && waitingCount > 0 && (
                 <StripFact
-                  label="Waiting on you"
-                  value={`${waitingCount} store ${waitingCount === 1 ? 'request' : 'requests'}`}
+                  label={t('authedShell.waitingOnYou')}
+                  value={t(
+                    waitingCount === 1
+                      ? 'authedShell.storeRequestOne'
+                      : 'authedShell.storeRequestMany',
+                    { count: waitingCount },
+                  )}
                   tone="warn"
                 />
               )}
@@ -285,7 +308,7 @@ export function AuthedShell({
             void handleLogout();
           }}
           signingOut={loggingOut}
-          themeControl={<ThemeSwitch />}
+          themeControl={<PrefsControl />}
         >
           {/* FIRST, above everything, on every page: a staff member
             inside somebody else's account has to be told so before they
@@ -301,9 +324,9 @@ export function AuthedShell({
             the rate it was worked out at. */}
           {identity.displayCurrency === 'BDT' && identity.displayFxRate !== null && (
             <p className="text-text-muted border-border bg-surface-raised mb-4 rounded-lg border px-3 py-2 text-xs">
-              Amounts are shown in taka, converted from rupees at ₹1 = ৳
-              {Number(identity.displayFxRate).toFixed(2)}. Your account is kept in rupees —
-              withdrawal requests are made in rupees.
+              {richMessage(t('authedShell.amountsAreShownIn'), {
+                displayFxRate: Number(identity.displayFxRate).toFixed(2),
+              })}
             </p>
           )}
           {children}

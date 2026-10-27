@@ -5,6 +5,7 @@ import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { Button, ButtonLink } from '@skydrop/ui/app/button';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * Step 1 of the staff password reset — asks for the email, posts to
@@ -24,6 +25,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * address belongs to an account…") and never about the outcome.
  */
 export function ForgotPasswordForm(): ReactElement {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +47,7 @@ export function ForgotPasswordForm(): ReactElement {
       // FE-2: the server's verdict verbatim. The one it actually returns
       // here is the rate limit — three an hour per address — and telling
       // someone "too many requests" is far more use than a shrug.
-      setError(serverVerdict(err, 'Could not send the reset email.'));
+      setError(serverVerdict(err, t('authForgotPasswordForgotForm.couldNotSendTheReset')));
       setSubmitting(false);
     }
   }
@@ -54,15 +56,13 @@ export function ForgotPasswordForm(): ReactElement {
     return (
       <div className="space-y-3">
         <div className="rounded-[var(--radius-2)] border border-[var(--color-accent-ring)] bg-[var(--color-accent-tint)] px-3 py-2.5 text-xs text-text-bright">
-          If that address belongs to a staff account, a reset link is on its way. It expires in 30
-          minutes.
+          {t('authForgotPasswordForgotForm.ifThatAddressBelongsTo')}
         </div>
         <p className="text-text-muted text-xs">
-          Nothing arrived? Check spam, then try again — the link is only sent to the address on the
-          account.
+          {t('authForgotPasswordForgotForm.nothingArrivedCheckSpamThen')}
         </p>
         <ButtonLink href="/login" variant="primary" fullWidth>
-          Back to sign in
+          {t('authForgotPasswordForgotForm.backToSignIn')}
         </ButtonLink>
       </div>
     );
@@ -79,7 +79,7 @@ export function ForgotPasswordForm(): ReactElement {
       <TextField
         id="email"
         type="email"
-        label="Email"
+        label={t('authForgotPasswordForgotForm.email')}
         required
         autoComplete="email"
         autoFocus
@@ -103,14 +103,16 @@ export function ForgotPasswordForm(): ReactElement {
       )}
 
       <Button type="submit" fullWidth loading={submitting}>
-        {submitting ? 'Sending…' : 'Send reset link'}
+        {submitting
+          ? t('authForgotPasswordForgotForm.sending')
+          : t('authForgotPasswordForgotForm.sendResetLink')}
       </Button>
 
       <a
         href="/login"
         className="text-text-muted hover:text-text-bright block pt-1 text-center text-xs transition-colors"
       >
-        Back to sign in
+        {t('authForgotPasswordForgotForm.backToSignIn')}
       </a>
     </form>
   );

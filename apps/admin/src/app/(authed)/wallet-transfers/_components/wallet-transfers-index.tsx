@@ -30,6 +30,7 @@ import {
   MkSection,
   MkAlert,
 } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Debit a seller's wallet into our bank, or credit it from our bank, with a
@@ -44,17 +45,18 @@ export function WalletTransfersIndex({
 }: {
   readonly initialSellerId: string | null;
 }): ReactElement {
+  const t = useT();
   const [sellerId, setSellerId] = useState<string | null>(initialSellerId);
   return (
     <div className="mk-page">
       <PageHeader
-        title="Wallet transfers"
-        subtitle="Take money out of a client's wallet into our bank, or put ours into theirs. The cash moves with it, and the client reads your reason on their wallet history."
+        title={t('walletTransfersWalletTransfersIndex.walletTransfers')}
+        subtitle={t('walletTransfersWalletTransfersIndex.takeMoneyOutOfA')}
       />
       <MkSection>
         <SectionHeading
-          title="New transfer"
-          note="Not a correction: this moves real money between the client and us."
+          title={t('walletTransfersWalletTransfersIndex.newTransfer')}
+          note={t('walletTransfersWalletTransfersIndex.notACorrectionThisMoves')}
         />
         {sellerId === null ? (
           <SellerPicker onPick={setSellerId} />
@@ -68,8 +70,12 @@ export function WalletTransfersIndex({
       </MkSection>
       <MkSection>
         <SectionHeading
-          title="History"
-          note={sellerId === null ? 'Every staff transfer.' : 'This client’s staff transfers.'}
+          title={t('walletTransfersWalletTransfersIndex.history')}
+          note={
+            sellerId === null
+              ? t('walletTransfersWalletTransfersIndex.everyStaffTransfer')
+              : t('walletTransfersWalletTransfersIndex.thisClientSStaffTransfers')
+          }
         />
         <TransferHistory sellerId={sellerId} />
       </MkSection>
@@ -78,6 +84,7 @@ export function WalletTransfersIndex({
 }
 
 function SellerPicker({ onPick }: { readonly onPick: (id: string) => void }): ReactElement {
+  const t = useT();
   const [q, setQ] = useState('');
   const found = useWalletTransferSellers(q);
   const items = found.data?.items ?? [];
@@ -85,20 +92,24 @@ function SellerPicker({ onPick }: { readonly onPick: (id: string) => void }): Re
     <MkCard>
       <TextField
         id="wt-seller-q"
-        label="Find a client"
+        label={t('walletTransfersWalletTransfersIndex.findAClient')}
         icon={<Search />}
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="Company name or email"
+        placeholder={t('walletTransfersWalletTransfersIndex.companyNameOrEmail')}
         autoComplete="off"
       />
       {found.isLoading ? (
-        <SkeletonRows rows={3} cols={2} label="Looking for clients…" />
+        <SkeletonRows
+          rows={3}
+          cols={2}
+          label={t('walletTransfersWalletTransfersIndex.lookingForClients')}
+        />
       ) : found.isError ? (
         <ErrorState message={serverVerdict(found.error)} retry={() => void found.refetch()} />
       ) : items.length === 0 ? (
         <p className="mk-muted">
-          No approved or suspended client matches. Try part of the company name or email.
+          {t('walletTransfersWalletTransfersIndex.noApprovedOrSuspendedClient')}
         </p>
       ) : (
         <ul className="mk-picks">
@@ -123,6 +134,7 @@ function TransferForm({
   readonly sellerId: string;
   readonly onChangeSeller: () => void;
 }): ReactElement {
+  const t = useT();
   const context = useWalletTransferContext(sellerId);
   const preview = usePreviewWalletTransfer();
   const post = usePostWalletTransfer();
@@ -188,8 +200,8 @@ function TransferForm({
       setIdempotencyKey(crypto.randomUUID());
       setDone(
         out.replayed
-          ? 'Already recorded — this form had been posted before, so nothing moved twice.'
-          : 'Transfer posted. The client can see it on their wallet history now.',
+          ? t('walletTransfersWalletTransfersIndex.alreadyRecordedThisFormHad')
+          : t('walletTransfersWalletTransfersIndex.transferPostedTheClientCan'),
       );
     } catch (err) {
       setConfirmError(serverVerdict(err));
@@ -197,11 +209,21 @@ function TransferForm({
     }
   }
 
-  if (context.isLoading) return <SkeletonRows rows={4} cols={2} label="Reading this client…" />;
+  if (context.isLoading)
+    return (
+      <SkeletonRows
+        rows={4}
+        cols={2}
+        label={t('walletTransfersWalletTransfersIndex.readingThisClient')}
+      />
+    );
   if (context.isError || context.data === undefined) {
     return (
       <ErrorState
-        message={serverVerdict(context.error, 'Could not read this client.')}
+        message={serverVerdict(
+          context.error,
+          t('walletTransfersWalletTransfersIndex.couldNotReadThisClient'),
+        )}
         retry={() => void context.refetch()}
       />
     );
@@ -217,7 +239,7 @@ function TransferForm({
         subtitle={ctx.seller.status.toLowerCase()}
         aside={
           <Button variant="ghost" size="sm" onClick={onChangeSeller}>
-            Change client
+            {t('walletTransfersWalletTransfersIndex.changeClient')}
           </Button>
         }
       >
@@ -225,11 +247,11 @@ function TransferForm({
           grid
           items={[
             {
-              label: 'Wallet',
+              label: t('walletTransfersWalletTransfersIndex.wallet'),
               value: <Money amount={ctx.walletInr} convert={false} />,
             },
             {
-              label: 'Their cash held with us',
+              label: t('walletTransfersWalletTransfersIndex.theirCashHeldWithUs'),
               value: <Money amount={ctx.heldInr} convert={false} />,
             },
           ]}
@@ -240,7 +262,7 @@ function TransferForm({
         <div className="mk-form mk-form--2">
           <Select
             id="wt-direction"
-            label="Which way"
+            label={t('walletTransfersWalletTransfersIndex.whichWay')}
             requiredMark
             icon={<ArrowLeftRight />}
             value={direction}
@@ -249,12 +271,16 @@ function TransferForm({
               edited();
             }}
           >
-            <option value="DEBIT">Debit — take from the client’s wallet into our bank</option>
-            <option value="CREDIT">Credit — give from our bank into the client’s wallet</option>
+            <option value="DEBIT">
+              {t('walletTransfersWalletTransfersIndex.debitTakeFromTheClient')}
+            </option>
+            <option value="CREDIT">
+              {t('walletTransfersWalletTransfersIndex.creditGiveFromOurBank')}
+            </option>
           </Select>
           <TextField
             id="wt-amount"
-            label="Amount (₹)"
+            label={t('walletTransfersWalletTransfersIndex.amount2')}
             requiredMark
             inputMode="decimal"
             value={amount}
@@ -271,7 +297,7 @@ function TransferForm({
           <div className="mk-stack mk-stack--tight">
             <Select
               id="wt-account"
-              label="From which of our rupee accounts"
+              label={t('walletTransfersWalletTransfersIndex.fromWhichOfOurRupee')}
               requiredMark
               value={accountId}
               onChange={(e) => {
@@ -279,7 +305,7 @@ function TransferForm({
                 edited();
               }}
             >
-              <option value="">Choose an account…</option>
+              <option value="">{t('walletTransfersWalletTransfersIndex.chooseAnAccount')}</option>
               {ctx.accounts.map((a) => (
                 <option key={a.accountId} value={a.accountId}>
                   {a.label}
@@ -290,11 +316,13 @@ function TransferForm({
               <MkDl
                 items={[
                   {
-                    label: 'Ours there',
+                    label: t('walletTransfersWalletTransfersIndex.oursThere'),
                     value: <Money amount={chosen.capitalInr} convert={false} />,
                   },
                   {
-                    label: `${ctx.seller.companyName}’s there`,
+                    label: t('walletTransfersWalletTransfersIndex.sThere', {
+                      companyName: ctx.seller.companyName,
+                    }),
                     value: <Money amount={chosen.sellerInr} convert={false} />,
                   },
                 ]}
@@ -303,16 +331,14 @@ function TransferForm({
           </div>
         ) : (
           <p className="mk-muted">
-            A debit takes the client’s money where it already sits with us — rupees first, then any
-            taka at the rate it was credited. The preview shows which account. Anything beyond what
-            they hold is not in any bank: their wallet goes negative and they owe it to us.
+            {t('walletTransfersWalletTransfersIndex.aDebitTakesTheClient')}
           </p>
         )}
 
         <TextArea
           id="wt-reason"
-          label="Reason"
-          hint="The client sees this on their wallet history, word for word."
+          label={t('walletTransfersWalletTransfersIndex.reason')}
+          hint={t('walletTransfersWalletTransfersIndex.theClientSeesThisOn')}
           requiredMark
           value={reason}
           onChange={(e) => {
@@ -322,12 +348,12 @@ function TransferForm({
           rows={3}
           maxLength={500}
           showCount
-          placeholder="e.g. Carton 3 of CN-2026-08-000003 was lost by your forwarder before it reached us"
+          placeholder={t('walletTransfersWalletTransfersIndex.eGCarton3Of')}
         />
         <TextArea
           id="wt-note"
-          label="Internal note"
-          hint="Only staff see this. It is kept with the audit record."
+          label={t('walletTransfersWalletTransfersIndex.internalNote')}
+          hint={t('walletTransfersWalletTransfersIndex.onlyStaffSeeThisIt')}
           value={internalNote}
           onChange={(e) => setInternalNote(e.target.value)}
           rows={2}
@@ -347,10 +373,10 @@ function TransferForm({
             variant="secondary"
             disabled={amount.trim() === ''}
             labels={{
-              idle: 'Preview',
-              busy: 'Working it out…',
-              done: 'Worked out',
-              error: 'Refused',
+              idle: t('walletTransfersWalletTransfersIndex.preview'),
+              busy: t('walletTransfersWalletTransfersIndex.workingItOut'),
+              done: t('walletTransfersWalletTransfersIndex.workedOut'),
+              error: t('walletTransfersWalletTransfersIndex.refused'),
             }}
             onAction={runPreview}
           />
@@ -362,7 +388,7 @@ function TransferForm({
                 setConfirming(true);
               }}
             >
-              Post transfer
+              {t('walletTransfersWalletTransfersIndex.postTransfer')}
             </Button>
           )}
         </div>
@@ -375,7 +401,7 @@ function TransferForm({
         onOpenChange={(next) => {
           if (!next) setConfirming(false);
         }}
-        title="Post this transfer?"
+        title={t('walletTransfersWalletTransfersIndex.postThisTransfer')}
         entity={ctx.seller.companyName}
         amount={
           shown === null ? undefined : (
@@ -386,8 +412,8 @@ function TransferForm({
             />
           )
         }
-        consequence="It moves real money and cannot be undone — a mistake is put right with a transfer the other way."
-        confirmLabel="Yes, post it"
+        consequence={t('walletTransfersWalletTransfersIndex.itMovesRealMoneyAnd')}
+        confirmLabel={t('walletTransfersWalletTransfersIndex.yesPostIt')}
         closeOnSuccess={false}
         onConfirm={confirm}
         error={confirmError}
@@ -399,16 +425,20 @@ function TransferForm({
 }
 
 function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView }): ReactElement {
+  const t = useT();
   const debit = preview.direction === 'DEBIT';
   return (
-    <MkCard title="Preview" subtitle="Nothing has moved yet. Check it, then post it.">
+    <MkCard
+      title={t('walletTransfersWalletTransfersIndex.preview')}
+      subtitle={t('walletTransfersWalletTransfersIndex.nothingHasMovedYetCheck')}
+    >
       <p className="mk-body" data-testid="wallet-transfer-sentence">
         {preview.sentence}
       </p>
       <MkDl
         items={[
           {
-            label: 'Wallet',
+            label: t('walletTransfersWalletTransfersIndex.wallet'),
             value: (
               <span className="mk-balances">
                 <Money amount={preview.walletBeforeInr} convert={false} /> →{' '}
@@ -417,7 +447,7 @@ function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView 
             ),
           },
           {
-            label: 'Their cash held with us',
+            label: t('walletTransfersWalletTransfersIndex.theirCashHeldWithUs'),
             value: (
               <span className="mk-balances">
                 <Money amount={preview.heldBeforeInr} convert={false} /> →{' '}
@@ -426,7 +456,9 @@ function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView 
             ),
           },
           {
-            label: debit ? 'Cash that becomes ours' : 'Our cash that becomes theirs',
+            label: debit
+              ? t('walletTransfersWalletTransfersIndex.cashThatBecomesOurs')
+              : t('walletTransfersWalletTransfersIndex.ourCashThatBecomesTheirs'),
             value: (
               <Money
                 amount={preview.cashMovedInr}
@@ -436,20 +468,22 @@ function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView 
             ),
           },
           {
-            label: debit ? 'Owed to us with no cash behind it' : 'Clears what they owed us',
+            label: debit
+              ? t('walletTransfersWalletTransfersIndex.owedToUsWithNo')
+              : t('walletTransfersWalletTransfersIndex.clearsWhatTheyOwedUs'),
             value: <Money amount={preview.withoutCashInr} convert={false} />,
           },
         ]}
       />
       {preview.accounts.length > 0 && (
         <div className="mk-scroll">
-          <Table caption="Where the cash moves">
+          <Table caption={t('walletTransfersWalletTransfersIndex.whereTheCashMoves')}>
             <THead>
               <Tr>
-                <Th>Account</Th>
-                <Th>Moving</Th>
-                <Th>Theirs: before → after</Th>
-                <Th>Ours: before → after</Th>
+                <Th>{t('walletTransfersWalletTransfersIndex.account')}</Th>
+                <Th>{t('walletTransfersWalletTransfersIndex.moving')}</Th>
+                <Th>{t('walletTransfersWalletTransfersIndex.theirsBeforeAfter')}</Th>
+                <Th>{t('walletTransfersWalletTransfersIndex.oursBeforeAfter')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -478,12 +512,23 @@ function PreviewCard({ preview }: { readonly preview: WalletTransferPreviewView 
 }
 
 function TransferHistory({ sellerId }: { readonly sellerId: string | null }): ReactElement {
+  const t = useT();
   const list = useWalletTransfers(sellerId);
-  if (list.isLoading) return <SkeletonRows rows={4} cols={8} label="Loading past transfers…" />;
+  if (list.isLoading)
+    return (
+      <SkeletonRows
+        rows={4}
+        cols={8}
+        label={t('walletTransfersWalletTransfersIndex.loadingPastTransfers')}
+      />
+    );
   if (list.isError || list.data === undefined) {
     return (
       <ErrorState
-        message={serverVerdict(list.error, 'Could not read past transfers.')}
+        message={serverVerdict(
+          list.error,
+          t('walletTransfersWalletTransfersIndex.couldNotReadPastTransfers'),
+        )}
         retry={() => void list.refetch()}
       />
     );
@@ -492,24 +537,24 @@ function TransferHistory({ sellerId }: { readonly sellerId: string | null }): Re
   if (items.length === 0) {
     return (
       <EmptyState
-        title="No staff transfers yet"
-        description="A transfer you post above appears here, with its reason and who posted it."
+        title={t('walletTransfersWalletTransfersIndex.noStaffTransfersYet')}
+        description={t('walletTransfersWalletTransfersIndex.aTransferYouPostAbove')}
       />
     );
   }
   return (
     <MkCard flush>
-      <Table caption="Staff wallet transfers">
+      <Table caption={t('walletTransfersWalletTransfersIndex.staffWalletTransfers')}>
         <THead>
           <Tr>
-            <Th>When</Th>
-            <Th>Client</Th>
-            <Th>Amount</Th>
-            <Th>Wallet after</Th>
-            <Th>Reason (client sees)</Th>
-            <Th>Internal note</Th>
-            <Th>By</Th>
-            <Th>Cash</Th>
+            <Th>{t('walletTransfersWalletTransfersIndex.when')}</Th>
+            <Th>{t('walletTransfersWalletTransfersIndex.client')}</Th>
+            <Th>{t('walletTransfersWalletTransfersIndex.amount')}</Th>
+            <Th>{t('walletTransfersWalletTransfersIndex.walletAfter')}</Th>
+            <Th>{t('walletTransfersWalletTransfersIndex.reasonClientSees')}</Th>
+            <Th>{t('walletTransfersWalletTransfersIndex.internalNote')}</Th>
+            <Th>{t('walletTransfersWalletTransfersIndex.by')}</Th>
+            <Th>{t('walletTransfersWalletTransfersIndex.cash')}</Th>
           </Tr>
         </THead>
         <TBody>
@@ -532,7 +577,7 @@ function TransferHistory({ sellerId }: { readonly sellerId: string | null }): Re
               <Td className="mk-small">{r.staff ?? '—'}</Td>
               <Td className="mk-small">
                 {r.accounts.length === 0
-                  ? 'No cash moved'
+                  ? t('walletTransfersWalletTransfersIndex.noCashMoved')
                   : r.accounts.map((a) => `${a.label} ${a.amount}`).join(', ')}
               </Td>
             </Tr>

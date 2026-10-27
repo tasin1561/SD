@@ -25,6 +25,9 @@ import {
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { useUnitDiscrepancies, type StuckUnitRow } from '@/lib/ops-hooks';
 import { UnitTracePanel } from './unit-trace-panel';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Serialized-unit discrepancies (strict-mode SKUs only).
@@ -48,6 +51,8 @@ import { UnitTracePanel } from './unit-trace-panel';
  * therefore stops meaning anything.
  */
 export function UnitDiscrepanciesIndex(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const report = useUnitDiscrepancies();
   const data = report.data;
 
@@ -60,35 +65,41 @@ export function UnitDiscrepanciesIndex(): ReactElement {
     <AreaPage>
       <BackLink href="/inventory">
         <ArrowLeft size={14} />
-        Inventory
+        {t('inventoryUnits.inventory')}
       </BackLink>
 
       <PageHeader
         breadcrumbs={[
-          { label: 'Client console' },
-          { label: 'Stock' },
-          { label: 'Inventory', href: '/inventory' },
-          { label: 'Unit discrepancies' },
+          { label: t('inventoryUnits.clientConsole') },
+          { label: t('inventoryUnits.stock') },
+          { label: t('inventoryUnits.inventory'), href: '/inventory' },
+          { label: t('inventoryUnits.unitDiscrepancies') },
         ]}
         Link={Link}
-        title="Unit discrepancies"
-        subtitle="For SKUs tracked per unit by serial. Where a scan is missing, a parcel is unaccounted for, or the serials disagree with the stock count."
+        title={t('inventoryUnits.unitDiscrepancies')}
+        subtitle={t('inventoryUnits.forSkusTrackedPer')}
         meta={
           data === undefined ? undefined : (
             <MetaFacts>
               <MetaFact tone={totalIssues > 0 ? 'warn' : 'good'} dot>
-                {totalIssues === 0 ? 'Everything reconciles' : `${totalIssues} to look at`}
+                {totalIssues === 0
+                  ? t('inventoryUnits.everythingReconciles')
+                  : t('inventoryUnits.toLookAt', { totalIssues })}
               </MetaFact>
               <MetaFact>
                 <GlossaryTerm
-                  title="Strict mode"
+                  title={t('inventoryUnits.strictMode')}
                   icon={<ShieldCheck size={16} />}
-                  description="A SKU on strict mode carries a serial on every physical unit, and the warehouse scans it at receiving, pick and pack. Only those SKUs appear on this page. We set it, not you."
+                  description={t('inventoryUnits.aSkuOnStrict')}
                 >
-                  Strict-mode SKUs only
+                  {t('inventoryUnits.strictModeSkusOnly')}
                 </GlossaryTerm>
               </MetaFact>
-              <MetaFact>Read {new Date(data.generatedAt).toLocaleString('en-IN')}</MetaFact>
+              <MetaFact>
+                {richMessage(t('inventoryUnits.read'), {
+                  generatedAt: new Date(data.generatedAt).toLocaleString(dateTag(locale, 'en-IN')),
+                })}
+              </MetaFact>
             </MetaFacts>
           )
         }
@@ -96,7 +107,7 @@ export function UnitDiscrepanciesIndex(): ReactElement {
 
       {report.isError ? (
         <ErrorState
-          message={report.error?.message ?? 'Could not load the report.'}
+          message={report.error?.message ?? t('inventoryUnits.couldNotLoadThe')}
           retry={() => void report.refetch()}
         />
       ) : report.isLoading ? (
@@ -109,101 +120,105 @@ export function UnitDiscrepanciesIndex(): ReactElement {
         <>
           <KpiGrid>
             <KpiCard
-              label="Needs attention"
+              label={t('inventoryUnits.needsAttention')}
               icon={<TriangleAlert size={14} />}
               value={totalIssues}
               format={rawCount}
               {...(totalIssues === 0 ? {} : { unit: 'units' })}
               tone={totalIssues > 0 ? 'pending' : 'credit'}
-              hint={totalIssues === 0 ? 'Everything reconciles.' : undefined}
+              hint={totalIssues === 0 ? t('inventoryUnits.everythingReconciles2') : undefined}
               {...(totalIssues > 0
                 ? {
                     foot: [
-                      { label: 'Stuck mid-lifecycle', value: stuck },
-                      { label: 'Unresolved dispatches', value: unresolved },
-                      { label: 'Count mismatches', value: mismatches },
+                      { label: t('inventoryUnits.stuckMidLifecycle'), value: stuck },
+                      { label: t('inventoryUnits.unresolvedDispatches'), value: unresolved },
+                      { label: t('inventoryUnits.countMismatches'), value: mismatches },
                     ],
                   }
                 : {})}
             />
             <KpiCard
-              label="Stuck mid-lifecycle"
+              label={t('inventoryUnits.stuckMidLifecycle')}
               icon={<ScanLine size={14} />}
               value={stuck}
               format={rawCount}
               {...(stuck === 0 ? {} : { unit: 'units' })}
               tone={stuck > 0 ? 'pending' : 'neutral'}
-              hint={`Picked or packed for over ${data?.thresholds.stuckSlaHours ?? 0}h.`}
+              hint={t('inventoryUnits.pickedOrPackedFor', {
+                stuckSlaHours: data?.thresholds.stuckSlaHours ?? 0,
+              })}
             />
             <KpiCard
-              label="Unresolved dispatches"
+              label={t('inventoryUnits.unresolvedDispatches')}
               icon={<Trash2 size={14} />}
               value={unresolved}
               format={rawCount}
               {...(unresolved === 0 ? {} : { unit: 'units' })}
               tone={unresolved > 0 ? 'debit' : 'neutral'}
-              hint={`Out for over ${data?.thresholds.dispatchedUnresolvedDays ?? 0} days, never delivered or returned.`}
+              hint={t('inventoryUnits.outForOverDays', {
+                dispatchedUnresolvedDays: data?.thresholds.dispatchedUnresolvedDays ?? 0,
+              })}
             />
             <KpiCard
-              label="Count mismatches"
+              label={t('inventoryUnits.countMismatches')}
               icon={<Scale size={14} />}
               value={mismatches}
               format={rawCount}
-              {...(mismatches === 0 ? {} : { unit: 'SKUs' })}
+              {...(mismatches === 0 ? {} : { unit: t('inventoryUnits.skus') })}
               tone={mismatches > 0 ? 'debit' : 'neutral'}
-              hint="Serials disagree with the stock figure."
+              hint={t('inventoryUnits.serialsDisagreeWithThe')}
             />
           </KpiGrid>
 
           <AreaSection
-            title="Stuck mid-lifecycle"
-            note="Usually a skipped scan on the floor rather than a lost item."
+            title={t('inventoryUnits.stuckMidLifecycle')}
+            note={t('inventoryUnits.usuallyASkippedScan')}
           >
             <Panel flush>
               <UnitTable
                 rows={data?.stuckUnits ?? []}
-                emptyTitle="Nothing stuck"
-                emptyDescription="Every serialized unit that started a pick has been scanned through to the next stage."
+                emptyTitle={t('inventoryUnits.nothingStuck')}
+                emptyDescription={t('inventoryUnits.everySerializedUnitThat')}
               />
             </Panel>
           </AreaSection>
 
           <AreaSection
-            title="Unresolved dispatches"
-            note="Each of these is a parcel to chase with the courier."
+            title={t('inventoryUnits.unresolvedDispatches')}
+            note={t('inventoryUnits.eachOfTheseIs')}
           >
             <Panel flush>
               <UnitTable
                 rows={data?.unresolvedDispatched ?? []}
-                emptyTitle="Nothing unaccounted for"
-                emptyDescription="Every dispatched unit has either been delivered or come back."
+                emptyTitle={t('inventoryUnits.nothingUnaccountedFor')}
+                emptyDescription={t('inventoryUnits.everyDispatchedUnitHas')}
               />
             </Panel>
           </AreaSection>
 
           <AreaSection
-            title="Count mismatches"
-            note="Reported, never auto-corrected — that would erase the evidence."
+            title={t('inventoryUnits.countMismatches')}
+            note={t('inventoryUnits.reportedNeverAutoCorrected')}
           >
             <Panel flush>
               {mismatches === 0 ? (
                 <PanelPad>
                   <EmptyState
                     tone="positive"
-                    title="Serials and stock agree"
-                    description="For every strict-mode SKU, the number of in-stock serials matches the recorded quantity on hand."
+                    title={t('inventoryUnits.serialsAndStockAgree')}
+                    description={t('inventoryUnits.forEveryStrictMode')}
                     bare
                   />
                 </PanelPad>
               ) : (
-                <Table caption="Count mismatches">
+                <Table caption={t('inventoryUnits.countMismatches')}>
                   <THead>
                     <Tr>
-                      <Th>SKU</Th>
-                      <Th>Warehouse</Th>
-                      <Th align="right">Serials in stock</Th>
-                      <Th align="right">Recorded on hand</Th>
-                      <Th align="right">Difference</Th>
+                      <Th>{t('inventoryUnits.sku')}</Th>
+                      <Th>{t('inventoryUnits.warehouse')}</Th>
+                      <Th align="right">{t('inventoryUnits.serialsInStock')}</Th>
+                      <Th align="right">{t('inventoryUnits.recordedOnHand')}</Th>
+                      <Th align="right">{t('inventoryUnits.difference')}</Th>
                     </Tr>
                   </THead>
                   <TBody>
@@ -237,14 +252,14 @@ export function UnitDiscrepanciesIndex(): ReactElement {
           </AreaSection>
 
           <AreaSection
-            title="Retired units"
-            note="Kept visible so a loss stays countable rather than just disappearing."
+            title={t('inventoryUnits.retiredUnits')}
+            note={t('inventoryUnits.keptVisibleSoA')}
           >
             <Panel flush>
               <UnitTable
                 rows={data?.retiredUnits ?? []}
-                emptyTitle="No units written off or lost"
-                emptyDescription="Nothing has been retired from the serial ledger."
+                emptyTitle={t('inventoryUnits.noUnitsWrittenOff')}
+                emptyDescription={t('inventoryUnits.nothingHasBeenRetired')}
               />
             </Panel>
           </AreaSection>
@@ -267,6 +282,8 @@ function UnitTable({
   readonly emptyTitle: string;
   readonly emptyDescription: string;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   if (rows.length === 0) {
     return (
       <PanelPad>
@@ -278,11 +295,11 @@ function UnitTable({
     <Table caption={emptyTitle}>
       <THead>
         <Tr>
-          <Th>Serial</Th>
-          <Th>SKU</Th>
-          <Th>Status</Th>
-          <Th align="right">Time in status</Th>
-          <Th>Last scan</Th>
+          <Th>{t('inventoryUnits.serial')}</Th>
+          <Th>{t('inventoryUnits.sku')}</Th>
+          <Th>{t('inventoryUnits.status')}</Th>
+          <Th align="right">{t('inventoryUnits.timeInStatus')}</Th>
+          <Th>{t('inventoryUnits.lastScan')}</Th>
         </Tr>
       </THead>
       <TBody>
@@ -310,10 +327,10 @@ function UnitTable({
             </Td>
             <Td>
               {u.lastScanAt === null ? (
-                <StatusChip kind="failed" label="Never scanned" size="sm" />
+                <StatusChip kind="failed" label={t('inventoryUnits.neverScanned')} size="sm" />
               ) : (
                 <span className="sk-figure inv-muted" style={{ whiteSpace: 'nowrap' }}>
-                  {new Date(u.lastScanAt).toLocaleString('en-IN')}
+                  {new Date(u.lastScanAt).toLocaleString(dateTag(locale, 'en-IN'))}
                 </span>
               )}
             </Td>

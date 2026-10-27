@@ -10,9 +10,11 @@ import { Accordion, AccordionItem } from '@skydrop/ui/app/accordion';
 import { Switch } from '@skydrop/ui/app/switch';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useCreateRole, useUpdateRole, type Catalogue, type RoleView } from '@/lib/rbac-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { SetCallout, phaseOf } from '../../../settings/_components/settings-parts';
 import './roles.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Deciding what a role may do.
@@ -59,6 +61,7 @@ export function RoleEditor({
   readonly open: boolean;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const create = useCreateRole();
   const update = useUpdateRole();
@@ -122,14 +125,14 @@ export function RoleEditor({
     try {
       if (role === null) {
         await create.mutateAsync({ name, description, permissions: selected });
-        toast.success(`${name} created`);
+        toast.success(t('teamRoles.created', { name }));
       } else {
         await update.mutateAsync({ id: role.id, name, description, permissions: selected });
-        toast.success(`${name} updated`);
+        toast.success(t('teamRoles.updated', { name }));
       }
       onClose();
     } catch (e) {
-      setError(serverVerdict(e));
+      setError(verdict(e, t));
     } finally {
       setBusy(false);
     }
@@ -145,20 +148,20 @@ export function RoleEditor({
           if (!next) onClose();
         }}
         icon={<ShieldCheck size={18} />}
-        title={role === null ? 'New role' : `Edit ${role.name}`}
+        title={role === null ? t('teamRoles.newRole') : t('teamRoles.edit', { role: role.name })}
         size="lg"
         footer={
           <DialogFooter>
             <Button variant="ghost" size="md" onClick={onClose}>
-              Cancel
+              {t('teamRoles.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               labels={{
-                idle: role === null ? 'Create role' : 'Save changes',
-                busy: 'Saving…',
-                error: 'Not saved',
+                idle: role === null ? t('teamRoles.createRole') : t('teamRoles.saveChanges'),
+                busy: t('teamRoles.saving'),
+                error: t('teamRoles.notSaved'),
               }}
               state={phaseOf(busy || pending, error)}
               disabled={pending || name.trim().length < 2}
@@ -172,19 +175,19 @@ export function RoleEditor({
       >
         <div className="set-form-grid">
           <TextField
-            label="Name"
+            label={t('teamRoles.name')}
             id="role-name"
             icon={<Tag size={15} />}
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Warehouse manager"
+            placeholder={t('teamRoles.warehouseManager')}
           />
 
           <TextArea
-            label="What this role is for"
+            label={t('teamRoles.whatThisRoleIs')}
             id="role-desc"
             icon={<FileText size={15} />}
-            hint="Shown on the roles list. Helps whoever assigns it later."
+            hint={t('teamRoles.shownOnTheRoles')}
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -195,8 +198,8 @@ export function RoleEditor({
               icon={<Search size={15} />}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search permissions — try “return”, “wallet” or a key"
-              aria-label="Search permissions"
+              placeholder={t('teamRoles.searchPermissionsTryReturn')}
+              aria-label={t('teamRoles.searchPermissions')}
             />
 
             <div className="role-perms__summary">
@@ -205,15 +208,21 @@ export function RoleEditor({
                   {selected.length} of {catalogue.permissions.length}
                 </span>{' '}
                 permissions
-                {needle !== '' && ` · ${matches.length} match${matches.length === 1 ? '' : 'es'}`}
+                {needle !== '' &&
+                  t('teamRoles.match', {
+                    matches: matches.length,
+                    plural: matches.length === 1 ? '' : 'es',
+                  })}
                 {hiddenSelected > 0 && (
-                  <span className="role-perms__hidden"> · {hiddenSelected} selected not shown</span>
+                  <span className="role-perms__hidden">
+                    {richMessage(t('teamRoles.selectedNotShown'), { hiddenSelected })}
+                  </span>
                 )}
               </span>
               {sensitiveCount > 0 && (
                 <span className="role-perms__sensitive">
                   <AlertTriangle size={12} aria-hidden />
-                  {sensitiveCount} can move money or stock
+                  {t('teamRoles.canMoveMoneyOrStock', { count: sensitiveCount })}
                 </span>
               )}
             </div>
@@ -221,8 +230,7 @@ export function RoleEditor({
             <div className="role-perms__list">
               {matches.length === 0 && (
                 <p className="set-muted role-perms__none">
-                  Nothing matches “{query.trim()}”. The search covers the name, the explanation and
-                  the permission key.
+                  {richMessage(t('teamRoles.nothingMatchesTheSearch'), { query: query.trim() })}
                 </p>
               )}
               {matches.length > 0 && (
@@ -262,7 +270,9 @@ export function RoleEditor({
                                     {p.sensitive && (
                                       <span className="role-perm__flag">
                                         <AlertTriangle size={11} aria-hidden />
-                                        <span className="set-sr">Can move money or stock</span>
+                                        <span className="set-sr">
+                                          {t('teamRoles.canMoveMoneyOr')}
+                                        </span>
                                       </span>
                                     )}
                                   </span>
@@ -301,14 +311,23 @@ export function RoleEditor({
       <ConfirmDialog
         open={confirmRemoval}
         onOpenChange={setConfirmRemoval}
-        title="Remove permissions from this role?"
+        title={t('teamRoles.removePermissionsFromThis')}
         entity={role?.name ?? name}
-        consequence={`${role?.memberCount ?? 0} ${
-          (role?.memberCount ?? 0) === 1 ? 'person holds' : 'people hold'
-        } ${role?.name ?? 'this role'}, and ${
-          removed.length === 1 ? 'this permission' : `these ${removed.length} permissions`
-        } stop coming from it as soon as it saves. Anyone who also holds another role covering ${removed.length === 1 ? 'it' : 'them'} keeps ${removed.length === 1 ? 'it' : 'them'}.`}
-        confirmLabel="Remove and save"
+        consequence={t(
+          (role?.memberCount ?? 0) === 1
+            ? removed.length === 1
+              ? 'teamRoles.removalOnePersonOnePermission'
+              : 'teamRoles.removalOnePersonManyPermissions'
+            : removed.length === 1
+              ? 'teamRoles.removalManyPeopleOnePermission'
+              : 'teamRoles.removalManyPeopleManyPermissions',
+          {
+            members: role?.memberCount ?? 0,
+            role: role?.name ?? t('teamRoles.thisRole'),
+            count: removed.length,
+          },
+        )}
+        confirmLabel={t('teamRoles.removeAndSave')}
         destructive
         onConfirm={save}
       >

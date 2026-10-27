@@ -17,6 +17,7 @@ import { AllocateSettlementModal } from './allocate-settlement-modal';
 import { usePermission } from '@/lib/use-permission';
 import { useRouter } from 'next/navigation';
 import { MkCard, MkSection } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Courier settlements + float reconciliation (R2c).
@@ -31,6 +32,7 @@ import { MkCard, MkSection } from '../../seller-wallets/_components/money-parts'
  * that has left and not come back.
  */
 export function SettlementsIndex(): ReactElement {
+  const t = useT();
   const canWrite = usePermission('money.settlements.record');
   const [recording, setRecording] = useState(false);
   const [allocating, setAllocating] = useState<SettlementView | null>(null);
@@ -45,8 +47,8 @@ export function SettlementsIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Courier settlements"
-        subtitle="Every rupee the courier pays us, matched to the orders it covers. What is not matched is float we are carrying on the clients' behalf."
+        title={t('settlementsSettlementsIndex.courierSettlements')}
+        subtitle={t('settlementsSettlementsIndex.everyRupeeTheCourierPays')}
         action={
           canWrite ? (
             <Button
@@ -55,7 +57,7 @@ export function SettlementsIndex(): ReactElement {
               icon={<Plus size={15} />}
               onClick={() => setRecording(true)}
             >
-              Record payout
+              {t('settlementsSettlementsIndex.recordPayout')}
             </Button>
           ) : null
         }
@@ -64,7 +66,7 @@ export function SettlementsIndex(): ReactElement {
       {/* ── the alarm ── */}
       <div className="mk-kpis">
         <KpiCard
-          label="Outstanding float"
+          label={t('settlementsSettlementsIndex.outstandingFloat')}
           figure={
             recon.isLoading ? (
               '—'
@@ -73,35 +75,36 @@ export function SettlementsIndex(): ReactElement {
             )
           }
           tone="neutral"
-          hint="Delivered COD no payout covers yet"
+          hint={t('settlementsSettlementsIndex.deliveredCodNoPayoutCovers')}
         />
         <KpiCard
-          label={`Overdue past ${overdueAfterDays}d`}
+          label={t('settlementsSettlementsIndex.overduePastD', { overdueAfterDays })}
           figure={recon.isLoading ? '—' : <Money amount={overdue} decimals={false} />}
           tone={overdue > 0 ? 'debit' : 'credit'}
-          hint={`${recon.data?.overdueOrders.length ?? 0} order${
-            (recon.data?.overdueOrders.length ?? 0) === 1 ? '' : 's'
-          } past the settlement window`}
+          hint={t('settlementsSettlementsIndex.orderPastTheSettlementWindow', {
+            value: recon.data?.overdueOrders.length ?? 0,
+            value2: (recon.data?.overdueOrders.length ?? 0) === 1 ? '' : t('common.pluralS'),
+          })}
         />
         <KpiCard
-          label="Short-paid orders"
+          label={t('settlementsSettlementsIndex.shortPaidOrders')}
           figure={recon.isLoading ? '—' : shortPaid.length}
           tone={shortPaid.length > 0 ? 'pending' : 'neutral'}
-          hint="A payout touched these but under-paid"
+          hint={t('settlementsSettlementsIndex.aPayoutTouchedTheseBut')}
         />
       </div>
 
       <div className="mk-filters">
         <Select
           id="overdue-days"
-          label="Treat unsettled as overdue after"
-          hint="Delhivery states 5–10 days; 10 is the top of that window."
+          label={t('settlementsSettlementsIndex.treatUnsettledAsOverdueAfter')}
+          hint={t('settlementsSettlementsIndex.delhiveryStates510Days')}
           value={overdueAfterDays}
           onChange={(e) => setOverdueAfterDays(Number(e.target.value))}
         >
           {[5, 7, 10, 14, 21, 30].map((d) => (
             <option key={d} value={d}>
-              {d} days
+              {t('settlementsSettlementsIndex.days', { d })}
             </option>
           ))}
         </Select>
@@ -109,7 +112,9 @@ export function SettlementsIndex(): ReactElement {
 
       {recon.isError && (
         <ErrorState
-          message={recon.error?.message ?? 'Could not load the reconciliation.'}
+          message={
+            recon.error?.message ?? t('settlementsSettlementsIndex.couldNotLoadTheReconciliation')
+          }
           retry={() => void recon.refetch()}
         />
       )}
@@ -117,19 +122,26 @@ export function SettlementsIndex(): ReactElement {
       {/* ── overdue orders ── */}
       <MkSection>
         <SectionHeading
-          title="Overdue"
-          note="Delivered, COD collected by the courier, no payout has covered it inside the window."
+          title={t('settlementsSettlementsIndex.overdue')}
+          note={t('settlementsSettlementsIndex.deliveredCodCollectedByThe')}
         />
         {recon.isLoading ? (
-          <SkeletonRows rows={4} cols={6} label="Loading overdue orders…" />
+          <SkeletonRows
+            rows={4}
+            cols={6}
+            label={t('settlementsSettlementsIndex.loadingOverdueOrders')}
+          />
         ) : (recon.data?.overdueOrders.length ?? 0) === 0 ? (
           <EmptyState
             tone="positive"
-            title="Nothing overdue"
-            description="Every delivered COD order is either settled or still inside the expected window."
+            title={t('settlementsSettlementsIndex.nothingOverdue')}
+            description={t('settlementsSettlementsIndex.everyDeliveredCodOrderIs')}
           />
         ) : (
-          <UnsettledTable caption="Overdue orders" rows={recon.data?.overdueOrders ?? []} />
+          <UnsettledTable
+            caption={t('settlementsSettlementsIndex.overdueOrders')}
+            rows={recon.data?.overdueOrders ?? []}
+          />
         )}
       </MkSection>
 
@@ -137,49 +149,52 @@ export function SettlementsIndex(): ReactElement {
       {shortPaid.length > 0 && (
         <MkSection>
           <SectionHeading
-            title="Short-paid"
-            note="A payout allocated less than the order was expected to yield. Each of these is a conversation with the courier."
+            title={t('settlementsSettlementsIndex.shortPaid')}
+            note={t('settlementsSettlementsIndex.aPayoutAllocatedLessThan')}
           />
-          <UnsettledTable caption="Short-paid orders" rows={shortPaid} />
+          <UnsettledTable
+            caption={t('settlementsSettlementsIndex.shortPaidOrders')}
+            rows={shortPaid}
+          />
         </MkSection>
       )}
 
       {/* ── the payout log ── */}
       <MkSection>
         <SectionHeading
-          title="Recorded payouts"
-          note="Each bank credit, and the orders it was allocated against."
+          title={t('settlementsSettlementsIndex.recordedPayouts')}
+          note={t('settlementsSettlementsIndex.eachBankCreditAndThe')}
         />
         {list.isError ? (
           <ErrorState
-            message={list.error?.message ?? 'Could not load payouts.'}
+            message={list.error?.message ?? t('settlementsSettlementsIndex.couldNotLoadPayouts')}
             retry={() => void list.refetch()}
           />
         ) : list.isLoading ? (
-          <SkeletonRows rows={4} cols={7} label="Loading payouts…" />
+          <SkeletonRows rows={4} cols={7} label={t('settlementsSettlementsIndex.loadingPayouts')} />
         ) : (list.data?.length ?? 0) === 0 ? (
           <EmptyState
-            title="No payouts recorded"
-            description="Enter the courier's payout with its UTR reference and the orders it covers. The reference is what makes recording the same credit twice a refusal instead of a double-count."
+            title={t('settlementsSettlementsIndex.noPayoutsRecorded')}
+            description={t('settlementsSettlementsIndex.enterTheCourierSPayout')}
             action={
               canWrite ? (
                 <Button variant="primary" size="sm" onClick={() => setRecording(true)}>
-                  Record payout
+                  {t('settlementsSettlementsIndex.recordPayout')}
                 </Button>
               ) : null
             }
           />
         ) : (
           <MkCard flush>
-            <Table caption="Recorded payouts">
+            <Table caption={t('settlementsSettlementsIndex.recordedPayouts')}>
               <THead>
                 <Tr>
-                  <Th>Reference</Th>
-                  <Th>Received</Th>
-                  <Th align="right">Amount</Th>
-                  <Th align="right">Allocated</Th>
-                  <Th align="right">Unallocated</Th>
-                  <Th align="right">Orders</Th>
+                  <Th>{t('settlementsSettlementsIndex.reference')}</Th>
+                  <Th>{t('settlementsSettlementsIndex.received')}</Th>
+                  <Th align="right">{t('settlementsSettlementsIndex.amount')}</Th>
+                  <Th align="right">{t('settlementsSettlementsIndex.allocated')}</Th>
+                  <Th align="right">{t('settlementsSettlementsIndex.unallocated')}</Th>
+                  <Th align="right">{t('settlementsSettlementsIndex.orders')}</Th>
                   <Th />
                 </Tr>
               </THead>
@@ -212,7 +227,7 @@ export function SettlementsIndex(): ReactElement {
                           <span
                             className="mk-text"
                             data-tone="critical"
-                            title="This part of the payout is not explained by any order"
+                            title={t('settlementsSettlementsIndex.thisPartOfThePayout')}
                           >
                             <Money amount={s.unallocatedInr} />
                           </span>
@@ -228,7 +243,7 @@ export function SettlementsIndex(): ReactElement {
                             refuses anyway. */}
                         {unallocated !== 0 && canWrite && (
                           <Button variant="ghost" size="sm" onClick={() => setAllocating(s)}>
-                            Allocate more
+                            {t('settlementsSettlementsIndex.allocateMore')}
                           </Button>
                         )}
                       </Td>
@@ -272,18 +287,19 @@ function UnsettledTable({
     shortfallInr: string;
   }>;
 }): ReactElement {
+  const t = useT();
   const router = useRouter();
   return (
     <MkCard flush>
       <Table caption={caption}>
         <THead>
           <Tr>
-            <Th>Order</Th>
-            <Th>Delivered</Th>
-            <Th align="right">Age</Th>
-            <Th align="right">Expected</Th>
-            <Th align="right">Settled</Th>
-            <Th align="right">Shortfall</Th>
+            <Th>{t('settlementsSettlementsIndex.order')}</Th>
+            <Th>{t('settlementsSettlementsIndex.delivered')}</Th>
+            <Th align="right">{t('settlementsSettlementsIndex.age')}</Th>
+            <Th align="right">{t('settlementsSettlementsIndex.expected')}</Th>
+            <Th align="right">{t('settlementsSettlementsIndex.settled')}</Th>
+            <Th align="right">{t('settlementsSettlementsIndex.shortfall')}</Th>
           </Tr>
         </THead>
         <TBody>

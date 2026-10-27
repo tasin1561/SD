@@ -21,7 +21,8 @@ import { KpiCard } from '@skydrop/ui/app/kpi-card';
 import { PageHeader, SectionHeading } from '@skydrop/ui/app/page-header';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { istDayRange, lastDays } from '@/lib/ist-day';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { useAssociateAnalysis, type AssociateAnalysisRow } from '@/lib/associate-hooks';
 import {
   AsSection,
@@ -69,6 +70,7 @@ const SORTS: Record<string, (r: AssociateAnalysisRow) => number | string | null>
  * read is how a feature goes unused.
  */
 export default function AssociateAnalysisPage(): ReactElement {
+  const t = useT();
   const initial = lastDays(30);
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -112,13 +114,13 @@ export default function AssociateAnalysisPage(): ReactElement {
   }
 
   const totals = rows.reduce(
-    (t, r) => ({
-      placed: t.placed + r.ordersPlaced,
-      delivered: t.delivered + r.delivered,
-      retail: t.retail + Number(r.retailSoldInr),
-      margin: t.margin + Number(r.storeMarginInr),
-      lines: t.lines + r.marginCoverage.lines,
-      priced: t.priced + r.marginCoverage.linesWithTransferPrice,
+    (acc, r) => ({
+      placed: acc.placed + r.ordersPlaced,
+      delivered: acc.delivered + r.delivered,
+      retail: acc.retail + Number(r.retailSoldInr),
+      margin: acc.margin + Number(r.storeMarginInr),
+      lines: acc.lines + r.marginCoverage.lines,
+      priced: acc.priced + r.marginCoverage.linesWithTransferPrice,
     }),
     { placed: 0, delivered: 0, retail: 0, margin: 0, lines: 0, priced: 0 },
   );
@@ -126,15 +128,15 @@ export default function AssociateAnalysisPage(): ReactElement {
 
   const header = (
     <PageHeader
-      title="How your associates are doing"
-      subtitle="Orders each of them placed in this window, how those orders ended, what they sold and what it left you."
+      title={t('assoca.title')}
+      subtitle={t('assoca.subtitle')}
       action={
         <Link href="/associates" className={buttonClassName('secondary', 'md')}>
           <span className="sk-btn__fx" aria-hidden />
           <span className="sk-btn__icon" aria-hidden>
             <ArrowLeft size={15} />
           </span>
-          <span className="sk-btn__label">All associates</span>
+          <span className="sk-btn__label">{t('assoca.all')}</span>
         </Link>
       }
     />
@@ -144,98 +146,110 @@ export default function AssociateAnalysisPage(): ReactElement {
     <div className="as-page">
       {header}
       <div className="as-filters">
-        <DateField id="from" label="From" value={from} onChange={(e) => setFrom(e.target.value)} />
-        <DateField id="to" label="To" value={to} onChange={(e) => setTo(e.target.value)} />
+        <DateField
+          id="from"
+          label={t('assoca.from')}
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+        />
+        <DateField
+          id="to"
+          label={t('assoca.to')}
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+        />
       </div>
 
-      {analysis.isPending && <SkeletonRows rows={5} cols={6} label="Loading the analysis" />}
+      {analysis.isPending && <SkeletonRows rows={5} cols={6} label={t('assoca.loading')} />}
       {analysis.isError && (
-        <ErrorState message={serverVerdict(analysis.error)} retry={() => void analysis.refetch()} />
+        <ErrorState message={verdict(analysis.error, t)} retry={() => void analysis.refetch()} />
       )}
 
       {analysis.data !== undefined && (
         <>
           <AsSection>
             <SectionHeading
-              title="Everybody together"
+              title={t('assoca.together')}
               note={
                 // The orders nobody on the roster placed are STATED, not
                 // dropped: without them these figures quietly fall short
                 // of the store's own order list and nothing says why.
                 analysis.data.ordersNotByAnAssociate === 0
-                  ? 'Every order of yours in this window was placed by an associate.'
-                  : `Plus ${analysis.data.ordersNotByAnAssociate} order${analysis.data.ordersNotByAnAssociate === 1 ? '' : 's'} nobody on this list placed — your own, a CSV upload, or an API key. They are not on any row below.`
+                  ? t('assoca.allByAssociate')
+                  : t(
+                      analysis.data.ordersNotByAnAssociate === 1
+                        ? 'assoca.notBy.one'
+                        : 'assoca.notBy.other',
+                      { n: analysis.data.ordersNotByAnAssociate },
+                    )
               }
             />
             <div className="as-kpis">
               <KpiCard
-                label="Orders placed"
+                label={t('assoca.kpi.placed')}
                 icon={<ShoppingBag size={14} />}
                 value={totals.placed}
                 format={(n) => `${n}`}
               />
               <KpiCard
-                label="Delivered"
+                label={t('assoca.kpi.delivered')}
                 icon={<PackageCheck size={14} />}
                 value={totals.delivered}
                 format={(n) => `${n}`}
               />
               <KpiCard
-                label="Retail sold"
+                label={t('assoca.kpi.retail')}
                 icon={<Coins size={14} />}
                 figure={<Money amount={totals.retail} />}
               />
               <KpiCard
-                label="Your margin"
+                label={t('assoca.kpi.margin')}
                 icon={<Coins size={14} />}
                 figure={<Money amount={totals.margin} />}
                 hint={
                   uncovered === 0
-                    ? 'Retail − what you pay your client, on every delivered line, before your share of Skydrop’s fees'
-                    : `Retail − what you pay your client, before your share of Skydrop’s fees. ${uncovered} of ${totals.lines} delivered lines have no cost recorded and are LEFT OUT, so the real figure is higher.`
+                    ? t('assoca.kpi.marginHint.full')
+                    : t('assoca.kpi.marginHint.partial', { uncovered, lines: totals.lines })
                 }
               />
             </div>
           </AsSection>
 
           <AsSection>
-            <SectionHeading
-              title="Associate by associate"
-              note="Best-selling first until you sort. A rate counts only the orders whose outcome is known; the figure under it says how many that was."
-            />
+            <SectionHeading title={t('assoca.by')} note={t('assoca.byNote')} />
             {rows.length === 0 ? (
               <EmptyState
                 icon={<Users size={22} />}
-                title="No orders from any associate in this window"
-                description="Widen the dates, or invite somebody and set their prices."
+                title={t('assoca.empty.title')}
+                description={t('assoca.empty.body')}
                 action={
                   <Link href="/associates" className={buttonClassName('secondary', 'md')}>
                     <span className="sk-btn__fx" aria-hidden />
-                    <span className="sk-btn__label">Go to associates</span>
+                    <span className="sk-btn__label">{t('assoca.empty.go')}</span>
                   </Link>
                 }
               />
             ) : (
-              <Table caption="Each associate’s orders and money">
+              <Table caption={t('assoca.caption')}>
                 <THead>
                   <Tr>
                     <SortableTh
-                      label="Person"
+                      label={t('assoca.col.person')}
                       columnKey="name"
                       activeKey={sortKey}
                       direction={direction}
                       onSort={sortBy}
                     />
-                    <Th>Can place orders</Th>
+                    <Th>{t('assoca.col.canPlace')}</Th>
                     <SortableTh
-                      label="Priced for"
+                      label={t('assoca.col.pricedFor')}
                       columnKey="blocked"
                       activeKey={sortKey}
                       direction={direction}
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Placed"
+                      label={t('assoca.col.placed')}
                       columnKey="placed"
                       align="right"
                       activeKey={sortKey}
@@ -243,7 +257,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Confirmed"
+                      label={t('assoca.col.confirmed')}
                       columnKey="confirmed"
                       align="right"
                       activeKey={sortKey}
@@ -251,7 +265,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Delivered"
+                      label={t('assoca.col.delivered')}
                       columnKey="delivered"
                       align="right"
                       activeKey={sortKey}
@@ -259,7 +273,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Called off"
+                      label={t('assoca.col.calledOff')}
                       columnKey="cancelled"
                       align="right"
                       activeKey={sortKey}
@@ -267,7 +281,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Failed delivery"
+                      label={t('assoca.col.failed')}
                       columnKey="ndr"
                       align="right"
                       activeKey={sortKey}
@@ -275,7 +289,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Came back"
+                      label={t('assoca.col.cameBack')}
                       columnKey="rto"
                       align="right"
                       activeKey={sortKey}
@@ -283,7 +297,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Retail sold"
+                      label={t('assoca.col.retail')}
                       columnKey="retail"
                       align="right"
                       activeKey={sortKey}
@@ -291,7 +305,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Your margin"
+                      label={t('assoca.col.margin')}
                       columnKey="margin"
                       align="right"
                       activeKey={sortKey}
@@ -299,7 +313,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Confirmation"
+                      label={t('assoca.col.confirmation')}
                       columnKey="confirmationRate"
                       align="right"
                       activeKey={sortKey}
@@ -307,7 +321,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Delivery"
+                      label={t('assoca.col.delivery')}
                       columnKey="deliveryRate"
                       align="right"
                       activeKey={sortKey}
@@ -315,7 +329,7 @@ export default function AssociateAnalysisPage(): ReactElement {
                       onSort={sortBy}
                     />
                     <SortableTh
-                      label="Returns"
+                      label={t('assoca.col.returns')}
                       columnKey="returnRate"
                       align="right"
                       activeKey={sortKey}
@@ -371,34 +385,39 @@ export default function AssociateAnalysisPage(): ReactElement {
                         <Money amount={r.storeMarginInr} />
                         <span className="as-coverage">
                           {r.marginCoverage.lines === 0
-                            ? 'nothing delivered yet'
+                            ? t('assoca.cov.none')
                             : r.marginCoverage.linesWithTransferPrice === r.marginCoverage.lines
-                              ? `all ${r.marginCoverage.lines} lines priced`
-                              : `${r.marginCoverage.lines - r.marginCoverage.linesWithTransferPrice} of ${r.marginCoverage.lines} lines left out`}
+                              ? t('assoca.cov.all', { n: r.marginCoverage.lines })
+                              : t('assoca.cov.left', {
+                                  left:
+                                    r.marginCoverage.lines -
+                                    r.marginCoverage.linesWithTransferPrice,
+                                  n: r.marginCoverage.lines,
+                                })}
                         </span>
                       </Td>
                       <Td align="right" className="sk-figure">
                         {pct(r.confirmationRate)}
                         <span className="as-coverage">
                           {r.decidedCount === 0
-                            ? 'none decided yet'
-                            : `of ${r.decidedCount} decided`}
+                            ? t('assoca.decided.none')
+                            : t('assoca.decided.of', { n: r.decidedCount })}
                         </span>
                       </Td>
                       <Td align="right" className="sk-figure">
                         {pct(r.deliveryRate)}
                         <span className="as-coverage">
                           {r.outcomeKnownCount === 0
-                            ? 'none finished yet'
-                            : `of ${r.outcomeKnownCount} finished`}
+                            ? t('assoca.finished.none')
+                            : t('assoca.finished.of', { n: r.outcomeKnownCount })}
                         </span>
                       </Td>
                       <Td align="right" className="sk-figure">
                         {pct(r.returnRate)}
                         <span className="as-coverage">
                           {r.outcomeKnownCount === 0
-                            ? 'none finished yet'
-                            : `of ${r.outcomeKnownCount} finished`}
+                            ? t('assoca.finished.none')
+                            : t('assoca.finished.of', { n: r.outcomeKnownCount })}
                         </span>
                       </Td>
                     </Tr>

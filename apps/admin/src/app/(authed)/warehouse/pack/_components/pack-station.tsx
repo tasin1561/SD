@@ -25,6 +25,8 @@ import { BarcodeCamera, CameraScanButton } from '@/components/barcode-camera';
 import { SerialScanner } from '@/components/ui/serial-scanner';
 import { PackQueueList } from './pack-queue-list';
 import '../../_components/benches.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * The pack bench.
@@ -73,6 +75,8 @@ function verdictCode(err: unknown): string | null {
 }
 
 export function PackStation(): ReactElement {
+  const t = useT();
+
   const toast = useToast();
   const block = useScanBlock();
   const forceComplete = useForceCompletePack();
@@ -156,7 +160,11 @@ export function PackStation(): ReactElement {
         const opened = await open.mutateAsync({ awbNumber: value });
         setBox(opened);
         setLines(opened.expected.map((l) => ({ ...l, scanned: 0 })));
-        toast.info(opened.alreadyOpen ? 'Box already open' : `Box open — ${opened.awbNumber}`);
+        toast.info(
+          opened.alreadyOpen
+            ? t('warehousePackPackStation.boxAlreadyOpen')
+            : t('warehousePackPackStation.boxOpen', { awbNumber: opened.awbNumber }),
+        );
         return;
       }
 
@@ -165,8 +173,10 @@ export function PackStation(): ReactElement {
           const result = await close.mutateAsync({ packBoxId: box.packBoxId, awbNumber: value });
           toast.success(
             result.manifestNumber
-              ? `Packed — manifest ${result.manifestNumber}`
-              : 'Packed — ready for pickup',
+              ? t('warehousePackPackStation.packedManifest', {
+                  manifestNumber: result.manifestNumber,
+                })
+              : t('warehousePackPackStation.packedReadyForPickup'),
           );
           reset();
         } catch (err) {
@@ -222,8 +232,8 @@ export function PackStation(): ReactElement {
       });
       toast.success(
         result.manifestNumber
-          ? `Packed — manifest ${result.manifestNumber}`
-          : 'Packed — ready for pickup',
+          ? t('warehousePackPackStation.packedManifest', { manifestNumber: result.manifestNumber })
+          : t('warehousePackPackStation.packedReadyForPickup'),
       );
       reset();
     } catch (err) {
@@ -249,8 +259,10 @@ export function PackStation(): ReactElement {
       });
       toast.success(
         result.manifestNumber
-          ? `Packed without scanning — manifest ${result.manifestNumber}`
-          : 'Packed without scanning',
+          ? t('warehousePackPackStation.packedWithoutScanningManifest', {
+              manifestNumber: result.manifestNumber,
+            })
+          : t('warehousePackPackStation.packedWithoutScanning'),
       );
       setForcing(false);
       setForceReason('');
@@ -267,8 +279,10 @@ export function PackStation(): ReactElement {
       const result = await cancel.mutateAsync({ packBoxId: box.packBoxId, reason: reason.trim() });
       toast.info(
         result.releasedScans > 0
-          ? `Box cancelled — ${result.releasedScans} scan(s) released, parcel back in the queue`
-          : 'Box cancelled — parcel back in the queue',
+          ? t('warehousePackPackStation.boxCancelledScanSReleased', {
+              releasedScans: result.releasedScans,
+            })
+          : t('warehousePackPackStation.boxCancelledParcelBackIn'),
       );
       reset();
     } catch (err) {
@@ -288,16 +302,18 @@ export function PackStation(): ReactElement {
       {block.data != null && (
         <div className="wh-stop">
           <div className="wh-stop__title">
-            <AlertTriangle size={18} /> Scanning is stopped
+            <AlertTriangle size={18} /> {t('warehousePackPackStation.scanningIsStopped')}
           </div>
           <p>{block.data.title}</p>
           <p className="wh-pre">{block.data.detail}</p>
           <p>
-            Put the box aside and get an admin. They clear it on{' '}
-            <Link href="/system-issues" className="wh-link">
-              system issues
-            </Link>
-            , after checking whether there are two of them.
+            {richMessage(t('warehousePackPackStation.putTheBoxAsideAnd'), {
+              link: (
+                <Link href="/system-issues" className="wh-link">
+                  {t('warehousePackPackStation.systemIssues')}
+                </Link>
+              ),
+            })}
           </p>
         </div>
       )}
@@ -308,8 +324,8 @@ export function PackStation(): ReactElement {
         <section className="wh-card wh-scan">
           <label htmlFor="pack-scan" className="wh-scan__label">
             {box === null
-              ? 'Scan the shipping label to open a box'
-              : 'Scan a product — or the label again to close'}
+              ? t('warehousePackPackStation.scanTheShippingLabelTo')
+              : t('warehousePackPackStation.scanAProductOrThe')}
           </label>
           <input
             id="pack-scan"
@@ -320,7 +336,11 @@ export function PackStation(): ReactElement {
             // let the next scan land before anybody read the warning.
             disabled={busy || refusal !== null}
             autoComplete="off"
-            placeholder={box === null ? 'Shipping label…' : 'Product barcode or serial…'}
+            placeholder={
+              box === null
+                ? t('warehousePackPackStation.shippingLabel')
+                : t('warehousePackPackStation.productBarcodeOrSerial')
+            }
             onChange={(e) => setCode(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -332,9 +352,11 @@ export function PackStation(): ReactElement {
           />
           {box !== null && (
             <div className="wh-scan__meta">
-              Box open on <span className="sk-ident">{box.awbNumber}</span> —{' '}
-              <span className="sk-figure">{done}</span> of{' '}
-              <span className="sk-figure">{total}</span> scanned
+              {richMessage(t('warehousePackPackStation.boxOpenOnOfScanned'), {
+                span: <span className="sk-ident">{box.awbNumber}</span>,
+                span2: <span className="sk-figure">{done}</span>,
+                span3: <span className="sk-figure">{total}</span>,
+              })}
             </div>
           )}
         </section>
@@ -350,22 +372,20 @@ export function PackStation(): ReactElement {
         <section className="wh-card wh-stack">
           <div>
             <div className="wh-title">
-              One step left on <span className="sk-ident">{pending.awbNumber}</span>
+              {richMessage(t('warehousePackPackStation.oneStepLeftOn'), {
+                span: <span className="sk-ident">{pending.awbNumber}</span>,
+              })}
             </div>
-            <p className="wh-note">
-              The box is closed and its contents matched. This parcel is tracked per unit, so the
-              serials go with it — these are the ones you scanned in. Add any the box did not
-              recognise, then finish.
-            </p>
+            <p className="wh-note">{t('warehousePackPackStation.theBoxIsClosedAnd')}</p>
           </div>
           <SerialScanner
             id="pack-finish-serials"
-            label="Unit serials in this parcel"
+            label={t('warehousePackPackStation.unitSerialsInThisParcel')}
             serials={unitSerials}
             onChange={setUnitSerials}
             disabled={busy}
             autoFocus
-            hint="No target count here — the server checks these against the units picked for this parcel and will say if one is missing or does not belong."
+            hint={t('warehousePackPackStation.noTargetCountHereThe')}
           />
           <div className="wh-row">
             <Button
@@ -374,16 +394,15 @@ export function PackStation(): ReactElement {
               disabled={busy || unitSerials.length === 0}
               onClick={() => void onFinishPack()}
             >
-              {completePack.isPending ? 'Finishing…' : 'Finish pack'}
+              {completePack.isPending
+                ? t('warehousePackPackStation.finishing')
+                : t('warehousePackPackStation.finishPack')}
             </Button>
             <Button variant="ghost" size="md" disabled={busy} onClick={() => reset()}>
-              Leave it for now
+              {t('warehousePackPackStation.leaveItForNow')}
             </Button>
           </div>
-          <p className="wh-faint">
-            Leaving it discards this list and changes nothing on the parcel — it stays picked and
-            un-packed, and whoever takes it next scans its label to open a fresh box.
-          </p>
+          <p className="wh-faint">{t('warehousePackPackStation.leavingItDiscardsThisList')}</p>
         </section>
       ) : box === null ? (
         // Nothing in hand — so show what is coming rather than an empty
@@ -391,7 +410,11 @@ export function PackStation(): ReactElement {
         <PackQueueList />
       ) : (
         <>
-          <section className="wh-card" data-flush="1" aria-label="What goes in this box">
+          <section
+            className="wh-card"
+            data-flush="1"
+            aria-label={t('warehousePackPackStation.whatGoesInThisBox')}
+          >
             <ul className="wh-lines">
               {lines.map((l) => {
                 const satisfied = l.scanned >= l.quantity;
@@ -417,7 +440,7 @@ export function PackStation(): ReactElement {
 
           {complete && (
             <div className="wh-good">
-              <Check size={14} /> Everything is in. Scan the label again to close the box.
+              <Check size={14} /> {t('warehousePackPackStation.everythingIsInScanThe')}
             </div>
           )}
 
@@ -425,19 +448,16 @@ export function PackStation(): ReactElement {
             {!cancelling ? (
               <div>
                 <Button variant="ghost" size="md" onClick={() => setCancelling(true)}>
-                  Cancel this box
+                  {t('warehousePackPackStation.cancelThisBox')}
                 </Button>
               </div>
             ) : (
               <>
-                <p className="wh-note">
-                  The scans are discarded and the parcel goes back in the queue. Nothing returns to
-                  inventory — packing never took it out.
-                </p>
+                <p className="wh-note">{t('warehousePackPackStation.theScansAreDiscardedAnd')}</p>
                 <TextField
-                  label="Reason for cancelling"
+                  label={t('warehousePackPackStation.reasonForCancelling')}
                   value={reason}
-                  placeholder="Why? e.g. damaged outer carton"
+                  placeholder={t('warehousePackPackStation.whyEGDamagedOuter')}
                   onChange={(e) => setReason(e.target.value)}
                 />
                 <div className="wh-row">
@@ -447,10 +467,12 @@ export function PackStation(): ReactElement {
                     disabled={reason.trim().length < 3 || cancel.isPending}
                     onClick={() => void onCancel()}
                   >
-                    {cancel.isPending ? 'Cancelling…' : 'Cancel the box'}
+                    {cancel.isPending
+                      ? t('warehousePackPackStation.cancelling')
+                      : t('warehousePackPackStation.cancelTheBox')}
                   </Button>
                   <Button variant="ghost" size="md" onClick={() => setCancelling(false)}>
-                    Keep packing
+                    {t('warehousePackPackStation.keepPacking')}
                   </Button>
                 </div>
               </>
@@ -465,19 +487,18 @@ export function PackStation(): ReactElement {
                 {!forcing ? (
                   <div>
                     <Button variant="ghost" size="sm" onClick={() => setForcing(true)}>
-                      These products have no labels to scan
+                      {t('warehousePackPackStation.theseProductsHaveNoLabels')}
                     </Button>
                   </div>
                 ) : (
                   <>
                     <p className="wh-note">
-                      This packs the parcel without checking its contents. It is recorded against
-                      your name with the reason below.
+                      {t('warehousePackPackStation.thisPacksTheParcelWithout')}
                     </p>
                     <TextField
-                      label="Reason for packing without scanning"
+                      label={t('warehousePackPackStation.reasonForPackingWithoutScanning')}
                       value={forceReason}
-                      placeholder="Why? e.g. stock received before product labelling; counted by hand against the pick list"
+                      placeholder={t('warehousePackPackStation.whyEGStockReceived')}
                       onChange={(e) => setForceReason(e.target.value)}
                     />
                     <div className="wh-row">
@@ -487,10 +508,12 @@ export function PackStation(): ReactElement {
                         disabled={forceReason.trim().length < 20 || forceComplete.isPending}
                         onClick={() => void onForceComplete()}
                       >
-                        {forceComplete.isPending ? 'Packing…' : 'Pack without scanning'}
+                        {forceComplete.isPending
+                          ? t('warehousePackPackStation.packing')
+                          : t('warehousePackPackStation.packWithoutScanning')}
                       </Button>
                       <Button variant="ghost" size="md" onClick={() => setForcing(false)}>
-                        Back
+                        {t('warehousePackPackStation.back')}
                       </Button>
                     </div>
                   </>
@@ -511,7 +534,11 @@ export function PackStation(): ReactElement {
           setCode(scanned);
           void onScan(scanned);
         }}
-        title={box === null ? 'Scan the shipping label' : 'Scan a product'}
+        title={
+          box === null
+            ? t('warehousePackPackStation.scanTheShippingLabel')
+            : t('warehousePackPackStation.scanAProduct')
+        }
       />
 
       {/* A refusal STOPS the bench. The packer says they have fixed it
@@ -526,7 +553,7 @@ export function PackStation(): ReactElement {
             inputRef.current?.focus();
           }
         }}
-        title="That scan was refused"
+        title={t('warehousePackPackStation.thatScanWasRefused')}
         tone="critical"
         icon={<OctagonX size={18} />}
         footer={
@@ -538,15 +565,13 @@ export function PackStation(): ReactElement {
                 inputRef.current?.focus();
               }}
             >
-              I have fixed it
+              {t('warehousePackPackStation.iHaveFixedIt')}
             </Button>
           </DialogFooter>
         }
       >
         <p className="wh-alert">{refusal}</p>
-        <p className="wh-note wh-gap-top">
-          Nothing was added to the box. Put that item aside, find the right one, and carry on.
-        </p>
+        <p className="wh-note wh-gap-top">{t('warehousePackPackStation.nothingWasAddedToThe')}</p>
       </Dialog>
     </div>
   );

@@ -16,6 +16,7 @@ import {
   type ReactNode,
 } from 'react';
 import './text-field.css';
+import { useUiT } from '../i18n-client';
 
 /**
  * The shared shell under every text-like field (text, text area, phone,
@@ -194,6 +195,7 @@ export function FieldShell({
   className,
   children,
 }: FieldShellProps): ReactElement {
+  const t = useUiT();
   const ids = fieldIds(id);
   const guidance = hint ?? help;
   const invalid = hasContent(error) || status === 'invalid';
@@ -283,7 +285,7 @@ export function FieldShell({
                 {counter.count.toLocaleString('en-IN')} / {counter.max.toLocaleString('en-IN')}
               </span>
               <span className="sk-field__sr">
-                {counter.count} of {counter.max} characters
+                {t('ui.field.counterSr', { count: counter.count, max: counter.max })}
               </span>
             </span>
           ) : null}

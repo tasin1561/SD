@@ -15,6 +15,7 @@ import {
 } from 'react';
 import { reducedMotion } from '../motion/motion';
 import './segmented-code.css';
+import { useUiT } from '../i18n-client';
 
 /**
  * SegmentedCode (storytelling 10, link-and-merge). One box per character:
@@ -84,6 +85,7 @@ export function SegmentedCode({
   className,
   id: idProp,
 }: SegmentedCodeProps): ReactElement {
+  const t = useUiT();
   const autoId = useId();
   const id = idProp ?? `sk-sc-${autoId}`;
   const [own, setOwn] = useState(() => clean(defaultValue ?? '', charset).slice(0, length));
@@ -188,7 +190,7 @@ export function SegmentedCode({
             disabled={disabled}
             autoFocus={i === 0 && autoFocus}
             data-filled={c !== '' || undefined}
-            aria-label={`Character ${i + 1} of ${length}`}
+            aria-label={t('ui.code.character', { n: i + 1, total: length })}
             aria-invalid={status === 'error' || undefined}
             onChange={(e) => {
               // A mobile keyboard or an autofill may still deliver through

@@ -6,6 +6,7 @@ import { Table, TBody, Td, Th, THead, Tr } from '@skydrop/ui/app/data-table';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useFxRateHistory } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 export function FxHistoryDrawer({
   fromCurrency,
@@ -16,6 +17,7 @@ export function FxHistoryDrawer({
   readonly toCurrency: string;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const history = useFxRateHistory(fromCurrency, toCurrency);
 
   return (
@@ -24,32 +26,32 @@ export function FxHistoryDrawer({
       onOpenChange={(o) => {
         if (!o) onClose();
       }}
-      title={`Timeline — ${fromCurrency} → ${toCurrency}`}
-      description="Append-only history of every change; most recent first."
+      title={t('fxFxHistoryDrawer.timeline', { fromCurrency, toCurrency })}
+      description={t('fxFxHistoryDrawer.appendOnlyHistoryOfEvery')}
       size="lg"
     >
       {history.isLoading ? (
-        <SkeletonRows rows={4} cols={5} label="Loading history…" />
+        <SkeletonRows rows={4} cols={5} label={t('fxFxHistoryDrawer.loadingHistory')} />
       ) : history.isError ? (
         <ErrorState
-          message={history.error?.message ?? 'Failed.'}
+          message={history.error?.message ?? t('fxFxHistoryDrawer.failed')}
           retry={() => void history.refetch()}
         />
       ) : !history.data || history.data.length === 0 ? (
         <EmptyState
           bare
-          title="No history yet"
-          description="The first change you make will record here."
+          title={t('fxFxHistoryDrawer.noHistoryYet')}
+          description={t('fxFxHistoryDrawer.theFirstChangeYouMake')}
         />
       ) : (
-        <Table caption={`Rate history for ${fromCurrency} to ${toCurrency}`}>
+        <Table caption={t('fxFxHistoryDrawer.rateHistoryForTo', { fromCurrency, toCurrency })}>
           <THead>
             <Tr>
-              <Th>When</Th>
-              <Th align="right">Rate</Th>
-              <Th align="right">Previous</Th>
-              <Th>Source</Th>
-              <Th>Reason</Th>
+              <Th>{t('fxFxHistoryDrawer.when')}</Th>
+              <Th align="right">{t('fxFxHistoryDrawer.rate')}</Th>
+              <Th align="right">{t('fxFxHistoryDrawer.previous')}</Th>
+              <Th>{t('fxFxHistoryDrawer.source')}</Th>
+              <Th>{t('fxFxHistoryDrawer.reason')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -83,7 +85,9 @@ export function FxHistoryDrawer({
                   </Td>
                   <Td className="mk-small mk-body">
                     {h.source}
-                    {h.isManualOverride && <span className="mk-tag">Manual</span>}
+                    {h.isManualOverride && (
+                      <span className="mk-tag">{t('fxFxHistoryDrawer.manual')}</span>
+                    )}
                   </Td>
                   <Td className="mk-small">
                     <span className="mk-clip" title={h.changeReason ?? undefined}>

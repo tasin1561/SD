@@ -21,6 +21,7 @@ import {
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import '@/app/(authed)/system/_components/af.css';
+import { useT } from '@/i18n/client';
 
 type Side = 'SELLER' | 'US' | 'COURIER';
 
@@ -56,6 +57,8 @@ interface Bubble {
  * messages it exists to show.
  */
 export function AdminTicketConversation({ ticket }: { readonly ticket: TicketView }): ReactElement {
+  const t = useT();
+
   const toast = useToast();
   const events = useTicketEvents(ticket.id);
   const canSeeCourier = usePermission('courier.ops.view');
@@ -98,7 +101,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     `storeName` is preferred over a bare "Member store" so an operator
     reading this with the seller on the telephone can say who complained.
   */
-  const them = ticket.storeName ?? 'Member store';
+  const them = ticket.storeName ?? t('ticketsAdminTicketConversation.memberStore');
   const openedByStore = ticket.openedBy === 'STORE';
   /*
     On a dispute our reply reaches BOTH parties — the plan's own rule is
@@ -118,7 +121,11 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     bubbles.push({
       key: 'raised',
       side: theirs ? 'SELLER' : 'US',
-      who: openedByStore ? them : fromSeller ? 'Client' : 'Skydrop',
+      who: openedByStore
+        ? them
+        : fromSeller
+          ? t('ticketsAdminTicketConversation.client')
+          : t('ticketsAdminTicketConversation.skydrop'),
       body: ticket.description,
       at: ticket.createdAt,
       /*
@@ -145,7 +152,11 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     bubbles.push({
       key: `note-${e.id}`,
       side: fromSeller || fromStore ? 'SELLER' : 'US',
-      who: fromStore ? them : fromSeller ? 'Client' : 'Skydrop',
+      who: fromStore
+        ? them
+        : fromSeller
+          ? t('ticketsAdminTicketConversation.client')
+          : t('ticketsAdminTicketConversation.skydrop'),
       body: said,
       at: e.createdAt,
       ...(fromSeller ? { eventId: e.id, relayedAt: e.relayedAt } : {}),
@@ -158,7 +169,10 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
       // Only what the courier SAID is theirs; our message to them is
       // still us talking.
       side: m.direction === 'INBOUND' ? 'COURIER' : 'US',
-      who: m.direction === 'INBOUND' ? 'Courier' : 'Skydrop → courier',
+      who:
+        m.direction === 'INBOUND'
+          ? t('ticketsAdminTicketConversation.courier')
+          : t('ticketsAdminTicketConversation.skydropCourier'),
       body: m.body,
       at: m.occurredAt,
     });
@@ -184,8 +198,8 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
         const res = await relay.mutateAsync({ ticketId: ticket.id, eventId });
         toast.success(
           res.alreadyRelayed
-            ? 'Already marked — the client can see it'
-            : 'Marked as passed to the courier — the client can see it',
+            ? t('ticketsAdminTicketConversation.alreadyMarkedTheClientCan')
+            : t('ticketsAdminTicketConversation.markedAsPassedToThe'),
         );
       } catch (err) {
         toast.error(serverVerdict(err));
@@ -204,19 +218,30 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
     try {
       await reply.mutateAsync({ ticketId: ticket.id, note });
       setDraft('');
-      toast.success(isDispute ? 'Sent — both sides can see it' : 'Sent — the client can see it');
+      toast.success(
+        isDispute
+          ? t('ticketsAdminTicketConversation.sentBothSidesCanSee')
+          : t('ticketsAdminTicketConversation.sentTheClientCanSee'),
+      );
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
     }
   };
 
-  if (events.isLoading) return <SkeletonRows rows={3} cols={1} label="Loading the conversation" />;
+  if (events.isLoading)
+    return (
+      <SkeletonRows
+        rows={3}
+        cols={1}
+        label={t('ticketsAdminTicketConversation.loadingTheConversation')}
+      />
+    );
 
   return (
     <>
       {bubbles.length === 0 ? (
-        <p className="af-muted">Nothing said yet.</p>
+        <p className="af-muted">{t('ticketsAdminTicketConversation.nothingSaidYet')}</p>
       ) : (
         <ol className="af-thread">
           {bubbles.map((b) => {
@@ -270,7 +295,7 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
                           disabled={relay.isPending}
                           onClick={() => markRelayed(eventId)}
                         >
-                          Mark delivered
+                          {t('ticketsAdminTicketConversation.markDelivered')}
                         </Button>
                       ) : null}
                     </div>
@@ -285,14 +310,18 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
       {ticket.resolvedAt === null && canReply ? (
         <div className="af-reply">
           <TextArea
-            label={isDispute ? `Reply to the client and ${them}` : 'Reply to the client'}
+            label={
+              isDispute
+                ? t('ticketsAdminTicketConversation.replyToTheClientAnd', { them })
+                : t('ticketsAdminTicketConversation.replyToTheClient')
+            }
             rows={2}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={
               isDispute
-                ? 'Both sides read this, each on their own ticket.'
-                : 'Reply to the client — they read this on their own ticket.'
+                ? t('ticketsAdminTicketConversation.bothSidesReadThisEach')
+                : t('ticketsAdminTicketConversation.replyToTheClientThey')
             }
             // Display only: the server's limit on a note (AddTicketNoteDto,
             // 2000), shown so a long reply is not a surprise — never enforced.
@@ -300,10 +329,14 @@ export function AdminTicketConversation({ ticket }: { readonly ticket: TicketVie
           />
           <div className="af-row af-row--end">
             <PaperPlaneSendButton
-              label={isDispute ? 'Reply to both' : 'Reply to client'}
-              busyLabel="Sending…"
-              doneLabel="Sent"
-              errorLabel="Not sent"
+              label={
+                isDispute
+                  ? t('ticketsAdminTicketConversation.replyToBoth')
+                  : t('ticketsAdminTicketConversation.replyToClient')
+              }
+              busyLabel={t('ticketsAdminTicketConversation.sending')}
+              doneLabel={t('ticketsAdminTicketConversation.sent')}
+              errorLabel={t('ticketsAdminTicketConversation.notSent')}
               size="sm"
               icon={<Send size={14} />}
               disabled={draft.trim() === '' || reply.isPending}

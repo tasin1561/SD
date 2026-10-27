@@ -12,6 +12,9 @@ import './benches.css';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useCreateWarehouse, useUpdateWarehouse, type WarehouseSummary } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Opening a second building.
@@ -40,11 +43,15 @@ import { useCreateWarehouse, useUpdateWarehouse, type WarehouseSummary } from '@
  * cannot silently restate a timezone somebody else just corrected.
  */
 
-const STATUSES = [
-  { value: 'ACTIVE', label: 'Active — receives stock and ships' },
-  { value: 'INACTIVE', label: 'Inactive — not in use' },
-  { value: 'MAINTENANCE', label: 'Maintenance — temporarily not operating' },
-] as const;
+const STATUSES = (t: Translate<MessageKey>) =>
+  [
+    { value: 'ACTIVE', label: t('warehouseWarehouseFormPanel.activeReceivesStockAndShips') },
+    { value: 'INACTIVE', label: t('warehouseWarehouseFormPanel.inactiveNotInUse') },
+    {
+      value: 'MAINTENANCE',
+      label: t('warehouseWarehouseFormPanel.maintenanceTemporarilyNotOperating'),
+    },
+  ] as const;
 
 /**
  * The server takes any string ≤64, which means a typo is accepted and
@@ -64,6 +71,7 @@ export function WarehouseFormPanel({
   /** Absent = create. Present = edit that building. */
   readonly warehouse?: WarehouseSummary;
 }): ReactElement | null {
+  const t = useT();
   // COSMETIC (FE-2). /warehouse is gated on `warehouse.view`; both these
   // endpoints require `warehouse.manage`. Without this, every reader sees
   // a button the server refuses.
@@ -142,7 +150,9 @@ export function WarehouseFormPanel({
           timezone: trimmedTz,
           fulfilsOrders,
         });
-        toast.success(`Warehouse ${row.code} created, with a MAIN zone and a FLOOR bin.`);
+        toast.success(
+          t('warehouseWarehouseFormPanel.warehouseCreatedWithAMain', { code: row.code }),
+        );
       }
       close();
     } catch (err) {
@@ -163,7 +173,9 @@ export function WarehouseFormPanel({
   return (
     <>
       <Button variant={isEdit ? 'ghost' : 'primary'} size="sm" onClick={() => setOpen(true)}>
-        {isEdit ? 'Edit' : 'New warehouse'}
+        {isEdit
+          ? t('warehouseWarehouseFormPanel.edit')
+          : t('warehouseWarehouseFormPanel.newWarehouse')}
       </Button>
 
       <Dialog
@@ -171,12 +183,16 @@ export function WarehouseFormPanel({
         onOpenChange={(next) => {
           if (!next) close();
         }}
-        title={isEdit ? `Edit ${warehouse.code}` : 'New warehouse'}
+        title={
+          isEdit
+            ? t('warehouseWarehouseFormPanel.edit2', { code: warehouse.code })
+            : t('warehouseWarehouseFormPanel.newWarehouse')
+        }
         icon={<Warehouse size={18} />}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={close}>
-              Cancel
+              {t('warehouseWarehouseFormPanel.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -185,12 +201,12 @@ export function WarehouseFormPanel({
               onClick={() => void submit()}
             >
               {pending
-                ? 'Saving…'
+                ? t('warehouseWarehouseFormPanel.saving')
                 : isEdit
                   ? nothingChanged
-                    ? 'No changes'
-                    : 'Save changes'
-                  : 'Create warehouse'}
+                    ? t('warehouseWarehouseFormPanel.noChanges')
+                    : t('warehouseWarehouseFormPanel.saveChanges')
+                  : t('warehouseWarehouseFormPanel.createWarehouse')}
             </Button>
           </DialogFooter>
         }
@@ -198,8 +214,8 @@ export function WarehouseFormPanel({
         <div className="wh-stack">
           <p className="wh-note">
             {isEdit
-              ? 'The code is fixed — settings, manifests and pick sheets all refer to it. Everything else here is safe to change; none of it moves stock.'
-              : 'A new building starts with a MAIN zone and a FLOOR bin so it can receive stock immediately. Location tracking starts off; turn it on from Bins once the shelving is laid out.'}
+              ? t('warehouseWarehouseFormPanel.theCodeIsFixedSettings')
+              : t('warehouseWarehouseFormPanel.aNewBuildingStartsWith')}
           </p>
 
           {error !== null && (
@@ -209,17 +225,17 @@ export function WarehouseFormPanel({
           )}
 
           <TextField
-            label="Code"
+            label={t('warehouseWarehouseFormPanel.code')}
             requiredMark={!isEdit}
             inputClassName="sk-ident"
             hint={
               isEdit
-                ? 'Immutable — the natural key other settings point at.'
-                : 'Uppercase letters, digits and dashes, 2–32 characters. e.g. CCU-01'
+                ? t('warehouseWarehouseFormPanel.immutableTheNaturalKeyOther')
+                : t('warehouseWarehouseFormPanel.uppercaseLettersDigitsAndDashes')
             }
             error={
               !isEdit && trimmedCode !== '' && codeBad
-                ? 'Uppercase A–Z, 0–9 and dashes only, 2–32 characters.'
+                ? t('warehouseWarehouseFormPanel.uppercaseAZ09')
                 : undefined
             }
             value={isEdit ? warehouse.code : code}
@@ -230,23 +246,23 @@ export function WarehouseFormPanel({
           />
 
           <TextField
-            label="Name"
+            label={t('warehouseWarehouseFormPanel.name')}
             requiredMark
-            hint="What people call the building."
+            hint={t('warehouseWarehouseFormPanel.whatPeopleCallTheBuilding')}
             value={name}
             maxLength={120}
             showCount
-            placeholder="Bangalore fulfilment centre"
+            placeholder={t('warehouseWarehouseFormPanel.bangaloreFulfilmentCentre')}
             onChange={(e) => setName(e.target.value)}
           />
 
           <Select
-            label="Status"
-            hint="Only ACTIVE warehouses are offered for receiving and picking."
+            label={t('warehouseWarehouseFormPanel.status')}
+            hint={t('warehouseWarehouseFormPanel.onlyActiveWarehousesAreOffered')}
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
-            {STATUSES.map((s) => (
+            {STATUSES(t).map((s) => (
               <option key={s.value} value={s.value}>
                 {s.label}
               </option>
@@ -255,9 +271,11 @@ export function WarehouseFormPanel({
 
           <div className="wh-fields" data-cols="2">
             <TextField
-              label="Country"
-              hint="ISO two-letter code."
-              error={cc !== '' && ccBad ? 'Exactly two letters.' : undefined}
+              label={t('warehouseWarehouseFormPanel.country')}
+              hint={t('warehouseWarehouseFormPanel.isoTwoLetterCode')}
+              error={
+                cc !== '' && ccBad ? t('warehouseWarehouseFormPanel.exactlyTwoLetters') : undefined
+              }
               value={countryCode}
               maxLength={2}
               placeholder="IN"
@@ -265,8 +283,8 @@ export function WarehouseFormPanel({
             />
 
             <Select
-              label="Timezone"
-              hint="Drives the local hour on anything scheduled here."
+              label={t('warehouseWarehouseFormPanel.timezone')}
+              hint={t('warehouseWarehouseFormPanel.drivesTheLocalHourOn')}
               value={trimmedTz}
               onChange={(e) => setTimezone(e.target.value)}
             >
@@ -279,16 +297,18 @@ export function WarehouseFormPanel({
           </div>
 
           <div className="wh-stack wh-stack--tight">
-            <div className="wh-scan__label">Ships customer orders</div>
+            <div className="wh-scan__label">
+              {t('warehouseWarehouseFormPanel.shipsCustomerOrders')}
+            </div>
             <Checkbox
               checked={fulfilsOrders}
               onChange={(e) => setFulfilsOrders(e.target.checked)}
               label={
                 fulfilsOrders
-                  ? 'Orders can ship from here'
-                  : 'Intake only — stock here is not sellable'
+                  ? t('warehouseWarehouseFormPanel.ordersCanShipFromHere')
+                  : t('warehouseWarehouseFormPanel.intakeOnlyStockHereIs')
               }
-              description="Leave this on for a normal warehouse. Turn it OFF for an intake-only site such as our Bangladesh warehouse: stock waiting there is real and on hand, and must not be offered to customers in India until it lands and is counted."
+              description={t('warehouseWarehouseFormPanel.leaveThisOnForA')}
             />
           </div>
         </div>

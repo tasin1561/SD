@@ -13,7 +13,7 @@ import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   CREDIT_TRIGGERS,
   FEE_FIELDS,
@@ -27,9 +27,16 @@ import {
   type TermsVersion,
 } from '@/lib/reseller-terms-hooks';
 import { RsCallout, RsError, RsSection } from '../../_components/rs-parts';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+function when(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 }
 
 function draftFrom(v: TermsVersion | null): TermsDraft {
@@ -74,26 +81,30 @@ export function TermsSection({
   storeId: string;
   final: boolean;
 }): ReactElement {
+  const t = useT();
   const terms = useResellerStoreTerms(storeId);
   const identity = useSellerIdentity();
   // COSMETIC (FE-2): the API refuses a publish without `stores.pricing`.
   const canPublish = can(identity, 'stores.pricing') && !final;
 
-  if (terms.isPending) return <SkeletonRows rows={4} cols={4} label="Loading the terms" />;
+  if (terms.isPending)
+    return <SkeletonRows rows={4} cols={4} label={t('resellerStoreDetail.loadingTheTerms')} />;
   if (terms.isError) {
-    return <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />;
+    return <ErrorState message={verdict(terms.error, t)} retry={() => void terms.refetch()} />;
   }
-  const t = terms.data;
+  const current = terms.data;
   return (
     <>
-      <CurrentTermsCard terms={t} />
-      {canPublish ? <PublishCard storeId={storeId} terms={t} /> : null}
-      <HistorySection terms={t} />
+      <CurrentTermsCard terms={current} />
+      {canPublish ? <PublishCard storeId={storeId} terms={current} /> : null}
+      <HistorySection terms={current} />
     </>
   );
 }
 
 function CurrentTermsCard({ terms }: { terms: StoreTerms }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const c = terms.current;
   /*
     `== null`, not `=== null`.
@@ -109,12 +120,16 @@ function CurrentTermsCard({ terms }: { terms: StoreTerms }): ReactElement {
   */
   if (c == null) {
     return (
-      <RsSection title="Terms in force" note="None published yet." flush>
+      <RsSection
+        title={t('resellerStoreDetail.termsInForce')}
+        note={t('resellerStoreDetail.nonePublishedYet')}
+        flush
+      >
         <EmptyState
           bare
           icon={<FileSignature size={22} />}
-          title="Publish the store’s first terms"
-          description="Say who pays which Skydrop fee and when each of you is credited. The store cannot place orders until it has accepted a version."
+          title={t('resellerStoreDetail.publishTheStoreS')}
+          description={t('resellerStoreDetail.sayWhoPaysWhich')}
         />
       </RsSection>
     );
@@ -124,13 +139,20 @@ function CurrentTermsCard({ terms }: { terms: StoreTerms }): ReactElement {
       title={
         <span className="rs-row">
           <FileSignature size={16} aria-hidden />
-          {`Version ${c.version} — in force`}
+          {t('resellerStoreDetail.versionInForce', { version: c.version })}
         </span>
       }
       note={
         c.acceptance === null
-          ? `Published ${when(c.publishedAt)}. Waiting for ${terms.storeName} to accept it.`
-          : `Published ${when(c.publishedAt)}. Accepted by ${c.acceptance.acceptedByName} on ${when(c.acceptance.acceptedAt)}.`
+          ? t('resellerStoreDetail.publishedWaitingForTo', {
+              publishedAt: when(c.publishedAt, locale),
+              storeName: terms.storeName,
+            })
+          : t('resellerStoreDetail.publishedAcceptedByOn', {
+              publishedAt: when(c.publishedAt, locale),
+              acceptedByName: c.acceptance.acceptedByName,
+              acceptedAt: when(c.acceptance.acceptedAt, locale),
+            })
       }
     >
       <div className="rs-stack">
@@ -154,7 +176,9 @@ function CurrentTermsCard({ terms }: { terms: StoreTerms }): ReactElement {
             {c.sellerCredit.words}
           </li>
         </ul>
-        {c.note !== null ? <p className="rs-muted">Note: {c.note}</p> : null}
+        {c.note !== null ? (
+          <p className="rs-muted">{richMessage(t('resellerStoreDetail.note'), { note: c.note })}</p>
+        ) : null}
         <p className="rs-faint">{terms.rounding}</p>
       </div>
     </RsSection>
@@ -168,14 +192,15 @@ function ExampleTable({
   examples: readonly FeeExample[];
   storeName: string;
 }): ReactElement {
+  const t = useT();
   return (
-    <Table caption="Who pays each fee, worked through">
+    <Table caption={t('resellerStoreDetail.whoPaysEachFee')}>
       <THead>
         <Tr>
-          <Th>Fee</Th>
-          <Th>Worked on</Th>
+          <Th>{t('resellerStoreDetail.fee')}</Th>
+          <Th>{t('resellerStoreDetail.workedOn')}</Th>
           <Th align="right">{storeName} pays</Th>
-          <Th align="right">You pay</Th>
+          <Th align="right">{t('resellerStoreDetail.youPay')}</Th>
         </Tr>
       </THead>
       <TBody>
@@ -199,6 +224,7 @@ function ExampleTable({
 }
 
 function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const publish = usePublishTerms(storeId);
   const [draft, setDraft] = useState<TermsDraft>(() => draftFrom(terms.current));
@@ -218,8 +244,8 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
     return CREDIT_TRIGGERS.map((o) => (
       <option key={o.value} value={o.value}>
         {o.value === 'AFTER_CONFIRMATION' && !terms.afterConfirmationEnabled
-          ? `${o.label} — needs Skydrop to enable it`
-          : o.label}
+          ? t('resellerStoreDetail.needsSkydropToEnable', { label: t(o.labelKey) })
+          : t(o.labelKey)}
       </option>
     ));
   }
@@ -232,19 +258,28 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
         note: note.trim() === '' ? undefined : note.trim(),
         basedOnVersion: terms.current?.version ?? 0,
       });
-      toast.success(`Version ${nextVersion} published. ${terms.storeName} must accept it next.`);
+      toast.success(
+        t('resellerStoreDetail.versionPublishedMustAccept', {
+          nextVersion,
+          storeName: terms.storeName,
+        }),
+      );
       setConfirming(false);
       setNote('');
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setConfirming(false);
     }
   }
 
   return (
     <RsSection
-      title={terms.current === null ? 'Publish the first terms' : `Publish version ${nextVersion}`}
-      note="For each Skydrop fee, the percentage the STORE pays — you pay the rest. Inbound freight is always yours."
+      title={
+        terms.current === null
+          ? t('resellerStoreDetail.publishTheFirstTerms')
+          : t('resellerStoreDetail.publishVersion', { nextVersion })
+      }
+      note={t('resellerStoreDetail.forEachSkydropFee')}
     >
       <div className="rs-stack">
         <div className="rs-grid-3">
@@ -252,7 +287,7 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
             <TextField
               key={f.field}
               id={`tf-${f.field}`}
-              label={`${f.label} — store pays (%)`}
+              label={t('resellerStoreDetail.storePays', { label: t(f.labelKey) })}
               inputMode="decimal"
               inputClassName="sk-figure"
               value={draft[f.field]}
@@ -264,15 +299,18 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
         <p role="status" aria-live="polite" className="rs-preview">
           {delivery === undefined ? (
             preview.isError ? (
-              <span className="rs-error">{serverVerdict(preview.error)}</span>
+              <span className="rs-error">{verdict(preview.error, t)}</span>
             ) : (
-              'Working out an example…'
+              t('resellerStoreDetail.workingOutAnExample')
             )
           ) : (
             <>
-              On a <Money amount={delivery.feeInr} convert={false} /> delivery fee {terms.storeName}{' '}
-              pays <Money amount={delivery.storeInr} convert={false} />, you pay{' '}
-              <Money amount={delivery.sellerInr} convert={false} />.
+              {richMessage(t('resellerStoreDetail.onADeliveryFee'), {
+                money: <Money amount={delivery.feeInr} convert={false} />,
+                storeName: terms.storeName,
+                money2: <Money amount={delivery.storeInr} convert={false} />,
+                money3: <Money amount={delivery.sellerInr} convert={false} />,
+              })}
             </>
           )}
         </p>
@@ -282,10 +320,12 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
 
         <div className="rs-grid-2">
           <fieldset className="rs-fieldset">
-            <legend>When {terms.storeName} is credited</legend>
+            <legend>
+              {richMessage(t('resellerStoreDetail.whenIsCredited'), { storeName: terms.storeName })}
+            </legend>
             <Select
               id="tf-store-trigger"
-              label="Credited"
+              label={t('resellerStoreDetail.credited')}
               value={draft.storeCreditTrigger}
               onChange={(e) => set('storeCreditTrigger', e.target.value as CreditTrigger)}
             >
@@ -293,7 +333,7 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
             </Select>
             <TextField
               id="tf-store-days"
-              label="Days"
+              label={t('resellerStoreDetail.days')}
               type="number"
               min={0}
               max={365}
@@ -306,10 +346,10 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
             ) : null}
           </fieldset>
           <fieldset className="rs-fieldset">
-            <legend>When you are credited</legend>
+            <legend>{t('resellerStoreDetail.whenYouAreCredited')}</legend>
             <Select
               id="tf-seller-trigger"
-              label="Credited"
+              label={t('resellerStoreDetail.credited')}
               value={draft.sellerCreditTrigger}
               onChange={(e) => set('sellerCreditTrigger', e.target.value as CreditTrigger)}
             >
@@ -317,7 +357,7 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
             </Select>
             <TextField
               id="tf-seller-days"
-              label="Days"
+              label={t('resellerStoreDetail.days')}
               type="number"
               min={0}
               max={365}
@@ -333,8 +373,8 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
 
         <TextArea
           id="tf-note"
-          label="Note to the store (optional)"
-          hint="What changed."
+          label={t('resellerStoreDetail.noteToTheStore')}
+          hint={t('resellerStoreDetail.whatChanged')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
@@ -347,17 +387,17 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
             icon={<FileSignature size={15} />}
             onClick={() => setConfirming(true)}
           >
-            Publish version {nextVersion}
+            {richMessage(t('resellerStoreDetail.publishVersion'), { nextVersion })}
           </Button>
         </div>
       </div>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Publish version ${nextVersion}?`}
+        title={t('resellerStoreDetail.publishVersion2', { nextVersion })}
         entity={terms.storeName}
-        consequence={`${terms.storeName} must accept it before its next order. Orders already placed keep the terms they were placed under.`}
-        confirmLabel="Publish"
+        consequence={t('resellerStoreDetail.mustAcceptItBefore', { storeName: terms.storeName })}
+        confirmLabel={t('resellerStoreDetail.publish')}
         closeOnSuccess={false}
         onConfirm={doPublish}
       />
@@ -371,28 +411,30 @@ function PublishCard({ storeId, terms }: { storeId: string; terms: StoreTerms })
  * form is on the page above it.
  */
 function HistorySection({ terms }: { terms: StoreTerms }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   return (
     <RsSection
       title={
         <span className="rs-row">
           <History size={16} aria-hidden />
-          Every version
+          {t('resellerStoreDetail.everyVersion')}
         </span>
       }
-      note="Newest first. A version is never edited once published."
+      note={t('resellerStoreDetail.newestFirstAVersion')}
       flush
     >
       {terms.history.length === 0 ? (
-        <EmptyState bare title="No versions yet" />
+        <EmptyState bare title={t('resellerStoreDetail.noVersionsYet')} />
       ) : (
-        <Table caption="Every version of the terms">
+        <Table caption={t('resellerStoreDetail.everyVersionOfThe')}>
           <THead>
             <Tr>
-              <Th>Version</Th>
-              <Th>Published</Th>
-              <Th>Store pays</Th>
-              <Th>Credit</Th>
-              <Th>Accepted</Th>
+              <Th>{t('resellerStoreDetail.version')}</Th>
+              <Th>{t('resellerStoreDetail.published')}</Th>
+              <Th>{t('resellerStoreDetail.storePays2')}</Th>
+              <Th>{t('resellerStoreDetail.credit')}</Th>
+              <Th>{t('resellerStoreDetail.accepted')}</Th>
             </Tr>
           </THead>
           <TBody>
@@ -401,20 +443,22 @@ function HistorySection({ terms }: { terms: StoreTerms }): ReactElement {
                 <Td>
                   <span className="rs-version sk-figure">{v.version}</span>
                 </Td>
-                <Td className="rs-when sk-figure">{when(v.publishedAt)}</Td>
+                <Td className="rs-when sk-figure">{when(v.publishedAt, locale)}</Td>
                 <Td className="rs-small">
                   {v.shares.map((s) => `${s.label} ${Number(s.storePercent)}%`).join(' · ')}
                 </Td>
                 <Td className="rs-small">
-                  Store: {v.storeCredit.label}
-                  {v.storeCredit.days > 0 ? ` (${v.storeCredit.days}d)` : ''} · You:{' '}
-                  {v.sellerCredit.label}
-                  {v.sellerCredit.days > 0 ? ` (${v.sellerCredit.days}d)` : ''}
+                  {t('resellerStoreDetail.creditStoreYou', {
+                    storeLabel: v.storeCredit.label,
+                    storeDays: v.storeCredit.days > 0 ? ` (${v.storeCredit.days}d)` : '',
+                    sellerLabel: v.sellerCredit.label,
+                    sellerDays: v.sellerCredit.days > 0 ? ` (${v.sellerCredit.days}d)` : '',
+                  })}
                 </Td>
                 <Td className="rs-small">
                   {v.acceptance === null
                     ? '—'
-                    : `${v.acceptance.acceptedByName}, ${when(v.acceptance.acceptedAt)}`}
+                    : `${v.acceptance.acceptedByName}, ${when(v.acceptance.acceptedAt, locale)}`}
                 </Td>
               </Tr>
             ))}

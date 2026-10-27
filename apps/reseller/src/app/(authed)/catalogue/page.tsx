@@ -9,7 +9,8 @@ import { Table, TableToolbar, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/d
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { GlossaryTerm } from '@skydrop/ui/app/tooltip-card';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { useStoreCatalogue, type StoreCatalogueItem } from '@/lib/catalogue-hooks';
 import { RmSection } from '../wallet/_components/rm-parts';
 
@@ -22,10 +23,11 @@ import { RmSection } from '../wallet/_components/rm-parts';
  * absent here.
  */
 export default function CataloguePage(): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   const catalogue = useStoreCatalogue();
   const [search, setSearch] = useState('');
-  const seller = me?.seller.companyName ?? 'The client';
+  const seller = me?.seller.companyName ?? t('cat.clientFallback');
 
   const items = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -35,18 +37,13 @@ export default function CataloguePage(): ReactElement {
       : all.filter((i) => i.title.toLowerCase().includes(q) || i.skuCode.toLowerCase().includes(q));
   }, [catalogue.data, search]);
 
-  const header = (
-    <PageHeader
-      title="Catalogue"
-      subtitle={`The products ${seller} lets you sell, what you pay for each, and how many are available.`}
-    />
-  );
+  const header = <PageHeader title={t('cat.title')} subtitle={t('cat.subtitle', { seller })} />;
 
   if (catalogue.isPending) {
     return (
       <div className="rm-page">
         {header}
-        <SkeletonRows rows={6} cols={5} label="Loading the catalogue" />
+        <SkeletonRows rows={6} cols={5} label={t('cat.loading')} />
       </div>
     );
   }
@@ -54,10 +51,7 @@ export default function CataloguePage(): ReactElement {
     return (
       <div className="rm-page">
         {header}
-        <ErrorState
-          message={serverVerdict(catalogue.error)}
-          retry={() => void catalogue.refetch()}
-        />
+        <ErrorState message={verdict(catalogue.error, t)} retry={() => void catalogue.refetch()} />
       </div>
     );
   }
@@ -70,8 +64,8 @@ export default function CataloguePage(): ReactElement {
           search={{
             value: search,
             onChange: setSearch,
-            label: 'Search by name or SKU',
-            placeholder: 'Search name or SKU',
+            label: t('cat.search.label'),
+            placeholder: t('cat.search.placeholder'),
           }}
         />
         {items.length === 0 ? (
@@ -79,34 +73,30 @@ export default function CataloguePage(): ReactElement {
             icon={
               catalogue.data.items.length === 0 ? <PackageOpen size={22} /> : <SearchX size={22} />
             }
-            title={
-              catalogue.data.items.length === 0 ? 'No products yet' : 'Nothing matches that search'
-            }
+            title={catalogue.data.items.length === 0 ? t('cat.empty.none') : t('cat.empty.noMatch')}
             description={
-              catalogue.data.items.length === 0
-                ? `${seller} has not given this store any products yet. Ask them to turn some on.`
-                : undefined
+              catalogue.data.items.length === 0 ? t('cat.empty.body', { seller }) : undefined
             }
           />
         ) : (
-          <Table caption="Products">
+          <Table caption={t('cat.caption')}>
             <THead>
               <Tr>
-                <Th>Product</Th>
+                <Th>{t('cat.col.product')}</Th>
                 {/* The header carries its own label: the tooltip card's text sits
                     inside the <th>, and the mobile card layout stamps each
                     column's header onto its cells. */}
-                <Th data-label="You pay">
+                <Th data-label={t('cat.col.youPay')}>
                   <GlossaryTerm
-                    title="Transfer price"
-                    description={`What your store pays ${seller} for each unit you sell. The difference between it and the retail price you charge is yours, before your share of Skydrop’s fees.`}
+                    title={t('cat.transfer.title')}
+                    description={t('cat.transfer.body', { seller })}
                   >
-                    You pay
+                    {t('cat.col.youPay')}
                   </GlossaryTerm>
                 </Th>
-                <Th>Sell between</Th>
-                <Th>Suggested</Th>
-                <Th>Available</Th>
+                <Th>{t('cat.col.sellBetween')}</Th>
+                <Th>{t('cat.col.suggested')}</Th>
+                <Th>{t('cat.col.available')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -122,6 +112,7 @@ export default function CataloguePage(): ReactElement {
 }
 
 function ItemRow({ item: i }: { item: StoreCatalogueItem }): ReactElement {
+  const t = useT();
   return (
     <Tr>
       <Td>
@@ -142,16 +133,21 @@ function ItemRow({ item: i }: { item: StoreCatalogueItem }): ReactElement {
       </Td>
       <Td>
         {i.minRetailInr === null && i.maxRetailInr === null ? (
-          'Any price'
+          t('cat.range.any')
         ) : (
           <span className="rm-range">
-            {i.minRetailInr === null ? 'up to ' : <Money amount={i.minRetailInr} convert={false} />}
-            {i.minRetailInr !== null && i.maxRetailInr !== null ? ' – ' : null}
-            {i.maxRetailInr === null ? (
-              ' or more'
-            ) : (
-              <Money amount={i.maxRetailInr} convert={false} />
-            )}
+            {i.minRetailInr !== null && i.maxRetailInr !== null
+              ? richMessage(t('cat.range.between'), {
+                  min: <Money amount={i.minRetailInr} convert={false} />,
+                  max: <Money amount={i.maxRetailInr} convert={false} />,
+                })
+              : i.minRetailInr === null
+                ? richMessage(t('cat.range.upTo'), {
+                    max: <Money amount={i.maxRetailInr ?? '0'} convert={false} />,
+                  })
+                : richMessage(t('cat.range.atLeast'), {
+                    min: <Money amount={i.minRetailInr} convert={false} />,
+                  })}
           </span>
         )}
       </Td>

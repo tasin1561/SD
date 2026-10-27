@@ -34,40 +34,62 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { Facts, Notice, OoCard } from '../../orders/_components/order-ops-parts';
 import './call-center.css';
+import { useT } from '@/i18n/client';
+import type { MessageKey } from '@/i18n/catalog';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import { richMessage } from '@/i18n/client';
 
-const OUTCOME_OPTIONS: ReadonlyArray<{
+interface OutcomeOption {
   value: CallOutcome;
   label: string;
   helper: string;
-}> = [
+}
+
+const outcomeOptions = (tr: Translate<MessageKey>): ReadonlyArray<OutcomeOption> => [
   {
     value: 'CONFIRMED' as CallOutcome,
-    label: 'Confirmed',
-    helper: 'Customer agreed → reserves stock + advances order',
+    label: tr('callCenterCallCenterStation.outcomeConfirmed'),
+    helper: tr('callCenterCallCenterStation.outcomeConfirmedHelper'),
   },
   {
     value: 'CUSTOMER_DECLINED' as CallOutcome,
-    label: 'Declined',
-    helper: 'Customer no longer wants the order',
+    label: tr('callCenterCallCenterStation.outcomeDeclined'),
+    helper: tr('callCenterCallCenterStation.outcomeDeclinedHelper'),
   },
-  { value: 'WRONG_NUMBER' as CallOutcome, label: 'Wrong number', helper: 'Reached someone else' },
-  { value: 'NO_ANSWER' as CallOutcome, label: 'No answer', helper: 'Did not pick up' },
-  { value: 'BUSY' as CallOutcome, label: 'Busy', helper: 'Line was busy' },
-  { value: 'VOICEMAIL_LEFT' as CallOutcome, label: 'Voicemail', helper: 'Left a message' },
+  {
+    value: 'WRONG_NUMBER' as CallOutcome,
+    label: tr('callCenterCallCenterStation.outcomeWrongNumber'),
+    helper: tr('callCenterCallCenterStation.outcomeWrongNumberHelper'),
+  },
+  {
+    value: 'NO_ANSWER' as CallOutcome,
+    label: tr('callCenterCallCenterStation.outcomeNoAnswer'),
+    helper: tr('callCenterCallCenterStation.outcomeNoAnswerHelper'),
+  },
+  {
+    value: 'BUSY' as CallOutcome,
+    label: tr('callCenterCallCenterStation.outcomeBusy'),
+    helper: tr('callCenterCallCenterStation.outcomeBusyHelper'),
+  },
+  {
+    value: 'VOICEMAIL_LEFT' as CallOutcome,
+    label: tr('callCenterCallCenterStation.outcomeVoicemail'),
+    helper: tr('callCenterCallCenterStation.outcomeVoicemailHelper'),
+  },
   {
     value: 'CALLBACK_REQUESTED' as CallOutcome,
-    label: 'Callback requested',
-    helper: 'Customer asked to call back at a specific time',
+    label: tr('callCenterCallCenterStation.outcomeCallback'),
+    helper: tr('callCenterCallCenterStation.outcomeCallbackHelper'),
   },
   {
     value: 'TECHNICAL_FAILURE' as CallOutcome,
-    label: 'Technical failure',
-    helper: 'Line dropped, system fault — no order transition',
+    label: tr('callCenterCallCenterStation.outcomeTechnical'),
+    helper: tr('callCenterCallCenterStation.outcomeTechnicalHelper'),
   },
   {
     value: 'LANGUAGE_BARRIER' as CallOutcome,
-    label: 'Language barrier',
-    helper: 'Could not communicate — no order transition',
+    label: tr('callCenterCallCenterStation.outcomeLanguage'),
+    helper: tr('callCenterCallCenterStation.outcomeLanguageHelper'),
   },
 ];
 
@@ -109,6 +131,7 @@ function callSignature(a: PulledAssignment): string {
 }
 
 export function CallCenterStation(): ReactElement {
+  const tr = useT();
   const toast = useToast();
   const client = useApiClient();
   const pull = usePullNextCall();
@@ -155,14 +178,14 @@ export function CallCenterStation(): ReactElement {
    * an order which must not move.
    */
   const orderedOutcomes = isConfirmationCall
-    ? OUTCOME_OPTIONS
+    ? outcomeOptions(tr)
     : ([
         {
           value: 'SPOKE_TO_CUSTOMER' as CallOutcome,
-          label: 'Called',
-          helper: 'What they said goes in the note below — the client reads it.',
+          label: tr('callCenterCallCenterStation.called'),
+          helper: tr('callCenterCallCenterStation.whatTheySaidGoesIn'),
         },
-      ] as typeof OUTCOME_OPTIONS);
+      ] as ReadonlyArray<OutcomeOption>);
   /** Whether the held-call check has answered — the auto-advance must
    *  not pull before it has, or the first tick races it to a certain
    *  AGENT_AT_CAPACITY. */
@@ -190,7 +213,7 @@ export function CallCenterStation(): ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(err: unknown): string {
-    return serverVerdict(err, 'Operation failed');
+    return serverVerdict(err, tr('callCenterCallCenterStation.operationFailed'));
   }
 
   function resetCall(): void {
@@ -222,7 +245,7 @@ export function CallCenterStation(): ReactElement {
         const r = await pull.mutateAsync();
         if (!r.assignment) {
           setQueueEmpty(true);
-          if (announce) toast.info('Queue is empty.');
+          if (announce) toast.info(tr('callCenterCallCenterStation.queueIsEmpty'));
           return;
         }
         setQueueEmpty(false);
@@ -394,7 +417,7 @@ export function CallCenterStation(): ReactElement {
     };
 
     if (outcome === 'CALLBACK_REQUESTED' && !callbackTime) {
-      setError('Callback time is required for "Callback requested".');
+      setError(tr('callCenterCallCenterStation.callbackTimeIsRequiredFor'));
       return;
     }
 
@@ -412,7 +435,10 @@ export function CallCenterStation(): ReactElement {
             await transitionTicket.mutateAsync({
               ticketId: t.ticketId,
               to: 'RESOLVED_WRITE_OFF_ACCEPTED',
-              notes: notes.trim() === '' ? 'Closed after speaking to the customer.' : notes.trim(),
+              notes:
+                notes.trim() === ''
+                  ? tr('callCenterCallCenterStation.closedAfterSpeakingToThe')
+                  : notes.trim(),
             });
             closed += 1;
           } catch {
@@ -424,14 +450,24 @@ export function CallCenterStation(): ReactElement {
       }
 
       const tail =
-        r.finalOrderStatus !== null ? `order → ${r.finalOrderStatus}` : 'no order transition';
+        r.finalOrderStatus !== null
+          ? tr('callCenterCallCenterStation.order', { finalOrderStatus: r.finalOrderStatus })
+          : tr('callCenterCallCenterStation.noOrderTransition');
       const closedTail =
         closeIssues && closed < assignment.openTickets.length
-          ? ` · ${closed}/${assignment.openTickets.length} issues closed — check the rest by hand`
+          ? tr('callCenterCallCenterStation.issuesClosedCheckTheRest', {
+              closed,
+              openTicketsLength: assignment.openTickets.length,
+            })
           : closed > 0
-            ? ` · ${closed} issue${closed === 1 ? '' : 's'} closed`
+            ? tr('callCenterCallCenterStation.issueClosed', {
+                closed,
+                value: closed === 1 ? '' : tr('common.pluralS'),
+              })
             : '';
-      toast.success(`Recorded ${r.outcome} · ${tail}${closedTail}`);
+      toast.success(
+        tr('callCenterCallCenterStation.recorded', { outcome: r.outcome, tail, closedTail }),
+      );
       resetCall();
       // Immediately, not on the next tick — the agent has just hung up
       // and the whole point is that the next customer is already there.
@@ -446,7 +482,7 @@ export function CallCenterStation(): ReactElement {
     setError(null);
     try {
       await release.mutateAsync({ assignmentId: assignment.assignmentId });
-      toast.info('Released — entry returns to the queue.');
+      toast.info(tr('callCenterCallCenterStation.releasedEntryReturnsToThe'));
       resetCall();
     } catch (err) {
       setError(fmtError(err));
@@ -470,8 +506,10 @@ export function CallCenterStation(): ReactElement {
           icon={<PhoneCall size={16} />}
           state={pull.isPending ? 'busy' : 'idle'}
           labels={{
-            idle: assignment ? 'Active call' : 'Check for a call now',
-            busy: 'Finding next call…',
+            idle: assignment
+              ? tr('callCenterCallCenterStation.activeCall')
+              : tr('callCenterCallCenterStation.checkForACallNow'),
+            busy: tr('callCenterCallCenterStation.findingNextCall'),
           }}
           onClick={() => void advance(true)}
           disabled={pull.isPending || assignment !== null || !isAvailable}
@@ -481,7 +519,10 @@ export function CallCenterStation(): ReactElement {
             variant="ghost"
             size="md"
             state={release.isPending ? 'busy' : 'idle'}
-            labels={{ idle: 'Release without attempt', busy: 'Releasing…' }}
+            labels={{
+              idle: tr('callCenterCallCenterStation.releaseWithoutAttempt'),
+              busy: tr('callCenterCallCenterStation.releasing'),
+            }}
             onClick={() => void onRelease()}
             disabled={release.isPending}
           />
@@ -497,13 +538,17 @@ export function CallCenterStation(): ReactElement {
       {!assignment ? (
         <EmptyState
           tone={isAvailable && queueEmpty ? 'positive' : 'neutral'}
-          title={isAvailable ? 'Waiting for the next call' : 'You are marked unavailable'}
+          title={
+            isAvailable
+              ? tr('callCenterCallCenterStation.waitingForTheNextCall')
+              : tr('callCenterCallCenterStation.youAreMarkedUnavailable')
+          }
           description={
             !isAvailable
-              ? 'Mark yourself available above to start receiving calls.'
+              ? tr('callCenterCallCenterStation.markYourselfAvailableAboveTo')
               : queueEmpty
-                ? 'Nobody is waiting to be called right now. The queue is checked again every few seconds — you do not need to do anything.'
-                : 'The next customer in the queue is handed to you automatically.'
+                ? tr('callCenterCallCenterStation.nobodyIsWaitingToBe')
+                : tr('callCenterCallCenterStation.theNextCustomerInThe')
           }
         />
       ) : (
@@ -519,23 +564,21 @@ export function CallCenterStation(): ReactElement {
               tone="warn"
               role="status"
               icon={<TriangleAlert size={16} />}
-              title="This order changed while you were on the call"
+              title={tr('callCenterCallCenterStation.thisOrderChangedWhileYou')}
             >
-              <p className="oo-p">
-                The client or the store that sold it has just changed something. What is on this
-                screen is the new version — read the address and the items again before you confirm
-                anything.
-              </p>
+              <p className="oo-p">{tr('callCenterCallCenterStation.theClientOrTheStore')}</p>
               <div>
                 <Button variant="ghost" size="sm" onClick={() => setChangedUnderMe(false)}>
-                  I have read it
+                  {tr('callCenterCallCenterStation.iHaveReadIt')}
                 </Button>
               </div>
             </Notice>
           ) : null}
           <div className="cc-call-head">
             <p className="cc-call-head__title">
-              Assignment <span className="sk-ident">{assignment.assignmentId.slice(0, 8)}</span>
+              {richMessage(tr('callCenterCallCenterStation.assignment'), {
+                span: <span className="sk-ident">{assignment.assignmentId.slice(0, 8)}</span>,
+              })}
             </p>
             <span className="oo-faint">
               {/* NOT +1: scheduledAttempts is incremented by pullNext
@@ -553,11 +596,14 @@ export function CallCenterStation(): ReactElement {
                   assignment carries; the number is what the order
                   snapshot carries, so it falls back only when the order
                   vanished under the entry. */}
-              Order{' '}
-              <span className="sk-ident">
-                {assignment.order?.orderNumber ?? assignment.orderId}
-              </span>{' '}
-              · pull #<span className="sk-figure">{assignment.scheduledAttempts}</span>
+              {richMessage(tr('callCenterCallCenterStation.orderPull'), {
+                span: (
+                  <span className="sk-ident">
+                    {assignment.order?.orderNumber ?? assignment.orderId}
+                  </span>
+                ),
+                span2: <span className="sk-figure">{assignment.scheduledAttempts}</span>,
+              })}
             </span>
           </div>
 
@@ -589,12 +635,12 @@ export function CallCenterStation(): ReactElement {
 
           <div className="cc-form">
             <Select
-              label="Outcome"
+              label={tr('callCenterCallCenterStation.outcome')}
               requiredMark
               value={outcome}
               onChange={(e) => setOutcome(e.target.value as CallOutcome | '')}
             >
-              <option value="">Select an outcome…</option>
+              <option value="">{tr('callCenterCallCenterStation.selectAnOutcome')}</option>
               {/*
                 On a follow-up the confirmation pair sinks to the
                 bottom: they are the only two that move an order, and
@@ -627,7 +673,7 @@ export function CallCenterStation(): ReactElement {
 
             {outcome === 'CALLBACK_REQUESTED' && (
               <DateField
-                label="Callback scheduled for"
+                label={tr('callCenterCallCenterStation.callbackScheduledFor')}
                 requiredMark
                 type="datetime-local"
                 value={callbackTime}
@@ -643,18 +689,22 @@ export function CallCenterStation(): ReactElement {
               get written.
             */}
             <TextField
-              label={hasOpenIssues ? 'What the customer told you' : 'Notes'}
+              label={
+                hasOpenIssues
+                  ? tr('callCenterCallCenterStation.whatTheCustomerToldYou')
+                  : tr('callCenterCallCenterStation.notes')
+              }
               hint={
                 hasOpenIssues
-                  ? 'Written onto the client’s open issue word for word — this is how they find out what happened.'
-                  : 'Free-form, audited.'
+                  ? tr('callCenterCallCenterStation.writtenOntoTheClientS')
+                  : tr('callCenterCallCenterStation.freeFormAudited')
               }
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder={
                 hasOpenIssues
-                  ? 'e.g. Customer will be home after 6pm and asked us to try again tomorrow'
-                  : 'Free-form notes (audited)'
+                  ? tr('callCenterCallCenterStation.eGCustomerWillBe')
+                  : tr('callCenterCallCenterStation.freeFormNotesAudited')
               }
             />
 
@@ -664,11 +714,15 @@ export function CallCenterStation(): ReactElement {
                 onChange={(e) => setCloseIssues(e.target.checked)}
                 label={
                   <>
-                    Close the client’s {assignment.openTickets.length === 1 ? 'issue' : 'issues'}{' '}
-                    after recording
+                    {tr('callCenterCallCenterStation.closeTheClientSAfter', {
+                      value:
+                        assignment.openTickets.length === 1
+                          ? tr('callCenterCallCenterStation.issue')
+                          : tr('callCenterCallCenterStation.issues'),
+                    })}
                   </>
                 }
-                description="Untick it if you still owe them something — a re-attempt to arrange, or another call."
+                description={tr('callCenterCallCenterStation.untickItIfYouStill')}
               />
             ) : null}
 
@@ -677,7 +731,10 @@ export function CallCenterStation(): ReactElement {
                 variant="primary"
                 size="md"
                 state={record.isPending ? 'busy' : 'idle'}
-                labels={{ idle: 'Record outcome', busy: 'Recording…' }}
+                labels={{
+                  idle: tr('callCenterCallCenterStation.recordOutcome'),
+                  busy: tr('callCenterCallCenterStation.recording'),
+                }}
                 disabled={record.isPending || !outcome}
                 onClick={() => void onRecord()}
               />
@@ -704,6 +761,7 @@ function RecipientPanel({
   readonly customerBrand: NonNullable<PulledAssignment['customerBrand']> | null;
   readonly itemDisplay: PulledAssignment['itemDisplay'];
 }): ReactElement {
+  const tr = useT();
   // ABOVE the early return. A hook called after one runs in a different
   // order on the render where the order failed to load, which React
   // refuses outright. The query is disabled on a missing pin anyway, so
@@ -721,9 +779,7 @@ function RecipientPanel({
     // to be told rather than shown a card of dashes.
     return (
       <Notice tone="warn" icon={<TriangleAlert size={16} />}>
-        <p className="oo-p">
-          This order could not be loaded. Release the call and tell a supervisor.
-        </p>
+        <p className="oo-p">{tr('callCenterCallCenterStation.thisOrderCouldNotBe')}</p>
       </Notice>
     );
   }
@@ -737,9 +793,9 @@ function RecipientPanel({
   const { orderedFrom, isReseller } = callBrandLine(seller, customerBrand);
 
   const facts: Array<{ label: ReactNode; value: ReactNode }> = [
-    { label: 'Name', value: r.name || '—' },
+    { label: tr('callCenterCallCenterStation.name'), value: r.name || '—' },
     {
-      label: 'Address',
+      label: tr('callCenterCallCenterStation.address'),
       value: [r.addressLine1, r.addressLine2, r.landmark].filter(Boolean).join(', ') || '—',
     },
     // Surfaced here, not enforced. An agent who learns the pin is not
@@ -750,18 +806,18 @@ function RecipientPanel({
     ...(serviceability.data?.known === true && !serviceability.data.serviceable
       ? [
           {
-            label: 'Delivery',
+            label: tr('callCenterCallCenterStation.delivery'),
             value: (
               <span className="oo-warn">
                 {serviceability.data.reason ??
-                  'Our courier may not deliver to this PIN — ask for an alternative address.'}
+                  tr('callCenterCallCenterStation.ourCourierMayNotDeliver')}
               </span>
             ),
           },
         ]
       : []),
     {
-      label: 'City / state / PIN',
+      label: tr('callCenterCallCenterStation.cityStatePin'),
       // Filtering on EMPTY STRING, not nullishness: city/state are
       // stored as '' for orders whose seller never supplied them
       // (ORD-5). An agent reading "· · 560001" aloud is the failure.
@@ -773,7 +829,7 @@ function RecipientPanel({
     (customerBrand.storeContactPhone !== null || customerBrand.storeContactEmail !== null)
       ? [
           {
-            label: 'Store contact',
+            label: tr('callCenterCallCenterStation.storeContact'),
             value: [customerBrand.storeContactPhone, customerBrand.storeContactEmail]
               .filter((v): v is string => v !== null && v.trim() !== '')
               .join(' · '),
@@ -783,7 +839,9 @@ function RecipientPanel({
     ...(seller !== null
       ? [
           {
-            label: isReseller ? 'Client contact (not for the customer)' : 'Client contact',
+            label: isReseller
+              ? tr('callCenterCallCenterStation.clientContactNotForThe')
+              : tr('callCenterCallCenterStation.clientContact'),
             // For the questions an agent cannot answer — a substitution,
             // a discount the customer says they were promised. Reaching
             // the shop takes a call, not a support ticket.
@@ -792,7 +850,7 @@ function RecipientPanel({
         ]
       : []),
     {
-      label: 'Payment',
+      label: tr('callCenterCallCenterStation.payment'),
       value:
         order.paymentMode === 'COD' && order.codAmountInr !== null ? (
           // The agent reads this figure aloud to the customer, so it
@@ -817,9 +875,13 @@ function RecipientPanel({
           // RS-10: for a reseller-store order that is THE STORE's name.
           <span className="cc-recipient__from" data-testid="ordered-from">
             <span>
-              Ordered from <strong>{orderedFrom}</strong>
+              {richMessage(tr('callCenterCallCenterStation.orderedFrom'), {
+                strong: <strong>{orderedFrom}</strong>,
+              })}
             </span>
-            {isReseller && <span className="cc-tag">Member store</span>}
+            {isReseller && (
+              <span className="cc-tag">{tr('callCenterCallCenterStation.memberStore')}</span>
+            )}
           </span>
         )}
       </div>
@@ -829,8 +891,9 @@ function RecipientPanel({
         // has never heard of the seller behind it; naming the seller
         // on the phone reads as a stranger calling about their parcel.
         <p className="oo-script" data-testid="reseller-script">
-          Say you are calling about their order from <strong>{orderedFrom}</strong>. Do not mention
-          the client behind the store.
+          {richMessage(tr('callCenterCallCenterStation.sayYouAreCallingAbout'), {
+            strong: <strong>{orderedFrom}</strong>,
+          })}
         </p>
       )}
 
@@ -845,7 +908,7 @@ function RecipientPanel({
 
       {order.items.length > 0 && (
         <div>
-          <div className="cc-items__label">Items</div>
+          <div className="cc-items__label">{tr('callCenterCallCenterStation.items')}</div>
           <ul className="cc-items">
             {order.items.map((it, idx) => {
               // Live catalogue read, keyed on variant — the snapshot's
@@ -903,6 +966,7 @@ function PriorAttempts({
 }: {
   readonly attempts: PulledAssignment['priorAttempts'];
 }): ReactElement | null {
+  const tr = useT();
   // A first call has no history, and an empty box saying so is noise on
   // the screen an agent uses most.
   if (attempts.length === 0) return null;
@@ -916,12 +980,14 @@ function PriorAttempts({
       state: 'done',
       label: (
         <>
-          {OUTCOME_OPTIONS.find((o) => o.value === a.outcome)?.label ?? a.outcome}
+          {outcomeOptions(tr).find((o) => o.value === a.outcome)?.label ?? a.outcome}
           {!a.isThisOrder && (
             <>
               {' '}
               <span className="oo-faint">
-                on <span className="sk-ident">{a.orderNumber}</span>
+                {richMessage(tr('callCenterCallCenterStation.on'), {
+                  span: <span className="sk-ident">{a.orderNumber}</span>,
+                })}
               </span>
             </>
           )}
@@ -935,7 +1001,9 @@ function PriorAttempts({
             // The promise the customer was given. Breaking it is worse
             // than never having made it.
             <span className="cc-prior__promise">
-              Promised callback: {new Date(a.rescheduledFor).toLocaleString('en-IN', WHEN)}
+              {tr('callCenterCallCenterStation.promisedCallback', {
+                value: new Date(a.rescheduledFor).toLocaleString('en-IN', WHEN),
+              })}
             </span>
           )}
           {a.notes !== null && a.notes !== '' ? (
@@ -944,7 +1012,9 @@ function PriorAttempts({
             // Said out loud rather than left blank: "nobody wrote anything
             // down" and "the notes failed to load" look identical
             // otherwise, and only one of them means stop looking.
-            <span className="cc-prior__none">No notes recorded</span>
+            <span className="cc-prior__none">
+              {tr('callCenterCallCenterStation.noNotesRecorded')}
+            </span>
           )}
         </>
       ),
@@ -954,16 +1024,25 @@ function PriorAttempts({
   return (
     <div className="cc-prior">
       <h3 className="cc-prior__title">
-        What this customer was told before
-        <span className="cc-prior__count">
-          {attempts.length} previous {attempts.length === 1 ? 'call' : 'calls'}
-        </span>
+        {richMessage(tr('callCenterCallCenterStation.whatThisCustomerWasTold'), {
+          span: (
+            <span className="cc-prior__count">
+              {tr('callCenterCallCenterStation.previous', {
+                length: attempts.length,
+                value:
+                  attempts.length === 1
+                    ? tr('callCenterCallCenterStation.call')
+                    : tr('callCenterCallCenterStation.calls'),
+              })}
+            </span>
+          ),
+        })}
       </h3>
 
       {thisOrder.length > 0 && (
         <Timeline
-          label="Previous calls about this order"
-          stateWords={{ done: 'Logged' }}
+          label={tr('callCenterCallCenterStation.previousCallsAboutThisOrder')}
+          stateWords={{ done: tr('callCenterCallCenterStation.logged') }}
           steps={thisOrder.map(step)}
         />
       )}
@@ -974,10 +1053,12 @@ function PriorAttempts({
               different parcel is still context — "she always asks for
               after seven" — but it is not about the one being discussed,
               and an agent must not confuse the two on the phone. */}
-          <p className="cc-prior__group">Earlier orders by the same customer</p>
+          <p className="cc-prior__group">
+            {tr('callCenterCallCenterStation.earlierOrdersByTheSame')}
+          </p>
           <Timeline
-            label="Previous calls about this customer's other orders"
-            stateWords={{ done: 'Logged' }}
+            label={tr('callCenterCallCenterStation.previousCallsAboutThisCustomer')}
+            stateWords={{ done: tr('callCenterCallCenterStation.logged') }}
             steps={earlier.map(step)}
           />
         </>
@@ -1000,17 +1081,18 @@ function CallPurposeBanner({
   readonly purpose: PulledAssignment['callPurpose'];
   readonly tickets: PulledAssignment['openTickets'];
 }): ReactElement {
+  const tr = useT();
   return (
     <div className="cc-purpose">
       <p className="cc-purpose__kicker">
         <MessageCircleWarning size={15} aria-hidden />
-        Why this call
+        {tr('callCenterCallCenterStation.whyThisCall')}
       </p>
       <p className="cc-purpose__headline">{purpose.headline}</p>
 
       {purpose.sellerAsked !== null ? (
         <p className="cc-purpose__said">
-          <span className="oo-muted">They told us: </span>
+          <span className="oo-muted">{tr('callCenterCallCenterStation.theyToldUs')} </span>
           &ldquo;{purpose.sellerAsked}&rdquo;
         </p>
       ) : null}
@@ -1026,7 +1108,7 @@ function CallPurposeBanner({
                 )}
               </p>
               <Link href={`/tickets?ticketId=${t.ticketId}`} className="oo-link">
-                Open
+                {tr('callCenterCallCenterStation.open')}
               </Link>
             </li>
           ))}
@@ -1040,10 +1122,7 @@ function CallPurposeBanner({
         raised in error.
       */}
       {tickets.length > 0 ? (
-        <p className="oo-faint">
-          Answer these on the call, then record the outcome below — it is written onto the issue and
-          can close it in the same step.
-        </p>
+        <p className="oo-faint">{tr('callCenterCallCenterStation.answerTheseOnTheCall')}</p>
       ) : null}
     </div>
   );

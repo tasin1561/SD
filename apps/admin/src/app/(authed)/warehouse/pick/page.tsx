@@ -4,6 +4,7 @@ import { ArrowRight } from 'lucide-react';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { PickStation } from './_components/pick-station';
 import '../_components/benches.css';
+import { getT } from '@/i18n/server';
 
 /**
  * The per-parcel pick station — RETIRED as the ordinary path
@@ -24,17 +25,18 @@ import '../_components/benches.css';
  * It is also the escape hatch for a parcel that has to be dealt with on
  * its own, off a batch.
  */
-export default function PickPage(): ReactElement {
+export default async function PickPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <div className="wh-page">
       <PageHeader
-        title="Pick station"
-        subtitle="One parcel at a time. The everyday path is batch picking — this is for serialised stock, which must be scanned unit by unit, and for one-off parcels."
+        title={t('warehousePickPage.pickStation')}
+        subtitle={t('warehousePickPage.oneParcelAtATime')}
       />
       <div className="wh-banner">
-        <span>Picking a normal batch? </span>
+        <span>{t('warehousePickPage.pickingANormalBatch')} </span>
         <Link href="/warehouse/printing">
-          Go to Printing <ArrowRight size={14} aria-hidden />
+          {t('warehousePickPage.goToPrinting')} <ArrowRight size={14} aria-hidden />
         </Link>
       </div>
       <PickStation />

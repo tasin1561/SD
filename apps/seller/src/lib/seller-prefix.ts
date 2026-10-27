@@ -1,3 +1,6 @@
+import type { Translate } from '@skydrop/ui/app/i18n';
+import { englishT } from '@/i18n/english';
+import type { MessageKey } from '@/i18n/catalog';
 /**
  * The seller code shown in front of a recipient name.
  *
@@ -28,8 +31,8 @@ export function stripSellerPrefix(initials: string | null, name: string): string
 
 /** The hint under the field, so the prefix is explained rather than
  *  just appearing. Empty when the seller has no code. */
-export function prefixHint(initials: string | null): string {
+export function prefixHint(initials: string | null, t: Translate<MessageKey> = englishT): string {
   const prefix = initials?.trim() ?? '';
   if (prefix === '') return '';
-  return `Saved as “${prefix} <name>” — your code, so we can tell your parcels apart`;
+  return t('guidance.prefixHint', { prefix });
 }

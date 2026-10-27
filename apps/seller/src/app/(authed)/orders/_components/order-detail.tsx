@@ -46,7 +46,7 @@ import { ReattemptRequestDialog } from './reattempt-request-dialog';
 import { OrderChargesSection } from './order-charges';
 import { OrderJourney } from './order-journey-parts';
 import { BackLink, Facts, LinkButton, MetaFact, Notice, OrdSection } from './orders-parts';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { packageWords } from '@/lib/package-type';
 import { can } from '@/lib/page-access';
 import { useSellerIdentity } from '@skydrop/auth/client';
@@ -54,6 +54,10 @@ import { OrderTicketsPanel } from '../[id]/_components/order-tickets-panel';
 import { ConsigneePanel } from '../[id]/_components/consignee-panel';
 import { ResellerMoneyPanel } from '../[id]/_components/reseller-money-panel';
 import { UnreachableCustomerPanel } from '../[id]/_components/unreachable-customer-panel';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
 /** The public tracking site. Env-driven so a domain change is a deploy
  *  variable rather than a code edit. */
@@ -153,8 +157,8 @@ function Dash(): ReactElement {
 }
 
 /** `21 Aug 2026` — a tile is a glance, not a timestamp. */
-function tileDate(value: string): string {
-  return new Date(value).toLocaleDateString('en-IN', {
+function tileDate(value: string, locale: Locale = 'en'): string {
+  return new Date(value).toLocaleDateString(dateTag(locale, 'en-IN'), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -170,6 +174,8 @@ const TILE_TONE: Record<ReturnType<typeof statusTone>, KpiTone> = {
 };
 
 export function OrderDetailView({ orderId }: { orderId: string }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const detail = useOrderDetail(orderId);
   // Asked for any FAILED status, because which of them qualifies is a
   // per-seller setting the server owns — not something to guess here.
@@ -207,24 +213,24 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           back button on a phone, where the tap target is a word in a
           line of words. */}
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        Orders
+        {t('orderDetail.orders')}
       </BackLink>
 
       {detail.isLoading ? (
-        <SkeletonRows rows={6} cols={4} label="Loading order…" />
+        <SkeletonRows rows={6} cols={4} label={t('orderDetail.loadingOrder')} />
       ) : detail.isError ? (
         <ErrorState
-          message={detail.error?.message ?? 'Failed to load order.'}
+          message={detail.error?.message ?? t('orderDetail.failedToLoadOrder')}
           retry={() => void detail.refetch()}
         />
       ) : !detail.data ? (
-        <ErrorState message="Order not found." />
+        <ErrorState message={t('orderDetail.orderNotFound')} />
       ) : (
         <>
           <PageHeader
             breadcrumbs={[
-              { label: 'Client console' },
-              { label: 'Orders', href: '/orders' },
+              { label: t('orderDetail.clientConsole') },
+              { label: t('orderDetail.orders'), href: '/orders' },
               { label: detail.data.orderNumber },
             ]}
             Link={Link}
@@ -232,7 +238,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             subtitle={
               detail.data.sellerOrderRef ? (
                 <span>
-                  Your ref: <span className="sk-ident">{detail.data.sellerOrderRef}</span>
+                  {richMessage(t('orderDetail.yourRef'), {
+                    span: <span className="sk-ident">{detail.data.sellerOrderRef}</span>,
+                  })}
                 </span>
               ) : undefined
             }
@@ -251,13 +259,19 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               <span className="ord-meta">
                 <StatusChip
                   kind={orderStatusKind(detail.data.status as OrderStatus)}
-                  label={statusLabel(detail.data.status as OrderStatus)}
+                  label={statusLabel(detail.data.status as OrderStatus, locale)}
                 />
                 <MetaFact tone="accent">
-                  {detail.data.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid'}
+                  {detail.data.paymentMode === 'COD'
+                    ? t('orderDetail.cashOnDelivery')
+                    : t('orderDetail.prepaid')}
                 </MetaFact>
                 {detail.data.storeKind === 'RESELLER' && (
-                  <MetaFact>Sold by {detail.data.storeNameSnapshot ?? 'a member store'}</MetaFact>
+                  <MetaFact>
+                    {richMessage(t('orderDetail.soldBy'), {
+                      t: detail.data.storeNameSnapshot ?? t('orderDetail.aMemberStore'),
+                    })}
+                  </MetaFact>
                 )}
               </span>
             }
@@ -273,7 +287,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     icon={<Truck size={14} />}
                     onClick={() => setAskOpen(true)}
                   >
-                    Ask admin to act
+                    {t('orderDetail.askAdminToAct')}
                   </Button>
                 )}
                 <Button
@@ -282,7 +296,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   icon={<LifeBuoy size={14} />}
                   onClick={() => setRaiseOpen(true)}
                 >
-                  Raise an issue
+                  {t('orderDetail.raiseAnIssue')}
                 </Button>
                 {/* A Reseller store's order is EDITABLE HERE TOO (owner,
                     2026-09-18). You own the goods, the warehouse slot,
@@ -299,7 +313,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     size="sm"
                     icon={<Pencil size={14} />}
                   >
-                    Edit
+                    {t('orderDetail.edit')}
                   </LinkButton>
                 )}
                 {/* The customer declined, so nothing calls this order
@@ -315,7 +329,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     icon={<PhoneCall size={14} />}
                     onClick={() => setReattemptOpen(true)}
                   >
-                    {lastDecided === null ? 'Ask us to call again' : 'Ask again'}
+                    {lastDecided === null
+                      ? t('orderDetail.askUsToCall')
+                      : t('orderDetail.askAgain')}
                   </Button>
                 )}
                 {/* Only a DELIVERED order can come back — before that a
@@ -331,7 +347,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                       icon={<Undo2 size={14} />}
                       onClick={() => setReturnOpen(true)}
                     >
-                      Request return
+                      {t('orderDetail.requestReturn')}
                     </Button>
                   )}
                 {CANCELLABLE.has(detail.data.status) &&
@@ -343,7 +359,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                       icon={<XCircle size={14} />}
                       onClick={() => setCancelOpen(true)}
                     >
-                      Cancel
+                      {t('orderDetail.cancel')}
                     </Button>
                   )}
               </div>
@@ -358,23 +374,27 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                  that are all on the page directly below it. */}
           <div className="ord-kpis">
             <KpiCard
-              label="Status"
+              label={t('orderDetail.status')}
               icon={<CircleDot size={14} />}
               /* `statusLabel` from `@skydrop/ui/status`, never the raw
                  enum: the chip in the header beside this tile reads
                  the same vocabulary. */
-              figure={<span>{statusLabel(detail.data.status as OrderStatus)}</span>}
+              figure={<span>{statusLabel(detail.data.status as OrderStatus, locale)}</span>}
               tone={TILE_TONE[statusTone(detail.data.status as OrderStatus)]}
             />
             <KpiCard
-              label={detail.data.paymentMode === 'COD' ? 'To collect' : 'Paid up front'}
+              label={
+                detail.data.paymentMode === 'COD'
+                  ? t('orderDetail.toCollect')
+                  : t('orderDetail.paidUpFront')
+              }
               icon={<CreditCard size={14} />}
               /* A PREPAID order reads "Prepaid", never ₹0 — nothing
                  being owed and nothing having been recorded look the
                  same at a glance otherwise. */
               figure={
                 detail.data.codAmountInr === null ? (
-                  <span className="ord-faint">Prepaid</span>
+                  <span className="ord-faint">{t('orderDetail.prepaid')}</span>
                 ) : (
                   <Money amount={detail.data.codAmountInr} />
                 )
@@ -385,28 +405,28 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 : {
                     foot: [
                       {
-                        label: 'Declared value',
+                        label: t('orderDetail.declaredValue'),
                         value: <Money amount={detail.data.declaredValueInr} />,
                       },
                     ],
                   })}
             />
             <KpiCard
-              label="What is in it"
+              label={t('orderDetail.whatIsInIt')}
               icon={<Package size={14} />}
               value={detail.data.items.length}
               unit={detail.data.items.length === 1 ? 'line' : 'lines'}
               tone="neutral"
               foot={[
                 {
-                  label: 'Units',
+                  label: t('orderDetail.units'),
                   value: detail.data.items.reduce((t, i) => t + i.quantity, 0),
                 },
                 {
-                  label: 'Weight',
+                  label: t('orderDetail.weight'),
                   value:
                     detail.data.totalWeightGrams === null ? (
-                      <span className="ord-faint">Not recorded</span>
+                      <span className="ord-faint">{t('orderDetail.notRecorded')}</span>
                     ) : (
                       `${detail.data.totalWeightGrams} g`
                     ),
@@ -414,11 +434,13 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               ]}
             />
             <KpiCard
-              label="Placed"
+              label={t('orderDetail.placed')}
               icon={<Clock size={14} />}
-              figure={<span>{tileDate(detail.data.placedAt)}</span>}
+              figure={<span>{tileDate(detail.data.placedAt, locale)}</span>}
               tone="neutral"
-              hint={`Last moved ${tileDate(detail.data.updatedAt)}.`}
+              hint={t('orderDetail.lastMoved', {
+                updatedAt: tileDate(detail.data.updatedAt, locale),
+              })}
             />
           </div>
 
@@ -440,12 +462,14 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <Notice
               tone="warn"
               icon={<Clock size={16} />}
-              title="We are reviewing your request to call this customer again"
+              title={t('orderDetail.weAreReviewingYour')}
             >
               <span className="ord-p">
-                Sent {new Date(pendingRequest.createdAt).toLocaleString('en-IN')}. The order stays
-                rejected until we decide. If we approve it, it goes back into the call queue and you
-                will see the status change here.
+                {richMessage(t('orderDetail.sentTheOrderStays'), {
+                  createdAt: new Date(pendingRequest.createdAt).toLocaleString(
+                    dateTag(locale, 'en-IN'),
+                  ),
+                })}
               </span>
               <p className="ord-quote">“{pendingRequest.reason}”</p>
             </Notice>
@@ -455,12 +479,12 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
             <Notice
               tone="bad"
               icon={<XCircle size={16} />}
-              title="We reviewed your request and did not call again"
+              title={t('orderDetail.weReviewedYourRequest')}
             >
               {lastDecided.decisionNote !== null && lastDecided.decisionNote !== '' && (
                 <span className="ord-p">{lastDecided.decisionNote}</span>
               )}
-              <span className="ord-faint">You can ask again if something changes.</span>
+              <span className="ord-faint">{t('orderDetail.youCanAskAgain')}</span>
             </Notice>
           )}
 
@@ -499,8 +523,8 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 going to, what is in it, what it costs, the paperwork. */}
             <div className="ord-stack">
               <OrdSection
-                title="Recipient"
-                note="Snapshotted when the order was placed."
+                title={t('orderDetail.recipient')}
+                note={t('orderDetail.snapshottedWhenTheOrder')}
                 action={
                   // `orders.create` is what the SERVER requires to save
                   // a consignee change ("whoever may commit the company
@@ -528,7 +552,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                         );
                       }}
                     >
-                      Edit
+                      {t('orderDetail.edit')}
                     </Button>
                   ) : undefined
                 }
@@ -539,24 +563,28 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                     // note says who sold to this person, because they
                     // are who the customer will ring first.
                     <p className="ord-p">
-                      Sold by your member store{' '}
-                      {detail.data.storeId !== null ? (
-                        <Link href={`/reseller-stores/${detail.data.storeId}`} className="ord-link">
-                          {detail.data.storeNameSnapshot ?? 'a member store'}
-                        </Link>
-                      ) : (
-                        <span className="ord-strong">
-                          {detail.data.storeNameSnapshot ?? 'a member store'}
-                        </span>
-                      )}
-                      .
+                      {richMessage(t('orderDetail.soldByYourMember'), {
+                        span:
+                          detail.data.storeId !== null ? (
+                            <Link
+                              href={`/reseller-stores/${detail.data.storeId}`}
+                              className="ord-link"
+                            >
+                              {detail.data.storeNameSnapshot ?? t('orderDetail.aMemberStore')}
+                            </Link>
+                          ) : (
+                            <span className="ord-strong">
+                              {detail.data.storeNameSnapshot ?? t('orderDetail.aMemberStore')}
+                            </span>
+                          ),
+                      })}
                     </p>
                   )}
                   <Facts
                     items={[
-                      { label: 'Name', value: detail.data.recipientName },
+                      { label: t('orderDetail.name'), value: detail.data.recipientName },
                       {
-                        label: 'Phone',
+                        label: t('orderDetail.phone'),
                         value: (
                           <span className="sk-figure">
                             {detail.data.recipientPhoneE164}
@@ -570,10 +598,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                         ),
                       },
                       ...(detail.data.recipientEmail
-                        ? [{ label: 'Email', value: detail.data.recipientEmail }]
+                        ? [{ label: t('orderDetail.email'), value: detail.data.recipientEmail }]
                         : []),
                       {
-                        label: 'Address',
+                        label: t('orderDetail.address'),
                         value: (
                           <>
                             <div>{detail.data.recipientAddressLine1}</div>
@@ -582,7 +610,9 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                             )}
                             {detail.data.recipientLandmark && (
                               <div className="ord-faint">
-                                Landmark: {detail.data.recipientLandmark}
+                                {richMessage(t('orderDetail.landmark'), {
+                                  recipientLandmark: detail.data.recipientLandmark,
+                                })}
                               </div>
                             )}
                             <div>
@@ -603,22 +633,28 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               {/* Six facts do not need two bordered boxes and two
                   heads, so they are one section and one list that
                   reflows to a single column on a phone. */}
-              <OrdSection title="Payment &amp; parcel" note="What it is worth and what it weighs.">
+              <OrdSection
+                title={t('orderDetail.paymentParcel')}
+                note={t('orderDetail.whatItIsWorth')}
+              >
                 <Facts
                   items={[
                     {
-                      label: 'Payment mode',
-                      value: detail.data.paymentMode === 'COD' ? 'Cash on delivery' : 'Prepaid',
+                      label: t('orderDetail.paymentMode'),
+                      value:
+                        detail.data.paymentMode === 'COD'
+                          ? t('orderDetail.cashOnDelivery')
+                          : t('orderDetail.prepaid'),
                     },
                     {
                       // The one figure here that decides whether the
                       // parcel is worth chasing, through `Money` so it
                       // groups the Indian way and sits on tabular
                       // figures.
-                      label: 'To collect',
+                      label: t('orderDetail.toCollect'),
                       value:
                         detail.data.codAmountInr === null ? (
-                          <span className="ord-faint">Prepaid</span>
+                          <span className="ord-faint">{t('orderDetail.prepaid')}</span>
                         ) : (
                           <span className="ord-strong">
                             <Money amount={detail.data.codAmountInr} />
@@ -626,7 +662,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                         ),
                     },
                     {
-                      label: 'Declared value',
+                      label: t('orderDetail.declaredValue'),
                       value:
                         detail.data.declaredValueInr === null ? (
                           <Dash />
@@ -635,7 +671,7 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                         ),
                     },
                     {
-                      label: 'Weight',
+                      label: t('orderDetail.weight'),
                       value:
                         detail.data.totalWeightGrams === null ? (
                           <Dash />
@@ -644,13 +680,13 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                         ),
                     },
                     {
-                      label: 'Package',
-                      value: packageWords(detail.data.packageType),
+                      label: t('orderDetail.package'),
+                      value: packageWords(detail.data.packageType, t),
                     },
                     {
-                      label: 'Flags',
+                      label: t('orderDetail.flags'),
                       value: detail.data.isUrgent ? (
-                        <StatusChip kind="pending" label="Urgent" size="sm" />
+                        <StatusChip kind="pending" label={t('orderDetail.urgent')} size="sm" />
                       ) : (
                         <Dash />
                       ),
@@ -660,25 +696,25 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               </OrdSection>
 
               <OrdSection
-                title="Items"
+                title={t('orderDetail.items')}
                 note={`${detail.data.items.length} ${detail.data.items.length === 1 ? 'line' : 'lines'}`}
                 flush
               >
-                <Table caption="Items on this order">
+                <Table caption={t('orderDetail.itemsOnThisOrder')}>
                   <THead>
                     <Tr>
-                      <Th className="ord-thumb-cell" aria-label="Picture" />
-                      <Th>SKU</Th>
-                      <Th>Product</Th>
-                      <Th align="right">Qty</Th>
-                      <Th align="right">Unit weight</Th>
+                      <Th className="ord-thumb-cell" aria-label={t('orderDetail.picture')} />
+                      <Th>{t('orderDetail.sku')}</Th>
+                      <Th>{t('orderDetail.product')}</Th>
+                      <Th align="right">{t('orderDetail.qty')}</Th>
+                      <Th align="right">{t('orderDetail.unitWeight')}</Th>
                     </Tr>
                   </THead>
                   <TBody>
                     {detail.data.items.length === 0 && (
                       // A header row over nothing says less than a
                       // sentence does.
-                      <TableEmpty colSpan={5}>No items recorded on this order.</TableEmpty>
+                      <TableEmpty colSpan={5}>{t('orderDetail.noItemsRecordedOn')}</TableEmpty>
                     )}
                     {detail.data.items.map((item) => (
                       <Tr key={item.id}>
@@ -712,7 +748,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
               </OrdSection>
 
               {detail.data.sellerNotes && (
-                <OrdSection title="Your notes" note="What you told us at order time.">
+                <OrdSection
+                  title={t('orderDetail.yourNotes')}
+                  note={t('orderDetail.whatYouToldUs')}
+                >
                   <p className="ord-body">{detail.data.sellerNotes}</p>
                 </OrdSection>
               )}
@@ -722,7 +761,11 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                   403 in a red box reads as a broken page rather than as
                   policy. Cosmetic — the server is still the boundary. */}
               {identity !== null && can(identity, 'charges.view') && (
-                <OrdSection title="Charges" note="What this parcel costs you." flush>
+                <OrdSection
+                  title={t('orderDetail.charges')}
+                  note={t('orderDetail.whatThisParcelCosts')}
+                  flush
+                >
                   <OrderChargesSection orderId={orderId} />
                 </OrdSection>
               )}
@@ -755,7 +798,10 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
                 }
               />
 
-              <OrdSection title="Invoice" note="The tax document for this sale.">
+              <OrdSection
+                title={t('orderDetail.invoice')}
+                note={t('orderDetail.theTaxDocumentFor')}
+              >
                 <OrderInvoiceSection
                   orderId={orderId}
                   orderNumber={detail.data.orderNumber}
@@ -782,8 +828,13 @@ export function OrderDetailView({ orderId }: { orderId: string }): ReactElement 
           </div>
 
           <p className="ord-footnote sk-figure">
-            Placed {new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16)} ·
-            Updated {new Date(detail.data.updatedAt).toISOString().replace('T', ' ').slice(0, 16)}
+            {t('orderDetail.placedUpdated', {
+              placedAt: new Date(detail.data.placedAt).toISOString().replace('T', ' ').slice(0, 16),
+              updatedAt: new Date(detail.data.updatedAt)
+                .toISOString()
+                .replace('T', ' ')
+                .slice(0, 16),
+            })}
           </p>
 
           <ReattemptRequestDialog
@@ -839,19 +890,24 @@ function OrderJourneySection({
   readonly orderNumber: string;
   readonly status: OrderStatus;
 }): ReactElement | null {
+  const locale = useLocale();
+  const t = useT();
   const journey = useOrderJourney(orderId);
-  if (journey.isPending) return <SkeletonRows rows={4} cols={1} label="Loading the journey…" />;
+  if (journey.isPending)
+    return <SkeletonRows rows={4} cols={1} label={t('orderDetail.loadingTheJourney')} />;
   if (journey.isError || journey.data === undefined) {
     return (
-      <OrdSection title="Order tracker">
-        <ErrorState message={serverVerdict(journey.error)} retry={() => void journey.refetch()} />
+      <OrdSection title={t('orderDetail.orderTracker')}>
+        <ErrorState message={verdict(journey.error, t)} retry={() => void journey.refetch()} />
       </OrdSection>
     );
   }
   return (
     <OrderJourney
       orderNumber={orderNumber}
-      status={<StatusChip kind={orderStatusKind(status)} label={statusLabel(status)} size="sm" />}
+      status={
+        <StatusChip kind={orderStatusKind(status)} label={statusLabel(status, locale)} size="sm" />
+      }
       milestones={journey.data.milestones}
       parcels={journey.data.parcels}
       entries={journey.data.timeline}
@@ -872,6 +928,8 @@ function OrderInvoiceSection({
   readonly orderNumber: string;
   readonly status: string;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const invoice = useOrderInvoice(orderId);
   const generate = useGenerateInvoice(orderId);
   const toast = useToast();
@@ -892,34 +950,36 @@ function OrderInvoiceSection({
   }
 
   if (status !== 'DELIVERED') {
-    return <p className="ord-p">Invoices are auto-generated when the order is delivered.</p>;
+    return <p className="ord-p">{t('orderDetail.invoicesAreAutoGenerated')}</p>;
   }
 
   async function onGenerate(): Promise<void> {
     setError(null);
     try {
       const res = await generate.mutateAsync();
-      toast.success(res.alreadyExisted ? 'Invoice loaded.' : 'Invoice generated.');
+      toast.success(
+        res.alreadyExisted ? t('orderDetail.invoiceLoaded') : t('orderDetail.invoiceGenerated'),
+      );
     } catch (e) {
-      setError(serverVerdict(e, 'Generation failed'));
+      setError(verdict(e, t, t('orderDetail.generationFailed')));
     }
   }
 
   if (invoice.isLoading) {
-    return <SkeletonRows rows={1} cols={2} label="Loading invoice…" />;
+    return <SkeletonRows rows={1} cols={2} label={t('orderDetail.loadingInvoice')} />;
   }
 
   if (!invoice.data) {
     return (
       <div className="ord-stack ord-stack--tight">
         <div className="ord-row ord-row--between">
-          <p className="ord-p">No invoice yet — usually generated within seconds of delivery.</p>
+          <p className="ord-p">{t('orderDetail.noInvoiceYetUsually')}</p>
           <AsyncButton
             variant="secondary"
             size="sm"
             icon={<FileText size={14} />}
             state={generate.isPending ? 'busy' : undefined}
-            labels={{ idle: 'Generate now', busy: 'Generating…' }}
+            labels={{ idle: t('orderDetail.generateNow'), busy: t('orderDetail.generating') }}
             onClick={() => setConfirming(true)}
           />
         </div>
@@ -927,11 +987,11 @@ function OrderInvoiceSection({
         <ConfirmDialog
           open={confirming}
           onOpenChange={setConfirming}
-          title="Generate the invoice now?"
+          title={t('orderDetail.generateTheInvoiceNow')}
           entity={orderNumber}
           entityIsIdentifier
-          consequence="We issue the tax invoice for this delivered order. If one already exists, that one is loaded instead."
-          confirmLabel="Generate invoice"
+          consequence={t('orderDetail.weIssueTheTaxInvoice')}
+          confirmLabel={t('orderDetail.generateInvoice')}
           onConfirm={() => onGenerate()}
         />
       </div>
@@ -943,8 +1003,10 @@ function OrderInvoiceSection({
       <div>
         <div className="sk-ident ord-strong">{invoice.data.invoiceNumber}</div>
         <span className="ord-sub">
-          Issued {new Date(invoice.data.invoiceDate).toLocaleString()} · Total ₹{' '}
-          {invoice.data.totalInr}
+          {richMessage(t('orderDetail.issuedTotal'), {
+            invoiceDate: new Date(invoice.data.invoiceDate).toLocaleString(dateTag(locale)),
+            totalInr: invoice.data.totalInr,
+          })}
         </span>
       </div>
       {invoice.data.pdfUrl !== null && (
@@ -959,7 +1021,7 @@ function OrderInvoiceSection({
           className="ord-link ord-link--block"
         >
           <Download size={14} aria-hidden />
-          Download PDF
+          {t('orderDetail.downloadPdf')}
         </a>
       )}
     </div>

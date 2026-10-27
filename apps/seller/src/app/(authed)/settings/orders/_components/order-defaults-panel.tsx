@@ -10,8 +10,9 @@ import { useToast } from '@skydrop/ui/app/toast';
 import { useCustomerDeliveryFee, useSetCustomerDeliveryFee } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { SetCallout, SetFact } from '../../_components/settings-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * The delivery fee a new order starts with.
@@ -22,6 +23,7 @@ import { SetCallout, SetFact } from '../../_components/settings-parts';
  * is added to the collectable amount, and it feeds nothing else.
  */
 export function OrderDefaultsPanel(): ReactElement {
+  const t = useT();
   const toast = useToast();
   const mayEdit = can(useSellerIdentity(), 'orders.create');
   const current = useCustomerDeliveryFee();
@@ -40,9 +42,9 @@ export function OrderDefaultsPanel(): ReactElement {
     setError(null);
     try {
       const saved = await save.mutateAsync({ amountInr: Number(value) });
-      toast.success(`New orders will start at ₹${saved.amountInr} delivery.`);
+      toast.success(t('settingsOrders.newOrdersWillStart', { amountInr: saved.amountInr }));
     } catch (e) {
-      setError(serverVerdict(e));
+      setError(verdict(e, t));
       throw e;
     }
   }
@@ -50,7 +52,7 @@ export function OrderDefaultsPanel(): ReactElement {
   return (
     <section className="set-section">
       <SectionHeading
-        title="Delivery fee"
+        title={t('settingsOrders.deliveryFee')}
         /*
           The note says WHOSE figure this currently is. It is the one
           thing about the field that a glance cannot tell you: an
@@ -59,9 +61,9 @@ export function OrderDefaultsPanel(): ReactElement {
         */
         note={
           current.data === undefined ? undefined : current.data.isOwnValue ? (
-            <SetFact tone="accent">Your own figure</SetFact>
+            <SetFact tone="accent">{t('settingsOrders.yourOwnFigure')}</SetFact>
           ) : (
-            <SetFact>Skydrop default</SetFact>
+            <SetFact>{t('settingsOrders.skydropDefault')}</SetFact>
           )
         }
       />
@@ -80,12 +82,12 @@ export function OrderDefaultsPanel(): ReactElement {
             )}
             <div className="set-form-grid set-form-narrow">
               <TextField
-                label="Delivery fee charged to your customer (₹)"
+                label={t('settingsOrders.deliveryFeeChargedTo')}
                 icon={<IndianRupee size={15} />}
                 hint={
                   current.data?.isOwnValue === true
-                    ? 'Your own figure. Pre-filled on every new order, and editable there.'
-                    : 'Currently the Skydrop default. Set your own and new orders will start with it.'
+                    ? t('settingsOrders.yourOwnFigurePre')
+                    : t('settingsOrders.currentlyTheSkydropDefault')
                 }
                 type="number"
                 min={0}
@@ -95,15 +97,17 @@ export function OrderDefaultsPanel(): ReactElement {
                 disabled={!mayEdit}
                 inputClassName="sk-figure"
               />
-              <p className="set-muted">
-                This is what you add to the customer&apos;s collectable amount. It is not what
-                Skydrop charges you to deliver — that is separate and unaffected by this.
-              </p>
+              <p className="set-muted">{t('settingsOrders.thisIsWhatYou')}</p>
               {mayEdit && (
                 <div className="set-buttons" data-align="start">
                   <AsyncButton
                     variant="primary"
-                    labels={{ idle: 'Save', busy: 'Saving…', done: 'Saved', error: 'Not saved' }}
+                    labels={{
+                      idle: t('settingsOrders.save'),
+                      busy: t('settingsOrders.saving'),
+                      done: t('settingsOrders.saved'),
+                      error: t('settingsOrders.notSaved'),
+                    }}
                     disabled={save.isPending || value.trim() === ''}
                     onAction={onSave}
                   />

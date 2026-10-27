@@ -6,8 +6,11 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useCourierThreadForTicket, type CourierThreadMessage } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import './tickets.css';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * The seller's conversation with the courier.
@@ -45,13 +48,14 @@ import './tickets.css';
  * "queued to send" rather than "sent", which is the true statement.
  */
 export function CourierThread({ ticketId }: { readonly ticketId: string }): ReactElement | null {
+  const t = useT();
   const thread = useCourierThreadForTicket(ticketId);
 
   if (thread.isLoading) {
-    return <SkeletonRows rows={3} cols={1} label="Loading the courier conversation…" />;
+    return <SkeletonRows rows={3} cols={1} label={t('tickets.loadingTheCourierConversation')} />;
   }
   if (thread.isError) {
-    return <ErrorState message={serverVerdict(thread.error)} retry={() => void thread.refetch()} />;
+    return <ErrorState message={verdict(thread.error, t)} retry={() => void thread.refetch()} />;
   }
 
   const data = thread.data;
@@ -66,11 +70,8 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
             <MessageSquare size={16} />
           </span>
           <div>
-            <p className="tkt-courier__lead">No courier conversation yet</p>
-            <p className="tkt-courier__body">
-              Our team opens one with the courier when a delivery needs chasing. Anything they say
-              will appear here, in their words.
-            </p>
+            <p className="tkt-courier__lead">{t('tickets.noCourierConversationYet')}</p>
+            <p className="tkt-courier__body">{t('tickets.ourTeamOpensOne')}</p>
           </div>
         </div>
       </div>
@@ -80,25 +81,30 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
   return (
     <div className="tkt-card">
       <div className="tkt-courier__head">
-        <h3 className="tkt-courier__title">Message the courier</h3>
+        <h3 className="tkt-courier__title">{t('tickets.messageTheCourier')}</h3>
         {data.state !== null ? (
           <StatusChip kind={badgeKind(data.state)} label={humanise(data.state)} size="sm" />
         ) : null}
         {data.awbNumber !== null ? (
           <span className="tkt-muted">
-            AWB <span className="sk-ident">{data.awbNumber}</span>
+            {richMessage(t('tickets.awb'), {
+              span: <span className="sk-ident">{data.awbNumber}</span>,
+            })}
           </span>
         ) : null}
         {data.pendingOutbound > 0 ? (
           <span className="tkt-muted">
-            {data.pendingOutbound} message{data.pendingOutbound === 1 ? '' : 's'} queued to send
+            {richMessage(t('tickets.messageQueuedToSend'), {
+              pendingOutbound: data.pendingOutbound,
+              plural: data.pendingOutbound === 1 ? '' : 's',
+            })}
           </span>
         ) : null}
       </div>
 
       <div className="tkt-courier__list">
         {data.messages.length === 0 ? (
-          <p className="tkt-courier__body">The conversation is open; nothing has been said yet.</p>
+          <p className="tkt-courier__body">{t('tickets.theConversationIsOpen')}</p>
         ) : (
           data.messages.map((m) => <Message key={m.id} message={m} />)
         )}
@@ -108,12 +114,16 @@ export function CourierThread({ ticketId }: { readonly ticketId: string }): Reac
 }
 
 function Message({ message }: { readonly message: CourierThreadMessage }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const fromCourier = message.direction === 'INBOUND';
   return (
     <div className="tkt-courier__msg" data-ours={fromCourier ? undefined : '1'}>
       <div className="tkt-courier__who">
-        <strong>{fromCourier ? 'Delhivery' : 'You'}</strong>
-        <span className="sk-figure">{new Date(message.occurredAt).toLocaleString('en-IN')}</span>
+        <strong>{fromCourier ? t('tickets.delhivery') : t('tickets.you')}</strong>
+        <span className="sk-figure">
+          {new Date(message.occurredAt).toLocaleString(dateTag(locale, 'en-IN'))}
+        </span>
         {message.state !== null ? (
           <StatusChip kind={badgeKind(message.state)} label={humanise(message.state)} size="sm" />
         ) : null}

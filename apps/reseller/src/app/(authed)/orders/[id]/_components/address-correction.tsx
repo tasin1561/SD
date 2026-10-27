@@ -14,7 +14,10 @@ import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { MessageKey } from '@/i18n/catalog';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import {
   useEditStoreRecipient,
   useStoreAddressChanges,
@@ -24,10 +27,6 @@ import {
 } from '@/lib/order-hooks';
 import { Notice, RoSection } from '../../_components/orders-parts';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
 /**
  * What a person calls each delivery detail.
  *
@@ -35,17 +34,17 @@ function when(iso: string): string {
  * through the API or a CSV may carry one the form does not, and the
  * history has to be able to name it.
  */
-const FIELD_LABEL: Readonly<Record<AddressField, string>> = {
-  recipientName: 'Name',
-  recipientPhoneE164: 'Phone',
-  recipientAltPhoneE164: 'Second phone',
-  recipientEmail: 'Email',
-  recipientAddressLine1: 'Address',
-  recipientAddressLine2: 'Landmark line',
-  recipientLandmark: 'Landmark (old field)',
-  recipientCity: 'City',
-  recipientStateProvince: 'State',
-  recipientPostalCode: 'PIN code',
+const FIELD_LABEL: Readonly<Record<AddressField, MessageKey>> = {
+  recipientName: 'addrfix.field.recipientName',
+  recipientPhoneE164: 'addrfix.field.recipientPhoneE164',
+  recipientAltPhoneE164: 'addrfix.field.recipientAltPhoneE164',
+  recipientEmail: 'addrfix.field.recipientEmail',
+  recipientAddressLine1: 'addrfix.field.recipientAddressLine1',
+  recipientAddressLine2: 'addrfix.field.recipientAddressLine2',
+  recipientLandmark: 'addrfix.field.recipientLandmark',
+  recipientCity: 'addrfix.field.recipientCity',
+  recipientStateProvince: 'addrfix.field.recipientStateProvince',
+  recipientPostalCode: 'addrfix.field.recipientPostalCode',
 };
 
 /** The same ten in reading order, for listing what a correction proposed. */
@@ -72,13 +71,13 @@ const ALL_FIELDS: readonly AddressField[] = [
  */
 const FORM_FIELDS: ReadonlyArray<{
   readonly key: AddressField;
-  readonly hint?: string;
+  readonly hint?: MessageKey;
   readonly current: (r: StoreOrderView['recipient']) => string;
 }> = [
   { key: 'recipientName', current: (r) => r.name },
   {
     key: 'recipientPhoneE164',
-    hint: 'With the country code, e.g. +919876543210',
+    hint: 'addrfix.hint.phone',
     current: (r) => r.phoneE164,
   },
   { key: 'recipientAltPhoneE164', current: (r) => r.altPhoneE164 ?? '' },
@@ -86,7 +85,7 @@ const FORM_FIELDS: ReadonlyArray<{
   { key: 'recipientAddressLine1', current: (r) => r.addressLine1 },
   {
     key: 'recipientAddressLine2',
-    hint: 'The landmark goes here — it is what a driver finds a rural address by.',
+    hint: 'addrfix.hint.line2',
     current: (r) => r.addressLine2 ?? '',
   },
   { key: 'recipientCity', current: (r) => r.city },
@@ -147,6 +146,8 @@ export function AddressCorrection({
   /** Before the call confirms the order — the only time the details can change. */
   stageOpen: boolean;
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const changes = useStoreAddressChanges(orderId);
   const submit = useEditStoreRecipient();
   const toast = useToast();
@@ -183,27 +184,21 @@ export function AddressCorrection({
       // The REPLY says which of the two happened — never the mode read
       // when the page loaded, because seller staff may have changed the
       // policy since.
-      toast.success(
-        out.applied
-          ? 'Corrected. The parcel now goes to the new address.'
-          : 'Sent to client staff. The parcel keeps the old address until they answer.',
-      );
+      toast.success(out.applied ? t('addrfix.toast.applied') : t('addrfix.toast.sent'));
       setOpen(false);
     } catch (err) {
       // Verbatim (FE-2): ADDRESS_CHANGE_REASON_REQUIRED,
       // ADDRESS_CHANGE_ALREADY_OPEN, STORE_ACTION_NOT_ALLOWED,
       // NOT_EDITABLE, COURIER_MUST_ACCEPT_ADDRESS_CHANGE, RETAIL_OUT_OF_RANGE…
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   if (changes.isPending) {
-    return <SkeletonRows rows={2} cols={3} label="Loading the delivery details" />;
+    return <SkeletonRows rows={2} cols={3} label={t('addrfix.loading')} />;
   }
   if (changes.isError) {
-    return (
-      <ErrorState message={serverVerdict(changes.error)} retry={() => void changes.refetch()} />
-    );
+    return <ErrorState message={verdict(changes.error, t)} retry={() => void changes.refetch()} />;
   }
 
   const history = changes.data.items;
@@ -212,34 +207,27 @@ export function AddressCorrection({
   const pending = history.find((r) => r.status === 'PENDING' || r.status === 'APPROVED') ?? null;
   if (mode === 'OFF' && history.length === 0) return <></>;
 
-  const sendLabel = waits ? 'Send it to client staff' : 'Correct it';
-  const consequence = waits
-    ? 'Client staff decide this one. The parcel keeps the OLD address until they answer.'
-    : 'This is written onto the order as soon as you send it.';
+  const sendLabel = waits ? t('addrfix.send.waits') : t('addrfix.send.direct');
+  const consequence = waits ? t('addrfix.consequence.waits') : t('addrfix.consequence.direct');
 
   return (
     <RoSection
-      title="Something wrong with this order?"
+      title={t('addrfix.title')}
       note={
         mode === 'OFF'
-          ? 'Your client does not allow this store to change its orders.'
+          ? t('addrfix.note.off')
           : !stageOpen
-            ? 'What is in the parcel can only change until the customer confirms it on our call. The customer’s details can still be corrected — while the parcel is with the courier, only if they accept it.'
+            ? t('addrfix.note.closed')
             : waits
-              ? 'Client staff read the change and decide. Nothing on the order changes until they answer.'
-              : 'A change here is written onto the order straight away.'
+              ? t('addrfix.note.waits')
+              : t('addrfix.note.direct')
       }
     >
       <div className="ro-stack">
         {mode === 'OFF' ? (
-          <p className="ro-p">Ask the client if anything on this order needs to change.</p>
+          <p className="ro-p">{t('addrfix.body.off')}</p>
         ) : !stageOpen ? (
-          <p className="ro-p">
-            This order is past that stage, so what is in the parcel stands. The customer’s details
-            can still be corrected — ask your client, and once it is with the courier the change
-            only sticks if the courier accepts it. Once it is out for delivery you can also ask for
-            another attempt or for it to be sent back.
-          </p>
+          <p className="ro-p">{t('addrfix.body.closed')}</p>
         ) : (
           <div className="ro-offer">
             <Button
@@ -248,7 +236,7 @@ export function AddressCorrection({
               disabled={pending !== null}
               onClick={start}
             >
-              Change this order
+              {t('addrfix.change')}
             </Button>
             <span className="ro-offer__note">
               {pending !== null || waits ? (
@@ -257,22 +245,22 @@ export function AddressCorrection({
                 <Zap size={13} aria-hidden />
               )}
               {pending !== null
-                ? 'A change on this order is still open with client staff — it has to be finished before you can send another.'
+                ? t('addrfix.hint.open')
                 : waits
-                  ? 'Client staff approve this one before anything changes'
-                  : 'Happens as soon as you send it'}
+                  ? t('addrfix.hint.approves')
+                  : t('addrfix.hint.now')}
             </span>
           </div>
         )}
 
         {history.length > 0 ? (
-          <Table caption="What you asked to change">
+          <Table caption={t('addrfix.history.caption')}>
             <THead>
               <Tr>
-                <Th>What you asked to change</Th>
-                <Th>Why</Th>
-                <Th>When</Th>
-                <Th>Where it got to</Th>
+                <Th>{t('addrfix.col.asked')}</Th>
+                <Th>{t('addrfix.col.why')}</Th>
+                <Th>{t('addrfix.col.when')}</Th>
+                <Th>{t('addrfix.col.state')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -282,7 +270,7 @@ export function AddressCorrection({
                     <ul className="ro-changes">
                       {ALL_FIELDS.filter((k) => r.fields[k] !== undefined).map((k) => (
                         <li key={k}>
-                          <span className="ro-faint">{FIELD_LABEL[k]}: </span>
+                          <span className="ro-faint">{t(FIELD_LABEL[k])}: </span>
                           <span>{r.fields[k] ?? ''}</span>
                         </li>
                       ))}
@@ -292,7 +280,9 @@ export function AddressCorrection({
                     <span className="ro-faint">{r.reason}</span>
                   </Td>
                   <Td>
-                    <span className="ro-muted sk-figure">{when(r.createdAt)}</span>
+                    <span className="ro-muted sk-figure">
+                      {formatDateTime(r.createdAt, locale)}
+                    </span>
                   </Td>
                   <Td>
                     <StatusChip
@@ -301,14 +291,15 @@ export function AddressCorrection({
                       size="sm"
                     />
                     {r.decisionNote !== null ? (
-                      <p className="ro-quote">They said: “{r.decisionNote}”</p>
+                      <p className="ro-quote">{t('addrfix.theySaid', { note: r.decisionNote })}</p>
                     ) : null}
                     {/* Seller staff said yes and the order had already
                         moved on. Loud, because somebody here has to
                         tell a customer the address did NOT change. */}
                     {r.failureReason !== null ? (
                       <span className="ro-sub ro-tone-bad">
-                        <TriangleAlert size={12} aria-hidden /> Not applied — {r.failureReason}
+                        <TriangleAlert size={12} aria-hidden />{' '}
+                        {t('addrfix.notApplied', { reason: r.failureReason })}
                       </span>
                     ) : null}
                   </Td>
@@ -327,7 +318,7 @@ export function AddressCorrection({
         size="lg"
         icon={<MapPinned size={18} />}
         locked={submit.isPending}
-        title="Correct the delivery address"
+        title={t('addrfix.dlg.title')}
         description={consequence}
         footer={
           <DialogFooter>
@@ -337,13 +328,13 @@ export function AddressCorrection({
               onClick={() => setOpen(false)}
               disabled={submit.isPending}
             >
-              Never mind
+              {t('addrfix.dlg.neverMind')}
             </Button>
             <AsyncButton
               type="button"
               variant="primary"
               state={submit.isPending ? 'busy' : undefined}
-              labels={{ idle: sendLabel, busy: 'Sending…' }}
+              labels={{ idle: sendLabel, busy: t('addrfix.dlg.sending') }}
               onClick={() => setConfirming(true)}
               disabled={submit.isPending || changedCount === 0}
             />
@@ -356,8 +347,8 @@ export function AddressCorrection({
               <TextField
                 key={f.key}
                 id={`fix-${f.key}`}
-                label={FIELD_LABEL[f.key]}
-                {...(f.hint === undefined ? {} : { hint: f.hint })}
+                label={t(FIELD_LABEL[f.key])}
+                {...(f.hint === undefined ? {} : { hint: t(f.hint) })}
                 value={draft[f.key] ?? ''}
                 onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
               />
@@ -366,8 +357,8 @@ export function AddressCorrection({
           {waits ? (
             <TextArea
               id="fix-reason"
-              label="Why the details are wrong"
-              hint="At least a sentence — client staff read this before deciding."
+              label={t('addrfix.dlg.why')}
+              hint={t('addrfix.dlg.whyHint')}
               requiredMark
               rows={3}
               maxLength={2000}
@@ -378,8 +369,10 @@ export function AddressCorrection({
           ) : null}
           <p className="ro-faint">
             {changedCount === 0
-              ? 'Nothing has changed yet — edit a detail above.'
-              : `Sending ${changedCount} change${changedCount === 1 ? '' : 's'}. A box left as it is stays as it is.`}
+              ? t('addrfix.dlg.nothing')
+              : t(changedCount === 1 ? 'addrfix.dlg.sending.one' : 'addrfix.dlg.sending.other', {
+                  n: changedCount,
+                })}
           </p>
           {error !== null ? (
             <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
@@ -392,12 +385,12 @@ export function AddressCorrection({
       <ConfirmDialog
         open={confirming && open}
         onOpenChange={setConfirming}
-        title={waits ? 'Send this change to client staff?' : 'Correct this order now?'}
+        title={waits ? t('addrfix.confirm.titleWaits') : t('addrfix.confirm.titleDirect')}
         entity={orderNumber}
         entityIsIdentifier
         consequence={consequence}
         confirmLabel={sendLabel}
-        cancelLabel="Back"
+        cancelLabel={t('addrfix.confirm.back')}
         // Resolves whatever the answer: a refusal is shown in the form
         // behind, which stays open, exactly where it was shown before.
         onConfirm={() => send()}
@@ -405,7 +398,7 @@ export function AddressCorrection({
         <ul className="ro-changes">
           {ALL_FIELDS.filter((k) => proposed[k] !== undefined).map((k) => (
             <li key={k}>
-              <span className="ro-faint">{FIELD_LABEL[k]}: </span>
+              <span className="ro-faint">{t(FIELD_LABEL[k])}: </span>
               <span>{proposed[k] ?? ''}</span>
             </li>
           ))}

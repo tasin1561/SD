@@ -21,6 +21,8 @@ import { OurCostCell } from './our-cost-cell';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { FreightChip, MkCallout, MkCard } from '../../seller-wallets/_components/money-parts';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Inbound (BD → India) freight bills — R3.
@@ -32,6 +34,7 @@ import { FreightChip, MkCallout, MkCard } from '../../seller-wallets/_components
  * is the question a PAY_LATER bill exists to answer.
  */
 export function FreightIndex(): ReactElement {
+  const tr = useT();
   // One bill open at a time — several expanded at once is a wall of
   // numbers that reads worse than the summary it explains.
   const [openId, setOpenId] = useState<string | null>(null);
@@ -61,8 +64,8 @@ export function FreightIndex(): ReactElement {
   return (
     <div className="mk-page">
       <PageHeader
-        title="Inbound freight"
-        subtitle="One bill per BD→India consignment, split over the units that actually landed. Pay-now debits the wallet immediately; pay-later leaves a receivable that amortises per unit as the stock sells."
+        title={tr('freightFreightIndex.inboundFreight')}
+        subtitle={tr('freightFreightIndex.oneBillPerBdIndia')}
         action={
           canWrite ? (
             <Button
@@ -71,7 +74,7 @@ export function FreightIndex(): ReactElement {
               icon={<Plus size={15} />}
               onClick={() => setRecording(true)}
             >
-              Record freight bill
+              {tr('freightFreightIndex.recordFreightBill')}
             </Button>
           ) : null
         }
@@ -79,31 +82,34 @@ export function FreightIndex(): ReactElement {
 
       <div className="mk-kpis">
         <KpiCard
-          label="Outstanding"
+          label={tr('freightFreightIndex.outstanding')}
           figure={<Money amount={outstanding} decimals={false} />}
           tone={outstanding > 0 ? 'pending' : 'credit'}
-          hint={`${pendingCount} bill${pendingCount === 1 ? '' : 's'} still owing`}
+          hint={tr('freightFreightIndex.billStillOwing', {
+            pendingCount,
+            value: pendingCount === 1 ? '' : tr('common.pluralS'),
+          })}
         />
         <KpiCard
-          label="Bills shown"
+          label={tr('freightFreightIndex.billsShown')}
           figure={list.isLoading ? '—' : rows.length}
-          hint={status === '' ? 'All statuses' : humanise(status)}
+          hint={status === '' ? tr('freightFreightIndex.allStatuses') : humanise(status)}
         />
         <KpiCard
-          label="Waived"
+          label={tr('freightFreightIndex.waived')}
           figure={<Money amount={waived} decimals={false} />}
-          hint="Forgiven — money we chose not to collect"
+          hint={tr('freightFreightIndex.forgivenMoneyWeChoseNot')}
         />
       </div>
 
       <div className="mk-filters">
         <Select
           id="freight-status"
-          label="Status"
+          label={tr('freightFreightIndex.status')}
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
-          <option value="">All statuses</option>
+          <option value="">{tr('freightFreightIndex.allStatuses')}</option>
           {Object.values(InboundFreightStatus).map((s) => (
             <option key={s} value={s}>
               {humanise(s)}
@@ -114,37 +120,37 @@ export function FreightIndex(): ReactElement {
 
       {list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load freight bills.'}
+          message={list.error?.message ?? tr('freightFreightIndex.failedToLoadFreightBills')}
           retry={() => void list.refetch()}
         />
       ) : list.isLoading ? (
-        <SkeletonRows rows={5} cols={9} label="Loading freight bills…" />
+        <SkeletonRows rows={5} cols={9} label={tr('freightFreightIndex.loadingFreightBills')} />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="No freight bills recorded"
-          description="Record the freight invoice for a consignment once something has landed in India. One bill per consignment — recording it twice is refused, and a client who shipped straight to India is refused outright."
+          title={tr('freightFreightIndex.noFreightBillsRecorded')}
+          description={tr('freightFreightIndex.recordTheFreightInvoiceFor')}
           action={
             canWrite ? (
               <Button variant="primary" size="sm" onClick={() => setRecording(true)}>
-                Record freight bill
+                {tr('freightFreightIndex.recordFreightBill')}
               </Button>
             ) : null
           }
         />
       ) : (
         <MkCard flush>
-          <Table caption="Freight bills">
+          <Table caption={tr('freightFreightIndex.freightBills')}>
             <THead>
               <Tr>
-                <Th>Consignment</Th>
-                <Th>Mode</Th>
-                <Th align="right">Bill</Th>
-                <Th align="right">Our cost</Th>
-                <Th align="right">Recovered</Th>
-                <Th align="right">Outstanding</Th>
-                <Th>Units</Th>
-                <Th>Status</Th>
-                <Th align="right">Actions</Th>
+                <Th>{tr('freightFreightIndex.consignment')}</Th>
+                <Th>{tr('freightFreightIndex.mode')}</Th>
+                <Th align="right">{tr('freightFreightIndex.bill')}</Th>
+                <Th align="right">{tr('freightFreightIndex.ourCost')}</Th>
+                <Th align="right">{tr('freightFreightIndex.recovered')}</Th>
+                <Th align="right">{tr('freightFreightIndex.outstanding')}</Th>
+                <Th>{tr('freightFreightIndex.units')}</Th>
+                <Th>{tr('freightFreightIndex.status')}</Th>
+                <Th align="right">{tr('freightFreightIndex.actions')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -175,6 +181,7 @@ function FreightRow({
   readonly open: boolean;
   readonly onToggle: () => void;
 }): ReactElement {
+  const tr = useT();
   const total = Number(row.totalInr);
   const settled = Number(row.amountSettledInr);
   const pct = total <= 0 ? 0 : Math.min(100, Math.round((settled / total) * 100));
@@ -185,7 +192,7 @@ function FreightRow({
         <Td>
           <button type="button" onClick={onToggle} aria-expanded={open} className="mk-toggle">
             <ChevronRight size={13} className="mk-toggle__chev" aria-hidden />
-            How this cost happened
+            {tr('freightFreightIndex.howThisCostHappened')}
           </button>
           {/* Straight to the consignment: a freight bill on its own says
             what was charged, not what arrived. */}
@@ -209,8 +216,10 @@ function FreightRow({
             only ever looked at to find out what was wrong with it. */}
           {row.voidedAt !== null && (
             <div className="mk-small">
-              Withdrawn {new Date(row.voidedAt).toLocaleDateString()}
-              {row.voidReason === null ? '' : ` — ${row.voidReason}`}
+              {tr('freightFreightIndex.withdrawn', {
+                value: new Date(row.voidedAt).toLocaleDateString(),
+                value2: row.voidReason === null ? '' : ` — ${row.voidReason}`,
+              })}
             </div>
           )}
         </Td>
@@ -256,7 +265,7 @@ function FreightRow({
         </Td>
         <Td align="right">
           {row.voidedAt !== null ? (
-            <span className="mk-faint">Withdrawn</span>
+            <span className="mk-faint">{tr('freightFreightIndex.withdrawn2')}</span>
           ) : Number(row.outstandingInr) === 0 ? (
             <span className="mk-faint">—</span>
           ) : (
@@ -301,13 +310,15 @@ function CostBreakdown({
   readonly freightChargeId: string;
   readonly billedInr: string;
 }): ReactElement {
+  const tr = useT();
   const q = useFreightCostBreakdown(freightChargeId);
 
-  if (q.isLoading) return <SkeletonRows rows={3} cols={4} label="Loading the breakdown…" />;
+  if (q.isLoading)
+    return <SkeletonRows rows={3} cols={4} label={tr('freightFreightIndex.loadingTheBreakdown')} />;
   if (q.isError || q.data === undefined) {
     return (
       <ErrorState
-        message={serverVerdict(q.error, 'Could not load the breakdown.')}
+        message={serverVerdict(q.error, tr('freightFreightIndex.couldNotLoadTheBreakdown'))}
         retry={() => void q.refetch()}
       />
     );
@@ -324,22 +335,21 @@ function CostBreakdown({
   return (
     <div className="mk-well mk-well--2">
       <div>
-        <h4 className="mk-well__title">Split across the lines it covers</h4>
+        <h4 className="mk-well__title">{tr('freightFreightIndex.splitAcrossTheLinesIt')}</h4>
         {d.lines.length === 0 ? (
-          <p className="mk-faint">
-            No allocation lines — this bill was recorded without a per-line split, so nothing here
-            can say which product carried what.
-          </p>
+          <p className="mk-faint">{tr('freightFreightIndex.noAllocationLinesThisBill')}</p>
         ) : (
-          <Table caption="Freight split by line">
+          <Table caption={tr('freightFreightIndex.freightSplitByLine')}>
             <THead>
               <Tr>
-                <Th>Product</Th>
-                <Th align="right">Units</Th>
-                <Th align="right">Weight</Th>
-                <Th align="right">Rate{agreed === null ? '' : ` (${agreed})`}</Th>
-                <Th align="right">Per unit</Th>
-                <Th align="right">Line</Th>
+                <Th>{tr('freightFreightIndex.product')}</Th>
+                <Th align="right">{tr('freightFreightIndex.units')}</Th>
+                <Th align="right">{tr('freightFreightIndex.weight')}</Th>
+                <Th align="right">
+                  {tr('freightFreightIndex.rate', { value: agreed === null ? '' : ` (${agreed})` })}
+                </Th>
+                <Th align="right">{tr('freightFreightIndex.perUnit')}</Th>
+                <Th align="right">{tr('freightFreightIndex.line')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -385,7 +395,7 @@ function CostBreakdown({
               ))}
               <Tr>
                 <Td colSpan={5}>
-                  <span className="mk-strong">Lines add up to</span>
+                  <span className="mk-strong">{tr('freightFreightIndex.linesAddUpTo')}</span>
                 </Td>
                 <Td align="right">
                   <span className="mk-strong">
@@ -401,24 +411,26 @@ function CostBreakdown({
         {d.lines.length > 0 && Math.abs(splitTotal - Number(billedInr)) > 0.01 && (
           <MkCallout tone="warn" icon={<TriangleAlert size={16} />}>
             <p>
-              The lines come to <Money amount={splitTotal.toFixed(2)} convert={false} /> but the
-              bill is <Money amount={billedInr} convert={false} />. Part of this bill is attached to
-              no line, so it will never be recovered as those units sell.
+              {richMessage(tr('freightFreightIndex.theLinesComeToBut'), {
+                money: <Money amount={splitTotal.toFixed(2)} convert={false} />,
+                money2: <Money amount={billedInr} convert={false} />,
+              })}
             </p>
           </MkCallout>
         )}
       </div>
 
       <div>
-        <h4 className="mk-well__title">What we have paid the forwarder</h4>
+        <h4 className="mk-well__title">{tr('freightFreightIndex.whatWeHavePaidThe')}</h4>
         {d.payments.length === 0 ? (
           <p className="mk-faint">
-            Nothing recorded as paid.
+            {tr('freightFreightIndex.nothingRecordedAsPaid')}
             {d.ourCostInr !== null && (
               <>
                 {' '}
-                Our cost is noted as <Money amount={d.ourCostInr} convert={false} />, but no payment
-                sits behind it.
+                {richMessage(tr('freightFreightIndex.ourCostIsNotedAs'), {
+                  money: <Money amount={d.ourCostInr} convert={false} />,
+                })}
               </>
             )}
           </p>
@@ -431,7 +443,9 @@ function CostBreakdown({
                   <span className="mk-faint">
                     {new Date(p.occurredAt).toLocaleDateString('en-IN')}
                     {p.reference !== null && <> · {p.reference}</>}
-                    {p.recordedByName !== null && <> · by {p.recordedByName}</>}
+                    {p.recordedByName !== null && (
+                      <> {tr('freightFreightIndex.by', { recordedByName: p.recordedByName })}</>
+                    )}
                   </span>
                 </div>
                 <Money
@@ -447,7 +461,7 @@ function CostBreakdown({
                 invite reading BDT + INR as INR. */}
             {d.paidTotalByCurrency.map((t) => (
               <li key={t.currency} className="mk-list__row mk-strong">
-                <span>Paid in {t.currency}</span>
+                <span>{tr('freightFreightIndex.paidIn', { currency: t.currency })}</span>
                 <Money
                   amount={t.amount}
                   currency={t.currency === 'BDT' ? 'BDT' : 'INR'}

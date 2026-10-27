@@ -38,7 +38,7 @@ export function NotificationBellContainer(): ReactElement {
 
   const byTopic = useMemo(() => {
     const m = new Map<string, { group: string; label: string }>();
-    for (const t of topics.data ?? []) m.set(t.topic, { group: t.group, label: t.label });
+    for (const tp of topics.data ?? []) m.set(tp.topic, { group: tp.group, label: tp.label });
     return m;
   }, [topics.data]);
 

@@ -30,6 +30,10 @@ import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import './cost-sync.css';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { richMessage } from '@/i18n/client';
 
 /** The legacy Stat tones, mapped onto the KPI card's. */
 const STAT_TONE: Record<'good' | 'warn' | 'bad' | 'neutral', KpiTone> = {
@@ -42,29 +46,31 @@ const STAT_TONE: Record<'good' | 'warn' | 'bad' | 'neutral', KpiTone> = {
 type RunKind = 'bills' | 'wallet' | 'probe' | 'invoices';
 
 /** What each browser-driven run is, restated in its confirm. */
-const BROWSER_RUNS: Record<
+const BROWSER_RUNS = (
+  t: Translate<MessageKey>,
+): Record<
   Exclude<RunKind, 'bills'>,
   { title: string; entity: string; label: string; done: string }
-> = {
+> => ({
   wallet: {
-    title: 'Run the Shiprocket wallet sync now?',
-    entity: 'Shiprocket passbook, recharges and ledger',
-    label: 'Run wallet sync now',
-    done: 'Queued. It signs in and reads about 70 pages — refresh in five minutes.',
+    title: t('costSyncShiprocketCostSection.runTheShiprocketWalletSync'),
+    entity: t('costSyncShiprocketCostSection.entityWallet'),
+    label: t('costSyncShiprocketCostSection.runWalletSyncNow'),
+    done: t('costSyncShiprocketCostSection.queuedItSignsInAnd'),
   },
   invoices: {
-    title: 'Check Shiprocket invoices now?',
-    entity: 'Shiprocket freight and VAS invoices',
-    label: 'Check invoices now',
-    done: 'Queued. It signs in and opens each invoice — refresh in three minutes.',
+    title: t('costSyncShiprocketCostSection.checkShiprocketInvoicesNow'),
+    entity: t('costSyncShiprocketCostSection.entityInvoices'),
+    label: t('costSyncShiprocketCostSection.checkInvoicesNow'),
+    done: t('costSyncShiprocketCostSection.queuedItSignsInAnd2'),
   },
   probe: {
-    title: 'Check Shiprocket website access now?',
-    entity: 'Shiprocket website login',
-    label: 'Check website access',
-    done: 'Queued. It signs in through Bangalore and reads three pages — refresh in two minutes.',
+    title: t('costSyncShiprocketCostSection.checkShiprocketWebsiteAccessNow'),
+    entity: t('costSyncShiprocketCostSection.entityProbe'),
+    label: t('costSyncShiprocketCostSection.checkWebsiteAccess'),
+    done: t('costSyncShiprocketCostSection.queuedItSignsInThrough'),
   },
-};
+});
 
 /**
  * The route the panel browser takes and the address it presents, in one
@@ -72,17 +78,29 @@ const BROWSER_RUNS: Record<
  * from a VPN the browser does not go through vouches for nothing, and
  * that is exactly the mistake this line exists to make visible.
  */
-function egressLine(e: ShiprocketEgressView): string {
+function egressLine(
+  tr: Translate<MessageKey>,
+  t: Translate<MessageKey>,
+  e: ShiprocketEgressView,
+): string {
   const route =
     e.proxy === null
-      ? 'No route is set, so the website reads are stopped.'
-      : `Goes out through ${e.proxy}.`;
-  if (!e.checked) return `${route} Where it comes out is not checked.`;
-  if (e.status === 'DOWN') return `${route} Runs are refused: ${e.summary ?? 'the check failed'}.`;
+      ? t('costSyncShiprocketCostSection.noRouteIsSetSo')
+      : t('costSyncShiprocketCostSection.goesOutThrough', { proxy: e.proxy });
+  if (!e.checked) return t('costSyncShiprocketCostSection.whereItComesOutIs', { route });
+  if (e.status === 'DOWN')
+    return tr('costSyncShiprocketCostSection.runsAreRefused', {
+      route,
+      value: e.summary ?? tr('costSyncShiprocketCostSection.theCheckFailed'),
+    });
   const where = e.summary ?? 'somewhere';
   return e.countryMismatch
-    ? `${route} Runs are refused: it comes out at ${where}, and it should be in ${e.expectedCountry ?? '—'}.`
-    : `${route} Comes out at ${where}.`;
+    ? t('costSyncShiprocketCostSection.runsAreRefusedItComes', {
+        route,
+        where,
+        value: e.expectedCountry ?? '—',
+      })
+    : t('costSyncShiprocketCostSection.comesOutAt', { route, where });
 }
 
 function fmtWhen(iso: string): string {
@@ -93,59 +111,85 @@ function fmtWhen(iso: string): string {
   });
 }
 
-function billCheckLabel(run: ShiprocketCostRunView): string {
-  if (!run.ok) return 'Failed';
-  if (run.skipped === 'DISABLED') return 'Switched off';
-  if (run.skipped === 'STUB_MODE') return 'Skipped — Shiprocket is in stub mode';
-  if (run.skipped === 'NO_ACCOUNTS') return 'No Shiprocket account with a login';
-  if (run.accounts.some((a) => a.error !== null)) return 'Partly failed';
-  return 'Worked';
+function billCheckLabel(t: Translate<MessageKey>, run: ShiprocketCostRunView): string {
+  if (!run.ok) return t('costSyncShiprocketCostSection.failed');
+  if (run.skipped === 'DISABLED') return t('costSyncShiprocketCostSection.switchedOffCap');
+  if (run.skipped === 'STUB_MODE')
+    return t('costSyncShiprocketCostSection.skippedShiprocketIsInStub');
+  if (run.skipped === 'NO_ACCOUNTS')
+    return t('costSyncShiprocketCostSection.noShiprocketAccountWithA');
+  if (run.accounts.some((a) => a.error !== null))
+    return t('costSyncShiprocketCostSection.partlyFailed');
+  return t('costSyncShiprocketCostSection.worked');
 }
 
-function walletLabel(run: ShiprocketWalletRunView): string {
-  if (run.skipped === 'DISABLED') return 'Switched off';
-  if (run.skipped === 'NO_ACCOUNTS') return 'No Shiprocket account';
-  if (!run.ok) return 'Failed';
-  if (run.accounts.some((a) => a.outcome !== 'READ')) return 'Partly failed';
-  return run.wrote ? 'Worked' : 'Worked (not recording)';
+function walletLabel(t: Translate<MessageKey>, run: ShiprocketWalletRunView): string {
+  if (run.skipped === 'DISABLED') return t('costSyncShiprocketCostSection.switchedOffCap');
+  if (run.skipped === 'NO_ACCOUNTS') return t('costSyncShiprocketCostSection.noShiprocketAccount');
+  if (!run.ok) return t('costSyncShiprocketCostSection.failed');
+  if (run.accounts.some((a) => a.outcome !== 'READ'))
+    return t('costSyncShiprocketCostSection.partlyFailed');
+  return run.wrote
+    ? t('costSyncShiprocketCostSection.worked')
+    : t('costSyncShiprocketCostSection.workedNotRecording');
 }
 
-function invoiceRunLabel(run: ShiprocketInvoiceRunView): string {
-  if (run.skipped === 'DISABLED') return 'Switched off';
-  if (run.skipped === 'NO_ACCOUNTS') return 'No Shiprocket account';
-  if (!run.ok) return 'Failed';
-  if (run.accounts.some((a) => a.outcome !== 'CHECKED')) return 'Partly failed';
+function invoiceRunLabel(t: Translate<MessageKey>, run: ShiprocketInvoiceRunView): string {
+  if (run.skipped === 'DISABLED') return t('costSyncShiprocketCostSection.switchedOffCap');
+  if (run.skipped === 'NO_ACCOUNTS') return t('costSyncShiprocketCostSection.noShiprocketAccount');
+  if (!run.ok) return t('costSyncShiprocketCostSection.failed');
+  if (run.accounts.some((a) => a.outcome !== 'CHECKED'))
+    return t('costSyncShiprocketCostSection.partlyFailed');
   const differing = run.accounts.reduce(
     (n, a) => n + (a.result?.rows.filter((r) => r.status === 'DIFFERS').length ?? 0),
     0,
   );
-  return differing === 0 ? 'every invoice matches the wallet' : `${differing} invoice(s) disagree`;
+  return differing === 0
+    ? t('costSyncShiprocketCostSection.everyInvoiceMatchesTheWallet')
+    : t('costSyncShiprocketCostSection.invoiceSDisagree', { differing });
 }
 
 /** One invoice's verdict, in words. */
 function InvoiceResult({ r }: { readonly r: ShiprocketInvoiceRowView }): ReactElement {
+  const t = useT();
   if (r.status === 'MATCHES') {
-    return <span className="af-good">Matches the wallet</span>;
+    return <span className="af-good">{t('costSyncShiprocketCostSection.matchesTheWallet')}</span>;
   }
   if (r.status === 'NOT_ITEMIZED') {
-    return <span className="af-small">No itemized file to check</span>;
+    return (
+      <span className="af-small">{t('costSyncShiprocketCostSection.noItemizedFileToCheck')}</span>
+    );
   }
   if (r.status === 'UNREADABLE') {
     return (
-      <span className="af-bad">Could not be read{r.problem !== null && ` — ${r.problem}`}</span>
+      <span className="af-bad">
+        {t('costSyncShiprocketCostSection.couldNotBeRead')}
+        {r.problem !== null && ` — ${r.problem}`}
+      </span>
     );
   }
   const parts: string[] = [];
-  if (r.totalsAgree === false) parts.push(`its file adds up to ₹${r.itemizedInr ?? '?'}`);
+  if (r.totalsAgree === false)
+    parts.push(t('costSyncShiprocketCostSection.fileAddsUpTo', { amount: r.itemizedInr ?? '?' }));
   if (r.differenceCount > 0) {
-    parts.push(`${r.differenceCount} order(s) billed differently (net ₹${r.differenceInr})`);
+    parts.push(
+      t('costSyncShiprocketCostSection.ordersBilledDifferently', {
+        count: r.differenceCount,
+        net: r.differenceInr,
+      }),
+    );
   }
-  if (r.unknownServices.length > 0) parts.push(`unknown service: ${r.unknownServices.join(', ')}`);
+  if (r.unknownServices.length > 0)
+    parts.push(
+      t('costSyncShiprocketCostSection.unknownService', { services: r.unknownServices.join(', ') }),
+    );
   return <span className="af-bad">{parts.join(' · ')}</span>;
 }
 
 /** One account's invoices: a line each, then what no invoice has billed. */
 function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }): ReactElement {
+  const t = useT();
+
   const res = a.result;
   const rows =
     res === null ? [] : [...res.rows].sort((x, y) => y.invoiceDate.localeCompare(x.invoiceDate));
@@ -154,8 +198,8 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
       <div className="af-small">
         <span className="af-strong">{a.label}</span> ·{' '}
         {a.outcome === 'CHECKED'
-          ? `${a.invoicesRead} invoice(s) read`
-          : (OUTCOME_WORDS[a.outcome] ?? a.outcome)}
+          ? t('costSyncShiprocketCostSection.invoiceSRead', { invoicesRead: a.invoicesRead })
+          : (OUTCOME_WORDS(t)[a.outcome] ?? a.outcome)}
         {a.detail !== null && <span> — {a.detail}</span>}
       </div>
       {res !== null && (
@@ -163,17 +207,19 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
           <Table>
             <THead>
               <Tr>
-                <Th>Invoice</Th>
-                <Th>Type</Th>
-                <Th>Date</Th>
-                <Th>Amount</Th>
-                <Th>Against the wallet</Th>
-                <Th>Dispute by</Th>
+                <Th>{t('costSyncShiprocketCostSection.invoice')}</Th>
+                <Th>{t('costSyncShiprocketCostSection.type')}</Th>
+                <Th>{t('costSyncShiprocketCostSection.date')}</Th>
+                <Th>{t('costSyncShiprocketCostSection.amount')}</Th>
+                <Th>{t('costSyncShiprocketCostSection.againstTheWallet')}</Th>
+                <Th>{t('costSyncShiprocketCostSection.disputeBy')}</Th>
               </Tr>
             </THead>
             <TBody>
               {rows.length === 0 ? (
-                <TableEmpty colSpan={6}>No invoices in the window.</TableEmpty>
+                <TableEmpty colSpan={6}>
+                  {t('costSyncShiprocketCostSection.noInvoicesInTheWindow')}
+                </TableEmpty>
               ) : (
                 rows.map((r) => (
                   <Tr key={r.invoiceId}>
@@ -189,7 +235,9 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
                       <InvoiceResult r={r} />
                       {r.beforeRecords > 0 && (
                         <span className="af-small cs-block">
-                          {r.beforeRecords} line(s) older than our records, not compared
+                          {t('costSyncShiprocketCostSection.lineSOlderThanOur', {
+                            beforeRecords: r.beforeRecords,
+                          })}
                         </span>
                       )}
                     </Td>
@@ -206,20 +254,23 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
             </TBody>
           </Table>
           <p className="af-small">
-            VAS charged but never invoiced:{' '}
+            {t('costSyncShiprocketCostSection.vasChargedButNeverInvoiced')}{' '}
             {res.vasUninvoiced.count === 0 ? (
               'none'
             ) : (
               <>
-                {res.vasUninvoiced.count}, <Money amount={res.vasUninvoiced.inr} /> — named on
-                /system-issues
+                {res.vasUninvoiced.count}, <Money amount={res.vasUninvoiced.inr} />{' '}
+                {t('costSyncShiprocketCostSection.namedOnSystemIssues')}
               </>
             )}{' '}
-            · Freight not invoiced yet: {res.freightUninvoiced.orders.toLocaleString('en-IN')}{' '}
-            order(s), <Money amount={res.freightUninvoiced.inr} /> — normal until a parcel&rsquo;s
-            charges finalise
+            {richMessage(t('costSyncShiprocketCostSection.freightNotInvoicedYetOrder'), {
+              value: res.freightUninvoiced.orders.toLocaleString('en-IN'),
+              money: <Money amount={res.freightUninvoiced.inr} />,
+            })}
             {res.freightUninvoiced.staleCount > 0 &&
-              `; ${res.freightUninvoiced.staleCount} charged over 60 days ago`}
+              t('costSyncShiprocketCostSection.chargedOver60DaysAgo', {
+                staleCount: res.freightUninvoiced.staleCount,
+              })}
           </p>
         </>
       )}
@@ -227,52 +278,83 @@ function InvoiceAccountBlock({ a }: { readonly a: ShiprocketInvoiceAccountView }
   );
 }
 
-const OUTCOME_WORDS: Readonly<Record<string, string>> = {
+const OUTCOME_WORDS = (t: Translate<MessageKey>): Readonly<Record<string, string>> => ({
   CHECKED: 'checked',
   READ: 'read',
-  REFUSED: 'refused — their balances did not add up, nothing stored',
-  SKIPPED: 'skipped — a sign-in challenge is open',
-  CHALLENGE: 'stopped at a sign-in challenge',
-  NO_LOGIN: 'no website login stored',
+  REFUSED: t('costSyncShiprocketCostSection.refusedTheirBalancesDidNot'),
+  SKIPPED: t('costSyncShiprocketCostSection.skippedASignInChallenge'),
+  CHALLENGE: t('costSyncShiprocketCostSection.stoppedAtASignIn'),
+  NO_LOGIN: t('costSyncShiprocketCostSection.noWebsiteLoginStored'),
   FAILED: 'failed',
-};
+});
 
 /** One account's night, in the words somebody checking it would use. */
 function WalletAccountLine({ a }: { readonly a: ShiprocketWalletAccountView }): ReactElement {
+  const t = useT();
+
   const i = a.import;
   const written = i === null ? 0 : i.forwardWritten + i.rtoWritten;
   return (
     <li className="af-stack af-stack--tight af-small">
       <div>
-        <span className="af-strong">{a.label}</span> · {OUTCOME_WORDS[a.outcome] ?? a.outcome}
+        <span className="af-strong">{a.label}</span> · {OUTCOME_WORDS(t)[a.outcome] ?? a.outcome}
         {a.detail !== null && <span> — {a.detail}</span>}
       </div>
       {a.outcome === 'READ' && i !== null && (
         <div>
-          {a.passbookRows.toLocaleString('en-IN')} movements read, balances add up ·{' '}
-          {i.txnsNew.toLocaleString('en-IN')} new, {i.txnsAlreadyHeld.toLocaleString('en-IN')}{' '}
-          already held · {i.dryRun ? 'would write' : 'wrote'} {written} parcel cost(s)
-          {i.revised > 0 && ` (${i.revised} revised)`} · {i.adjustments} account adjustment(s), net{' '}
+          {t('costSyncShiprocketCostSection.movementsReadBalancesAddUp', {
+            value: a.passbookRows.toLocaleString('en-IN'),
+            value2: i.txnsNew.toLocaleString('en-IN'),
+            value3: i.txnsAlreadyHeld.toLocaleString('en-IN'),
+            value4: i.dryRun
+              ? t('costSyncShiprocketCostSection.wouldWrite')
+              : t('costSyncShiprocketCostSection.wrote'),
+            written,
+          })}
+          {i.revised > 0 && t('costSyncShiprocketCostSection.revised', { revised: i.revised })}{' '}
+          {t('costSyncShiprocketCostSection.accountAdjustmentSNet', {
+            adjustments: i.adjustments,
+          })}{' '}
           <Money amount={i.adjustmentsNetInr} />
-          {i.txnsMissing > 0 && ` · ${i.txnsMissing} vanished from their passbook`}
-          {i.txnsMutated > 0 && ` · ${i.txnsMutated} changed`}
-          {i.incompleteHistory > 0 && ` · ${i.incompleteHistory} parcel(s) net below zero`}
+          {i.txnsMissing > 0 &&
+            t('costSyncShiprocketCostSection.vanishedFromTheirPassbook', {
+              txnsMissing: i.txnsMissing,
+            })}
+          {i.txnsMutated > 0 &&
+            t('costSyncShiprocketCostSection.changed', { txnsMutated: i.txnsMutated })}
+          {i.incompleteHistory > 0 &&
+            t('costSyncShiprocketCostSection.parcelSNetBelowZero', {
+              incompleteHistory: i.incompleteHistory,
+            })}
         </div>
       )}
       {a.recharges !== null && (
         <div>
-          Recharges: {a.recharges.matched} of {a.recharges.seen} matched to our bank book
-          {a.recharges.unrecorded > 0 && `, ${a.recharges.unrecorded} not in our books`}
+          {t('costSyncShiprocketCostSection.rechargesOfMatchedToOur', {
+            matched: a.recharges.matched,
+            seen: a.recharges.seen,
+          })}
+          {a.recharges.unrecorded > 0 &&
+            t('costSyncShiprocketCostSection.notInOurBooks', {
+              unrecorded: a.recharges.unrecorded,
+            })}
           {a.recharges.amountMismatched > 0 &&
-            `, ${a.recharges.amountMismatched} with a different amount`}
+            t('costSyncShiprocketCostSection.withADifferentAmount', {
+              amountMismatched: a.recharges.amountMismatched,
+            })}
         </div>
       )}
       {a.ledger !== null && (
         <div>
-          Ledger: {a.ledger.checked - a.ledger.uncovered.length} of {a.ledger.checked} credits found
-          in the passbook
-          {a.ledger.uncovered.length > 0 && ' — the rest are named on /system-issues'} ·{' '}
-          {a.ledger.documents} invoice(s), already counted through the passbook
+          {t('costSyncShiprocketCostSection.ledgerOfCreditsFoundIn', {
+            value: a.ledger.checked - a.ledger.uncovered.length,
+            checked: a.ledger.checked,
+            value2:
+              a.ledger.uncovered.length > 0
+                ? t('costSyncShiprocketCostSection.theRestAreNamedOn')
+                : '',
+            documents: a.ledger.documents,
+          })}
         </div>
       )}
     </li>
@@ -289,6 +371,9 @@ function WalletAccountLine({ a }: { readonly a: ShiprocketWalletAccountView }): 
  * with what the wallet charged. Two writers would take turns.
  */
 export function ShiprocketCostSection(): ReactElement {
+  const tr = useT();
+  const t = useT();
+
   const panel = useShiprocketCostPanel();
   const run = useRunShiprocketCost();
   const wallet = useRunShiprocketWalletSync();
@@ -337,20 +422,26 @@ export function ShiprocketCostSection(): ReactElement {
       disabled={busy !== null}
       onClick={() => setConfirming(which)}
     >
-      {BROWSER_RUNS[which].label}
+      {BROWSER_RUNS(t)[which].label}
     </Button>
   );
 
   return (
     <section className="af-section">
-      <SectionHeading title="Shiprocket" />
+      <SectionHeading title={t('costSyncShiprocketCostSection.shiprocket')} />
       {panel.isLoading ? (
         <AfCard flush>
-          <SkeletonRows rows={4} cols={4} label="Loading Shiprocket costs…" />
+          <SkeletonRows
+            rows={4}
+            cols={4}
+            label={t('costSyncShiprocketCostSection.loadingShiprocketCosts')}
+          />
         </AfCard>
       ) : panel.isError || d === undefined ? (
         <ErrorState
-          message={panel.error?.message ?? 'Could not load Shiprocket costs.'}
+          message={
+            panel.error?.message ?? t('costSyncShiprocketCostSection.couldNotLoadShiprocketCosts')
+          }
           retry={() => void panel.refetch()}
         />
       ) : (
@@ -364,13 +455,19 @@ export function ShiprocketCostSection(): ReactElement {
                   ) : (
                     <PauseCircle size={15} aria-hidden className="af-bad" />
                   )}
-                  Wallet sync — {lastWallet === null ? 'has not run yet' : walletLabel(lastWallet)}
+                  {t('costSyncShiprocketCostSection.walletSync', {
+                    value:
+                      lastWallet === null
+                        ? t('costSyncShiprocketCostSection.hasNotRunYet')
+                        : walletLabel(t, lastWallet),
+                  })}
                 </p>
                 <p className="af-small">
-                  Every night at 03:50 IST · their Passbook, Recharge History and Ledger, read from
-                  app.shiprocket.in through Bangalore. Each movement is stored once and each
-                  parcel&rsquo;s cost netted from them, the way Delhivery&rsquo;s are.
-                  {!d.writesEnabled && ' Not recording: it reads and reports only.'}
+                  {t('costSyncShiprocketCostSection.everyNightAt0350', {
+                    value: !d.writesEnabled
+                      ? t('costSyncShiprocketCostSection.notRecordingItReadsAnd')
+                      : '',
+                  })}
                 </p>
               </div>
               {canRun && runButton('wallet')}
@@ -381,9 +478,14 @@ export function ShiprocketCostSection(): ReactElement {
                   <WalletAccountLine key={a.courierAccountId} a={a} />
                 ))}
                 <li className="af-small">
-                  {lastWallet.trigger === 'MANUAL' ? 'Run by hand' : 'Nightly run'} ·{' '}
-                  {fmtWhen(lastWallet.at)}
-                  {lastWallet.windowDays !== null && ` · last ${lastWallet.windowDays} days`}
+                  {lastWallet.trigger === 'MANUAL'
+                    ? t('costSyncShiprocketCostSection.runByHand')
+                    : t('costSyncShiprocketCostSection.nightlyRun')}{' '}
+                  · {fmtWhen(lastWallet.at)}
+                  {lastWallet.windowDays !== null &&
+                    t('costSyncShiprocketCostSection.lastDays', {
+                      windowDays: lastWallet.windowDays,
+                    })}
                 </li>
               </ul>
             )}
@@ -395,20 +497,19 @@ export function ShiprocketCostSection(): ReactElement {
                 <p className="af-title cs-with-icon">
                   {lastInvoices !== null &&
                   lastInvoices.ok &&
-                  invoiceRunLabel(lastInvoices) === 'every invoice matches the wallet' ? (
+                  invoiceRunLabel(t, lastInvoices) === 'every invoice matches the wallet' ? (
                     <CheckCircle2 size={15} aria-hidden className="af-good" />
                   ) : (
                     <PauseCircle size={15} aria-hidden className="af-bad" />
                   )}
-                  Invoice check —{' '}
-                  {lastInvoices === null ? 'has not run yet' : invoiceRunLabel(lastInvoices)}
+                  {t('costSyncShiprocketCostSection.invoiceCheck', {
+                    value:
+                      lastInvoices === null
+                        ? t('costSyncShiprocketCostSection.hasNotRunYet')
+                        : invoiceRunLabel(t, lastInvoices),
+                  })}
                 </p>
-                <p className="af-small">
-                  Every night at 04:30 IST · each Freight and VAS invoice&rsquo;s itemized file,
-                  compared line by line with what their wallet charged. Shiprocket settles a
-                  discrepancy only if it is raised within 15 days of the invoice, so a disagreement
-                  inside that window is raised as HIGH.
-                </p>
+                <p className="af-small">{t('costSyncShiprocketCostSection.everyNightAt0430')}</p>
               </div>
               {canRun && runButton('invoices')}
             </div>
@@ -418,10 +519,14 @@ export function ShiprocketCostSection(): ReactElement {
                   <InvoiceAccountBlock key={a.courierAccountId} a={a} />
                 ))}
                 <p className="af-small">
-                  {lastInvoices.trigger === 'MANUAL' ? 'Run by hand' : 'Nightly run'} ·{' '}
-                  {fmtWhen(lastInvoices.at)}
+                  {lastInvoices.trigger === 'MANUAL'
+                    ? t('costSyncShiprocketCostSection.runByHand')
+                    : t('costSyncShiprocketCostSection.nightlyRun')}{' '}
+                  · {fmtWhen(lastInvoices.at)}
                   {lastInvoices.windowDays !== null &&
-                    ` · invoices from the last ${lastInvoices.windowDays} days`}
+                    t('costSyncShiprocketCostSection.invoicesFromTheLastDays', {
+                      windowDays: lastInvoices.windowDays,
+                    })}
                 </p>
               </>
             )}
@@ -429,44 +534,54 @@ export function ShiprocketCostSection(): ReactElement {
 
           <div className="af-kpis">
             <KpiCard
-              label="Wallet balance"
+              label={t('costSyncShiprocketCostSection.walletBalance')}
               figure={
                 d.balances[0] === undefined ? '—' : <Money amount={d.balances[0].balanceInr} />
               }
               hint={
                 d.balances[0] === undefined
-                  ? 'Not read yet.'
-                  : `As read ${fmtWhen(d.balances[0].capturedAt)}.`
+                  ? t('costSyncShiprocketCostSection.notReadYet')
+                  : t('costSyncShiprocketCostSection.asRead', {
+                      value: fmtWhen(d.balances[0].capturedAt),
+                    })
               }
             />
             <KpiCard
-              label="Parcels with a recorded cost"
+              label={t('costSyncShiprocketCostSection.parcelsWithARecordedCost')}
               figure={`${recorded} / ${d.parcels.length}`}
               tone={
                 STAT_TONE[d.parcels.length === 0 || recorded === d.parcels.length ? 'good' : 'warn']
               }
-              hint="Netted from their passbook. A parcel with no movement yet is uncovered, not free."
+              hint={t('costSyncShiprocketCostSection.nettedFromTheirPassbookA')}
             />
             {lastBills === null ? (
               <KpiCard
-                label="Final bills that disagree"
+                label={t('costSyncShiprocketCostSection.finalBillsThatDisagree')}
                 figure="—"
                 tone={STAT_TONE.neutral}
-                hint="Their final billed amount against what their wallet charged for the same parcel. The wallet figure is what the P&L uses."
+                hint={t('costSyncShiprocketCostSection.theirFinalBilledAmountAgainst')}
               />
             ) : (
               <KpiCard
-                label="Final bills that disagree"
+                label={t('costSyncShiprocketCostSection.finalBillsThatDisagree')}
                 value={disagree}
                 tone={STAT_TONE[disagree === 0 ? 'good' : 'bad']}
-                hint="Their final billed amount against what their wallet charged for the same parcel. The wallet figure is what the P&L uses."
+                hint={t('costSyncShiprocketCostSection.theirFinalBilledAmountAgainst')}
               />
             )}
             <KpiCard
-              label="Last bill check"
-              figure={lastBills === null ? 'Never' : billCheckLabel(lastBills)}
+              label={t('costSyncShiprocketCostSection.lastBillCheck')}
+              figure={
+                lastBills === null
+                  ? t('costSyncShiprocketCostSection.never')
+                  : billCheckLabel(t, lastBills)
+              }
               tone={STAT_TONE[lastBills === null || !lastBills.ok ? 'bad' : 'good']}
-              hint={lastBills === null ? 'It has not run yet.' : fmtWhen(lastBills.at)}
+              hint={
+                lastBills === null
+                  ? t('costSyncShiprocketCostSection.itHasNotRunYet')
+                  : fmtWhen(lastBills.at)
+              }
             />
           </div>
 
@@ -479,16 +594,18 @@ export function ShiprocketCostSection(): ReactElement {
                   ) : (
                     <PauseCircle size={15} aria-hidden className="af-bad" />
                   )}
-                  Final-bill check —{' '}
-                  {d.stubMode
-                    ? 'not running, Shiprocket is in stub mode'
-                    : !d.enabled
-                      ? 'switched off'
-                      : 'on'}
+                  {t('costSyncShiprocketCostSection.finalBillCheck', {
+                    value: d.stubMode
+                      ? t('costSyncShiprocketCostSection.notRunningShiprocketIsIn')
+                      : !d.enabled
+                        ? t('costSyncShiprocketCostSection.switchedOff')
+                        : t('costSyncShiprocketCostSection.on'),
+                  })}
                 </p>
                 <p className="af-small">
-                  {d.schedule} · reads each order&rsquo;s charges from Shiprocket&rsquo;s API and
-                  checks their final bill against the wallet. It records nothing as a cost.
+                  {t('costSyncShiprocketCostSection.readsEachOrderSCharges', {
+                    schedule: d.schedule,
+                  })}
                 </p>
               </div>
               {canRun && (
@@ -496,13 +613,14 @@ export function ShiprocketCostSection(): ReactElement {
                   variant="secondary"
                   size="sm"
                   icon={<RefreshCw size={14} />}
-                  labels={{ idle: 'Check bills now', busy: 'Queuing…', done: 'Queued' }}
+                  labels={{
+                    idle: t('costSyncShiprocketCostSection.checkBillsNow'),
+                    busy: t('costSyncShiprocketCostSection.queuing'),
+                    done: t('costSyncShiprocketCostSection.queued'),
+                  }}
                   disabled={busy !== null}
                   onAction={() =>
-                    queue(
-                      'bills',
-                      'Queued. It reads every Shiprocket parcel — refresh in a minute.',
-                    )
+                    queue('bills', t('costSyncShiprocketCostSection.queuedItReadsEveryShiprocket'))
                   }
                 />
               )}
@@ -512,12 +630,10 @@ export function ShiprocketCostSection(): ReactElement {
           <AfCard>
             <div className="af-card__head">
               <div className="af-grow af-stack af-stack--tight">
-                <h3 className="af-title">Shiprocket website access</h3>
-                <p className="af-small">
-                  Signs in and saves what the three wallet pages show, without storing anything. A
-                  sign-in challenge stops every website run until someone resolves the issue — it
-                  never retries on its own.
-                </p>
+                <h3 className="af-title">
+                  {t('costSyncShiprocketCostSection.shiprocketWebsiteAccess')}
+                </h3>
+                <p className="af-small">{t('costSyncShiprocketCostSection.signsInAndSavesWhat')}</p>
               </div>
               {canRun && runButton('probe')}
             </div>
@@ -528,10 +644,10 @@ export function ShiprocketCostSection(): ReactElement {
                   : 'af-small'
               }
             >
-              {egressLine(d.egress)}
+              {egressLine(tr, t, d.egress)}
             </p>
             {d.portalProbe === null ? (
-              <p className="af-small">Never checked.</p>
+              <p className="af-small">{t('costSyncShiprocketCostSection.neverChecked')}</p>
             ) : (
               <ul className="af-list af-small">
                 {d.portalProbe.accounts.map((a) => (
@@ -544,32 +660,39 @@ export function ShiprocketCostSection(): ReactElement {
                     {a.detail !== null && <span> — {a.detail}</span>}
                   </li>
                 ))}
-                <li>Checked {fmtWhen(d.portalProbe.at)}</li>
+                <li>
+                  {t('costSyncShiprocketCostSection.checked', { value: fmtWhen(d.portalProbe.at) })}
+                </li>
               </ul>
             )}
           </AfCard>
 
           <div className="af-section">
-            <SectionHeading title="Our Shiprocket parcels" as="h3" />
+            <SectionHeading
+              title={t('costSyncShiprocketCostSection.ourShiprocketParcels')}
+              as="h3"
+            />
             <Table>
               <THead>
                 <Tr>
-                  <Th>Order</Th>
+                  <Th>{t('costSyncShiprocketCostSection.order')}</Th>
                   <Th>AWB</Th>
-                  <Th>Their status</Th>
-                  <Th>Charged so far (estimate)</Th>
-                  <Th>Final bill</Th>
-                  <Th>Recorded cost (wallet)</Th>
-                  <Th>Last read</Th>
+                  <Th>{t('costSyncShiprocketCostSection.theirStatus')}</Th>
+                  <Th>{t('costSyncShiprocketCostSection.chargedSoFarEstimate')}</Th>
+                  <Th>{t('costSyncShiprocketCostSection.finalBill')}</Th>
+                  <Th>{t('costSyncShiprocketCostSection.recordedCostWallet')}</Th>
+                  <Th>{t('costSyncShiprocketCostSection.lastRead')}</Th>
                 </Tr>
               </THead>
               <TBody>
                 {d.parcels.length === 0 ? (
                   <TableEmpty colSpan={7}>
                     <div className="af-stack af-stack--tight cs-empty">
-                      <span className="af-strong">No Shiprocket parcels read yet</span>
+                      <span className="af-strong">
+                        {t('costSyncShiprocketCostSection.noShiprocketParcelsReadYet')}
+                      </span>
                       <span className="af-small">
-                        Parcels appear here after the first run that finds them.
+                        {t('costSyncShiprocketCostSection.parcelsAppearHereAfterThe')}
                       </span>
                     </div>
                   </TableEmpty>
@@ -596,7 +719,9 @@ export function ShiprocketCostSection(): ReactElement {
                         </Td>
                         <Td>
                           {p.billedInr === null ? (
-                            <span className="af-small">not billed yet</span>
+                            <span className="af-small">
+                              {t('costSyncShiprocketCostSection.notBilledYet')}
+                            </span>
                           ) : (
                             <Money amount={p.billedInr} />
                           )}
@@ -608,7 +733,9 @@ export function ShiprocketCostSection(): ReactElement {
                             <span className="af-stack af-stack--tight">
                               <Money amount={cost.toFixed(2)} />
                               {differs && (
-                                <span className="af-small af-bad">differs from their bill</span>
+                                <span className="af-small af-bad">
+                                  {t('costSyncShiprocketCostSection.differsFromTheirBill')}
+                                </span>
                               )}
                             </span>
                           )}
@@ -617,7 +744,11 @@ export function ShiprocketCostSection(): ReactElement {
                           <span className="af-stack af-stack--tight">
                             <span className="af-small af-nowrap">{fmtWhen(p.readAt)}</span>
                             {p.readings > 1 && (
-                              <span className="af-small">{p.readings} readings — it moved</span>
+                              <span className="af-small">
+                                {t('costSyncShiprocketCostSection.readingsItMoved', {
+                                  readings: p.readings,
+                                })}
+                              </span>
                             )}
                           </span>
                         </Td>
@@ -636,16 +767,24 @@ export function ShiprocketCostSection(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setConfirming(null);
         }}
-        title={confirming === null ? 'Run now?' : BROWSER_RUNS[confirming].title}
-        entity={confirming === null ? 'Shiprocket' : BROWSER_RUNS[confirming].entity}
-        consequence="The portal worker signs in to Shiprocket's own website with our stored login and runs in the background; it is queued, not finished, when this closes."
-        confirmLabel="Run it now"
+        title={
+          confirming === null
+            ? t('costSyncShiprocketCostSection.runNow')
+            : BROWSER_RUNS(t)[confirming].title
+        }
+        entity={
+          confirming === null
+            ? t('costSyncShiprocketCostSection.shiprocket')
+            : BROWSER_RUNS(t)[confirming].entity
+        }
+        consequence={t('costSyncShiprocketCostSection.thePortalWorkerSignsIn')}
+        confirmLabel={t('costSyncShiprocketCostSection.runItNow')}
         onConfirm={() => {
           if (confirming === null) return;
           const which = confirming;
           // Queued in the background: the dialog closes at once and the
           // button beside the card shows it busy, exactly as before.
-          void queue(which, BROWSER_RUNS[which].done).catch(() => undefined);
+          void queue(which, BROWSER_RUNS(t)[which].done).catch(() => undefined);
         }}
       />
     </section>

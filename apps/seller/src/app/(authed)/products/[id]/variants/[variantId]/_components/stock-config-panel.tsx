@@ -14,8 +14,9 @@ import {
 } from '@/app/(authed)/inventory/_components/stock-ui';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { useSetVariantThreshold, useVariantInventoryMode, useVariantStock } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * The two per-SKU stock settings, on the SKU.
@@ -47,6 +48,7 @@ export function StockConfigPanel({
   readonly productId: string;
   readonly variantId: string;
 }): ReactElement | null {
+  const t = useT();
   const toast = useToast();
   const mayManage = can(useSellerIdentity(), 'catalog.manage');
 
@@ -81,11 +83,11 @@ export function StockConfigPanel({
       setTyped(undefined);
       toast.success(
         value === null
-          ? 'Cleared — this SKU uses your default low-stock level.'
-          : `Low-stock alerts at ${value} units or fewer.`,
+          ? t('variantDetail.clearedThisSkuUses')
+          : t('variantDetail.lowStockAlertsAt', { value }),
       );
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -96,7 +98,7 @@ export function StockConfigPanel({
 
   // One section of the variant page, drawn as a card like its siblings.
   return (
-    <AreaSection title="Stock handling" note="When we warn you it is running out.">
+    <AreaSection title={t('variantDetail.stockHandling')} note={t('variantDetail.whenWeWarnYou')}>
       <Panel>
         <div className="inv-stack">
           {error !== null && <InlineError message={error} />}
@@ -104,13 +106,13 @@ export function StockConfigPanel({
           {mode.isLoading ? (
             <SkeletonRows rows={2} />
           ) : mode.isError ? (
-            <InlineError message={serverVerdict(mode.error)} retry={() => void mode.refetch()} />
+            <InlineError message={verdict(mode.error, t)} retry={() => void mode.refetch()} />
           ) : (
             <div className="inv-lookup">
               <TextField
-                label="Low-stock alert at"
-                hint="Units. Leave blank to use your default; 0 warns only when it is empty."
-                error={thresholdValid ? undefined : 'Whole number between 0 and 1,000,000.'}
+                label={t('variantDetail.lowStockAlertAt')}
+                hint={t('variantDetail.unitsLeaveBlankTo')}
+                error={thresholdValid ? undefined : t('variantDetail.wholeNumberBetween0')}
                 inputMode="numeric"
                 value={threshold}
                 onChange={(e) => setTyped(e.target.value)}
@@ -118,7 +120,7 @@ export function StockConfigPanel({
               <AsyncButton
                 variant="secondary"
                 size="lg"
-                labels={{ idle: 'Save', busy: 'Saving…' }}
+                labels={{ idle: t('variantDetail.save'), busy: t('variantDetail.saving') }}
                 state={mutationPhase(setThreshold)}
                 disabled={!thresholdValid || setThreshold.isPending}
                 onClick={() => void onSaveThreshold()}
@@ -132,10 +134,10 @@ export function StockConfigPanel({
             <Switch
               checked
               disabled
-              onText="On"
-              offText="Off"
-              label="Strict unit tracking"
-              description="This SKU is on strict unit tracking: the warehouse cannot receive, pick or pack a unit without scanning its serial, so every unit needs one on the item itself before the next consignment arrives. We set this — talk to us if it looks wrong for this SKU."
+              onText={t('variantDetail.on')}
+              offText={t('variantDetail.off')}
+              label={t('variantDetail.strictUnitTracking')}
+              description={t('variantDetail.thisSkuIsOn')}
             />
           )}
         </div>

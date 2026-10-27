@@ -12,10 +12,12 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { useRouter } from 'next/navigation';
 import { PanelPad, Stack, Toolbar } from '../../../inventory/_components/stock-kit';
+import { useT } from '@/i18n/client';
 
 const PAGE_SIZE = 25;
 
 export function ManifestsIndex(): ReactElement {
+  const t = useT();
   const router = useRouter();
   const [status, setStatus] = useState<ManifestStatus | ''>('');
   const [page, setPage] = useState(1);
@@ -30,14 +32,14 @@ export function ManifestsIndex(): ReactElement {
     <Stack>
       <Toolbar>
         <Select
-          aria-label="Status"
+          aria-label={t('warehouseManifestsManifestsIndex.status')}
           value={status}
           onChange={(e) => {
             setStatus(e.target.value as ManifestStatus | '');
             setPage(1);
           }}
         >
-          <option value="">All statuses</option>
+          <option value="">{t('warehouseManifestsManifestsIndex.allStatuses')}</option>
           <option value="DRAFT">DRAFT</option>
           <option value="CLOSED">CLOSED</option>
           <option value="AWB_PENDING">AWB_PENDING</option>
@@ -48,28 +50,34 @@ export function ManifestsIndex(): ReactElement {
       </Toolbar>
 
       {list.isLoading ? (
-        <SkeletonRows rows={6} cols={6} label="Loading manifests…" />
+        <SkeletonRows
+          rows={6}
+          cols={6}
+          label={t('warehouseManifestsManifestsIndex.loadingManifests')}
+        />
       ) : list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load manifests.'}
+          message={
+            list.error?.message ?? t('warehouseManifestsManifestsIndex.failedToLoadManifests')
+          }
           retry={() => void list.refetch()}
         />
       ) : !list.data || list.data.items.length === 0 ? (
         <EmptyState
-          title="No manifests yet"
-          description="A DRAFT manifest is auto-created when the first shipment is packed for a (courier, warehouse) pair."
+          title={t('warehouseManifestsManifestsIndex.noManifestsYet')}
+          description={t('warehouseManifestsManifestsIndex.aDraftManifestIsAuto')}
         />
       ) : (
         <>
           <Table>
             <THead>
               <Tr>
-                <Th>Manifest</Th>
-                <Th>Status</Th>
-                <Th>Courier</Th>
-                <Th align="right">Shipments</Th>
-                <Th>Created</Th>
-                <Th>Closed</Th>
+                <Th>{t('warehouseManifestsManifestsIndex.manifest')}</Th>
+                <Th>{t('warehouseManifestsManifestsIndex.status')}</Th>
+                <Th>{t('warehouseManifestsManifestsIndex.courier')}</Th>
+                <Th align="right">{t('warehouseManifestsManifestsIndex.shipments')}</Th>
+                <Th>{t('warehouseManifestsManifestsIndex.created')}</Th>
+                <Th>{t('warehouseManifestsManifestsIndex.closed')}</Th>
               </Tr>
             </THead>
             <TBody>

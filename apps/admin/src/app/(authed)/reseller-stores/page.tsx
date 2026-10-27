@@ -20,15 +20,19 @@ import { useSellersList } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAdminCreateResellerStore, useAdminResellerStores } from '@/lib/reseller-store-hooks';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const STATUSES = [
-  ['', 'Every status'],
-  ['PENDING_SELLER_APPROVAL', 'Awaiting the client'],
-  ['ACTIVE', 'Active'],
-  ['PAUSED', 'Paused'],
-  ['CLOSED', 'Closed'],
-  ['REJECTED', 'Rejected'],
-] as const;
+const STATUSES = (t: Translate<MessageKey>) =>
+  [
+    ['', t('resellerStoresPage.everyStatus')],
+    ['PENDING_SELLER_APPROVAL', t('resellerStoresPage.awaitingTheClient')],
+    ['ACTIVE', t('resellerStoresPage.active')],
+    ['PAUSED', t('resellerStoresPage.paused')],
+    ['CLOSED', t('resellerStoresPage.closed')],
+    ['REJECTED', t('resellerStoresPage.rejected')],
+  ] as const;
 
 /**
  * Reseller stores across every seller (RS-1). Opening one for a seller
@@ -38,16 +42,22 @@ const STATUSES = [
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function ResellerStoresPage(): ReactElement {
+  const t = useT();
   // The filters live in the URL (`?status=&sellerId=`) so a link — a
   // seller's page, a store's "their other stores" — can open it pre-filled.
   return (
-    <Suspense fallback={<SkeletonRows rows={5} cols={7} label="Loading member stores" />}>
+    <Suspense
+      fallback={
+        <SkeletonRows rows={5} cols={7} label={t('resellerStoresPage.loadingMemberStores')} />
+      }
+    >
       <ResellerStoresIndex />
     </Suspense>
   );
 }
 
 function ResellerStoresIndex(): ReactElement {
+  const t = useT();
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -72,8 +82,8 @@ function ResellerStoresIndex(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        title="Member stores"
-        subtitle="Businesses reselling one client’s stock under their own name."
+        title={t('resellerStoresPage.memberStores')}
+        subtitle={t('resellerStoresPage.businessesResellingOneClientS')}
         action={
           mayCreate ? (
             <Button
@@ -82,32 +92,34 @@ function ResellerStoresIndex(): ReactElement {
               icon={<Store size={15} />}
               onClick={() => setCreating(true)}
             >
-              Open a store for a client
+              {t('resellerStoresPage.openAStoreForA')}
             </Button>
           ) : undefined
         }
       />
       <div className="ac-toolbar">
         <Select
-          label="Status"
+          label={t('resellerStoresPage.status')}
           id="rs-status"
           value={status}
           onChange={(e) => setFilter('status', e.target.value)}
         >
-          {STATUSES.map(([v, label]) => (
+          {STATUSES(t).map(([v, label]) => (
             <option key={v} value={v}>
               {label}
             </option>
           ))}
         </Select>
         <Select
-          label="Client"
+          label={t('resellerStoresPage.client')}
           id="rs-seller"
           value={sellerId}
           onChange={(e) => setFilter('sellerId', e.target.value)}
         >
-          <option value="">Every client</option>
-          {!sellerKnown ? <option value={sellerId}>The client in the link</option> : null}
+          <option value="">{t('resellerStoresPage.everyClient')}</option>
+          {!sellerKnown ? (
+            <option value={sellerId}>{t('resellerStoresPage.theClientInTheLink')}</option>
+          ) : null}
           {sellerOptions.map((o) => (
             <option key={o.id} value={o.id}>
               {o.companyName}
@@ -117,30 +129,30 @@ function ResellerStoresIndex(): ReactElement {
       </div>
 
       {stores.isPending ? (
-        <SkeletonRows rows={5} cols={7} label="Loading member stores" />
+        <SkeletonRows rows={5} cols={7} label={t('resellerStoresPage.loadingMemberStores')} />
       ) : stores.isError ? (
         <ErrorState message={serverVerdict(stores.error)} retry={() => void stores.refetch()} />
       ) : stores.data.length === 0 ? (
         <EmptyState
-          title="No member stores"
+          title={t('resellerStoresPage.noMemberStores')}
           description={
             status === '' && sellerId === ''
-              ? 'Clients open their own from their portal; you can open one for a client here.'
-              : 'None match these filters. Choose others.'
+              ? t('resellerStoresPage.clientsOpenTheirOwnFrom')
+              : t('resellerStoresPage.noneMatchTheseFiltersChoose')
           }
         />
       ) : (
         <AcCard flush>
-          <Table caption="Member stores">
+          <Table caption={t('resellerStoresPage.memberStores')}>
             <THead>
               <Tr>
-                <Th>Store</Th>
-                <Th>Client</Th>
-                <Th>Status</Th>
-                <Th>Opened by</Th>
-                <Th>Wallet</Th>
-                <Th>Team</Th>
-                <Th>Created</Th>
+                <Th>{t('resellerStoresPage.store')}</Th>
+                <Th>{t('resellerStoresPage.client')}</Th>
+                <Th>{t('resellerStoresPage.status')}</Th>
+                <Th>{t('resellerStoresPage.openedBy')}</Th>
+                <Th>{t('resellerStoresPage.wallet')}</Th>
+                <Th>{t('resellerStoresPage.team')}</Th>
+                <Th>{t('resellerStoresPage.created')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -155,7 +167,7 @@ function ResellerStoresIndex(): ReactElement {
                     <Link
                       href={`/reseller-stores?sellerId=${s.sellerId}`}
                       className="ac-link"
-                      title="Only this client’s stores"
+                      title={t('resellerStoresPage.onlyThisClientSStores')}
                     >
                       {s.sellerCompanyName}
                     </Link>
@@ -167,8 +179,16 @@ function ResellerStoresIndex(): ReactElement {
                       size="sm"
                     />
                   </Td>
-                  <Td>{s.origin === 'ADMIN' ? 'Skydrop' : 'Client'}</Td>
-                  <Td>{s.walletManagedBy === 'SKYDROP' ? 'Skydrop' : 'Client'}</Td>
+                  <Td>
+                    {s.origin === 'ADMIN'
+                      ? t('resellerStoresPage.skydrop')
+                      : t('resellerStoresPage.client')}
+                  </Td>
+                  <Td>
+                    {s.walletManagedBy === 'SKYDROP'
+                      ? t('resellerStoresPage.skydrop')
+                      : t('resellerStoresPage.client')}
+                  </Td>
                   <Td>
                     <span className="sk-figure">{s.memberCount}</span>
                   </Td>
@@ -195,6 +215,7 @@ function CreateModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const create = useAdminCreateResellerStore();
   const [search, setSearch] = useState('');
@@ -220,7 +241,12 @@ function CreateModal({
         contactPhone: contactPhone.trim(),
         ...(opt(note) === undefined ? {} : { note: opt(note) }),
       });
-      toast.success(`“${created.name}” is waiting for ${created.sellerCompanyName} to approve it.`);
+      toast.success(
+        t('resellerStoresPage.isWaitingForToApprove', {
+          name: created.name,
+          sellerCompanyName: created.sellerCompanyName,
+        }),
+      );
       onOpenChange(false);
     } catch (err) {
       // Verbatim (FE-2): STORE_NAME_TAKEN, SELLER_NOT_ACTIVE…
@@ -232,27 +258,31 @@ function CreateModal({
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Open a member store for a client"
-      description="It waits for the client to approve or reject it, and they are told now. Nothing about it is live until they do."
+      title={t('resellerStoresPage.openAMemberStoreFor')}
+      description={t('resellerStoresPage.itWaitsForTheClient')}
       icon={<Store size={18} />}
       size="lg"
       locked={create.isPending}
     >
       <form onSubmit={submit} className="ac-form">
         <TextField
-          label="Find the client"
+          label={t('resellerStoresPage.findTheClient')}
           id="cr-search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         <Select
-          label="Client"
+          label={t('resellerStoresPage.client')}
           id="cr-seller"
           required
           value={sellerId}
           onChange={(e) => setSellerId(e.target.value)}
         >
-          <option value="">{sellers.isPending ? 'Loading…' : 'Choose an approved client'}</option>
+          <option value="">
+            {sellers.isPending
+              ? t('resellerStoresPage.loading')
+              : t('resellerStoresPage.chooseAnApprovedClient')}
+          </option>
           {(sellers.data?.items ?? []).map((s) => (
             <option key={s.id} value={s.id}>
               {s.companyName}
@@ -261,9 +291,9 @@ function CreateModal({
         </Select>
         <div className="ac-form-grid" data-cols="2">
           <TextField
-            label="Store name"
+            label={t('resellerStoresPage.storeName')}
             id="cr-name"
-            hint="Unique among this client’s stores."
+            hint={t('resellerStoresPage.uniqueAmongThisClientS')}
             required
             maxLength={80}
             showCount
@@ -271,7 +301,7 @@ function CreateModal({
             onChange={(e) => setName(e.target.value)}
           />
           <TextField
-            label="Name customers see"
+            label={t('resellerStoresPage.nameCustomersSee')}
             id="cr-display"
             maxLength={80}
             showCount
@@ -279,7 +309,7 @@ function CreateModal({
             onChange={(e) => setDisplayName(e.target.value)}
           />
           <TextField
-            label="Contact email"
+            label={t('resellerStoresPage.contactEmail')}
             id="cr-email"
             type="email"
             required
@@ -287,9 +317,9 @@ function CreateModal({
             onChange={(e) => setContactEmail(e.target.value)}
           />
           <TextField
-            label="Contact phone"
+            label={t('resellerStoresPage.contactPhone')}
             id="cr-phone"
-            hint="With the country code — +8801712345678 for Bangladesh, +919812345678 for India."
+            hint={t('resellerStoresPage.withTheCountryCode8801712345678')}
             type="tel"
             required
             value={contactPhone}
@@ -297,7 +327,7 @@ function CreateModal({
           />
         </div>
         <TextArea
-          label="Note for the client"
+          label={t('resellerStoresPage.noteForTheClient')}
           id="cr-note"
           maxLength={500}
           showCount
@@ -307,7 +337,7 @@ function CreateModal({
         {error !== null ? <AcAlert message={error} /> : null}
         <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('resellerStoresPage.cancel')}
           </Button>
           <AsyncButton
             type="submit"
@@ -315,7 +345,11 @@ function CreateModal({
             size="md"
             icon={<Store size={15} />}
             state={phaseOf(create.isPending, error)}
-            labels={{ idle: 'Open and ask the client', busy: 'Opening…', error: 'Not opened' }}
+            labels={{
+              idle: t('resellerStoresPage.openAndAskTheClient'),
+              busy: t('resellerStoresPage.opening'),
+              error: t('resellerStoresPage.notOpened'),
+            }}
             disabled={create.isPending || sellerId === ''}
           />
         </DialogFooter>

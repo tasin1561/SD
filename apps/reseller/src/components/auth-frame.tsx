@@ -1,13 +1,16 @@
+'use client';
+
 import type { ReactElement, ReactNode } from 'react';
 import { SignInCard, SignInFrame } from '@skydrop/ui/app/sign-in';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { useT } from '@/i18n/client';
+import { PrefsControl } from './prefs-control';
 
 /**
  * Every signed-out screen of the store portal — sign in, reset a password,
  * accept an invitation, verify an email — on the ONE shared sign-in frame
  * (apps restyle, Phase 4): the corridor map after first paint, the Skydrop
- * mark and "member store portal", the theme switch (so a signed-out visitor can
- * always change it), and one card with the page's own content unchanged.
+ * mark and "member store portal", the language and theme switches (so a signed-out
+ * visitor can always change them), and one card with the page's own content unchanged.
  *
  * `section`, `note` and `alert` fed the old console's panel band ("access
  * · invite-only") and are accepted so no page changes; the brand frame has
@@ -28,8 +31,9 @@ export function AuthFrame({
   readonly note?: string;
   readonly alert?: boolean;
 }): ReactElement {
+  const t = useT();
   return (
-    <SignInFrame portal="member store portal" themeControl={<ThemeSwitch />}>
+    <SignInFrame portal={t('auth.portal')} themeControl={<PrefsControl />}>
       <SignInCard title={title} note={subtitle} footer={footer}>
         {children}
       </SignInCard>

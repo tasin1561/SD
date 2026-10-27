@@ -37,7 +37,7 @@ import {
   type UpdateOrderInput,
 } from '@/lib/api-hooks';
 import { useSellerIdentity } from '@skydrop/auth/client';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   PACKAGE_TYPES,
   isPackageType,
@@ -45,22 +45,18 @@ import {
   type PackageTypeValue,
 } from '@/lib/package-type';
 import { useStores } from '@/lib/store-hooks';
-import {
-  ADDRESS_LINE_1_HINT,
-  ADDRESS_LINE_2_HINT,
-  DUPLICATE_LINES_ERROR,
-  linesAreDuplicated,
-} from '@/lib/address-guidance';
+import { linesAreDuplicated } from '@/lib/address-guidance';
 import { prefixHint, stripSellerPrefix } from '@/lib/seller-prefix';
 import {
   IN_DIAL,
   IN_LOCAL_LENGTH,
-  IN_PHONE_ERROR,
   isCompleteLocal,
   sanitiseLocal,
   toE164,
   toLocalDigits,
 } from '@/lib/phone';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Edit form for a DRAFT or PENDING_CONFIRMATION order.
@@ -136,6 +132,7 @@ interface FormState {
 const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
 
 export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactElement {
+  const t = useT();
   const sellerInitials = useSellerIdentity()?.initials ?? null;
   const router = useRouter();
   const toast = useToast();
@@ -287,13 +284,13 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   if (detail.isError)
     return (
       <ErrorState
-        message={serverVerdict(detail.error, 'Failed to load order.')}
+        message={verdict(detail.error, t, t('orderEdit.failedToLoadOrder'))}
         retry={() => void detail.refetch()}
       />
     );
   if (detail.isLoading || form === null)
-    return <SkeletonRows rows={6} cols={2} label="Loading order…" />;
-  if (!detail.data) return <ErrorState message="Order not found." />;
+    return <SkeletonRows rows={6} cols={2} label={t('orderEdit.loadingOrder')} />;
+  if (!detail.data) return <ErrorState message={t('orderEdit.orderNotFound')} />;
 
   const status = detail.data.status;
   const isDraft = status === 'DRAFT';
@@ -302,14 +299,15 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
 
   if (!canEdit) {
     return (
-      <Notice tone="neutral" title="This order is no longer editable.">
+      <Notice tone="neutral" title={t('orderEdit.thisOrderIsNo')}>
         <span className="ord-p">
-          Status: <span className="sk-ident ord-strong">{status}</span>. The server allows edits
-          only for DRAFT (full) and PENDING_CONFIRMATION (recipient + notes).
+          {richMessage(t('orderEdit.statusTheServerAllows'), {
+            span: <span className="sk-ident ord-strong">{status}</span>,
+          })}
         </span>
         <div>
           <Button variant="secondary" onClick={() => router.push(`/orders/${orderId}`)}>
-            Back to order
+            {t('orderEdit.backToOrder')}
           </Button>
         </div>
       </Notice>
@@ -370,14 +368,16 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   }
 
   function fmtError(err: unknown): string {
-    return serverVerdict(err, 'Action failed');
+    return verdict(err, t, t('orderEdit.actionFailed'));
   }
 
   /** The same gate the create form uses, from the same module — the two
    *  screens edit the same field and must refuse the same values. */
   function phoneProblem(): string | null {
     if (!form) return null;
-    return isCompleteLocal(toLocalDigits(form.recipientPhoneE164)) ? null : IN_PHONE_ERROR;
+    return isCompleteLocal(toLocalDigits(form.recipientPhoneE164))
+      ? null
+      : t('guidance.phoneError', { len: IN_LOCAL_LENGTH, dial: IN_DIAL });
   }
 
   /** Same shape, same reason: the create form refuses duplicated address
@@ -385,9 +385,9 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
    *  has no such rule; the consequence downstream is a held order. */
   function addressProblem(): string | null {
     if (!form) return null;
-    if (!form.recipientAddressLine2.trim()) return 'Address line 2 (the landmark) is required.';
+    if (!form.recipientAddressLine2.trim()) return t('orderEdit.addressLine2The');
     return linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-      ? DUPLICATE_LINES_ERROR
+      ? t('guidance.duplicateLines')
       : null;
   }
 
@@ -402,7 +402,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     setBusy('save');
     try {
       await update.mutateAsync(buildPatch());
-      toast.success('Changes saved.');
+      toast.success(t('orderEdit.changesSaved'));
       router.push(`/orders/${orderId}`);
     } catch (err) {
       setError(fmtError(err));
@@ -425,7 +425,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     try {
       await update.mutateAsync(buildPatch());
       await submit.mutateAsync({ id: orderId });
-      toast.success('Saved and submitted for confirmation.');
+      toast.success(t('orderEdit.savedAndSubmittedFor'));
       router.push(`/orders/${orderId}`);
     } catch (err) {
       setError(fmtError(err));
@@ -439,7 +439,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
     setBusy('discard');
     try {
       await discard.mutateAsync();
-      toast.success('Draft discarded.');
+      toast.success(t('orderEdit.draftDiscarded'));
       router.push('/orders');
     } catch (err) {
       setError(fmtError(err));
@@ -466,9 +466,11 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
   return (
     <form className="ord-page" onSubmit={(e) => void onSave(e)}>
       <p className="ord-p">
-        Editing order <span className="sk-ident ord-strong">{detail.data.orderNumber}</span> ·
-        status <span className="sk-ident ord-strong">{status}</span>
-        {isPending && <span> — editable until the confirmation call is done</span>}
+        {richMessage(t('orderEdit.editingOrderStatus'), {
+          span: <span className="sk-ident ord-strong">{detail.data.orderNumber}</span>,
+          span2: <span className="sk-ident ord-strong">{status}</span>,
+          span3: isPending && <span>{t('orderEdit.editableUntilTheConfirmation')}</span>,
+        })}
       </p>
 
       {/* A progress header over the SAME single form: it marks the
@@ -476,13 +478,13 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
           or unmounted — every field stays in the one form. */}
       <Stepper
         mode="sections"
-        label="Order form sections"
+        label={t('orderEdit.orderFormSections')}
         sticky
         steps={[
-          { id: 'eo-items', label: 'Items', icon: <PackageSearch size={15} /> },
-          { id: 'eo-recipient', label: 'Recipient', icon: <MapPin size={15} /> },
-          { id: 'eo-payment', label: 'Payment', icon: <Banknote size={15} /> },
-          { id: 'eo-notes', label: 'Notes', icon: <NotebookPen size={15} /> },
+          { id: 'eo-items', label: t('orderEdit.items'), icon: <PackageSearch size={15} /> },
+          { id: 'eo-recipient', label: t('orderEdit.recipient'), icon: <MapPin size={15} /> },
+          { id: 'eo-payment', label: t('orderEdit.payment'), icon: <Banknote size={15} /> },
+          { id: 'eo-notes', label: t('orderEdit.notes'), icon: <NotebookPen size={15} /> },
         ]}
       />
 
@@ -491,17 +493,17 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
           cancel and start again. */}
       <OrdSection
         id="eo-items"
-        title="Items"
+        title={t('orderEdit.items')}
         note={
           linesChanged ? (
-            <span className="ord-tone-warn">changed — save to apply</span>
+            <span className="ord-tone-warn">{t('orderEdit.changedSaveToApply')}</span>
           ) : (
-            'What is in the parcel.'
+            t('orderEdit.whatIsInThe')
           )
         }
       >
         {lines === null ? (
-          <SkeletonRows rows={3} cols={3} label="Loading the items…" />
+          <SkeletonRows rows={3} cols={3} label={t('orderEdit.loadingTheItems')} />
         ) : (
           <div className="ord-stack ord-stack--tight">
             <OrderedProducts
@@ -552,14 +554,18 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
         )}
       </OrdSection>
 
-      <OrdSection id="eo-recipient" title="Recipient" note="Where it is going.">
+      <OrdSection
+        id="eo-recipient"
+        title={t('orderEdit.recipient')}
+        note={t('orderEdit.whereItIsGoing')}
+      >
         <div className="ord-grid-2">
           {/* Chrome, like the +91 below — the seller cannot edit their
               own code, so it is not part of the input. */}
           <TextField
-            label="Full name"
+            label={t('orderEdit.fullName')}
             required
-            hint={prefixHint(sellerInitials)}
+            hint={prefixHint(sellerInitials, t)}
             lead={
               sellerInitials !== null && sellerInitials !== '' ? (
                 <span className="ord-prefix" aria-hidden>
@@ -576,9 +582,12 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               paste a differently-formatted number into it. The field
               itself holds only the ten national digits. */}
           <TextField
-            label="Phone"
+            label={t('orderEdit.phone')}
             required
-            hint={`${IN_DIAL} — ${IN_LOCAL_LENGTH} digits, starting 6-9`}
+            hint={t('orderEdit.digitsStarting69', {
+              inDial: IN_DIAL,
+              inLocalLength: IN_LOCAL_LENGTH,
+            })}
             lead={
               <span className="ord-prefix" aria-hidden>
                 {IN_DIAL}
@@ -593,12 +602,15 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             autoComplete="tel-national"
             maxLength={IN_LOCAL_LENGTH}
             placeholder="9812345678"
-            aria-label={`Phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
+            aria-label={t('orderEdit.phoneNumberThenDigits', {
+              inDial: IN_DIAL,
+              inLocalLength: IN_LOCAL_LENGTH,
+            })}
             inputClassName="sk-figure"
           />
           <TextField
-            label="Second number"
-            hint="Tried when the first does not answer — the call centre uses it before giving up on an order."
+            label={t('orderEdit.secondNumber')}
+            hint={t('orderEdit.triedWhenTheFirst')}
             lead={
               <span className="ord-prefix" aria-hidden>
                 {IN_DIAL}
@@ -615,14 +627,17 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             autoComplete="tel-national"
             maxLength={IN_LOCAL_LENGTH}
             placeholder="optional"
-            aria-label={`Second phone number, ${IN_DIAL} then ${IN_LOCAL_LENGTH} digits`}
+            aria-label={t('orderEdit.secondPhoneNumberThen', {
+              inDial: IN_DIAL,
+              inLocalLength: IN_LOCAL_LENGTH,
+            })}
             inputClassName="sk-figure"
           />
           <div className="ord-span-2">
             <TextField
-              label="Address line 1"
+              label={t('orderEdit.addressLine1')}
               required
-              hint={ADDRESS_LINE_1_HINT}
+              hint={t('guidance.addressLine1Hint')}
               value={form.recipientAddressLine1}
               onChange={(e) => set('recipientAddressLine1', e.target.value)}
               maxLength={200}
@@ -630,12 +645,12 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
           </div>
           <div className="ord-span-2">
             <TextField
-              label="Address line 2"
+              label={t('orderEdit.addressLine2')}
               required
-              hint={ADDRESS_LINE_2_HINT}
+              hint={t('guidance.addressLine2Hint')}
               error={
                 linesAreDuplicated(form.recipientAddressLine1, form.recipientAddressLine2)
-                  ? DUPLICATE_LINES_ERROR
+                  ? t('guidance.duplicateLines')
                   : undefined
               }
               value={form.recipientAddressLine2}
@@ -644,7 +659,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             />
           </div>
           <TextField
-            label="PIN code"
+            label={t('orderEdit.pinCode')}
             required
             value={form.recipientPostalCode}
             onChange={(e) =>
@@ -658,25 +673,25 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
 
       <OrdSection
         id="eo-payment"
-        title="Payment &amp; parcel"
-        note="What the customer pays, and what it weighs."
+        title={t('orderEdit.paymentParcel')}
+        note={t('orderEdit.whatTheCustomerPays')}
       >
         <div className="ord-stack ord-stack--tight">
           <ChoiceCards
-            label="Payment mode"
+            label={t('orderEdit.paymentMode')}
             required
             columns={2}
             value={form.paymentMode}
             onChange={(v) => set('paymentMode', v as 'COD' | 'PREPAID')}
             options={[
-              { value: 'PREPAID', title: 'Prepaid', icon: <CreditCard size={16} /> },
-              { value: 'COD', title: 'Cash on Delivery', icon: <Banknote size={16} /> },
+              { value: 'PREPAID', title: t('orderEdit.prepaid'), icon: <CreditCard size={16} /> },
+              { value: 'COD', title: t('orderEdit.cashOnDelivery'), icon: <Banknote size={16} /> },
             ]}
           />
           <div className="ord-grid-2">
             {showDeliveryFee ? (
               <TextField
-                label="Delivery fee charged to the customer (INR)"
+                label={t('orderEdit.deliveryFeeChargedTo')}
                 type="number"
                 min={0}
                 step="0.01"
@@ -686,7 +701,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               />
             ) : null}
             <TextField
-              label="Advance already paid (INR)"
+              label={t('orderEdit.advanceAlreadyPaidInr')}
               type="number"
               min={0}
               step="0.01"
@@ -696,7 +711,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             />
             {showDiscount ? (
               <TextField
-                label="Discount (INR)"
+                label={t('orderEdit.discountInr')}
                 type="number"
                 min={0}
                 step="0.01"
@@ -707,7 +722,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             ) : null}
             {form.paymentMode === 'COD' && (
               <TextField
-                label="COD amount (INR)"
+                label={t('orderEdit.codAmountInr')}
                 required
                 /*
                   The same arithmetic the create form shows. It is a
@@ -719,7 +734,9 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                 */
                 notice={
                   Math.abs(computedCollectable - (Number(form.codAmountInr) || 0)) > 0.005
-                    ? `Items + delivery − advance − discount = ${inr.format(computedCollectable)}`
+                    ? t('orderEdit.itemsDeliveryAdvanceDiscount', {
+                        inr: inr.format(computedCollectable),
+                      })
                     : undefined
                 }
                 type="number"
@@ -736,7 +753,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
                       size="sm"
                       onClick={() => set('codAmountInr', computedCollectable.toFixed(2))}
                     >
-                      Use {inr.format(computedCollectable)}
+                      {richMessage(t('orderEdit.use'), { inr: inr.format(computedCollectable) })}
                     </Button>
                   ) : undefined
                 }
@@ -744,7 +761,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             )}
             {showDeclaredValue ? (
               <TextField
-                label="Declared value (INR)"
+                label={t('orderEdit.declaredValueInr')}
                 type="number"
                 min={0}
                 step="0.01"
@@ -754,7 +771,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               />
             ) : null}
             <TextField
-              label="Total weight (grams)"
+              label={t('orderEdit.totalWeightGrams')}
               type="number"
               min={0}
               value={form.totalWeightGrams}
@@ -762,29 +779,29 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               inputClassName="sk-figure"
             />
             <Select
-              label="Package type"
+              label={t('orderEdit.packageType')}
               value={form.packageType}
               onChange={(e) => set('packageType', e.target.value as PackageTypeValue | '')}
             >
-              <option value="">Not stated</option>
-              {PACKAGE_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {packageWords(t)}
+              <option value="">{t('orderEdit.notStated')}</option>
+              {PACKAGE_TYPES.map((kind) => (
+                <option key={kind} value={kind}>
+                  {packageWords(kind, t)}
                 </option>
               ))}
             </Select>
             <TextField
-              label="Order ID"
+              label={t('orderEdit.orderId')}
               value={form.sellerOrderRef}
               maxLength={100}
-              placeholder="e.g. the number your shop gave it"
+              placeholder={t('orderEdit.eGTheNumber')}
               onChange={(e) => set('sellerOrderRef', e.target.value)}
               inputClassName="sk-ident"
             />
             {openStores.length > 1 && (
               <Select
-                label="Store"
-                hint="Which of your shops this order belongs to. The Order ID has to be unique within one shop, not across them."
+                label={t('orderEdit.store')}
+                hint={t('orderEdit.whichOfYourShops')}
                 value={form.storeId}
                 onChange={(e) => set('storeId', e.target.value)}
               >
@@ -797,7 +814,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               </Select>
             )}
             <Checkbox
-              label="Treat this order as urgent"
+              label={t('orderEdit.treatThisOrderAs')}
               checked={form.isUrgent}
               onChange={(e) => set('isUrgent', e.target.checked)}
             />
@@ -806,14 +823,14 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       </OrdSection>
 
       {/* Notes — always editable */}
-      <OrdSection id="eo-notes" title="Notes" note="For us, never the customer.">
+      <OrdSection id="eo-notes" title={t('orderEdit.notes')} note={t('orderEdit.forUsNeverThe')}>
         <TextArea
-          label="Delivery Notes"
+          label={t('orderEdit.deliveryNotes')}
           rows={3}
           maxLength={2000}
           value={form.sellerNotes}
           onChange={(e) => set('sellerNotes', e.target.value)}
-          placeholder="Anything the call agent should know"
+          placeholder={t('orderEdit.anythingTheCallAgent')}
         />
       </OrdSection>
 
@@ -832,7 +849,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             disabled={busy !== null}
             onClick={() => setConfirmDiscard(true)}
           >
-            Discard draft
+            {t('orderEdit.discardDraft')}
           </Button>
         ) : (
           <span />
@@ -844,14 +861,14 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
             disabled={busy !== null}
             onClick={() => router.push(`/orders/${orderId}`)}
           >
-            Cancel
+            {t('orderEdit.cancel')}
           </Button>
           <AsyncButton
             type="submit"
             variant="secondary"
             icon={<Save size={15} />}
             state={busy === 'save' ? 'busy' : undefined}
-            labels={{ idle: 'Save changes', busy: 'Saving…' }}
+            labels={{ idle: t('orderEdit.saveChanges'), busy: t('orderEdit.saving') }}
             disabled={busy !== null}
           />
           {isDraft && (
@@ -860,7 +877,7 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
               variant="primary"
               icon={<Send size={15} />}
               state={busy === 'submit' ? 'busy' : undefined}
-              labels={{ idle: 'Save + submit', busy: 'Submitting…' }}
+              labels={{ idle: t('orderEdit.saveSubmit'), busy: t('orderEdit.submitting') }}
               disabled={busy !== null}
               onClick={() => setConfirmSubmit(true)}
             />
@@ -871,28 +888,28 @@ export function EditOrderForm({ orderId }: { readonly orderId: string }): ReactE
       <ConfirmDialog
         open={confirmSubmit}
         onOpenChange={setConfirmSubmit}
-        title="Save and submit for confirmation?"
+        title={t('orderEdit.saveAndSubmitFor')}
         entity={detail.data.orderNumber}
         entityIsIdentifier
         amount={
           form.paymentMode === 'COD' && form.codAmountInr.trim() !== ''
-            ? `${inr.format(Number(form.codAmountInr))} to collect`
+            ? t('orderEdit.amountToCollect', { amount: inr.format(Number(form.codAmountInr)) })
             : form.paymentMode === 'COD'
               ? undefined
-              : 'Prepaid'
+              : t('orderEdit.prepaid')
         }
-        consequence="Your changes are saved, then the order joins the call queue and the call centre phones this customer to confirm it."
-        confirmLabel="Save + submit"
+        consequence={t('orderEdit.saveSubmitConsequence')}
+        confirmLabel={t('orderEdit.saveSubmit')}
         onConfirm={() => onSaveAndSubmit()}
       />
       <ConfirmDialog
         open={confirmDiscard}
         onOpenChange={setConfirmDiscard}
-        title="Discard this draft?"
+        title={t('orderEdit.discardThisDraft')}
         entity={detail.data.orderNumber}
         entityIsIdentifier
-        consequence="The draft is deleted and nothing is sent to the call centre. This cannot be undone."
-        confirmLabel="Yes, discard"
+        consequence={t('orderEdit.discardConsequence')}
+        confirmLabel={t('orderEdit.yesDiscard')}
         destructive
         onConfirm={() => onDiscard()}
       />

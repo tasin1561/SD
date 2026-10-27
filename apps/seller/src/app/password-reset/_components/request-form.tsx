@@ -4,7 +4,9 @@ import { useState, type FormEvent, type ReactElement } from 'react';
 import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { Button } from '@skydrop/ui/app/button';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Email-only form that calls /auth/seller/password-reset/request.
@@ -17,6 +19,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  * surface it.
  */
 export function PasswordResetRequestForm(): ReactElement {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +42,8 @@ export function PasswordResetRequestForm(): ReactElement {
       setDone(true);
     } catch (err) {
       if (err instanceof ApiError && err.status === 429) {
-        setError('Too many requests. Try again in an hour.');
-      } else setError(serverVerdict(err, 'Could not request a reset.'));
+        setError(t('passwordReset.tooManyRequestsTry'));
+      } else setError(verdict(err, t, t('passwordReset.couldNotRequestA')));
     } finally {
       setSubmitting(false);
     }
@@ -49,8 +52,9 @@ export function PasswordResetRequestForm(): ReactElement {
   if (done) {
     return (
       <div className="rounded-[var(--radius-2)] bg-[var(--color-accent-tint)] border border-[var(--color-accent-ring)] px-3 py-2.5 text-xs text-text-bright">
-        If <span className="font-mono">{email}</span> matches a seller account, a reset link is on
-        its way. The link expires in 30 minutes.
+        {richMessage(t('passwordReset.ifMatchesASeller'), {
+          span: <span className="font-mono">{email}</span>,
+        })}
       </div>
     );
   }
@@ -66,7 +70,7 @@ export function PasswordResetRequestForm(): ReactElement {
       <TextField
         id="email"
         type="email"
-        label="Email"
+        label={t('passwordReset.email')}
         autoComplete="email"
         required
         value={email}
@@ -79,7 +83,7 @@ export function PasswordResetRequestForm(): ReactElement {
         </div>
       )}
       <Button type="submit" fullWidth loading={submitting}>
-        {submitting ? 'Sending…' : 'Send reset link'}
+        {submitting ? t('passwordReset.sending') : t('passwordReset.sendResetLink')}
       </Button>
     </form>
   );

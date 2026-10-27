@@ -1,3 +1,7 @@
+import type { Translate } from '@skydrop/ui/app/i18n';
+import { englishT } from '@/i18n/english';
+import type { MessageKey } from '@/i18n/catalog';
+
 /**
  * How a person's ROLES are worded, in one place.
  *
@@ -50,7 +54,7 @@ export function roleLine(
     readonly roleNames?: readonly string[] | undefined;
     readonly roleName?: string | undefined;
   },
-  fallback = 'No role',
+  fallback: string = englishT('roleWords.noRole'),
 ): string {
   const names = roleNamesOf(member);
   return names.length === 0 ? fallback : names.join(' · ');
@@ -81,17 +85,27 @@ export function roleChangeConsequence(
   fullName: string,
   before: readonly string[],
   after: readonly string[],
+  t: Translate<MessageKey> = englishT,
 ): string {
   if (after.length === 0) {
     // The server refuses this and its words are what gets shown; this
     // sentence is not that refusal and names no error code. It only has
     // to say something true while the field sits empty.
-    return `No roles are selected. ${fullName} must hold at least one — somebody with none cannot sign in at all.`;
+    return t('roleWords.noRolesSelected', { fullName });
   }
   const { added, removed } = roleChangeSummary(before, after);
-  const parts: string[] = [];
-  if (added.length > 0) parts.push(`gains ${added.join(', ')}`);
-  if (removed.length > 0) parts.push(`loses ${removed.join(', ')}`);
-  const movement = parts.length === 0 ? 'keeps the same roles' : parts.join(' and ');
-  return `${fullName} ${movement}. They end up holding ${after.join(', ')}, and what they can see and change is everything those roles cover between them.`;
+  const key: MessageKey =
+    added.length > 0 && removed.length > 0
+      ? 'roleWords.changeBoth'
+      : added.length > 0
+        ? 'roleWords.changeGains'
+        : removed.length > 0
+          ? 'roleWords.changeLoses'
+          : 'roleWords.changeSame';
+  return t(key, {
+    fullName,
+    added: added.join(', '),
+    removed: removed.join(', '),
+    after: after.join(', '),
+  });
 }

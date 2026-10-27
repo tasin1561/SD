@@ -19,6 +19,7 @@ import {
 } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
 
 /**
  * The courier conversation for this ticket, on the ticket — whichever
@@ -34,6 +35,8 @@ import { usePermission } from '@/lib/use-permission';
  * reaches the seller if somebody types it back in here.
  */
 export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }): ReactElement {
+  const t = useT();
+
   const toast = useToast();
   // FE-2: cosmetic. The server enforces this regardless.
   const canWrite = usePermission('courier.ops.write');
@@ -67,11 +70,19 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
   // After every hook, never before: an early return above a useState
   // changes the hook order between renders.
   if (!canSeeCourier) {
-    return <p className="af-muted">Courier conversations are handled by the courier-ops team.</p>;
+    return (
+      <p className="af-muted">{t('ticketsTicketCourierPanel.courierConversationsAreHandledBy')}</p>
+    );
   }
 
   if (link.isLoading)
-    return <SkeletonRows rows={2} cols={1} label="Loading the courier conversation" />;
+    return (
+      <SkeletonRows
+        rows={2}
+        cols={1}
+        label={t('ticketsTicketCourierPanel.loadingTheCourierConversation')}
+      />
+    );
   if (link.isError) {
     return <ErrorState message={serverVerdict(link.error)} retry={() => void link.refetch()} />;
   }
@@ -79,27 +90,24 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
   if (escalationId === null) {
     return (
       <div className="af-inner">
-        <p className="af-body">No courier conversation on this ticket yet.</p>
-        <p className="af-small">
-          Start one when this needs taking up with the courier. Nothing is sent by opening it — a
-          message you write is queued for someone to send from the courier’s own portal.
-        </p>
+        <p className="af-body">{t('ticketsTicketCourierPanel.noCourierConversationOnThis')}</p>
+        <p className="af-small">{t('ticketsTicketCourierPanel.startOneWhenThisNeeds')}</p>
         {canWrite ? (
           <div>
             <AsyncButton
               variant="secondary"
               size="sm"
               labels={{
-                idle: 'Start a courier conversation',
-                busy: 'Starting…',
-                done: 'Started',
-                error: 'Not started',
+                idle: t('ticketsTicketCourierPanel.startACourierConversation'),
+                busy: t('ticketsTicketCourierPanel.starting'),
+                done: t('ticketsTicketCourierPanel.started'),
+                error: t('ticketsTicketCourierPanel.notStarted'),
               }}
               disabled={open.isPending}
               onAction={async () => {
                 try {
                   await open.mutateAsync({ ticketId });
-                  toast.success('Courier conversation started');
+                  toast.success(t('ticketsTicketCourierPanel.courierConversationStarted'));
                 } catch (err) {
                   toast.error(serverVerdict(err));
                   throw err;
@@ -126,7 +134,7 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
         setOutbound('');
         // Queued, not sent. Saying "sent" is a lie the operator finds
         // out about at the next reconciliation.
-        toast.success('Queued in the send queue');
+        toast.success(t('ticketsTicketCourierPanel.queuedInTheSendQueue'));
       } catch (err) {
         toast.error(serverVerdict(err));
       }
@@ -140,7 +148,7 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
       try {
         await record.mutateAsync({ escalationId, body });
         setInbound('');
-        toast.success('Recorded — the client can see it now');
+        toast.success(t('ticketsTicketCourierPanel.recordedTheClientCanSee'));
       } catch (err) {
         toast.error(serverVerdict(err));
       }
@@ -152,8 +160,10 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
       {desk !== null ? (
         <div className="af-stack--tight af-stack">
           <p className="af-title">
-            {desk.courierName} support
-            {desk.canSendAutomatically ? '' : ' — sent by hand'}
+            {t('ticketsTicketCourierPanel.support', {
+              courierName: desk.courierName,
+              value: desk.canSendAutomatically ? '' : t('ticketsTicketCourierPanel.sentByHand'),
+            })}
           </p>
           <p className="af-small">{desk.howTo}</p>
           <p className="af-small">
@@ -164,18 +174,23 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
                 rel="noreferrer"
                 className="af-link"
               >
-                {desk.ticketUrl !== null ? 'Open their ticket' : `Open ${desk.courierName}`}
+                {desk.ticketUrl !== null
+                  ? t('ticketsTicketCourierPanel.openTheirTicket')
+                  : t('ticketsTicketCourierPanel.open', { courierName: desk.courierName })}
               </a>
             ) : null}
             {' · '}
-            {desk.supportEmail ?? `No support email — set ${desk.supportEmailSettingKey}`}
+            {desk.supportEmail ??
+              t('ticketsTicketCourierPanel.noSupportEmailSet', {
+                supportEmailSettingKey: desk.supportEmailSettingKey,
+              })}
           </p>
         </div>
       ) : null}
       {thread.isLoading ? (
-        <SkeletonRows rows={2} cols={1} label="Loading messages" />
+        <SkeletonRows rows={2} cols={1} label={t('ticketsTicketCourierPanel.loadingMessages')} />
       ) : messages.length === 0 ? (
-        <p className="af-small">Nothing said either way yet.</p>
+        <p className="af-small">{t('ticketsTicketCourierPanel.nothingSaidEitherWayYet')}</p>
       ) : (
         <ul className="af-list">
           {messages.map((m) => {
@@ -183,8 +198,10 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
             return (
               <li key={m.id} className="af-stack--tight af-stack">
                 <p className="af-small">
-                  {fromCourier ? 'Courier' : 'Us'} ·{' '}
-                  {new Date(m.occurredAt).toLocaleString('en-IN')}
+                  {fromCourier
+                    ? t('ticketsTicketCourierPanel.courier')
+                    : t('ticketsTicketCourierPanel.us')}{' '}
+                  · {new Date(m.occurredAt).toLocaleString('en-IN')}
                 </p>
                 <p className="af-pre" data-dense="1" data-side={fromCourier ? 'in' : undefined}>
                   {m.body}
@@ -204,8 +221,12 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
       {waiting.length > 0 ? (
         <div className="af-inner" data-tone="warn">
           <p className="af-title">
-            {waiting.length === 1 ? 'One message' : `${waiting.length} messages`} waiting to be sent
-            to the courier
+            {t('ticketsTicketCourierPanel.waitingToBeSentTo', {
+              value:
+                waiting.length === 1
+                  ? t('ticketsTicketCourierPanel.oneMessage')
+                  : `${waiting.length} messages`,
+            })}
           </p>
           {waiting.map((i) => (
             <div key={i.id} className="af-stack">
@@ -217,8 +238,8 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
                   <div className="af-grow">
                     <TextField
                       id={`ext-${i.id}`}
-                      label="Their ticket number"
-                      hint="Optional, but it is what binds their replies to this conversation."
+                      label={t('ticketsTicketCourierPanel.theirTicketNumber')}
+                      hint={t('ticketsTicketCourierPanel.optionalButItIsWhat')}
                       value={theirTicketId}
                       onChange={(e) => setTheirTicketId(e.target.value)}
                       placeholder="e.g. 1234567"
@@ -228,10 +249,10 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
                     variant="primary"
                     size="sm"
                     labels={{
-                      idle: 'I have sent this',
-                      busy: 'Saving…',
-                      done: 'Marked sent',
-                      error: 'Not saved',
+                      idle: t('ticketsTicketCourierPanel.iHaveSentThis'),
+                      busy: t('ticketsTicketCourierPanel.saving'),
+                      done: t('ticketsTicketCourierPanel.markedSent'),
+                      error: t('ticketsTicketCourierPanel.notSaved'),
                     }}
                     disabled={markSent.isPending}
                     onAction={async () => {
@@ -243,7 +264,7 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
                             : { externalTicketId: theirTicketId.trim() }),
                         });
                         setTheirTicketId('');
-                        toast.success('Marked as sent to the courier');
+                        toast.success(t('ticketsTicketCourierPanel.markedAsSentToThe'));
                       } catch (err) {
                         toast.error(serverVerdict(err));
                         throw err;
@@ -266,8 +287,8 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
           */}
           <TextArea
             id={`inbound-${ticketId}`}
-            label="What the courier told us"
-            hint="Paste their reply rather than paraphrasing — the client reads this as the courier’s own words."
+            label={t('ticketsTicketCourierPanel.whatTheCourierToldUs')}
+            hint={t('ticketsTicketCourierPanel.pasteTheirReplyRatherThan')}
             rows={3}
             value={inbound}
             onChange={(e) => setInbound(e.target.value)}
@@ -280,14 +301,14 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
               loading={record.isPending}
               onClick={saveReply}
             >
-              Save their reply
+              {t('ticketsTicketCourierPanel.saveTheirReply')}
             </Button>
           </div>
 
           <TextArea
             id={`outbound-${ticketId}`}
-            label="Ask the courier something"
-            hint="Queued for someone to send from the courier’s portal. Stored and sent exactly as typed."
+            label={t('ticketsTicketCourierPanel.askTheCourierSomething')}
+            hint={t('ticketsTicketCourierPanel.queuedForSomeoneToSend')}
             rows={2}
             value={outbound}
             onChange={(e) => setOutbound(e.target.value)}
@@ -300,7 +321,7 @@ export function TicketCourierPanel({ ticketId }: { readonly ticketId: string }):
               loading={reply.isPending}
               onClick={send}
             >
-              Queue for sending
+              {t('ticketsTicketCourierPanel.queueForSending')}
             </Button>
           </div>
         </>

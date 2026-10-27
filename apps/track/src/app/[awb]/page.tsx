@@ -295,5 +295,6 @@ function humanizeStatus(s: PublicShipmentDisplayStatus, locale: Locale): string 
 }
 
 function localeBcp47(l: Locale): string {
+  // Bangla keeps en-IN so dates and times stay in the format the page uses today (TRK-3).
   return l === 'hi' ? 'hi-IN' : 'en-IN';
 }

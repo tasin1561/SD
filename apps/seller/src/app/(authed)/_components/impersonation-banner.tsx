@@ -4,8 +4,9 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { Eye, PenLine, ShieldAlert, ShieldOff } from 'lucide-react';
 import { useApiClient } from '@skydrop/auth/client';
 import type { SellerMe } from '@skydrop/api-client';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import './impersonation-banner.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Where the way out lives — and it ENDS the session, it does not merely
@@ -73,6 +74,7 @@ const LEAVE_PATH = '/api/auth/seller/impersonation/leave';
  * not a substitute for it doing it.
  */
 export function ImpersonationBanner({ identity }: { identity: SellerMe }): ReactElement | null {
+  const t = useT();
   const session = identity.impersonation ?? null;
   const client = useApiClient();
   const [leaving, setLeaving] = useState(false);
@@ -112,7 +114,7 @@ export function ImpersonationBanner({ identity }: { identity: SellerMe }): React
         // to get out of somebody's account disappears after four
         // seconds, and the fact that it failed is exactly the fact that
         // has to stay on screen.
-        setError(serverVerdict(e, 'Could not end the session from this browser.'));
+        setError(verdict(e, t, t('authedShell.couldNotEndThe')));
         setLeaving(false);
         return;
       }
@@ -127,7 +129,7 @@ export function ImpersonationBanner({ identity }: { identity: SellerMe }): React
   return (
     <>
       <div className="imp-frame" aria-hidden />
-      <div className="imp-bar" role="region" aria-label="Skydrop support session">
+      <div className="imp-bar" role="region" aria-label={t('authedShell.skydropSupportSession')}>
         <span className="imp-bar__icon" aria-hidden>
           <ShieldAlert size={20} />
         </span>
@@ -135,13 +137,13 @@ export function ImpersonationBanner({ identity }: { identity: SellerMe }): React
         <div className="imp-bar__says">
           <p className="imp-bar__lead">
             {over
-              ? `This support session in ${identity.companyName}’s account has run out`
-              : `You are inside ${identity.companyName}’s account`}
+              ? t('authedShell.thisSupportSessionIn', { companyName: identity.companyName })
+              : t('authedShell.youAreInsideS', { companyName: identity.companyName })}
           </p>
           <p className="imp-bar__sub">
             {over
-              ? 'Nothing on this screen will work any more. Close it, and open a new session from the console if you still need one.'
-              : `Support session opened by ${session.staffEmail}. Everything you do here is recorded under their name and yours.`}
+              ? t('authedShell.nothingOnThisScreen')
+              : t('authedShell.supportSessionOpenedBy', { staffEmail: session.staffEmail })}
           </p>
         </div>
 
@@ -149,11 +151,11 @@ export function ImpersonationBanner({ identity }: { identity: SellerMe }): React
           <span className="imp-bar__pill">
             {session.mayWrite ? (
               <>
-                <PenLine size={12} aria-hidden /> Acting as them
+                <PenLine size={12} aria-hidden /> {t('authedShell.actingAsThem')}
               </>
             ) : (
               <>
-                <Eye size={12} aria-hidden /> Read-only
+                <Eye size={12} aria-hidden /> {t('authedShell.readOnly')}
               </>
             )}
           </span>
@@ -162,10 +164,10 @@ export function ImpersonationBanner({ identity }: { identity: SellerMe }): React
               sentence above already says what is happening. */}
           <span className="imp-bar__clock">
             {remaining === null
-              ? 'ends shortly'
+              ? t('authedShell.endsShortly')
               : over
                 ? 'ended'
-                : `ends in ${describeRemaining(remaining)}`}
+                : t('authedShell.endsIn', { remaining: describeRemaining(remaining) })}
           </span>
         </div>
 
@@ -177,10 +179,10 @@ export function ImpersonationBanner({ identity }: { identity: SellerMe }): React
           // Says exactly what the click does, because the label has to
           // be short and this one is not reversible: coming back needs a
           // fresh session, which means a fresh code.
-          title="Ends the support session now and drops this browser out of the account. Coming back needs a new session from the console."
+          title={t('authedShell.endsTheSupportSession')}
         >
           <ShieldOff size={16} aria-hidden />
-          {leaving ? 'Ending…' : 'End session'}
+          {leaving ? t('authedShell.ending') : t('authedShell.endSession')}
         </button>
 
         {error !== null && (

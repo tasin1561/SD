@@ -12,6 +12,7 @@ import { Select } from '@skydrop/ui/app/select';
 import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 import './order-shipping.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Record a courier scan by hand (TRK-9).
@@ -122,6 +123,7 @@ function nowForInput(): string {
 }
 
 export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string }): ReactElement {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const record = useRecordManualScan();
   const [status, setStatus] = useState<string>('IN_TRANSIT');
@@ -161,7 +163,7 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
   return (
     <>
       <Button variant="ghost" size="sm" icon={<ScanLine size={14} />} onClick={() => setOpen(true)}>
-        Record a scan manually
+        {t('ordersManualScanPanel.recordAScanManually')}
       </Button>
 
       <Dialog
@@ -171,16 +173,21 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
         }}
         size="lg"
         icon={<ScanLine size={18} />}
-        title="Record a courier scan"
-        description="For when the courier's webhook never reached us. This drives the order exactly as a real scan would."
+        title={t('ordersManualScanPanel.recordACourierScan')}
+        description={t('ordersManualScanPanel.forWhenTheCourierS')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={close}>
-              {result === null ? 'Cancel' : 'Done'}
+              {result === null
+                ? t('ordersManualScanPanel.cancel')
+                : t('ordersManualScanPanel.done')}
             </Button>
             {result === null && (
               <AsyncButton
-                labels={{ idle: 'Record scan', busy: 'Recording…' }}
+                labels={{
+                  idle: t('ordersManualScanPanel.recordScan'),
+                  busy: t('ordersManualScanPanel.recording'),
+                }}
                 state={record.isPending ? 'busy' : 'idle'}
                 disabled={eventAt === ''}
                 onClick={submit}
@@ -192,8 +199,8 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
         <div className="os-fields">
           <Select
             id="ms-status"
-            label="What happened"
-            hint="Only scans a courier can report are listed. RTO received is a warehouse action, not a scan."
+            label={t('ordersManualScanPanel.whatHappened')}
+            hint={t('ordersManualScanPanel.onlyScansACourierCan')}
             value={status}
             onChange={(e) => setStatus(e.target.value)}
           >
@@ -207,8 +214,8 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
           <DateField
             id="ms-when"
             type="datetime-local"
-            label="When it happened"
-            hint="The time of the SCAN, not now. Backdating puts it in the right place in the customer's timeline."
+            label={t('ordersManualScanPanel.whenItHappened')}
+            hint={t('ordersManualScanPanel.theTimeOfTheScan')}
             value={eventAt}
             onChange={(e) => setEventAt(e.target.value)}
           />
@@ -216,20 +223,20 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
           <div className="os-fields" data-cols="2">
             <TextField
               id="ms-city"
-              label="City"
-              hint="Optional. Shown to the customer."
+              label={t('ordersManualScanPanel.city')}
+              hint={t('ordersManualScanPanel.optionalShownToTheCustomer')}
               value={locationCity}
               onChange={(e) => setLocationCity(e.target.value)}
             />
             {isNdr && (
               <Select
                 id="ms-fail"
-                label="Why delivery failed"
-                hint="Recorded as the NDR reason. The courier's own categories."
+                label={t('ordersManualScanPanel.whyDeliveryFailed')}
+                hint={t('ordersManualScanPanel.recordedAsTheNdrReason')}
                 value={failureReason}
                 onChange={(e) => setFailureReason(e.target.value)}
               >
-                <option value="">Not stated</option>
+                <option value="">{t('ordersManualScanPanel.notStated')}</option>
                 {FAILURE_REASONS.map((r) => (
                   <option key={r} value={r}>
                     {r.replace(/_/g, ' ').toLowerCase()}
@@ -241,8 +248,8 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
 
           <TextArea
             id="ms-desc"
-            label="Description"
-            hint="Optional. What the courier's panel said, so the next person can check it."
+            label={t('ordersManualScanPanel.description')}
+            hint={t('ordersManualScanPanel.optionalWhatTheCourierS')}
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -261,14 +268,15 @@ export function ManualScanPanel({ shipmentId }: { readonly shipmentId: string })
               role="status"
             >
               {result.orderTransitioned ? (
-                <>Scan recorded and the order moved forward.</>
+                <>{t('ordersManualScanPanel.scanRecordedAndTheOrder')}</>
               ) : (
                 <>
-                  Scan recorded on the timeline. The order did not move
-                  {result.skipReason === null || result.skipReason === undefined
-                    ? ''
-                    : ` — ${result.skipReason.replace(/_/g, ' ').toLowerCase()}`}
-                  . That is normal when it is already at or past this point.
+                  {t('ordersManualScanPanel.scanRecordedOnTheTimeline', {
+                    value:
+                      result.skipReason === null || result.skipReason === undefined
+                        ? ''
+                        : ` — ${result.skipReason.replace(/_/g, ' ').toLowerCase()}`,
+                  })}
                 </>
               )}
             </p>

@@ -20,6 +20,7 @@ import {
   Panel,
   mutationPhase,
 } from '../../_components/stock-kit';
+import { useT } from '@/i18n/client';
 
 /**
  * Move stock between warehouses.
@@ -39,6 +40,7 @@ import {
  * second version of the truth.
  */
 export function TransfersIndex(): ReactElement {
+  const t = useT();
   const warehouses = useWarehouseOptions();
   const create = useCreateTransfer();
   const [form, setForm] = useState({
@@ -106,31 +108,34 @@ export function TransfersIndex(): ReactElement {
   return (
     <AreaPage>
       <PageHeader
-        breadcrumbs={[{ label: 'Inventory' }, { label: 'Transfers' }]}
-        title="Inter-warehouse transfer"
-        subtitle="Moves units out of one warehouse and into another as a matched pair of movements."
+        breadcrumbs={[
+          { label: t('inventoryTransfersTransfersIndex.inventory') },
+          { label: t('inventoryTransfersTransfersIndex.transfers') },
+        ]}
+        title={t('inventoryTransfersTransfersIndex.interWarehouseTransfer')}
+        subtitle={t('inventoryTransfersTransfersIndex.movesUnitsOutOfOne')}
       />
 
-      <Panel title="What is moving">
+      <Panel title={t('inventoryTransfersTransfersIndex.whatIsMoving')}>
         <FieldGrid columns={3}>
           <TextField
             id="tr-seller"
-            label="Client id"
+            label={t('inventoryTransfersTransfersIndex.clientId')}
             inputClassName="sk-ident"
             value={form.sellerId}
             onChange={(e) => set('sellerId', e.target.value)}
           />
           <TextField
             id="tr-variant"
-            label="Variant id"
+            label={t('inventoryTransfersTransfersIndex.variantId')}
             inputClassName="sk-ident"
             value={form.variantId}
             onChange={(e) => set('variantId', e.target.value)}
           />
           <TextField
             id="tr-qty"
-            label="Quantity"
-            hint="Whole units, at least one."
+            label={t('inventoryTransfersTransfersIndex.quantity')}
+            hint={t('inventoryTransfersTransfersIndex.wholeUnitsAtLeastOne')}
             type="number"
             min={1}
             inputClassName="sk-figure"
@@ -140,16 +145,19 @@ export function TransfersIndex(): ReactElement {
         </FieldGrid>
       </Panel>
 
-      <AreaSection title="From" note="The exact bin and batch the units leave.">
+      <AreaSection
+        title={t('inventoryTransfersTransfersIndex.from')}
+        note={t('inventoryTransfersTransfersIndex.theExactBinAndBatch')}
+      >
         <Panel>
           <FieldGrid columns={3}>
             <Select
               id="tr-src-wh"
-              label="Warehouse"
+              label={t('inventoryTransfersTransfersIndex.warehouse')}
               value={form.sourceWarehouseId}
               onChange={(e) => set('sourceWarehouseId', e.target.value)}
             >
-              <option value="">Select…</option>
+              <option value="">{t('inventoryTransfersTransfersIndex.select')}</option>
               {(warehouses.data ?? []).map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.name}
@@ -158,14 +166,14 @@ export function TransfersIndex(): ReactElement {
             </Select>
             <TextField
               id="tr-src-bin"
-              label="Bin id"
+              label={t('inventoryTransfersTransfersIndex.binId')}
               inputClassName="sk-ident"
               value={form.sourceBinId}
               onChange={(e) => set('sourceBinId', e.target.value)}
             />
             <TextField
               id="tr-src-batch"
-              label="Batch id"
+              label={t('inventoryTransfersTransfersIndex.batchId')}
               inputClassName="sk-ident"
               value={form.sourceBatchId}
               onChange={(e) => set('sourceBatchId', e.target.value)}
@@ -175,18 +183,18 @@ export function TransfersIndex(): ReactElement {
       </AreaSection>
 
       <AreaSection
-        title="To"
-        note="The destination batch is required, not created for you — it carries expiry, unit cost and the goods-receipt link that FEFO and margin depend on."
+        title={t('inventoryTransfersTransfersIndex.to')}
+        note={t('inventoryTransfersTransfersIndex.theDestinationBatchIsRequired')}
       >
         <Panel>
           <FieldGrid columns={3}>
             <Select
               id="tr-dst-wh"
-              label="Warehouse"
+              label={t('inventoryTransfersTransfersIndex.warehouse')}
               value={form.destWarehouseId}
               onChange={(e) => set('destWarehouseId', e.target.value)}
             >
-              <option value="">Select…</option>
+              <option value="">{t('inventoryTransfersTransfersIndex.select')}</option>
               {(warehouses.data ?? []).map((w) => (
                 <option key={w.id} value={w.id}>
                   {w.name}
@@ -195,14 +203,14 @@ export function TransfersIndex(): ReactElement {
             </Select>
             <TextField
               id="tr-dst-bin"
-              label="Bin id"
+              label={t('inventoryTransfersTransfersIndex.binId')}
               inputClassName="sk-ident"
               value={form.destBinId}
               onChange={(e) => set('destBinId', e.target.value)}
             />
             <TextField
               id="tr-dst-batch"
-              label="Batch id"
+              label={t('inventoryTransfersTransfersIndex.batchId')}
               inputClassName="sk-ident"
               value={form.destBatchId}
               onChange={(e) => set('destBatchId', e.target.value)}
@@ -210,8 +218,8 @@ export function TransfersIndex(): ReactElement {
           </FieldGrid>
           <TextField
             id="tr-desc"
-            label="Note"
-            hint="Optional. Why this move happened."
+            label={t('inventoryTransfersTransfersIndex.note')}
+            hint={t('inventoryTransfersTransfersIndex.optionalWhyThisMoveHappened')}
             value={form.description}
             onChange={(e) => set('description', e.target.value)}
           />
@@ -219,12 +227,12 @@ export function TransfersIndex(): ReactElement {
       </AreaSection>
 
       {sameWarehouse && (
-        <InlineError message="Source and destination are the same warehouse — that is a bin move, not a transfer." />
+        <InlineError message={t('inventoryTransfersTransfersIndex.sourceAndDestinationAreThe')} />
       )}
       {create.error !== null && <InlineError message={serverVerdict(create.error)} />}
       {done && (
         <Callout tone="good">
-          Transfer recorded. It appears in the movement ledger as a TRANSFER_OUT and a TRANSFER_IN.
+          {t('inventoryTransfersTransfersIndex.transferRecordedItAppearsIn')}
         </Callout>
       )}
 
@@ -233,7 +241,10 @@ export function TransfersIndex(): ReactElement {
           size="md"
           icon={<ArrowRightLeft size={16} />}
           state={mutationPhase(create)}
-          labels={{ idle: 'Transfer stock', busy: 'Transferring…' }}
+          labels={{
+            idle: t('inventoryTransfersTransfersIndex.transferStock'),
+            busy: t('inventoryTransfersTransfersIndex.transferring'),
+          }}
           disabled={!complete || sameWarehouse || create.isPending}
           onClick={() => setConfirming(true)}
         />
@@ -242,12 +253,19 @@ export function TransfersIndex(): ReactElement {
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Transfer this stock?"
-        entity={`${form.variantId.trim()} · client ${form.sellerId.trim()}`}
+        title={t('inventoryTransfersTransfersIndex.transferThisStock')}
+        entity={t('inventoryTransfersTransfersIndex.client', {
+          value: form.variantId.trim(),
+          value2: form.sellerId.trim(),
+        })}
         entityIsIdentifier
-        amount={`${form.qty} unit(s) · ${sourceName} → ${destName}`}
-        consequence="The units leave the source bin and batch and arrive in the destination bin and batch as a matched TRANSFER_OUT and TRANSFER_IN — a movement, not something this form can take back."
-        confirmLabel="Transfer stock"
+        amount={t('inventoryTransfersTransfersIndex.unitS', {
+          qty: form.qty,
+          sourceName,
+          destName,
+        })}
+        consequence={t('inventoryTransfersTransfersIndex.theUnitsLeaveTheSource')}
+        confirmLabel={t('inventoryTransfersTransfersIndex.transferStock')}
         onConfirm={submit}
       />
     </AreaPage>

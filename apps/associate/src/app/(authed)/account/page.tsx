@@ -9,7 +9,8 @@ import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { MotionSwitch } from '@skydrop/ui/app/motion-switch';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { useToast } from '@skydrop/ui/app/toast';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { ordersPaused, seesOwnOnly } from '@/lib/orders-paused';
 import { useRequestEmailVerification, useSignOutEverywhere } from '@/lib/store-hooks';
 import { Facts, Notice, Section } from '../_components/parts';
@@ -26,6 +27,7 @@ import '../_components/as.css';
  * choice about this browser rather than about the store.
  */
 export default function AccountPage(): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   const toast = useToast();
   const verify = useRequestEmailVerification();
@@ -35,57 +37,52 @@ export default function AccountPage(): ReactElement {
 
   return (
     <div className="as-page" data-width="narrow">
-      <PageHeader title="My account" subtitle="Your own login for this store." />
+      <PageHeader title={t('account.title')} subtitle={t('account.subtitle')} />
 
       {/* The pause belongs on this page too: somebody who finds the order
           form refusing them looks here next, and "your store did this"
           is the answer, not "something is broken". */}
       {ordersPaused(me) ? (
-        <Notice tone="warn" title="Your store has paused new orders from you" role="status">
-          <span>
-            You can still read, track and follow up everything you have already placed. Ask whoever
-            runs your store to switch it back on.
-          </span>
+        <Notice tone="warn" title={t('account.paused.title')} role="status">
+          <span>{t('account.paused.body')}</span>
         </Notice>
       ) : null}
 
-      <Section title="You">
+      <Section title={t('account.you')}>
         <Facts
           items={[
-            { label: 'Name', value: <span className="as-strong">{me.fullName}</span> },
-            { label: 'Email', value: me.emailDisplay },
-            { label: 'Store', value: (me.store.displayName ?? me.store.name) || '—' },
+            { label: t('account.name'), value: <span className="as-strong">{me.fullName}</span> },
+            { label: t('common.email'), value: me.emailDisplay },
+            { label: t('account.store'), value: (me.store.displayName ?? me.store.name) || '—' },
             // Every role held, not `roleKey` — that is the first grant, a
             // label, so somebody holding two would be told something
             // untrue about their own access.
-            { label: 'Roles', value: me.roleNames.join(' and ') || '—' },
+            { label: t('account.roles'), value: me.roleNames.join(t('account.and')) || '—' },
             {
-              label: 'What you see',
-              value: seesOwnOnly(me)
-                ? 'The orders and customers you placed'
-                : 'Everything your store has placed',
+              label: t('account.whatYouSee'),
+              value: seesOwnOnly(me) ? t('account.seesOwn') : t('account.seesAll'),
             },
             {
-              label: 'Email confirmed',
+              label: t('account.emailConfirmed'),
               value:
                 me.emailVerifiedAt !== null ? (
-                  'Yes'
+                  t('common.yes')
                 ) : (
                   <AsyncButton
                     variant="secondary"
                     size="sm"
                     icon={<MailCheck size={14} />}
                     labels={{
-                      idle: verify.isSuccess ? 'Link sent' : 'Send a confirmation link',
-                      busy: 'Sending…',
-                      error: 'Not sent',
+                      idle: verify.isSuccess ? t('account.linkSent') : t('account.sendLink'),
+                      busy: t('account.sending'),
+                      error: t('account.notSent'),
                     }}
                     state={verify.isPending ? 'busy' : verify.isError ? 'error' : 'idle'}
                     disabled={verify.isPending || verify.isSuccess}
                     onClick={() =>
                       verify.mutate(undefined, {
-                        onSuccess: () => toast.success('Check your inbox for the link.'),
-                        onError: (err) => toast.error(serverVerdict(err)),
+                        onSuccess: () => toast.success(t('account.checkInbox')),
+                        onError: (err) => toast.error(verdict(err, t)),
                       })
                     }
                   />
@@ -95,14 +92,11 @@ export default function AccountPage(): ReactElement {
         />
       </Section>
 
-      <Section
-        title="This browser"
-        note="How the portal moves in this browser — saved here only, so another device keeps its own choice."
-      >
+      <Section title={t('account.browser.title')} note={t('account.browser.note')}>
         <MotionSwitch />
       </Section>
 
-      <Section title="Sessions" note="Signed in somewhere you should not be?">
+      <Section title={t('account.sessions.title')} note={t('account.sessions.note')}>
         <div className="as-row">
           <Button
             variant="destructive"
@@ -110,23 +104,23 @@ export default function AccountPage(): ReactElement {
             icon={<LogOut size={15} />}
             onClick={() => setConfirming(true)}
           >
-            Sign out everywhere
+            {t('account.signOutAll')}
           </Button>
         </div>
         <ConfirmDialog
           open={confirming}
           onOpenChange={setConfirming}
-          title="Sign out of every device?"
+          title={t('account.signOutAll.title')}
           entity={me.emailDisplay}
-          consequence="Every session of yours ends, including this one."
-          confirmLabel="Sign out everywhere"
+          consequence={t('account.signOutAll.consequence')}
+          confirmLabel={t('account.signOutAll')}
           destructive
           closeOnSuccess={false}
           onConfirm={async () => {
             try {
               await everywhere.mutateAsync();
             } catch (err) {
-              toast.error(serverVerdict(err));
+              toast.error(verdict(err, t));
               // Keep the dialog open: the sign-out did not happen.
               throw err;
             }

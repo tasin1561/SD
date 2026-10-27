@@ -11,25 +11,16 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { Tabs } from '@skydrop/ui/app/tabs';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { useMyTickets, type TicketStage } from '@/lib/ticket-hooks';
 import { LinkButton } from '../_components/parts';
 import '../_components/as.css';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
-
 /** The tab id for "every stage" — a tab needs a non-empty id. */
 const ALL_STAGES = 'ALL';
-
-const STAGES: ReadonlyArray<{ id: string; label: string }> = [
-  { id: ALL_STAGES, label: 'All' },
-  { id: 'OPEN', label: 'Open' },
-  { id: 'REVIEWING', label: 'Being looked at' },
-  { id: 'CLOSED', label: 'Closed' },
-];
 
 /**
  * ASSOC-1 capability 5 — the issues this person has raised about their
@@ -37,6 +28,14 @@ const STAGES: ReadonlyArray<{ id: string; label: string }> = [
  * scope as the orders themselves.
  */
 export default function TicketsPage(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
+  const stages: ReadonlyArray<{ id: string; label: string }> = [
+    { id: ALL_STAGES, label: t('tickets.stage.all') },
+    { id: 'OPEN', label: t('tickets.stage.open') },
+    { id: 'REVIEWING', label: t('tickets.stage.reviewing') },
+    { id: 'CLOSED', label: t('tickets.stage.closed') },
+  ];
   const me = useStoreIdentity();
   const [stage, setStage] = useState<TicketStage | ''>('');
   const tickets = useMyTickets(stage === '' ? {} : { stage });
@@ -45,75 +44,73 @@ export default function TicketsPage(): ReactElement {
   return (
     <div className="as-page">
       <PageHeader
-        title="Issues"
-        subtitle="Something wrong with one of your orders? Raise it here and follow what is said back."
+        title={t('tickets.title')}
+        subtitle={t('tickets.subtitle')}
         action={
           mayRaise ? (
             <LinkButton href="/tickets/new" variant="primary" icon={<Plus size={15} />}>
-              Raise an issue
+              {t('tickets.raise')}
             </LinkButton>
           ) : undefined
         }
       />
       <section className="as-section">
         <Tabs
-          label="Stage"
+          label={t('tickets.stage')}
           size="sm"
-          items={STAGES}
+          items={stages}
           value={stage === '' ? ALL_STAGES : stage}
           onChange={(id) => setStage(id === ALL_STAGES ? '' : (id as TicketStage))}
         />
         {tickets.isPending ? (
-          <SkeletonRows rows={4} cols={4} label="Loading issues" />
+          <SkeletonRows rows={4} cols={4} label={t('tickets.loading')} />
         ) : tickets.isError ? (
-          <ErrorState message={serverVerdict(tickets.error)} retry={() => void tickets.refetch()} />
+          <ErrorState message={verdict(tickets.error, t)} retry={() => void tickets.refetch()} />
         ) : tickets.data.items.length === 0 ? (
           <EmptyState
             tone={stage === '' ? 'positive' : 'neutral'}
-            title="Nothing raised"
-            description={
-              mayRaise
-                ? 'Open one of your orders and raise an issue from there — damaged, lost, late, or anything else that needs somebody to look.'
-                : 'Nothing has been raised about your orders.'
-            }
+            title={t('tickets.empty.title')}
+            description={mayRaise ? t('tickets.empty.mayRaise') : t('tickets.empty.cannotRaise')}
             action={
               <LinkButton href="/orders" variant="secondary" size="sm">
-                Go to my orders <ArrowRight size={14} aria-hidden />
+                {t('tickets.goOrders')} <ArrowRight size={14} aria-hidden />
               </LinkButton>
             }
           />
         ) : (
           <div className="as-card" data-flush="1">
-            <Table caption="Issues">
+            <Table caption={t('tickets.table.caption')}>
               <THead>
                 <Tr>
-                  <Th>Issue</Th>
-                  <Th>Order</Th>
-                  <Th>Status</Th>
-                  <Th>Raised</Th>
+                  <Th>{t('tickets.col.issue')}</Th>
+                  <Th>{t('tickets.col.order')}</Th>
+                  <Th>{t('tickets.col.status')}</Th>
+                  <Th>{t('tickets.col.raised')}</Th>
                 </Tr>
               </THead>
               <TBody>
-                {tickets.data.items.map((t) => (
-                  <Tr key={t.id}>
+                {tickets.data.items.map((tk) => (
+                  <Tr key={tk.id}>
                     <Td>
-                      <Link href={`/tickets/${t.id}`} className="as-link sk-ident">
-                        {t.ticketNumber}
+                      <Link href={`/tickets/${tk.id}`} className="as-link sk-ident">
+                        {tk.ticketNumber}
                       </Link>
-                      <span className="as-sub">{t.subject}</span>
+                      <span className="as-sub">{tk.subject}</span>
                     </Td>
                     <Td>
-                      <span className="sk-ident">{t.orderNumber ?? '—'}</span>
+                      <span className="sk-ident">{tk.orderNumber ?? '—'}</span>
                     </Td>
                     <Td>
                       <StatusChip
-                        kind={ticketStatusKind(t.status)}
-                        label={ticketStatusLabel(t.status)}
+                        kind={ticketStatusKind(tk.status)}
+                        label={ticketStatusLabel(tk.status, locale)}
                         size="sm"
                       />
                     </Td>
                     <Td>
-                      <span className="as-muted sk-figure">{when(t.createdAt)}</span>
+                      <span className="as-muted sk-figure">
+                        {formatDateTime(tk.createdAt, locale)}
+                      </span>
                     </Td>
                   </Tr>
                 ))}

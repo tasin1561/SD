@@ -31,6 +31,9 @@ import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
 import { CreditStandingCard } from './_components/credit-standing-card';
 import { WalFact, WalStripFact } from './_components/wallet-parts';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 type WalletTab = 'ledger' | 'withdrawals' | 'topups';
 
@@ -64,6 +67,7 @@ function isWalletTab(id: string): id is WalletTab {
  *       schedule rules live on /wallet/limits.
  */
 export default function WalletPage(): ReactElement {
+  const t = useT();
   const [exporting, setExporting] = useState(false);
   /**
    * Three views of the same money, switched in place rather than split
@@ -109,16 +113,16 @@ export default function WalletPage(): ReactElement {
   }
 
   const ledgerPanel = entries.isLoading ? (
-    <SkeletonRows rows={6} cols={5} label="Loading your ledger…" />
+    <SkeletonRows rows={6} cols={5} label={t('wallet.loadingYourLedger')} />
   ) : entries.isError ? (
     <ErrorState
-      message={entries.error?.message ?? 'Failed.'}
+      message={entries.error?.message ?? t('wallet.failed')}
       retry={() => void entries.refetch()}
     />
   ) : accumulated.length === 0 ? (
     <EmptyState
-      title="No ledger entries yet."
-      description="Once an order delivers (COD), your wallet will accrue (COD amount − shipping + GST)."
+      title={t('wallet.noLedgerEntriesYet')}
+      description={t('wallet.onceAnOrderDelivers')}
     />
   ) : (
     <>
@@ -126,14 +130,14 @@ export default function WalletPage(): ReactElement {
           here kept its desktop shape on a phone and scrolled the page
           sideways, while every other list in the app folded into cards
           (FE-7). */}
-      <Table caption="Wallet ledger">
+      <Table caption={t('wallet.walletLedger')}>
         <THead>
           <Tr>
-            <Th>When</Th>
-            <Th>Type</Th>
-            <Th>Linked</Th>
-            <Th align="right">Amount</Th>
-            <Th align="right">Balance after</Th>
+            <Th>{t('wallet.when')}</Th>
+            <Th>{t('wallet.type')}</Th>
+            <Th>{t('wallet.linked')}</Th>
+            <Th align="right">{t('wallet.amount')}</Th>
+            <Th align="right">{t('wallet.balanceAfter')}</Th>
           </Tr>
         </THead>
         <TBody>
@@ -148,7 +152,11 @@ export default function WalletPage(): ReactElement {
             variant="secondary"
             size="md"
             disabled={entries.isFetchingNextPage}
-            labels={{ idle: 'Load more', busy: 'Loading…', done: 'Loaded' }}
+            labels={{
+              idle: t('wallet.loadMore'),
+              busy: t('wallet.loading'),
+              done: t('wallet.loaded'),
+            }}
             settleMs={600}
             onAction={() => entries.fetchNextPage()}
           />
@@ -160,29 +168,37 @@ export default function WalletPage(): ReactElement {
   const topupsPanel = mayTopup ? (
     <TopupCard open={topupOpen} onOpenChange={setTopupOpen} />
   ) : (
-    <p className="wal-muted">Top-ups are recorded by an owner or finance account.</p>
+    <p className="wal-muted">{t('wallet.topUpsAreRecorded')}</p>
   );
 
   const withdrawalsPanel = mayWithdraw ? (
     <WithdrawalsCard requesting={withdrawalOpen} onRequestingChange={setWithdrawalOpen} />
   ) : (
-    <p className="wal-muted">Withdrawal requests are handled by an owner or finance account.</p>
+    <p className="wal-muted">{t('wallet.withdrawalRequestsAreHandled')}</p>
   );
 
   return (
     <div className="wal-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Money' }, { label: 'Wallet' }]}
+        breadcrumbs={[
+          { label: t('wallet.clientConsole') },
+          { label: t('wallet.money') },
+          { label: t('wallet.wallet') },
+        ]}
         Link={Link}
-        title="Wallet"
-        subtitle="What's owed to you. COD net of charges per delivered order; remittances debit as we pay you out."
+        title={t('wallet.wallet')}
+        subtitle={t('wallet.whatSOwedTo')}
         meta={
           owed === null ? undefined : (
             <span className="wal-meta">
               <WalFact tone={owed > 0 ? 'good' : owed < 0 ? 'bad' : undefined} dot>
-                {owed > 0 ? 'Owed to you' : owed < 0 ? 'You owe' : 'Settled'}
+                {owed > 0
+                  ? t('wallet.owedToYou')
+                  : owed < 0
+                    ? t('wallet.youOwe')
+                    : t('wallet.settled')}
               </WalFact>
-              {rows.some((b) => b.isConverted) && <WalFact>Also shown in taka</WalFact>}
+              {rows.some((b) => b.isConverted) && <WalFact>{t('wallet.alsoShownInTaka')}</WalFact>}
             </span>
           )
         }
@@ -202,7 +218,7 @@ export default function WalletPage(): ReactElement {
                     setTopupOpen(true);
                   }}
                 >
-                  Top-up wallet
+                  {t('wallet.topUpWallet')}
                 </Button>
               )}
               {mayWithdraw && (
@@ -215,7 +231,7 @@ export default function WalletPage(): ReactElement {
                     setWithdrawalOpen(true);
                   }}
                 >
-                  Request a withdrawal
+                  {t('wallet.requestAWithdrawal')}
                 </Button>
               )}
             </div>
@@ -243,14 +259,18 @@ export default function WalletPage(): ReactElement {
           </>
         ) : balances.isError ? (
           <ErrorState
-            message={balances.error?.message ?? 'Failed.'}
+            message={balances.error?.message ?? t('wallet.failed')}
             retry={() => void balances.refetch()}
           />
         ) : (
           rows.map((b) => (
             <KpiCard
               key={b.currency}
-              label={b.isConverted ? `Your balance in ${b.currency}` : `Balance · ${b.currency}`}
+              label={
+                b.isConverted
+                  ? t('wallet.yourBalanceIn', { currency: b.currency })
+                  : t('wallet.balance2', { currency: b.currency })
+              }
               icon={b.isConverted ? <Coins size={14} /> : <Landmark size={14} />}
               figure={
                 <Money
@@ -275,12 +295,14 @@ export default function WalletPage(): ReactElement {
                 // "owed to you" on both would read as twice as much
                 // money.
                 b.isConverted
-                  ? `Your rupee balance in taka${b.fxRate === null ? '' : ` · ₹1 = ৳${Number(b.fxRate).toFixed(2)}`}`
+                  ? t('wallet.rupeeBalanceInTaka', {
+                      rate: b.fxRate === null ? '' : ` · ₹1 = ৳${Number(b.fxRate).toFixed(2)}`,
+                    })
                   : Number(b.balance) === 0
-                    ? 'No activity yet.'
+                    ? t('wallet.noActivityYet')
                     : Number(b.balance) > 0
-                      ? 'Owed to you, and goes out with your next withdrawal.'
-                      : 'You owe this much; it clears as your stock sells.'
+                      ? t('wallet.owedToYouAnd')
+                      : t('wallet.youOweThisMuch')
               }
             />
           ))
@@ -292,18 +314,24 @@ export default function WalletPage(): ReactElement {
           navigation problem. */}
       <section className="wal-section">
         <SectionHeading
-          title={tab === 'ledger' ? 'Ledger' : tab === 'topups' ? 'Top-ups' : 'Withdrawal requests'}
+          title={
+            tab === 'ledger'
+              ? t('wallet.ledger')
+              : tab === 'topups'
+                ? t('wallet.topUps')
+                : t('wallet.withdrawalRequests')
+          }
           note={
             tab === 'ledger'
-              ? 'Every movement, oldest last.'
+              ? t('wallet.everyMovementOldestLast')
               : tab === 'topups'
-                ? 'Money you have told us you sent.'
-                : 'Money you have asked us to pay out.'
+                ? t('wallet.moneyYouHaveTold')
+                : t('wallet.moneyYouHaveAsked')
           }
           action={
             <span className="wal-actions">
               <Link href="/wallet/limits" className="wal-link">
-                Limits and settings
+                {t('wallet.limitsAndSettings')}
                 <ArrowRight size={13} aria-hidden />
               </Link>
               {tab === 'ledger' && (
@@ -312,7 +340,11 @@ export default function WalletPage(): ReactElement {
                   size="sm"
                   icon={<Download size={14} />}
                   disabled={accumulated.length === 0 || exporting}
-                  labels={{ idle: 'Export CSV', busy: 'Loading all…', done: 'Downloaded' }}
+                  labels={{
+                    idle: t('wallet.exportCsv'),
+                    busy: t('wallet.loadingAll'),
+                    done: t('wallet.downloaded'),
+                  }}
                   onAction={exportAll}
                 />
               )}
@@ -321,7 +353,7 @@ export default function WalletPage(): ReactElement {
         />
 
         <Tabs
-          label="Wallet views"
+          label={t('wallet.walletViews')}
           size="sm"
           panelClassName="wal-panel"
           value={tab}
@@ -329,11 +361,11 @@ export default function WalletPage(): ReactElement {
             if (isWalletTab(id)) setTab(id);
           }}
           items={[
-            { id: 'ledger', label: 'Ledger', panel: ledgerPanel },
+            { id: 'ledger', label: t('wallet.ledger'), panel: ledgerPanel },
             // Money in before money out: a seller whose balance is
             // short needs the top-up, not the withdrawal form.
-            { id: 'topups', label: 'Top-ups', panel: topupsPanel },
-            { id: 'withdrawals', label: 'Withdrawal requests', panel: withdrawalsPanel },
+            { id: 'topups', label: t('wallet.topUps'), panel: topupsPanel },
+            { id: 'withdrawals', label: t('wallet.withdrawalRequests'), panel: withdrawalsPanel },
           ]}
         />
       </section>
@@ -341,18 +373,19 @@ export default function WalletPage(): ReactElement {
       <div className="wal-strip">
         {owed !== null && (
           <WalStripFact
-            label="Balance"
+            label={t('wallet.balance')}
             value={<Money amount={inr?.balance ?? '0'} convert={false} />}
             tone={owed < 0 ? 'warn' : 'good'}
           />
         )}
         <WalStripFact
-          label="Entries loaded"
+          label={t('wallet.entriesLoaded')}
           value={entries.isLoading ? '—' : `${accumulated.length}${entries.hasNextPage ? '+' : ''}`}
         />
         <span className="wal-strip__note">
-          Remittances are paid to the bank account on your profile —{' '}
-          <Link href="/profile">update it</Link> before your first withdrawal.
+          {richMessage(t('wallet.remittancesArePaidTo'), {
+            link: <Link href="/profile">{t('wallet.updateIt')}</Link>,
+          })}
         </span>
       </div>
     </div>
@@ -375,11 +408,15 @@ export default function WalletPage(): ReactElement {
  * colour of the figure — so colour is never the only signal.
  */
 function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const isCredit = isWalletCredit(entry.direction);
   const currency = entry.currency === 'BDT' ? 'BDT' : 'INR';
   return (
     <Tr>
-      <Td className="wal-when sk-figure">{new Date(entry.createdAt).toLocaleString()}</Td>
+      <Td className="wal-when sk-figure">
+        {new Date(entry.createdAt).toLocaleString(dateTag(locale))}
+      </Td>
       <Td>
         <div className="wal-type">
           <span className="wal-dir" data-dir={isCredit ? 'credit' : 'debit'} aria-hidden>
@@ -393,14 +430,14 @@ function LedgerRow({ entry }: { readonly entry: WalletEntryView }): ReactElement
       <Td>
         {entry.linkedOrderId ? (
           <Link href={`/orders/${entry.linkedOrderId}`} className="wal-linked sk-ident">
-            {entry.linkedOrderNumber ?? 'Order'} →
+            {entry.linkedOrderNumber ?? t('wallet.order')} →
           </Link>
         ) : entry.linkedConsignmentId ? (
           <Link href={`/inbound/${entry.linkedConsignmentId}`} className="wal-linked sk-ident">
-            {entry.linkedConsignmentNumber ?? 'Consignment'} →
+            {entry.linkedConsignmentNumber ?? t('wallet.consignment')} →
           </Link>
         ) : entry.linkedRemittanceId ? (
-          <span className="wal-faint">Remittance</span>
+          <span className="wal-faint">{t('wallet.remittance')}</span>
         ) : (
           <span className="wal-faint">—</span>
         )}

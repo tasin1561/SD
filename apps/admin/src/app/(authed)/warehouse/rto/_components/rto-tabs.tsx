@@ -3,6 +3,7 @@
 import type { ReactElement, ReactNode } from 'react';
 import { Tabs } from '@skydrop/ui/app/tabs';
 import '../../_components/benches.css';
+import { useT } from '@/i18n/client';
 
 export type RtoTab = 'door' | 'transit' | 'bench' | 'receive';
 
@@ -37,6 +38,7 @@ export function RtoTabs({
   readonly onChange: (tab: RtoTab) => void;
   readonly counts: Readonly<Record<Exclude<RtoTab, 'receive'>, number>>;
 }): ReactElement {
+  const t = useT();
   const shown = (n: number): number | undefined => (n > 0 ? n : undefined);
   // Only "At our door" is urgent: these parcels are here, and every hour
   // is an hour a seller is being told their goods are still moving.
@@ -45,14 +47,18 @@ export function RtoTabs({
   return (
     <div className="wh-rto-tabs" data-door-urgent={doorUrgent ? '1' : undefined}>
       <Tabs
-        label="RTO views"
+        label={t('warehouseRtoRtoTabs.rtoViews')}
         value={active}
         onChange={(id) => onChange(id as RtoTab)}
         items={[
-          { id: 'door', label: 'At our door', count: shown(counts.door) },
-          { id: 'transit', label: 'Still with the courier', count: shown(counts.transit) },
-          { id: 'bench', label: 'On the bench', count: shown(counts.bench) },
-          { id: 'receive', label: 'Receive & inspect' },
+          { id: 'door', label: t('warehouseRtoRtoTabs.atOurDoor'), count: shown(counts.door) },
+          {
+            id: 'transit',
+            label: t('warehouseRtoRtoTabs.stillWithTheCourier'),
+            count: shown(counts.transit),
+          },
+          { id: 'bench', label: t('warehouseRtoRtoTabs.onTheBench'), count: shown(counts.bench) },
+          { id: 'receive', label: t('warehouseRtoRtoTabs.receiveInspect') },
         ]}
       />
     </div>

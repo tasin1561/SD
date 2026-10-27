@@ -1,7 +1,10 @@
+'use client';
+
 import { clsx } from 'clsx';
 import { SlidersHorizontal, X } from 'lucide-react';
 import type { ReactElement, ReactNode } from 'react';
 import { Button } from '../button';
+import { useUiT } from '../i18n-client';
 import './filter-bar.css';
 
 export interface FilterChip {
@@ -22,12 +25,12 @@ export interface FilterChip {
  * number of chips.
  */
 export function FilterBar({
-  title = 'Filters',
+  title,
   activeCount,
   chips = [],
   onReset,
   onApply,
-  applyLabel = 'Apply',
+  applyLabel,
   applying = false,
   actions,
   children,
@@ -46,16 +49,17 @@ export function FilterBar({
   readonly children: ReactNode;
   readonly className?: string | undefined;
 }): ReactElement {
+  const t = useUiT();
   const count = activeCount ?? chips.length;
   return (
-    <section className={clsx('sk-filter', className)} aria-label="Filters">
+    <section className={clsx('sk-filter', className)} aria-label={t('ui.filters.title')}>
       <div className="sk-filter__head">
         <span className="sk-filter__icon" aria-hidden>
           <SlidersHorizontal size={16} />
         </span>
-        <span className="sk-filter__title">{title}</span>
+        <span className="sk-filter__title">{title ?? t('ui.filters.title')}</span>
         <span className="sk-filter__count sk-figure" data-zero={count === 0 ? '1' : undefined}>
-          {count === 0 ? 'None active' : `${count} active`}
+          {count === 0 ? t('ui.filters.noneActive') : t('ui.filters.nActive', { n: count })}
         </span>
         <span className="sk-filter__head-actions">
           {actions}
@@ -66,19 +70,19 @@ export function FilterBar({
               onClick={onReset}
               disabled={count === 0}
             >
-              Reset
+              {t('ui.filters.reset')}
             </button>
           )}
           {onApply !== undefined && (
             <Button variant="primary" size="sm" onClick={onApply} loading={applying}>
-              {applyLabel}
+              {applyLabel ?? t('ui.filters.apply')}
             </Button>
           )}
         </span>
       </div>
       <div className="sk-filter__controls">{children}</div>
       {chips.length > 0 && (
-        <ul className="sk-filter__chips" aria-label="Active filters">
+        <ul className="sk-filter__chips" aria-label={t('ui.filters.active')}>
           {chips.map((c) => (
             <li key={c.id} className="sk-filter__chip">
               <span className="sk-filter__chip-label">{c.label}</span>
@@ -86,7 +90,7 @@ export function FilterBar({
                 type="button"
                 className="sk-filter__chip-x"
                 onClick={c.onRemove}
-                aria-label={`Remove filter: ${c.label}`}
+                aria-label={t('ui.filters.remove', { label: c.label })}
               >
                 <X size={12} strokeWidth={2.5} aria-hidden />
               </button>

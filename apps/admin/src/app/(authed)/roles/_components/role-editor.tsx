@@ -13,6 +13,8 @@ import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { AcAlert, phaseOf } from '../../settings/_components/ac-parts';
 import { useCreateRole, useUpdateRole, type Catalogue, type RoleView } from '@/lib/rbac-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Deciding what a role may do.
@@ -52,6 +54,8 @@ export function RoleEditor({
   readonly open: boolean;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
+
   const toast = useToast();
   const create = useCreateRole();
   const update = useUpdateRole();
@@ -118,23 +122,28 @@ export function RoleEditor({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title={role === null ? 'New role' : `Edit ${role.name}`}
+      title={
+        role === null
+          ? t('rolesRoleEditor.newRole')
+          : t('rolesRoleEditor.edit', { name: role.name })
+      }
       icon={<KeyRound size={18} />}
       size="lg"
       locked={pending}
       footer={
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={onClose}>
-            Cancel
+            {t('rolesRoleEditor.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
             size="md"
             state={phaseOf(pending, error)}
             labels={{
-              idle: role === null ? 'Create role' : 'Save changes',
-              busy: 'Saving…',
-              error: 'Not saved',
+              idle:
+                role === null ? t('rolesRoleEditor.createRole') : t('rolesRoleEditor.saveChanges'),
+              busy: t('rolesRoleEditor.saving'),
+              error: t('rolesRoleEditor.notSaved'),
             }}
             disabled={pending || name.trim().length < 2}
             onClick={() => void save()}
@@ -144,17 +153,17 @@ export function RoleEditor({
     >
       <div className="ac-form">
         <TextField
-          label="Name"
+          label={t('rolesRoleEditor.name')}
           id="role-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Warehouse manager"
+          placeholder={t('rolesRoleEditor.warehouseManager')}
         />
 
         <TextArea
-          label="What this role is for"
+          label={t('rolesRoleEditor.whatThisRoleIsFor')}
           id="role-desc"
-          hint="Shown on the roles list. Helps whoever assigns it later."
+          hint={t('rolesRoleEditor.shownOnTheRolesList')}
           rows={2}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -165,23 +174,32 @@ export function RoleEditor({
             icon={<Search size={15} />}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search permissions — try “return”, “wallet” or a key"
-            aria-label="Search permissions"
+            placeholder={t('rolesRoleEditor.searchPermissionsTryReturnWallet')}
+            aria-label={t('rolesRoleEditor.searchPermissions')}
           />
 
           <div className="ac-counts">
             <span>
-              <span className="sk-figure">{selected.length}</span> of{' '}
-              <span className="sk-figure">{catalogue.permissions.length}</span> permissions
-              {needle !== '' && ` · ${matches.length} match${matches.length === 1 ? '' : 'es'}`}
+              {richMessage(t('rolesRoleEditor.ofPermissions'), {
+                span: <span className="sk-figure">{selected.length}</span>,
+                span2: <span className="sk-figure">{catalogue.permissions.length}</span>,
+              })}
+              {needle !== '' &&
+                t('rolesRoleEditor.match', {
+                  length: matches.length,
+                  value: matches.length === 1 ? '' : t('common.pluralEs'),
+                })}
               {hiddenSelected > 0 && (
-                <span className="ac-counts__warn"> · {hiddenSelected} selected not shown</span>
+                <span className="ac-counts__warn">
+                  {' '}
+                  {t('rolesRoleEditor.selectedNotShown', { hiddenSelected })}
+                </span>
               )}
             </span>
             {dangerousCount > 0 && (
               <span className="ac-counts__danger">
                 <AlertTriangle size={13} aria-hidden />
-                {dangerousCount} can move money or stock
+                {t('rolesRoleEditor.canMoveMoneyOrStock', { dangerousCount })}
               </span>
             )}
           </div>
@@ -189,8 +207,7 @@ export function RoleEditor({
           <div className="ac-perms">
             {matches.length === 0 && (
               <p className="ac-perms__empty">
-                Nothing matches “{query.trim()}”. The search covers the name, the explanation and
-                the permission key.
+                {t('rolesRoleEditor.nothingMatchesTheSearchCovers', { value: query.trim() })}
               </p>
             )}
             {catalogue.groups.map((group) => {
@@ -208,7 +225,10 @@ export function RoleEditor({
                         <>
                           {p.label}
                           {p.dangerous && (
-                            <span className="ac-perm-danger" title="Can move money or stock">
+                            <span
+                              className="ac-perm-danger"
+                              title={t('rolesRoleEditor.canMoveMoneyOrStock2')}
+                            >
                               <AlertTriangle size={12} aria-hidden />
                             </span>
                           )}

@@ -6,7 +6,8 @@ import { KeyRound } from 'lucide-react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { AuthNotice } from '../../../login/_components/auth-notice';
 
 /**
@@ -15,11 +16,12 @@ import { AuthNotice } from '../../../login/_components/auth-notice';
  * submit — the server's own verdict is what counts, shown verbatim
  * (FE-2).
  */
-const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
-  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
-];
 
 export function ResetForm(): ReactElement {
+  const t = useT();
+  const criteria: readonly PasswordCriterion[] = [
+    { id: 'length', label: t('auth.password.min10'), test: (v) => v.length >= 10 },
+  ];
   const token = useSearchParams().get('token') ?? '';
   const [password, setPassword] = useState('');
   const [state, setState] = useState<'idle' | 'saving' | 'done'>('idle');
@@ -39,22 +41,20 @@ export function ResetForm(): ReactElement {
       setState('done');
     } catch (err) {
       // The server's own verdict (FE-2): its minimum length, an expired link.
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setState('idle');
     }
   }
 
   if (token === '') {
-    return (
-      <AuthNotice tone="neutral">
-        This link is missing its token. Ask for a new one from the sign-in page.
-      </AuthNotice>
-    );
+    return <AuthNotice tone="neutral">{t('auth.reset.missingToken')}</AuthNotice>;
   }
   if (state === 'done') {
     return (
       <AuthNotice tone="good" role="status">
-        Your password is set, and every signed-in session was ended. <a href="/login">Sign in</a>.
+        {richMessage(t('auth.reset.done'), {
+          signIn: <a href="/login">{t('auth.reset.signInLink')}</a>,
+        })}
       </AuthNotice>
     );
   }
@@ -68,13 +68,13 @@ export function ResetForm(): ReactElement {
     >
       <PasswordField
         id="password"
-        label="New password"
+        label={t('auth.reset.newPassword')}
         autoComplete="new-password"
         required
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         showStrength
-        criteria={PASSWORD_CRITERIA}
+        criteria={criteria}
       />
       {error !== null ? (
         <AuthNotice tone="critical" role="alert">
@@ -87,7 +87,11 @@ export function ResetForm(): ReactElement {
         size="lg"
         fullWidth
         icon={<KeyRound size={15} />}
-        labels={{ idle: 'Set password', busy: 'Saving…', error: 'Not saved' }}
+        labels={{
+          idle: t('auth.reset.set'),
+          busy: t('common.saving'),
+          error: t('common.notSaved'),
+        }}
         state={state === 'saving' ? 'busy' : error !== null ? 'error' : 'idle'}
         disabled={state === 'saving'}
       />

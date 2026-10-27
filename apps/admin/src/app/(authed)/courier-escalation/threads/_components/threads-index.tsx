@@ -25,6 +25,7 @@ import { usePermission } from '@/lib/use-permission';
 import { AfCard } from '@/app/(authed)/system/_components/af-parts';
 import { EscalationTabs } from '../../_components/escalation-tabs';
 import '../../_components/escalation.css';
+import { useT } from '@/i18n/client';
 
 /**
  * Every courier conversation, and the operator's side of one.
@@ -48,6 +49,7 @@ import '../../_components/escalation.css';
  * wrong label with extra steps.
  */
 export function CourierThreadsIndex(): ReactElement {
+  const t = useT();
   const list = useCourierEscalations();
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -56,34 +58,41 @@ export function CourierThreadsIndex(): ReactElement {
   return (
     <div className="af-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Network' }, { label: 'Courier escalation' }]}
+        breadcrumbs={[
+          { label: t('courierEscalationThreadsThreadsIndex.network') },
+          { label: t('courierEscalationThreadsThreadsIndex.courierEscalation') },
+        ]}
         Link={Link}
-        title="Courier conversations"
-        subtitle="What each courier has told us, per parcel, in their words. Replies you send here queue for a person to send — no courier has a reply API."
+        title={t('courierEscalationThreadsThreadsIndex.courierConversations')}
+        subtitle={t('courierEscalationThreadsThreadsIndex.whatEachCourierHasTold')}
       />
       <EscalationTabs />
 
       {list.isLoading ? (
         <AfCard flush>
-          <SkeletonRows rows={5} cols={6} label="Loading conversations" />
+          <SkeletonRows
+            rows={5}
+            cols={6}
+            label={t('courierEscalationThreadsThreadsIndex.loadingConversations')}
+          />
         </AfCard>
       ) : list.isError ? (
         <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="No conversations yet"
-          description="One opens when a ticket needs the courier — either a client raises an issue, or a failed re-attempt request escalates one automatically."
+          title={t('courierEscalationThreadsThreadsIndex.noConversationsYet')}
+          description={t('courierEscalationThreadsThreadsIndex.oneOpensWhenATicket')}
         />
       ) : (
         <Table>
           <THead>
             <Tr>
-              <Th>Client</Th>
+              <Th>{t('courierEscalationThreadsThreadsIndex.client')}</Th>
               <Th>AWB</Th>
-              <Th>Their ticket</Th>
-              <Th>State</Th>
-              <Th align="right">Messages</Th>
-              <Th>Last heard</Th>
+              <Th>{t('courierEscalationThreadsThreadsIndex.theirTicket')}</Th>
+              <Th>{t('courierEscalationThreadsThreadsIndex.state')}</Th>
+              <Th align="right">{t('courierEscalationThreadsThreadsIndex.messages')}</Th>
+              <Th>{t('courierEscalationThreadsThreadsIndex.lastHeard')}</Th>
               <Th> </Th>
             </Tr>
           </THead>
@@ -108,7 +117,9 @@ export function CourierThreadsIndex(): ReactElement {
                     // No courier ticket id means nothing has been
                     // delivered to them yet, or the operator marked an
                     // item sent without pasting one back.
-                    <span className="af-faint">not yet raised</span>
+                    <span className="af-faint">
+                      {t('courierEscalationThreadsThreadsIndex.notYetRaised')}
+                    </span>
                   ) : (
                     <Ident value={r.externalTicketId} />
                   )}
@@ -123,7 +134,7 @@ export function CourierThreadsIndex(): ReactElement {
                     {r.needsReviewAt !== null ? (
                       <span
                         className="ce-review"
-                        title="A message here was classified with low confidence."
+                        title={t('courierEscalationThreadsThreadsIndex.aMessageHereWasClassified')}
                       >
                         <AlertTriangle size={12} aria-hidden /> review
                       </span>
@@ -147,7 +158,9 @@ export function CourierThreadsIndex(): ReactElement {
                     aria-expanded={selected === r.id}
                     onClick={() => setSelected(selected === r.id ? null : r.id)}
                   >
-                    {selected === r.id ? 'Close' : 'Open'}
+                    {selected === r.id
+                      ? t('courierEscalationThreadsThreadsIndex.close')
+                      : t('courierEscalationThreadsThreadsIndex.open')}
                   </Button>
                 </Td>
               </Tr>
@@ -162,6 +175,7 @@ export function CourierThreadsIndex(): ReactElement {
 }
 
 function ThreadPanel({ escalationId }: { readonly escalationId: string }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const thread = useCourierThread(escalationId);
   const reply = useReplyToCourierAsStaff();
@@ -171,7 +185,14 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
   const canWrite = usePermission('courier.ops.write');
   const [draft, setDraft] = useState('');
 
-  if (thread.isLoading) return <SkeletonRows rows={4} cols={1} label="Loading the thread" />;
+  if (thread.isLoading)
+    return (
+      <SkeletonRows
+        rows={4}
+        cols={1}
+        label={t('courierEscalationThreadsThreadsIndex.loadingTheThread')}
+      />
+    );
   if (thread.isError) {
     return <ErrorState message={serverVerdict(thread.error)} retry={() => void thread.refetch()} />;
   }
@@ -188,7 +209,7 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
       // Queued, not sent: it lands in the outbox and a human or the
       // portal worker delivers it. Saying "sent" here would be a lie
       // the operator finds out about on the next reconciliation.
-      toast.success('Queued in the send queue');
+      toast.success(t('courierEscalationThreadsThreadsIndex.queuedInTheSendQueue'));
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
@@ -201,7 +222,7 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
     try {
       await recordInbound.mutateAsync({ escalationId, body });
       setInbound('');
-      toast.success('Recorded — the client can see it now');
+      toast.success(t('courierEscalationThreadsThreadsIndex.recordedTheClientCanSee'));
     } catch (err) {
       toast.error(serverVerdict(err));
       throw err;
@@ -211,23 +232,27 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
   return (
     <AfCard>
       <div className="af-row">
-        <h3 className="af-card__title">Thread</h3>
+        <h3 className="af-card__title">{t('courierEscalationThreadsThreadsIndex.thread')}</h3>
         {data.awbNumber !== null ? (
           <span className="af-small">
             AWB <Ident value={data.awbNumber} />
           </span>
         ) : null}
         <Link href={`/tickets?ticketId=${data.ticketId}`} className="af-link af-small">
-          the ticket this hangs off
+          {t('courierEscalationThreadsThreadsIndex.theTicketThisHangsOff')}
         </Link>
         {data.pendingOutbound > 0 ? (
-          <span className="af-small">{data.pendingOutbound} awaiting delivery to the courier</span>
+          <span className="af-small">
+            {t('courierEscalationThreadsThreadsIndex.awaitingDeliveryToTheCourier', {
+              pendingOutbound: data.pendingOutbound,
+            })}
+          </span>
         ) : null}
       </div>
 
       <div className="af-stack">
         {data.messages.length === 0 ? (
-          <p className="af-muted">Open, nothing said yet.</p>
+          <p className="af-muted">{t('courierEscalationThreadsThreadsIndex.openNothingSaidYet')}</p>
         ) : (
           data.messages.map((m) => <Message key={m.id} message={m} />)
         )}
@@ -237,8 +262,8 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
         <div className="af-divider af-form">
           <TextArea
             id={`reply-${escalationId}`}
-            label="Reply to the courier"
-            hint="Stored and sent exactly as typed — never rewritten or translated."
+            label={t('courierEscalationThreadsThreadsIndex.replyToTheCourier')}
+            hint={t('courierEscalationThreadsThreadsIndex.storedAndSentExactlyAs')}
             rows={3}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -249,16 +274,16 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
               size="sm"
               icon={<Send size={14} />}
               labels={{
-                idle: 'Queue reply',
-                busy: 'Queueing…',
-                done: 'Queued',
-                error: 'Not queued',
+                idle: t('courierEscalationThreadsThreadsIndex.queueReply'),
+                busy: t('courierEscalationThreadsThreadsIndex.queueing'),
+                done: t('courierEscalationThreadsThreadsIndex.queued'),
+                error: t('courierEscalationThreadsThreadsIndex.notQueued'),
               }}
               disabled={draft.trim() === ''}
               onAction={send}
             />
             <span className="af-small">
-              Goes to the send queue. Nothing reaches Delhivery until it is delivered from there.
+              {t('courierEscalationThreadsThreadsIndex.goesToTheSendQueue')}
             </span>
           </div>
 
@@ -271,8 +296,8 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
           */}
           <TextArea
             id={`inbound-${escalationId}`}
-            label="Record what the courier told us"
-            hint="Paste their reply rather than paraphrasing — the client reads this as the courier's own words."
+            label={t('courierEscalationThreadsThreadsIndex.recordWhatTheCourierTold')}
+            hint={t('courierEscalationThreadsThreadsIndex.pasteTheirReplyRatherThan')}
             rows={3}
             value={inbound}
             onChange={(e) => setInbound(e.target.value)}
@@ -282,15 +307,17 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
               variant="secondary"
               size="sm"
               labels={{
-                idle: 'Save their reply',
-                busy: 'Saving…',
-                done: 'Recorded',
-                error: 'Not saved',
+                idle: t('courierEscalationThreadsThreadsIndex.saveTheirReply'),
+                busy: t('courierEscalationThreadsThreadsIndex.saving'),
+                done: t('courierEscalationThreadsThreadsIndex.recorded'),
+                error: t('courierEscalationThreadsThreadsIndex.notSaved'),
               }}
               disabled={inbound.trim() === ''}
               onAction={saveInbound}
             />
-            <span className="af-small">Shown to the client on their ticket. Sends nothing.</span>
+            <span className="af-small">
+              {t('courierEscalationThreadsThreadsIndex.shownToTheClientOn')}
+            </span>
           </div>
         </div>
       ) : null}
@@ -299,11 +326,16 @@ function ThreadPanel({ escalationId }: { readonly escalationId: string }): React
 }
 
 function Message({ message }: { readonly message: CourierThreadMessage }): ReactElement {
+  const t = useT();
   const fromCourier = message.direction === 'INBOUND';
   return (
     <div className="ce-msg" data-side={fromCourier ? 'in' : 'out'}>
       <div className="ce-msg__meta">
-        <span className="ce-msg__who">{fromCourier ? 'Delhivery' : 'Skydrop'}</span>
+        <span className="ce-msg__who">
+          {fromCourier
+            ? t('courierEscalationThreadsThreadsIndex.delhivery')
+            : t('courierEscalationThreadsThreadsIndex.skydrop')}
+        </span>
         <span className="af-small">{new Date(message.occurredAt).toLocaleString('en-IN')}</span>
         <span className="af-faint">{message.channel.toLowerCase()}</span>
         {message.state !== null ? (
@@ -314,7 +346,8 @@ function Message({ message }: { readonly message: CourierThreadMessage }): React
         ) : null}
         {message.needsReview ? (
           <span className="ce-review">
-            <AlertTriangle size={12} aria-hidden /> low confidence
+            <AlertTriangle size={12} aria-hidden />{' '}
+            {t('courierEscalationThreadsThreadsIndex.lowConfidence')}
           </span>
         ) : null}
       </div>

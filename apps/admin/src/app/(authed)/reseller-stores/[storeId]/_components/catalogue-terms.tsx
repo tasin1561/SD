@@ -9,18 +9,30 @@ import { TBody, THead, Table, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { AcSection } from '../../../settings/_components/ac-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { useAdminResellerCatalogue } from '@/lib/reseller-catalogue-hooks';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
-const REASON_WORDS = {
-  NOT_ENABLED: 'Not sold',
-  NO_TRANSFER_PRICE: 'No price',
-  VARIANT_NOT_RESELLABLE: 'Product archived',
-} as const;
+const REASON_WORDS = (t: Translate<MessageKey>) =>
+  ({
+    NOT_ENABLED: t('resellerStoresStoreIdCatalogueTerms.notSold'),
+    NO_TRANSFER_PRICE: t('resellerStoresStoreIdCatalogueTerms.noPrice'),
+    VARIANT_NOT_RESELLABLE: t('resellerStoresStoreIdCatalogueTerms.productArchived'),
+  }) as const;
 
 /** RS-3 — the store's catalogue terms, read-only (the seller sets them). */
 export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
+  const t = useT();
   const terms = useAdminResellerCatalogue(storeId);
   const body = ((): ReactElement => {
-    if (terms.isPending) return <SkeletonRows rows={4} cols={6} label="Loading catalogue terms" />;
+    if (terms.isPending)
+      return (
+        <SkeletonRows
+          rows={4}
+          cols={6}
+          label={t('resellerStoresStoreIdCatalogueTerms.loadingCatalogueTerms')}
+        />
+      );
     if (terms.isError) {
       return <ErrorState message={serverVerdict(terms.error)} retry={() => void terms.refetch()} />;
     }
@@ -29,21 +41,21 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
       return (
         <EmptyState
           bare
-          title="The client has not given this store any products yet"
-          description="Products appear here once the client turns them on for the store."
+          title={t('resellerStoresStoreIdCatalogueTerms.theClientHasNotGiven')}
+          description={t('resellerStoresStoreIdCatalogueTerms.productsAppearHereOnceThe')}
         />
       );
     }
     return (
-      <Table caption="Catalogue terms">
+      <Table caption={t('resellerStoresStoreIdCatalogueTerms.catalogueTerms')}>
         <THead>
           <Tr>
-            <Th>Product</Th>
-            <Th>Sold</Th>
-            <Th align="right">Transfer price</Th>
-            <Th>Stock</Th>
-            <Th align="right">Available (real)</Th>
-            <Th align="right">Store sees</Th>
+            <Th>{t('resellerStoresStoreIdCatalogueTerms.product')}</Th>
+            <Th>{t('resellerStoresStoreIdCatalogueTerms.sold')}</Th>
+            <Th align="right">{t('resellerStoresStoreIdCatalogueTerms.transferPrice')}</Th>
+            <Th>{t('resellerStoresStoreIdCatalogueTerms.stock')}</Th>
+            <Th align="right">{t('resellerStoresStoreIdCatalogueTerms.availableReal')}</Th>
+            <Th align="right">{t('resellerStoresStoreIdCatalogueTerms.storeSees')}</Th>
           </Tr>
         </THead>
         <TBody>
@@ -61,7 +73,11 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
               <Td>
                 <StatusChip
                   kind={r.sellable ? 'delivered' : 'neutral'}
-                  label={r.sellable ? 'Yes' : REASON_WORDS[r.notSellableReason ?? 'NOT_ENABLED']}
+                  label={
+                    r.sellable
+                      ? t('resellerStoresStoreIdCatalogueTerms.yes')
+                      : REASON_WORDS(t)[r.notSellableReason ?? 'NOT_ENABLED']
+                  }
                   size="sm"
                 />
               </Td>
@@ -72,14 +88,22 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
                   <span>
                     <Money amount={r.effective.transferPriceInr} convert={false} />
                     <span className="ac-cell-sub">
-                      {r.priceSource === 'OVERRIDE' ? ' (store’s own)' : ' (default)'}
+                      {r.priceSource === 'OVERRIDE'
+                        ? t('resellerStoresStoreIdCatalogueTerms.storeSOwn')
+                        : ' (default)'}
                     </span>
                   </span>
                 )}
               </Td>
               <Td>
-                {r.stockMode === 'SET_ASIDE' ? `Set aside ${r.setAsideQty ?? 0}` : 'Shared'}
-                {r.hiddenPercent > 0 ? ` · ${r.hiddenPercent}% hidden` : ''}
+                {r.stockMode === 'SET_ASIDE'
+                  ? t('resellerStoresStoreIdCatalogueTerms.setAside', { value: r.setAsideQty ?? 0 })
+                  : t('resellerStoresStoreIdCatalogueTerms.shared')}
+                {r.hiddenPercent > 0
+                  ? t('resellerStoresStoreIdCatalogueTerms.hidden', {
+                      hiddenPercent: r.hiddenPercent,
+                    })
+                  : ''}
               </Td>
               <Td align="right">
                 <Num value={r.realAvailable} />
@@ -95,8 +119,8 @@ export function CatalogueTerms({ storeId }: { storeId: string }): ReactElement {
   })();
   return (
     <AcSection
-      title="Catalogue terms"
-      note="What the client lets this store sell, at what price, and how much stock it is shown."
+      title={t('resellerStoresStoreIdCatalogueTerms.catalogueTerms')}
+      note={t('resellerStoresStoreIdCatalogueTerms.whatTheClientLetsThis')}
       flush
     >
       {body}

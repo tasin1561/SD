@@ -10,6 +10,7 @@ import { Dialog, DialogFooter } from '@skydrop/ui/app/dialog';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { serverVerdict } from '@/lib/server-verdict';
 import { phaseOf } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Invite-a-seller dialog. Email-only — the API generates the
@@ -23,6 +24,7 @@ export function CreateInvitationDialog({
   readonly open: boolean;
   readonly onOpenChange: (o: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const create = useCreateInvitation();
@@ -37,16 +39,16 @@ export function CreateInvitationDialog({
   async function handleSubmit(): Promise<void> {
     setError(null);
     if (!email.trim()) {
-      setError('Email is required.');
+      setError(t('sellersCreateInvitationDialog.emailIsRequired'));
       return;
     }
     try {
       const trimmed = email.trim();
       await create.mutateAsync({ email: trimmed });
-      toast.success(`Invitation sent to ${trimmed}`);
+      toast.success(t('sellersCreateInvitationDialog.invitationSentTo', { trimmed }));
       close();
     } catch (err) {
-      setError(serverVerdict(err, 'Failed to send invitation.'));
+      setError(serverVerdict(err, t('sellersCreateInvitationDialog.failedToSendInvitation')));
     }
   }
 
@@ -54,8 +56,8 @@ export function CreateInvitationDialog({
     <Dialog
       open={open}
       onOpenChange={(o) => (o ? onOpenChange(true) : close())}
-      title="Invite a client"
-      description="An invitation email with a one-time registration link will be sent. The invitee creates their account; you can monitor it from the invitations panel."
+      title={t('sellersCreateInvitationDialog.inviteAClient')}
+      description={t('sellersCreateInvitationDialog.anInvitationEmailWithA')}
       icon={<Mail size={18} />}
       locked={create.isPending}
     >
@@ -67,7 +69,7 @@ export function CreateInvitationDialog({
         className="ac-form"
       >
         <TextField
-          label="Email address"
+          label={t('sellersCreateInvitationDialog.emailAddress')}
           id="invite-email"
           type="email"
           autoComplete="off"
@@ -80,7 +82,7 @@ export function CreateInvitationDialog({
         />
         <DialogFooter>
           <Button variant="ghost" size="md" onClick={close} disabled={create.isPending}>
-            Cancel
+            {t('sellersCreateInvitationDialog.cancel')}
           </Button>
           <AsyncButton
             variant="primary"
@@ -88,7 +90,11 @@ export function CreateInvitationDialog({
             type="submit"
             icon={<Send size={15} />}
             state={phaseOf(create.isPending, error)}
-            labels={{ idle: 'Send invitation', busy: 'Sending…', error: 'Not sent' }}
+            labels={{
+              idle: t('sellersCreateInvitationDialog.sendInvitation'),
+              busy: t('sellersCreateInvitationDialog.sending'),
+              error: t('sellersCreateInvitationDialog.notSent'),
+            }}
           />
         </DialogFooter>
       </form>

@@ -7,6 +7,7 @@ import { PageHeader } from '@skydrop/ui/app/page-header';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useStoreIdentity } from '@skydrop/auth/client';
+import { useT } from '@/i18n/client';
 import { can } from '@/lib/page-access';
 import { useStoreActionPolicy } from '@/lib/order-hooks';
 import { useRaiseStoreDispute, useRaiseStoreSkydropIssue } from '@/lib/ticket-hooks';
@@ -19,8 +20,9 @@ import '../_components/tickets.css';
  * is decides the endpoint, and nothing else about the form changes.
  */
 export default function NewTicketPage(): ReactElement {
+  const t = useT();
   return (
-    <Suspense fallback={<SkeletonRows rows={2} cols={1} label="Loading" />}>
+    <Suspense fallback={<SkeletonRows rows={2} cols={1} label={t('tktn.loading')} />}>
       <NewTicket />
     </Suspense>
   );
@@ -31,6 +33,7 @@ function audienceParam(value: string | null): TicketAudience {
 }
 
 function NewTicket(): ReactElement {
+  const tr = useT();
   const params = useSearchParams();
   const router = useRouter();
   const raiseDispute = useRaiseStoreDispute();
@@ -42,10 +45,10 @@ function NewTicket(): ReactElement {
   return (
     <div className="rc-tkt-page" data-narrow>
       <PageHeader
-        breadcrumbs={[{ label: 'Tickets', href: '/tickets' }, { label: 'Raise a ticket' }]}
+        breadcrumbs={[{ label: tr('tkt.d.crumb'), href: '/tickets' }, { label: tr('tktn.crumb') }]}
         Link={Link}
-        title="Raise a ticket"
-        subtitle="About one of your orders — with your client, or with Skydrop. Choose below; they go to different people."
+        title={tr('tktn.title')}
+        subtitle={tr('tktn.subtitle')}
       />
       <NewTicketForm
         initialOrderId={params?.get('orderId') ?? ''}
@@ -56,8 +59,8 @@ function NewTicket(): ReactElement {
         skydropMode={policy.data?.chaseSkydrop}
         submit={async ({ audience, ...body }) => {
           if (audience === 'seller') {
-            const t = await raiseDispute.mutateAsync(body);
-            return { kind: 'ticket', id: t.id };
+            const created = await raiseDispute.mutateAsync(body);
+            return { kind: 'ticket', id: created.id };
           }
           // The REPLY says which happened, never the policy read earlier.
           const out = await raiseIssue.mutateAsync(body);
@@ -70,9 +73,7 @@ function NewTicket(): ReactElement {
             router.push(`/tickets/${result.id}`);
             return;
           }
-          toast.success(
-            'Sent to Client staff to approve. It reaches Skydrop only once they say yes — follow it on the order.',
-          );
+          toast.success(tr('tktn.heldToast'));
           router.push(`/orders/${result.orderId}`);
         }}
       />

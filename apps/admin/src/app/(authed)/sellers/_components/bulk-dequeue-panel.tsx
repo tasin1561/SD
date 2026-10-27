@@ -12,6 +12,7 @@ import { AcCard } from '../../settings/_components/ac-parts';
 import { useBulkDequeue } from '@/lib/callcenter-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
+import { useT } from '@/i18n/client';
 
 /**
  * Close every OPEN call-queue entry for one seller.
@@ -34,6 +35,7 @@ export function BulkDequeuePanel({
   readonly sellerId: string;
   readonly sellerName: string;
 }): ReactElement | null {
+  const t = useT();
   const canManage = usePermission('callcenter.queue.manage');
   const dequeue = useBulkDequeue();
   const toast = useToast();
@@ -49,8 +51,14 @@ export function BulkDequeuePanel({
       const res = await dequeue.mutateAsync({ sellerId, reason: reason.trim() });
       toast.success(
         res.dequeuedOrders === 0
-          ? 'Nothing to close: this client had no open call-queue entries.'
-          : `Closed ${res.dequeuedOrders} open call-queue ${res.dequeuedOrders === 1 ? 'entry' : 'entries'}.`,
+          ? t('sellersBulkDequeuePanel.nothingToCloseThisClient')
+          : t('sellersBulkDequeuePanel.closedOpenCallQueue', {
+              dequeuedOrders: res.dequeuedOrders,
+              value:
+                res.dequeuedOrders === 1
+                  ? t('sellersBulkDequeuePanel.entry')
+                  : t('sellersBulkDequeuePanel.entries'),
+            }),
       );
       setConfirming(false);
       setReason('');
@@ -63,18 +71,18 @@ export function BulkDequeuePanel({
 
   return (
     <AcCard
-      title="Call queue"
-      note="Stop agents calling this client's customers. Closes every open queue entry; the orders themselves do not move, and confirmed orders are untouched."
+      title={t('sellersBulkDequeuePanel.callQueue')}
+      note={t('sellersBulkDequeuePanel.stopAgentsCallingThisClient')}
     >
       <div className="ac-form">
         <TextArea
-          label="Reason (recorded in the audit log)"
+          label={t('sellersBulkDequeuePanel.reasonRecordedInTheAudit')}
           id="bulk-dequeue-reason"
           requiredMark
           rows={2}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="e.g. Client paused trading until their stock arrives"
+          placeholder={t('sellersBulkDequeuePanel.eGClientPausedTrading')}
         />
         <div className="ac-buttons" data-align="start">
           <Button
@@ -87,7 +95,7 @@ export function BulkDequeuePanel({
               setConfirming(true);
             }}
           >
-            Close all open queue entries
+            {t('sellersBulkDequeuePanel.closeAllOpenQueueEntries')}
           </Button>
         </div>
       </div>
@@ -95,16 +103,16 @@ export function BulkDequeuePanel({
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Close ${sellerName}'s call queue?`}
+        title={t('sellersBulkDequeuePanel.closeSCallQueue', { sellerName })}
         entity={sellerName}
-        consequence="Every open call-queue entry for this client is closed now. Agents stop being handed these orders; the orders stay in their current status until something else moves them."
-        confirmLabel="Close entries"
+        consequence={t('sellersBulkDequeuePanel.everyOpenCallQueueEntry')}
+        confirmLabel={t('sellersBulkDequeuePanel.closeEntries')}
         destructive
         error={error}
         closeOnSuccess={false}
         onConfirm={submit}
       >
-        <p className="ac-muted">Reason: {reason.trim()}</p>
+        <p className="ac-muted">{t('sellersBulkDequeuePanel.reason', { value: reason.trim() })}</p>
       </ConfirmDialog>
     </AcCard>
   );

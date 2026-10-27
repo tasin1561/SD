@@ -11,6 +11,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { useUiT } from '../app/i18n-client';
 
 /**
  * Toast primitive — fire-and-forget success/error notifications.
@@ -115,6 +116,7 @@ interface ToastRowProps {
 }
 
 function ToastRow({ item, onDismiss }: ToastRowProps): ReactElement {
+  const tr = useUiT();
   const [entered, setEntered] = useState(false);
   useEffect(() => {
     const t = setTimeout(() => setEntered(true), 10);
@@ -156,7 +158,7 @@ function ToastRow({ item, onDismiss }: ToastRowProps): ReactElement {
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="Dismiss"
+        aria-label={tr('ui.dismiss')}
         className="text-text-muted hover:text-text-body transition-colors -mr-1 -mt-0.5"
       >
         <X size={14} />

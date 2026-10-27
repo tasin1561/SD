@@ -24,7 +24,9 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { formatDateBrowser } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import { useAssociates, type AssociateSummary } from '@/lib/associate-hooks';
 import { useInviteStoreMember } from '@/lib/store-hooks';
 import { RdCallout, phaseOf } from '../settings/_components/rd-parts';
@@ -52,6 +54,8 @@ import './_components/associates.css';
  * on one page.
  */
 export default function AssociatesPage(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const me = useStoreIdentity();
   const associates = useAssociates();
   const [search, setSearch] = useState('');
@@ -76,8 +80,8 @@ export default function AssociatesPage(): ReactElement {
 
   const header = (
     <PageHeader
-      title="Associates"
-      subtitle="The people who place orders for your store, what each of them sells at, and whether they can place new orders."
+      title={t('assoc.title')}
+      subtitle={t('assoc.subtitle')}
       action={
         <div className="as-row-actions">
           <Link href="/associates/analysis" className={buttonClassName('secondary', 'md')}>
@@ -85,7 +89,7 @@ export default function AssociatesPage(): ReactElement {
             <span className="sk-btn__icon" aria-hidden>
               <BarChart3 size={15} />
             </span>
-            <span className="sk-btn__label">How they are doing</span>
+            <span className="sk-btn__label">{t('assoc.howDoing')}</span>
           </Link>
           {mayInvite ? (
             <Button
@@ -94,7 +98,7 @@ export default function AssociatesPage(): ReactElement {
               icon={<UserPlus size={15} />}
               onClick={() => setInviting(true)}
             >
-              Invite an associate
+              {t('assoc.invite')}
             </Button>
           ) : null}
         </div>
@@ -106,7 +110,7 @@ export default function AssociatesPage(): ReactElement {
     return (
       <div className="as-page">
         {header}
-        <SkeletonRows rows={5} cols={4} label="Loading your associates" />
+        <SkeletonRows rows={5} cols={4} label={t('assoc.loading')} />
       </div>
     );
   }
@@ -115,7 +119,7 @@ export default function AssociatesPage(): ReactElement {
       <div className="as-page">
         {header}
         <ErrorState
-          message={serverVerdict(associates.error)}
+          message={verdict(associates.error, t)}
           retry={() => void associates.refetch()}
         />
       </div>
@@ -135,20 +139,17 @@ export default function AssociatesPage(): ReactElement {
     <div className="as-page">
       {header}
       <AsSection>
-        <SectionHeading
-          title="Your associates"
-          note="Switching somebody off stops NEW orders only. Everything already placed carries on, and they can still follow, cancel and chase it."
-        />
+        <SectionHeading title={t('assoc.section')} note={t('assoc.sectionNote')} />
         <TableToolbar
           search={{
             value: search,
             onChange: setSearch,
-            label: 'Search by name or email',
-            placeholder: 'Search name or email',
+            label: t('assoc.search.label'),
+            placeholder: t('assoc.search.placeholder'),
           }}
         />
         {invited.length > 0 ? (
-          <ul className="as-invited" aria-label="Invitations waiting to be accepted">
+          <ul className="as-invited" aria-label={t('assoc.invited.aria')}>
             {invited.map((i) => (
               <li key={i.invitationId} className="as-invited__row">
                 <MailCheck size={15} aria-hidden />
@@ -157,8 +158,7 @@ export default function AssociatesPage(): ReactElement {
                   <span className="as-invited__email">{i.email}</span>
                 </span>
                 <span className="as-invited__state">
-                  Invited {new Date(i.invitedAt).toLocaleDateString()} — waiting for them to accept.
-                  Set their prices once they are in.
+                  {t('assoc.invited.state', { date: formatDateBrowser(i.invitedAt, locale) })}
                 </span>
               </li>
             ))}
@@ -167,12 +167,8 @@ export default function AssociatesPage(): ReactElement {
         {rows.length === 0 && invited.length === 0 ? (
           <EmptyState
             icon={none ? <Users size={22} /> : <SearchX size={22} />}
-            title={none ? 'No associates yet' : 'Nobody matches that search'}
-            description={
-              none
-                ? 'An associate places orders for your store and sells at a price you set for them, product by product. Invite one, then set their prices.'
-                : undefined
-            }
+            title={none ? t('assoc.empty.none') : t('assoc.empty.noMatch')}
+            description={none ? t('assoc.empty.body') : undefined}
             action={
               none && mayInvite ? (
                 <Button
@@ -181,19 +177,19 @@ export default function AssociatesPage(): ReactElement {
                   icon={<UserPlus size={15} />}
                   onClick={() => setInviting(true)}
                 >
-                  Invite an associate
+                  {t('assoc.invite')}
                 </Button>
               ) : undefined
             }
           />
         ) : (
-          <Table caption="Associates">
+          <Table caption={t('assoc.caption')}>
             <THead>
               <Tr>
-                <Th>Person</Th>
-                <Th>Can place orders</Th>
-                <Th>Priced for</Th>
-                <Th align="right">Prices</Th>
+                <Th>{t('assoc.col.person')}</Th>
+                <Th>{t('assoc.col.canPlace')}</Th>
+                <Th>{t('assoc.col.pricedFor')}</Th>
+                <Th align="right">{t('assoc.col.prices')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -217,6 +213,7 @@ function AssociateRowView({
   readonly associate: AssociateSummary;
   readonly sellable: number;
 }): ReactElement {
+  const t = useT();
   return (
     <Tr>
       <Td>
@@ -242,7 +239,7 @@ function AssociateRowView({
           <span className="sk-btn__icon" aria-hidden>
             <Tags size={14} />
           </span>
-          <span className="sk-btn__label">Set prices</span>
+          <span className="sk-btn__label">{t('assoc.setPrices')}</span>
         </Link>
       </Td>
     </Tr>
@@ -271,6 +268,7 @@ function InviteAssociateDialog({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const invite = useInviteStoreMember();
   const [email, setEmail] = useState('');
@@ -286,12 +284,12 @@ function InviteAssociateDialog({
         fullName: fullName.trim(),
         roleKeys: ['associate'],
       });
-      toast.success(`Invitation sent to ${email.trim()}. Set their prices once they sign in.`);
+      toast.success(t('assoc.dlg.toast', { email: email.trim() }));
       setEmail('');
       setFullName('');
       onOpenChange(false);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -300,13 +298,13 @@ function InviteAssociateDialog({
       open={open}
       onOpenChange={onOpenChange}
       icon={<UserPlus size={18} />}
-      title="Invite an associate"
-      description="They get an email with a link to set up their login. It works for 7 days. They see only the orders they place, and only the prices you set for them."
+      title={t('assoc.dlg.title')}
+      description={t('assoc.dlg.desc')}
     >
       <form onSubmit={submit} className="as-form">
         <TextField
           id="associate-name"
-          label="Name"
+          label={t('assoc.dlg.name')}
           icon={<User size={15} />}
           required
           value={fullName}
@@ -315,16 +313,16 @@ function InviteAssociateDialog({
         <TextField
           id="associate-email"
           type="email"
-          label="Email"
+          label={t('assoc.dlg.email')}
           icon={<Mail size={15} />}
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
         <p className="as-muted">
-          They join on the <strong className="as-strong">Associate</strong> role. Until you give
-          them a price for a product, they cannot sell it — set their prices from this list once
-          they have signed in.
+          {richMessage(t('assoc.dlg.roleNote'), {
+            role: <strong className="as-strong">{t('assoc.dlg.roleName')}</strong>,
+          })}
         </p>
         {error !== null ? (
           <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
@@ -333,14 +331,18 @@ function InviteAssociateDialog({
         ) : null}
         <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('assoc.dlg.cancel')}
           </Button>
           <AsyncButton
             type="submit"
             variant="primary"
             size="md"
             icon={<UserPlus size={15} />}
-            labels={{ idle: 'Send invitation', busy: 'Sending…', error: 'Not sent' }}
+            labels={{
+              idle: t('assoc.dlg.send'),
+              busy: t('assoc.dlg.sending'),
+              error: t('assoc.dlg.notSent'),
+            }}
             state={phaseOf(invite.isPending, error)}
             disabled={invite.isPending}
           />

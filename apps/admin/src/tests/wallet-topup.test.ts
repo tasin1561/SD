@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withAppCatalogue, withCatalogEnglish } from './i18n-source';
 
 /**
  * Wallet top-up — the only way money enters a wallet other than COD.
@@ -48,16 +49,28 @@ describe('WAL-2 — the client is never told the money arrived', () => {
     // wizard says so at both ends — before they pay and after they
     // submit — and the negative list is what the copy must never drift
     // into.
-    const form = R(SELLER_FORM);
+    const form = withAppCatalogue(R(SELLER_FORM), 'seller');
     expect(flat(form)).toContain('Nothing reaches your balance until we match it');
     expect(flat(form)).toContain('Nothing has been added to your balance yet');
     expect(form).not.toMatch(/Add funds|Top up now|credited instantly/i);
   });
 
   it('the success message says recorded, not credited', () => {
-    const form = R(SELLER_FORM);
+    const form = withAppCatalogue(R(SELLER_FORM), 'seller');
     expect(form).toContain('Top-up recorded');
     expect(form).toContain('24');
+  });
+
+  it('the Bangla keeps the same promise', () => {
+    // The guard above is English-only, and after the console was
+    // translated that is a hole: an English regex cannot see a Bangla
+    // sentence that promises credit. These are the three sentences WAL-2
+    // turns on, pinned on the negation itself — "nothing is added to
+    // your balance", "nothing has been added yet", "top-up RECORDED".
+    const bn = flat(withAppCatalogue('', 'seller'));
+    expect(bn).toContain('আপনার ব্যালেন্সে কিছুই যোগ হয় না');
+    expect(bn).toContain('আপনার ব্যালেন্সে এখনো কিছু যোগ হয়নি');
+    expect(bn).toContain('টপ-আপ নথিভুক্ত হয়েছে');
   });
 
   it('submitting does NOT invalidate the balance, because nothing moved', () => {
@@ -104,14 +117,14 @@ describe('the admin side can actually accept one', () => {
   });
 
   it('accepting says plainly that it moves money', () => {
-    expect(src).toContain('Credit the wallet');
-    expect(src).toMatch(/adds the money to the client/);
+    expect(withCatalogEnglish(src)).toContain('Credit the wallet');
+    expect(withCatalogEnglish(src)).toMatch(/adds the money to the client/);
   });
 
   it('a rejection carries a reason the client can act on', () => {
     // The DTO requires ≥5 chars; mirrored so the operator is told first.
     expect(src).toContain('note.trim().length < 5');
-    expect(src).toContain('the client sees your reason');
+    expect(withCatalogEnglish(src)).toContain('the client sees your reason');
   });
 
   it('the receipt link is fetched on demand, not listed', () => {

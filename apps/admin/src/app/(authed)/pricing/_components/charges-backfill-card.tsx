@@ -18,6 +18,8 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { MoSection } from '../../treasury/_components/money-parts';
 import './pricing.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /** Where the REAL (not dry) run stands, for the parachute. Null until one starts. */
 interface RealRun {
@@ -47,6 +49,8 @@ const inr = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' 
  * separate call about real money against a real seller.
  */
 export function ChargesBackfillCard(): ReactElement | null {
+  const t = useT();
+
   const canRun = usePermission('orders.charges.compute');
   const backfill = useBackfillCharges();
   const toast = useToast();
@@ -82,7 +86,9 @@ export function ChargesBackfillCard(): ReactElement | null {
           setReport(r);
           setWasDryRun(false);
           setRealRun({ state: 'done' });
-          toast.success(`Charges added to ${String(r.persisted)} order(s).`);
+          toast.success(
+            t('pricingChargesBackfillCard.chargesAddedToOrderS', { value: String(r.persisted) }),
+          );
         },
         onError: (err) => {
           setRealRun({ state: 'failed', detail: serverVerdict(err) });
@@ -95,18 +101,17 @@ export function ChargesBackfillCard(): ReactElement | null {
   const examined = report?.examined ?? 0;
 
   return (
-    <MoSection title="Orders with no charges">
-      <p className="mo-p">
-        An order with no charge rows is billed nothing when it delivers — the sum is zero, so there
-        is nothing to take, and no error says so. This finds those orders and prices them at the
-        current flat fee. It writes the charge lines only; nothing is taken from a client&rsquo;s
-        wallet here.
-      </p>
+    <MoSection title={t('pricingChargesBackfillCard.ordersWithNoCharges')}>
+      <p className="mo-p">{t('pricingChargesBackfillCard.anOrderWithNoCharge')}</p>
 
       <div className="mo-row">
         <AsyncButton
           variant="secondary"
-          labels={{ idle: 'Preview', busy: 'Checking…', done: 'Preview ready' }}
+          labels={{
+            idle: t('pricingChargesBackfillCard.preview'),
+            busy: t('pricingChargesBackfillCard.checking'),
+            done: t('pricingChargesBackfillCard.previewReady'),
+          }}
           onAction={preview}
           disabled={backfill.isPending}
         />
@@ -115,26 +120,35 @@ export function ChargesBackfillCard(): ReactElement | null {
           onClick={() => setConfirming(true)}
           disabled={backfill.isPending || report === null || !wasDryRun}
         >
-          Add the missing charges
+          {t('pricingChargesBackfillCard.addTheMissingCharges')}
         </Button>
       </div>
-      {report === null && <p className="mo-faint">Preview first — then the second button.</p>}
+      {report === null && (
+        <p className="mo-faint">{t('pricingChargesBackfillCard.previewFirstThenTheSecond')}</p>
+      )}
 
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Add charges to ${String(examined)} order${examined === 1 ? '' : 's'}?`}
-        entity={`${String(examined)} order${examined === 1 ? '' : 's'} found by the preview`}
-        consequence={`Writes charge lines onto ${String(examined)} order${
-          examined === 1 ? '' : 's'
-        } at the current flat fee; nothing is taken from any client's wallet here.`}
-        confirmLabel="Add the missing charges"
+        title={t('pricingChargesBackfillCard.addChargesToOrder', {
+          value: String(examined),
+          value2: examined === 1 ? '' : t('common.pluralS'),
+        })}
+        entity={t('pricingChargesBackfillCard.orderFoundByThePreview', {
+          value: String(examined),
+          value2: examined === 1 ? '' : t('common.pluralS'),
+        })}
+        consequence={t('pricingChargesBackfillCard.writesChargeLinesOntoOrder', {
+          value: String(examined),
+          value2: examined === 1 ? '' : t('common.pluralS'),
+        })}
+        confirmLabel={t('pricingChargesBackfillCard.addTheMissingCharges')}
         onConfirm={runReal}
       />
 
       {realRun !== null && (
         <ParachuteProgress
-          label="Adding the missing charges"
+          label={t('pricingChargesBackfillCard.addingTheMissingCharges')}
           state={realRun.state}
           detail={realRun.detail}
         />
@@ -145,14 +159,21 @@ export function ChargesBackfillCard(): ReactElement | null {
       {report !== null && (
         <div className="mo-stack mo-stack--tight">
           <p className="pr-summary">
-            {wasDryRun ? 'Would price' : 'Priced'}{' '}
-            <span className="mo-strong sk-figure">{report.examined}</span> order
-            {report.examined === 1 ? '' : 's'}
+            {richMessage(t('pricingChargesBackfillCard.order'), {
+              value: wasDryRun
+                ? t('pricingChargesBackfillCard.wouldPrice')
+                : t('pricingChargesBackfillCard.priced'),
+              span: <span className="mo-strong sk-figure">{report.examined}</span>,
+              value2: report.examined === 1 ? '' : t('common.pluralS'),
+            })}
             {!wasDryRun && (
               <>
                 {' '}
-                — {report.persisted} added, {report.skipped} already had them, {report.failed}{' '}
-                failed
+                {t('pricingChargesBackfillCard.addedAlreadyHadThemFailed', {
+                  persisted: report.persisted,
+                  skipped: report.skipped,
+                  failed: report.failed,
+                })}
               </>
             )}
             .
@@ -189,6 +210,8 @@ export function ChargesBackfillCard(): ReactElement | null {
  * read before agreeing to it.
  */
 export function BillUnbilledCard(): ReactElement | null {
+  const t = useT();
+
   const canBill = usePermission('money.wallets.bill_unbilled');
   const bill = useBillUnbilled();
   const toast = useToast();
@@ -223,7 +246,12 @@ export function BillUnbilledCard(): ReactElement | null {
           setReport(r);
           setPreviewed(false);
           setRealRun({ state: 'done' });
-          toast.success(`Billed ${String(r.billed)} order(s) — ${inr.format(Number(r.totalInr))}.`);
+          toast.success(
+            t('pricingChargesBackfillCard.billedOrderS', {
+              value: String(r.billed),
+              value2: inr.format(Number(r.totalInr)),
+            }),
+          );
         },
         onError: (err) => {
           setRealRun({ state: 'failed', detail: serverVerdict(err) });
@@ -234,17 +262,17 @@ export function BillUnbilledCard(): ReactElement | null {
   }
 
   return (
-    <MoSection title="Orders that finished unbilled" tone="critical">
-      <p className="mo-p">
-        Delivered or returned orders whose carriage was never taken. This is a real debit against a
-        real client balance — not a correction to a record. Only orders whose journey has ended are
-        eligible; an in-transit one is billed when it lands.
-      </p>
+    <MoSection title={t('pricingChargesBackfillCard.ordersThatFinishedUnbilled')} tone="critical">
+      <p className="mo-p">{t('pricingChargesBackfillCard.deliveredOrReturnedOrdersWhose')}</p>
 
       <div className="mo-row">
         <AsyncButton
           variant="secondary"
-          labels={{ idle: 'Preview', busy: 'Checking…', done: 'Preview ready' }}
+          labels={{
+            idle: t('pricingChargesBackfillCard.preview'),
+            busy: t('pricingChargesBackfillCard.checking'),
+            done: t('pricingChargesBackfillCard.previewReady'),
+          }}
           onAction={preview}
           disabled={bill.isPending}
         />
@@ -255,33 +283,39 @@ export function BillUnbilledCard(): ReactElement | null {
           onClick={() => setConfirming(true)}
           disabled={bill.isPending || report === null || !previewed || report.examined === 0}
         >
-          Charge them
+          {t('pricingChargesBackfillCard.chargeThem')}
         </Button>
       </div>
 
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={`Charge ${String(report?.examined ?? 0)} order${report?.examined === 1 ? '' : 's'}?`}
-        entity={`${String(report?.examined ?? 0)} order${
-          report?.examined === 1 ? '' : 's'
-        } found by the preview`}
+        title={t('pricingChargesBackfillCard.chargeOrder', {
+          value: String(report?.examined ?? 0),
+          value2: report?.examined === 1 ? '' : t('common.pluralS'),
+        })}
+        entity={t('pricingChargesBackfillCard.orderFoundByThePreview', {
+          value: String(report?.examined ?? 0),
+          value2: report?.examined === 1 ? '' : t('common.pluralS'),
+        })}
         amount={<Money amount={report?.totalInr ?? '0'} convert={false} />}
-        consequence="This debits real client balances and cannot be undone from here."
-        confirmLabel="Charge them"
+        consequence={t('pricingChargesBackfillCard.thisDebitsRealClientBalances')}
+        confirmLabel={t('pricingChargesBackfillCard.chargeThem')}
         destructive
         onConfirm={runReal}
       >
         <p className="mo-p">
-          The preview found <span className="mo-strong">{report?.examined ?? 0}</span> order
-          {report?.examined === 1 ? '' : 's'} to bill, totalling{' '}
-          <Money amount={report?.totalInr ?? '0'} convert={false} />.
+          {richMessage(t('pricingChargesBackfillCard.thePreviewFoundOrderTo'), {
+            span: <span className="mo-strong">{report?.examined ?? 0}</span>,
+            value: report?.examined === 1 ? '' : t('common.pluralS'),
+            money: <Money amount={report?.totalInr ?? '0'} convert={false} />,
+          })}
         </p>
       </ConfirmDialog>
 
       {realRun !== null && (
         <ParachuteProgress
-          label="Charging the unbilled orders"
+          label={t('pricingChargesBackfillCard.chargingTheUnbilledOrders')}
           state={realRun.state}
           detail={realRun.detail}
         />
@@ -292,14 +326,22 @@ export function BillUnbilledCard(): ReactElement | null {
       {report !== null && (
         <div className="mo-stack mo-stack--tight">
           <p className="pr-summary">
-            {previewed ? 'Would charge' : 'Charged'}{' '}
-            <span className="mo-strong sk-figure">{report.examined}</span> order
-            {report.examined === 1 ? '' : 's'}
+            {richMessage(t('pricingChargesBackfillCard.order'), {
+              value: previewed
+                ? t('pricingChargesBackfillCard.wouldCharge')
+                : t('pricingChargesBackfillCard.charged'),
+              span: <span className="mo-strong sk-figure">{report.examined}</span>,
+              value2: report.examined === 1 ? '' : t('common.pluralS'),
+            })}
             {!previewed && (
               <>
                 {' '}
-                — {report.billed} billed (<Money amount={report.totalInr} convert={false} />
-                ), {report.skipped} had nothing to bill, {report.failed} failed
+                {richMessage(t('pricingChargesBackfillCard.billedHadNothingToBill'), {
+                  billed: report.billed,
+                  money: <Money amount={report.totalInr} convert={false} />,
+                  skipped: report.skipped,
+                  failed: report.failed,
+                })}
               </>
             )}
             .

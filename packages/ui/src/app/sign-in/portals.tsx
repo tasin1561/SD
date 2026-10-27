@@ -1,5 +1,7 @@
 import type { ReactElement } from 'react';
 import { ArrowRight, Building2, Store, UserRound, type LucideIcon } from 'lucide-react';
+import { DEFAULT_LOCALE, makeTranslator, type Locale } from '../i18n';
+import { UI_MESSAGES } from '../i18n/ui-messages';
 
 /**
  * The CONSOLE DIRECTORY — the one place that knows which Skydrop
@@ -86,6 +88,12 @@ export const CONSOLES: readonly ConsoleEntry[] = [
   },
 ];
 
+const PORTAL_KEYS = {
+  client: { name: 'ui.portals.client.name', who: 'ui.portals.client.who' },
+  store: { name: 'ui.portals.store.name', who: 'ui.portals.store.who' },
+  associate: { name: 'ui.portals.associate.name', who: 'ui.portals.associate.who' },
+} as const;
+
 /**
  * The other consoles, as a chooser under a sign-in or sign-up card.
  *
@@ -108,16 +116,20 @@ export const CONSOLES: readonly ConsoleEntry[] = [
 export function OtherPortals({
   self,
   path = '/login',
-  title = 'Not the right sign-in?',
+  title,
+  locale = DEFAULT_LOCALE,
 }: {
   readonly self: ConsoleKey;
   readonly path?: '/login' | '/sign-up';
   readonly title?: string;
+  /** The reader's UI language (server pages pass it from the `sd-lang` cookie). */
+  readonly locale?: Locale;
 }): ReactElement {
+  const t = makeTranslator(UI_MESSAGES[locale], UI_MESSAGES.en);
   const others = CONSOLES.filter((c) => c.key !== self);
   return (
-    <nav className="sk-signin__portals" aria-label="Other Skydrop portals">
-      <p className="sk-signin__portals-head">{title}</p>
+    <nav className="sk-signin__portals" aria-label={t('ui.portals.aria')}>
+      <p className="sk-signin__portals-head">{title ?? t('ui.portals.title')}</p>
       <ul className="sk-signin__portals-list">
         {others.map(({ key, origin, portal, who, Icon }) => (
           <li key={key}>
@@ -135,8 +147,12 @@ export function OtherPortals({
                 <Icon size={16} />
               </span>
               <span className="sk-signin__portal-text">
-                <span className="sk-signin__portal-name">{portal}</span>
-                <span className="sk-signin__portal-who">{who}</span>
+                <span className="sk-signin__portal-name">
+                  {locale === DEFAULT_LOCALE ? portal : t(PORTAL_KEYS[key].name)}
+                </span>
+                <span className="sk-signin__portal-who">
+                  {locale === DEFAULT_LOCALE ? who : t(PORTAL_KEYS[key].who)}
+                </span>
               </span>
               <ArrowRight className="sk-signin__portal-go" size={15} aria-hidden />
             </a>

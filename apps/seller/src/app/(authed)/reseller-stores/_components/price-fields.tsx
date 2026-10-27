@@ -3,6 +3,7 @@
 import type { ReactElement } from 'react';
 import { TextField } from '@skydrop/ui/app/text-field';
 import './reseller-stores.css';
+import { useT } from '@/i18n/client';
 
 /** The four figures of a reseller price, as the form edits them (rupees, text). */
 export interface PriceDraft {
@@ -64,6 +65,7 @@ export function PriceFields({
   onChange: (next: PriceDraft) => void;
   disabled?: boolean;
 }): ReactElement {
+  const t = useT();
   const field = (key: keyof PriceDraft, label: string, hint?: string): ReactElement => (
     <TextField
       id={`${idPrefix}-${key}`}
@@ -78,10 +80,14 @@ export function PriceFields({
   );
   return (
     <div className="rs-grid-2">
-      {field('transferPriceInr', 'Transfer price (₹)', 'What the store pays you per unit.')}
-      {field('suggestedRetailInr', 'Suggested retail (₹)')}
-      {field('minRetailInr', 'Lowest retail (₹)')}
-      {field('maxRetailInr', 'Highest retail (₹)')}
+      {field(
+        'transferPriceInr',
+        t('resellerStores.transferPriceInr'),
+        t('resellerStores.whatTheStorePaysYouPerUnit'),
+      )}
+      {field('suggestedRetailInr', t('resellerStores.suggestedRetailInr'))}
+      {field('minRetailInr', t('resellerStores.lowestRetailInr'))}
+      {field('maxRetailInr', t('resellerStores.highestRetailInr'))}
     </div>
   );
 }

@@ -35,6 +35,7 @@ import { itemLabel, itemThumb, useSellCatalogue } from '@/lib/catalogue-hooks';
 import { useCreateOrder } from '@/lib/order-hooks';
 import { BackLink, LinkButton, Notice, Section } from '../../_components/parts';
 import { useUatField } from '@skydrop/ui/app/uat-fields';
+import { richMessage, useT } from '@/i18n/client';
 
 interface Line {
   readonly key: number;
@@ -79,10 +80,11 @@ interface Line {
  * an account the flag does not cover, which is the real boundary.
  */
 export default function NewOrderPageV2(): ReactElement {
+  const t = useT();
   const gate = useOrderPageV2Enabled();
   // A failed check is not a reason to show an unproven page — the same
   // fail-closed rule the server gate uses.
-  if (gate.isPending) return <SkeletonRows rows={6} cols={2} label="Loading the order form…" />;
+  if (gate.isPending) return <SkeletonRows rows={6} cols={2} label={t('neworder.loading')} />;
   if (gate.data?.enabled !== true) notFound();
   return <NewOrderPageForm />;
 }
@@ -107,6 +109,7 @@ function NewOrderPageForm(): ReactElement {
   // Hidden for UAT (owner, 2026-10-26), code intact. Not rendered means
   // it stays '' and the payload omits it, which is the same 0 the
   // server has always defaulted to. Reversible from UAT Settings.
+  const t = useT();
   const showDeliveryFee = useUatField('orderDeliveryFee');
   const [codAmount, setCodAmount] = useState('');
   const [notes, setNotes] = useState('');
@@ -178,18 +181,13 @@ function NewOrderPageForm(): ReactElement {
     }
   }
 
-  const header = (
-    <PageHeader
-      title="New order"
-      subtitle="Pick what your customer is buying and say where it is going. Your prices are set by your store."
-    />
-  );
+  const header = <PageHeader title={t('neworder.title')} subtitle={t('neworder.subtitle')} />;
 
   if (catalogue.isPending) {
     return (
       <div className="as-page">
         {header}
-        <SkeletonRows rows={4} cols={3} label="Loading what you can sell" />
+        <SkeletonRows rows={4} cols={3} label={t('catalogue.loading')} />
       </div>
     );
   }
@@ -210,8 +208,8 @@ function NewOrderPageForm(): ReactElement {
         {header}
         <EmptyState
           icon={<PackageSearch size={20} />}
-          title="Nothing to sell yet"
-          description="Your store has not given you any products to sell. Ask whoever runs it to add some, then come back."
+          title={t('catalogue.empty.title')}
+          description={t('neworder.empty.body')}
         />
       </div>
     );
@@ -226,7 +224,7 @@ function NewOrderPageForm(): ReactElement {
       }}
     >
       <BackLink href="/orders" icon={<ArrowLeft size={14} aria-hidden />}>
-        My orders
+        {t('nav.myOrders')}
       </BackLink>
       {header}
 
@@ -236,17 +234,14 @@ function NewOrderPageForm(): ReactElement {
         <Notice
           tone="warn"
           icon={<PauseCircle size={16} />}
-          title="Your store has paused new orders from you"
+          title={t('account.paused.title')}
           role="status"
         >
-          <span>
-            You can still read, track and follow up everything you have already placed. Ask whoever
-            runs your store to switch it back on.
-          </span>
+          <span>{t('neworder.paused.body')}</span>
         </Notice>
       ) : null}
 
-      <Section title="What they are buying" note="Your store sets these prices">
+      <Section title={t('neworder.buying')} note={t('neworder.buyingNote')}>
         <div className="as-stack as-stack--tight">
           <ul className="as-lines">
             {lines.map((l) => {
@@ -254,25 +249,28 @@ function NewOrderPageForm(): ReactElement {
               return (
                 <li key={l.key} className="as-line">
                   <Select
-                    label="Product"
-                    aria-label="Product"
+                    label={t('neworder.product')}
+                    aria-label={t('neworder.product')}
                     value={l.variantId}
                     onChange={(e) => update(l.key, { variantId: e.target.value })}
                   >
-                    <option value="">Choose a product</option>
+                    <option value="">{t('neworder.chooseProduct')}</option>
                     {sellable.map((i) => (
                       <option
                         key={i.variantId}
                         value={i.variantId}
                         disabled={i.availableQuantity === 0}
                       >
-                        {itemLabel(i)} — {i.availableQuantity} available
+                        {t('neworder.optionLabel', {
+                          label: itemLabel(i),
+                          n: i.availableQuantity,
+                        })}
                       </option>
                     ))}
                   </Select>
                   <NumberStepper
-                    label="Qty"
-                    aria-label="Quantity"
+                    label={t('neworder.qty')}
+                    aria-label={t('neworder.quantity')}
                     min={1}
                     value={l.quantity}
                     onChange={(e) => update(l.key, { quantity: e.target.value })}
@@ -283,7 +281,7 @@ function NewOrderPageForm(): ReactElement {
                         type="button"
                         variant="ghost"
                         icon={<Trash2 size={15} />}
-                        aria-label="Remove this product"
+                        aria-label={t('neworder.removeLine')}
                         onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))}
                       />
                     ) : null}
@@ -298,15 +296,17 @@ function NewOrderPageForm(): ReactElement {
                     <p className="as-line__note">
                       <ProductThumb src={itemThumb(item)} size={32} alt="" />
                       <span className="as-line__price">
-                        <Money amount={item.retailPriceInr} convert={false} /> each
+                        {richMessage(t('neworder.each'), {
+                          price: <Money amount={item.retailPriceInr} convert={false} />,
+                        })}
                       </span>
                       {item.availableQuantity === 0 ? (
                         <span className="as-flag" data-tone="bad">
                           <PackageX size={12} aria-hidden />
-                          None left
+                          {t('neworder.noneLeft')}
                         </span>
                       ) : (
-                        <span>{item.availableQuantity} available</span>
+                        <span>{t('neworder.available', { n: item.availableQuantity })}</span>
                       )}
                     </p>
                   ) : null}
@@ -324,7 +324,7 @@ function NewOrderPageForm(): ReactElement {
                 setNextKey((k) => k + 1);
               }}
             >
-              Add another product
+              {t('neworder.addAnother')}
             </Button>
           </div>
 
@@ -332,61 +332,65 @@ function NewOrderPageForm(): ReactElement {
               from the picker is how somebody stops being able to sell it
               without ever learning why. */}
           {unpricedCount > 0 ? (
-            <Notice tone="info" icon={<Tag size={16} />} title="Waiting for a price">
+            <Notice tone="info" icon={<Tag size={16} />} title={t('catalogue.unpriced.title')}>
               <span>
-                {unpricedCount === 1 ? 'One product is' : `${unpricedCount} products are`} missing
-                from the list above because nobody has set your price for{' '}
-                {unpricedCount === 1 ? 'it' : 'them'}:{' '}
-                {unpriced.map((i) => itemLabel(i)).join(', ')}. Ask whoever runs your store to set
-                one.
+                {t(unpricedCount === 1 ? 'neworder.unpriced.one' : 'neworder.unpriced.many', {
+                  n: unpricedCount,
+                  list: unpriced.map((i) => itemLabel(i)).join(', '),
+                })}
               </span>
             </Notice>
           ) : null}
         </div>
       </Section>
 
-      <Section title="Where it is going">
+      <Section title={t('neworder.where')}>
         <div className="as-grid-2">
           {/* The store's own order id, FIRST — owner, 2026-10-26. It is
               the number they already have in their own system and the
               one they quote when they ring about this parcel, so it is
               the first thing they copy across, not the last. */}
           <TextField
-            label="Order ID (optional)"
+            label={t('neworder.reference')}
             value={reference}
             onChange={(e) => setReference(e.target.value)}
           />
-          <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
           <TextField
-            label="Phone"
-            hint="With the country code, e.g. +919876543210"
+            label={t('neworder.name')}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+          <TextField
+            label={t('neworder.phone')}
+            hint={t('neworder.phoneHint')}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             inputMode="tel"
             required
           />
           <TextField
-            label="Email (optional)"
+            label={t('neworder.email')}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
           <TextField
-            label="PIN code"
+            label={t('neworder.pin')}
             value={pin}
             onChange={(e) => setPin(e.target.value)}
             inputMode="numeric"
             required
           />
           <TextField
-            label="Address"
+            label={t('neworder.address')}
             value={line1}
             onChange={(e) => setLine1(e.target.value)}
             required
           />
           <TextField
-            label="Landmark"
-            hint="What a driver looks for to find the door"
+            label={t('neworder.landmark')}
+            hint={t('neworder.landmarkHint')}
             value={landmark}
             onChange={(e) => setLandmark(e.target.value)}
             required
@@ -394,10 +398,10 @@ function NewOrderPageForm(): ReactElement {
         </div>
       </Section>
 
-      <Section title="How it is paid for">
+      <Section title={t('neworder.paid')}>
         <div className="as-stack as-stack--tight">
           <ChoiceCards
-            label="How is this one paid for?"
+            label={t('neworder.paidQuestion')}
             name="associate-order-payment"
             columns={2}
             value={payment}
@@ -406,14 +410,14 @@ function NewOrderPageForm(): ReactElement {
               {
                 value: 'COD',
                 icon: <Banknote size={16} />,
-                title: 'Cash on delivery',
-                description: 'The courier collects from your customer on the doorstep.',
+                title: t('neworder.cod.title'),
+                description: t('neworder.cod.desc'),
               },
               {
                 value: 'PREPAID',
                 icon: <Wallet size={16} />,
-                title: 'Prepaid',
-                description: 'Your customer has already paid. Nothing is collected on delivery.',
+                title: t('neworder.prepaid.title'),
+                description: t('neworder.prepaid.desc'),
               },
             ]}
           />
@@ -423,7 +427,7 @@ function NewOrderPageForm(): ReactElement {
               <>
                 {showDeliveryFee ? (
                   <TextField
-                    label="Delivery charge to the customer (₹, optional)"
+                    label={t('neworder.deliveryFee')}
                     type="number"
                     inputMode="decimal"
                     min={0}
@@ -433,12 +437,10 @@ function NewOrderPageForm(): ReactElement {
                   />
                 ) : null}
                 <TextField
-                  label="Cash to collect (₹)"
-                  hint={
-                    <>
-                      Leave blank to collect <Money amount={collectDefault} convert={false} />
-                    </>
-                  }
+                  label={t('neworder.cash')}
+                  hint={richMessage(t('neworder.cashHint'), {
+                    amount: <Money amount={collectDefault} convert={false} />,
+                  })}
                   type="number"
                   inputMode="decimal"
                   min={0}
@@ -450,7 +452,7 @@ function NewOrderPageForm(): ReactElement {
             )}
           </div>
           <TextArea
-            label="Delivery Notes (optional)"
+            label={t('neworder.notes')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             maxLength={2000}
@@ -460,16 +462,11 @@ function NewOrderPageForm(): ReactElement {
             // No figure, deliberately: what the store's wallet pays is the
             // store's cost, which is not this person's to know.
             <Notice tone="info" icon={<Wallet size={16} />}>
-              <span>
-                Nothing is collected on delivery. Your store's wallet covers this order when it is
-                confirmed; if it cannot, the order is refused and nothing is placed.
-              </span>
+              <span>{t('neworder.prepaidNote')}</span>
             </Notice>
           ) : (
             <Notice tone="info" icon={<Banknote size={16} />}>
-              <span>
-                Skydrop's call centre rings every customer to confirm the order before it is packed.
-              </span>
+              <span>{t('neworder.codNote')}</span>
             </Notice>
           )}
         </div>
@@ -480,7 +477,7 @@ function NewOrderPageForm(): ReactElement {
           <p className="as-error">{error}</p>
           {error.includes('DUPLICATE_ORDER_SUSPECTED') ? (
             <Checkbox
-              label="This is a separate order — place it anyway"
+              label={t('neworder.duplicate')}
               checked={acknowledgeDuplicate}
               onChange={(e) => setAcknowledgeDuplicate(e.target.checked)}
             />
@@ -491,14 +488,18 @@ function NewOrderPageForm(): ReactElement {
       <div className="as-bar">
         <p className="as-bar__summary">
           {chosen.length === 0
-            ? 'No products chosen yet'
-            : `${chosen.length} ${chosen.length === 1 ? 'product' : 'products'} · ${
-                prepaid ? 'prepaid' : 'cash on delivery'
-              }`}
+            ? t('neworder.summary.none')
+            : t('neworder.summary', {
+                products: t(
+                  chosen.length === 1 ? 'neworder.products.one' : 'neworder.products.other',
+                  { n: chosen.length },
+                ),
+                mode: prepaid ? t('neworder.mode.prepaid') : t('neworder.mode.cod'),
+              })}
         </p>
         <div className="as-bar__actions">
           <LinkButton href="/orders" variant="ghost">
-            Cancel
+            {t('neworder.cancel')}
           </LinkButton>
           <VanDriveOffButton
             type="submit"
@@ -506,9 +507,9 @@ function NewOrderPageForm(): ReactElement {
             variant="primary"
             className="as-nowrap"
             icon={<Send size={15} />}
-            label="Place order"
-            busyLabel="Placing…"
-            errorLabel="Not placed"
+            label={t('neworder.place')}
+            busyLabel={t('neworder.placing')}
+            errorLabel={t('neworder.notPlaced')}
             state={placing ? 'busy' : placeFailed ? 'error' : 'idle'}
             onAction={async () => {
               setConfirmPlace(true);
@@ -520,29 +521,35 @@ function NewOrderPageForm(): ReactElement {
       <ConfirmDialog
         open={confirmPlace}
         onOpenChange={setConfirmPlace}
-        title="Place this order?"
+        title={t('neworder.confirm.title')}
         entity={`${name.trim()} · ${phone.trim()}`}
         amount={
           prepaid ? (
-            'Already paid'
+            t('neworder.confirm.alreadyPaid')
           ) : (
             <>
-              {codAmount.trim() === '' ? (
-                <Money amount={collectDefault} convert={false} />
-              ) : (
-                <Money amount={codAmount.trim()} convert={false} />
-              )}{' '}
-              to collect
+              {richMessage(t('neworder.confirm.toCollect'), {
+                amount:
+                  codAmount.trim() === '' ? (
+                    <Money amount={collectDefault} convert={false} />
+                  ) : (
+                    <Money amount={codAmount.trim()} convert={false} />
+                  ),
+              })}
             </>
           )
         }
-        consequence={`It is placed for ${
-          chosen.length === 1 ? 'one product' : `${chosen.length} products`
-        }, ${
-          prepaid ? 'already paid for' : 'cash on delivery'
-        }, and goes to Skydrop's call centre, who ring the customer to confirm it before it is packed.`}
-        confirmLabel="Place order"
-        cancelLabel="Not yet"
+        consequence={t('neworder.confirm.consequence', {
+          products: t(
+            chosen.length === 1
+              ? 'neworder.confirm.products.one'
+              : 'neworder.confirm.products.other',
+            { n: chosen.length },
+          ),
+          mode: prepaid ? t('neworder.confirm.mode.prepaid') : t('neworder.confirm.mode.cod'),
+        })}
+        confirmLabel={t('neworder.place')}
+        cancelLabel={t('neworder.confirm.notYet')}
         // Closes at once: the van on the page carries the busy state while
         // the order is created (submit() never throws — it reports on the page).
         onConfirm={() => {

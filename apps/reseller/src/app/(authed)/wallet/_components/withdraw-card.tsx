@@ -8,7 +8,8 @@ import { Money, useToast } from '@skydrop/ui/components';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { TextField } from '@skydrop/ui/app/text-field';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { useRequestStoreWithdrawal, type StoreWalletSummary } from '@/lib/store-wallet-hooks';
 import { RmAlert } from './rm-parts';
 
@@ -22,6 +23,7 @@ import { RmAlert } from './rm-parts';
  * fresh key is minted only after a request lands.
  */
 export function WithdrawCard({ summary }: { readonly summary: StoreWalletSummary }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const request = useRequestStoreWithdrawal();
   const [amount, setAmount] = useState('');
@@ -52,12 +54,12 @@ export function WithdrawCard({ summary }: { readonly summary: StoreWalletSummary
         ...(note.trim() === '' ? {} : { note: note.trim() }),
         idempotencyKey,
       });
-      toast.success('Asked. Skydrop pays it and the wallet shows it when they do.');
+      toast.success(t('walwd.toast'));
       setAmount('');
       setNote('');
       setIdempotencyKey(crypto.randomUUID());
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     } finally {
       setConfirming(false);
     }
@@ -73,25 +75,21 @@ export function WithdrawCard({ summary }: { readonly summary: StoreWalletSummary
         </span>
         <div className="rm-card__titles">
           <h2 id="wd-title" className="rm-card__title">
-            Withdraw
+            {t('walwd.title')}
           </h2>
           <div className="rm-card__sub">
-            {summary.withdrawableInr === null ? (
-              'Ask Skydrop to pay out your balance.'
-            ) : (
-              <>
-                Ask Skydrop to pay out up to{' '}
-                <Money amount={summary.withdrawableInr} convert={false} />. Nothing leaves the
-                wallet until they pay it.
-              </>
-            )}
+            {summary.withdrawableInr === null
+              ? t('walwd.sub.plain')
+              : richMessage(t('walwd.sub.upTo'), {
+                  amount: <Money amount={summary.withdrawableInr} convert={false} />,
+                })}
           </div>
         </div>
       </div>
       <form onSubmit={onSubmit} className="rm-form">
         <TextField
           id="wd-amount"
-          label="Amount (₹)"
+          label={t('walwd.amount')}
           inputMode="decimal"
           required
           value={amount}
@@ -99,14 +97,14 @@ export function WithdrawCard({ summary }: { readonly summary: StoreWalletSummary
         />
         <TextField
           id="wd-name"
-          label="Name on the account"
+          label={t('walwd.payee')}
           required
           value={payeeName}
           onChange={(e) => setPayeeName(e.target.value)}
         />
         <TextField
           id="wd-account"
-          label="Account number"
+          label={t('walwd.account')}
           required
           inputMode="numeric"
           inputClassName="sk-ident"
@@ -123,14 +121,14 @@ export function WithdrawCard({ summary }: { readonly summary: StoreWalletSummary
         />
         <TextField
           id="wd-bank"
-          label="Bank"
+          label={t('walwd.bank')}
           required
           value={bank}
           onChange={(e) => setBank(e.target.value)}
         />
         <TextField
           id="wd-note"
-          label="Note (optional)"
+          label={t('walwd.note')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
         />
@@ -142,24 +140,22 @@ export function WithdrawCard({ summary }: { readonly summary: StoreWalletSummary
             size="md"
             icon={<HandCoins size={15} />}
             state={request.isPending ? 'busy' : 'idle'}
-            labels={{ idle: 'Ask to withdraw', busy: 'Asking…' }}
+            labels={{ idle: t('walwd.ask'), busy: t('walwd.asking') }}
           />
         </div>
       </form>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={
-          <>
-            Ask Skydrop to pay <Money amount={amountShown} convert={false} /> to {payeeName.trim()}{' '}
-            · {account.trim()}?
-          </>
-        }
+        title={richMessage(
+          t('walwd.confirmTitle', { payee: payeeName.trim(), account: account.trim() }),
+          { amount: <Money amount={amountShown} convert={false} /> },
+        )}
         entity={`${payeeName.trim()} · ${account.trim()}`}
         entityIsIdentifier={false}
         amount={<Money amount={amountShown} convert={false} />}
-        consequence={`${bank.trim()} · IFSC ${ifsc.trim()}. Check the account number — money sent to the wrong one is very hard to get back.`}
-        confirmLabel="Ask to withdraw"
+        consequence={t('walwd.consequence', { bank: bank.trim(), ifsc: ifsc.trim() })}
+        confirmLabel={t('walwd.ask')}
         onConfirm={send}
       />
     </section>

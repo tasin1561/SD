@@ -2,6 +2,8 @@ import type { ReactElement } from 'react';
 import type { Metadata } from 'next';
 import { ButtonLink } from '@skydrop/ui/app/button';
 import { OtherPortals, SignInCard } from '@skydrop/ui/app/sign-in';
+import { getT } from '@/i18n/server';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * How to get a client account.
@@ -22,29 +24,35 @@ import { OtherPortals, SignInCard } from '@skydrop/ui/app/sign-in';
  * "how do I get in" from the wrong console wants that console's answer
  * to the same question, not its sign-in form.
  */
-export const metadata: Metadata = {
-  title: 'Get a client account',
-  description: 'How to get a Skydrop client account.',
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await getT();
+  return { title: t('signUp.metaTitle'), description: t('signUp.metaDescription') };
+}
 
-export default function SignUpPage(): ReactElement {
+export default async function SignUpPage(): Promise<ReactElement> {
+  const { t, locale } = await getT();
   return (
     <SignInCard
-      title="Get a client account"
-      note="Skydrop accounts are opened by invitation, so that every client is set up with their warehouse space, courier accounts and terms before their first parcel moves."
+      title={t('signUp.getAClientAccount')}
+      note={t('signUp.skydropAccountsAreOpened')}
       footer={
         <>
           <p>
-            Already invited? The invitation email carries your link. <a href="/login">Sign in</a>
+            {richMessage(t('signUp.alreadyInvitedTheInvitation'), {
+              a: <a href="/login">{t('signUp.signIn')}</a>,
+            })}
           </p>
-          <OtherPortals self="client" path="/sign-up" title="Looking for a different portal?" />
+          <OtherPortals
+            self="client"
+            locale={locale}
+            path="/sign-up"
+            title={t('signUp.lookingForADifferent')}
+          />
         </>
       }
     >
       <div className="sk-signin__form">
-        <p className="sk-signin__lead">
-          Tell us what you sell and where you ship it, and we will come back to you.
-        </p>
+        <p className="sk-signin__lead">{t('signUp.tellUsWhatYou')}</p>
         {/*
           An ordinary link, deliberately NOT a submit-shaped control with
           a busy state: it navigates, and a navigation fires immediately,
@@ -57,7 +65,7 @@ export default function SignUpPage(): ReactElement {
           fullWidth
           href="https://skydrop.global/request-invite"
         >
-          Request an invite
+          {t('signUp.requestAnInvite')}
         </ButtonLink>
       </div>
     </SignInCard>

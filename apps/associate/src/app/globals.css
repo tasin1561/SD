@@ -129,6 +129,46 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/*
+ * BANGLA (lang="bn"). The faces next/font loads — Plus Jakarta Sans and
+ * JetBrains Mono, both latin subsets — contain NO Bengali glyphs, so Bangla
+ * text needs a Bengali face. The committed Noto Sans Bengali subset
+ * (--font-bn-face, loaded in layout.tsx only when lang is bn, unicode-range
+ * Bengali-only) is FIRST so ZWJ/ZWNJ stay in the Bengali run; Latin is outside
+ * its range and still draws from Plus Jakarta. The named system faces stay after
+ * it as the fallback for anything the subset lacks or if the file fails to load.
+ *
+ * Bangla also wants more air than Latin (matras and hasanta marks sit above and
+ * below the line) and must NOT be letter-spaced: tracking pulls apart the
+ * conjuncts the font has joined.
+ */
+html[lang='bn'] {
+  --app-font:
+    var(--font-bn-face, ui-sans-serif), var(--font-sans-face, ui-sans-serif), 'Noto Sans Bengali',
+    'Hind Siliguri', 'Nirmala UI', 'Bangla Sangam MN', 'Kohinoor Bangla', Vrinda, Mukti,
+    'Lohit Bengali', ui-sans-serif, system-ui, sans-serif;
+}
+html[lang='bn'] body {
+  line-height: 1.65;
+}
+html[lang='bn'] h1,
+html[lang='bn'] h2,
+html[lang='bn'] h3,
+html[lang='bn'] h4,
+html[lang='bn'] button,
+html[lang='bn'] label {
+  letter-spacing: 0;
+}
+
+/* Language + theme controls, side by side (signed-in header, drawer, sign-in corner). */
+.as-prefs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
 *,
 *::before,
 *::after {

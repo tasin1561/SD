@@ -14,7 +14,7 @@ import { GlossaryTerm } from '@skydrop/ui/app/tooltip-card';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { Skeleton, SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { useToast } from '@skydrop/ui/app/toast';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import {
   useRemoveResellerDefaultPrice,
   useResellerPriceList,
@@ -33,6 +33,7 @@ import {
   RsStripFact,
   pendingPhase,
 } from '../_components/rs-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * RS-3 — the seller's DEFAULT reseller price list: what every reseller
@@ -52,6 +53,7 @@ import {
  *       list genuinely holds.
  */
 export default function ResellerPriceListPage(): ReactElement {
+  const t = useT();
   const list = useResellerPriceList();
   const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<PriceListRow | null>(null);
@@ -74,19 +76,25 @@ export default function ResellerPriceListPage(): ReactElement {
 
   const header = (
     <div className="rs-head">
-      <RsBack href="/reseller-stores">Member stores</RsBack>
+      <RsBack href="/reseller-stores">{t('resellerPriceList.memberStores')}</RsBack>
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Reselling' }, { label: 'Price list' }]}
+        breadcrumbs={[
+          { label: t('resellerPriceList.clientConsole') },
+          { label: t('resellerPriceList.reselling') },
+          { label: t('resellerPriceList.priceList') },
+        ]}
         Link={Link}
-        title="Member store price list"
-        subtitle="Your default price to every member store, and the range it may sell at. A store can be given its own price on its page."
+        title={t('resellerPriceList.memberStorePriceList')}
+        subtitle={t('resellerPriceList.yourDefaultPriceTo')}
         meta={
           list.data === undefined ? undefined : (
             <RsFacts>
               <RsFact tone={priced > 0 ? 'accent' : 'warn'}>
                 {priced} of {all.length} priced
               </RsFact>
-              {list.data.truncated && <RsFact tone="warn">First 2,000 products</RsFact>}
+              {list.data.truncated && (
+                <RsFact tone="warn">{t('resellerPriceList.first2000Products')}</RsFact>
+              )}
             </RsFacts>
           )
         }
@@ -103,7 +111,7 @@ export default function ResellerPriceListPage(): ReactElement {
             <Skeleton key={i} className="rs-kpi-skel" height={104} rounded="md" />
           ))}
         </div>
-        <SkeletonRows rows={6} cols={7} label="Loading your products" />
+        <SkeletonRows rows={6} cols={7} label={t('resellerPriceList.loadingYourProducts')} />
       </div>
     );
   }
@@ -111,7 +119,7 @@ export default function ResellerPriceListPage(): ReactElement {
     return (
       <div className="rs-page">
         {header}
-        <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+        <ErrorState message={verdict(list.error, t)} retry={() => void list.refetch()} />
       </div>
     );
   }
@@ -127,36 +135,36 @@ export default function ResellerPriceListPage(): ReactElement {
              counts roll up once; the unit total keeps its `<Num>`. */}
       <div className="rs-kpis">
         <KpiCard
-          label="Priced for resale"
+          label={t('resellerPriceList.pricedForResale')}
           icon={<Tag size={14} />}
           value={priced}
           unit={`of ${all.length}`}
           tone={priced === 0 ? 'pending' : 'neutral'}
-          hint="A product with no price here cannot be sold by a store on your default terms."
+          hint={t('resellerPriceList.aProductWithNo')}
         />
         <KpiCard
-          label="Being sold by a store"
+          label={t('resellerPriceList.beingSoldByA')}
           icon={<Store size={14} />}
           value={inStores}
           unit={inStores === 1 ? 'product' : 'products'}
           tone="neutral"
-          hint="Switched on for at least one of your member stores."
+          hint={t('resellerPriceList.switchedOnForAt')}
         />
         <KpiCard
-          label="Units available"
+          label={t('resellerPriceList.unitsAvailable')}
           icon={<Boxes size={14} />}
           figure={<Num value={available} />}
           unit="units"
           tone="neutral"
-          hint="Sellable stock across the products listed."
+          hint={t('resellerPriceList.sellableStockAcrossThe')}
         />
       </div>
 
       <RsSection
-        title="Products"
+        title={t('resellerPriceList.products')}
         note={
           list.data.truncated
-            ? 'Your first 2,000 active products.'
+            ? t('resellerPriceList.yourFirst2000')
             : `${rows.length} ${rows.length === 1 ? 'product' : 'products'}`
         }
         flush
@@ -165,13 +173,13 @@ export default function ResellerPriceListPage(): ReactElement {
           search={{
             value: search,
             onChange: setSearch,
-            label: 'Search by product or SKU',
-            placeholder: 'Product or SKU…',
+            label: t('resellerPriceList.searchByProductOr'),
+            placeholder: t('resellerPriceList.productOrSku'),
           }}
           action={
             search !== '' ? (
               <Button variant="ghost" size="sm" onClick={() => setSearch('')}>
-                Reset
+                {t('resellerPriceList.reset')}
               </Button>
             ) : undefined
           }
@@ -180,38 +188,42 @@ export default function ResellerPriceListPage(): ReactElement {
           <EmptyState
             bare
             icon={search === '' ? undefined : <PackageSearch size={22} />}
-            title={search === '' ? 'No active products yet' : 'Nothing matches that search'}
+            title={
+              search === ''
+                ? t('resellerPriceList.noActiveProductsYet')
+                : t('resellerPriceList.nothingMatchesThatSearch')
+            }
             description={
               search === ''
-                ? 'Add products to your catalogue, then set their member store prices here.'
-                : 'Try a different name or SKU code.'
+                ? t('resellerPriceList.addProductsToYour')
+                : t('resellerPriceList.tryADifferentName')
             }
             action={
               search === '' ? undefined : (
                 <Button variant="secondary" size="md" onClick={() => setSearch('')}>
-                  Reset search
+                  {t('resellerPriceList.resetSearch')}
                 </Button>
               )
             }
           />
         ) : (
-          <Table caption="Member store prices">
+          <Table caption={t('resellerPriceList.memberStorePrices')}>
             <THead>
               <Tr>
-                <Th>Product</Th>
-                <Th align="right">Available</Th>
+                <Th>{t('resellerPriceList.product')}</Th>
+                <Th align="right">{t('resellerPriceList.available')}</Th>
                 <Th align="right">
                   <GlossaryTerm
-                    title="Transfer price"
-                    description="What a member store pays you per unit, unless it has been given a price of its own."
+                    title={t('resellerPriceList.transferPrice')}
+                    description={t('resellerPriceList.whatAMemberStore')}
                   >
-                    Transfer price
+                    {t('resellerPriceList.transferPrice')}
                   </GlossaryTerm>
                 </Th>
-                <Th>Retail range</Th>
-                <Th align="right">Suggested</Th>
-                <Th align="right">Stores selling it</Th>
-                <Th>Actions</Th>
+                <Th>{t('resellerPriceList.retailRange')}</Th>
+                <Th align="right">{t('resellerPriceList.suggested')}</Th>
+                <Th align="right">{t('resellerPriceList.storesSellingIt')}</Th>
+                <Th>{t('resellerPriceList.actions')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -262,7 +274,9 @@ export default function ResellerPriceListPage(): ReactElement {
                         icon={<Pencil size={13} />}
                         onClick={() => setEditing(r)}
                       >
-                        {r.price === null ? 'Set price' : 'Edit'}
+                        {r.price === null
+                          ? t('resellerPriceList.setPrice')
+                          : t('resellerPriceList.edit')}
                       </Button>
                       {r.price !== null ? (
                         <Button
@@ -271,7 +285,7 @@ export default function ResellerPriceListPage(): ReactElement {
                           icon={<Trash2 size={13} />}
                           onClick={() => setRemoving(r)}
                         >
-                          Remove
+                          {t('resellerPriceList.remove')}
                         </Button>
                       ) : null}
                     </div>
@@ -286,12 +300,12 @@ export default function ResellerPriceListPage(): ReactElement {
       {all.length > 0 && (
         <RsStrip>
           <RsStripFact
-            label="Priced"
+            label={t('resellerPriceList.priced')}
             value={`${priced} / ${all.length}`}
             tone={priced === 0 ? 'warn' : 'good'}
           />
-          <RsStripFact label="In a store" value={inStores} />
-          <RsStripFact label="Shown" value={`${rows.length} products`} />
+          <RsStripFact label={t('resellerPriceList.inAStore')} value={inStores} />
+          <RsStripFact label={t('resellerPriceList.shown')} value={`${rows.length} products`} />
         </RsStrip>
       )}
 
@@ -301,20 +315,24 @@ export default function ResellerPriceListPage(): ReactElement {
         onOpenChange={(open) => {
           if (!open) setRemoving(null);
         }}
-        title={removing === null ? '' : `Remove the price of ${removing.skuCode}?`}
+        title={
+          removing === null
+            ? ''
+            : t('resellerPriceList.removeThePriceOf', { skuCode: removing.skuCode })
+        }
         entity={removing?.skuCode ?? ''}
         entityIsIdentifier
-        consequence="Stores that sell it at your default price must be given their own first — we will tell you which."
-        confirmLabel="Remove"
+        consequence={t('resellerPriceList.storesThatSellIt')}
+        confirmLabel={t('resellerPriceList.remove')}
         closeOnSuccess={false}
         onConfirm={async () => {
           if (removing === null) return;
           try {
             await remove.mutateAsync({ variantId: removing.variantId });
-            toast.success('Price removed.');
+            toast.success(t('resellerPriceList.priceRemoved'));
             setRemoving(null);
           } catch (err) {
-            toast.error(serverVerdict(err));
+            toast.error(verdict(err, t));
           }
         }}
       />
@@ -327,12 +345,21 @@ function RetailRange({
 }: {
   p: { minRetailInr: string | null; maxRetailInr: string | null };
 }): ReactElement {
-  if (p.minRetailInr === null && p.maxRetailInr === null) return <>Any</>;
+  const t = useT();
+  if (p.minRetailInr === null && p.maxRetailInr === null) return <>{t('resellerPriceList.any')}</>;
   return (
     <span className="rs-nowrap">
-      {p.minRetailInr === null ? 'up to ' : <Money amount={p.minRetailInr} convert={false} />}
+      {p.minRetailInr === null ? (
+        t('resellerPriceList.upTo')
+      ) : (
+        <Money amount={p.minRetailInr} convert={false} />
+      )}
       {p.minRetailInr !== null && p.maxRetailInr !== null ? ' – ' : null}
-      {p.maxRetailInr === null ? ' or more' : <Money amount={p.maxRetailInr} convert={false} />}
+      {p.maxRetailInr === null ? (
+        t('resellerPriceList.orMore')
+      ) : (
+        <Money amount={p.maxRetailInr} convert={false} />
+      )}
     </span>
   );
 }
@@ -344,6 +371,7 @@ function EditPriceModal({
   row: PriceListRow;
   onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const save = useSetResellerDefaultPrice();
   const [draft, setDraft] = useState<PriceDraft>(draftFrom(row.price));
@@ -354,10 +382,10 @@ function EditPriceModal({
     setError(null);
     try {
       await save.mutateAsync({ variantId: row.variantId, body: priceBody(draft) });
-      toast.success(`Saved the member store price of ${row.skuCode}.`);
+      toast.success(t('resellerPriceList.savedTheMemberStore', { skuCode: row.skuCode }));
       onClose();
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -367,13 +395,13 @@ function EditPriceModal({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      title={`Member store price — ${row.productName}`}
-      description={`${row.skuCode}. Stores with a price of their own are not affected.`}
+      title={t('resellerPriceList.memberStorePrice', { productName: row.productName })}
+      description={t('resellerPriceList.storesWithAPrice', { skuCode: row.skuCode })}
       icon={<Tag size={18} />}
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={onClose}>
-            Cancel
+            {t('resellerPriceList.cancel')}
           </Button>
           <AsyncButton
             type="submit"
@@ -381,7 +409,7 @@ function EditPriceModal({
             variant="primary"
             size="md"
             state={pendingPhase(save.isPending)}
-            labels={{ idle: 'Save price', busy: 'Saving…' }}
+            labels={{ idle: t('resellerPriceList.savePrice'), busy: t('resellerPriceList.saving') }}
           />
         </DialogFooter>
       }

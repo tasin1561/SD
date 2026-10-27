@@ -16,6 +16,10 @@ import {
   useSellerRestriction,
 } from '@/lib/restriction-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { tEn, type MessageKey } from '@/i18n/catalog';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Capabilities, split by what blocking them actually costs.
@@ -29,20 +33,20 @@ import { serverVerdict } from '@/lib/server-verdict';
  * knowingly rather than by ticking the next box down a flat list.
  */
 const SAFE = [
-  ['ORDER_CREATE', 'Placing new orders'],
-  ['ORDER_CONFIRM', 'Confirming orders'],
-  ['CONSIGNMENT_CREATE', 'Declaring new inbound stock'],
-  ['WITHDRAWAL_REQUEST', 'Requesting withdrawals'],
+  ['ORDER_CREATE', 'sellersRestrictionPanel.capOrderCreate'],
+  ['ORDER_CONFIRM', 'sellersRestrictionPanel.capOrderConfirm'],
+  ['CONSIGNMENT_CREATE', 'sellersRestrictionPanel.capConsignmentCreate'],
+  ['WITHDRAWAL_REQUEST', 'sellersRestrictionPanel.capWithdrawalRequest'],
 ] as const;
 
 const IN_FLIGHT = [
-  ['SHIPMENT_DISPATCH', 'Handing their parcels to the courier'],
+  ['SHIPMENT_DISPATCH', 'sellersRestrictionPanel.capShipmentDispatch'],
   // Offered from the change that BUILT the seller tracking page and
   // guarded it in the same commit. It was held back while the page was
   // a placeholder: a checkbox that ticks and stops nothing tells an
   // operator they have blocked something they have not.
-  ['TRACKING_VIEW', 'Seeing where their parcels are'],
-  ['RTO_RECEIVE', 'Booking their returns back in'],
+  ['TRACKING_VIEW', 'sellersRestrictionPanel.capTrackingView'],
+  ['RTO_RECEIVE', 'sellersRestrictionPanel.capRtoReceive'],
 ] as const;
 
 /**
@@ -60,12 +64,17 @@ const IN_FLIGHT = [
  * unknown value falls back to the raw code rather than disappearing:
  * a blocked capability nobody can see is worse than an ugly one.
  */
-const CAPABILITY_LABELS: Readonly<Record<string, string>> = Object.fromEntries(
+const CAPABILITY_LABELS: Readonly<Record<string, MessageKey>> = Object.fromEntries(
   [...SAFE, ...IN_FLIGHT].map(([key, label]) => [key, label]),
 );
 
+export function capabilityLabelIn(tr: Translate<MessageKey>, key: string): string {
+  const k = CAPABILITY_LABELS[key];
+  return k === undefined ? key : tr(k);
+}
+
 export function capabilityLabel(key: string): string {
-  return CAPABILITY_LABELS[key] ?? key;
+  return capabilityLabelIn(tEn, key);
 }
 
 export function RestrictionPanel({
@@ -75,6 +84,8 @@ export function RestrictionPanel({
   readonly sellerId: string;
   readonly canManage: boolean;
 }): ReactElement {
+  const t = useT();
+
   const active = useSellerRestriction(sellerId);
   const apply = useApplyRestriction(sellerId);
   const lift = useLiftRestriction(sellerId);
@@ -101,7 +112,7 @@ export function RestrictionPanel({
         clearAtBalanceInr: clearAt.trim(),
         reason: reason.trim(),
       });
-      toast.success('Hold placed. The client sees it on every page.');
+      toast.success(t('sellersRestrictionPanel.holdPlacedTheClientSees'));
       setOpen(false);
       setReason('');
     } catch (err) {
@@ -114,9 +125,9 @@ export function RestrictionPanel({
     try {
       await lift.mutateAsync({
         restrictionId: hold.id,
-        reason: 'Lifted by hand from client detail',
+        reason: t('sellersRestrictionPanel.liftedByHandFromClient'),
       });
-      toast.success('Hold lifted.');
+      toast.success(t('sellersRestrictionPanel.holdLifted'));
     } catch (err) {
       toast.error(serverVerdict(err));
     }
@@ -124,8 +135,8 @@ export function RestrictionPanel({
 
   return (
     <AcCard
-      title="Account hold"
-      note="Stop a client who owes us money from starting new work. It lifts itself once their balance reaches the figure you set — they never wait for someone to notice a payment."
+      title={t('sellersRestrictionPanel.accountHold')}
+      note={t('sellersRestrictionPanel.stopAClientWhoOwes')}
       tone={hold === null ? undefined : 'warn'}
       action={
         canManage && hold === null ? (
@@ -135,23 +146,27 @@ export function RestrictionPanel({
             icon={<Lock size={14} />}
             onClick={() => setOpen(true)}
           >
-            Place a hold
+            {t('sellersRestrictionPanel.placeAHold')}
           </Button>
         ) : null
       }
     >
       {hold === null ? (
-        <p className="ac-muted">No hold. This client can trade normally.</p>
+        <p className="ac-muted">{t('sellersRestrictionPanel.noHoldThisClientCan')}</p>
       ) : (
         <div className="ac-card__body">
           <p className="ac-text">{hold.reason}</p>
           <p className="ac-muted">
-            Blocked: {hold.blockedCapabilities.map(capabilityLabel).join(', ')}
+            {t('sellersRestrictionPanel.blocked', {
+              value: hold.blockedCapabilities.map((c) => capabilityLabelIn(t, c)).join(', '),
+            })}
           </p>
           <p className="ac-muted">
-            Balance <Money amount={hold.balanceInr} currency="INR" /> · lifts at{' '}
-            <Money amount={hold.clearAtBalanceInr} currency="INR" /> · still needed{' '}
-            <Money amount={hold.shortfallInr} currency="INR" />
+            {richMessage(t('sellersRestrictionPanel.balanceLiftsAtStillNeeded'), {
+              money: <Money amount={hold.balanceInr} currency="INR" />,
+              money2: <Money amount={hold.clearAtBalanceInr} currency="INR" />,
+              money3: <Money amount={hold.shortfallInr} currency="INR" />,
+            })}
           </p>
           {canManage && (
             <div className="ac-buttons" data-align="start">
@@ -160,7 +175,10 @@ export function RestrictionPanel({
                 size="sm"
                 icon={<LockOpen size={14} />}
                 state={lift.isPending ? 'busy' : 'idle'}
-                labels={{ idle: 'Lift now', busy: 'Lifting…' }}
+                labels={{
+                  idle: t('sellersRestrictionPanel.liftNow'),
+                  busy: t('sellersRestrictionPanel.lifting'),
+                }}
                 onClick={() => void onLift()}
               />
             </div>
@@ -172,19 +190,23 @@ export function RestrictionPanel({
         open={open}
         onOpenChange={setOpen}
         size="lg"
-        title="Place a hold"
+        title={t('sellersRestrictionPanel.placeAHold')}
         icon={<Lock size={18} />}
         locked={apply.isPending}
         footer={
           <DialogFooter>
             <Button variant="ghost" size="md" onClick={() => setOpen(false)}>
-              Cancel
+              {t('sellersRestrictionPanel.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               size="md"
               state={phaseOf(apply.isPending, error)}
-              labels={{ idle: 'Place hold', busy: 'Placing…', error: 'Not placed' }}
+              labels={{
+                idle: t('sellersRestrictionPanel.placeHold'),
+                busy: t('sellersRestrictionPanel.placing'),
+                error: t('sellersRestrictionPanel.notPlaced'),
+              }}
               disabled={picked.length === 0 || reason.trim().length < 20 || apply.isPending}
               onClick={() => void submit()}
             />
@@ -193,11 +215,11 @@ export function RestrictionPanel({
       >
         <div className="ac-form">
           <fieldset className="ac-fieldset">
-            <legend>Stop them from</legend>
+            <legend>{t('sellersRestrictionPanel.stopThemFrom')}</legend>
             {SAFE.map(([key, label]) => (
               <Checkbox
                 key={key}
-                label={label}
+                label={t(label)}
                 checked={picked.includes(key)}
                 onChange={() => toggle(key)}
               />
@@ -205,16 +227,12 @@ export function RestrictionPanel({
           </fieldset>
 
           <fieldset className="ac-fieldset">
-            <legend>Parcels already moving</legend>
-            <p className="ac-muted">
-              These do not protect the money. A parcel with the courier still has to be delivered,
-              tracked and returned, so blocking these strands goods we are still paying to move —
-              and a blocked return is a carton on the bench with no record behind it.
-            </p>
+            <legend>{t('sellersRestrictionPanel.parcelsAlreadyMoving')}</legend>
+            <p className="ac-muted">{t('sellersRestrictionPanel.theseDoNotProtectThe')}</p>
             {IN_FLIGHT.map(([key, label]) => (
               <Checkbox
                 key={key}
-                label={label}
+                label={t(label)}
                 checked={picked.includes(key)}
                 onChange={() => toggle(key)}
               />
@@ -223,14 +241,13 @@ export function RestrictionPanel({
 
           {touchesInFlight && (
             <AcCallout tone="warn" icon={<TriangleAlert size={15} />} role="status">
-              You have chosen something that affects parcels already in transit. This is recorded on
-              the audit trail as such.
+              {t('sellersRestrictionPanel.youHaveChosenSomethingThat')}
             </AcCallout>
           )}
 
           <TextField
-            label="Lifts automatically at balance (₹)"
-            hint="Usually 0 — the point at which they no longer owe us. The client sees this figure and how far off it they are."
+            label={t('sellersRestrictionPanel.liftsAutomaticallyAtBalance')}
+            hint={t('sellersRestrictionPanel.usually0ThePointAt')}
             requiredMark
             inputMode="decimal"
             inputClassName="sk-figure"
@@ -239,8 +256,8 @@ export function RestrictionPanel({
           />
 
           <TextArea
-            label="Reason"
-            hint="The CLIENT reads this. Write it as you would say it to them — a hold they cannot understand is one they phone about instead of fixing."
+            label={t('sellersRestrictionPanel.reason')}
+            hint={t('sellersRestrictionPanel.theClientReadsThisWrite')}
             requiredMark
             rows={3}
             value={reason}

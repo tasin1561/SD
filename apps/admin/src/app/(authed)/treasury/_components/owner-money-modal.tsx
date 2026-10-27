@@ -10,6 +10,7 @@ import { Select } from '@skydrop/ui/app/select';
 import { DateField } from '@skydrop/ui/app/date-field';
 import { useRecordOwnerMoney } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 /**
  * The owner putting money into the business, or taking it out.
@@ -30,6 +31,7 @@ export function OwnerMoneyModal({
   readonly currency: 'INR' | 'BDT';
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const record = useRecordOwnerMoney();
   const [direction, setDirection] = useState<'IN' | 'OUT'>('IN');
   const [amount, setAmount] = useState('');
@@ -109,19 +111,19 @@ export function OwnerMoneyModal({
           }
         }}
         icon={<Landmark size={18} />}
-        title={`Owner money — ${accountLabel}`}
-        description="Money you put into the business or took out of it. Recorded as equity: it is never counted as income or as an expense."
+        title={t('treasuryOwnerMoneyModal.ownerMoney', { accountLabel })}
+        description={t('treasuryOwnerMoneyModal.moneyYouPutIntoThe')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={onClose}>
-              Cancel
+              {t('treasuryOwnerMoneyModal.cancel')}
             </Button>
             <Button
               variant="primary"
               onClick={review}
               disabled={record.isPending || amount.trim() === ''}
             >
-              Review
+              {t('treasuryOwnerMoneyModal.review')}
             </Button>
           </DialogFooter>
         }
@@ -129,18 +131,18 @@ export function OwnerMoneyModal({
         <div className="mo-fields">
           <Select
             id="owner-money-direction"
-            label="Which way"
+            label={t('treasuryOwnerMoneyModal.whichWay')}
             requiredMark
             value={direction}
             onChange={(e) => setDirection(e.target.value === 'OUT' ? 'OUT' : 'IN')}
           >
-            <option value="IN">Put in — money into the business</option>
-            <option value="OUT">Taken out — money out of the business</option>
+            <option value="IN">{t('treasuryOwnerMoneyModal.putInMoneyIntoThe')}</option>
+            <option value="OUT">{t('treasuryOwnerMoneyModal.takenOutMoneyOutOf')}</option>
           </Select>
           <TextField
             id="owner-money-amount"
-            label={`Amount (${currency})`}
-            hint="As a positive figure — the direction above says which way."
+            label={t('treasuryOwnerMoneyModal.amount', { currency })}
+            hint={t('treasuryOwnerMoneyModal.asAPositiveFigureThe')}
             requiredMark
             inputMode="decimal"
             inputClassName="sk-figure"
@@ -151,39 +153,46 @@ export function OwnerMoneyModal({
           />
           {preview !== null && (
             <p className="mo-p">
-              {direction === 'IN' ? 'Adds' : 'Takes'}{' '}
+              {direction === 'IN'
+                ? t('treasuryOwnerMoneyModal.adds')
+                : t('treasuryOwnerMoneyModal.takes')}{' '}
               <Money
                 amount={direction === 'IN' ? preview : `-${preview}`}
                 currency={currency}
                 convert={false}
                 direction={direction === 'IN' ? 'credit' : 'debit'}
               />{' '}
-              {direction === 'IN' ? 'to' : 'from'} our own money in this account.
+              {t('treasuryOwnerMoneyModal.ourOwnMoneyInThis', {
+                value:
+                  direction === 'IN'
+                    ? t('treasuryOwnerMoneyModal.to')
+                    : t('treasuryOwnerMoneyModal.from'),
+              })}
             </p>
           )}
           <DateField
             id="owner-money-date"
-            label="On"
+            label={t('treasuryOwnerMoneyModal.on')}
             requiredMark
             value={occurredOn}
             onChange={(e) => setOccurredOn(e.target.value)}
           />
           <TextArea
             id="owner-money-reason"
-            label="What it was for"
-            hint="At least a sentence; it is kept with the entry."
+            label={t('treasuryOwnerMoneyModal.whatItWasFor')}
+            hint={t('treasuryOwnerMoneyModal.atLeastASentenceIt')}
             requiredMark
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
             maxLength={2000}
             showCount
-            placeholder="e.g. Founder's capital for the October stock purchase"
+            placeholder={t('treasuryOwnerMoneyModal.eGFounderSCapital')}
           />
           <TextField
             id="owner-money-ref"
-            label="Bank reference"
-            hint="Optional."
+            label={t('treasuryOwnerMoneyModal.bankReference')}
+            hint={t('treasuryOwnerMoneyModal.optional')}
             inputClassName="sk-ident"
             value={reference}
             onChange={(e) => setReference(e.target.value)}
@@ -198,7 +207,11 @@ export function OwnerMoneyModal({
           setConfirming(next);
           if (!next) setError(null);
         }}
-        title={direction === 'IN' ? 'Record money put in?' : 'Record money taken out?'}
+        title={
+          direction === 'IN'
+            ? t('treasuryOwnerMoneyModal.recordMoneyPutIn')
+            : t('treasuryOwnerMoneyModal.recordMoneyTakenOut')
+        }
         entity={accountLabel}
         amount={
           preview === null ? undefined : (
@@ -210,8 +223,16 @@ export function OwnerMoneyModal({
             />
           )
         }
-        consequence={`${direction === 'IN' ? 'Adds this to' : 'Takes this from'} our own ${currency} money in ${accountLabel} on ${onLabel}, as owner equity — never counted as income or an expense.`}
-        confirmLabel="Record"
+        consequence={t('treasuryOwnerMoneyModal.ourOwnMoneyInOn', {
+          value:
+            direction === 'IN'
+              ? t('treasuryOwnerMoneyModal.addsThisTo')
+              : t('treasuryOwnerMoneyModal.takesThisFrom'),
+          currency,
+          accountLabel,
+          onLabel,
+        })}
+        confirmLabel={t('treasuryOwnerMoneyModal.record')}
         onConfirm={save}
         error={confirming ? (error ?? undefined) : undefined}
       />

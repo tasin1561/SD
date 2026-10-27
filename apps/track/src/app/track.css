@@ -10,6 +10,20 @@
     system-ui, sans-serif;
 }
 
+/* Bangla: the Bengali face leads so ZWJ/ZWNJ stay in the Bengali run; Latin
+   is outside its unicode-range and still draws from Plus Jakarta. */
+:root[data-lang='bn'] {
+  --app-font:
+    var(--font-bn-face, ui-sans-serif), var(--font-sans-face, ui-sans-serif), 'Noto Sans Bengali',
+    'Hind Siliguri', 'Nirmala UI', 'Bangla Sangam MN', 'Kohinoor Bangla', Vrinda, Mukti,
+    'Lohit Bengali', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Matras and hasanta sit above and below the line; give Bangla more air. */
+:root[data-lang='bn'] body {
+  line-height: 1.65;
+}
+
 body {
   min-height: 100dvh;
 }
@@ -82,6 +96,7 @@ body {
 }
 .tr-top__controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
 }
@@ -336,8 +351,9 @@ body {
   gap: var(--sp-2);
 }
 
-/* Devanagari has no use for the tight display tracking the Latin headings
+/* Devanagari and Bengali have no use for the tight display tracking the Latin headings
    carry; it only crowds the words. */
-:root[data-lang='hi'] :is(.tr-summary__title, .tr-lookup__title, .tr-brand__name) {
+:root:is([data-lang='hi'], [data-lang='bn'])
+  :is(.tr-summary__title, .tr-lookup__title, .tr-brand__name) {
   letter-spacing: 0;
 }

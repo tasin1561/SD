@@ -27,6 +27,9 @@ import {
   OoSection,
   elapsedSince,
 } from '../../orders/_components/order-ops-parts';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The operator gate for failed deliveries (CUR-10).
@@ -40,14 +43,14 @@ import {
  * RECALL is the exception and is worth recognising on sight: it asks our
  * own agents to phone the customer and reaches no courier at all.
  */
-function actionLabel(a: AdminDeliveryActionView['action']): string {
+function actionLabel(t: Translate<MessageKey>, a: AdminDeliveryActionView['action']): string {
   switch (a) {
     case 'REATTEMPT':
-      return 'Re-attempt delivery';
+      return t('deliveryActionsDeliveryActionsIndex.reAttemptDelivery');
     case 'RECALL':
-      return 'Call the customer';
+      return t('deliveryActionsDeliveryActionsIndex.callTheCustomer');
     case 'RTO':
-      return 'Return to us';
+      return t('deliveryActionsDeliveryActionsIndex.returnToUs');
   }
 }
 
@@ -69,6 +72,8 @@ function statusKind(
 }
 
 export function DeliveryActionsIndex(): ReactElement {
+  const t = useT();
+
   const canDecide = usePermission('courier.ops.write');
   const [showAll, setShowAll] = useState(false);
   const queue = useDeliveryActionQueue(showAll ? undefined : 'PENDING');
@@ -86,7 +91,7 @@ export function DeliveryActionsIndex(): ReactElement {
     if (deciding === null) return false;
     setError(null);
     if (deciding.decision === 'reject' && note.trim().length < 5) {
-      setError('Say why — the client sees this, and an unexplained no comes straight back');
+      setError(t('deliveryActionsDeliveryActionsIndex.sayWhyTheClientSees'));
       return false;
     }
     try {
@@ -109,32 +114,43 @@ export function DeliveryActionsIndex(): ReactElement {
   return (
     <div className="oo-page">
       <PageHeader
-        title="Failed deliveries"
-        subtitle="What clients have asked us to do about parcels the courier could not hand over. A Member store's ask that its client chose to approve is shown for reference only — Client staff decide it, not Skydrop admin."
+        title={t('deliveryActionsDeliveryActionsIndex.failedDeliveries')}
+        subtitle={t('deliveryActionsDeliveryActionsIndex.whatClientsHaveAskedUs')}
       />
 
       <OoCard>
         <Checkbox
           checked={showAll}
           onChange={(e) => setShowAll(e.target.checked)}
-          label="Show decided requests too"
-          description="Approving a re-attempt sends a van; approving a return ends the sale. A recall only queues one of our agents to phone the customer."
+          label={t('deliveryActionsDeliveryActionsIndex.showDecidedRequestsToo')}
+          description={t('deliveryActionsDeliveryActionsIndex.approvingAReAttemptSends')}
         />
       </OoCard>
 
       <OoSection
-        title={showAll ? 'All requests' : 'Waiting on a decision'}
+        title={
+          showAll
+            ? t('deliveryActionsDeliveryActionsIndex.allRequests')
+            : t('deliveryActionsDeliveryActionsIndex.waitingOnADecision')
+        }
         note={queue.data === undefined ? undefined : `${rows.length} shown`}
         flush
       >
         {queue.isLoading ? (
           <div className="oo-card__pad">
-            <SkeletonRows rows={4} cols={6} label="Loading the queue…" />
+            <SkeletonRows
+              rows={4}
+              cols={6}
+              label={t('deliveryActionsDeliveryActionsIndex.loadingTheQueue')}
+            />
           </div>
         ) : queue.isError || queue.data === undefined ? (
           <div className="oo-card__pad">
             <ErrorState
-              message={queue.error?.message ?? 'Could not read the queue.'}
+              message={
+                queue.error?.message ??
+                t('deliveryActionsDeliveryActionsIndex.couldNotReadTheQueue')
+              }
               retry={() => void queue.refetch()}
             />
           </div>
@@ -143,23 +159,27 @@ export function DeliveryActionsIndex(): ReactElement {
             bare
             tone={showAll ? 'neutral' : 'positive'}
             icon={<Truck size={20} />}
-            title={showAll ? 'No requests yet' : 'Nothing waiting'}
+            title={
+              showAll
+                ? t('deliveryActionsDeliveryActionsIndex.noRequestsYet')
+                : t('deliveryActionsDeliveryActionsIndex.nothingWaiting')
+            }
             description={
               showAll
-                ? 'No client has asked for anything yet.'
-                : 'Nothing waiting. Failed deliveries appear here when a client asks us to act.'
+                ? t('deliveryActionsDeliveryActionsIndex.noClientHasAskedFor')
+                : t('deliveryActionsDeliveryActionsIndex.nothingWaitingFailedDeliveriesAppear')
             }
           />
         ) : (
-          <Table caption="Failed-delivery requests">
+          <Table caption={t('deliveryActionsDeliveryActionsIndex.failedDeliveryRequests')}>
             <THead>
               <Tr>
-                <Th>Order</Th>
-                <Th>Client</Th>
-                <Th>Asked for</Th>
-                <Th>Why</Th>
-                <Th>State</Th>
-                <Th align="right">Decide</Th>
+                <Th>{t('deliveryActionsDeliveryActionsIndex.order')}</Th>
+                <Th>{t('deliveryActionsDeliveryActionsIndex.client')}</Th>
+                <Th>{t('deliveryActionsDeliveryActionsIndex.askedFor')}</Th>
+                <Th>{t('deliveryActionsDeliveryActionsIndex.why')}</Th>
+                <Th>{t('deliveryActionsDeliveryActionsIndex.state')}</Th>
+                <Th align="right">{t('deliveryActionsDeliveryActionsIndex.decide')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -180,13 +200,19 @@ export function DeliveryActionsIndex(): ReactElement {
                     {r.seller?.companyName ?? '—'}
                     {r.resellerStore !== null && (
                       <span className="oo-sub">
-                        Member store: {r.resellerStore.displayName ?? r.resellerStore.name}
+                        {t('deliveryActionsDeliveryActionsIndex.memberStore', {
+                          value: r.resellerStore.displayName ?? r.resellerStore.name,
+                        })}
                       </span>
                     )}
                   </Td>
                   <Td>
-                    <span className="oo-strong">{actionLabel(r.action)}</span>
-                    {r.action === 'RECALL' && <span className="oo-sub">No courier involved</span>}
+                    <span className="oo-strong">{actionLabel(t, r.action)}</span>
+                    {r.action === 'RECALL' && (
+                      <span className="oo-sub">
+                        {t('deliveryActionsDeliveryActionsIndex.noCourierInvolved')}
+                      </span>
+                    )}
                   </Td>
                   <Td className="oo-muted oo-clip">{r.reason}</Td>
                   <Td>
@@ -197,7 +223,11 @@ export function DeliveryActionsIndex(): ReactElement {
                           kind={statusKind(r.status)}
                           label={r.status.toLowerCase()}
                         />
-                        <AgeChip title={`Asked ${new Date(r.createdAt).toLocaleString('en-IN')}`}>
+                        <AgeChip
+                          title={t('deliveryActionsDeliveryActionsIndex.asked', {
+                            value: new Date(r.createdAt).toLocaleString('en-IN'),
+                          })}
+                        >
                           {elapsedSince(r.createdAt)}
                         </AgeChip>
                       </span>
@@ -214,7 +244,9 @@ export function DeliveryActionsIndex(): ReactElement {
                       // Seller staff decide this one — the Reseller
                       // store's policy says so. Skydrop admin can see it,
                       // and the server refuses a decision here anyway.
-                      <span className="oo-muted">Waiting on client staff</span>
+                      <span className="oo-muted">
+                        {t('deliveryActionsDeliveryActionsIndex.waitingOnClientStaff')}
+                      </span>
                     ) : r.status === 'PENDING' && canDecide ? (
                       <div className="oo-row oo-row--end">
                         <Button
@@ -225,7 +257,7 @@ export function DeliveryActionsIndex(): ReactElement {
                             setNote('');
                           }}
                         >
-                          Approve
+                          {t('deliveryActionsDeliveryActionsIndex.approve')}
                         </Button>
                         <Button
                           variant="ghost"
@@ -235,7 +267,7 @@ export function DeliveryActionsIndex(): ReactElement {
                             setNote('');
                           }}
                         >
-                          Decline
+                          {t('deliveryActionsDeliveryActionsIndex.decline')}
                         </Button>
                       </div>
                     ) : (
@@ -259,26 +291,31 @@ export function DeliveryActionsIndex(): ReactElement {
         }}
         title={
           deciding?.decision === 'approve'
-            ? `Approve: ${deciding ? actionLabel(deciding.row.action) : ''}`
-            : 'Decline this request'
+            ? t('deliveryActionsDeliveryActionsIndex.approve2', {
+                value: deciding ? actionLabel(t, deciding.row.action) : '',
+              })
+            : t('deliveryActionsDeliveryActionsIndex.declineThisRequest')
         }
         description={
           deciding?.decision === 'approve'
             ? deciding.row.action === 'RECALL'
-              ? 'Queues the order for one of our agents to phone the customer. Nothing reaches the courier.'
-              : 'This reaches Delhivery. A re-attempt dispatches a van; a return ends the sale.'
-            : 'The client sees your reason.'
+              ? t('deliveryActionsDeliveryActionsIndex.queuesTheOrderForOne')
+              : t('deliveryActionsDeliveryActionsIndex.thisReachesDelhiveryARe')
+            : t('deliveryActionsDeliveryActionsIndex.theClientSeesYourReason')
         }
         footer={
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDeciding(null)}>
-              Cancel
+              {t('deliveryActionsDeliveryActionsIndex.cancel')}
             </Button>
             <AsyncButton
               variant="primary"
               labels={{
-                idle: deciding?.decision === 'approve' ? 'Approve and act' : 'Decline',
-                busy: 'Working…',
+                idle:
+                  deciding?.decision === 'approve'
+                    ? t('deliveryActionsDeliveryActionsIndex.approveAndAct')
+                    : t('deliveryActionsDeliveryActionsIndex.decline'),
+                busy: t('deliveryActionsDeliveryActionsIndex.working'),
               }}
               onAction={async () => {
                 const ok = await submit();
@@ -293,27 +330,28 @@ export function DeliveryActionsIndex(): ReactElement {
             <div className="oo-row">
               <span className="sk-ident oo-strong">{deciding.row.order?.orderNumber ?? '—'}</span>
               <span className="oo-muted">
-                {deciding.row.seller?.companyName ?? '—'} · {actionLabel(deciding.row.action)}
+                {deciding.row.seller?.companyName ?? '—'} · {actionLabel(t, deciding.row.action)}
               </span>
             </div>
             {deciding.decision === 'approve' && deciding.row.action !== 'RECALL' && (
               <Notice tone="warn" icon={<AlertTriangle size={16} />}>
                 <p>
-                  Delhivery answers asynchronously — this returns a reference, not an outcome. The
-                  real result arrives on the next scan.
+                  {t(
+                    'deliveryActionsDeliveryActionsIndex.delhiveryAnswersAsynchronouslyThisReturns',
+                  )}
                 </p>
               </Notice>
             )}
             <TextArea
-              label="Note"
+              label={t('deliveryActionsDeliveryActionsIndex.note')}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               rows={3}
               maxLength={2000}
               placeholder={
                 deciding.decision === 'approve'
-                  ? 'Optional note for the client'
-                  : 'e.g. Two attempts already made — a third is unlikely to land'
+                  ? t('deliveryActionsDeliveryActionsIndex.optionalNoteForTheClient')
+                  : t('deliveryActionsDeliveryActionsIndex.eGTwoAttemptsAlready')
               }
             />
             {error !== null && (

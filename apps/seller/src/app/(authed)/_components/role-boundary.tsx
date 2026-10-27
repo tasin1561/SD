@@ -6,6 +6,7 @@ import { Button } from '@skydrop/ui/app/button';
 import { EmptyState } from '@skydrop/ui/app/empty-state';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { canSeePath, permissionForPath, FALLBACK_PATH } from '@/lib/page-access';
+import { useT } from '@/i18n/client';
 
 /**
  * Hides pages a role has no business on.
@@ -33,6 +34,7 @@ export function RoleBoundary({
   readonly permissions: readonly string[];
   readonly children: ReactNode;
 }): ReactElement {
+  const t = useT();
   const pathname = usePathname();
   const router = useRouter();
   const allowed = canSeePath({ permissions }, pathname);
@@ -54,17 +56,17 @@ export function RoleBoundary({
     // A refusal is prose, so it keeps a reading width — unlike a
     // page, which fills the space it is given.
     <div className="max-w-2xl">
-      <PageHeader title="Not available" />
+      <PageHeader title={t('authedShell.notAvailable')} />
       <EmptyState
-        title="This section is not part of your access"
+        title={t('authedShell.thisSectionIsNot')}
         description={
           needed === null
-            ? 'Your role does not cover this page.'
-            : `This page needs the “${needed}” permission and your role does not have it. Whoever owns this account can grant it under Team → Roles.`
+            ? t('authedShell.yourRoleDoesNot')
+            : t('authedShell.thisPageNeedsThe', { needed })
         }
         action={
           <Button variant="primary" size="md" onClick={() => router.push(home)}>
-            Go to the dashboard
+            {t('authedShell.goToTheDashboard')}
           </Button>
         }
       />

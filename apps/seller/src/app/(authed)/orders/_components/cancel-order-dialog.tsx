@@ -10,7 +10,11 @@ import { TextField } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
 import { Notice } from './orders-parts';
 import { useCancelOrder } from '@/lib/api-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Calling off an order.
@@ -35,7 +39,7 @@ import { serverVerdict } from '@/lib/server-verdict';
  */
 
 /** What cancelling costs the warehouse, by where the order has got to. */
-function consequenceFor(status: string): string | null {
+function consequenceFor(t: Translate<MessageKey>, status: string): string | null {
   switch (status) {
     case 'DRAFT':
       return null;
@@ -43,19 +47,19 @@ function consequenceFor(status: string): string | null {
     case 'CALL_NO_RESPONSE':
     case 'CALL_RESCHEDULED':
     case 'AWAITING_SELLER_DECISION':
-      return 'It leaves the call queue — nobody will phone this customer about it.';
+      return t('orderDialogs.itLeavesTheCall');
     case 'AWAITING_COURIER':
-      return 'No courier has been booked for it yet, and the stock held for it goes back to available straight away.';
+      return t('orderDialogs.noCourierHasBeen');
     case 'CONFIRMED':
     case 'OUT_OF_STOCK':
-      return 'The stock held for this order goes back to available straight away.';
+      return t('orderDialogs.theStockHeldFor');
     case 'PENDING_PICK':
-      return 'It comes out of the pick queue and the stock held for it is released.';
+      return t('orderDialogs.itComesOutOf');
     case 'PICKED':
     case 'PACK_FAILED':
-      return 'The goods have already been picked, so someone has to put them back on the shelf. Cancel only if you are sure.';
+      return t('orderDialogs.theGoodsHaveAlready');
     case 'PENDING_MANUAL_PLACEMENT':
-      return 'It comes out of the manual-placement queue and the stock held for it is released.';
+      return t('orderDialogs.itComesOutOf2');
     default:
       return null;
   }
@@ -77,26 +81,27 @@ export function CancelOrderDialog({
   readonly chargedInr?: string | null;
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const cancel = useCancelOrder(orderId);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const consequence = consequenceFor(status);
+  const consequence = consequenceFor(t, status);
   const heavy = status === 'PICKED' || status === 'PACK_FAILED';
 
   async function submit(): Promise<void> {
     setError(null);
     try {
       await cancel.mutateAsync(note.trim().length > 0 ? { note: note.trim() } : {});
-      toast.success(`${orderNumber} cancelled`);
+      toast.success(t('orderDialogs.cancelled', { orderNumber }));
       onOpenChange(false);
       setNote('');
     } catch (err) {
       // Verbatim. "Someone is packing this order right now" is the
       // whole answer, and softening it into "could not cancel" would
       // send the seller to support for something that resolves itself.
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -110,7 +115,7 @@ export function CancelOrderDialog({
         }
         onOpenChange(next);
       }}
-      title={`Cancel ${orderNumber}?`}
+      title={t('orderDialogs.cancel', { orderNumber })}
       icon={heavy ? <TriangleAlert size={18} /> : <XCircle size={18} />}
       tone={heavy ? 'critical' : 'default'}
       size="sm"
@@ -118,21 +123,19 @@ export function CancelOrderDialog({
       footer={
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={cancel.isPending}>
-            Keep it
+            {t('orderDialogs.keepIt')}
           </Button>
           <AsyncButton
             variant="destructive"
             state={cancel.isPending ? 'busy' : undefined}
-            labels={{ idle: 'Cancel this order', busy: 'Cancelling…' }}
+            labels={{ idle: t('orderDialogs.cancelThisOrder'), busy: t('orderDialogs.cancelling') }}
             onClick={() => void submit()}
           />
         </DialogFooter>
       }
     >
       <div className="ord-stack ord-stack--tight">
-        <p className="ord-p">
-          This cannot be undone. To ship to this customer afterwards you would place a new order.
-        </p>
+        <p className="ord-p">{t('orderDialogs.thisCannotBeUndone')}</p>
 
         {consequence !== null && (
           <Notice tone={heavy ? 'bad' : 'neutral'} icon={<TriangleAlert size={16} />}>
@@ -142,11 +145,13 @@ export function CancelOrderDialog({
 
         {chargedInr != null && Number(chargedInr) > 0 && (
           <p className="ord-p">
-            The delivery fee of{' '}
-            <span className="ord-strong">
-              <Money amount={chargedInr} />
-            </span>{' '}
-            already charged for this order goes back to your wallet.
+            {richMessage(t('orderDialogs.theDeliveryFeeOf'), {
+              span: (
+                <span className="ord-strong">
+                  <Money amount={chargedInr} />
+                </span>
+              ),
+            })}
           </p>
         )}
 
@@ -157,11 +162,11 @@ export function CancelOrderDialog({
         )}
 
         <TextField
-          label="Reason (optional)"
-          hint="Kept on the order's history — useful when you look back at why."
+          label={t('orderDialogs.reasonOptional')}
+          hint={t('orderDialogs.keptOnTheOrder')}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Customer changed their mind"
+          placeholder={t('orderDialogs.customerChangedTheirMind')}
         />
       </div>
     </Dialog>

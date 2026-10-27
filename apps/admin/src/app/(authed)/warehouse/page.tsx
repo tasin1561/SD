@@ -12,60 +12,62 @@ import {
   ScanLine,
 } from 'lucide-react';
 import './_components/benches.css';
+import { getT } from '@/i18n/server';
 
 /**
  * Warehouse hub — links to the four station workspaces.
  * Each station has its own page with its own pull-next / action UX.
  */
-export default function WarehouseHubPage(): ReactElement {
+export default async function WarehouseHubPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <div className="wh-page">
       <PageHeader
-        title="Warehouse"
-        subtitle="Consignment → Receive → Print → Pick → Pack → Handover → Dispatch. RTO handled separately."
+        title={t('warehousePage.warehouse')}
+        subtitle={t('warehousePage.consignmentReceivePrintPickPack')}
       />
       <div className="wh-hub">
         <Tile
           href="/warehouse/bins"
           icon={<Grid3x3 size={20} />}
-          title="Bins"
-          subtitle="Lay out aisles, racks and shelves — and choose whether this building records where stock sits at all."
+          title={t('warehousePage.bins')}
+          subtitle={t('warehousePage.layOutAislesRacksAnd')}
         />
         <Tile
           href="/warehouse/consignments"
           icon={<Ship size={20} />}
-          title="Consignments"
-          subtitle="The journey: where each one is, what each stop counted, and the steps counting has no opinion about — labelling, dispatch to India, cancelling."
+          title={t('warehousePage.consignments')}
+          subtitle={t('warehousePage.theJourneyWhereEachOne')}
         />
         <Tile
           href="/warehouse/receive"
           icon={<Inbox size={20} />}
-          title="Receive"
-          subtitle="Where counting happens. Claim, record qty/damage, putaway, complete — this is the step that writes stock, for consignments and ordinary receipts alike."
+          title={t('warehousePage.receive')}
+          subtitle={t('warehousePage.whereCountingHappensClaimRecord')}
         />
         <Tile
           href="/warehouse/printing"
           icon={<Printer size={20} />}
-          title="Printing"
-          subtitle="Shipping labels, then the picking sheet. The floor works from paper — this is where it comes from."
+          title={t('warehousePage.printing')}
+          subtitle={t('warehousePage.shippingLabelsThenThePicking')}
         />
         <Tile
           href="/warehouse/pack"
           icon={<Layers size={20} />}
-          title="Pack"
-          subtitle="Pull next picked shipment, pack the parcel, mark complete."
+          title={t('warehousePage.pack')}
+          subtitle={t('warehousePage.pullNextPickedShipmentPack')}
         />
         <Tile
           href="/warehouse/handover"
           icon={<ScanLine size={20} />}
-          title="Handover"
-          subtitle="Scan each parcel as it goes onto the van. The scan is the handover — the parcel dispatches there and then."
+          title={t('warehousePage.handover')}
+          subtitle={t('warehousePage.scanEachParcelAsIt')}
         />
         <Tile
           href="/warehouse/rto"
           icon={<RotateCcw size={20} />}
           title="RTO"
-          subtitle="Receive returns, inspect items, finalize disposition (restock / write-off)."
+          subtitle={t('warehousePage.receiveReturnsInspectItemsFinalize')}
         />
       </div>
     </div>

@@ -13,6 +13,9 @@ import { SettingName, compareByGuide } from '@/components/setting-guide-ui';
 import { SETTING_GROUP_ORDER, settingGuide, settingValueLabel } from '@/lib/system-setting-guide';
 import { AcFact, AcHeader, AcPage, AcSection } from './ac-parts';
 import { EditSettingDialog } from './edit-setting-dialog';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * Admin /settings — every system setting, grouped by what it is about.
@@ -32,30 +35,35 @@ import { EditSettingDialog } from './edit-setting-dialog';
  * authoritative valueDisplay (masked for sensitive).
  */
 export function SettingsIndex(): ReactElement {
+  const t = useT();
+
   const list = useSystemSettingsList();
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   return (
     <AcPage>
       <AcHeader
-        title="System settings"
-        subtitle="How the whole system behaves, one setting at a time. Hover or tap (i) for what a setting decides and an example. Every edit is audited with its before and after."
+        title={t('settingsSettingsIndex.systemSettings')}
+        subtitle={t('settingsSettingsIndex.howTheWholeSystemBehaves')}
       />
 
       {list.isLoading ? (
-        <SkeletonRows rows={8} cols={3} label="Loading settings…" />
+        <SkeletonRows rows={8} cols={3} label={t('settingsSettingsIndex.loadingSettings')} />
       ) : list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load settings.'}
+          message={list.error?.message ?? t('settingsSettingsIndex.failedToLoadSettings')}
           retry={() => void list.refetch()}
         />
       ) : !list.data || list.data.length === 0 ? (
         <EmptyState
-          title="No settings"
-          description="The seed should provision these — check the database."
+          title={t('settingsSettingsIndex.noSettings')}
+          description={t('settingsSettingsIndex.theSeedShouldProvisionThese')}
         />
       ) : (
-        groupByGuide(list.data.flatMap((g) => g.items)).map((group) => (
+        groupByGuide(
+          t,
+          list.data.flatMap((g) => g.items),
+        ).map((group) => (
           <AcSection
             key={group.title}
             title={group.title}
@@ -84,10 +92,15 @@ interface SettingGroupView {
 }
 
 /** The guide's groups in page order, then any unknown key under its category. */
-function groupByGuide(items: readonly SystemSettingView[]): readonly SettingGroupView[] {
+function groupByGuide(
+  t: Translate<MessageKey>,
+  items: readonly SystemSettingView[],
+): readonly SettingGroupView[] {
   const byTitle = new Map<string, SystemSettingView[]>();
   for (const s of [...items].sort((a, b) => compareByGuide(a.key, b.key))) {
-    const title = settingGuide(s.key)?.group ?? `Other — ${categoryLabel(s.category)}`;
+    const title =
+      settingGuide(s.key)?.group ??
+      t('settingsSettingsIndex.other', { value: categoryLabel(t, s.category) });
     const bucket = byTitle.get(title);
     if (bucket === undefined) byTitle.set(title, [s]);
     else bucket.push(s);
@@ -108,6 +121,7 @@ function SettingRow({
   setting: SystemSettingView;
   onEdit: () => void;
 }): ReactElement {
+  const t = useT();
   const shown = setting.isSensitive
     ? setting.valueDisplay
     : settingValueLabel(setting.key, setting.valueDisplay);
@@ -121,14 +135,20 @@ function SettingRow({
             label={setting.valueType.toLowerCase()}
             size="sm"
           />
-          {setting.isSensitive && <AcFact tone="warn">Sensitive</AcFact>}
-          {setting.requiresRestart && <AcFact tone="bad">Restart</AcFact>}
-          {!setting.isEditableByAdmin && <AcFact>Read-only</AcFact>}
+          {setting.isSensitive && (
+            <AcFact tone="warn">{t('settingsSettingsIndex.sensitive')}</AcFact>
+          )}
+          {setting.requiresRestart && (
+            <AcFact tone="bad">{t('settingsSettingsIndex.restart')}</AcFact>
+          )}
+          {!setting.isEditableByAdmin && <AcFact>{t('settingsSettingsIndex.readOnly')}</AcFact>}
         </div>
         <div className="ac-row__value">{shown}</div>
         {setting.lastEditedAt && (
           <span className="ac-faint sk-figure">
-            Last edit: {new Date(setting.lastEditedAt).toISOString().replace('T', ' ').slice(0, 16)}
+            {t('settingsSettingsIndex.lastEdit', {
+              value: new Date(setting.lastEditedAt).toISOString().replace('T', ' ').slice(0, 16),
+            })}
           </span>
         )}
       </div>
@@ -140,7 +160,7 @@ function SettingRow({
           onClick={onEdit}
           disabled={!setting.isEditableByAdmin}
         >
-          Edit
+          {t('settingsSettingsIndex.edit')}
         </Button>
       </div>
     </li>
@@ -162,13 +182,14 @@ function SettingRow({
  * heading is DERIVED from the key below, not written as a string, so
  * there was nothing for a search for "Reseller" to match.
  */
-const CATEGORY_LABELS: Record<string, string> = {
-  reseller: 'Member stores',
+const CATEGORY_LABELS: Record<string, MessageKey> = {
+  reseller: 'settingsSettingsIndex.categoryReseller',
 };
 
-function categoryLabel(category: string): string {
+function categoryLabel(tr: Translate<MessageKey>, category: string): string {
+  const known = CATEGORY_LABELS[category];
   return (
-    CATEGORY_LABELS[category] ??
+    (known === undefined ? undefined : tr(known)) ??
     category
       .split('_')
       .map((p) => p.charAt(0).toUpperCase() + p.slice(1))

@@ -11,7 +11,8 @@ import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
 import { Notice } from '../../_components/orders-parts';
 import { useRaiseStoreDispute } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
 
 const MIN_SUBJECT = 3;
 
@@ -45,6 +46,7 @@ export function DisputeFiguresModal({
   readonly onOpenChange: (open: boolean) => void;
   readonly orderId: string;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const raise = useRaiseStoreDispute();
   const [subject, setSubject] = useState('');
@@ -78,12 +80,12 @@ export function DisputeFiguresModal({
             }
           : {}),
       });
-      toast.success('Raised with the store. Skydrop will referee it.');
+      toast.success(t('orderDispute.raisedWithTheStore'));
       reset();
       onOpenChange(false);
     } catch (err) {
       // FE-2 — the server's own verdict, verbatim.
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -94,18 +96,18 @@ export function DisputeFiguresModal({
         if (!next) reset();
         onOpenChange(next);
       }}
-      title="Raise this with the store"
-      description="Skydrop referees it. A settlement moves money between your wallet and the store’s — never ours."
+      title={t('orderDispute.raiseThisWithThe')}
+      description={t('orderDispute.skydropRefereesItA')}
       icon={<Scale size={18} />}
       locked={raise.isPending}
       footer={
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={raise.isPending}>
-            Cancel
+            {t('orderDispute.cancel')}
           </Button>
           <AsyncButton
             state={raise.isPending ? 'busy' : undefined}
-            labels={{ idle: 'Raise it', busy: 'Raising…' }}
+            labels={{ idle: t('orderDispute.raiseIt'), busy: t('orderDispute.raising') }}
             onClick={() => void submit()}
             disabled={raise.isPending || subject.trim().length < MIN_SUBJECT}
           />
@@ -116,21 +118,16 @@ export function DisputeFiguresModal({
         <Checkbox
           checked={correction}
           onChange={(e) => setCorrection(e.target.checked)}
-          label="The money worked out on this order is wrong"
-          description={
-            <>
-              Say what you think is owed and who owes it. We record the order&rsquo;s figures as
-              they stand now, so the settlement is argued from what was on the table.
-            </>
-          }
+          label={t('orderDispute.theMoneyWorkedOut')}
+          description={<>{t('orderDispute.sayWhatYouThink')}</>}
         />
 
         {correction ? (
           <div className="ord-grid-2">
             <TextField
               id="dispute-claim-amount"
-              label="How much"
-              hint="₹, up to 2 decimals"
+              label={t('orderDispute.howMuch')}
+              hint={t('orderDispute.upTo2Decimals')}
               inputMode="decimal"
               value={claimAmount}
               onChange={(e) => setClaimAmount(e.target.value)}
@@ -138,27 +135,27 @@ export function DisputeFiguresModal({
             />
             <Select
               id="dispute-claim-payer"
-              label="Who owes it"
+              label={t('orderDispute.whoOwesIt')}
               value={claimPayer}
               onChange={(e) => setClaimPayer(e.target.value === 'SELLER' ? 'SELLER' : 'STORE')}
             >
-              <option value="STORE">The store owes us</option>
-              <option value="SELLER">We owe the store</option>
+              <option value="STORE">{t('orderDispute.theStoreOwesUs')}</option>
+              <option value="SELLER">{t('orderDispute.weOweTheStore')}</option>
             </Select>
           </div>
         ) : null}
 
         <TextField
           id="dispute-subject"
-          label="What is wrong"
+          label={t('orderDispute.whatIsWrong')}
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
           maxLength={200}
-          placeholder="The transfer price on this order is short"
+          placeholder={t('orderDispute.theTransferPriceOn')}
         />
         <TextArea
           id="dispute-description"
-          label="Tell us more"
+          label={t('orderDispute.tellUsMore')}
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           maxLength={4000}

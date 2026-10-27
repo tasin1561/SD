@@ -34,11 +34,18 @@ import {
   useSetResellerStoreNegativeLimit,
   useTopUpResellerStore,
 } from '@/lib/reseller-store-wallet-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { RsError, RsSection, pendingPhase } from '../../_components/rs-parts';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
 
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+function when(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleString(dateTag(locale, 'en-IN'), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  });
 }
 
 /**
@@ -54,6 +61,8 @@ export function StoreWalletSection({
 }: {
   readonly store: ResellerStoreDetail;
 }): ReactElement | null {
+  const locale = useLocale();
+  const t = useT();
   const allowed = can(useSellerIdentity(), 'stores.wallet');
   const summary = useResellerStoreWallet(store.id, allowed);
   const entries = useResellerStoreWalletEntries(store.id, allowed);
@@ -70,11 +79,11 @@ export function StoreWalletSection({
 
   return (
     <RsSection
-      title="The store’s wallet"
+      title={t('resellerStoreDetail.theStoreSWallet')}
       note={
         store.walletManagedBy === 'SELLER'
-          ? 'You manage it: top it up from your own wallet, and record paying the store.'
-          : 'Skydrop manages it: the store tops up to us and withdraws through us.'
+          ? t('resellerStoreDetail.youManageItTop')
+          : t('resellerStoreDetail.skydropManagesItThe')
       }
       action={
         open && store.walletManagedBy === 'SELLER' ? (
@@ -85,7 +94,7 @@ export function StoreWalletSection({
               icon={<Plus size={14} />}
               onClick={() => setTopUp(true)}
             >
-              Top up
+              {t('resellerStoreDetail.topUp')}
             </Button>
             <Button
               variant="ghost"
@@ -93,7 +102,7 @@ export function StoreWalletSection({
               icon={<HandCoins size={14} />}
               onClick={() => setPayout(true)}
             >
-              Record a payout
+              {t('resellerStoreDetail.recordAPayout')}
             </Button>
           </span>
         ) : undefined
@@ -107,41 +116,42 @@ export function StoreWalletSection({
             ))}
           </div>
         ) : summary.isError ? (
-          <ErrorState message={serverVerdict(summary.error)} retry={() => void summary.refetch()} />
+          <ErrorState message={verdict(summary.error, t)} retry={() => void summary.refetch()} />
         ) : (
           <>
             {/* The two money cards take their `<Money>` as `figure`, so
                 nothing re-formats them; only the plain count rolls up. */}
             <div className="rs-kpis">
               <KpiCard
-                label="Balance"
+                label={t('resellerStoreDetail.balance')}
                 icon={<Wallet size={14} />}
                 figure={<Money amount={summary.data.balanceInr} size="lg" />}
                 tone={Number(summary.data.balanceInr) < 0 ? 'debit' : 'neutral'}
                 hint={
                   Number(summary.data.balanceInr) < 0
-                    ? 'Below zero: the store owes you this, and it comes off what you can withdraw.'
+                    ? t('resellerStoreDetail.belowZeroTheStore')
                     : undefined
                 }
               />
               <KpiCard
-                label="May go below zero by"
+                label={t('resellerStoreDetail.mayGoBelowZero')}
                 icon={<Landmark size={14} />}
                 figure={<Money amount={summary.data.negativeLimit.effectiveInr} size="lg" />}
                 tone="neutral"
                 hint={
                   <>
-                    Skydrop allows up to <Money amount={summary.data.negativeLimit.capInr} /> for
-                    your account.
+                    {richMessage(t('resellerStoreDetail.skydropAllowsUpTo'), {
+                      money: <Money amount={summary.data.negativeLimit.capInr} />,
+                    })}
                   </>
                 }
               />
               <KpiCard
-                label="Waiting on Skydrop"
+                label={t('resellerStoreDetail.waitingOnSkydrop')}
                 icon={<Clock size={14} />}
                 value={summary.data.pendingTopups.count + summary.data.pendingWithdrawals.count}
                 tone="neutral"
-                hint="The store’s top-ups and withdrawals Skydrop has not settled yet."
+                hint={t('resellerStoreDetail.theStoreSTop')}
               />
             </div>
             {open ? (
@@ -156,27 +166,27 @@ export function StoreWalletSection({
         )}
 
         {entries.isPending ? (
-          <SkeletonRows rows={3} cols={4} label="Loading the ledger" />
+          <SkeletonRows rows={3} cols={4} label={t('resellerStoreDetail.loadingTheLedger')} />
         ) : entries.isError ? (
-          <ErrorState message={serverVerdict(entries.error)} retry={() => void entries.refetch()} />
+          <ErrorState message={verdict(entries.error, t)} retry={() => void entries.refetch()} />
         ) : ledger.length === 0 ? (
           <EmptyState
-            title="Nothing has moved yet"
+            title={t('resellerStoreDetail.nothingHasMovedYet')}
             description={
               store.walletManagedBy === 'SELLER' && open
-                ? 'Top it up to give the store money to work with.'
+                ? t('resellerStoreDetail.topItUpTo')
                 : undefined
             }
           />
         ) : (
           <div className="rs-stack rs-stack--tight">
-            <Table caption="The store’s wallet ledger">
+            <Table caption={t('resellerStoreDetail.theStoreSWallet2')}>
               <THead>
                 <Tr>
-                  <Th>When</Th>
-                  <Th>What</Th>
-                  <Th align="right">Amount</Th>
-                  <Th align="right">Balance after</Th>
+                  <Th>{t('resellerStoreDetail.when')}</Th>
+                  <Th>{t('resellerStoreDetail.what')}</Th>
+                  <Th align="right">{t('resellerStoreDetail.amount')}</Th>
+                  <Th align="right">{t('resellerStoreDetail.balanceAfter')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -184,7 +194,7 @@ export function StoreWalletSection({
                   const credit = isStoreWalletCredit(e.direction);
                   return (
                     <Tr key={e.id}>
-                      <Td className="rs-when sk-figure">{when(e.createdAt)}</Td>
+                      <Td className="rs-when sk-figure">{when(e.createdAt, locale)}</Td>
                       <Td>
                         {/* Which way the money went: an arrow chip beside
                             the sign and colour the figure already carries. */}
@@ -197,12 +207,12 @@ export function StoreWalletSection({
                             {credit ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
                           </span>
                           <span className="rs-body">
-                            {storeWalletDirectionLabel(e.direction, 'you')}
+                            {storeWalletDirectionLabel(e.direction, 'you', locale)}
                           </span>
                         </div>
                         {e.linkedOrderId !== null ? (
                           <Link href={`/orders/${e.linkedOrderId}`} className="rs-order-link">
-                            See the order
+                            {t('resellerStoreDetail.seeTheOrder')}
                           </Link>
                         ) : null}
                         {e.note !== null ? <div className="rs-faint">{e.note}</div> : null}
@@ -221,21 +231,25 @@ export function StoreWalletSection({
             <div className="rs-row rs-row--between">
               <p className="rs-faint">
                 {entries.hasNextPage
-                  ? `Showing the latest ${ledger.length} movements.`
-                  : `Showing all ${ledger.length} movements.`}
+                  ? t('resellerStoreDetail.showingTheLatestMovements', { ledger: ledger.length })
+                  : t('resellerStoreDetail.showingAllMovements', { ledger: ledger.length })}
               </p>
               {entries.hasNextPage ? (
                 <AsyncButton
                   variant="secondary"
                   size="sm"
                   disabled={entries.isFetchingNextPage}
-                  labels={{ idle: 'Show older', busy: 'Loading…', done: 'Loaded' }}
+                  labels={{
+                    idle: t('resellerStoreDetail.showOlder'),
+                    busy: t('resellerStoreDetail.loading'),
+                    done: t('resellerStoreDetail.loaded'),
+                  }}
                   settleMs={600}
                   onAction={() => entries.fetchNextPage()}
                 />
               ) : null}
             </div>
-            {olderFailed !== null ? <RsError>{serverVerdict(olderFailed)}</RsError> : null}
+            {olderFailed !== null ? <RsError>{verdict(olderFailed, t)}</RsError> : null}
           </div>
         )}
       </div>
@@ -269,6 +283,7 @@ function NegativeLimitForm({
   readonly current: string;
   readonly cap: string;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const set = useSetResellerStoreNegativeLimit();
   const [value, setValue] = useState(current);
@@ -279,11 +294,12 @@ function NegativeLimitForm({
       <div className="rs-inline-field">
         <TextField
           id="nl-amount"
-          label="How far below zero it may go (₹)"
+          label={t('resellerStoreDetail.howFarBelowZero')}
           hint={
             <>
-              Your risk: the store owes you whatever it spends below zero. At most{' '}
-              <Money amount={cap} />.
+              {richMessage(t('resellerStoreDetail.yourRiskTheStore'), {
+                money: <Money amount={cap} />,
+              })}
             </>
           }
           inputMode="decimal"
@@ -298,29 +314,30 @@ function NegativeLimitForm({
         disabled={set.isPending || next === current}
         onClick={() => setConfirming(true)}
       >
-        Save
+        {t('resellerStoreDetail.save')}
       </Button>
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title="Change how far below zero the store may go?"
+        title={t('resellerStoreDetail.changeHowFarBelow')}
         entity={storeName}
         amount={<Money amount={next === '' ? '0' : next} />}
-        consequence="Whatever the store spends below zero is money it owes you — your risk, not Skydrop’s."
-        confirmLabel="Change the limit"
+        consequence={t('resellerStoreDetail.whateverTheStoreSpends')}
+        confirmLabel={t('resellerStoreDetail.changeTheLimit')}
         closeOnSuccess={false}
         onConfirm={async () => {
           try {
             await set.mutateAsync({ storeId, negativeLimitInr: next });
-            toast.success('Saved.');
+            toast.success(t('resellerStoreDetail.saved'));
           } catch (err) {
-            toast.error(serverVerdict(err));
+            toast.error(verdict(err, t));
           }
           setConfirming(false);
         }}
       >
         <p className="rs-muted">
-          From <Money amount={current} /> to <Money amount={next === '' ? '0' : next} />.
+          {t('resellerStoreDetail.from')} <Money amount={current} /> to{' '}
+          <Money amount={next === '' ? '0' : next} />.
         </p>
       </ConfirmDialog>
     </div>
@@ -340,6 +357,7 @@ function MoveModal({
   readonly storeId: string;
   readonly storeName: string;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const topUp = useTopUpResellerStore();
   const payout = useRecordResellerStorePayout();
@@ -385,7 +403,7 @@ function MoveModal({
           ...(note.trim() === '' ? {} : { note: note.trim() }),
           idempotencyKey,
         });
-        toast.success(`Moved the money to ${storeName}. It shows on the store’s ledger below.`);
+        toast.success(t('resellerStoreDetail.movedTheMoneyTo', { storeName }));
       } else {
         await payout.mutateAsync({
           storeId,
@@ -393,10 +411,10 @@ function MoveModal({
           note: note.trim(),
           idempotencyKey,
         });
-        toast.success(`Recorded paying ${storeName}. It shows on the store’s ledger below.`);
+        toast.success(t('resellerStoreDetail.recordedPayingItShows', { storeName }));
       }
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       // Rethrown so the confirmation stays open with the verdict on it.
       throw err;
     }
@@ -409,17 +427,21 @@ function MoveModal({
       <Dialog
         open={open}
         onOpenChange={change}
-        title={kind === 'TOPUP' ? `Top up ${storeName}` : `Record paying ${storeName}`}
+        title={
+          kind === 'TOPUP'
+            ? t('resellerStoreDetail.topUp2', { storeName })
+            : t('resellerStoreDetail.recordPaying', { storeName })
+        }
         description={
           kind === 'TOPUP'
-            ? 'Moves money from your wallet into the store’s. You can move at most what you could withdraw.'
-            : 'You paid the store yourself, outside Skydrop. Its wallet falls by this, and yours rises by the same.'
+            ? t('resellerStoreDetail.movesMoneyFromYour')
+            : t('resellerStoreDetail.youPaidTheStore')
         }
         icon={kind === 'TOPUP' ? <Plus size={18} /> : <HandCoins size={18} />}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={() => change(false)}>
-              Cancel
+              {t('resellerStoreDetail.cancel')}
             </Button>
             <AsyncButton
               type="submit"
@@ -428,8 +450,11 @@ function MoveModal({
               size="md"
               state={pendingPhase(busy)}
               labels={{
-                idle: kind === 'TOPUP' ? 'Move the money' : 'Record it',
-                busy: 'Saving…',
+                idle:
+                  kind === 'TOPUP'
+                    ? t('resellerStoreDetail.moveTheMoney')
+                    : t('resellerStoreDetail.recordIt'),
+                busy: t('resellerStoreDetail.saving'),
               }}
             />
           </DialogFooter>
@@ -438,7 +463,7 @@ function MoveModal({
         <form id={formId} onSubmit={review} className="rs-form">
           <TextField
             id="mv-amount"
-            label="Amount (₹)"
+            label={t('resellerStoreDetail.amount2')}
             inputMode="decimal"
             inputClassName="sk-figure"
             required
@@ -447,8 +472,12 @@ function MoveModal({
           />
           <TextArea
             id="mv-note"
-            label={kind === 'TOPUP' ? 'Note (optional)' : 'How you paid it'}
-            hint="The store reads this."
+            label={
+              kind === 'TOPUP'
+                ? t('resellerStoreDetail.noteOptional')
+                : t('resellerStoreDetail.howYouPaidIt')
+            }
+            hint={t('resellerStoreDetail.theStoreReadsThis')}
             required={kind === 'PAYOUT'}
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -461,7 +490,9 @@ function MoveModal({
         open={confirming}
         onOpenChange={setConfirming}
         title={
-          kind === 'TOPUP' ? `Move this money to ${storeName}?` : `Record paying ${storeName}?`
+          kind === 'TOPUP'
+            ? t('resellerStoreDetail.moveThisMoneyTo', { storeName })
+            : t('resellerStoreDetail.recordPaying2', { storeName })
         }
         entity={storeName}
         amount={
@@ -473,17 +504,24 @@ function MoveModal({
         }
         consequence={
           kind === 'TOPUP'
-            ? 'It leaves your wallet and lands in the store’s straight away.'
-            : 'The store’s wallet falls by this, and yours rises by the same.'
+            ? t('resellerStoreDetail.itLeavesYourWallet')
+            : t('resellerStoreDetail.theStoreSWallet3')
         }
-        confirmLabel={kind === 'TOPUP' ? 'Move the money' : 'Record it'}
-        cancelLabel="Back"
+        confirmLabel={
+          kind === 'TOPUP'
+            ? t('resellerStoreDetail.moveTheMoney')
+            : t('resellerStoreDetail.recordIt')
+        }
+        cancelLabel={t('resellerStoreDetail.back')}
         onConfirm={submit}
         error={error}
       >
         {note.trim() !== '' ? (
           <p className="rs-muted">
-            {kind === 'TOPUP' ? 'Your note' : 'How you paid it'}: {note.trim()}
+            {kind === 'TOPUP'
+              ? t('resellerStoreDetail.yourNote')
+              : t('resellerStoreDetail.howYouPaidIt')}
+            : {note.trim()}
           </p>
         ) : null}
       </ConfirmDialog>

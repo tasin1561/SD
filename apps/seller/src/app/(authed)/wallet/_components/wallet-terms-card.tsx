@@ -6,6 +6,9 @@ import { Money } from '@skydrop/ui/components';
 import { SectionHeading } from '@skydrop/ui/app/page-header';
 import { useWalletTerms, type WalletTerm } from '@/lib/ops-hooks';
 import './wallet.css';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The rules this wallet runs on.
@@ -31,6 +34,7 @@ const OWNED_BY_SELLER = new Set([
 ]);
 
 export function WalletTermsCard(): ReactElement | null {
+  const t = useT();
   const terms = useWalletTerms();
   const items = (terms.data?.items ?? []).filter((t) => !OWNED_BY_SELLER.has(t.key));
   if (items.length === 0) return null;
@@ -43,26 +47,23 @@ export function WalletTermsCard(): ReactElement | null {
   */
   return (
     <section className="wal-section">
-      <SectionHeading
-        title="Your limits"
-        note="Set by Skydrop — shown so a limit is never a surprise."
-      />
+      <SectionHeading title={t('wallet.yourLimits')} note={t('wallet.setBySkydropShown')} />
       <div className="wal-card">
         <ul className="wal-terms">
-          {items.map((t) => (
-            <li key={t.key} className="wal-term">
+          {items.map((term) => (
+            <li key={term.key} className="wal-term">
               <span className="wal-term__chip" aria-hidden>
                 <Info size={13} />
               </span>
               <div className="wal-term__text">
-                <div className="wal-term__label">{t.label}</div>
-                {t.hint !== '' && <p className="wal-term__hint">{t.hint}</p>}
+                <div className="wal-term__label">{term.label}</div>
+                {term.hint !== '' && <p className="wal-term__hint">{term.hint}</p>}
               </div>
-              <div className="wal-term__value sk-figure">{format(t)}</div>
+              <div className="wal-term__value sk-figure">{format(term, t)}</div>
             </li>
           ))}
         </ul>
-        <p className="wal-setting__desc">Ask us if one of these looks wrong for your account.</p>
+        <p className="wal-setting__desc">{t('wallet.askUsIfOne')}</p>
       </div>
     </section>
   );
@@ -73,27 +74,27 @@ export function WalletTermsCard(): ReactElement | null {
  * an hour, `2.50` is a percent and `0.00` is money. The kind travels
  * with the value from the server so the unit is never guessed here.
  */
-function format(t: WalletTerm): ReactElement | string {
-  if (t.value === '') return '—';
-  switch (t.kind) {
+function format(term: WalletTerm, t: Translate<MessageKey>): ReactElement | string {
+  if (term.value === '') return '—';
+  switch (term.kind) {
     case 'INR':
       // Not converted: these are the thresholds the guards apply, and
       // they are applied in rupees.
-      return <Money amount={t.value} currency="INR" convert={false} />;
+      return <Money amount={term.value} currency="INR" convert={false} />;
     case 'PERCENT':
-      return `${t.value}%`;
+      return `${term.value}%`;
     case 'COUNT':
-      return t.value;
+      return term.value;
     case 'HOUR': {
-      const h = Number(t.value);
-      if (!Number.isFinite(h)) return t.value;
+      const h = Number(term.value);
+      if (!Number.isFinite(h)) return term.value;
       return `${String(h).padStart(2, '0')}:00`;
     }
     case 'BOOL':
-      return t.value === 'true' || t.value === '1' ? 'On' : 'Off';
+      return term.value === 'true' || term.value === '1' ? t('wallet.on') : t('wallet.off');
     default:
       // SETTLEMENT -> Settlement, PAY_NOW -> Pay now.
-      return t.value
+      return term.value
         .toLowerCase()
         .replace(/_/g, ' ')
         .replace(/^./, (c) => c.toUpperCase());

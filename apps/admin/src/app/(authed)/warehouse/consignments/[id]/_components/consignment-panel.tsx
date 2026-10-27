@@ -68,6 +68,9 @@ function parseSerials(raw: string): string[] {
 import { LabelReprintRequests } from './label-reprint-requests';
 import { LabelSheetView } from './label-sheet';
 import { Step, Variance } from './steps';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 const dt = (v: string | null): string =>
   v === null
@@ -75,6 +78,7 @@ const dt = (v: string | null): string =>
     : new Date(v).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 
 export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const detail = useConsignmentDetail(id);
   const events = useConsignmentEvents(id);
@@ -133,10 +137,19 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
     return out;
   }, [bdLeg, finalLegs]);
 
-  if (detail.isLoading) return <SkeletonRows rows={8} label="Loading consignment" />;
+  if (detail.isLoading)
+    return (
+      <SkeletonRows
+        rows={8}
+        label={t('warehouseConsignmentsIdConsignmentPanel.loadingConsignment')}
+      />
+    );
   if (detail.isError || !c) {
     return (
-      <ErrorState message="Could not load this consignment." retry={() => void detail.refetch()} />
+      <ErrorState
+        message={t('warehouseConsignmentsIdConsignmentPanel.couldNotLoadThisConsignment')}
+        retry={() => void detail.refetch()}
+      />
     );
   }
 
@@ -152,7 +165,9 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
     setError(null);
     try {
       await setSite.mutateAsync({ id, site });
-      toast.success(`Labelling moved to ${SITE_LABEL[site]}`);
+      toast.success(
+        t('warehouseConsignmentsIdConsignmentPanel.labellingMovedTo', { value: SITE_LABEL[site] }),
+      );
     } catch (e) {
       setError(serverVerdict(e));
     }
@@ -163,7 +178,11 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
     try {
       const result = await printLabels.mutateAsync({ id });
       setSheet(result);
-      toast.success(`${result.labels.length} label(s) ready`);
+      toast.success(
+        t('warehouseConsignmentsIdConsignmentPanel.labelSReady', {
+          labelsLength: result.labels.length,
+        }),
+      );
     } catch (e) {
       setError(serverVerdict(e));
     }
@@ -182,7 +201,9 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
         reason: reprintReason.trim(),
       });
       toast.success(
-        `Asked to reprint ${result.serials.length} label(s) — somebody else has to approve it`,
+        t('warehouseConsignmentsIdConsignmentPanel.askedToReprintLabelS', {
+          serialsLength: result.serials.length,
+        }),
       );
       setReprinting(false);
       setReprintSerials('');
@@ -213,7 +234,10 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
       setEtaAt('');
       setReference('');
       toast.success(
-        `Sent on unopened — ${result.unitsDispatched} declared unit(s) on ${result.legReceiptNumber}`,
+        t('warehouseConsignmentsIdConsignmentPanel.sentOnUnopenedDeclaredUnit', {
+          unitsDispatched: result.unitsDispatched,
+          legReceiptNumber: result.legReceiptNumber,
+        }),
       );
     } catch (e) {
       setError(serverVerdict(e));
@@ -230,7 +254,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
       }))
       .filter((l) => Number.isFinite(l.quantity) && l.quantity > 0);
     if (lines.length === 0) {
-      setError('Enter how many units are leaving on this shipment.');
+      setError(t('warehouseConsignmentsIdConsignmentPanel.enterHowManyUnitsAre'));
       return;
     }
     try {
@@ -246,7 +270,10 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
       setEtaAt('');
       setReference('');
       toast.success(
-        `${result.unitsDispatched} unit(s) on their way — leg ${result.legReceiptNumber}`,
+        t('warehouseConsignmentsIdConsignmentPanel.unitSOnTheirWay', {
+          unitsDispatched: result.unitsDispatched,
+          legReceiptNumber: result.legReceiptNumber,
+        }),
       );
     } catch (e) {
       setError(serverVerdict(e));
@@ -261,8 +288,10 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
       setReason('');
       toast.success(
         result.unitsReturned > 0
-          ? `Cancelled — ${result.unitsReturned} unit(s) removed and going back to the client`
-          : 'Cancelled before anything arrived',
+          ? t('warehouseConsignmentsIdConsignmentPanel.cancelledUnitSRemovedAnd', {
+              unitsReturned: result.unitsReturned,
+            })
+          : t('warehouseConsignmentsIdConsignmentPanel.cancelledBeforeAnythingArrived'),
       );
     } catch (e) {
       setError(serverVerdict(e));
@@ -275,15 +304,41 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
     (labelPreview.data !== undefined && labelPreview.data.strictUnits === 0);
   const arrivedAll = finalLegs.length > 0 && finalLegs.every((l) => l.status === 'COMPLETED');
   const journey: ReadonlyArray<{ id: string; label: string; done: boolean }> = [
-    { id: 'cns-announced', label: 'Announced', done: true },
+    {
+      id: 'cns-announced',
+      label: t('warehouseConsignmentsIdConsignmentPanel.announced'),
+      done: true,
+    },
     ...(viaBd
-      ? [{ id: 'cns-bd', label: 'Bangladesh intake', done: bdLeg?.status === 'COMPLETED' }]
+      ? [
+          {
+            id: 'cns-bd',
+            label: t('warehouseConsignmentsIdConsignmentPanel.bangladeshIntake'),
+            done: bdLeg?.status === 'COMPLETED',
+          },
+        ]
       : []),
-    { id: 'cns-labelling', label: 'Labelling', done: labellingDone },
+    {
+      id: 'cns-labelling',
+      label: t('warehouseConsignmentsIdConsignmentPanel.labelling'),
+      done: labellingDone,
+    },
     ...(viaBd
-      ? [{ id: 'cns-dispatch', label: 'Dispatch to India', done: finalLegs.length > 0 }]
+      ? [
+          {
+            id: 'cns-dispatch',
+            label: t('warehouseConsignmentsIdConsignmentPanel.dispatchToIndia'),
+            done: finalLegs.length > 0,
+          },
+        ]
       : []),
-    { id: 'cns-arrival', label: viaBd ? 'Arrival in India' : 'Arrival', done: arrivedAll },
+    {
+      id: 'cns-arrival',
+      label: viaBd
+        ? t('warehouseConsignmentsIdConsignmentPanel.arrivalInIndia')
+        : t('warehouseConsignmentsIdConsignmentPanel.arrival'),
+      done: arrivedAll,
+    },
   ];
   const firstOpen = journey.findIndex((s) => !s.done);
   const journeyAt = firstOpen < 0 ? journey.length : firstOpen;
@@ -308,8 +363,11 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
       <PageHeader
         Link={Link}
         breadcrumbs={[
-          { label: 'Warehouse', href: '/warehouse' },
-          { label: 'Consignments', href: '/warehouse/consignments' },
+          { label: t('warehouseConsignmentsIdConsignmentPanel.warehouse'), href: '/warehouse' },
+          {
+            label: t('warehouseConsignmentsIdConsignmentPanel.consignments'),
+            href: '/warehouse/consignments',
+          },
           { label: c.consignmentNumber },
         ]}
         title={<span className="sk-ident">{c.consignmentNumber}</span>}
@@ -322,7 +380,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
               icon={<Ban size={16} />}
               onClick={() => setCancelOpen(true)}
             >
-              Cancel consignment
+              {t('warehouseConsignmentsIdConsignmentPanel.cancelConsignment')}
             </Button>
           ) : undefined
         }
@@ -334,23 +392,37 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
         <Facts
           columns={3}
           items={[
-            { label: 'Client', value: `${c.seller.companyName} — ${c.seller.emailDisplay}` },
-            { label: 'Route', value: ROUTE_LABEL[c.route] },
-            { label: 'Their reference', value: c.sellerReference ?? '—' },
-            { label: 'Expected arrival', value: dt(c.expectedArrivalAt) },
+            {
+              label: t('warehouseConsignmentsIdConsignmentPanel.client'),
+              value: `${c.seller.companyName} — ${c.seller.emailDisplay}`,
+            },
+            {
+              label: t('warehouseConsignmentsIdConsignmentPanel.route'),
+              value: ROUTE_LABEL[c.route],
+            },
+            {
+              label: t('warehouseConsignmentsIdConsignmentPanel.theirReference'),
+              value: c.sellerReference ?? '—',
+            },
+            {
+              label: t('warehouseConsignmentsIdConsignmentPanel.expectedArrival'),
+              value: dt(c.expectedArrivalAt),
+            },
             {
               // One bill per ARRIVAL, so this is a total across however
               // many shipments have landed — a consignment arriving in
               // two parts carries two forwarder invoices.
               label:
                 c.freightCharges.length > 1
-                  ? `Freight bills (${c.freightCharges.length})`
-                  : 'Freight bill',
+                  ? t('warehouseConsignmentsIdConsignmentPanel.freightBills', {
+                      freightChargesLength: c.freightCharges.length,
+                    })
+                  : t('warehouseConsignmentsIdConsignmentPanel.freightBill'),
               value:
                 c.freightCharges.length === 0
                   ? viaBd
-                    ? 'Not recorded yet'
-                    : 'Not billable — they shipped it themselves'
+                    ? t('warehouseConsignmentsIdConsignmentPanel.notRecordedYet')
+                    : t('warehouseConsignmentsIdConsignmentPanel.notBillableTheyShippedIt')
                   : c.freightCharges.map((f, i) => (
                       <span key={f.id}>
                         {i > 0 ? '  ·  ' : ''}
@@ -361,16 +433,21 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
             },
             ...(c.cancelledAt === null
               ? []
-              : [{ label: 'Cancelled', value: `${dt(c.cancelledAt)} — ${c.cancelReason ?? ''}` }]),
+              : [
+                  {
+                    label: t('warehouseConsignmentsIdConsignmentPanel.cancelled'),
+                    value: `${dt(c.cancelledAt)} — ${c.cancelReason ?? ''}`,
+                  },
+                ]),
           ]}
         />
       </Panel>
 
-      <Panel title="The journey">
+      <Panel title={t('warehouseConsignmentsIdConsignmentPanel.theJourney')}>
         <Stepper
           mode="wizard"
           navigable="none"
-          label="Consignment journey"
+          label={t('warehouseConsignmentsIdConsignmentPanel.consignmentJourney')}
           current={journeyAt}
           steps={journey.map((s) => ({ id: `${s.id}-rail`, label: s.label }))}
         />
@@ -379,7 +456,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
             n={1}
             id="cns-announced"
             phase={phaseOf('cns-announced')}
-            title="Announced"
+            title={t('warehouseConsignmentsIdConsignmentPanel.announced')}
             state={`${declaredUnits} unit(s) across ${(bdLeg ?? finalLegs[0])?.lines.length ?? 0} product(s), declared ${dt(c.createdAt)}`}
           />
 
@@ -388,26 +465,37 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
               n={2}
               id="cns-bd"
               phase={phaseOf('cns-bd')}
-              title="Bangladesh intake"
+              title={t('warehouseConsignmentsIdConsignmentPanel.bangladeshIntake')}
               state={
                 bdLeg === null
-                  ? 'No intake leg — this should not happen; check the consignment was declared as VIA_BD.'
+                  ? t('warehouseConsignmentsIdConsignmentPanel.noIntakeLegThisShould')
                   : bdLeg.status === 'COMPLETED'
                     ? bdLeg.forwardedWithoutCount
-                      ? `Handled at ${bdLeg.warehouse.name} and sent on unopened — India is the only count`
-                      : `Counted ${dt(bdLeg.receivedAt)} at ${bdLeg.warehouse.name}`
-                    : `Waiting to be counted at ${bdLeg.warehouse.name}`
+                      ? t('warehouseConsignmentsIdConsignmentPanel.handledAtAndSentOn', {
+                          name: bdLeg.warehouse.name,
+                        })
+                      : t('warehouseConsignmentsIdConsignmentPanel.countedAt', {
+                          value: dt(bdLeg.receivedAt),
+                          name: bdLeg.warehouse.name,
+                        })
+                    : t('warehouseConsignmentsIdConsignmentPanel.waitingToBeCountedAt', {
+                        name: bdLeg.warehouse.name,
+                      })
               }
             >
               {bdLeg !== null && (
                 <Stack tight>
                   {!bdLeg.forwardedWithoutCount && (
-                    <LegLines leg={bdLeg} shortWord="short of declared" overWord="over declared" />
+                    <LegLines
+                      leg={bdLeg}
+                      shortWord={t('warehouseConsignmentsIdConsignmentPanel.shortOfDeclared')}
+                      overWord={t('warehouseConsignmentsIdConsignmentPanel.overDeclared')}
+                    />
                   )}
                   {bdLeg.status !== 'COMPLETED' && (
                     <p className="stk-note">
                       <TextLink href={`/warehouse/receive/${bdLeg.id}`}>
-                        Count it on the receive station →
+                        {t('warehouseConsignmentsIdConsignmentPanel.countItOnTheReceive')}
                       </TextLink>
                     </p>
                   )}
@@ -425,26 +513,28 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
             n={viaBd ? 3 : 2}
             id="cns-labelling"
             phase={phaseOf('cns-labelling')}
-            title="Labelling"
+            title={t('warehouseConsignmentsIdConsignmentPanel.labelling')}
             state={
               c.labelsPrintedAt !== null
-                ? `Printed in ${SITE_LABEL[c.labellingSite]} on ${dt(c.labelsPrintedAt)} — the station is locked`
+                ? t('warehouseConsignmentsIdConsignmentPanel.printedInOnTheStation', {
+                    value: SITE_LABEL[c.labellingSite],
+                    value2: dt(c.labelsPrintedAt),
+                  })
                 : c.labellingSite === LabellingSite.NONE
-                  ? 'No station chosen. Only STRICT-mode SKUs are labelled; the rest are counted in aggregate.'
-                  : `Set to ${SITE_LABEL[c.labellingSite]}, nothing printed yet`
+                  ? t('warehouseConsignmentsIdConsignmentPanel.noStationChosenOnlyStrict')
+                  : t('warehouseConsignmentsIdConsignmentPanel.setToNothingPrintedYet', {
+                      value: SITE_LABEL[c.labellingSite],
+                    })
             }
           >
             <Stack tight>
               {c.labelsPrintedAt !== null ? (
-                <Note>
-                  The station cannot be moved now. A consignment half-labelled in one country and
-                  half in the other cannot be told apart without opening every carton.
-                </Note>
+                <Note>{t('warehouseConsignmentsIdConsignmentPanel.theStationCannotBeMoved')}</Note>
               ) : (
                 mayManage && (
                   <div className="cns-narrow">
                     <Select
-                      aria-label="Labelling station"
+                      aria-label={t('warehouseConsignmentsIdConsignmentPanel.labellingStation')}
                       value={c.labellingSite}
                       onChange={(e) => void onSetSite(e.target.value as LabellingSite)}
                       disabled={setSite.isPending}
@@ -459,8 +549,11 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
               {labelPreview.data !== undefined && (
                 <p className="stk-note sk-figure">
                   {labelPreview.data.strictUnits === 0
-                    ? 'Nothing to label — no serialised units are waiting at this station.'
-                    : `${labelPreview.data.strictUnits} unit(s) across ${labelPreview.data.strictSkus} strict SKU(s) waiting.`}
+                    ? t('warehouseConsignmentsIdConsignmentPanel.nothingToLabelNoSerialised')
+                    : t('warehouseConsignmentsIdConsignmentPanel.unitSAcrossStrictSku', {
+                        strictUnits: labelPreview.data.strictUnits,
+                        strictSkus: labelPreview.data.strictSkus,
+                      })}
                 </p>
               )}
               {mayManage &&
@@ -471,7 +564,10 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                     <AsyncButton
                       icon={<Printer size={16} />}
                       state={mutationPhase(printLabels)}
-                      labels={{ idle: 'Print labels', busy: 'Preparing…' }}
+                      labels={{
+                        idle: t('warehouseConsignmentsIdConsignmentPanel.printLabels'),
+                        busy: t('warehouseConsignmentsIdConsignmentPanel.preparing'),
+                      }}
                       onClick={() => void onPrint()}
                       disabled={printLabels.isPending}
                     />
@@ -492,36 +588,40 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       className="stk-textbtn"
                       onClick={() => setReprinting(true)}
                     >
-                      A label was damaged or lost
+                      {t('warehouseConsignmentsIdConsignmentPanel.aLabelWasDamagedOr')}
                     </button>
                   ) : (
                     <Stack tight>
                       <Note>
-                        Name the units only. Reprinting the sheet would put a second sticker on
-                        every unit, and two boxes claiming to be the same one is not something the
-                        ledger can hold — one of them just stops existing. Nothing prints yet:
-                        somebody else approves the request, then you print it.
+                        {t('warehouseConsignmentsIdConsignmentPanel.nameTheUnitsOnlyReprinting')}
                       </Note>
                       <input
                         className="stk-input"
                         data-mono="1"
-                        aria-label="Serials to reprint"
+                        aria-label={t('warehouseConsignmentsIdConsignmentPanel.serialsToReprint')}
                         value={reprintSerials}
-                        placeholder="Scan or type the serials, separated by spaces or commas"
+                        placeholder={t(
+                          'warehouseConsignmentsIdConsignmentPanel.scanOrTypeTheSerials',
+                        )}
                         onChange={(e) => setReprintSerials(e.target.value)}
                       />
                       <input
                         className="stk-input"
-                        aria-label="Why"
+                        aria-label={t('warehouseConsignmentsIdConsignmentPanel.why')}
                         value={reprintReason}
-                        placeholder="What happened to the original label?"
+                        placeholder={t(
+                          'warehouseConsignmentsIdConsignmentPanel.whatHappenedToTheOriginal',
+                        )}
                         onChange={(e) => setReprintReason(e.target.value)}
                       />
                       <Actions>
                         <AsyncButton
                           icon={<Tag size={16} />}
                           state={mutationPhase(requestReprint)}
-                          labels={{ idle: 'Ask for approval', busy: 'Sending…' }}
+                          labels={{
+                            idle: t('warehouseConsignmentsIdConsignmentPanel.askForApproval'),
+                            busy: t('warehouseConsignmentsIdConsignmentPanel.sending'),
+                          }}
                           disabled={
                             requestReprint.isPending ||
                             reprintReason.trim().length === 0 ||
@@ -530,7 +630,7 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                           onClick={() => void onReprint()}
                         />
                         <Button variant="ghost" onClick={() => setReprinting(false)}>
-                          Cancel
+                          {t('warehouseConsignmentsIdConsignmentPanel.cancel')}
                         </Button>
                       </Actions>
                     </Stack>
@@ -546,18 +646,19 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
               n={4}
               id="cns-dispatch"
               phase={phaseOf('cns-dispatch')}
-              title="Dispatch to India"
+              title={t('warehouseConsignmentsIdConsignmentPanel.dispatchToIndia')}
               state={
                 finalLegs.length === 0
-                  ? 'Nothing sent yet'
-                  : `${finalLegs.length} shipment(s) sent — a large intake can travel in several`
+                  ? t('warehouseConsignmentsIdConsignmentPanel.nothingSentYet')
+                  : t('warehouseConsignmentsIdConsignmentPanel.shipmentSSentALarge', {
+                      length: finalLegs.length,
+                    })
               }
             >
               {bdLeg !== null && bdLeg.status === 'COMPLETED' && mayDispatch ? (
                 <Stack>
                   <Note>
-                    Dispatched stock sits in the Indian warehouse&apos;s transit location. It is on
-                    hand and cannot be sold until it lands and is counted.
+                    {t('warehouseConsignmentsIdConsignmentPanel.dispatchedStockSitsInThe')}
                   </Note>
                   <div className="cns-lines">
                     {bdLeg.lines.map((l) => {
@@ -574,13 +675,16 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                             </span>
                           </span>
                           <span className="stk-muted sk-figure cns-line__left">
-                            {left} still in Dhaka
+                            {t('warehouseConsignmentsIdConsignmentPanel.stillInDhaka', { left })}
                           </span>
                           <input
                             type="number"
                             min={0}
                             max={left}
-                            aria-label={`Units of ${l.variant.skuCode} leaving`}
+                            aria-label={t(
+                              'warehouseConsignmentsIdConsignmentPanel.unitsOfLeaving',
+                              { skuCode: l.variant.skuCode },
+                            )}
                             className="stk-input sk-figure cns-line__qty"
                             value={dispatchQty[l.id] ?? String(left)}
                             onChange={(e) =>
@@ -594,70 +698,76 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                   </div>
                   <FieldGrid columns={2}>
                     <TextField
-                      label="Expected arrival in India"
+                      label={t('warehouseConsignmentsIdConsignmentPanel.expectedArrivalInIndia')}
                       type="date"
                       floatLabel
                       value={etaAt}
                       onChange={(e) => setEtaAt(e.target.value)}
                     />
                     <TextField
-                      label="Forwarder reference"
+                      label={t('warehouseConsignmentsIdConsignmentPanel.forwarderReference')}
                       value={reference}
                       onChange={(e) => setReference(e.target.value)}
-                      placeholder="Optional"
+                      placeholder={t('warehouseConsignmentsIdConsignmentPanel.optional')}
                     />
                   </FieldGrid>
                   <Actions>
                     <AsyncButton
                       icon={<Plane size={16} />}
                       state={mutationPhase(dispatch)}
-                      labels={{ idle: 'Send to India', busy: 'Sending…' }}
+                      labels={{
+                        idle: t('warehouseConsignmentsIdConsignmentPanel.sendToIndia'),
+                        busy: t('warehouseConsignmentsIdConsignmentPanel.sending'),
+                      }}
                       onClick={() => setConfirmDispatch('counted')}
                       disabled={dispatch.isPending}
                     />
                   </Actions>
                 </Stack>
               ) : !mayDispatch ? (
-                <Note>You do not have permission to move stock between warehouses.</Note>
+                <Note>{t('warehouseConsignmentsIdConsignmentPanel.youDoNotHavePermission')}</Note>
               ) : bdLeg !== null && bdLeg.status !== 'COMPLETED' ? (
                 // The uncounted option lives HERE, where somebody is
                 // deciding what to do with a carton in front of them —
                 // not as a checkbox on the counted form, where it would
                 // be an easy misclick with no way back.
                 <Stack>
-                  <Note>
-                    It has not been counted in Bangladesh. Count it first if you want a number from
-                    that stop — or send it on unopened, in which case it travels on the
-                    client&apos;s declared quantities and India is the only count.
-                  </Note>
+                  <Note>{t('warehouseConsignmentsIdConsignmentPanel.itHasNotBeenCounted')}</Note>
                   <FieldGrid columns={2}>
                     <TextField
-                      label="Expected arrival in India"
+                      label={t('warehouseConsignmentsIdConsignmentPanel.expectedArrivalInIndia')}
                       type="date"
                       floatLabel
                       value={etaAt}
                       onChange={(e) => setEtaAt(e.target.value)}
                     />
                     <TextField
-                      label="Forwarder reference"
+                      label={t('warehouseConsignmentsIdConsignmentPanel.forwarderReference')}
                       value={reference}
                       onChange={(e) => setReference(e.target.value)}
-                      placeholder="Optional"
+                      placeholder={t('warehouseConsignmentsIdConsignmentPanel.optional')}
                     />
                   </FieldGrid>
                   <Actions>
-                    <TextLink href={`/warehouse/receive/${bdLeg.id}`}>Count it first →</TextLink>
+                    <TextLink href={`/warehouse/receive/${bdLeg.id}`}>
+                      {t('warehouseConsignmentsIdConsignmentPanel.countItFirst')}
+                    </TextLink>
                     <AsyncButton
                       variant="secondary"
                       state={mutationPhase(dispatch)}
-                      labels={{ idle: 'Send on without counting', busy: 'Sending…' }}
+                      labels={{
+                        idle: t('warehouseConsignmentsIdConsignmentPanel.sendOnWithoutCounting'),
+                        busy: t('warehouseConsignmentsIdConsignmentPanel.sending'),
+                      }}
                       onClick={() => setConfirmDispatch('uncounted')}
                       disabled={dispatch.isPending}
                     />
                   </Actions>
                 </Stack>
               ) : (
-                <Note>There is no Bangladesh intake on this consignment.</Note>
+                <Note>
+                  {t('warehouseConsignmentsIdConsignmentPanel.thereIsNoBangladeshIntake')}
+                </Note>
               )}
             </Step>
           )}
@@ -666,11 +776,18 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
             n={viaBd ? 5 : 3}
             id="cns-arrival"
             phase={phaseOf('cns-arrival')}
-            title={viaBd ? 'Arrival in India' : 'Arrival'}
+            title={
+              viaBd
+                ? t('warehouseConsignmentsIdConsignmentPanel.arrivalInIndia')
+                : t('warehouseConsignmentsIdConsignmentPanel.arrival')
+            }
             state={
               finalLegs.length === 0
-                ? 'Nothing has arrived yet'
-                : `${finalLegs.filter((l) => l.status === 'COMPLETED').length} of ${finalLegs.length} shipment(s) counted`
+                ? t('warehouseConsignmentsIdConsignmentPanel.nothingHasArrivedYet')
+                : t('warehouseConsignmentsIdConsignmentPanel.shipmentsCounted', {
+                    done: finalLegs.filter((l) => l.status === 'COMPLETED').length,
+                    total: finalLegs.length,
+                  })
             }
           >
             <Stack>
@@ -683,22 +800,34 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
                       <Code>{leg.receiptNumber}</Code>
                       <span className="stk-sub">
                         {leg.dispatchedAt === null
-                          ? 'shipped direct by the client'
-                          : `left Bangladesh ${dt(leg.dispatchedAt)}`}
-                        {leg.receivedAt === null ? '' : ` · counted ${dt(leg.receivedAt)}`}
+                          ? t('warehouseConsignmentsIdConsignmentPanel.shippedDirectByTheClient')
+                          : t('warehouseConsignmentsIdConsignmentPanel.leftBangladesh', {
+                              value: dt(leg.dispatchedAt),
+                            })}
+                        {leg.receivedAt === null
+                          ? ''
+                          : t('warehouseConsignmentsIdConsignmentPanel.counted', {
+                              value: dt(leg.receivedAt),
+                            })}
                       </span>
                     </div>
                     <LegLines
                       leg={leg}
                       shortWord={
-                        leg.dispatchedAt === null ? 'short of declared' : 'lost in transit'
+                        leg.dispatchedAt === null
+                          ? t('warehouseConsignmentsIdConsignmentPanel.shortOfDeclared')
+                          : t('warehouseConsignmentsIdConsignmentPanel.lostInTransit')
                       }
-                      overWord={leg.dispatchedAt === null ? 'over declared' : 'more than was sent'}
+                      overWord={
+                        leg.dispatchedAt === null
+                          ? t('warehouseConsignmentsIdConsignmentPanel.overDeclared')
+                          : t('warehouseConsignmentsIdConsignmentPanel.moreThanWasSent')
+                      }
                     />
                     {leg.status !== 'COMPLETED' && (
                       <p className="stk-note">
                         <TextLink href={`/warehouse/receive/${leg.id}`}>
-                          Count it on the receive station →
+                          {t('warehouseConsignmentsIdConsignmentPanel.countItOnTheReceive')}
                         </TextLink>
                       </p>
                     )}
@@ -710,14 +839,14 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
         </div>
       </Panel>
 
-      <Panel title="Timeline">
+      <Panel title={t('warehouseConsignmentsIdConsignmentPanel.timeline')}>
         {events.isLoading ? (
           <SkeletonRows rows={3} cols={2} />
         ) : eventRows.length === 0 ? (
-          <Note>Nothing recorded yet.</Note>
+          <Note>{t('warehouseConsignmentsIdConsignmentPanel.nothingRecordedYet')}</Note>
         ) : (
           <Timeline
-            label="Consignment history"
+            label={t('warehouseConsignmentsIdConsignmentPanel.consignmentHistory')}
             steps={eventRows.map((e) => ({
               id: e.id,
               label: e.description ?? e.type,
@@ -735,21 +864,27 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
         onOpenChange={(next) => {
           if (!next) setConfirmDispatch(null);
         }}
-        title={confirmDispatch === 'uncounted' ? 'Send it on without counting?' : 'Send to India?'}
+        title={
+          confirmDispatch === 'uncounted'
+            ? t('warehouseConsignmentsIdConsignmentPanel.sendItOnWithoutCounting')
+            : t('warehouseConsignmentsIdConsignmentPanel.sendToIndia2')
+        }
         entity={c.consignmentNumber}
         entityIsIdentifier
         amount={
           confirmDispatch === 'uncounted'
-            ? `${declaredUnits} declared unit(s) → India`
-            : `${dispatchUnits} unit(s) → India`
+            ? t('warehouseConsignmentsIdConsignmentPanel.declaredUnitSIndia', { declaredUnits })
+            : t('warehouseConsignmentsIdConsignmentPanel.unitSIndia', { dispatchUnits })
         }
         consequence={
           confirmDispatch === 'uncounted'
-            ? 'It leaves Bangladesh unopened on the client’s declared quantities and India becomes the only count; once dispatched, the consignment can no longer be cancelled.'
-            : 'The units leave the Bangladesh count and sit in the Indian warehouse’s transit location until they land; once dispatched, the consignment can no longer be cancelled.'
+            ? t('warehouseConsignmentsIdConsignmentPanel.itLeavesBangladeshUnopenedOn')
+            : t('warehouseConsignmentsIdConsignmentPanel.theUnitsLeaveTheBangladesh')
         }
         confirmLabel={
-          confirmDispatch === 'uncounted' ? 'Send on without counting' : 'Send to India'
+          confirmDispatch === 'uncounted'
+            ? t('warehouseConsignmentsIdConsignmentPanel.sendOnWithoutCounting')
+            : t('warehouseConsignmentsIdConsignmentPanel.sendToIndia')
         }
         onConfirm={async () => {
           if (confirmDispatch === 'uncounted') await onForwardUncounted();
@@ -762,16 +897,21 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
         onOpenChange={setCancelOpen}
         tone="critical"
         icon={<Ban size={18} />}
-        title={`Cancel ${c.consignmentNumber}?`}
+        title={t('warehouseConsignmentsIdConsignmentPanel.cancel2', {
+          consignmentNumber: c.consignmentNumber,
+        })}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => setCancelOpen(false)}>
-              Keep it
+              {t('warehouseConsignmentsIdConsignmentPanel.keepIt')}
             </Button>
             <AsyncButton
               variant="destructive"
               state={mutationPhase(cancel)}
-              labels={{ idle: 'Cancel and return the goods', busy: 'Cancelling…' }}
+              labels={{
+                idle: t('warehouseConsignmentsIdConsignmentPanel.cancelAndReturnTheGoods'),
+                busy: t('warehouseConsignmentsIdConsignmentPanel.cancelling'),
+              }}
               onClick={() => void onCancel()}
               disabled={cancel.isPending || reason.trim().length < 10}
             />
@@ -782,17 +922,13 @@ export function ConsignmentPanel({ id }: { readonly id: string }): ReactElement 
           <p className="cns-entity">
             <Code>{c.consignmentNumber}</Code> · {c.seller.companyName}
           </p>
-          <Note>
-            Stock already booked in will be removed from Skydrop and returned to the client. This is
-            impossible once the goods have left Bangladesh, so it cannot be undone by dispatching
-            later.
-          </Note>
+          <Note>{t('warehouseConsignmentsIdConsignmentPanel.stockAlreadyBookedInWill')}</Note>
           <TextField
-            label="Why"
+            label={t('warehouseConsignmentsIdConsignmentPanel.why')}
             requiredMark
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="At least 10 characters — recorded permanently"
+            placeholder={t('warehouseConsignmentsIdConsignmentPanel.atLeast10CharactersRecorded')}
           />
         </Stack>
       </Dialog>
@@ -831,11 +967,13 @@ function LegLines({
   );
 }
 
-const FREIGHT_SOURCE_LABEL: Record<'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT', string> = {
-  CONSIGNMENT: 'pinned on this consignment',
-  SELLER: "from the client's settings",
-  SYSTEM_DEFAULT: 'the platform default',
-};
+const FREIGHT_SOURCE_LABEL = (
+  t: Translate<MessageKey>,
+): Record<'CONSIGNMENT' | 'SELLER' | 'SYSTEM_DEFAULT', string> => ({
+  CONSIGNMENT: t('warehouseConsignmentsIdConsignmentPanel.pinnedOnThisConsignment'),
+  SELLER: t('warehouseConsignmentsIdConsignmentPanel.fromTheClientSSettings'),
+  SYSTEM_DEFAULT: t('warehouseConsignmentsIdConsignmentPanel.thePlatformDefault'),
+});
 
 /**
  * The mode's NAME, for a toast.
@@ -867,6 +1005,7 @@ function shortMode(mode: InboundFreightMode): string {
  * (`FREIGHT_MODE_LOCKED`) and its verdict is shown verbatim.
  */
 function FreightModeControl({ id }: { readonly id: string }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const mayManage = usePermission('money.freight.manage');
   const q = useConsignmentFreightMode(id);
@@ -883,8 +1022,13 @@ function FreightModeControl({ id }: { readonly id: string }): ReactElement {
       const result = await setMode.mutateAsync({ id, mode: next });
       toast.success(
         next === null
-          ? `Pin cleared — ${shortMode(result.mode)} applies, ${FREIGHT_SOURCE_LABEL[result.source]}`
-          : `Freight pinned to ${shortMode(result.mode)}`,
+          ? t('warehouseConsignmentsIdConsignmentPanel.pinClearedApplies', {
+              value: shortMode(result.mode),
+              value2: FREIGHT_SOURCE_LABEL(t)[result.source],
+            })
+          : t('warehouseConsignmentsIdConsignmentPanel.freightPinnedTo', {
+              value: shortMode(result.mode),
+            }),
       );
     } catch (e) {
       setError(serverVerdict(e));
@@ -897,23 +1041,25 @@ function FreightModeControl({ id }: { readonly id: string }): ReactElement {
   return (
     <div className="cns-freight">
       <div>
-        <div className="cns-freight__title">Freight</div>
+        <div className="cns-freight__title">
+          {t('warehouseConsignmentsIdConsignmentPanel.freight')}
+        </div>
         <p className="stk-note">
-          {freightModeExplainer(mode, 'STAFF')} — {FREIGHT_SOURCE_LABEL[source]}.
-          {locked
-            ? ' A bill already exists, so this is settled: it is what that bill was raised on.'
-            : ''}
+          {freightModeExplainer(mode, 'STAFF')} — {FREIGHT_SOURCE_LABEL(t)[source]}.
+          {locked ? t('warehouseConsignmentsIdConsignmentPanel.aBillAlreadyExistsSo') : ''}
         </p>
       </div>
       {mayManage && (
         <Select
-          aria-label="How this consignment's freight is paid for"
+          aria-label={t('warehouseConsignmentsIdConsignmentPanel.howThisConsignmentSFreight')}
           className="cns-freight__select"
           value={source === 'CONSIGNMENT' ? mode : ''}
           disabled={locked || setMode.isPending}
           onChange={(e) => void onChange(e.target.value)}
         >
-          <option value="">Follow the client&apos;s setting</option>
+          <option value="">
+            {t('warehouseConsignmentsIdConsignmentPanel.followTheClientSSetting')}
+          </option>
           {FREIGHT_MODES.map((m) => (
             <option key={m} value={m}>
               {freightModeExplainer(m, 'STAFF')}

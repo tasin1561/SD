@@ -35,6 +35,8 @@ import {
   PanelPad,
   StockPageHeader,
 } from '../../../inventory/_components/stock-kit';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /** The server's own floors, mirrored for the counter and nothing else. */
 const MIN_REASON_LEN = 30;
@@ -72,6 +74,8 @@ const MIN_REASON_LEN = 30;
  * rather than a button, and it is deliberately not in the sidebar.
  */
 export function BinCollapseIndex(): ReactElement {
+  const t = useT();
+
   const mayCollapse = usePermission('warehouse.bins.collapse');
   const warehouses = useWarehouses();
   const [warehouseId, setWarehouseId] = useState('');
@@ -84,28 +88,28 @@ export function BinCollapseIndex(): ReactElement {
   return (
     <AreaPage>
       <StockPageHeader
-        title="Collapse a warehouse's bins"
+        title={t('warehouseCollapseBinCollapseIndex.collapseAWarehouseSBins')}
         subtitle={
           <>
-            Merges every shelf into <Code>FLOOR</Code>. A backup of the layout is taken first, and
-            the goods keep selling while it is being put back — so a restore is a head start, not a
-            rewind.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.mergesEveryShelfIntoA'), {
+              code: <Code>FLOOR</Code>,
+            })}
           </>
         }
       />
 
-      <AreaSection title="Which warehouse">
+      <AreaSection title={t('warehouseCollapseBinCollapseIndex.whichWarehouse')}>
         <Panel>
           <PanelPad>
             <FieldGrid>
               <Select
                 id="collapse-warehouse"
-                label="Warehouse"
+                label={t('warehouseCollapseBinCollapseIndex.warehouse')}
                 value={warehouseId}
                 onChange={(e) => setWarehouseId(e.target.value)}
                 disabled={warehouses.isPending}
               >
-                <option value="">Choose a warehouse…</option>
+                <option value="">{t('warehouseCollapseBinCollapseIndex.chooseAWarehouse')}</option>
                 {(warehouses.data ?? []).map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name} · {w.code}
@@ -152,6 +156,8 @@ export function SnapshotList({
   readonly warehouseId: string;
   readonly mayRestore: boolean;
 }): ReactElement {
+  const t = useT();
+
   const snapshots = useBinSnapshots(warehouseId);
   const restore = useRestoreBinSnapshot(warehouseId);
   const [confirming, setConfirming] = useState<BinLayoutSnapshot | null>(null);
@@ -159,26 +165,28 @@ export function SnapshotList({
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <AreaSection title="Layout backups">
+    <AreaSection title={t('warehouseCollapseBinCollapseIndex.layoutBackups')}>
       <Panel>
         <PanelPad>
           <Note>
-            One is taken automatically before every collapse, BEFORE anything moves — a crash
-            between the two leaves a complete backup and an untouched warehouse. They are swept once
-            they expire; how long they are kept is the{' '}
-            <Code>ops.bin_snapshot_retention_months</Code> setting, and each row below shows the
-            date its own copy goes.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.oneIsTakenAutomaticallyBefore'), {
+              code: <Code>ops.bin_snapshot_retention_months</Code>,
+            })}
           </Note>
 
           {error !== null && <InlineError message={error} />}
 
           {result !== null && (
             <Callout tone="info">
-              Put back {result.restoredLines} line(s).
+              {t('warehouseCollapseBinCollapseIndex.putBackLineS', {
+                restoredLines: result.restoredLines,
+              })}
               {result.skippedLines.length > 0 ? (
                 <>
                   {' '}
-                  {result.skippedLines.length} could not be:
+                  {t('warehouseCollapseBinCollapseIndex.couldNotBe', {
+                    skippedLinesLength: result.skippedLines.length,
+                  })}
                   <ul>
                     {result.skippedLines.map((s) => (
                       <li key={`${s.binCode}:${s.variantId}`}>
@@ -186,8 +194,7 @@ export function SnapshotList({
                       </li>
                     ))}
                   </ul>
-                  Stock sells between a collapse and a restore, so this is expected rather than a
-                  fault: the goods that are still here went back where they were.
+                  {t('warehouseCollapseBinCollapseIndex.stockSellsBetweenACollapse')}
                 </>
               ) : null}
             </Callout>
@@ -196,11 +203,11 @@ export function SnapshotList({
           <Table>
             <THead>
               <Tr>
-                <Th>Taken</Th>
-                <Th>Why</Th>
-                <Th>Lines</Th>
-                <Th>Units</Th>
-                <Th>Kept until</Th>
+                <Th>{t('warehouseCollapseBinCollapseIndex.taken')}</Th>
+                <Th>{t('warehouseCollapseBinCollapseIndex.why')}</Th>
+                <Th>{t('warehouseCollapseBinCollapseIndex.lines')}</Th>
+                <Th>{t('warehouseCollapseBinCollapseIndex.units')}</Th>
+                <Th>{t('warehouseCollapseBinCollapseIndex.keptUntil')}</Th>
                 <Th>{''}</Th>
               </Tr>
             </THead>
@@ -209,7 +216,7 @@ export function SnapshotList({
                 <SkeletonRows rows={3} cols={6} />
               ) : (snapshots.data ?? []).length === 0 ? (
                 <TableEmpty colSpan={6}>
-                  No backup has been taken for this warehouse — nothing here has been collapsed.
+                  {t('warehouseCollapseBinCollapseIndex.noBackupHasBeenTaken')}
                 </TableEmpty>
               ) : (
                 (snapshots.data ?? []).map((s) => {
@@ -224,15 +231,21 @@ export function SnapshotList({
                         {fmt(s.expiresAt)}
                         <div className="stk-sub">
                           {left < 0
-                            ? 'expired — the sweep will remove it'
+                            ? t('warehouseCollapseBinCollapseIndex.expiredTheSweepWillRemove')
                             : left === 0
-                              ? 'expires today'
-                              : `${String(left)} day(s) left`}
+                              ? t('warehouseCollapseBinCollapseIndex.expiresToday')
+                              : t('warehouseCollapseBinCollapseIndex.daySLeft', {
+                                  value: String(left),
+                                })}
                         </div>
                       </Td>
                       <Td>
                         {s.restoredAt !== null ? (
-                          <span className="stk-sub">Restored {fmt(s.restoredAt)}</span>
+                          <span className="stk-sub">
+                            {t('warehouseCollapseBinCollapseIndex.restored', {
+                              value: fmt(s.restoredAt),
+                            })}
+                          </span>
                         ) : mayRestore ? (
                           <Button
                             variant="ghost"
@@ -244,7 +257,7 @@ export function SnapshotList({
                               setConfirming(s);
                             }}
                           >
-                            Put the layout back
+                            {t('warehouseCollapseBinCollapseIndex.putTheLayoutBack')}
                           </Button>
                         ) : null}
                       </Td>
@@ -265,8 +278,8 @@ export function SnapshotList({
         locked={restore.isPending}
         size="md"
         icon={<Archive size={18} />}
-        title="Put this layout back?"
-        description="Best-effort, line by line. Anything that has sold, moved or been picked since the collapse stays where it is and is listed as skipped — this is a head start, not a rewind."
+        title={t('warehouseCollapseBinCollapseIndex.putThisLayoutBack')}
+        description={t('warehouseCollapseBinCollapseIndex.bestEffortLineByLine')}
         footer={
           <DialogFooter>
             <Button
@@ -274,7 +287,7 @@ export function SnapshotList({
               onClick={() => setConfirming(null)}
               disabled={restore.isPending}
             >
-              Cancel
+              {t('warehouseCollapseBinCollapseIndex.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -288,20 +301,25 @@ export function SnapshotList({
                     setResult(await restore.mutateAsync({ snapshotId: target.id }));
                     setConfirming(null);
                   } catch (err) {
-                    setError(serverVerdict(err, 'The restore failed.'));
+                    setError(
+                      serverVerdict(err, t('warehouseCollapseBinCollapseIndex.theRestoreFailed')),
+                    );
                   }
                 })();
               }}
             >
-              Put it back
+              {t('warehouseCollapseBinCollapseIndex.putItBack')}
             </Button>
           </DialogFooter>
         }
       >
         {confirming !== null && (
           <p>
-            {confirming.lineCount} line(s), {confirming.totalQty} unit(s), taken{' '}
-            {fmt(confirming.createdAt)}.
+            {t('warehouseCollapseBinCollapseIndex.lineSUnitSTaken', {
+              lineCount: confirming.lineCount,
+              totalQty: confirming.totalQty,
+              value: fmt(confirming.createdAt),
+            })}
           </p>
         )}
         {error !== null && <InlineError message={error} />}
@@ -319,31 +337,35 @@ function DangerZone({
   readonly warehouseId: string;
   readonly warehouseCode: string;
 }): ReactElement {
+  const t = useT();
+
   const [open, setOpen] = useState(false);
   const [done, setDone] = useState<CollapseResult | null>(null);
 
   return (
-    <AreaSection title="Collapse">
+    <AreaSection title={t('warehouseCollapseBinCollapseIndex.collapse')}>
       <Panel tone="critical">
         <PanelPad>
           <Callout tone="bad">
-            <strong>This merges every shelf in the warehouse into FLOOR.</strong> Where each thing
-            was is then only in the backup above. Bins a picker can never reach are left alone —
-            hold, damaged, quarantine, and goods still in transit between two of our warehouses.
-            Those are about not selling stock rather than finding it, and sweeping them into FLOOR
-            would put broken or not-yet-arrived goods into the pickable pool.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.whereEachThingWasIs'), {
+              strong: (
+                <strong>{t('warehouseCollapseBinCollapseIndex.thisMergesEveryShelfIn')}</strong>
+              ),
+            })}
           </Callout>
           <Note>
-            Two steps, and the first moves nothing: it reports how many bins and units WOULD merge
-            and emails a six-digit code to you. You then type that code and this warehouse&rsquo;s
-            own code, <Code>{warehouseCode}</Code>, exactly.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.twoStepsAndTheFirst'), {
+              code: <Code>{warehouseCode}</Code>,
+            })}
           </Note>
 
           {done !== null && (
             <Callout tone="info">
-              Collapsed {done.binsCollapsed} bin(s): {done.rowsMoved} stock line(s),{' '}
-              {done.unitsMoved} unit(s) now in FLOOR. The backup is in the list above and can be put
-              back from there.
+              {t('warehouseCollapseBinCollapseIndex.collapsedBinSStockLine', {
+                binsCollapsed: done.binsCollapsed,
+                rowsMoved: done.rowsMoved,
+                unitsMoved: done.unitsMoved,
+              })}
             </Callout>
           )}
 
@@ -356,7 +378,7 @@ function DangerZone({
                 setOpen(true);
               }}
             >
-              Collapse this warehouse&rsquo;s bins
+              {t('warehouseCollapseBinCollapseIndex.collapseThisWarehouseSBins')}
             </Button>
           </Actions>
         </PanelPad>
@@ -394,6 +416,8 @@ export function CollapseDialog({
   readonly warehouseCode: string;
   readonly onDone: (result: CollapseResult) => void;
 }): ReactElement {
+  const t = useT();
+
   const request = useRequestBinCollapse(warehouseId);
   const confirm = useConfirmBinCollapse(warehouseId);
 
@@ -427,7 +451,7 @@ export function CollapseDialog({
     try {
       setChallenge(await request.mutateAsync({ reason: reason.trim() }));
     } catch (err) {
-      setError(serverVerdict(err, 'Could not start the collapse.'));
+      setError(serverVerdict(err, t('warehouseCollapseBinCollapseIndex.couldNotStartTheCollapse')));
     }
   }
 
@@ -443,7 +467,7 @@ export function CollapseDialog({
       onDone(result);
       onOpenChange(false);
     } catch (err) {
-      setError(serverVerdict(err, 'The collapse was refused.'));
+      setError(serverVerdict(err, t('warehouseCollapseBinCollapseIndex.theCollapseWasRefused')));
     }
   }
 
@@ -457,13 +481,13 @@ export function CollapseDialog({
       size="lg"
       tone="critical"
       icon={<ShieldAlert size={18} />}
-      title="Collapse this warehouse's bins"
-      description="Every shelf merges into FLOOR. A backup is taken first; goods sell while it is being put back, so a restore recovers what is still here and no more."
+      title={t('warehouseCollapseBinCollapseIndex.collapseThisWarehouseSBins2')}
+      description={t('warehouseCollapseBinCollapseIndex.everyShelfMergesIntoFloor')}
       footer={
         challenge === null ? (
           <DialogFooter>
             <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={busy}>
-              Cancel
+              {t('warehouseCollapseBinCollapseIndex.cancel')}
             </Button>
             <Button
               variant="destructive"
@@ -472,13 +496,15 @@ export function CollapseDialog({
               onClick={() => void askForCode()}
               title={
                 !reasonOk
-                  ? `Give a reason of at least ${String(MIN_REASON_LEN)} characters`
+                  ? t('warehouseCollapseBinCollapseIndex.giveAReasonOfAt', {
+                      value: String(MIN_REASON_LEN),
+                    })
                   : !ack
-                    ? 'Acknowledge what a collapse destroys'
+                    ? t('warehouseCollapseBinCollapseIndex.acknowledgeWhatACollapseDestroys')
                     : undefined
               }
             >
-              Show me what this would move
+              {t('warehouseCollapseBinCollapseIndex.showMeWhatThisWould')}
             </Button>
           </DialogFooter>
         ) : (
@@ -492,7 +518,7 @@ export function CollapseDialog({
               }}
               disabled={busy}
             >
-              ← Back
+              {t('warehouseCollapseBinCollapseIndex.back')}
             </Button>
             <Button
               variant="destructive"
@@ -501,7 +527,9 @@ export function CollapseDialog({
               disabled={!codeOk || !typedOk || busy}
               onClick={() => void doCollapse()}
             >
-              Collapse {String(challenge.binsAffected)} bin(s)
+              {t('warehouseCollapseBinCollapseIndex.collapseBinS', {
+                value: String(challenge.binsAffected),
+              })}
             </Button>
           </DialogFooter>
         )
@@ -510,23 +538,25 @@ export function CollapseDialog({
       {challenge === null ? (
         <>
           <Callout tone="bad">
-            <AlertTriangle size={14} aria-hidden /> Where every item sits is about to stop being
-            recorded. Pickers will find stock by searching FLOOR until the shelving is laid out and
-            put away again.
+            <AlertTriangle size={14} aria-hidden />{' '}
+            {t('warehouseCollapseBinCollapseIndex.whereEveryItemSitsIs')}
           </Callout>
           <TextArea
             id="collapse-reason"
-            label="Why"
+            label={t('warehouseCollapseBinCollapseIndex.why')}
             requiredMark
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             disabled={busy}
-            placeholder="What is happening to this warehouse, and why the layout is being abandoned rather than re-shelved."
-            hint="Stored on the backup and on the audit trail. It is the only explanation anyone will have later."
+            placeholder={t('warehouseCollapseBinCollapseIndex.whatIsHappeningToThis')}
+            hint={t('warehouseCollapseBinCollapseIndex.storedOnTheBackupAnd')}
             after={
               <span className="sk-figure" data-ok={reasonOk ? '1' : undefined}>
-                {reasonLen} / {MIN_REASON_LEN} min
+                {t('warehouseCollapseBinCollapseIndex.min', {
+                  reasonLen,
+                  minReasonLen: MIN_REASON_LEN,
+                })}
               </span>
             }
           />
@@ -534,30 +564,33 @@ export function CollapseDialog({
             checked={ack}
             onChange={(e) => setAck(e.target.checked)}
             disabled={busy}
-            label={
-              <>
-                I understand this destroys the record of where everything is, and that a restore
-                only recovers stock that has not moved or sold in the meantime.
-              </>
-            }
+            label={<>{t('warehouseCollapseBinCollapseIndex.iUnderstandThisDestroysThe')}</>}
           />
         </>
       ) : (
         <>
           <Callout tone="bad">
-            <strong>
-              {challenge.binsAffected} bin(s) holding {challenge.unitsAffected} unit(s)
-            </strong>{' '}
-            would merge into FLOOR.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.wouldMergeIntoFloor'), {
+              strong: (
+                <strong>
+                  {t('warehouseCollapseBinCollapseIndex.binSHoldingUnitS', {
+                    binsAffected: challenge.binsAffected,
+                    unitsAffected: challenge.unitsAffected,
+                  })}
+                </strong>
+              ),
+            })}
           </Callout>
           <Note>
-            A six-digit code has been emailed to <Code>{challenge.sentToEmail}</Code>. It is good
-            until {fmt(challenge.expiresAt)}.
+            {richMessage(t('warehouseCollapseBinCollapseIndex.aSixDigitCodeHas'), {
+              code: <Code>{challenge.sentToEmail}</Code>,
+              value: fmt(challenge.expiresAt),
+            })}
           </Note>
           <FieldGrid>
             <TextField
               id="collapse-code"
-              label="The code from your email"
+              label={t('warehouseCollapseBinCollapseIndex.theCodeFromYourEmail')}
               value={code}
               onChange={(e) => setCode(e.target.value)}
               disabled={busy}
@@ -567,8 +600,8 @@ export function CollapseDialog({
             />
             <TextField
               id="collapse-warehouse-code"
-              label={`Type ${warehouseCode} to confirm`}
-              aria-label={`Type ${warehouseCode} to confirm`}
+              label={t('warehouseCollapseBinCollapseIndex.typeToConfirm', { warehouseCode })}
+              aria-label={t('warehouseCollapseBinCollapseIndex.typeToConfirm', { warehouseCode })}
               value={typedCode}
               onChange={(e) => setTypedCode(e.target.value)}
               disabled={busy}

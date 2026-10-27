@@ -11,7 +11,9 @@ import { useToast } from '@skydrop/ui/app/toast';
 import { PhoneOff, RotateCw, Unlock } from 'lucide-react';
 import { InlineError, mutationPhase } from '@/app/(authed)/inventory/_components/stock-ui';
 import { useDecideHoldReview, type ReviewView } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * "We rang your customer and nobody answered. Keep trying, or let it go?"
@@ -52,6 +54,7 @@ export function HoldDecisionDialog({
   readonly orderNumber?: string | undefined;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const decide = useDecideHoldReview();
   // KEEP TRYING is the default, not RELEASE (2026-09-27). The register
@@ -84,17 +87,20 @@ export function HoldDecisionDialog({
       toast.success(
         decision === 'RELEASE'
           ? review.heldQty > 0
-            ? `Order let go. ${review.heldQty} unit${review.heldQty === 1 ? '' : 's'} released back to available stock.`
-            : 'Order let go. No stock was being held against it.'
+            ? t('holdDecision.orderLetGoUnit', {
+                heldQty: review.heldQty,
+                plural: review.heldQty === 1 ? '' : 's',
+              })
+            : t('holdDecision.orderLetGoNo')
           : result.orderMoved
-            ? 'We will keep trying to reach the customer.'
-            : 'Recorded. The order had already moved on, so calling did not restart.',
+            ? t('holdDecision.weWillKeepTrying')
+            : t('holdDecision.recordedTheOrderHad'),
       );
       setNote('');
       setConfirmRelease(false);
       onClose();
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setConfirmRelease(false);
       // Rethrown so ConfirmDialog stops being busy; the message is
       // already on the dialog behind it.
@@ -115,35 +121,39 @@ export function HoldDecisionDialog({
         size="md"
         icon={<PhoneOff size={18} />}
         locked={decide.isPending}
-        title="We could not reach your customer"
+        title={t('holdDecision.weCouldNotReach')}
         description={
           review === null ? undefined : held > 0 ? (
             <>
-              We have tried {review.attemptCount} time
-              {review.attemptCount === 1 ? '' : 's'} without reaching them, and are still holding{' '}
-              {held} unit{held === 1 ? '' : 's'} against this order. Nothing happens to it until you
-              say.
+              {richMessage(t('holdDecision.weHaveTriedTime'), {
+                attemptCount: review.attemptCount,
+                plural: review.attemptCount === 1 ? '' : 's',
+                held,
+                plural2: held === 1 ? '' : 's',
+              })}
             </>
           ) : (
             <>
-              We have tried {review.attemptCount} time
-              {review.attemptCount === 1 ? '' : 's'} without reaching them. Nothing happens to this
-              order until you say.
+              {richMessage(t('holdDecision.weHaveTriedTime2'), {
+                attemptCount: review.attemptCount,
+                plural: review.attemptCount === 1 ? '' : 's',
+              })}
             </>
           )
         }
         footer={
           <DialogFooter>
             <Button variant="ghost" size="md" onClick={onClose} disabled={decide.isPending}>
-              Cancel
+              {t('holdDecision.cancel')}
             </Button>
             <AsyncButton
               variant={decision === 'RELEASE' ? 'destructive' : 'primary'}
               size="md"
               icon={decision === 'RELEASE' ? <Unlock size={16} /> : <RotateCw size={16} />}
               labels={{
-                idle: decision === 'RELEASE' ? 'Let it go' : 'Keep trying',
-                busy: 'Saving…',
+                idle:
+                  decision === 'RELEASE' ? t('holdDecision.letItGo') : t('holdDecision.keepTrying'),
+                busy: t('holdDecision.saving'),
               }}
               state={mutationPhase(decide)}
               disabled={decide.isPending}
@@ -159,8 +169,9 @@ export function HoldDecisionDialog({
           {review !== null && (
             <div className="inv-callout" data-tone="warn">
               <span>
-                Order <Ident value={label} /> · <Num value={review.attemptCount} />{' '}
-                {review.attemptCount === 1 ? 'call' : 'calls'} made
+                {t('holdDecision.order')} <Ident value={label} /> ·{' '}
+                <Num value={review.attemptCount} /> {review.attemptCount === 1 ? 'call' : 'calls'}{' '}
+                made
                 {held > 0 && (
                   <>
                     {' · '}
@@ -172,7 +183,7 @@ export function HoldDecisionDialog({
           )}
 
           <ChoiceCards
-            label="Decision"
+            label={t('holdDecision.decision')}
             hideLegend
             name="hold-decision"
             columns={1}
@@ -181,29 +192,29 @@ export function HoldDecisionDialog({
             options={[
               {
                 value: 'RELEASE',
-                title: 'Let it go',
+                title: t('holdDecision.letItGo'),
                 description:
                   held > 0
-                    ? 'The order is rejected and the units go back to available stock so your other orders can use them. You can still ask us to call again afterwards.'
-                    : 'The order is rejected. No stock is held against it, so nothing moves in your inventory. You can still ask us to call again afterwards.',
+                    ? t('holdDecision.theOrderIsRejected')
+                    : t('holdDecision.theOrderIsRejected2'),
                 icon: <Unlock size={16} />,
               },
               {
                 value: 'REQUEST_MORE_ATTEMPTS',
-                title: 'Keep trying',
+                title: t('holdDecision.keepTrying'),
                 description:
                   held > 0
-                    ? 'The order goes back into the call queue and we ring again. The units stay unavailable to your other orders in the meantime.'
-                    : 'The order goes back into the call queue and we ring again.',
+                    ? t('holdDecision.theOrderGoesBack')
+                    : t('holdDecision.theOrderGoesBack2'),
                 icon: <RotateCw size={16} />,
               },
             ]}
           />
 
           <TextArea
-            label="Note"
+            label={t('holdDecision.note')}
             id="hold-note"
-            hint="Optional. Anything you know about this customer."
+            hint={t('holdDecision.optionalAnythingYouKnow')}
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
@@ -216,15 +227,13 @@ export function HoldDecisionDialog({
       <ConfirmDialog
         open={confirmRelease}
         onOpenChange={setConfirmRelease}
-        title="Let this order go?"
-        entity={label === '' ? 'This order' : label}
+        title={t('holdDecision.letThisOrderGo')}
+        entity={label === '' ? t('holdDecision.thisOrder') : label}
         entityIsIdentifier={label !== ''}
         consequence={
-          held > 0
-            ? 'The order is rejected and the held units return to your available stock. You can ask us to call again afterwards, but the order does not come back on its own.'
-            : 'The order is rejected. You can ask us to call again afterwards, but the order does not come back on its own.'
+          held > 0 ? t('holdDecision.theOrderIsRejected3') : t('holdDecision.theOrderIsRejected4')
         }
-        confirmLabel="Let it go"
+        confirmLabel={t('holdDecision.letItGo')}
         destructive
         closeOnSuccess={false}
         onConfirm={() => submit()}

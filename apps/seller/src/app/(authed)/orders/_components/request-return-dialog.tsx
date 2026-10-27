@@ -10,7 +10,9 @@ import { useToast } from '@skydrop/ui/app/toast';
 import { Notice } from './orders-parts';
 import { useRequestReturn, useSellerFees } from '@/lib/api-hooks';
 import { feeOfKind } from '@/lib/fee-figure';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * Ask for a delivered parcel back.
@@ -46,6 +48,7 @@ export function RequestReturnDialog({
   readonly open: boolean;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const request = useRequestReturn(orderId);
   // Only while the dialog is up: a fee nobody is about to spend is not
   // worth a request on every order page.
@@ -64,13 +67,19 @@ export function RequestReturnDialog({
           // would wait for a collection nobody arranged.
           if (r.collectionBookingFailed !== null) {
             toast.error(
-              `${orderNumber} is marked as returning, but we could not book the collection yet: ${r.collectionBookingFailed} We are on it — you do not need to do anything.`,
+              t('orderDialogs.isMarkedAsReturning', {
+                orderNumber,
+                collectionBookingFailed: r.collectionBookingFailed,
+              }),
             );
           } else {
             toast.success(
               r.alreadyRequested
-                ? `${orderNumber} was already coming back.`
-                : `Collection booked for ${orderNumber}${r.reverseAwbNumber === null ? '' : ` · ${r.reverseAwbNumber}`}.`,
+                ? t('orderDialogs.wasAlreadyComingBack', { orderNumber })
+                : t('orderDialogs.collectionBooked', {
+                    orderNumber,
+                    awb: r.reverseAwbNumber === null ? '' : ` · ${r.reverseAwbNumber}`,
+                  }),
             );
           }
           setReason('');
@@ -86,18 +95,18 @@ export function RequestReturnDialog({
       onOpenChange={(next) => {
         if (!next) onClose();
       }}
-      title="Bring this parcel back?"
+      title={t('orderDialogs.bringThisParcelBack')}
       icon={<Undo2 size={18} />}
       locked={request.isPending}
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={onClose} disabled={request.isPending}>
-            Cancel
+            {t('orderDialogs.cancel2')}
           </Button>
           <AsyncButton
             variant="primary"
             state={request.isPending ? 'busy' : undefined}
-            labels={{ idle: 'Request return', busy: 'Requesting…' }}
+            labels={{ idle: t('orderDialogs.requestReturn'), busy: t('orderDialogs.requesting') }}
             onClick={submit}
             disabled={request.isPending || reason.trim().length < 5}
           />
@@ -111,44 +120,32 @@ export function RequestReturnDialog({
           <span className="sk-confirm__entity sk-ident">{orderNumber}</span>
         </div>
         <p className="ord-p">
-          The courier collects it from your customer and brings it to our warehouse. It travels the
-          same distance again, so it is charged as a second delivery
-          {fee === null ? (
-            <> on top of the delivery you already paid</>
-          ) : (
-            <>
-              {' — '}
-              <span className="ord-strong">{fee.primary}</span>
-              {fee.agreed === null ? null : <> (agreed as {fee.agreed})</>} on top of the delivery
-              you already paid
-            </>
-          )}
-          . Nothing is charged until the parcel actually arrives.
+          {fee === null
+            ? t('orderDialogs.returnExplainNoFee')
+            : richMessage(t('orderDialogs.returnExplainFee'), {
+                fee: <span className="ord-strong">{fee.primary}</span>,
+                agreed:
+                  fee.agreed === null ? '' : t('orderDialogs.agreedAs', { agreed: fee.agreed }),
+              })}
         </p>
         {fee !== null && !fee.priced && (
-          <p className="ord-faint">
-            That is the figure we agreed with you. What leaves your wallet is its value in rupees on
-            the day the parcel arrives.
-          </p>
+          <p className="ord-faint">{t('orderDialogs.thatIsTheFigure')}</p>
         )}
-        <p className="ord-faint">
-          Stock goes back on the shelf once the warehouse has checked it. If it comes back damaged
-          it is written off instead, and you will see that on the order.
-        </p>
+        <p className="ord-faint">{t('orderDialogs.stockGoesBackOn')}</p>
 
         <TextArea
-          label="Why is it coming back?"
-          hint="The warehouse reads this when it arrives — it decides whether the stock can be resold."
+          label={t('orderDialogs.whyIsItComing')}
+          hint={t('orderDialogs.theWarehouseReadsThis')}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Damaged product / quality not as expected / customer changed their mind…"
+          placeholder={t('orderDialogs.damagedProductQualityNot')}
           maxLength={500}
           rows={3}
         />
 
         {request.isError && (
           <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
-            <span>{serverVerdict(request.error)}</span>
+            <span>{verdict(request.error, t)}</span>
           </Notice>
         )}
       </div>

@@ -14,17 +14,16 @@ import { Table, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/data-table';
 import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { MessageKey } from '@/i18n/catalog';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import {
   useRequestStoreAction,
   useStoreOrderActions,
   type StoreActionKind,
 } from '@/lib/order-hooks';
 import { Notice, RoSection } from '../../_components/orders-parts';
-
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 /**
  * The three things a store can ask for about a live parcel, and what it
@@ -41,31 +40,31 @@ const ACTIONS: ReadonlyArray<{
   readonly kind: StoreActionKind;
   /** The policy column that governs it. */
   readonly capability: string;
-  readonly label: string;
-  readonly ask: string;
+  readonly label: MessageKey;
+  readonly ask: MessageKey;
 }> = [
   {
     kind: 'RECALL',
     capability: 'recall',
-    label: 'Call the customer again',
-    ask: 'Our call centre will ring them. Say what they should be asked.',
+    label: 'ordact.recall.label',
+    ask: 'ordact.recall.ask',
   },
   {
     kind: 'REATTEMPT',
     capability: 'reattempt',
-    label: 'Try delivering again',
-    ask: 'The courier is asked to attempt the delivery again. Say what changed — a corrected landmark, a time they will be in.',
+    label: 'ordact.reattempt.label',
+    ask: 'ordact.reattempt.ask',
   },
   {
     kind: 'RTO',
     capability: 'sendBack',
-    label: 'Send it back',
-    ask: 'The parcel stops going to the customer and comes back to the warehouse. Say why.',
+    label: 'ordact.rto.label',
+    ask: 'ordact.rto.ask',
   },
 ];
 
-function actionLabel(kind: StoreActionKind): string {
-  return ACTIONS.find((a) => a.kind === kind)?.label ?? kind;
+function actionLabelKey(kind: StoreActionKind): MessageKey | undefined {
+  return ACTIONS.find((a) => a.kind === kind)?.label;
 }
 
 function actionIcon(kind: StoreActionKind): ReactElement {
@@ -96,6 +95,8 @@ export function OrderActions({
   /** The order is out for delivery or has just failed — the only time these apply. */
   stageOpen: boolean;
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const actions = useStoreOrderActions(orderId);
   const submit = useRequestStoreAction();
   const toast = useToast();
@@ -117,56 +118,44 @@ export function OrderActions({
       // Seller staff, done, or refused — a send-back the courier turns
       // down comes back FAILED with the reason.
       if (out.request.status === 'FAILED') {
-        setError(out.request.executionError ?? 'It could not be carried out.');
+        setError(out.request.executionError ?? t('ordact.failedFallback'));
         return;
       }
-      toast.success(
-        out.awaitingSeller
-          ? 'Sent to Client staff to approve. Nothing happens until they answer.'
-          : 'Done.',
-      );
+      toast.success(out.awaitingSeller ? t('ordact.toast.sentToSeller') : t('ordact.toast.done'));
       setAsking(null);
       setReason('');
     } catch (err) {
       // Verbatim (FE-2): DELIVERY_ACTION_REASON_TOO_SHORT,
       // DELIVERY_ACTION_ALREADY_OPEN, STORE_ACTION_NOT_ALLOWED…
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
   if (actions.isPending) {
-    return <SkeletonRows rows={2} cols={3} label="Loading what you can ask for" />;
+    return <SkeletonRows rows={2} cols={3} label={t('ordact.loading')} />;
   }
   if (actions.isError) {
-    return (
-      <ErrorState message={serverVerdict(actions.error)} retry={() => void actions.refetch()} />
-    );
+    return <ErrorState message={verdict(actions.error, t)} retry={() => void actions.refetch()} />;
   }
 
+  const labelOf = (kind: StoreActionKind): string => {
+    const key = actionLabelKey(kind);
+    return key === undefined ? kind : t(key);
+  };
   const offered = ACTIONS.filter((a) => actions.data.allowed[a.capability] !== 'OFF');
   const history = actions.data.items;
   if (offered.length === 0 && history.length === 0) return <></>;
   const askingWaits = asking !== null && actions.data.allowed[asking.capability] === 'ASK_SELLER';
   const askingWords =
-    asking === null
-      ? undefined
-      : askingWaits
-        ? 'The client sees this and decides. Nothing happens to the parcel until they answer.'
-        : 'This is carried out as soon as you send it.';
+    asking === null ? undefined : askingWaits ? t('ordact.waitsSeller') : t('ordact.immediate');
 
   return (
-    <RoSection
-      title="Something wrong with the delivery?"
-      note="What you can ask for is set by the client. Some of it happens straight away; some goes to them first."
-    >
+    <RoSection title={t('ordact.title')} note={t('ordact.note')}>
       <div className="ro-stack">
         {offered.length === 0 ? (
-          <p className="ro-p">The client has not enabled any of these for your store.</p>
+          <p className="ro-p">{t('ordact.noneEnabled')}</p>
         ) : !stageOpen ? (
-          <p className="ro-p">
-            Calling the customer again, another delivery attempt and sending the parcel back are
-            available only while the parcel is out for delivery or has just failed to deliver.
-          </p>
+          <p className="ro-p">{t('ordact.stageClosed')}</p>
         ) : (
           <ul className="ro-offers">
             {offered.map((a) => {
@@ -182,13 +171,11 @@ export function OrderActions({
                       setAsking(a);
                     }}
                   >
-                    {a.label}
+                    {t(a.label)}
                   </Button>
                   <span className="ro-offer__note">
                     {waits ? <Clock size={13} aria-hidden /> : <Zap size={13} aria-hidden />}
-                    {waits
-                      ? 'The client approves this one before anything happens'
-                      : 'Happens as soon as you ask'}
+                    {waits ? t('ordact.approvesFirst') : t('ordact.happensNow')}
                   </span>
                 </li>
               );
@@ -197,32 +184,34 @@ export function OrderActions({
         )}
 
         {history.length > 0 ? (
-          <Table caption="What you asked for">
+          <Table caption={t('ordact.history.caption')}>
             <THead>
               <Tr>
-                <Th>What you asked</Th>
-                <Th>When</Th>
-                <Th>Where it got to</Th>
+                <Th>{t('ordact.col.asked')}</Th>
+                <Th>{t('ordact.col.when')}</Th>
+                <Th>{t('ordact.col.state')}</Th>
               </Tr>
             </THead>
             <TBody>
               {history.map((r) => (
                 <Tr key={r.id}>
                   <Td>
-                    <div>{actionLabel(r.action)}</div>
+                    <div>{labelOf(r.action)}</div>
                     <span className="ro-sub">{r.reason}</span>
                   </Td>
                   <Td>
-                    <span className="ro-muted sk-figure">{when(r.createdAt)}</span>
+                    <span className="ro-muted sk-figure">
+                      {formatDateTime(r.createdAt, locale)}
+                    </span>
                   </Td>
                   <Td>
                     <StatusChip
                       kind={deliveryActionStatusKind(r.status)}
-                      label={deliveryActionStatusLabel(r.status)}
+                      label={deliveryActionStatusLabel(r.status, locale)}
                       size="sm"
                     />
                     {r.decisionNote !== null ? (
-                      <p className="ro-quote">They said: “{r.decisionNote}”</p>
+                      <p className="ro-quote">{t('ordact.theySaid', { note: r.decisionNote })}</p>
                     ) : null}
                     {r.executionError !== null ? (
                       <span className="ro-sub ro-tone-bad">{r.executionError}</span>
@@ -240,7 +229,7 @@ export function OrderActions({
         onOpenChange={(open) => {
           if (!open) setAsking(null);
         }}
-        title={asking?.label ?? ''}
+        title={asking === null ? '' : t(asking.label)}
         description={askingWords}
         icon={asking === null ? <RotateCcw size={18} /> : actionIcon(asking.kind)}
         locked={submit.isPending}
@@ -252,13 +241,13 @@ export function OrderActions({
               onClick={() => setAsking(null)}
               disabled={submit.isPending}
             >
-              Never mind
+              {t('ordact.neverMind')}
             </Button>
             <AsyncButton
               type="button"
               variant="primary"
               state={submit.isPending ? 'busy' : undefined}
-              labels={{ idle: 'Send it', busy: 'Sending…' }}
+              labels={{ idle: t('ordact.send'), busy: t('ordact.sending') }}
               onClick={() => setConfirming(true)}
               disabled={submit.isPending}
             />
@@ -268,15 +257,15 @@ export function OrderActions({
         <div className="ro-stack ro-stack--tight">
           <TextArea
             id="action-reason"
-            label="What happened"
-            hint="At least a sentence — a person reads this before acting on it."
+            label={t('ordact.whatHappened')}
+            hint={t('ordact.whatHappenedHint')}
             requiredMark
             rows={4}
             maxLength={2000}
             showCount
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder={asking?.ask ?? ''}
+            placeholder={asking === null ? '' : t(asking.ask)}
           />
           {error !== null ? (
             <Notice tone="bad" role="alert" icon={<OctagonX size={16} />}>
@@ -289,12 +278,12 @@ export function OrderActions({
       <ConfirmDialog
         open={confirming && asking !== null}
         onOpenChange={setConfirming}
-        title={`${asking?.label ?? ''}?`}
+        title={`${asking === null ? '' : t(asking.label)}?`}
         entity={orderNumber}
         entityIsIdentifier
         consequence={askingWords ?? ''}
-        confirmLabel="Send it"
-        cancelLabel="Back"
+        confirmLabel={t('ordact.send')}
+        cancelLabel={t('ordact.confirm.back')}
         destructive={asking?.kind === 'RTO'}
         // Resolves whatever the answer: a refusal is shown in the dialog
         // behind, which stays open, exactly where it was shown before.

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Search } from 'lucide-react';
+import { statusLabel } from '@skydrop/ui/status';
+import { useLocale, useT } from '@/i18n/client';
 import { useOrdersList } from '@/lib/api-hooks';
 import { useTicketsList } from '@/lib/ops-hooks';
 import { usePermission } from '@/lib/use-permission';
@@ -38,6 +40,8 @@ export function looksLikeTicketNumber(term: string): boolean {
  * more, and the list is the answer.
  */
 export function OrderOmnisearch(): ReactElement | null {
+  const t = useT();
+  const locale = useLocale();
   const router = useRouter();
   const canSee = usePermission('orders.view');
   const canSeeTickets = usePermission('tickets.view');
@@ -47,8 +51,8 @@ export function OrderOmnisearch(): ReactElement | null {
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(term.trim()), 250);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebounced(term.trim()), 250);
+    return () => clearTimeout(timer);
   }, [term]);
 
   // Close on a click anywhere else. Without this the panel sits over
@@ -113,8 +117,8 @@ export function OrderOmnisearch(): ReactElement | null {
           className="sd-field bg-bg border-border text-text-bright placeholder:text-text-faint focus:border-accent focus:ring-accent/25 min-h-[34px] w-full rounded-[5px] border py-1.5 pr-3 pl-8 text-sm transition-colors focus:ring-2 focus:outline-none"
           type="search"
           value={term}
-          placeholder="Order, AWB, ticket, name or phone…"
-          aria-label="Find an order or ticket"
+          placeholder={t('search.placeholder')}
+          aria-label={t('search.ariaLabel')}
           onChange={(e) => {
             setTerm(e.target.value);
             setOpen(true);
@@ -143,33 +147,30 @@ export function OrderOmnisearch(): ReactElement | null {
         <div className="border-border bg-surface absolute right-0 z-50 mt-1 w-[22rem] max-w-[90vw] overflow-hidden rounded-md border shadow-lg">
           {tickets.length > 0 ? (
             <ul className="border-border border-b">
-              {tickets.map((t) => (
-                <li key={t.id}>
+              {tickets.map((tk) => (
+                <li key={tk.id}>
                   <button
                     type="button"
                     className="hover:bg-surface-raised block w-full px-3 py-2 text-left"
-                    onClick={() => goTicket(t.id)}
+                    onClick={() => goTicket(tk.id)}
                   >
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-mono text-xs">{t.ticketNumber}</span>
+                      <span className="font-mono text-xs">{tk.ticketNumber}</span>
                       <span className="text-text-faint text-[11px] tracking-wide uppercase">
-                        ticket
+                        {t('search.ticketTag')}
                       </span>
                     </div>
-                    <div className="text-text-muted truncate text-xs">{t.subject}</div>
+                    <div className="text-text-muted truncate text-xs">{tk.subject}</div>
                   </button>
                 </li>
               ))}
             </ul>
           ) : null}
           {q.isFetching && items.length === 0 ? (
-            <p className="text-text-muted px-3 py-2 text-xs">Searching…</p>
+            <p className="text-text-muted px-3 py-2 text-xs">{t('search.searching')}</p>
           ) : items.length === 0 ? (
             tickets.length > 0 ? null : (
-              <p className="text-text-muted px-3 py-2 text-xs">
-                Nothing matches that. It searches the order number, the client’s own reference, the
-                recipient’s name and phone, the waybill, and a ticket number (TK-…).
-              </p>
+              <p className="text-text-muted px-3 py-2 text-xs">{t('search.noMatch')}</p>
             )
           ) : (
             <ul className="max-h-80 overflow-y-auto">
@@ -183,7 +184,9 @@ export function OrderOmnisearch(): ReactElement | null {
                     <div className="flex items-baseline justify-between gap-2">
                       <span className="font-mono text-xs">{o.orderNumber}</span>
                       <span className="text-text-faint text-[11px] tracking-wide uppercase">
-                        {o.status.replaceAll('_', ' ').toLowerCase()}
+                        {locale === 'bn'
+                          ? statusLabel(o.status, 'bn')
+                          : o.status.replaceAll('_', ' ').toLowerCase()}
                       </span>
                     </div>
                     <div className="text-text-muted truncate text-xs">

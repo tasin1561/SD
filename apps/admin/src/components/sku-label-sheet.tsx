@@ -3,6 +3,7 @@
 import type { ReactElement } from 'react';
 import { Barcode128, Button } from '@skydrop/ui/components';
 import type { SkuLabelSheet } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * Product stickers — one per physical unit, both inventory modes.
@@ -25,6 +26,7 @@ export function SkuLabelSheetView({
   readonly sheet: SkuLabelSheet;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const stickers = sheet.labels.flatMap((l) =>
     Array.from({ length: l.quantity }, (_, i) => ({ ...l, key: `${l.variantId}-${i}` })),
   );
@@ -55,33 +57,29 @@ export function SkuLabelSheetView({
         <div>
           <h2 className="text-base font-semibold">{sheet.title}</h2>
           <p className="text-text-muted mt-0.5 text-xs">
-            {sheet.totalStickers} sticker{sheet.totalStickers === 1 ? '' : 's'} — one per unit.
-            Stick one on each item before it goes to a shelf; the packing bench scans it.
+            {t('skuLabelSheet.stickerOnePerUnitStick', {
+              totalStickers: sheet.totalStickers,
+              value: sheet.totalStickers === 1 ? '' : t('common.pluralS'),
+            })}
           </p>
           {sheet.labels.some((l) => l.usedSkuCode) && (
-            <p className="text-text-faint mt-1 text-xs">
-              Some of these carry the SKU code because the product has no barcode of its own. That
-              is fine — the bench accepts both, so these stay valid if a real barcode is added
-              later.
-            </p>
+            <p className="text-text-faint mt-1 text-xs">{t('skuLabelSheet.someOfTheseCarryThe')}</p>
           )}
           {sheet.skippedStrict.length > 0 && (
             <p className="text-text-muted mt-1 text-xs">
-              Not on this sheet (strict mode — each unit carries its own barcode from the
-              consignment): {sheet.skippedStrict.join(', ')}.
+              {t('skuLabelSheet.notOnThisSheetStrict', { value: sheet.skippedStrict.join(', ') })}
             </p>
           )}
           {sheet.labels.some((l) => l.barcodeWidths === null) && (
             <p className="text-status-failed-fg mt-1 text-xs">
-              One or more codes cannot be printed as a barcode and will show as text only. Give
-              those SKUs a plain code — letters, digits and dashes.
+              {t('skuLabelSheet.oneOrMoreCodesCannot')}
             </p>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => window.print()}>Send to printer</Button>
+          <Button onClick={() => window.print()}>{t('skuLabelSheet.sendToPrinter')}</Button>
           <Button variant="secondary" onClick={onClose}>
-            Done
+            {t('skuLabelSheet.done')}
           </Button>
         </div>
       </div>

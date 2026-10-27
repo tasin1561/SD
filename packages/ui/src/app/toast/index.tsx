@@ -15,6 +15,7 @@ import {
 } from 'react';
 import { reducedMotion } from '../motion/motion';
 import './toast.css';
+import { useUiT } from '../i18n-client';
 
 export type ToastKind = 'success' | 'error' | 'info';
 
@@ -144,6 +145,7 @@ const ICON: Record<ToastKind, typeof Info> = {
 };
 
 function ToastView({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }): ReactElement {
+  const tr = useUiT();
   const [hover, setHover] = useState(false);
   const [focus, setFocus] = useState(false);
   const setPaused = usePausableTimer(item.duration, onDismiss);
@@ -186,7 +188,12 @@ function ToastView({ item, onDismiss }: { item: ToastItem; onDismiss: () => void
           {item.action.label}
         </button>
       ) : null}
-      <button type="button" className="sk-toast__close" aria-label="Dismiss" onClick={onDismiss}>
+      <button
+        type="button"
+        className="sk-toast__close"
+        aria-label={tr('ui.dismiss')}
+        onClick={onDismiss}
+      >
         <X size={15} aria-hidden />
       </button>
       {showBar ? <span className="sk-toast__bar" aria-hidden /> : null}

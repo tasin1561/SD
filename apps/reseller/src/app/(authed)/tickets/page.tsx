@@ -13,24 +13,23 @@ import { buttonClassName } from '@skydrop/ui/app/button';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { MessageKey } from '@/i18n/catalog';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import { storeTicketKind } from '@/lib/ticket-kind';
 import { useStoreTickets, type TicketStage } from '@/lib/ticket-hooks';
 import './_components/tickets.css';
-
-function when(iso: string): string {
-  return new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 /** The tab id for "every stage" — a tab needs a non-empty id. */
 const ALL_STAGES = 'ALL';
 
 /** The stage filter, same words and same values as the select it replaced. */
-const STAGES: ReadonlyArray<{ id: string; label: string }> = [
-  { id: ALL_STAGES, label: 'All' },
-  { id: 'OPEN', label: 'Open' },
-  { id: 'REVIEWING', label: 'Being reviewed' },
-  { id: 'CLOSED', label: 'Closed' },
+const STAGES: ReadonlyArray<{ id: string; label: MessageKey }> = [
+  { id: ALL_STAGES, label: 'tkt.stage.all' },
+  { id: 'OPEN', label: 'tkt.stage.open' },
+  { id: 'REVIEWING', label: 'tkt.stage.reviewing' },
+  { id: 'CLOSED', label: 'tkt.stage.closed' },
 ];
 
 /**
@@ -46,6 +45,8 @@ const STAGES: ReadonlyArray<{ id: string; label: string }> = [
  * wrong thing to the wrong company.
  */
 export default function TicketsPage(): ReactElement {
+  const tr = useT();
+  const locale = useLocale();
   const me = useStoreIdentity();
   const [stage, setStage] = useState<TicketStage | ''>('');
   const tickets = useStoreTickets(stage === '' ? {} : { stage });
@@ -54,8 +55,8 @@ export default function TicketsPage(): ReactElement {
   return (
     <div className="rc-tkt-page">
       <PageHeader
-        title="Tickets"
-        subtitle="Problems with your orders — raised with your client, or with Skydrop."
+        title={tr('tkt.title')}
+        subtitle={tr('tkt.subtitle')}
         action={
           mayRaise ? (
             <Link href="/tickets/new" className={buttonClassName('primary', 'md')}>
@@ -63,36 +64,32 @@ export default function TicketsPage(): ReactElement {
               <span className="sk-btn__icon" aria-hidden>
                 <Plus size={15} />
               </span>
-              <span className="sk-btn__label">Raise a ticket</span>
+              <span className="sk-btn__label">{tr('tkt.raise')}</span>
             </Link>
           ) : null
         }
       />
       <section className="rc-tkt-section">
         <Tabs
-          label="Stage"
+          label={tr('tkt.stage.label')}
           size="sm"
-          items={STAGES}
+          items={STAGES.map((s) => ({ id: s.id, label: tr(s.label) }))}
           value={stage === '' ? ALL_STAGES : stage}
           onChange={(id) => setStage(id === ALL_STAGES ? '' : (id as TicketStage))}
         />
         {tickets.isPending ? (
-          <SkeletonRows rows={4} cols={5} label="Loading disputes" />
+          <SkeletonRows rows={4} cols={5} label={tr('tkt.loading')} />
         ) : tickets.isError ? (
-          <ErrorState message={serverVerdict(tickets.error)} retry={() => void tickets.refetch()} />
+          <ErrorState message={verdict(tickets.error, tr)} retry={() => void tickets.refetch()} />
         ) : tickets.data.items.length === 0 ? (
           <EmptyState
             tone={stage === '' ? 'positive' : 'neutral'}
-            title="No tickets"
-            description={
-              mayRaise
-                ? 'Something wrong with one of your orders? Open it and raise a ticket from there — with your client if it is about the goods or the price, with Skydrop if we damaged it, lost it or are sitting on it.'
-                : 'Nothing has been raised with your client or with Skydrop.'
-            }
+            title={tr('tkt.empty.title')}
+            description={mayRaise ? tr('tkt.empty.raise') : tr('tkt.empty.none')}
             action={
               <Link href="/orders" className={buttonClassName('secondary', 'sm')}>
                 <span className="sk-btn__fx" aria-hidden />
-                <span className="sk-btn__label">Go to your orders</span>
+                <span className="sk-btn__label">{tr('tkt.empty.go')}</span>
                 <span className="sk-btn__icon sk-btn__icon--right" aria-hidden>
                   <ArrowRight size={14} />
                 </span>
@@ -100,14 +97,14 @@ export default function TicketsPage(): ReactElement {
             }
           />
         ) : (
-          <Table caption="Tickets">
+          <Table caption={tr('tkt.caption')}>
             <THead>
               <Tr>
-                <Th>Ticket</Th>
-                <Th>With</Th>
-                <Th>Order</Th>
-                <Th>Status</Th>
-                <Th>Opened</Th>
+                <Th>{tr('tkt.col.ticket')}</Th>
+                <Th>{tr('tkt.col.with')}</Th>
+                <Th>{tr('tkt.col.order')}</Th>
+                <Th>{tr('tkt.col.status')}</Th>
+                <Th>{tr('tkt.col.opened')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -120,7 +117,7 @@ export default function TicketsPage(): ReactElement {
                     </Link>
                   </Td>
                   <Td>
-                    <span className="rc-tkt-muted">{storeTicketKind(t.ticketType).label}</span>
+                    <span className="rc-tkt-muted">{storeTicketKind(t.ticketType, tr).label}</span>
                   </Td>
                   <Td>
                     <span className="rc-tkt-order sk-ident">{t.orderNumber ?? '—'}</span>
@@ -128,12 +125,14 @@ export default function TicketsPage(): ReactElement {
                   <Td>
                     <StatusChip
                       kind={ticketStatusKind(t.status)}
-                      label={ticketStatusLabel(t.status)}
+                      label={ticketStatusLabel(t.status, locale)}
                       size="sm"
                     />
                   </Td>
                   <Td>
-                    <span className="rc-tkt-muted sk-figure">{when(t.createdAt)}</span>
+                    <span className="rc-tkt-muted sk-figure">
+                      {formatDateTime(t.createdAt, locale)}
+                    </span>
                   </Td>
                 </Tr>
               ))}

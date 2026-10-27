@@ -41,6 +41,8 @@ import {
   ShortcutCard,
 } from './dashboard-parts';
 import { can } from '@/lib/page-access';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
 
 /**
  * The seller dashboard.
@@ -106,6 +108,8 @@ export function onboardingVisible(
 }
 
 export function DashboardView(): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const identity = useSellerIdentity();
   // This is the ONE page open to everybody, so it is where a permission
   // gap shows first. A viewer holds `orders.view` and nothing else, and
@@ -198,26 +202,26 @@ export function DashboardView(): ReactElement {
   const steps = [
     {
       done: profileComplete,
-      label: 'Complete your profile',
-      hint: 'Company name, contact person, and phone',
+      label: t('dashboard.completeYourProfile'),
+      hint: t('dashboard.companyNameContactPerson'),
       href: '/profile',
     },
     {
       done: bankDetailsComplete,
-      label: 'Add bank details',
-      hint: 'Required before we can remit your COD collections',
+      label: t('dashboard.addBankDetails'),
+      hint: t('dashboard.requiredBeforeWeCan'),
       href: '/profile',
     },
     {
       done: hasProduct,
-      label: 'Add your first product',
-      hint: 'At least one ACTIVE product + variant',
+      label: t('dashboard.addYourFirstProduct'),
+      hint: t('dashboard.atLeastOneActive'),
       href: '/products/new',
     },
     {
       done: hasOrder,
-      label: 'Place your first order',
-      hint: 'Manually or via CSV upload',
+      label: t('dashboard.placeYourFirstOrder'),
+      hint: t('dashboard.manuallyOrViaCsv'),
       href: '/orders/new',
     },
   ];
@@ -228,14 +232,14 @@ export function DashboardView(): ReactElement {
   return (
     <div className="db-page">
       <PageHeader
-        breadcrumbs={[{ label: 'Client console' }, { label: 'Dashboard' }]}
+        breadcrumbs={[{ label: t('dashboard.clientConsole') }, { label: t('dashboard.dashboard') }]}
         Link={Link}
-        title={`Hello, ${companyName}`}
-        subtitle="Your most recent orders, what you are owed, and where to go next."
+        title={t('dashboard.hello', { companyName })}
+        subtitle={t('dashboard.yourMostRecentOrders')}
         meta={
           <span className="db-meta">
             <MetaFact tone="good" dot>
-              Account active
+              {t('dashboard.accountActive')}
             </MetaFact>
             {canWallet && canonicalCurrency !== null && (
               <MetaFact tone="accent">{canonicalCurrency} wallet</MetaFact>
@@ -252,7 +256,7 @@ export function DashboardView(): ReactElement {
 
       {/* ── What needs you, before anything that is merely true ──── */}
       {canOrders && needsYou && (
-        <ListRows label="Needs your attention">
+        <ListRows label={t('dashboard.needsYourAttention')}>
           {awaitingCount > 0 && (
             <ListRow
               key="awaiting"
@@ -260,11 +264,12 @@ export function DashboardView(): ReactElement {
               Link={Link}
               severity="high"
               icon={<PhoneOff size={16} />}
-              title="Waiting on your decision"
+              title={t('dashboard.waitingOnYourDecision')}
               description={
                 <>
-                  We rang and nobody answered. Nothing happens to these until you say.
-                  <span className="db-row-cta">Open the list · Needs attention →</span>
+                  {richMessage(t('dashboard.weRangAndNobody'), {
+                    span: <span className="db-row-cta">{t('dashboard.openTheListNeeds')}</span>,
+                  })}
                 </>
               }
               meta={
@@ -281,13 +286,14 @@ export function DashboardView(): ReactElement {
               Link={Link}
               severity="critical"
               icon={<AlertTriangle size={16} />}
-              title="Out for delivery, not arrived"
+              title={t('dashboard.outForDeliveryNot')}
               description={
                 // We chase these; the seller does not have to. Saying so
                 // is what stops the row reading as a task list.
                 <>
-                  We are chasing the courier on these.
-                  <span className="db-row-cta">See where each one is · Needs attention →</span>
+                  {richMessage(t('dashboard.weAreChasingThe'), {
+                    span: <span className="db-row-cta">{t('dashboard.seeWhereEachOne')}</span>,
+                  })}
                 </>
               }
               meta={
@@ -301,7 +307,10 @@ export function DashboardView(): ReactElement {
       )}
 
       {canProfile && canCatalog && onboardingVisible(onboardingKnown, steps) && (
-        <DashSection title="Finish setting up" note={`${completedSteps} of ${STEPS_TOTAL} done`}>
+        <DashSection
+          title={t('dashboard.finishSettingUp')}
+          note={t('dashboard.ofDone', { completedSteps, stepsTotal: STEPS_TOTAL })}
+        >
           <OnboardingSteps
             steps={steps}
             completed={completedSteps}
@@ -313,8 +322,8 @@ export function DashboardView(): ReactElement {
       {/* ── Money ─────────────────────────────────────────────────────── */}
       {(canWallet || canOrders) && (
         <DashSection
-          title="Treasury & liquidity"
-          link={canWallet ? { href: '/wallet', label: 'Ledger and top-ups →' } : undefined}
+          title={t('dashboard.treasuryLiquidity')}
+          link={canWallet ? { href: '/wallet', label: t('dashboard.ledgerAndTopUps') } : undefined}
         >
           <div className="db-kpis">
             {canWallet && <WalletBalanceCard query={balances} />}
@@ -326,23 +335,23 @@ export function DashboardView(): ReactElement {
                     inside them, which the caption says rather than
                     leaving somebody to discover at settlement. */}
                 <MoneyTile
-                  label="On its way"
+                  label={t('dashboard.onItsWay')}
                   icon={<Truck size={14} />}
                   tone="info"
                   amount={inFlight.data?.inTransit.codInr}
                   count={inFlight.data?.inTransit.count}
-                  countLabel="orders dispatched"
-                  hint="Confirmed and dispatched, not yet delivered. Before our charges."
+                  countLabel={t('dashboard.ordersDispatched')}
+                  hint={t('dashboard.confirmedAndDispatchedNot')}
                   loading={inFlight.isLoading}
                 />
                 <MoneyTile
-                  label="Clearing"
+                  label={t('dashboard.clearing')}
                   icon={<Hourglass size={14} />}
                   tone="pending"
                   amount={inFlight.data?.processing.codInr}
                   count={inFlight.data?.processing.count}
-                  countLabel="delivered, unpaid"
-                  hint="Delivered; waiting on the courier to remit the cash to us."
+                  countLabel={t('dashboard.deliveredUnpaid')}
+                  hint={t('dashboard.deliveredWaitingOnThe')}
                   loading={inFlight.isLoading}
                 />
               </>
@@ -353,28 +362,31 @@ export function DashboardView(): ReactElement {
 
       {/* ── Recent orders ─────────────────────────────────────────────── */}
       {canOrders && (
-        <DashSection title="Recent orders" link={{ href: '/orders', label: 'See all orders →' }}>
+        <DashSection
+          title={t('dashboard.recentOrders')}
+          link={{ href: '/orders', label: t('dashboard.seeAllOrders') }}
+        >
           {recent.isLoading ? (
-            <SkeletonRows rows={5} cols={5} label="Loading your orders…" />
+            <SkeletonRows rows={5} cols={5} label={t('dashboard.loadingYourOrders')} />
           ) : recent.isError ? (
             <ErrorState
-              message={recent.error?.message ?? 'Could not load your orders.'}
+              message={recent.error?.message ?? t('dashboard.couldNotLoadYour')}
               retry={() => void recent.refetch()}
             />
           ) : (recent.data?.items ?? []).length === 0 ? (
             <EmptyState
-              title="No orders yet"
-              description="Your most recent orders appear here once you create one."
+              title={t('dashboard.noOrdersYet')}
+              description={t('dashboard.yourMostRecentOrders2')}
             />
           ) : (
-            <Table caption="Recent orders">
+            <Table caption={t('dashboard.recentOrders')}>
               <THead>
                 <Tr>
-                  <Th>Order</Th>
-                  <Th>Recipient</Th>
-                  <Th>Stage</Th>
-                  <Th align="right">COD</Th>
-                  <Th>Open</Th>
+                  <Th>{t('dashboard.order')}</Th>
+                  <Th>{t('dashboard.recipient')}</Th>
+                  <Th>{t('dashboard.stage')}</Th>
+                  <Th align="right">{t('dashboard.cod')}</Th>
+                  <Th>{t('dashboard.open')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -396,20 +408,20 @@ export function DashboardView(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={orderStatusKind(o.status)}
-                        label={statusLabel(o.status)}
+                        label={statusLabel(o.status, locale)}
                         size="sm"
                       />
                     </Td>
                     <Td align="right">
                       {o.codAmountInr === null ? (
-                        <span className="db-prepaid">Prepaid</span>
+                        <span className="db-prepaid">{t('dashboard.prepaid')}</span>
                       ) : (
                         <Money amount={o.codAmountInr} />
                       )}
                     </Td>
                     <Td>
                       <Link href={`/orders/${o.id}`} className="db-link">
-                        View →
+                        {t('dashboard.view')}
                       </Link>
                     </Td>
                   </Tr>
@@ -421,18 +433,23 @@ export function DashboardView(): ReactElement {
       )}
 
       {/* ── Where to go next ──────────────────────────────────────────── */}
-      <DashSection title="Next steps">
+      <DashSection title={t('dashboard.nextSteps')}>
         <ul className="db-shortcuts">
           {canCatalog && (
             <ShortcutCard
               href="/products"
               icon={<Package size={18} />}
-              title="Manage catalogue"
-              body="Products, variants, images and SKU codes."
+              title={t('dashboard.manageCatalogue')}
+              body={t('dashboard.productsVariantsImagesAnd')}
               foot={
                 products.data === undefined
                   ? undefined
-                  : `${products.data.total} active ${products.data.total === 1 ? 'product' : 'products'}`
+                  : t(
+                      products.data.total === 1
+                        ? 'dashboard.activeProductOne'
+                        : 'dashboard.activeProductMany',
+                      { total: products.data.total },
+                    )
               }
             />
           )}
@@ -440,9 +457,13 @@ export function DashboardView(): ReactElement {
             <ShortcutCard
               href="/orders"
               icon={<ListOrdered size={18} />}
-              title="View orders"
-              body="Full lifecycle, failed deliveries and the tracking timeline."
-              foot={recent.data === undefined ? undefined : `${recent.data.total} in total`}
+              title={t('dashboard.viewOrders')}
+              body={t('dashboard.fullLifecycleFailedDeliveries')}
+              foot={
+                recent.data === undefined
+                  ? undefined
+                  : t('dashboard.inTotal', { total: recent.data.total })
+              }
             />
           )}
           {/* The page that answers "is anything of mine stuck". It had
@@ -453,13 +474,13 @@ export function DashboardView(): ReactElement {
             <ShortcutCard
               href="/needs-attention"
               icon={<AlertTriangle size={18} />}
-              title="Needs attention"
-              body="Orders we could not confirm, and parcels that never arrived."
+              title={t('dashboard.needsAttention')}
+              body={t('dashboard.ordersWeCouldNot')}
               foot={
                 awaiting.isSuccess && stuck.isSuccess
                   ? awaitingCount + stuckCount === 0
-                    ? 'Nothing right now'
-                    : `${awaitingCount + stuckCount} to look at`
+                    ? t('dashboard.nothingRightNow')
+                    : t('dashboard.toLookAt', { stuckCount: awaitingCount + stuckCount })
                   : undefined
               }
             />
@@ -467,14 +488,14 @@ export function DashboardView(): ReactElement {
           <ShortcutCard
             href="/inbound"
             icon={<Ship size={18} />}
-            title="Inbound freight"
-            body="Send stock to the warehouse and track what is on the water."
+            title={t('dashboard.inboundFreight')}
+            body={t('dashboard.sendStockToThe')}
           />
           <ShortcutCard
             href="/tickets"
             icon={<LifeBuoy size={18} />}
-            title="Support tickets"
-            body="Damage claims, missing items and anything that needs a person."
+            title={t('dashboard.supportTickets')}
+            body={t('dashboard.damageClaimsMissingItems')}
           />
         </ul>
       </DashSection>
@@ -487,11 +508,12 @@ export function WalletBalanceCard({
 }: {
   readonly query: ReturnType<typeof useWalletBalances>;
 }): ReactElement {
+  const t = useT();
   if (query.isLoading) return <SkeletonRows rows={1} />;
   if (query.isError) {
     return (
       <ErrorState
-        message={query.error?.message ?? 'Failed to load your balance.'}
+        message={query.error?.message ?? t('dashboard.failedToLoadYour')}
         retry={() => void query.refetch()}
       />
     );
@@ -504,14 +526,19 @@ export function WalletBalanceCard({
   if (canonical === undefined) {
     return (
       <EmptyState
-        title="No wallet activity yet"
-        description="Your balance appears here once an order delivers or you top up."
+        title={t('dashboard.noWalletActivityYet')}
+        description={t('dashboard.yourBalanceAppearsHere')}
       />
     );
   }
 
   const value = Number(canonical.balance);
-  const caption = value === 0 ? 'No activity yet' : value > 0 ? 'Owed to you' : 'You owe';
+  const caption =
+    value === 0
+      ? t('dashboard.noActivityYet')
+      : value > 0
+        ? t('dashboard.owedToYou')
+        : t('dashboard.youOwe');
   // Colour follows the same sign the caption states in words, so the
   // tone is never the only signal.
   const tone = value === 0 ? 'neutral' : value > 0 ? 'credit' : 'debit';
@@ -530,7 +557,7 @@ export function WalletBalanceCard({
   */
   return (
     <KpiCard
-      label={`${canonical.currency} balance`}
+      label={t('dashboard.balance', { currency: canonical.currency })}
       icon={<Wallet size={14} />}
       tone={tone}
       figure={
@@ -555,12 +582,16 @@ export function WalletBalanceCard({
                       currency={restated.currency === 'BDT' ? 'BDT' : 'INR'}
                       convert={false}
                     />
-                    <span className="db-sr">the same balance in {restated.currency}</span>
+                    <span className="db-sr">
+                      {richMessage(t('dashboard.theSameBalanceIn'), {
+                        currency: restated.currency,
+                      })}
+                    </span>
                   </span>
                 ),
                 value:
                   restated.fxRate === null ? (
-                    <span className="db-faint">rate not recorded</span>
+                    <span className="db-faint">{t('dashboard.rateNotRecorded')}</span>
                   ) : (
                     <span className="db-faint">₹1 = ৳{Number(restated.fxRate).toFixed(2)}</span>
                   ),

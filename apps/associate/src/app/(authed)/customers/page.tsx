@@ -9,8 +9,10 @@ import { Table, TableToolbar, TBody, THead, Td, Th, Tr } from '@skydrop/ui/app/d
 import { Pagination } from '@skydrop/ui/app/pagination';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/i18n/format';
 import { seesOwnOnly } from '@/lib/orders-paused';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { useMyCustomers } from '@/lib/order-hooks';
 import '../_components/as.css';
 
@@ -28,6 +30,8 @@ import '../_components/as.css';
  * the row links straight to it.
  */
 export default function CustomersPage(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const me = useStoreIdentity();
   const [input, setInput] = useState('');
   const [search, setSearch] = useState('');
@@ -37,17 +41,13 @@ export default function CustomersPage(): ReactElement {
   return (
     <div className="as-page">
       <PageHeader
-        title="My customers"
-        subtitle={
-          seesOwnOnly(me)
-            ? 'Everyone you have sold to. You see the people you placed an order for — not the rest of the store’s.'
-            : 'Everyone your store has sold to.'
-        }
+        title={t('customers.title')}
+        subtitle={seesOwnOnly(me) ? t('customers.subtitle.own') : t('customers.subtitle.all')}
       />
       <section className="as-section">
         <SectionHeading
-          title="Customers"
-          note={list.data === undefined ? undefined : `${list.data.total} in all`}
+          title={t('customers.section')}
+          note={list.data === undefined ? undefined : t('customers.inAll', { n: list.data.total })}
         />
         {/* The search COMMITS on Enter: the box holds what is being
             typed, the list reads what was asked for. */}
@@ -62,35 +62,33 @@ export default function CustomersPage(): ReactElement {
             search={{
               value: input,
               onChange: setInput,
-              label: 'Search customers',
-              placeholder: 'Name, phone or email',
+              label: t('customers.search.label'),
+              placeholder: t('customers.search.placeholder'),
             }}
           />
         </form>
         {list.isPending ? (
-          <SkeletonRows rows={5} cols={5} label="Loading customers" />
+          <SkeletonRows rows={5} cols={5} label={t('customers.loading')} />
         ) : list.isError ? (
-          <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <ErrorState message={verdict(list.error, t)} retry={() => void list.refetch()} />
         ) : list.data.items.length === 0 ? (
           <EmptyState
             icon={<Contact size={20} />}
-            title={search === '' ? 'No customers yet' : 'Nobody matches'}
+            title={search === '' ? t('customers.empty.none') : t('customers.empty.noMatch')}
             description={
-              search === ''
-                ? 'Everyone you place an order for appears here.'
-                : 'Try a different name, number or email.'
+              search === '' ? t('customers.empty.noneBody') : t('customers.empty.noMatchBody')
             }
           />
         ) : (
           <div className="as-card" data-flush="1">
-            <Table caption="My customers">
+            <Table caption={t('customers.table.caption')}>
               <THead>
                 <Tr>
-                  <Th>Name</Th>
-                  <Th>Phone</Th>
-                  <Th>Email</Th>
-                  <Th align="right">Orders</Th>
-                  <Th>Last order</Th>
+                  <Th>{t('customers.col.name')}</Th>
+                  <Th>{t('customers.col.phone')}</Th>
+                  <Th>{t('customers.col.email')}</Th>
+                  <Th align="right">{t('customers.col.orders')}</Th>
+                  <Th>{t('customers.col.last')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -101,9 +99,9 @@ export default function CustomersPage(): ReactElement {
                         href={`/orders?search=${encodeURIComponent(c.phoneE164)}`}
                         className="as-link"
                       >
-                        {c.name ?? 'No name given'}
+                        {c.name ?? t('customers.noName')}
                       </Link>
-                      <span className="as-sub">See what they have bought</span>
+                      <span className="as-sub">{t('customers.seeBought')}</span>
                     </Td>
                     <Td>
                       <span className="sk-ident">{c.phoneE164}</span>
@@ -116,11 +114,7 @@ export default function CustomersPage(): ReactElement {
                     </Td>
                     <Td>
                       <span className="as-muted sk-figure">
-                        {c.lastOrderAt === null
-                          ? '—'
-                          : new Date(c.lastOrderAt).toLocaleDateString('en-IN', {
-                              dateStyle: 'medium',
-                            })}
+                        {c.lastOrderAt === null ? '—' : formatDate(c.lastOrderAt, locale)}
                       </span>
                     </Td>
                   </Tr>
@@ -133,7 +127,7 @@ export default function CustomersPage(): ReactElement {
                 pageSize={20}
                 total={list.data.total}
                 onPageChange={setPage}
-                label="Customer pages"
+                label={t('customers.pages')}
               />
             </div>
           </div>

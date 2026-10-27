@@ -17,6 +17,8 @@ import {
   writeThemeCookie,
   type PinnedTheme,
 } from '../../components/theme-init';
+import { useUiT } from '../i18n-client';
+import type { UiMessageKey } from '../i18n/ui-messages';
 import { reducedMotion } from '../motion/motion';
 import './theme-switch.css';
 
@@ -31,10 +33,18 @@ import './theme-switch.css';
  */
 export type ThemeMode = PinnedTheme;
 
-const MODES: readonly { mode: ThemeMode; label: string; Icon: typeof Sun }[] = [
-  { mode: 'light', label: 'Light', Icon: Sun },
-  { mode: 'dark', label: 'Dark', Icon: Moon },
-];
+const MODES = [
+  // System is GONE (owner, 2026-10-26) — the product opens light and
+  // the only question the switch asks is which of the two you want.
+  // The labels are message keys, so the switch speaks whatever language
+  // the console is in.
+  { mode: 'light', label: 'ui.theme.light', Icon: Sun },
+  { mode: 'dark', label: 'ui.theme.dark', Icon: Moon },
+] as const satisfies readonly {
+  mode: ThemeMode;
+  label: UiMessageKey;
+  Icon: typeof Sun;
+}[];
 
 /** Put a mode on <html>, localStorage and the cookie the server renders from. Never throws. */
 function applyMode(mode: ThemeMode): void {
@@ -65,6 +75,7 @@ type ViewTransitionDoc = Document & { startViewTransition?: (cb: () => void) => 
  * stop. Inert until mounted (the server cannot know the stored choice).
  */
 export function ThemeSwitch({ className }: { className?: string | undefined }): ReactElement {
+  const t = useUiT();
   const [mode, setMode] = useState<ThemeMode | null>(null);
   const radios = useRef<(HTMLButtonElement | null)[]>([]);
 
@@ -128,7 +139,7 @@ export function ThemeSwitch({ className }: { className?: string | undefined }): 
   return (
     <div
       role="radiogroup"
-      aria-label="Theme"
+      aria-label={t('ui.theme.label')}
       className={clsx('sk-themesw', className)}
       data-mode={mode ?? undefined}
       data-ready={mode !== null || undefined}
@@ -150,8 +161,8 @@ export function ThemeSwitch({ className }: { className?: string | undefined }): 
             type="button"
             role="radio"
             aria-checked={checked}
-            aria-label={label}
-            title={label}
+            aria-label={t(label)}
+            title={t(label)}
             tabIndex={checked || (mode === null && i === 0) ? 0 : -1}
             disabled={mode === null}
             className="sk-themesw__opt"

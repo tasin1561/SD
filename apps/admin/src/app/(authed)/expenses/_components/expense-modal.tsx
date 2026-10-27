@@ -22,6 +22,8 @@ import { usePermission } from '@/lib/use-permission';
 import { localNow } from '@/lib/datetime-local';
 import '../../treasury/_components/money.css';
 import './expenses.css';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * Money leaving for something we bought.
@@ -39,6 +41,8 @@ export function ExpenseModal({
   readonly open: boolean;
   readonly onOpenChange: (next: boolean) => void;
 }): ReactElement {
+  const t = useT();
+
   const accounts = usePlatformBankAccounts(usePermission('money.view'));
   const categories = useExpenseCategories(false);
   const record = useRecordBankEntry();
@@ -80,18 +84,18 @@ export function ExpenseModal({
   function review(): void {
     setError(null);
     if (account === undefined) {
-      setError('Which account did it leave?');
+      setError(t('expensesExpenseModal.whichAccountDidItLeave'));
       return;
     }
     const n = Number(amount);
     if (!Number.isFinite(n) || n <= 0) {
-      setError('Enter what was spent, as a positive number');
+      setError(t('expensesExpenseModal.enterWhatWasSpentAs'));
       return;
     }
     if (linked === null && categoryId === '') {
       // The server refuses an uncategorised expense; saying so here is
       // just sooner (FE-2: its verdict is still what counts).
-      setError('Choose what this was spent on');
+      setError(t('expensesExpenseModal.chooseWhatThisWasSpent'));
       return;
     }
     setConfirming(true);
@@ -131,7 +135,7 @@ export function ExpenseModal({
         setNote('');
         setLinked(null);
         onOpenChange(false);
-        toast.success('Payment recorded and attributed');
+        toast.success(t('expensesExpenseModal.paymentRecordedAndAttributed'));
         return;
       }
 
@@ -151,7 +155,7 @@ export function ExpenseModal({
       setReference('');
       setNote('');
       onOpenChange(false);
-      toast.success('Expense recorded');
+      toast.success(t('expensesExpenseModal.expenseRecorded'));
     } catch (err) {
       setError(serverVerdict(err));
       // Keeps the confirm open with the verdict on it, to read and retry.
@@ -160,7 +164,10 @@ export function ExpenseModal({
   }
 
   const pending = record.isPending || payForwarder.isPending;
-  const actionLabel = linked === null ? 'Record expense' : 'Record & attribute';
+  const actionLabel =
+    linked === null
+      ? t('expensesExpenseModal.recordExpense')
+      : t('expensesExpenseModal.recordAttribute');
 
   return (
     <>
@@ -171,27 +178,27 @@ export function ExpenseModal({
           if (!next) setError(null);
         }}
         icon={<Receipt size={18} />}
-        title="Record an expense"
-        description="Money leaving one of our accounts for something we bought. Always ours — never a client's."
+        title={t('expensesExpenseModal.recordAnExpense')}
+        description={t('expensesExpenseModal.moneyLeavingOneOfOur')}
         footer={
           <DialogFooter>
             <Button variant="secondary" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('expensesExpenseModal.cancel')}
             </Button>
             <Button variant="primary" onClick={review} disabled={pending}>
-              {pending ? 'Recording…' : actionLabel}
+              {pending ? t('expensesExpenseModal.recording') : actionLabel}
             </Button>
           </DialogFooter>
         }
       >
         <div className="mo-fields">
           <Select
-            label="Paid from"
+            label={t('expensesExpenseModal.paidFrom')}
             requiredMark
             value={accountId}
             onChange={(e) => setAccountId(e.target.value)}
           >
-            <option value="">Select an account…</option>
+            <option value="">{t('expensesExpenseModal.selectAnAccount')}</option>
             {(accounts.data ?? [])
               .filter((a) => a.isActive)
               .map((a) => (
@@ -201,17 +208,17 @@ export function ExpenseModal({
               ))}
           </Select>
           <Select
-            label="Category"
+            label={t('expensesExpenseModal.category2')}
             requiredMark={linked === null}
             hint={
               (categories.data ?? []).length === 0
-                ? 'No categories yet — add one first so this spend can be told apart later.'
+                ? t('expensesExpenseModal.noCategoriesYetAddOne')
                 : undefined
             }
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
           >
-            <option value="">Select a category…</option>
+            <option value="">{t('expensesExpenseModal.selectACategory')}</option>
             {(categories.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -228,7 +235,9 @@ export function ExpenseModal({
           )}
           <div className="mo-fields" data-cols="2">
             <TextField
-              label={`Amount${account ? ` (${account.currency})` : ''}`}
+              label={t('expensesExpenseModal.amount', {
+                value: account ? ` (${account.currency})` : '',
+              })}
               requiredMark
               type="number"
               inputMode="decimal"
@@ -239,7 +248,7 @@ export function ExpenseModal({
               placeholder="0.00"
             />
             <DateField
-              label="When"
+              label={t('expensesExpenseModal.when2')}
               requiredMark
               type="datetime-local"
               value={occurredAt}
@@ -248,18 +257,22 @@ export function ExpenseModal({
           </div>
           {linked !== null && account !== undefined && account.currency !== 'INR' && (
             <p className="mo-faint">
-              Paid in {account.currency}. The consignment&apos;s cost is kept in rupees, priced at
-              the rate recorded for the moment this payment moved.
+              {t('expensesExpenseModal.paidInTheConsignmentS', { currency: account.currency })}
             </p>
           )}
           <TextField
-            label="Reference"
-            hint="Invoice or transaction id, so it can be matched later"
+            label={t('expensesExpenseModal.reference')}
+            hint={t('expensesExpenseModal.invoiceOrTransactionIdSo')}
             value={reference}
             onChange={(e) => setReference(e.target.value)}
             maxLength={200}
           />
-          <TextArea label="Note" value={note} onChange={(e) => setNote(e.target.value)} rows={2} />
+          <TextArea
+            label={t('expensesExpenseModal.note')}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={2}
+          />
           {error !== null && !confirming && (
             <p className="mo-error" role="alert">
               {error}
@@ -274,8 +287,16 @@ export function ExpenseModal({
           setConfirming(next);
           if (!next) setError(null);
         }}
-        title={linked === null ? 'Record this expense?' : 'Record and attribute this payment?'}
-        entity={account === undefined ? 'Paid from' : `${account.label} · ${account.bankName}`}
+        title={
+          linked === null
+            ? t('expensesExpenseModal.recordThisExpense')
+            : t('expensesExpenseModal.recordAndAttributeThisPayment')
+        }
+        entity={
+          account === undefined
+            ? t('expensesExpenseModal.paidFrom')
+            : `${account.label} · ${account.bankName}`
+        }
         amount={
           account === undefined ? undefined : (
             <Money
@@ -288,8 +309,8 @@ export function ExpenseModal({
         }
         consequence={
           linked === null
-            ? 'This money leaves our account as an operating expense, filed under the category below.'
-            : "This money leaves our account and becomes this consignment's forwarder cost, not an operating expense."
+            ? t('expensesExpenseModal.thisMoneyLeavesOurAccount')
+            : t('expensesExpenseModal.thisMoneyLeavesOurAccount2')
         }
         confirmLabel={actionLabel}
         onConfirm={save}
@@ -297,19 +318,28 @@ export function ExpenseModal({
       >
         <div className="ex-confirm-lines">
           {linked === null ? (
-            <span>Category: {category?.name ?? '—'}</span>
+            <span>{t('expensesExpenseModal.category', { value: category?.name ?? '—' })}</span>
           ) : (
             <span>
-              Consignment:{' '}
-              <span className="sk-ident">{linked.consignmentNumber ?? 'Consignment'}</span>
+              {richMessage(t('expensesExpenseModal.consignmentRich'), {
+                span: (
+                  <span className="sk-ident">
+                    {linked.consignmentNumber ?? t('expensesExpenseModal.consignment')}
+                  </span>
+                ),
+              })}
             </span>
           )}
           <span>
-            When: {occurredAt === '' ? '—' : new Date(occurredAt).toLocaleString('en-IN')}
+            {t('expensesExpenseModal.when', {
+              value: occurredAt === '' ? '—' : new Date(occurredAt).toLocaleString('en-IN'),
+            })}
           </span>
           {reference.trim() !== '' && (
             <span>
-              Reference: <span className="sk-ident">{reference.trim()}</span>
+              {richMessage(t('expensesExpenseModal.referenceRich'), {
+                span: <span className="sk-ident">{reference.trim()}</span>,
+              })}
             </span>
           )}
         </div>
@@ -343,25 +373,32 @@ function FreightLinkField({
   readonly prompt: boolean;
   readonly currency: string;
 }): ReactElement {
+  const t = useT();
+
   const [term, setTerm] = useState('');
   const results = useFreightSearch(term);
 
   if (value !== null) {
     return (
       <div>
-        <p className="ex-picked__label">Attributed to</p>
+        <p className="ex-picked__label">{t('expensesExpenseModal.attributedTo')}</p>
         <div className="ex-picked">
           <div className="mo-wrap">
             <div className="ex-picked__title sk-ident">
-              {value.consignmentNumber ?? 'Consignment'}
+              {value.consignmentNumber ?? t('expensesExpenseModal.consignment')}
             </div>
             <div className="ex-picked__sub">
-              {value.receiptNumber ?? 'no receipt number'} · billed {currency} {value.totalInr}
-              {value.ourCostInr === null ? ' · our cost not yet recorded' : ''}
+              {t('expensesExpenseModal.billed', {
+                value: value.receiptNumber ?? t('expensesExpenseModal.noReceiptNumber'),
+                currency,
+                totalInr: value.totalInr,
+                value2:
+                  value.ourCostInr === null ? t('expensesExpenseModal.ourCostNotYetRecorded') : '',
+              })}
             </div>
           </div>
           <Button variant="ghost" size="sm" onClick={() => onChange(null)}>
-            Remove
+            {t('expensesExpenseModal.remove')}
           </Button>
         </div>
       </div>
@@ -370,26 +407,25 @@ function FreightLinkField({
 
   return (
     <TextField
-      label="Link to a consignment"
+      label={t('expensesExpenseModal.linkToAConsignment')}
       hint={
         prompt
-          ? 'A forwarder payment with no consignment behind it is counted twice in the profit report — once as that leg’s cost, once here. Search by consignment number, receipt or client.'
-          : 'Optional. Search by consignment number, receipt or client.'
+          ? t('expensesExpenseModal.aForwarderPaymentWithNo')
+          : t('expensesExpenseModal.optionalSearchByConsignmentNumber')
       }
       value={term}
       onChange={(e) => setTerm(e.target.value)}
-      placeholder="e.g. CN-2026-08 or the client’s name"
+      placeholder={t('expensesExpenseModal.eGCn202608')}
       // Loud only where leaving it empty is an actual error.
       className={prompt && term === '' ? 'ex-prompt' : undefined}
       after={
         term.trim().length >= 2 ? (
           <div className="ex-results">
             {results.isLoading ? (
-              <p className="ex-results__note">Searching…</p>
+              <p className="ex-results__note">{t('expensesExpenseModal.searching')}</p>
             ) : (results.data ?? []).length === 0 ? (
               <p className="ex-results__note">
-                No freight bill matches that. Leave it unlinked if this spend belongs to no
-                consignment.
+                {t('expensesExpenseModal.noFreightBillMatchesThat')}
               </p>
             ) : (
               (results.data ?? []).map((f) => (
@@ -403,11 +439,17 @@ function FreightLinkField({
                   }}
                 >
                   <span className="ex-result__title sk-ident">
-                    {f.consignmentNumber ?? 'Consignment'}
+                    {f.consignmentNumber ?? t('expensesExpenseModal.consignment')}
                   </span>
                   <span className="ex-result__sub">
-                    {f.receiptNumber ?? 'no receipt number'} · billed {f.totalInr}
-                    {f.ourCostInr === null ? ' · no cost recorded' : ` · cost ${f.ourCostInr}`}
+                    {t('expensesExpenseModal.billed2', {
+                      value: f.receiptNumber ?? t('expensesExpenseModal.noReceiptNumber'),
+                      totalInr: f.totalInr,
+                      value2:
+                        f.ourCostInr === null
+                          ? t('expensesExpenseModal.noCostRecorded')
+                          : t('expensesExpenseModal.cost', { ourCostInr: f.ourCostInr }),
+                    })}
                   </span>
                 </button>
               ))

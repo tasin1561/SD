@@ -13,7 +13,9 @@ import { SkeletonRows } from '@skydrop/ui/app/skeleton';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { useToast } from '@skydrop/ui/app/toast';
 import { can, isStoreOwner } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
+import { verdict } from '@/i18n/verdict';
 import {
   useInviteStoreMember,
   useRemoveStoreMember,
@@ -25,12 +27,6 @@ import {
 } from '@/lib/store-hooks';
 import { RdCallout, RdSection, phaseOf } from '../settings/_components/rd-parts';
 import { RoleList, RolePicker, type StoreRoleOption } from './_components/role-picker';
-
-function when(iso: string | null): string {
-  return iso === null
-    ? 'never'
-    : new Date(iso).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
-}
 
 /** The roles only an owner may grant, take away, or touch somebody who holds. */
 const OWNER_ONLY = ['owner'] as const;
@@ -44,6 +40,7 @@ const OWNER_ONLY = ['owner'] as const;
  * every role they hold is shown and a change states the whole set.
  */
 export default function TeamPage(): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   const team = useStoreTeam();
   const manage = can(me, 'team.manage');
@@ -53,11 +50,11 @@ export default function TeamPage(): ReactElement {
   if (team.isPending || team.isError) {
     return (
       <div className="rd-page">
-        <PageHeader title="Team" subtitle="Everybody with a login for this store." />
+        <PageHeader title={t('team.title')} subtitle={t('team.subtitle')} />
         {team.isPending ? (
-          <SkeletonRows label="Loading the team" rows={4} cols={5} />
+          <SkeletonRows label={t('team.loading')} rows={4} cols={5} />
         ) : (
-          <ErrorState message={serverVerdict(team.error)} retry={() => void team.refetch()} />
+          <ErrorState message={verdict(team.error, t)} retry={() => void team.refetch()} />
         )}
       </div>
     );
@@ -67,8 +64,8 @@ export default function TeamPage(): ReactElement {
   return (
     <div className="rd-page">
       <PageHeader
-        title="Team"
-        subtitle="Everybody with a login for this store."
+        title={t('team.title')}
+        subtitle={t('team.subtitle')}
         action={
           manage ? (
             <Button
@@ -77,27 +74,24 @@ export default function TeamPage(): ReactElement {
               icon={<UserPlus size={15} />}
               onClick={() => setInviting(true)}
             >
-              Invite a colleague
+              {t('team.invite')}
             </Button>
           ) : undefined
         }
       />
 
-      <RdSection
-        title="Members"
-        note="Somebody can hold more than one role; what they may do is everything their roles allow put together."
-      >
+      <RdSection title={t('team.members')} note={t('team.membersNote')}>
         {members.length === 0 ? (
-          <EmptyState title="No members yet" description="Invite a colleague to get started." />
+          <EmptyState title={t('team.noMembers')} description={t('team.noMembersBody')} />
         ) : (
           <Table>
             <THead>
               <Tr>
-                <Th>Name</Th>
-                <Th>Email</Th>
-                <Th>Roles</Th>
-                <Th>Last signed in</Th>
-                {manage ? <Th align="right">Actions</Th> : null}
+                <Th>{t('team.col.name')}</Th>
+                <Th>{t('team.col.email')}</Th>
+                <Th>{t('team.col.roles')}</Th>
+                <Th>{t('team.col.lastSignedIn')}</Th>
+                {manage ? <Th align="right">{t('team.col.actions')}</Th> : null}
               </Tr>
             </THead>
             <TBody>
@@ -116,23 +110,21 @@ export default function TeamPage(): ReactElement {
         )}
       </RdSection>
 
-      <RdSection title="Pending invitations">
+      <RdSection title={t('team.pending')}>
         {invitations.length === 0 ? (
           <EmptyState
-            title="No pending invitations"
-            description={
-              manage ? 'Invitations you send appear here until they are accepted.' : undefined
-            }
+            title={t('team.noPending')}
+            description={manage ? t('team.noPendingBody') : undefined}
           />
         ) : (
           <Table>
             <THead>
               <Tr>
-                <Th>Name</Th>
-                <Th>Email</Th>
-                <Th>Roles</Th>
-                <Th>Expires</Th>
-                {manage ? <Th align="right">Actions</Th> : null}
+                <Th>{t('team.col.name')}</Th>
+                <Th>{t('team.col.email')}</Th>
+                <Th>{t('team.col.roles')}</Th>
+                <Th>{t('team.col.expires')}</Th>
+                {manage ? <Th align="right">{t('team.col.actions')}</Th> : null}
               </Tr>
             </THead>
             <TBody>
@@ -169,6 +161,8 @@ function MemberRow({
   mayTouchOwners: boolean;
   isYou: boolean;
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const toast = useToast();
   const remove = useRemoveStoreMember();
   const [confirming, setConfirming] = useState(false);
@@ -179,13 +173,15 @@ function MemberRow({
     <Tr>
       <Td>
         <span className="rd-cell-strong">{member.fullName}</span>
-        {isYou ? <span className="rd-you"> (you)</span> : null}
+        {isYou ? <span className="rd-you">{t('team.you')}</span> : null}
       </Td>
       <Td>{member.email}</Td>
       <Td>
         <RoleList names={member.roleNames} />
       </Td>
-      <Td className="rd-cell-muted">{when(member.lastLoginAt)}</Td>
+      <Td className="rd-cell-muted">
+        {member.lastLoginAt === null ? t('team.never') : formatDateTime(member.lastLoginAt, locale)}
+      </Td>
       {manage ? (
         <Td align="right">
           {locked ? null : (
@@ -196,7 +192,7 @@ function MemberRow({
                 icon={<ShieldCheck size={14} />}
                 onClick={() => setEditing(true)}
               >
-                Change roles
+                {t('team.changeRoles')}
               </Button>
               <Button
                 variant="destructive"
@@ -204,7 +200,7 @@ function MemberRow({
                 icon={<Trash2 size={14} />}
                 onClick={() => setConfirming(true)}
               >
-                Remove
+                {t('team.remove')}
               </Button>
               <RolesDialog
                 open={editing}
@@ -216,18 +212,18 @@ function MemberRow({
               <ConfirmDialog
                 open={confirming}
                 onOpenChange={setConfirming}
-                title={`Remove ${member.fullName}?`}
+                title={t('team.removeTitle', { name: member.fullName })}
                 entity={`${member.fullName} · ${member.email}`}
-                consequence="Their access ends now, including any session they have open."
-                confirmLabel="Remove access"
+                consequence={t('team.removeConsequence')}
+                confirmLabel={t('team.removeConfirm')}
                 destructive
                 onConfirm={async () => {
                   try {
                     await remove.mutateAsync({ memberId: member.id });
-                    toast.success(`${member.fullName} no longer has access.`);
+                    toast.success(t('team.removed', { name: member.fullName }));
                     setConfirming(false);
                   } catch (err) {
-                    toast.error(serverVerdict(err));
+                    toast.error(verdict(err, t));
                     // Stays open, as before: nothing was removed.
                     throw err;
                   }
@@ -269,6 +265,7 @@ function RolesDialog({
   readonly roles: readonly StoreRoleOption[];
   readonly mayTouchOwners: boolean;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const save = useSetStoreMemberRoles();
   const [chosen, setChosen] = useState<readonly string[]>(member.roleKeys);
@@ -291,12 +288,15 @@ function RolesDialog({
       const saved = await save.mutateAsync({ memberId: member.id, roleKeys: chosen });
       toast.success(
         saved.roleNames.length === 0
-          ? `${member.fullName} holds no role.`
-          : `${member.fullName} is now ${saved.roleNames.join(' and ')}.`,
+          ? t('team.roles.holdsNone', { name: member.fullName })
+          : t('team.roles.nowIs', {
+              name: member.fullName,
+              roles: saved.roleNames.join(t('team.roles.join')),
+            }),
       );
       onOpenChange(false);
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -305,18 +305,18 @@ function RolesDialog({
       open={open}
       onOpenChange={onOpenChange}
       icon={<ShieldCheck size={18} />}
-      title={`What ${member.fullName} may do`}
-      description="Tick every role they hold. What they may do is all of them put together, and it changes as soon as you save."
+      title={t('team.roles.dlgTitle', { name: member.fullName })}
+      description={t('team.roles.dlgDesc')}
     >
       <form onSubmit={submit} className="rd-form">
         <RolePicker
-          legend="Roles"
+          legend={t('team.roles.legend')}
           options={roles}
           value={chosen}
           onChange={setChosen}
           disabled={save.isPending}
           lockedKeys={mayTouchOwners ? [] : OWNER_ONLY}
-          lockedNote="Only an owner of this store can make somebody an owner."
+          lockedNote={t('team.roles.lockedChange')}
         />
         {error !== null ? (
           <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
@@ -325,14 +325,18 @@ function RolesDialog({
         ) : null}
         <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('team.roles.cancel')}
           </Button>
           <AsyncButton
             type="submit"
             variant="primary"
             size="md"
             icon={<ShieldCheck size={15} />}
-            labels={{ idle: 'Save roles', busy: 'Saving…', error: 'Not saved' }}
+            labels={{
+              idle: t('team.roles.save'),
+              busy: t('team.roles.saving'),
+              error: t('team.roles.notSaved'),
+            }}
             state={phaseOf(save.isPending, error)}
             disabled={save.isPending}
           />
@@ -356,6 +360,8 @@ function InvitationRow({
   };
   manage: boolean;
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const toast = useToast();
   const revoke = useRevokeStoreInvitation();
   const resend = useResendStoreInvitation();
@@ -374,8 +380,8 @@ function InvitationRow({
           apart by colour. */}
       <Td className="rd-cell-muted">
         {invitation.expired
-          ? `Expired ${when(invitation.expiresAt)} — never accepted`
-          : when(invitation.expiresAt)}
+          ? t('team.expired', { when: formatDateTime(invitation.expiresAt, locale) })
+          : formatDateTime(invitation.expiresAt, locale)}
       </Td>
       {manage ? (
         <Td align="right">
@@ -390,15 +396,13 @@ function InvitationRow({
                 // Names the dead link: somebody who forwards the first
                 // email after resending is sending a key that no longer
                 // turns, and would have no way to know.
-                toast.success(
-                  `Sent again to ${invitation.email}. The earlier link no longer works.`,
-                );
+                toast.success(t('team.resent', { email: invitation.email }));
               } catch (err) {
-                toast.error(serverVerdict(err));
+                toast.error(verdict(err, t));
               }
             }}
           >
-            {invitation.expired ? 'Send again' : 'Resend'}
+            {invitation.expired ? t('team.sendAgain') : t('team.resend')}
           </Button>
           <Button
             variant="secondary"
@@ -407,22 +411,22 @@ function InvitationRow({
             disabled={revoke.isPending || resend.isPending}
             onClick={() => setConfirming(true)}
           >
-            Withdraw
+            {t('team.withdraw')}
           </Button>
           <ConfirmDialog
             open={confirming}
             onOpenChange={setConfirming}
-            title={`Withdraw the invitation to ${invitation.fullName}?`}
+            title={t('team.withdrawTitle', { name: invitation.fullName })}
             entity={`${invitation.fullName} · ${invitation.email}`}
-            consequence={`The link sent to ${invitation.email} stops working. You can invite them again later.`}
-            confirmLabel="Withdraw invitation"
+            consequence={t('team.withdrawConsequence', { email: invitation.email })}
+            confirmLabel={t('team.withdrawConfirm')}
             destructive
             onConfirm={async () => {
               try {
                 await revoke.mutateAsync({ invitationId: invitation.id });
-                toast.success('Invitation withdrawn.');
+                toast.success(t('team.withdrawn'));
               } catch (err) {
-                toast.error(serverVerdict(err));
+                toast.error(verdict(err, t));
               }
               setConfirming(false);
             }}
@@ -444,6 +448,7 @@ function InviteModal({
   roles: readonly StoreRoleOption[];
   mayGrantOwner: boolean;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const invite = useInviteStoreMember();
   const [email, setEmail] = useState('');
@@ -458,7 +463,7 @@ function InviteModal({
     setError(null);
     try {
       await invite.mutateAsync({ email: email.trim(), fullName: fullName.trim(), roleKeys });
-      toast.success(`Invitation sent to ${email.trim()}.`);
+      toast.success(t('team.inv.sent', { email: email.trim() }));
       setEmail('');
       setFullName('');
       setRoleKeys(['ops']);
@@ -466,7 +471,7 @@ function InviteModal({
     } catch (err) {
       // Verbatim (FE-2): NO_ROLES, EMAIL_ALREADY_REGISTERED,
       // INVITATION_ALREADY_PENDING, OWNER_GRANT_REQUIRES_OWNER…
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
     }
   }
 
@@ -475,13 +480,13 @@ function InviteModal({
       open={open}
       onOpenChange={onOpenChange}
       icon={<UserPlus size={18} />}
-      title="Invite a colleague"
-      description="They get an email with a link to set up their login. It works for 7 days."
+      title={t('team.inv.title')}
+      description={t('team.inv.desc')}
     >
       <form onSubmit={submit} className="rd-form">
         <TextField
           id="invite-name"
-          label="Name"
+          label={t('team.inv.name')}
           icon={<User size={15} />}
           required
           value={fullName}
@@ -490,20 +495,20 @@ function InviteModal({
         <TextField
           id="invite-email"
           type="email"
-          label="Email"
+          label={t('team.inv.email')}
           icon={<Mail size={15} />}
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
         <RolePicker
-          legend="Roles"
+          legend={t('team.roles.legend')}
           options={roles}
           value={roleKeys}
           onChange={setRoleKeys}
           disabled={invite.isPending}
           lockedKeys={mayGrantOwner ? [] : OWNER_ONLY}
-          lockedNote="Only an owner of this store can invite another owner."
+          lockedNote={t('team.inv.lockedOwner')}
         />
         {error !== null ? (
           <RdCallout tone="critical" icon={<CircleAlert size={15} />} role="alert">
@@ -512,14 +517,18 @@ function InviteModal({
         ) : null}
         <DialogFooter>
           <Button type="button" variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('team.inv.cancel')}
           </Button>
           <AsyncButton
             type="submit"
             variant="primary"
             size="md"
             icon={<UserPlus size={15} />}
-            labels={{ idle: 'Send invitation', busy: 'Sending…', error: 'Not sent' }}
+            labels={{
+              idle: t('team.inv.send'),
+              busy: t('team.inv.sending'),
+              error: t('team.inv.notSent'),
+            }}
             state={phaseOf(invite.isPending, error)}
             disabled={invite.isPending}
           />

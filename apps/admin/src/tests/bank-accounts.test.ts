@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { withCatalogEnglish } from './i18n-source';
 
 /**
  * The accounts sellers are told to send money to.
@@ -100,7 +101,7 @@ describe('it gates on what the server enforces', () => {
   it('the list still renders without the write permission', () => {
     // Knowing which account is live is part of reading the top-up queue;
     // only the actions are hidden.
-    expect(PANEL).toContain('{mayManage && <Th align="right">Actions</Th>}');
+    expect(PANEL).toMatch(/\{mayManage && <Th align="right">\{t\('[^']+'\)\}<\/Th>\}/);
     expect(PANEL).not.toMatch(/if \(!mayManage\) return null;/);
   });
 
@@ -116,8 +117,8 @@ describe('retiring says what it does and does not do', () => {
 
   it('the wording promises exactly that', () => {
     // "Delete" would read as though the history went with it.
-    expect(PANEL).toContain('Retire');
-    expect(flat(PANEL)).toContain('Past top-ups keep it');
+    expect(withCatalogEnglish(PANEL)).toContain('Retire');
+    expect(flat(withCatalogEnglish(PANEL))).toContain('Past top-ups keep it');
     expect(PANEL).not.toMatch(/>\s*Delete\s*</);
   });
 });
@@ -125,6 +126,6 @@ describe('retiring says what it does and does not do', () => {
 describe('the empty state states the consequence', () => {
   it('says a client cannot top up at all until one exists', () => {
     // "No accounts" is a fact; this is what the fact costs.
-    expect(flat(PANEL)).toContain('cannot top up at all');
+    expect(flat(withCatalogEnglish(PANEL))).toContain('cannot top up at all');
   });
 });

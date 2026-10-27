@@ -14,6 +14,7 @@ import './courier-accounts.css';
 import { CredentialEnvironment } from '@skydrop/db';
 import { useCouriers, useCreateCourierAccount } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 interface CredField {
   readonly key: number;
@@ -63,6 +64,7 @@ export function CreateCourierAccountModal({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const create = useCreateCourierAccount();
 
@@ -116,7 +118,7 @@ export function CreateCourierAccountModal({
         ...(pickupLocationName === '' ? {} : { pickupLocationName }),
         ...(notes.trim() === '' ? {} : { notes: notes.trim() }),
       });
-      toast.success('Courier account added.');
+      toast.success(t('courierAccountsCreateCourierAccountModal.courierAccountAdded'));
       // Clear immediately on success so the secrets do not sit in
       // component state behind a closed modal.
       reset();
@@ -134,12 +136,12 @@ export function CreateCourierAccountModal({
         if (!next) reset();
       }}
       size="md"
-      title="Add a courier account"
-      description="Credentials are encrypted at rest with a key held in the environment. They are never returned by any endpoint, so keep your own copy."
+      title={t('courierAccountsCreateCourierAccountModal.addACourierAccount')}
+      description={t('courierAccountsCreateCourierAccountModal.credentialsAreEncryptedAtRest')}
       footer={
         <DialogFooter>
           <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('courierAccountsCreateCourierAccountModal.cancel')}
           </Button>
           <Button
             variant="primary"
@@ -153,7 +155,7 @@ export function CreateCourierAccountModal({
             }
             onClick={() => void submit()}
           >
-            Add account
+            {t('courierAccountsCreateCourierAccountModal.addAccount')}
           </Button>
         </DialogFooter>
       }
@@ -162,7 +164,7 @@ export function CreateCourierAccountModal({
         <div className="af-grid-2">
           <TextField
             id="ca-courier"
-            label="Courier code"
+            label={t('courierAccountsCreateCourierAccountModal.courierCode')}
             requiredMark
             value={courierCode}
             onChange={(e) => {
@@ -179,7 +181,7 @@ export function CreateCourierAccountModal({
 
           <Select
             id="ca-env"
-            label="Environment"
+            label={t('courierAccountsCreateCourierAccountModal.environment')}
             requiredMark
             value={environment}
             onChange={(e) => setEnvironment(e.target.value)}
@@ -194,28 +196,27 @@ export function CreateCourierAccountModal({
 
         <TextField
           id="ca-label"
-          label="Label"
+          label={t('courierAccountsCreateCourierAccountModal.label')}
           requiredMark
-          hint="How an operator will tell this account apart from the others."
+          hint={t('courierAccountsCreateCourierAccountModal.howAnOperatorWillTell')}
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          placeholder="Delhivery — primary"
+          placeholder={t('courierAccountsCreateCourierAccountModal.delhiveryPrimary')}
           autoComplete="off"
         />
 
         {credentialless && (
           <Notice tone="info">
-            <p>
-              A manual courier has no API, so there is nothing to authenticate — this account exists
-              so its payouts can be recorded and settled like any other.
-            </p>
+            <p>{t('courierAccountsCreateCourierAccountModal.aManualCourierHasNo')}</p>
           </Notice>
         )}
 
         {/* ── credentials ── */}
         <div className={credentialless ? 'ca-hidden' : 'af-divider af-stack'}>
           <div className="af-row af-row--between">
-            <h3 className="af-title">Credentials</h3>
+            <h3 className="af-title">
+              {t('courierAccountsCreateCourierAccountModal.credentials')}
+            </h3>
             <Button
               variant="ghost"
               size="sm"
@@ -227,7 +228,7 @@ export function CreateCourierAccountModal({
                 ])
               }
             >
-              Add field
+              {t('courierAccountsCreateCourierAccountModal.addField')}
             </Button>
           </div>
 
@@ -235,8 +236,8 @@ export function CreateCourierAccountModal({
             {fields.map((f) => (
               <div key={f.key} className="af-cred-row">
                 <TextField
-                  label="Field name"
-                  aria-label="Credential field name"
+                  label={t('courierAccountsCreateCourierAccountModal.fieldName')}
+                  aria-label={t('courierAccountsCreateCourierAccountModal.credentialFieldName')}
                   value={f.name}
                   onChange={(e) =>
                     setFields((prev) =>
@@ -247,8 +248,8 @@ export function CreateCourierAccountModal({
                   autoComplete="off"
                 />
                 <TextField
-                  label="Value"
-                  aria-label="Credential value"
+                  label={t('courierAccountsCreateCourierAccountModal.value')}
+                  aria-label={t('courierAccountsCreateCourierAccountModal.credentialValue')}
                   type="password"
                   value={f.value}
                   onChange={(e) =>
@@ -262,7 +263,9 @@ export function CreateCourierAccountModal({
                 />
                 <button
                   type="button"
-                  aria-label="Remove this credential field"
+                  aria-label={t(
+                    'courierAccountsCreateCourierAccountModal.removeThisCredentialField',
+                  )}
                   onClick={() =>
                     setFields((prev) =>
                       prev.length === 1 ? prev : prev.filter((x) => x.key !== f.key),
@@ -281,17 +284,17 @@ export function CreateCourierAccountModal({
         <Checkbox
           checked={isDefault}
           onChange={(e) => setIsDefault(e.target.checked)}
-          label="Make this the default for its courier and environment"
-          description="Clients with no explicit link route here. At most one default per pair."
+          label={t('courierAccountsCreateCourierAccountModal.makeThisTheDefaultFor')}
+          description={t('courierAccountsCreateCourierAccountModal.clientsWithNoExplicitLink')}
         />
 
         <TextField
           id="ca-pickup"
-          label="Pickup location name"
-          hint="The warehouse name registered with THIS account at Delhivery. Blank uses the global setting — fine for one account, wrong as soon as there are two."
+          label={t('courierAccountsCreateCourierAccountModal.pickupLocationName')}
+          hint={t('courierAccountsCreateCourierAccountModal.theWarehouseNameRegisteredWith')}
           error={
             pickupLocationName !== pickupLocationName.trim() && pickupLocationName !== ''
-              ? 'Leading or trailing space. Delhivery matches this exactly, so this would not match the registration.'
+              ? t('courierAccountsCreateCourierAccountModal.leadingOrTrailingSpaceDelhivery')
               : undefined
           }
           value={pickupLocationName}
@@ -300,14 +303,19 @@ export function CreateCourierAccountModal({
 
         <TextArea
           id="ca-notes"
-          label="Notes"
-          hint="Optional."
+          label={t('courierAccountsCreateCourierAccountModal.notes')}
+          hint={t('courierAccountsCreateCourierAccountModal.optional')}
           rows={2}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
         />
 
-        {error !== null && <ErrorState title="Not added" message={error} />}
+        {error !== null && (
+          <ErrorState
+            title={t('courierAccountsCreateCourierAccountModal.notAdded')}
+            message={error}
+          />
+        )}
       </div>
     </Dialog>
   );

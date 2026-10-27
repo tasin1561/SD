@@ -6,7 +6,8 @@ import { useState, type ReactElement } from 'react';
 import { MailCheck } from 'lucide-react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
-import { serverVerdict } from '@/lib/server-verdict';
+import { richMessage, useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { AuthNotice } from '../../../login/_components/auth-notice';
 
 /**
@@ -14,6 +15,7 @@ import { AuthNotice } from '../../../login/_components/auth-notice';
  * to inspect them, and a GET that spends a token would be spent by one.
  */
 export function VerifyPanel(): ReactElement {
+  const t = useT();
   const token = useSearchParams().get('token') ?? '';
   const [state, setState] = useState<'idle' | 'working' | 'done'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -30,13 +32,13 @@ export function VerifyPanel(): ReactElement {
       });
       setState('done');
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setState('idle');
     }
   }
 
   if (token === '') {
-    return <AuthNotice tone="neutral">This link is missing its token.</AuthNotice>;
+    return <AuthNotice tone="neutral">{t('common.missingToken')}</AuthNotice>;
   }
   if (state === 'done') {
     return (
@@ -48,13 +50,15 @@ export function VerifyPanel(): ReactElement {
           app actually serves: a plain anchor costs a full document load
           and throws away the client router.
         */}
-        Your email is confirmed. <Link href="/orders">Go to your orders</Link>.
+        {richMessage(t('auth.verify.done'), {
+          link: <Link href="/orders">{t('auth.verify.goOrders')}</Link>,
+        })}
       </AuthNotice>
     );
   }
   return (
     <div className="as-auth-form">
-      <p className="as-auth-text">Confirm that this email address is yours.</p>
+      <p className="as-auth-text">{t('auth.verify.prompt')}</p>
       {error !== null ? (
         <AuthNotice tone="critical" role="alert">
           {error}
@@ -65,7 +69,11 @@ export function VerifyPanel(): ReactElement {
         size="lg"
         fullWidth
         icon={<MailCheck size={15} />}
-        labels={{ idle: 'Confirm my email', busy: 'Confirming…', error: 'Not confirmed' }}
+        labels={{
+          idle: t('auth.verify.confirm'),
+          busy: t('auth.verify.busy'),
+          error: t('auth.verify.notConfirmed'),
+        }}
         state={state === 'working' ? 'busy' : error !== null ? 'error' : 'idle'}
         disabled={state === 'working'}
         onClick={() => void confirm()}

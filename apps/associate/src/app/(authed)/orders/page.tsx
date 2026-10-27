@@ -17,9 +17,11 @@ import { Pagination } from '@skydrop/ui/app/pagination';
 import { chipWords, StatusChip } from '@skydrop/ui/app/status-chip';
 import { EmptyState, ErrorState } from '@skydrop/ui/app/empty-state';
 import { SkeletonRows } from '@skydrop/ui/app/skeleton';
+import { richMessage, useLocale, useT } from '@/i18n/client';
+import { formatDateTime } from '@/i18n/format';
 import { can } from '@/lib/page-access';
 import { seesOwnOnly } from '@/lib/orders-paused';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { useMyOrders } from '@/lib/order-hooks';
 import { LinkButton } from '../_components/parts';
 import '../_components/as.css';
@@ -36,8 +38,9 @@ const STATUSES = Object.values(OrderStatus);
  * their own rows and is not told reads the list as missing orders.
  */
 export default function OrdersPage(): ReactElement {
+  const t = useT();
   return (
-    <Suspense fallback={<SkeletonRows rows={6} cols={5} label="Loading orders" />}>
+    <Suspense fallback={<SkeletonRows rows={6} cols={5} label={t('orders.loading')} />}>
       <OrdersList />
     </Suspense>
   );
@@ -49,6 +52,8 @@ function statusParam(v: string | null): OrderStatus | '' {
 }
 
 function OrdersList(): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const me = useStoreIdentity();
   const router = useRouter();
   const pathname = usePathname();
@@ -86,20 +91,16 @@ function OrdersList(): ReactElement {
   return (
     <div className="as-page">
       <PageHeader
-        title="My orders"
-        subtitle={
-          seesOwnOnly(me)
-            ? 'The orders you placed, and where each one has got to. You see the orders you placed — not the rest of the store’s.'
-            : 'Every order your store has placed, and where each one has got to.'
-        }
+        title={t('orders.title')}
+        subtitle={seesOwnOnly(me) ? t('orders.subtitle.own') : t('orders.subtitle.all')}
         action={
           mayPlace ? (
             <div className="as-row">
               <LinkButton href="/orders/import" variant="ghost" icon={<Upload size={15} />}>
-                Upload a CSV
+                {t('orders.uploadCsv')}
               </LinkButton>
               <LinkButton href="/orders/new" variant="primary">
-                New order
+                {t('orders.newOrder')}
               </LinkButton>
             </div>
           ) : undefined
@@ -108,11 +109,11 @@ function OrdersList(): ReactElement {
 
       <section className="as-section">
         <SectionHeading
-          title="Orders"
+          title={t('orders.section')}
           note={
             list.data === undefined
               ? undefined
-              : `${list.data.items.length} of ${list.data.total} shown`
+              : t('orders.shown', { shown: list.data.items.length, total: list.data.total })
           }
         />
 
@@ -131,16 +132,16 @@ function OrdersList(): ReactElement {
               }}
             >
               <TextField
-                label="Search"
-                aria-label="Search orders"
-                placeholder="Order, reference, customer or waybill"
+                label={t('orders.search')}
+                aria-label={t('orders.searchAria')}
+                placeholder={t('orders.searchPlaceholder')}
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 trail={
                   <button
                     type="submit"
-                    aria-label="Search"
-                    title="Search"
+                    aria-label={t('orders.search')}
+                    title={t('orders.search')}
                     /* `skydrop-hit` gives a hand-rolled icon button the same 44px
                        coarse-pointer tap area the Button primitive has: a ::after
                        box that changes the hit target and not the layout. Without
@@ -156,15 +157,15 @@ function OrdersList(): ReactElement {
           </FilterField>
           <FilterField>
             <Select
-              label="Status"
-              aria-label="Filter by status"
+              label={t('orders.status')}
+              aria-label={t('orders.filterByStatus')}
               value={status}
               onChange={(e) => go({ status: statusParam(e.target.value), page: 1 })}
             >
-              <option value="">All statuses</option>
+              <option value="">{t('orders.allStatuses')}</option>
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {chipWords(statusLabel(s))}
+                  {chipWords(statusLabel(s, locale))}
                 </option>
               ))}
             </Select>
@@ -172,38 +173,38 @@ function OrdersList(): ReactElement {
         </FilterBar>
 
         {list.isPending ? (
-          <SkeletonRows rows={6} cols={5} label="Loading orders" />
+          <SkeletonRows rows={6} cols={5} label={t('orders.loading')} />
         ) : list.isError ? (
-          <ErrorState message={serverVerdict(list.error)} retry={() => void list.refetch()} />
+          <ErrorState message={verdict(list.error, t)} retry={() => void list.refetch()} />
         ) : list.data.items.length === 0 ? (
           <EmptyState
             icon={<Package size={20} />}
-            title={!filtered ? 'No orders yet' : 'Nothing matches'}
+            title={!filtered ? t('orders.empty.none') : t('orders.empty.noMatch')}
             description={
               !filtered
                 ? mayPlace
-                  ? 'Place your first order, or upload a CSV of them.'
-                  : 'The orders you place will appear here.'
-                : 'Try clearing the search or the status filter.'
+                  ? t('orders.empty.firstOrder')
+                  : t('orders.empty.willAppear')
+                : t('orders.empty.clear')
             }
             action={
               !filtered && mayPlace ? (
                 <LinkButton href="/orders/new" variant="primary">
-                  New order
+                  {t('orders.newOrder')}
                 </LinkButton>
               ) : undefined
             }
           />
         ) : (
           <div className="as-card" data-flush="1">
-            <Table caption="My orders">
+            <Table caption={t('orders.table.caption')}>
               <THead>
                 <Tr>
-                  <Th>Order</Th>
-                  <Th>Customer</Th>
-                  <Th>Status</Th>
-                  <Th align="right">To collect</Th>
-                  <Th>Placed</Th>
+                  <Th>{t('orders.col.order')}</Th>
+                  <Th>{t('orders.col.customer')}</Th>
+                  <Th>{t('orders.col.status')}</Th>
+                  <Th align="right">{t('orders.col.collect')}</Th>
+                  <Th>{t('orders.col.placed')}</Th>
                 </Tr>
               </THead>
               <TBody>
@@ -215,7 +216,9 @@ function OrdersList(): ReactElement {
                       </Link>
                       {o.sellerOrderRef !== null && o.sellerOrderRef !== '' ? (
                         <span className="as-sub">
-                          ref <span className="sk-ident">{o.sellerOrderRef}</span>
+                          {richMessage(t('orders.ref'), {
+                            ref: <span className="sk-ident">{o.sellerOrderRef}</span>,
+                          })}
                         </span>
                       ) : null}
                     </Td>
@@ -230,23 +233,20 @@ function OrdersList(): ReactElement {
                     <Td>
                       <StatusChip
                         kind={orderStatusKind(o.status)}
-                        label={statusLabel(o.status)}
+                        label={statusLabel(o.status, locale)}
                         size="sm"
                       />
                     </Td>
                     <Td align="right">
                       {o.codAmountInr === null ? (
-                        <span className="as-sub">Prepaid</span>
+                        <span className="as-sub">{t('orders.prepaid')}</span>
                       ) : (
                         <Money amount={o.codAmountInr} convert={false} />
                       )}
                     </Td>
                     <Td>
                       <span className="sk-figure as-muted">
-                        {new Date(o.placedAt).toLocaleString('en-IN', {
-                          dateStyle: 'medium',
-                          timeStyle: 'short',
-                        })}
+                        {formatDateTime(o.placedAt, locale)}
                       </span>
                     </Td>
                   </Tr>
@@ -259,7 +259,7 @@ function OrdersList(): ReactElement {
                 pageSize={PAGE_SIZE}
                 total={list.data.total}
                 onPageChange={(p) => go({ page: p })}
-                label="Order pages"
+                label={t('orders.pages')}
               />
             </div>
           </div>

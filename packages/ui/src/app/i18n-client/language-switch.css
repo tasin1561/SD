@@ -1,0 +1,47 @@
+/* Language switch: English | বাংলা. A pill track; the chosen option is filled.
+   Colour only changes (no transform), so nothing shifts when it is toggled;
+   reduced motion simply drops the transition. */
+.sk-langsw {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: var(--r-pill);
+  background: var(--surface-band);
+  box-shadow:
+    inset 0 1px 3px var(--line-strong),
+    inset 0 -1px 0 var(--line);
+}
+.sk-langsw__opt {
+  min-height: calc(var(--tap) - 6px);
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--fg-faint);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out);
+}
+.sk-langsw__opt:hover {
+  color: var(--fg-strong);
+}
+.sk-langsw__opt[aria-checked='true'] {
+  background: var(--accent-fill);
+  color: var(--accent-fg);
+  box-shadow: var(--elev-2);
+}
+.sk-langsw__opt:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-langsw__opt {
+    transition: none;
+  }
+}

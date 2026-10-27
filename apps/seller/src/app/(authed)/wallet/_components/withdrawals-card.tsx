@@ -19,8 +19,11 @@ import {
   useSellerWithdrawals,
   useWithdrawalEligibility,
 } from '@/lib/ops-hooks';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { WalCallout } from './wallet-parts';
+import { useT, useLocale } from '@/i18n/client';
+import { richMessage } from '@/i18n/rich';
+import { dateTag } from '@/i18n/format';
 
 /**
  * Withdrawal requests, on the wallet page because that is where the balance
@@ -49,6 +52,8 @@ export function WithdrawalsCard({
   readonly requesting: boolean;
   readonly onRequestingChange: (open: boolean) => void;
 }): ReactElement {
+  const locale = useLocale();
+  const t = useT();
   const list = useSellerWithdrawals();
   const rows = list.data ?? [];
 
@@ -60,15 +65,15 @@ export function WithdrawalsCard({
     <>
       {list.isError ? (
         <ErrorState
-          message={list.error?.message ?? 'Failed to load withdrawal requests.'}
+          message={list.error?.message ?? t('wallet.failedToLoadWithdrawal')}
           retry={() => void list.refetch()}
         />
       ) : list.isLoading ? (
-        <SkeletonRows rows={3} cols={4} label="Loading withdrawal requests…" />
+        <SkeletonRows rows={3} cols={4} label={t('wallet.loadingWithdrawalRequests')} />
       ) : rows.length === 0 ? (
         <EmptyState
-          title="No withdrawal requests yet."
-          description="Request one when you want your balance transferred; we will pay it to the bank account on your profile."
+          title={t('wallet.noWithdrawalRequestsYet')}
+          description={t('wallet.requestOneWhenYou')}
           action={
             <Button
               variant="primary"
@@ -76,27 +81,27 @@ export function WithdrawalsCard({
               icon={<HandCoins size={15} />}
               onClick={() => onRequestingChange(true)}
             >
-              Request a withdrawal
+              {t('wallet.requestAWithdrawal')}
             </Button>
           }
         />
       ) : (
-        <Table caption="Withdrawal requests">
+        <Table caption={t('wallet.withdrawalRequests')}>
           <THead>
             <Tr>
-              <Th>Requested</Th>
-              <Th align="right">Amount</Th>
-              <Th>Status</Th>
-              <Th>Outcome</Th>
+              <Th>{t('wallet.requested')}</Th>
+              <Th align="right">{t('wallet.amount')}</Th>
+              <Th>{t('wallet.status')}</Th>
+              <Th>{t('wallet.outcome')}</Th>
             </Tr>
           </THead>
           <TBody>
             {rows.map((w) => (
               <Tr key={w.id}>
                 <Td className="wal-when sk-figure">
-                  {new Date(w.createdAt).toLocaleDateString()}
+                  {new Date(w.createdAt).toLocaleDateString(dateTag(locale))}
                   <div className="wal-faint">
-                    {new Date(w.createdAt).toLocaleTimeString([], {
+                    {new Date(w.createdAt).toLocaleTimeString(dateTag(locale, []), {
                       hour: '2-digit',
                       minute: '2-digit',
                     })}
@@ -109,18 +114,20 @@ export function WithdrawalsCard({
                 <Td>
                   <StatusChip
                     kind={withdrawalStatusKind(w.status)}
-                    label={withdrawalStatusLabel(w.status, 'seller')}
+                    label={withdrawalStatusLabel(w.status, 'seller', locale)}
                     size="sm"
                   />
                 </Td>
                 <Td className="wal-faint">
                   {w.rejectionReason ??
                     (w.resolvedAt === null
-                      ? 'Awaiting review'
-                      : `Paid ${new Date(w.resolvedAt).toLocaleString([], {
-                          dateStyle: 'short',
-                          timeStyle: 'short',
-                        })}`)}
+                      ? t('wallet.awaitingReview')
+                      : t('wallet.paidAt', {
+                          when: new Date(w.resolvedAt).toLocaleString(dateTag(locale, []), {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
+                          }),
+                        }))}
                 </Td>
               </Tr>
             ))}
@@ -140,6 +147,7 @@ function RequestWithdrawalModal({
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const request = useRequestWithdrawal();
   const eligibility = useWithdrawalEligibility();
@@ -176,11 +184,11 @@ function RequestWithdrawalModal({
         ...(note.trim() === '' ? {} : { note: note.trim() }),
       });
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       // Rethrown so the confirm screen stays open with the verdict on it.
       throw err;
     }
-    toast.success('Withdrawal requested.');
+    toast.success(t('wallet.withdrawalRequested'));
     setAmount('');
     setNote('');
     setConfirming(false);
@@ -203,12 +211,12 @@ function RequestWithdrawalModal({
         }}
         size="sm"
         icon={<HandCoins size={18} />}
-        title="Request a withdrawal"
-        description="We will review this and transfer to the bank account on your profile. Your balance changes when the transfer is recorded, not when you request it."
+        title={t('wallet.requestAWithdrawal')}
+        description={t('wallet.weWillReviewThis')}
         footer={
           <DialogFooter>
             <Button variant="secondary" size="md" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t('wallet.cancel')}
             </Button>
             <Button
               variant="primary"
@@ -219,7 +227,7 @@ function RequestWithdrawalModal({
                 setConfirming(true);
               }}
             >
-              Request withdrawal
+              {t('wallet.requestWithdrawal')}
             </Button>
           </DialogFooter>
         }
@@ -233,8 +241,9 @@ function RequestWithdrawalModal({
           {eligibility.data?.hasBankAccount === false && (
             <WalCallout tone="critical" icon={<OctagonAlert size={16} />}>
               <p>
-                Add your bank details before requesting a withdrawal — without them there is nowhere
-                for us to send the money. <Link href="/profile">Go to your profile</Link>.
+                {richMessage(t('wallet.addYourBankDetails'), {
+                  link: <Link href="/profile">{t('wallet.goToYourProfile')}</Link>,
+                })}
               </p>
             </WalCallout>
           )}
@@ -246,7 +255,7 @@ function RequestWithdrawalModal({
           {eligibility.data !== undefined && (
             <div className="wal-avail">
               <div className="wal-avail__head">
-                <span>Available to withdraw:</span>
+                <span>{t('wallet.availableToWithdraw')}</span>
                 <span className="wal-avail__figure sk-figure">
                   <Money amount={eligibility.data.withdrawableInr} currency="INR" convert={false} />
                 </span>
@@ -255,14 +264,14 @@ function RequestWithdrawalModal({
                   refusal is never a surprise. */}
               <dl className="wal-avail__rows">
                 <div className="wal-avail__row">
-                  <dt>Balance</dt>
+                  <dt>{t('wallet.balance')}</dt>
                   <dd className="sk-figure">
                     <Money amount={eligibility.data.balanceInr} currency="INR" convert={false} />
                   </dd>
                 </div>
                 {Number(eligibility.data.minimumBalanceInr) > 0 && (
                   <div className="wal-avail__row">
-                    <dt>Must stay in the account</dt>
+                    <dt>{t('wallet.mustStayInThe')}</dt>
                     <dd className="sk-figure">
                       <Money
                         amount={eligibility.data.minimumBalanceInr}
@@ -278,7 +287,7 @@ function RequestWithdrawalModal({
                     the same rupees go out twice. */}
                 {Number(eligibility.data.pendingWithdrawalInr) > 0 && (
                   <div className="wal-avail__row">
-                    <dt>On hold for a withdrawal you already requested</dt>
+                    <dt>{t('wallet.onHoldForA')}</dt>
                     <dd className="sk-figure">
                       <Money
                         amount={eligibility.data.pendingWithdrawalInr}
@@ -306,7 +315,7 @@ function RequestWithdrawalModal({
           */}
           <TextField
             id="wd-amount"
-            label="Amount (₹)"
+            label={t('wallet.amount2')}
             requiredMark
             inputMode="decimal"
             value={amount}
@@ -317,14 +326,16 @@ function RequestWithdrawalModal({
 
           <TextArea
             id="wd-note"
-            label="Note"
-            hint="Optional."
+            label={t('wallet.note')}
+            hint={t('wallet.optional')}
             rows={2}
             value={note}
             onChange={(e) => setNote(e.target.value)}
           />
 
-          {error !== null && !confirming && <ErrorState title="Not requested" message={error} />}
+          {error !== null && !confirming && (
+            <ErrorState title={t('wallet.notRequested')} message={error} />
+          )}
         </div>
       </Dialog>
 
@@ -334,8 +345,8 @@ function RequestWithdrawalModal({
           setConfirming(next);
           if (!next) setError(null);
         }}
-        title="Request this withdrawal?"
-        entity="To the bank account on your profile"
+        title={t('wallet.requestThisWithdrawal')}
+        entity={t('wallet.toTheBankAccount')}
         amount={
           Number.isFinite(typed) ? (
             <Money amount={amount.trim()} currency="INR" convert={false} size="md" />
@@ -343,13 +354,15 @@ function RequestWithdrawalModal({
             amount.trim()
           )
         }
-        consequence="We review the request and transfer it to that account. Your balance changes when the transfer is recorded, not now."
-        confirmLabel="Request withdrawal"
-        cancelLabel="Back"
+        consequence={t('wallet.weReviewTheRequest')}
+        confirmLabel={t('wallet.requestWithdrawal')}
+        cancelLabel={t('wallet.back')}
         onConfirm={submit}
         error={error}
       >
-        {note.trim() !== '' && <p className="wal-muted">Your note: {note.trim()}</p>}
+        {note.trim() !== '' && (
+          <p className="wal-muted">{richMessage(t('wallet.yourNote'), { note: note.trim() })}</p>
+        )}
       </ConfirmDialog>
     </>
   );

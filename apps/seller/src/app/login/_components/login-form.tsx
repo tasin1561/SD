@@ -5,6 +5,7 @@ import { AccessTokenStore, ApiClient, ApiError } from '@skydrop/api-client';
 import { TextField } from '@skydrop/ui/app/text-field';
 import { PasswordField } from '@skydrop/ui/app/password-field';
 import { Button } from '@skydrop/ui/app/button';
+import { useT } from '@/i18n/client';
 
 /**
  * Login form. The login page isn't wrapped in an AuthProvider (the
@@ -30,6 +31,7 @@ import { Button } from '@skydrop/ui/app/button';
  * spec finds it by that name.
  */
 export function LoginForm(): ReactElement {
+  const t = useT();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -49,15 +51,15 @@ export function LoginForm(): ReactElement {
       window.location.assign('/dashboard');
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        setError('Invalid email or password.');
+        setError(t('login.invalidEmailOrPassword'));
       } else if (err instanceof ApiError && err.status === 403) {
         // Seller-specific: SUSPENDED/PENDING/REJECTED accounts get a
         // 403 from /me. Surface the server's intent verbatim (FE-2).
-        setError(err.message || 'Account not active. Contact support.');
+        setError(err.message || t('login.accountNotActiveContact'));
       } else if (err instanceof ApiError && err.status === 429) {
-        setError('Too many attempts. Try again in a few minutes.');
+        setError(t('login.tooManyAttemptsTry'));
       } else {
-        setError('Sign-in failed. Please try again.');
+        setError(t('login.signInFailedPlease'));
       }
       setSubmitting(false);
     }
@@ -74,7 +76,7 @@ export function LoginForm(): ReactElement {
       <TextField
         id="email"
         type="email"
-        label="Email"
+        label={t('login.email')}
         autoComplete="email"
         required
         value={email}
@@ -83,7 +85,7 @@ export function LoginForm(): ReactElement {
       />
       <PasswordField
         id="password"
-        label="Password"
+        label={t('login.password')}
         autoComplete="current-password"
         required
         value={password}
@@ -96,7 +98,7 @@ export function LoginForm(): ReactElement {
         </div>
       )}
       <Button type="submit" size="lg" fullWidth loading={submitting}>
-        Sign in
+        {t('login.signIn')}
       </Button>
     </form>
   );

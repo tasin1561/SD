@@ -4,7 +4,8 @@ import type { ReactElement, ReactNode } from 'react';
 import { CircleAlert, TriangleAlert } from 'lucide-react';
 import { Switch } from '@skydrop/ui/app/switch';
 import { useToast } from '@skydrop/ui/app/toast';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { usePauseAssociateOrders, type AssociateSummary, type Rate } from '@/lib/associate-hooks';
 import './associates.css';
 
@@ -70,6 +71,7 @@ export function AssociateCoverage({
   readonly sellable: number;
   readonly outOfRange: number;
 }): ReactElement {
+  const t = useT();
   return (
     <div className="as-product">
       {/* The icon is not decoration: the chip's colour is the only other
@@ -78,22 +80,24 @@ export function AssociateCoverage({
           says the same thing in words. */}
       <span className="as-count sk-figure" data-tone={missing > 0 ? 'warn' : undefined}>
         {missing > 0 ? <TriangleAlert size={12} className="as-count__icon" aria-hidden /> : null}
-        {priced} of {sellable}
+        {t('assoc.cov.priced', { priced, sellable })}
       </span>
       <span className="as-coverage">
         {sellable === 0
           ? // Your seller has turned nothing on for this store, so there is
             // nothing an associate could be priced for. Saying "priced for
             // everything" here would read as a clean bill of health.
-            'Your client sells nothing through this store yet'
+            t('assoc.cov.nothing')
           : missing === 0
-            ? 'Priced for everything this store sells'
-            : `${missing} product${missing === 1 ? '' : 's'} they cannot sell yet`}
+            ? t('assoc.cov.all')
+            : t(missing === 1 ? 'assoc.cov.missing.one' : 'assoc.cov.missing.other', {
+                n: missing,
+              })}
       </span>
       {outOfRange > 0 ? (
         <span className="as-count" data-tone="bad">
           <CircleAlert size={12} className="as-count__icon" aria-hidden />
-          {outOfRange} price{outOfRange === 1 ? '' : 's'} outside the client’s range
+          {t(outOfRange === 1 ? 'assoc.cov.out.one' : 'assoc.cov.out.other', { n: outOfRange })}
         </span>
       ) : null}
     </div>
@@ -118,6 +122,7 @@ export function AssociatePauseSwitch({
 }: {
   readonly associate: Pick<AssociateSummary, 'storeUserId' | 'fullName' | 'ordersPausedAt'>;
 }): ReactElement {
+  const t = useT();
   const toast = useToast();
   const pause = usePauseAssociateOrders();
   const canPlace = associate.ordersPausedAt === null;
@@ -125,25 +130,21 @@ export function AssociatePauseSwitch({
     <Switch
       checked={canPlace}
       disabled={pause.isPending}
-      onText="On"
-      offText="Off"
-      label="Can place orders"
-      description={
-        canPlace
-          ? 'Switch off and they place no new orders. Everything already placed carries on.'
-          : 'They place no new orders. Orders already placed carry on, and they can still follow and chase them.'
-      }
+      onText={t('assoc.switch.on')}
+      offText={t('assoc.switch.off')}
+      label={t('assoc.switch.label')}
+      description={canPlace ? t('assoc.switch.descOn') : t('assoc.switch.descOff')}
       onCheckedChange={(next) => {
         void (async () => {
           try {
             await pause.mutateAsync({ storeUserId: associate.storeUserId, paused: !next });
             toast.success(
               next
-                ? `${associate.fullName} can place orders again.`
-                : `${associate.fullName} places no new orders. Everything already placed carries on.`,
+                ? t('assoc.switch.toastOn', { name: associate.fullName })
+                : t('assoc.switch.toastOff', { name: associate.fullName }),
             );
           } catch (err) {
-            toast.error(serverVerdict(err));
+            toast.error(verdict(err, t));
           }
         })();
       }}

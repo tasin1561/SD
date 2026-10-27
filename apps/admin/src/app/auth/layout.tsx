@@ -1,6 +1,7 @@
 import type { ReactNode, ReactElement } from 'react';
 import { SignInFrame } from '@skydrop/ui/app/sign-in';
-import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
+import { PrefsControl } from '@/components/prefs-control';
+import { getT } from '@/i18n/server';
 
 /**
  * Everything under /auth — reset password, verify email, accept
@@ -8,9 +9,14 @@ import { ThemeSwitch } from '@skydrop/ui/app/theme-switch';
  * signed in. Same shell as /login, for the same reason: it is the
  * product's front door.
  */
-export default function AuthLayout({ children }: { children: ReactNode }): ReactElement {
+export default async function AuthLayout({
+  children,
+}: {
+  children: ReactNode;
+}): Promise<ReactElement> {
+  const { t } = await getT();
   return (
-    <SignInFrame portal="operations console" themeControl={<ThemeSwitch />}>
+    <SignInFrame portal={t('shell.portal')} themeControl={<PrefsControl />}>
       {children}
     </SignInFrame>
   );

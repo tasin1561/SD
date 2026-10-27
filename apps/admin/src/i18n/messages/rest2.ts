@@ -1,0 +1,137 @@
+import { defineMessages } from '../define';
+
+export const rest2 = defineMessages({
+  'bankChangesBankChangesIndex.nothingVisiblyDifferentReadThe': [
+    'nothing visibly different — read the note below',
+    'দৃশ্যত কোনো পার্থক্য নেই — নিচের নোট পড়ুন',
+  ],
+  'bankChangesBankChangesIndex.ofFieldsChanged': [
+    '{size} of {length} fields changed',
+    '{length}টি ঘরের মধ্যে {size}টি বদলেছে',
+  ],
+  'bankChangesBankChangesIndex.submitted': [
+    'Submitted {value} · {value2}',
+    'জমা দেওয়া হয়েছে {value} · {value2}',
+  ],
+  'bankChangesBankChangesIndex.payIntoTheNewAccount': [
+    'Pay {value} into the new account?',
+    'নতুন অ্যাকাউন্টে {value} পরিশোধ করবেন?',
+  ],
+  'costSyncShiprocketCostSection.theCheckFailed': ['the check failed', 'পরীক্ষা ব্যর্থ হয়েছে'],
+  'costSyncShiprocketCostSection.runsAreRefused': [
+    '{route} Runs are refused: {value}.',
+    '{route} রান প্রত্যাখ্যাত: {value}।',
+  ],
+  'courierAccountsCourierMasterSwitches.takingNewParcels': [
+    'taking new parcels',
+    'নতুন পার্সেল নিচ্ছে',
+  ],
+  'courierAccountsCourierMasterSwitches.offForNewParcels2': [
+    'off for new parcels',
+    'নতুন পার্সেলের জন্য বন্ধ',
+  ],
+  'courierAccountsCourierMasterSwitches.isNow': ['{name} is now {value}.', '{name} এখন {value}।'],
+  'dashboardDashboardView.queueNeeds': ['queue needs', 'কিউ দরকার'],
+  'dashboardDashboardView.queuesNeed': ['queues need', 'কিউ দরকার'],
+  'dashboardDashboardView.staffAttention': [
+    '{needingAttention} {value} staff attention',
+    '{needingAttention}টি {value} স্টাফের মনোযোগ',
+  ],
+  'delhiveryAccountSetupPanel.reachedDelhiveryIs': [
+    'Reached Delhivery. {value} is {value2}.',
+    'Delhivery-তে পৌঁছেছে। {value} {value2}।',
+  ],
+  'delhiveryTrackingPollPanel.lessThanAMinute': ['less than a minute', 'এক মিনিটেরও কম'],
+  'delhiveryTrackingPollPanel.lastCycleAgoScheduled': [
+    'Last cycle {value} ago. Scheduled {value2}.',
+    'সর্বশেষ চক্র {value} আগে। নির্ধারিত {value2}।',
+  ],
+  'ordersAdminRequestReturnDialog.pickup': [
+    ' · pickup {reverseAwbNumber}',
+    ' · পিকআপ {reverseAwbNumber}',
+  ],
+  'ordersAdminRequestReturnDialog.returnBookedFor': [
+    'Return booked for {orderNumber}{value}.',
+    '{orderNumber}-এর জন্য রিটার্ন বুক হয়েছে{value}।',
+  ],
+  'rolesRolesIndex.thisRole2': ['this role', 'এই ভূমিকা'],
+  'rolesRolesIndex.delete2': ['Delete {value}?', '{value} মুছবেন?'],
+  'staffInviteStaffModal.theRoleListDidNot': [
+    'The role list did not load, so there is nothing to choose from. {value}',
+    'ভূমিকার তালিকা লোড হয়নি, তাই বেছে নেওয়ার কিছু নেই। {value}',
+  ],
+  'staffStaffManagementIndex.rolesCouldNotBeLoaded': [
+    'Roles could not be loaded, so they cannot be changed here. {value}',
+    'ভূমিকা লোড করা যায়নি, তাই এখানে বদলানো যায় না। {value}',
+  ],
+  'treasuryOwnerMoneyModal.addsThisTo': ['Adds this to', 'এতে যোগ করে'],
+  'treasuryOwnerMoneyModal.takesThisFrom': ['Takes this from', 'এ থেকে নেয়'],
+  'treasuryOwnerMoneyModal.ourOwnMoneyInOn': [
+    '{value} our own {currency} money in {accountLabel} on {onLabel}, as owner equity — never counted as income or an expense.',
+    '{value} {accountLabel}-এ {onLabel} তারিখে আমাদের নিজস্ব {currency} অর্থ, মালিকের ইকুইটি হিসেবে — আয় বা খরচ হিসেবে কখনো গোনা হয় না।',
+  ],
+  'treasuryReconcileModal.markedAsTheOpeningBalance': [
+    ', marked as the opening balance',
+    ', প্রারম্ভিক ব্যালান্স হিসেবে চিহ্নিত',
+  ],
+  'treasuryReconcileModal.postsTheDifferenceAsA2': [
+    'Posts the {currency} difference as a new entry against {ownerWords} in {accountLabel}{value}; nothing is overwritten.',
+    '{accountLabel}-এ {ownerWords}-এর বিপরীতে {currency} পার্থক্যটি একটি নতুন এন্ট্রি হিসেবে পোস্ট করে{value}; কিছুই ওভাররাইট হয় না।',
+  ],
+  'treasuryTransferModal.thisAccount': ['This account', 'এই অ্যাকাউন্ট'],
+  'treasuryTransferModal.holdsForThemATransfer': [
+    '{value} holds {heldHere} {value2} for them. A transfer cannot move more than that.',
+    '{value}-এ তাঁদের জন্য {heldHere} {value2} ধরা আছে। একটি ট্রান্সফার এর চেয়ে বেশি সরাতে পারে না।',
+  ],
+  'treasuryTransferModal.theReceivingAccount': ['the receiving account', 'গ্রহণকারী অ্যাকাউন্ট'],
+  'treasuryTransferModal.ourOwnMoney': ['our own money', 'আমাদের নিজস্ব অর্থ'],
+  'treasuryTransferModal.moneyHeldFor': [
+    'money held for {sellerName}',
+    '{sellerName}-এর জন্য ধরা অর্থ',
+  ],
+  'treasuryTransferModal.recordsLeavingAndArrivingIn': [
+    'Records {value} leaving {value2} and {value3} arriving in {value4} on {whenLabel}, as {value5}; both balances change at once.',
+    '{whenLabel} তারিখে {value} {value2} ছেড়ে {value3} {value4}-এ পৌঁছানো রেকর্ড করে, {value5} হিসেবে; দুই ব্যালান্সই একসাথে বদলায়।',
+  ],
+  'warehouseBinsBinOpsPanel.theDestinationBin': ['the destination bin', 'গন্তব্য বিন'],
+  'warehouseBinsBinOpsPanel.movedUnitSAcrossLine': [
+    'Moved {unitsMoved} unit(s) across {linesMoved} line(s) into {value}.',
+    '{linesMoved}টি লাইনে {unitsMoved}টি ইউনিট {value}-এ সরানো হয়েছে।',
+  ],
+  'warehouseBinsBinOpsPanel.thisBin': ['this bin', 'এই বিন'],
+  'warehouseBinsBinOpsPanel.moveEverythingIn': [
+    'Move everything in {value}?',
+    '{value}-এর সবকিছু সরাবেন?',
+  ],
+  'warehouseConsignmentsIdLabelReprintRequests.theRequester': ['the requester', 'অনুরোধকারী'],
+  'warehouseConsignmentsIdLabelReprintRequests.approvedCanPrintItNow': [
+    'Approved — {value} can print it now',
+    'অনুমোদিত — {value} এটি ছাপতে পারেন',
+  ],
+  'warehouseConsignmentsIdLabelReprintRequests.thePersonWhoAsked2': [
+    'The person who asked',
+    'যিনি অনুরোধ করেছেন',
+  ],
+  'warehouseConsignmentsIdLabelReprintRequests.canThenPrintTheseLabels': [
+    "{value} can then print these labels once, and each reprint is recorded on the unit's own ledger.",
+    '{value} তখন এই লেবেলগুলো একবার ছাপতে পারেন, এবং প্রতিটি রিপ্রিন্ট ইউনিটের নিজস্ব খতিয়ানে রেকর্ড হয়।',
+  ],
+  'warehouseManifestsMoveShipmentPanel.wasAlreadyOnThatManifest': [
+    '{value} was already on that manifest — nothing changed.',
+    '{value} ইতিমধ্যে ওই ম্যানিফেস্টে ছিল — কিছুই বদলায়নি।',
+  ],
+  'warehouseManifestsMoveShipmentPanel.movedOff': [
+    '{value} moved off {manifestNumber}.',
+    '{value} {manifestNumber} থেকে সরানো হয়েছে।',
+  ],
+  'phoneToCall.phoneNumber': ['phone number', 'ফোন নম্বর'],
+  'phoneToCall.copy': ['Copy {value} {value2}', '{value} {value2} কপি করুন'],
+  'settingGuideUi.switchedOffForNewParcels': [
+    ' (switched off for new parcels right now)',
+    ' (এখন নতুন পার্সেলের জন্য বন্ধ)',
+  ],
+  'settingGuideUi.newParcelsAreBookedWith': [
+    'New parcels are booked with {name}{value}.',
+    'নতুন পার্সেল {name}{value}-এ বুক হয়',
+  ],
+});

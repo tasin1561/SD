@@ -3,6 +3,7 @@
 import { useState, type ReactElement } from 'react';
 import { Button } from '@skydrop/ui/app/button';
 import { X } from 'lucide-react';
+import { useT } from '@/i18n/client';
 
 /**
  * R4 STRICT — the one serial-capture interaction, shared by pick, pack
@@ -73,6 +74,7 @@ export function SerialScanner({
   autoFocus = false,
   hint,
 }: SerialScannerProps): ReactElement {
+  const t = useT();
   const [code, setCode] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -84,7 +86,7 @@ export function SerialScanner({
     // policy question — de-duplicating the operator's own buffer is not
     // predicting what the server would say about it.
     if (serials.includes(serial)) {
-      setNotice(`${serial} is already in this list.`);
+      setNotice(t('uiSerialScanner.isAlreadyInThisList', { serial }));
       return;
     }
     setNotice(null);
@@ -110,7 +112,7 @@ export function SerialScanner({
           disabled={disabled}
           autoComplete="off"
           autoFocus={autoFocus}
-          placeholder="Scan a unit serial…"
+          placeholder={t('uiSerialScanner.scanAUnitSerial')}
           onChange={(e) => setCode(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -124,7 +126,7 @@ export function SerialScanner({
           className={'sk-figure shrink-0 text-sm ' + (over ? 'text-critical' : 'text-text-bright')}
         >
           {required === undefined ? (
-            <span>{serials.length} captured</span>
+            <span>{t('uiSerialScanner.captured', { length: serials.length })}</span>
           ) : (
             <span>
               <span className="font-semibold">{serials.length}</span> / {required}
@@ -148,7 +150,7 @@ export function SerialScanner({
                   variant="ghost"
                   size="sm"
                   disabled={disabled}
-                  aria-label={`Remove ${serial}`}
+                  aria-label={t('uiSerialScanner.remove', { serial })}
                   onClick={() => remove(serial)}
                   icon={<X size={12} />}
                 />

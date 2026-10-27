@@ -24,6 +24,7 @@ import { usePermissionCatalogue, useRoles } from '@/lib/rbac-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { serverVerdict } from '@/lib/server-verdict';
 import { AcAlert, AcHeader, AcPage, AcSection } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Staff, and which roles each of them holds.
@@ -46,6 +47,7 @@ import { AcAlert, AcHeader, AcPage, AcSection } from '../../settings/_components
  * is what happened before, with nothing on screen saying why.
  */
 export function StaffManagementIndex(): ReactElement {
+  const t = useT();
   const canWrite = usePermission('staff.manage');
   const canReadRoles = usePermission('rbac.manage');
   const users = useStaffUsersList();
@@ -65,14 +67,14 @@ export function StaffManagementIndex(): ReactElement {
   const [error, setError] = useState<string | null>(null);
 
   function fmtError(e: unknown): string {
-    return serverVerdict(e, 'Action failed');
+    return serverVerdict(e, t('staffStaffManagementIndex.actionFailed'));
   }
 
   async function onDeactivate(id: string): Promise<boolean> {
     setError(null);
     try {
       await deactivate.mutateAsync({ id });
-      toast.success('Staff member deactivated.');
+      toast.success(t('staffStaffManagementIndex.staffMemberDeactivated'));
       setPendingDelete(null);
       return true;
     } catch (e) {
@@ -86,7 +88,7 @@ export function StaffManagementIndex(): ReactElement {
     try {
       const reveal = await resend.mutateAsync({ id });
       setRevealed(reveal);
-      toast.success('Invitation re-issued — copy the new link below.');
+      toast.success(t('staffStaffManagementIndex.invitationReIssuedCopyThe'));
     } catch (e) {
       setError(fmtError(e));
     }
@@ -96,7 +98,7 @@ export function StaffManagementIndex(): ReactElement {
     setError(null);
     try {
       await revoke.mutateAsync({ id });
-      toast.success('Invitation revoked.');
+      toast.success(t('staffStaffManagementIndex.invitationRevoked'));
       setPendingRevoke(null);
       return true;
     } catch (e) {
@@ -112,8 +114,8 @@ export function StaffManagementIndex(): ReactElement {
   return (
     <AcPage>
       <AcHeader
-        title="Staff"
-        subtitle="Invite + manage admin / operational users. A person may hold several roles; what they can do is every permission from every role they hold."
+        title={t('staffStaffManagementIndex.staff')}
+        subtitle={t('staffStaffManagementIndex.inviteManageAdminOperationalUsers')}
         action={
           canWrite ? (
             <Button
@@ -122,7 +124,7 @@ export function StaffManagementIndex(): ReactElement {
               icon={<UserPlus size={15} />}
               onClick={() => setInviting(true)}
             >
-              Invite staff
+              {t('staffStaffManagementIndex.inviteStaff')}
             </Button>
           ) : null
         }
@@ -137,38 +139,34 @@ export function StaffManagementIndex(): ReactElement {
       {canWrite && canReadRoles && roles.isError && (
         <AcAlert
           tone="warn"
-          message={`Roles could not be loaded, so they cannot be changed here. ${serverVerdict(
-            roles.error,
-            'The role list did not load.',
-          )}`}
+          message={t('staffStaffManagementIndex.rolesCouldNotBeLoaded', {
+            value: serverVerdict(roles.error, t('staffStaffManagementIndex.theRoleListDidNot')),
+          })}
         />
       )}
       {canWrite && !canReadRoles && (
-        <AcAlert
-          tone="warn"
-          message="You can see the team and invite people, but changing which roles somebody holds needs the “Manage roles and permissions” permission."
-        />
+        <AcAlert tone="warn" message={t('staffStaffManagementIndex.youCanSeeTheTeam')} />
       )}
 
-      <AcSection title="Active staff" flush>
+      <AcSection title={t('staffStaffManagementIndex.activeStaff')} flush>
         {users.isLoading ? (
-          <SkeletonRows rows={4} cols={5} label="Loading staff…" />
+          <SkeletonRows rows={4} cols={5} label={t('staffStaffManagementIndex.loadingStaff')} />
         ) : users.isError ? (
           <ErrorState
-            message={users.error?.message ?? 'Failed.'}
+            message={users.error?.message ?? t('staffStaffManagementIndex.failed')}
             retry={() => void users.refetch()}
           />
         ) : !users.data || users.data.length === 0 ? (
-          <EmptyState bare title="No staff yet." />
+          <EmptyState bare title={t('staffStaffManagementIndex.noStaffYet')} />
         ) : (
-          <Table caption="Active staff">
+          <Table caption={t('staffStaffManagementIndex.activeStaff')}>
             <THead>
               <Tr>
-                <Th>Email</Th>
-                <Th>Roles</Th>
-                <Th>Last login</Th>
-                <Th>Created</Th>
-                <Th align="right">Actions</Th>
+                <Th>{t('staffStaffManagementIndex.email')}</Th>
+                <Th>{t('staffStaffManagementIndex.roles')}</Th>
+                <Th>{t('staffStaffManagementIndex.lastLogin')}</Th>
+                <Th>{t('staffStaffManagementIndex.created')}</Th>
+                <Th align="right">{t('staffStaffManagementIndex.actions')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -177,7 +175,13 @@ export function StaffManagementIndex(): ReactElement {
                   <Td>
                     <span className="ac-inline">
                       <span className="ac-cell-main">{u.emailDisplay}</span>
-                      {u.deletedAt && <StatusChip kind="cancelled" label="Deactivated" size="sm" />}
+                      {u.deletedAt && (
+                        <StatusChip
+                          kind="cancelled"
+                          label={t('staffStaffManagementIndex.deactivated')}
+                          size="sm"
+                        />
+                      )}
                     </span>
                   </Td>
                   <Td>
@@ -188,7 +192,7 @@ export function StaffManagementIndex(): ReactElement {
                       // cannot sign in. Blank would read as "loading".
                       <span className="ac-inline ac-danger-text">
                         <TriangleAlert size={13} aria-hidden />
-                        No roles — cannot sign in
+                        {t('staffStaffManagementIndex.noRolesCannotSignIn')}
                       </span>
                     ) : (
                       <span className="ac-chips">
@@ -225,7 +229,7 @@ export function StaffManagementIndex(): ReactElement {
                               setEditingRoles(u);
                             }}
                           >
-                            Change roles
+                            {t('staffStaffManagementIndex.changeRoles')}
                           </Button>
                         )}
                         {canWrite && (
@@ -238,7 +242,7 @@ export function StaffManagementIndex(): ReactElement {
                               setPendingDelete(u.id);
                             }}
                           >
-                            Deactivate
+                            {t('staffStaffManagementIndex.deactivate')}
                           </Button>
                         )}
                         {!canWrite && <span className="ac-faint">—</span>}
@@ -252,25 +256,25 @@ export function StaffManagementIndex(): ReactElement {
         )}
       </AcSection>
 
-      <AcSection title="Pending invitations" flush>
+      <AcSection title={t('staffStaffManagementIndex.pendingInvitations')} flush>
         {invitations.isLoading ? (
-          <SkeletonRows rows={3} cols={5} label="Loading…" />
+          <SkeletonRows rows={3} cols={5} label={t('staffStaffManagementIndex.loading')} />
         ) : invitations.isError ? (
           <ErrorState
-            message={invitations.error?.message ?? 'Failed.'}
+            message={invitations.error?.message ?? t('staffStaffManagementIndex.failed')}
             retry={() => void invitations.refetch()}
           />
         ) : !invitations.data || invitations.data.items.length === 0 ? (
-          <EmptyState bare title="No invitations yet." />
+          <EmptyState bare title={t('staffStaffManagementIndex.noInvitationsYet')} />
         ) : (
-          <Table caption="Invitations">
+          <Table caption={t('staffStaffManagementIndex.invitations')}>
             <THead>
               <Tr>
-                <Th>Email</Th>
-                <Th>Roles</Th>
-                <Th>Status</Th>
-                <Th>Expires</Th>
-                <Th align="right">Actions</Th>
+                <Th>{t('staffStaffManagementIndex.email')}</Th>
+                <Th>{t('staffStaffManagementIndex.roles')}</Th>
+                <Th>{t('staffStaffManagementIndex.status')}</Th>
+                <Th>{t('staffStaffManagementIndex.expires')}</Th>
+                <Th align="right">{t('staffStaffManagementIndex.actions')}</Th>
               </Tr>
             </THead>
             <TBody>
@@ -296,7 +300,7 @@ export function StaffManagementIndex(): ReactElement {
                         // to revoke it and invite again.
                         <span className="ac-inline ac-danger-text">
                           <TriangleAlert size={13} aria-hidden />
-                          No live roles — grants nothing
+                          {t('staffStaffManagementIndex.noLiveRolesGrantsNothing')}
                         </span>
                       ) : (
                         <span className="ac-chips">
@@ -329,7 +333,7 @@ export function StaffManagementIndex(): ReactElement {
                             icon={<RotateCw size={14} />}
                             onClick={() => void onResend(inv.id)}
                           >
-                            Resend
+                            {t('staffStaffManagementIndex.resend')}
                           </Button>
                           <Button
                             variant="ghost"
@@ -340,7 +344,7 @@ export function StaffManagementIndex(): ReactElement {
                               setPendingRevoke(inv.id);
                             }}
                           >
-                            Revoke
+                            {t('staffStaffManagementIndex.revoke')}
                           </Button>
                         </div>
                       )}
@@ -365,7 +369,9 @@ export function StaffManagementIndex(): ReactElement {
           onSaved={(names) => {
             setEditingRoles(null);
             toast.success(
-              names.length === 0 ? 'Roles updated.' : `Roles updated — now ${names.join(', ')}.`,
+              names.length === 0
+                ? t('staffStaffManagementIndex.rolesUpdated')
+                : t('staffStaffManagementIndex.rolesUpdatedNow', { value: names.join(', ') }),
             );
           }}
         />
@@ -376,10 +382,10 @@ export function StaffManagementIndex(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setPendingDelete(null);
         }}
-        title="Deactivate this staff member?"
+        title={t('staffStaffManagementIndex.deactivateThisStaffMember')}
         entity={deleteUser?.emailDisplay ?? ''}
-        consequence="Their account is deactivated and they can no longer sign in to the console."
-        confirmLabel="Deactivate"
+        consequence={t('staffStaffManagementIndex.theirAccountIsDeactivatedAnd')}
+        confirmLabel={t('staffStaffManagementIndex.deactivate')}
         destructive
         error={error}
         onConfirm={async () => {
@@ -394,10 +400,10 @@ export function StaffManagementIndex(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setPendingRevoke(null);
         }}
-        title="Revoke this invitation?"
+        title={t('staffStaffManagementIndex.revokeThisInvitation')}
         entity={revokeInvite?.email ?? ''}
-        consequence="The invitation link stops working. You can invite them again any time."
-        confirmLabel="Revoke"
+        consequence={t('staffStaffManagementIndex.theInvitationLinkStopsWorking')}
+        confirmLabel={t('staffStaffManagementIndex.revoke')}
         destructive
         error={error}
         onConfirm={async () => {
@@ -413,7 +419,7 @@ export function StaffManagementIndex(): ReactElement {
           onSuccess={(reveal) => {
             setInviting(false);
             setRevealed(reveal);
-            toast.success('Invitation created — share the link below.');
+            toast.success(t('staffStaffManagementIndex.invitationCreatedShareTheLink'));
           }}
         />
       )}

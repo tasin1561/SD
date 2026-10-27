@@ -11,6 +11,7 @@ import { StatusChip } from '@skydrop/ui/app/status-chip';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { AcCard } from '../../settings/_components/ac-parts';
+import { useT } from '@/i18n/client';
 
 /**
  * Inline panel listing pending invitations on the sellers page. Most
@@ -18,6 +19,7 @@ import { AcCard } from '../../settings/_components/ac-parts';
  * shows the list + resend/delete actions.
  */
 export function InvitationsPanel(): ReactElement {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const list = useInvitationsList();
   const canInvite = usePermission('sellers.invite');
@@ -28,7 +30,8 @@ export function InvitationsPanel(): ReactElement {
 
   const pendingCount = list.data?.items.filter((i) => i.status === 'pending').length ?? 0;
   const pendingEmail =
-    list.data?.items.find((i) => i.id === pendingDeleteId)?.email ?? 'This invitation';
+    list.data?.items.find((i) => i.id === pendingDeleteId)?.email ??
+    t('sellersInvitationsPanel.thisInvitation');
 
   return (
     <AcCard flush>
@@ -41,13 +44,15 @@ export function InvitationsPanel(): ReactElement {
         <span className="ac-inline">
           <ChevronRight size={15} className="ac-disclosure__chev" aria-hidden />
           <span>
-            Pending invitations
+            {t('sellersInvitationsPanel.pendingInvitations')}
             {pendingCount > 0 && (
               <span className="ac-disclosure__count sk-figure">({pendingCount})</span>
             )}
           </span>
         </span>
-        <span className="ac-faint">{expanded ? 'Hide' : 'Show'}</span>
+        <span className="ac-faint">
+          {expanded ? t('sellersInvitationsPanel.hide') : t('sellersInvitationsPanel.show')}
+        </span>
       </button>
 
       {expanded && (
@@ -57,7 +62,7 @@ export function InvitationsPanel(): ReactElement {
               <SkeletonRows rows={3} cols={2} />
             </div>
           ) : !list.data || list.data.items.length === 0 ? (
-            <p className="ac-muted ac-row">No invitations yet.</p>
+            <p className="ac-muted ac-row">{t('sellersInvitationsPanel.noInvitationsYet')}</p>
           ) : (
             <ul className="ac-rows">
               {list.data.items.map((inv) => (
@@ -77,7 +82,9 @@ export function InvitationsPanel(): ReactElement {
                         size="sm"
                       />
                       <span className="sk-figure">
-                        Expires {new Date(inv.expiresAt).toISOString().slice(0, 10)}
+                        {t('sellersInvitationsPanel.expires', {
+                          value: new Date(inv.expiresAt).toISOString().slice(0, 10),
+                        })}
                       </span>
                     </div>
                   </div>
@@ -94,15 +101,24 @@ export function InvitationsPanel(): ReactElement {
                               { id: inv.id },
                               {
                                 onSuccess: () =>
-                                  toast.success(`Invitation re-sent to ${inv.email}`),
+                                  toast.success(
+                                    t('sellersInvitationsPanel.invitationReSentTo', {
+                                      email: inv.email,
+                                    }),
+                                  ),
                                 onError: (e) =>
-                                  toast.error(serverVerdict(e, 'Failed to resend invitation.')),
+                                  toast.error(
+                                    serverVerdict(
+                                      e,
+                                      t('sellersInvitationsPanel.failedToResendInvitation'),
+                                    ),
+                                  ),
                               },
                             )
                           }
-                          title="Rotate token + re-send invitation email"
+                          title={t('sellersInvitationsPanel.rotateTokenReSendInvitation')}
                         >
-                          Resend
+                          {t('sellersInvitationsPanel.resend')}
                         </Button>
                       )}
                       {canInvite && (
@@ -111,8 +127,10 @@ export function InvitationsPanel(): ReactElement {
                           size="sm"
                           icon={<Trash2 size={14} />}
                           onClick={() => setPendingDeleteId(inv.id)}
-                          title="Soft-delete invitation"
-                          aria-label={`Delete the invitation to ${inv.email}`}
+                          title={t('sellersInvitationsPanel.softDeleteInvitation')}
+                          aria-label={t('sellersInvitationsPanel.deleteTheInvitationTo', {
+                            email: inv.email,
+                          })}
                         />
                       )}
                     </div>
@@ -129,18 +147,22 @@ export function InvitationsPanel(): ReactElement {
         onOpenChange={(o) => {
           if (!o) setPendingDeleteId(null);
         }}
-        title="Delete invitation?"
+        title={t('sellersInvitationsPanel.deleteInvitation')}
         entity={pendingEmail}
-        consequence="The pending invitation token will be revoked. The invitee can no longer use the email link. You can issue a new invitation any time."
-        confirmLabel="Delete"
+        consequence={t('sellersInvitationsPanel.thePendingInvitationTokenWill')}
+        confirmLabel={t('sellersInvitationsPanel.delete')}
         destructive
         onConfirm={async () => {
           if (pendingDeleteId === null) return;
           try {
             await del.mutateAsync({ id: pendingDeleteId });
-            toast.success('Invitation deleted.');
+            toast.success(t('sellersInvitationsPanel.invitationDeleted'));
           } catch (e) {
-            toast.error(e instanceof Error ? e.message : 'Failed to delete invitation.');
+            toast.error(
+              e instanceof Error
+                ? e.message
+                : t('sellersInvitationsPanel.failedToDeleteInvitation'),
+            );
           }
           setPendingDeleteId(null);
         }}

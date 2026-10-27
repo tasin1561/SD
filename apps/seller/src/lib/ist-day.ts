@@ -1,3 +1,6 @@
+import { dateTag } from '@/i18n/format';
+import type { Locale } from '@skydrop/ui/app/i18n';
+
 /**
  * Business days are INDIAN days (the admin P&L's `ist-day.ts`, for the
  * seller app's reseller reports). India has no daylight saving, so a
@@ -23,8 +26,8 @@ export function lastDays(days: number, now: Date = new Date()): { from: string; 
   return { from: istDay(new Date(now.getTime() - (days - 1) * DAY_MS)), to: istDay(now) };
 }
 
-export function istDateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-IN', {
+export function istDateLabel(iso: string, locale: Locale = 'en'): string {
+  return new Date(iso).toLocaleDateString(dateTag(locale, 'en-IN'), {
     timeZone: 'Asia/Kolkata',
     day: 'numeric',
     month: 'short',

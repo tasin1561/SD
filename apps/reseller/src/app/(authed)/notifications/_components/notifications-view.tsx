@@ -23,6 +23,7 @@ import {
   useNotificationTopics,
   type FeedItem,
 } from '@/lib/notification-hooks';
+import { useLocale, useT } from '@/i18n/client';
 import './notifications.css';
 
 /** The tab id that means "every group" — a group name is never empty. */
@@ -46,6 +47,7 @@ const ALL_GROUPS = '__all';
  * because it answers "nothing found" for something that exists.
  */
 export function NotificationsView(): ReactElement {
+  const t = useT();
   /** Pages accumulate — "load earlier" appends rather than replacing. */
   const [cursor, setCursor] = useState<string | undefined>(undefined);
   const [older, setOlder] = useState<readonly FeedItem[]>([]);
@@ -75,7 +77,7 @@ export function NotificationsView(): ReactElement {
   // starts.
   const byTopic = useMemo(() => {
     const m = new Map<string, { group: string; label: string }>();
-    for (const t of topics.data ?? []) m.set(t.topic, { group: t.group, label: t.label });
+    for (const tp of topics.data ?? []) m.set(tp.topic, { group: tp.group, label: tp.label });
     return m;
   }, [topics.data]);
 
@@ -138,8 +140,8 @@ export function NotificationsView(): ReactElement {
   return (
     <div className="rc-ntf-page">
       <PageHeader
-        title="Notifications"
-        subtitle="Everything sent to you about this store. Clearing one hides it from your list; the record of what was sent is kept."
+        title={t('rntf.title')}
+        subtitle={t('rntf.subtitle')}
         action={
           <div className="rc-ntf-actions">
             <Button
@@ -148,7 +150,7 @@ export function NotificationsView(): ReactElement {
               onClick={() => setConfirmMarkAll(true)}
               disabled={unread === 0}
             >
-              Mark all read
+              {t('rntf.markAllRead')}
             </Button>
             <Button
               variant="ghost"
@@ -156,14 +158,14 @@ export function NotificationsView(): ReactElement {
               onClick={() => setConfirmDismissAll(true)}
               disabled={items.length === 0}
             >
-              Clear all
+              {t('rntf.clearAll')}
             </Button>
             <Link href="/notifications/settings" className={buttonClassName('ghost', 'md')}>
               <span className="sk-btn__fx" aria-hidden />
               <span className="sk-btn__icon" aria-hidden>
                 <Settings2 size={15} />
               </span>
-              <span className="sk-btn__label">Settings</span>
+              <span className="sk-btn__label">{t('rntf.settings')}</span>
             </Link>
           </div>
         }
@@ -171,51 +173,51 @@ export function NotificationsView(): ReactElement {
 
       <section className="rc-ntf-section">
         <SectionHeading
-          title="Inbox"
+          title={t('rntf.inbox')}
           note={
             shown.length === items.length
-              ? `${items.length} ${items.length === 1 ? 'message' : 'messages'}`
-              : `${shown.length} of ${items.length} loaded`
+              ? t(items.length === 1 ? 'rntf.count.one' : 'rntf.count.other', { n: items.length })
+              : t('rntf.shownOfLoaded', { shown: shown.length, total: items.length })
           }
         />
         <TableToolbar
           search={{
             value: query,
             onChange: setQuery,
-            label: 'Filter notifications',
-            placeholder: 'Filter what is loaded…',
+            label: t('rntf.filter.label'),
+            placeholder: t('rntf.filter.placeholder'),
           }}
         />
         <div className="rc-ntf-filters">
           <Tabs
-            label="Kind of notification"
+            label={t('rntf.tabs.label')}
             size="sm"
             items={[
-              { id: ALL_GROUPS, label: 'All', count: items.length },
+              { id: ALL_GROUPS, label: t('rntf.tabs.all'), count: items.length },
               ...tabs.map(([group, count]) => ({ id: group, label: group, count })),
             ]}
             value={tab === '' ? ALL_GROUPS : tab}
             onChange={(id) => setTab(id === ALL_GROUPS ? '' : id)}
           />
           <Checkbox
-            label="Unread only"
+            label={t('rntf.unreadOnly')}
             checked={unreadOnly}
             onChange={(e) => setUnreadOnly(e.target.checked)}
           />
         </div>
 
         {feed.isLoading ? (
-          <SkeletonRows rows={4} cols={2} label="Loading notifications…" />
+          <SkeletonRows rows={4} cols={2} label={t('rntf.loading')} />
         ) : shown.length === 0 ? (
           <EmptyState
             tone={items.length === 0 ? 'positive' : 'neutral'}
-            title={items.length === 0 ? 'Nothing yet' : 'Nothing matches'}
+            title={items.length === 0 ? t('rntf.empty.title') : t('rntf.empty.noMatch')}
             description={
               items.length === 0
-                ? 'Decisions on what you have asked the client, changes to your orders, replies on your tickets and new terms all land here.'
+                ? t('rntf.empty.body')
                 : query.trim() !== '' && more !== null
-                  ? 'Nothing on this page matches. There are older notifications that have not been loaded — load them and try again.'
-                  : 'Nothing here matches that.'
+                  ? t('rntf.empty.olderNotLoaded')
+                  : t('rntf.empty.nothingHere')
             }
           />
         ) : (
@@ -248,7 +250,7 @@ export function NotificationsView(): ReactElement {
                 setCursor(more);
               }}
             >
-              Load earlier
+              {t('rntf.loadEarlier')}
             </Button>
           </div>
         )}
@@ -259,10 +261,10 @@ export function NotificationsView(): ReactElement {
       <ConfirmDialog
         open={confirmMarkAll}
         onOpenChange={setConfirmMarkAll}
-        title="Mark everything read?"
-        entity={`Your list · ${unread} unread loaded${more !== null ? ', more further back' : ''}`}
-        consequence="Every notification in your list is marked read, including any not loaded yet. Nothing is cleared, and you can mark one unread again."
-        confirmLabel="Mark all read"
+        title={t('rntf.markAll.title')}
+        entity={t(more !== null ? 'rntf.markAll.entityMore' : 'rntf.markAll.entity', { n: unread })}
+        consequence={t('rntf.markAll.consequence')}
+        confirmLabel={t('rntf.markAllRead')}
         onConfirm={() =>
           markAll.mutateAsync().then(
             () => undefined,
@@ -273,10 +275,12 @@ export function NotificationsView(): ReactElement {
       <ConfirmDialog
         open={confirmDismissAll}
         onOpenChange={setConfirmDismissAll}
-        title="Clear your whole list?"
-        entity={`Your list · ${items.length} loaded${more !== null ? ', more further back' : ''}`}
-        consequence="Every notification is hidden from your list and cannot be brought back here. The record of what was sent is kept, and anybody else sent the same messages keeps their copies."
-        confirmLabel="Clear all"
+        title={t('rntf.clearAll.title')}
+        entity={t(more !== null ? 'rntf.clearAll.entityMore' : 'rntf.clearAll.entity', {
+          n: items.length,
+        })}
+        consequence={t('rntf.clearAll.consequence')}
+        confirmLabel={t('rntf.clearAll')}
         destructive
         onConfirm={() =>
           dismissAll.mutateAsync().then(
@@ -290,10 +294,10 @@ export function NotificationsView(): ReactElement {
         onOpenChange={(next) => {
           if (!next) setPendingDismiss(null);
         }}
-        title="Clear this from your list?"
+        title={t('rntf.clearOne.title')}
         entity={pendingDismiss === null ? '' : titleOf(pendingDismiss)}
-        consequence="It is hidden from your list and cannot be brought back here. The record of what was sent is kept."
-        confirmLabel="Clear from my list"
+        consequence={t('rntf.clearOne.consequence')}
+        confirmLabel={t('rntf.clearOne.confirm')}
         destructive
         onConfirm={() =>
           pendingDismiss === null
@@ -327,6 +331,8 @@ function Row({
   readonly onUnread: () => Promise<unknown>;
   readonly onDismiss: () => void;
 }): ReactElement {
+  const t = useT();
+  const locale = useLocale();
   const { Icon, tone } = notificationKindStyle(group);
   const isUnread = item.readAt === null;
   // The kind's colours, read from the status tokens by name — never a hex.
@@ -358,8 +364,10 @@ function Row({
             <span className="rc-ntf-item__title" data-unread={isUnread ? '1' : undefined}>
               {item.title ?? label ?? humaniseTopic(item.topic)}
             </span>
-            {isUnread && <span className="rc-ntf-item__new">New</span>}
-            <span className="rc-ntf-item__when sk-figure">{agoLabel(item.createdAt, now)}</span>
+            {isUnread && <span className="rc-ntf-item__new">{t('rntf.row.new')}</span>}
+            <span className="rc-ntf-item__when sk-figure">
+              {agoLabel(item.createdAt, now, locale)}
+            </span>
           </span>
           <span className="rc-ntf-item__text" data-open={expanded ? '1' : undefined}>
             {item.body}
@@ -370,19 +378,23 @@ function Row({
           <div className="rc-ntf-item__actions">
             {item.orderId !== null && (
               <Link href={`/orders/${item.orderId}`} className="rc-ntf-item__order">
-                Open the order <ArrowRight size={12} aria-hidden />
+                {t('rntf.row.openOrder')} <ArrowRight size={12} aria-hidden />
               </Link>
             )}
             {item.readAt !== null && (
               <AsyncButton
                 variant="ghost"
                 size="sm"
-                labels={{ idle: 'Mark unread', busy: 'Marking…', done: 'Unread' }}
+                labels={{
+                  idle: t('rntf.row.markUnread'),
+                  busy: t('rntf.row.marking'),
+                  done: t('rntf.row.unread'),
+                }}
                 onAction={onUnread}
               />
             )}
             <Button variant="ghost" size="sm" icon={<Trash2 size={13} />} onClick={onDismiss}>
-              Clear from my list
+              {t('rntf.clearOne.confirm')}
             </Button>
             <span className={label === null ? 'rc-ntf-item__topic sk-ident' : 'rc-ntf-item__topic'}>
               {label ?? item.topic}

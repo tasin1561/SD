@@ -9,6 +9,7 @@ import { Notice, OoCard } from './order-ops-parts';
 import { serverVerdict } from '@/lib/server-verdict';
 import { usePermission } from '@/lib/use-permission';
 import { useRetryStock, useReturnToPick } from '@/lib/api-hooks';
+import { useT } from '@/i18n/client';
 
 /**
  * The way out of the two states an order could enter and never leave.
@@ -51,6 +52,7 @@ export function StuckOrderRecovery({
   /** For the confirm's restatement; the id stands in when it is not passed. */
   readonly orderNumber?: string | undefined;
 }): ReactElement | null {
+  const t = useT();
   const toast = useToast();
   // Cosmetic (FE-2). /orders is gated on orders.view; these two write.
   const mayAct = usePermission('orders.cancel');
@@ -73,8 +75,8 @@ export function StuckOrderRecovery({
       // whether this became CONFIRMED or bounced straight back.
       toast.success(
         r.status === 'OUT_OF_STOCK'
-          ? 'Still nothing to reserve — the order stays out of stock.'
-          : `Stock reserved. Order is now ${r.status}.`,
+          ? t('ordersStuckOrderRecovery.stillNothingToReserveThe')
+          : t('ordersStuckOrderRecovery.stockReservedOrderIsNow', { status: r.status }),
       );
     } catch (err) {
       setError(serverVerdict(err));
@@ -86,7 +88,7 @@ export function StuckOrderRecovery({
     setError(null);
     try {
       const r = await returnToPick.mutateAsync();
-      toast.success(`Back on the pick floor — order is now ${r.status}.`);
+      toast.success(t('ordersStuckOrderRecovery.backOnThePickFloor', { status: r.status }));
     } catch (err) {
       setError(serverVerdict(err));
       throw err;
@@ -100,12 +102,16 @@ export function StuckOrderRecovery({
       <Notice
         tone="warn"
         icon={isOutOfStock ? <PackageSearch size={16} /> : <RotateCcw size={16} />}
-        title={isOutOfStock ? 'Waiting on stock' : 'Stuck at manual placement'}
+        title={
+          isOutOfStock
+            ? t('ordersStuckOrderRecovery.waitingOnStock')
+            : t('ordersStuckOrderRecovery.stuckAtManualPlacement')
+        }
       >
         <p>
           {isOutOfStock
-            ? 'The call was confirmed but there was nothing to reserve. Retry once the stock has landed — if there is still none, the order simply stays here.'
-            : 'If this order was never picked, manual placement will refuse it. Send it back to the pick floor and it can be picked normally.'}
+            ? t('ordersStuckOrderRecovery.theCallWasConfirmedBut')
+            : t('ordersStuckOrderRecovery.ifThisOrderWasNever')}
         </p>
       </Notice>
 
@@ -126,7 +132,7 @@ export function StuckOrderRecovery({
               setConfirming('retry');
             }}
           >
-            Retry — stock has arrived
+            {t('ordersStuckOrderRecovery.retryStockHasArrived')}
           </Button>
         )}
         {isManualPlacement && (
@@ -139,7 +145,7 @@ export function StuckOrderRecovery({
               setConfirming('return');
             }}
           >
-            Send back to the pick floor
+            {t('ordersStuckOrderRecovery.sendBackToThePick')}
           </Button>
         )}
       </div>
@@ -149,11 +155,11 @@ export function StuckOrderRecovery({
         onOpenChange={(o) => {
           if (!o) setConfirming(null);
         }}
-        title="Retry the stock reservation?"
+        title={t('ordersStuckOrderRecovery.retryTheStockReservation')}
         entity={entity}
         entityIsIdentifier
-        consequence="The order is sent back to confirmed and stock is reserved for it if any has landed; if there is still none, it stays out of stock."
-        confirmLabel="Retry — stock has arrived"
+        consequence={t('ordersStuckOrderRecovery.theOrderIsSentBack')}
+        confirmLabel={t('ordersStuckOrderRecovery.retryStockHasArrived')}
         onConfirm={onRetry}
         error={confirming === 'retry' ? error : null}
       />
@@ -162,11 +168,11 @@ export function StuckOrderRecovery({
         onOpenChange={(o) => {
           if (!o) setConfirming(null);
         }}
-        title="Send this order back to the pick floor?"
+        title={t('ordersStuckOrderRecovery.sendThisOrderBackTo')}
         entity={entity}
         entityIsIdentifier
-        consequence="The order leaves manual placement and goes back to pending pick, so the warehouse picks it again."
-        confirmLabel="Send back to the pick floor"
+        consequence={t('ordersStuckOrderRecovery.theOrderLeavesManualPlacement')}
+        confirmLabel={t('ordersStuckOrderRecovery.sendBackToThePick')}
         onConfirm={onReturn}
         error={confirming === 'return' ? error : null}
       />

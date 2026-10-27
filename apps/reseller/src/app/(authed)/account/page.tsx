@@ -9,7 +9,8 @@ import { ConfirmDialog } from '@skydrop/ui/app/dialog';
 import { MotionSwitch } from '@skydrop/ui/app/motion-switch';
 import { PageHeader } from '@skydrop/ui/app/page-header';
 import { useToast } from '@skydrop/ui/app/toast';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { useRequestEmailVerification, useSignOutEverywhere } from '@/lib/store-hooks';
 import { RdCard, RdDl } from '../settings/_components/rd-parts';
 
@@ -22,6 +23,7 @@ import { RdCard, RdDl } from '../settings/_components/rd-parts';
  * this browser would be unreachable there for most of the team.
  */
 export default function AccountPage(): ReactElement {
+  const t = useT();
   const me = useStoreIdentity();
   const toast = useToast();
   const verify = useRequestEmailVerification();
@@ -31,38 +33,38 @@ export default function AccountPage(): ReactElement {
 
   return (
     <div className="rd-page" data-width="narrow">
-      <PageHeader title="My account" subtitle="Your own login for this store." />
-      <RdCard title="You">
+      <PageHeader title={t('acct.title')} subtitle={t('acct.subtitle')} />
+      <RdCard title={t('acct.you')}>
         <RdDl
           items={[
-            { label: 'Name', value: <span className="rd-strong">{me.fullName}</span> },
-            { label: 'Email', value: me.emailDisplay },
+            { label: t('acct.name'), value: <span className="rd-strong">{me.fullName}</span> },
+            { label: t('acct.email'), value: me.emailDisplay },
             // Every role held, not `roleName` — that is the first grant,
             // a label, so somebody who is Finance AND Owner would read
             // as one of the two and be told something untrue about their
             // own access.
-            { label: 'Roles', value: me.roleNames.join(' and ') || '—' },
+            { label: t('acct.roles'), value: me.roleNames.join(t('acct.rolesJoin')) || '—' },
             {
-              label: 'Email confirmed',
+              label: t('acct.verified'),
               value:
                 me.emailVerifiedAt !== null ? (
-                  'Yes'
+                  t('acct.yes')
                 ) : (
                   <AsyncButton
                     variant="secondary"
                     size="sm"
                     icon={<MailCheck size={14} />}
                     labels={{
-                      idle: verify.isSuccess ? 'Link sent' : 'Send a confirmation link',
-                      busy: 'Sending…',
-                      error: 'Not sent',
+                      idle: verify.isSuccess ? t('acct.linkSent') : t('acct.sendLink'),
+                      busy: t('acct.sending'),
+                      error: t('acct.notSent'),
                     }}
                     state={verify.isPending ? 'busy' : verify.isError ? 'error' : 'idle'}
                     disabled={verify.isPending || verify.isSuccess}
                     onClick={() =>
                       verify.mutate(undefined, {
-                        onSuccess: () => toast.success('Check your inbox for the link.'),
-                        onError: (err) => toast.error(serverVerdict(err)),
+                        onSuccess: () => toast.success(t('acct.checkInbox')),
+                        onError: (err) => toast.error(verdict(err, t)),
                       })
                     }
                   />
@@ -72,14 +74,11 @@ export default function AccountPage(): ReactElement {
         />
       </RdCard>
 
-      <RdCard
-        title="This browser"
-        note="How the portal moves in this browser — saved here only, so another device keeps its own choice."
-      >
+      <RdCard title={t('acct.browser.title')} note={t('acct.browser.note')}>
         <MotionSwitch />
       </RdCard>
 
-      <RdCard title="Sessions" note="Signed in somewhere you should not be?" tone="danger">
+      <RdCard title={t('acct.sessions.title')} note={t('acct.sessions.note')} tone="danger">
         <div className="rd-buttons" data-align="start">
           <Button
             variant="destructive"
@@ -87,23 +86,23 @@ export default function AccountPage(): ReactElement {
             icon={<LogOut size={15} />}
             onClick={() => setConfirming(true)}
           >
-            Sign out everywhere
+            {t('acct.signOutAll')}
           </Button>
         </div>
         <ConfirmDialog
           open={confirming}
           onOpenChange={setConfirming}
-          title="Sign out of every device?"
+          title={t('acct.confirm.title')}
           entity={me.emailDisplay}
-          consequence="Every session of yours ends, including this one."
-          confirmLabel="Sign out everywhere"
+          consequence={t('acct.confirm.consequence')}
+          confirmLabel={t('acct.signOutAll')}
           destructive
           closeOnSuccess={false}
           onConfirm={async () => {
             try {
               await everywhere.mutateAsync();
             } catch (err) {
-              toast.error(serverVerdict(err));
+              toast.error(verdict(err, t));
               // Keep the dialog open, as before: the sign-out did not happen.
               throw err;
             }

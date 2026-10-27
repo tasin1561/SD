@@ -2,6 +2,7 @@ import type { ReactElement } from 'react';
 import { ButtonLink } from '@skydrop/ui/app/button';
 import { SignInCard } from '@skydrop/ui/app/sign-in';
 import { VerifyEmailPanel } from './_components/verify-panel';
+import { getT } from '@/i18n/server';
 
 /**
  * Staff email verification, linked from the verification email as
@@ -17,25 +18,26 @@ export default async function StaffVerifyEmailPage({
 }: {
   searchParams: Promise<{ readonly token?: string | string[] }>;
 }): Promise<ReactElement> {
+  const { t } = await getT();
   const params = await searchParams;
   const rawToken = Array.isArray(params.token) ? params.token[0] : params.token;
   const token = (rawToken ?? '').trim();
 
   return token === '' ? (
     <SignInCard
-      title="Verify your email"
-      note="The link is missing its verification token. Open the email again and use the button there rather than copying the address by hand."
-      footer={<a href="/login">Back to sign in</a>}
+      title={t('authVerifyEmailPage.verifyYourEmail')}
+      note={t('authVerifyEmailPage.theLinkIsMissingIts')}
+      footer={<a href="/login">{t('authVerifyEmailPage.backToSignIn')}</a>}
     >
       <ButtonLink href="/login" variant="primary" fullWidth>
-        Back to sign in
+        {t('authVerifyEmailPage.backToSignIn')}
       </ButtonLink>
     </SignInCard>
   ) : (
     <SignInCard
-      title="Verify your email"
-      note="Confirming the address on your staff account."
-      footer={<a href="/login">Back to sign in</a>}
+      title={t('authVerifyEmailPage.verifyYourEmail')}
+      note={t('authVerifyEmailPage.confirmingTheAddressOnYour')}
+      footer={<a href="/login">{t('authVerifyEmailPage.backToSignIn')}</a>}
     >
       <VerifyEmailPanel token={token} />
     </SignInCard>

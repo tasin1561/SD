@@ -10,6 +10,7 @@ import { TextArea, TextField } from '@skydrop/ui/app/text-field';
 import { MkAlert } from '../../_components/money-parts';
 import { useReclassifySellerCash } from '@/lib/ops-hooks';
 import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
 
 export interface HoldingRef {
   readonly accountId: string;
@@ -35,6 +36,7 @@ export function MoveSellerCashModal({
   readonly holding: HoldingRef | null;
   readonly onClose: () => void;
 }): ReactElement {
+  const t = useT();
   const move = useReclassifySellerCash();
   const [direction, setDirection] = useState<'TO_CAPITAL' | 'TO_SELLER'>('TO_CAPITAL');
   const [amount, setAmount] = useState('');
@@ -87,15 +89,22 @@ export function MoveSellerCashModal({
         }
       }}
       locked={move.isPending}
-      title={`Correct whose cash it is — ${holding?.label ?? ''}`}
-      description="Relabels cash already in this account between the client and us. Nothing moves between banks, so the account total does not change."
+      title={t('sellerWalletsIdMoveSellerCashModal.correctWhoseCashItIs', {
+        value: holding?.label ?? '',
+      })}
+      description={t('sellerWalletsIdMoveSellerCashModal.relabelsCashAlreadyInThis')}
       footer={
         <DialogFooter>
           <Button variant="secondary" onClick={onClose} disabled={move.isPending}>
-            Cancel
+            {t('sellerWalletsIdMoveSellerCashModal.cancel')}
           </Button>
           <AsyncButton
-            labels={{ idle: 'Correct', busy: 'Correcting…', done: 'Corrected', error: 'Refused' }}
+            labels={{
+              idle: t('sellerWalletsIdMoveSellerCashModal.correct'),
+              busy: t('sellerWalletsIdMoveSellerCashModal.correcting'),
+              done: t('sellerWalletsIdMoveSellerCashModal.corrected'),
+              error: t('sellerWalletsIdMoveSellerCashModal.refused'),
+            }}
             disabled={amount.trim() === ''}
             onAction={save}
           />
@@ -105,7 +114,9 @@ export function MoveSellerCashModal({
       <div className="mk-stack">
         {holding !== null && (
           <div className="mk-subject">
-            <span className="mk-subject__label">Held for this client here</span>
+            <span className="mk-subject__label">
+              {t('sellerWalletsIdMoveSellerCashModal.heldForThisClientHere')}
+            </span>
             <span className="mk-subject__main">
               <Money amount={holding.amount} currency={holding.currency} convert={false} />
             </span>
@@ -113,20 +124,26 @@ export function MoveSellerCashModal({
         )}
         <Select
           id="move-cash-direction"
-          label="Which way"
+          label={t('sellerWalletsIdMoveSellerCashModal.whichWay')}
           requiredMark
           value={direction}
           onChange={(e) =>
             setDirection(e.target.value === 'TO_SELLER' ? 'TO_SELLER' : 'TO_CAPITAL')
           }
         >
-          <option value="TO_CAPITAL">It is ours — move it to our capital</option>
-          <option value="TO_SELLER">It is theirs — move it from our capital to them</option>
+          <option value="TO_CAPITAL">
+            {t('sellerWalletsIdMoveSellerCashModal.itIsOursMoveIt')}
+          </option>
+          <option value="TO_SELLER">
+            {t('sellerWalletsIdMoveSellerCashModal.itIsTheirsMoveIt')}
+          </option>
         </Select>
         <TextField
           id="move-cash-amount"
-          label={`Amount (${holding?.currency ?? 'INR'})`}
-          hint="As a positive figure — the direction above says which way."
+          label={t('sellerWalletsIdMoveSellerCashModal.amount', {
+            value: holding?.currency ?? 'INR',
+          })}
+          hint={t('sellerWalletsIdMoveSellerCashModal.asAPositiveFigureThe')}
           requiredMark
           inputMode="decimal"
           value={amount}
@@ -137,11 +154,11 @@ export function MoveSellerCashModal({
         {foreign && (
           <TextField
             id="move-cash-inr-value"
-            label="Worth to their wallet (INR)"
+            label={t('sellerWalletsIdMoveSellerCashModal.worthToTheirWalletInr')}
             hint={
               direction === 'TO_SELLER'
-                ? 'Required: the rupees this cash is worth to their wallet — usually what they were credited for it.'
-                : 'Optional: leave empty to take it at their average rate in this account.'
+                ? t('sellerWalletsIdMoveSellerCashModal.requiredTheRupeesThisCash')
+                : t('sellerWalletsIdMoveSellerCashModal.optionalLeaveEmptyToTake')
             }
             requiredMark={direction === 'TO_SELLER'}
             inputMode="decimal"
@@ -152,8 +169,8 @@ export function MoveSellerCashModal({
         )}
         <TextArea
           id="move-cash-reason"
-          label="Why the bank book was wrong"
-          hint="At least a sentence; it is kept with the entries."
+          label={t('sellerWalletsIdMoveSellerCashModal.whyTheBankBookWas')}
+          hint={t('sellerWalletsIdMoveSellerCashModal.atLeastASentenceIt')}
           requiredMark
           value={reason}
           onChange={(e) => setReason(e.target.value)}

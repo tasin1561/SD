@@ -4,6 +4,9 @@ import type { ReactElement } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Tabs } from '@skydrop/ui/app/tabs';
+import { useT } from '@/i18n/client';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
 
 /**
  * The four faces of one subsystem.
@@ -18,24 +21,30 @@ import { Tabs } from '@skydrop/ui/app/tabs';
  * `nav` of links with `aria-current="page"` and the liquid bead slides to
  * the current one. They stay navigation — the same four hrefs.
  */
-const TABS: readonly { readonly href: string; readonly label: string }[] = [
-  { href: '/courier-escalation', label: 'Send queue' },
-  { href: '/courier-escalation/threads', label: 'Conversations' },
-  { href: '/courier-escalation/templates', label: 'Patterns' },
-  { href: '/courier-escalation/portal', label: 'Portal worker' },
+const TABS = (
+  tr: Translate<MessageKey>,
+): readonly { readonly href: string; readonly label: string }[] => [
+  { href: '/courier-escalation', label: tr('courierEscalationEscalationTabs.sendQueue') },
+  {
+    href: '/courier-escalation/threads',
+    label: tr('courierEscalationEscalationTabs.conversations'),
+  },
+  { href: '/courier-escalation/templates', label: tr('courierEscalationEscalationTabs.patterns') },
+  { href: '/courier-escalation/portal', label: tr('courierEscalationEscalationTabs.portalWorker') },
 ];
 
 export function EscalationTabs(): ReactElement {
+  const tr = useT();
   const pathname = usePathname();
   // Exact match, not prefix: '/courier-escalation' is a prefix of all
   // three others and would light up on every tab.
-  const active = TABS.find((t) => pathname === t.href)?.href ?? '';
+  const active = TABS(tr).find((t) => pathname === t.href)?.href ?? '';
   return (
     <Tabs
-      label="Escalation views"
+      label={tr('courierEscalationEscalationTabs.escalationViews')}
       Link={Link}
       value={active}
-      items={TABS.map((t) => ({ id: t.href, label: t.label, href: t.href }))}
+      items={TABS(tr).map((t) => ({ id: t.href, label: t.label, href: t.href }))}
     />
   );
 }

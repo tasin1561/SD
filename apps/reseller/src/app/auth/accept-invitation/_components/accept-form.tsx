@@ -1,14 +1,17 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { User, UserCheck } from 'lucide-react';
 import { AccessTokenStore, ApiClient } from '@skydrop/api-client';
 import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { TextField } from '@skydrop/ui/app/text-field';
-import { serverVerdict } from '@/lib/server-verdict';
+import type { Translate } from '@skydrop/ui/app/i18n';
+import type { MessageKey } from '@/i18n/catalog';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { AuthNotice } from '../../../login/_components/rd-auth-notice';
 
 interface Preview {
@@ -29,8 +32,8 @@ interface Preview {
  * characters."), ticking off as it is typed. Nothing here refuses a
  * submit; the server's verdict still decides (FE-2).
  */
-const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
-  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
+const passwordCriteria = (t: Translate<MessageKey>): readonly PasswordCriterion[] => [
+  { id: 'length', label: t('auth.accept.criteria'), test: (v) => v.length >= 10 },
 ];
 
 /**
@@ -39,6 +42,11 @@ const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
  * never sits in an access log; a bad token gets one generic answer.
  */
 export function AcceptForm(): ReactElement {
+  const t = useT();
+  // The preview is fetched once per token; a language switch must not re-fetch it
+  // (and overwrite a name already typed), so the effect reads the translator from a ref.
+  const tRef = useRef(t);
+  tRef.current = t;
   const token = useSearchParams().get('token') ?? '';
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -60,7 +68,7 @@ export function AcceptForm(): ReactElement {
         setPreview(p);
         setFullName(p.fullName);
       })
-      .catch((err: unknown) => setLoadError(serverVerdict(err)));
+      .catch((err: unknown) => setLoadError(verdict(err, tRef.current)));
   }, [token]);
 
   async function submit(e: FormEvent<HTMLFormElement>): Promise<void> {
@@ -77,12 +85,12 @@ export function AcceptForm(): ReactElement {
       // The API set the session cookie; the authed layout picks it up.
       window.location.assign('/dashboard');
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setSubmitting(false);
     }
   }
 
-  if (token === '') return <AuthNotice tone="neutral">This link is missing its token.</AuthNotice>;
+  if (token === '') return <AuthNotice tone="neutral">{t('auth.accept.missingToken')}</AuthNotice>;
   if (loadError !== null) {
     return (
       <AuthNotice tone="critical" role="alert">
@@ -92,7 +100,7 @@ export function AcceptForm(): ReactElement {
   }
   if (preview === null) {
     return (
-      <div className="rd-auth-skel" role="status" aria-label="Loading the invitation">
+      <div className="rd-auth-skel" role="status" aria-label={t('auth.accept.loading')}>
         <Skeleton height={88} rounded="md" />
         <Skeleton height={48} rounded="md" />
         <Skeleton height={48} rounded="md" />
@@ -109,16 +117,16 @@ export function AcceptForm(): ReactElement {
       className="rd-auth-form"
     >
       <dl className="rd-auth-facts">
-        <dt>Store</dt>
+        <dt>{t('auth.accept.store')}</dt>
         <dd>{preview.storeName}</dd>
-        <dt>Your roles</dt>
+        <dt>{t('auth.accept.roles')}</dt>
         <dd>{preview.roleName}</dd>
-        <dt>Email</dt>
+        <dt>{t('auth.accept.email')}</dt>
         <dd>{preview.email}</dd>
       </dl>
       <TextField
         id="fullName"
-        label="Your name"
+        label={t('auth.accept.name')}
         icon={<User size={15} />}
         required
         value={fullName}
@@ -126,14 +134,14 @@ export function AcceptForm(): ReactElement {
       />
       <PasswordField
         id="password"
-        label="Choose a password"
-        hint="At least 10 characters."
+        label={t('auth.accept.password')}
+        hint={t('auth.accept.passwordHint')}
         autoComplete="new-password"
         required
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         showStrength
-        criteria={PASSWORD_CRITERIA}
+        criteria={passwordCriteria(t)}
       />
       {error !== null ? (
         <AuthNotice tone="critical" role="alert">
@@ -146,7 +154,11 @@ export function AcceptForm(): ReactElement {
         size="lg"
         fullWidth
         icon={<UserCheck size={15} />}
-        labels={{ idle: 'Join the store', busy: 'Setting up…', error: 'Try again' }}
+        labels={{
+          idle: t('auth.accept.join'),
+          busy: t('auth.accept.busy'),
+          error: t('auth.accept.tryAgain'),
+        }}
         state={submitting ? 'busy' : error !== null ? 'error' : 'idle'}
         disabled={submitting}
       />

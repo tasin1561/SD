@@ -9,6 +9,8 @@ import { serverVerdict } from '@/lib/server-verdict';
 import { useRevealSellerBankAccount, useSellerDetail } from '@/lib/api-hooks';
 import { usePermission } from '@/lib/use-permission';
 import { useSellerHoldings, useTreasuryOverview } from '@/lib/ops-hooks';
+import { useT } from '@/i18n/client';
+import { richMessage } from '@/i18n/client';
 
 /**
  * WHERE the money goes, and WHETHER we can send it — on the screen that
@@ -46,6 +48,8 @@ export function PayoutInstructionPanel({
   /** What is about to leave, in `currency`. Blank while nothing is typed. */
   readonly amount: string;
 }): ReactElement {
+  const t = useT();
+
   // This page is gated on `money.view`, which is WEAKER than either of
   // these. Without the checks, an operator who may record a remittance
   // but not read the treasury or reveal an account number would get a
@@ -83,35 +87,31 @@ export function PayoutInstructionPanel({
   return (
     <div className="mk-panel">
       <div className="mk-panel__part">
-        <p className="mk-panel__title">Send it to</p>
+        <p className="mk-panel__title">{t('remittancesPayoutInstructionPanel.sendItTo')}</p>
         {!mayReadSeller ? (
-          <p className="mk-muted">
-            You do not have access to client records, so the destination account is not shown. Ask
-            someone who does for the payout details before sending.
-          </p>
+          <p className="mk-muted">{t('remittancesPayoutInstructionPanel.youDoNotHaveAccess')}</p>
         ) : seller.isLoading ? (
           <Skeleton height={40} width="100%" />
         ) : bankMissing ? (
           <p className="mk-text" data-tone="critical">
-            This client has no bank details on file. There is nowhere to send the money — ask them
-            to add them on their profile before paying.
+            {t('remittancesPayoutInstructionPanel.thisClientHasNoBank')}
           </p>
         ) : s === undefined ? (
           <div className="mk-muted">—</div>
         ) : (
           <dl className="mk-kv">
-            <dt>Bank</dt>
+            <dt>{t('remittancesPayoutInstructionPanel.bank')}</dt>
             <dd>{s.bankName}</dd>
-            <dt>Branch</dt>
+            <dt>{t('remittancesPayoutInstructionPanel.branch')}</dt>
             {/* Bangladeshi routing is branch-scoped: the same bank and
                 account number resolve differently per branch, so an
                 instruction without it is incomplete. */}
             <dd className="mk-text" data-tone={s.bankBranchName === null ? 'warn' : undefined}>
-              {s.bankBranchName ?? 'not on file — routing is branch-scoped, ask for it'}
+              {s.bankBranchName ?? t('remittancesPayoutInstructionPanel.notOnFileRoutingIs')}
             </dd>
-            <dt>Account name</dt>
+            <dt>{t('remittancesPayoutInstructionPanel.accountName')}</dt>
             <dd>{s.bankAccountName}</dd>
-            <dt>Account no.</dt>
+            <dt>{t('remittancesPayoutInstructionPanel.accountNo')}</dt>
             <dd>
               <span className="sk-ident">{revealed ?? s.bankAccountNumberMasked}</span>
               {revealed === null && mayReveal && (
@@ -121,18 +121,23 @@ export function PayoutInstructionPanel({
                   loading={reveal.isPending}
                   disabled={reveal.isPending}
                   onClick={() => {
-                    reveal.mutate('Recording a remittance to this client', {
-                      onSuccess: (r) => setRevealed(r.accountNumber),
-                    });
+                    reveal.mutate(
+                      t('remittancesPayoutInstructionPanel.recordingARemittanceToThis'),
+                      {
+                        onSuccess: (r) => setRevealed(r.accountNumber),
+                      },
+                    );
                   }}
                 >
-                  {reveal.isPending ? 'Revealing…' : 'Reveal'}
+                  {reveal.isPending
+                    ? t('remittancesPayoutInstructionPanel.revealing')
+                    : t('remittancesPayoutInstructionPanel.reveal')}
                 </Button>
               )}
             </dd>
             {s.bankRoutingNumber !== null && (
               <>
-                <dt>Routing</dt>
+                <dt>{t('remittancesPayoutInstructionPanel.routing')}</dt>
                 <dd className="sk-ident">{s.bankRoutingNumber}</dd>
               </>
             )}
@@ -149,14 +154,14 @@ export function PayoutInstructionPanel({
 
       {mayReadTreasury && (
         <div className="mk-panel__part">
-          <p className="mk-panel__title">Of that, this client&rsquo;s</p>
+          <p className="mk-panel__title">
+            {t('remittancesPayoutInstructionPanel.ofThatThisClientS')}
+          </p>
           {holdings.isLoading ? (
             <Skeleton height={16} width="66%" />
           ) : (holdings.data ?? []).length === 0 ? (
             <p className="mk-muted">
-              None of our accounts holds cash attributed to this client. That is normal for a wallet
-              built from credits rather than transfers — the money to pay them is our capital, and
-              paying it is what settles the liability.
+              {t('remittancesPayoutInstructionPanel.noneOfOurAccountsHolds')}
             </p>
           ) : (
             <ul className="mk-list">
@@ -174,17 +179,16 @@ export function PayoutInstructionPanel({
       )}
 
       <div className="mk-panel__part">
-        <p className="mk-panel__title">What we hold in {currency}</p>
+        <p className="mk-panel__title">
+          {t('remittancesPayoutInstructionPanel.whatWeHoldIn', { currency })}
+        </p>
         {!mayReadTreasury ? (
-          <p className="mk-muted">
-            You do not have treasury access, so balances are not shown — check with someone who does
-            before sending, or the transfer may bounce.
-          </p>
+          <p className="mk-muted">{t('remittancesPayoutInstructionPanel.youDoNotHaveTreasury')}</p>
         ) : treasury.isLoading ? (
           <Skeleton height={32} width="100%" />
         ) : accounts.length === 0 ? (
           <p className="mk-text" data-tone="critical">
-            No {currency} account is set up, so this payout cannot leave from anywhere.
+            {t('remittancesPayoutInstructionPanel.noAccountIsSetUp', { currency })}
           </p>
         ) : (
           <ul className="mk-list">
@@ -205,10 +209,10 @@ export function PayoutInstructionPanel({
         )}
         {mayReadTreasury && shortfall && (
           <p className="mk-text mk-small" data-tone="warn">
-            No single {currency} account holds{' '}
-            <Money amount={amount} currency={currency} convert={false} /> on its own. Move money
-            between our accounts on Treasury first — a payout leaves ONE account, so the total
-            across all of them is not the test.
+            {richMessage(t('remittancesPayoutInstructionPanel.noSingleAccountHoldsOn'), {
+              currency,
+              money: <Money amount={amount} currency={currency} convert={false} />,
+            })}
           </p>
         )}
       </div>

@@ -8,7 +8,8 @@ import { AsyncButton } from '@skydrop/ui/app/async-button';
 import { PasswordField, type PasswordCriterion } from '@skydrop/ui/app/password-field';
 import { Skeleton } from '@skydrop/ui/app/skeleton';
 import { TextField } from '@skydrop/ui/app/text-field';
-import { serverVerdict } from '@/lib/server-verdict';
+import { useT } from '@/i18n/client';
+import { verdict } from '@/i18n/verdict';
 import { AuthNotice } from '../../../login/_components/auth-notice';
 
 interface Preview {
@@ -29,9 +30,6 @@ interface Preview {
  * characters."), ticking off as it is typed. Nothing here refuses a
  * submit; the server's verdict still decides (FE-2).
  */
-const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
-  { id: 'length', label: 'At least 10 characters', test: (v) => v.length >= 10 },
-];
 
 /**
  * Accept an invitation: say what it is for FIRST (the store, the role,
@@ -39,6 +37,10 @@ const PASSWORD_CRITERIA: readonly PasswordCriterion[] = [
  * never sits in an access log; a bad token gets one generic answer.
  */
 export function AcceptForm(): ReactElement {
+  const t = useT();
+  const criteria: readonly PasswordCriterion[] = [
+    { id: 'length', label: t('auth.password.min10'), test: (v) => v.length >= 10 },
+  ];
   const token = useSearchParams().get('token') ?? '';
   const [preview, setPreview] = useState<Preview | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export function AcceptForm(): ReactElement {
         setPreview(p);
         setFullName(p.fullName);
       })
-      .catch((err: unknown) => setLoadError(serverVerdict(err)));
+      .catch((err: unknown) => setLoadError(verdict(err, t)));
   }, [token]);
 
   async function submit(e: FormEvent<HTMLFormElement>): Promise<void> {
@@ -77,12 +79,12 @@ export function AcceptForm(): ReactElement {
       // The API set the session cookie; the authed layout picks it up.
       window.location.assign('/orders');
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       setSubmitting(false);
     }
   }
 
-  if (token === '') return <AuthNotice tone="neutral">This link is missing its token.</AuthNotice>;
+  if (token === '') return <AuthNotice tone="neutral">{t('common.missingToken')}</AuthNotice>;
   if (loadError !== null) {
     return (
       <AuthNotice tone="critical" role="alert">
@@ -92,7 +94,7 @@ export function AcceptForm(): ReactElement {
   }
   if (preview === null) {
     return (
-      <div className="as-auth-skel" role="status" aria-label="Loading the invitation">
+      <div className="as-auth-skel" role="status" aria-label={t('auth.accept.loading')}>
         <Skeleton height={88} rounded="md" />
         <Skeleton height={48} rounded="md" />
         <Skeleton height={48} rounded="md" />
@@ -109,16 +111,16 @@ export function AcceptForm(): ReactElement {
       className="as-auth-form"
     >
       <dl className="as-auth-facts">
-        <dt>Store</dt>
+        <dt>{t('auth.accept.store')}</dt>
         <dd>{preview.storeName}</dd>
-        <dt>Your roles</dt>
+        <dt>{t('auth.accept.roles')}</dt>
         <dd>{preview.roleName}</dd>
-        <dt>Email</dt>
+        <dt>{t('common.email')}</dt>
         <dd>{preview.email}</dd>
       </dl>
       <TextField
         id="fullName"
-        label="Your name"
+        label={t('auth.accept.name')}
         icon={<User size={15} />}
         required
         value={fullName}
@@ -126,14 +128,14 @@ export function AcceptForm(): ReactElement {
       />
       <PasswordField
         id="password"
-        label="Choose a password"
-        hint="At least 10 characters."
+        label={t('auth.accept.choosePassword')}
+        hint={t('auth.accept.hint')}
         autoComplete="new-password"
         required
         value={password}
         onChange={(e) => setPassword(e.target.value)}
         showStrength
-        criteria={PASSWORD_CRITERIA}
+        criteria={criteria}
       />
       {error !== null ? (
         <AuthNotice tone="critical" role="alert">
@@ -146,7 +148,11 @@ export function AcceptForm(): ReactElement {
         size="lg"
         fullWidth
         icon={<UserCheck size={15} />}
-        labels={{ idle: 'Join the store', busy: 'Setting up…', error: 'Try again' }}
+        labels={{
+          idle: t('auth.accept.join'),
+          busy: t('auth.accept.busy'),
+          error: t('common.tryAgain'),
+        }}
         state={submitting ? 'busy' : error !== null ? 'error' : 'idle'}
         disabled={submitting}
       />

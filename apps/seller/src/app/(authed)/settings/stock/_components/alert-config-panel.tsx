@@ -11,9 +11,10 @@ import { ErrorState } from '@skydrop/ui/app/empty-state';
 import { useToast } from '@skydrop/ui/app/toast';
 import { useSellerIdentity } from '@skydrop/auth/client';
 import { can } from '@/lib/page-access';
-import { serverVerdict } from '@/lib/server-verdict';
+import { verdict } from '@/i18n/verdict';
 import { useSetDefaultStockThreshold, useStockAlertConfig } from '@/lib/api-hooks';
 import { SetCallout, SetFact } from '../../_components/settings-parts';
+import { useT } from '@/i18n/client';
 
 /** Mirrors @Min(0)/@Max(1_000_000) on SetDefaultThresholdDto. Mirrored only
  *  so the operator is told before submitting; the server still decides. */
@@ -43,6 +44,7 @@ const MAX_THRESHOLD = 1_000_000;
  * this is the floor for everything that has no opinion of its own.
  */
 export function AlertConfigPanel(): ReactElement | null {
+  const t = useT();
   const identity = useSellerIdentity();
   const toast = useToast();
   const config = useStockAlertConfig();
@@ -81,11 +83,11 @@ export function AlertConfigPanel(): ReactElement | null {
       setDraft(null);
       toast.success(
         clearing
-          ? 'Default threshold cleared — SKUs without their own will not alert.'
-          : 'Default low-stock threshold saved.',
+          ? t('settingsStock.defaultThresholdClearedSkus')
+          : t('settingsStock.defaultLowStockThreshold'),
       );
     } catch (err) {
-      setError(serverVerdict(err));
+      setError(verdict(err, t));
       // Rethrown so the Save button shows the failure on itself.
       throw err;
     }
@@ -100,7 +102,7 @@ export function AlertConfigPanel(): ReactElement | null {
   return (
     <section className="set-section">
       <SectionHeading
-        title="Low-stock alerts"
+        title={t('settingsStock.lowStockAlerts')}
         /*
           "Off" is a real setting here and it is the one worth saying in
           the heading: a blank field and a field still loading look the
@@ -108,10 +110,13 @@ export function AlertConfigPanel(): ReactElement | null {
         */
         note={
           config.data === undefined ? undefined : config.data.defaultLowStockThreshold === null ? (
-            <SetFact tone="warn">Off — nothing alerts by default</SetFact>
+            <SetFact tone="warn">{t('settingsStock.offNothingAlertsBy')}</SetFact>
           ) : (
             <SetFact tone="good" dot>
-              {`Warning below ${config.data.defaultLowStockThreshold.toLocaleString('en-IN')} units`}
+              {t('settingsStock.warningBelowUnits', {
+                defaultLowStockThreshold:
+                  config.data.defaultLowStockThreshold.toLocaleString('en-IN'),
+              })}
             </SetFact>
           )
         }
@@ -121,7 +126,7 @@ export function AlertConfigPanel(): ReactElement | null {
           <Skeleton width={224} height={40} />
         ) : config.isError ? (
           <ErrorState
-            message={serverVerdict(config.error, 'Could not load your alert settings.')}
+            message={verdict(config.error, t, t('settingsStock.couldNotLoadYour'))}
             retry={() => void config.refetch()}
           />
         ) : (
@@ -133,22 +138,26 @@ export function AlertConfigPanel(): ReactElement | null {
             )}
             <div className="set-inline">
               <TextField
-                label="Default threshold"
+                label={t('settingsStock.defaultThreshold')}
                 id="default-low-stock-threshold"
                 icon={<BellRing size={15} />}
                 hint={
                   clearing
-                    ? 'Empty — no SKU alerts unless it carries its own threshold.'
-                    : `Units. Whole number, 0–${MAX_THRESHOLD.toLocaleString('en-IN')}.`
+                    ? t('settingsStock.emptyNoSkuAlerts')
+                    : t('settingsStock.unitsWholeNumber0', {
+                        maxThreshold: MAX_THRESHOLD.toLocaleString('en-IN'),
+                      })
                 }
                 error={
                   valid
                     ? undefined
-                    : `Enter a whole number between 0 and ${MAX_THRESHOLD.toLocaleString('en-IN')}, or leave empty to turn alerts off.`
+                    : t('settingsStock.enterAWholeNumber', {
+                        maxThreshold: MAX_THRESHOLD.toLocaleString('en-IN'),
+                      })
                 }
                 inputMode="numeric"
                 value={value}
-                placeholder="Off"
+                placeholder={t('settingsStock.off')}
                 onChange={(e) => setDraft(e.target.value)}
                 disabled={save.isPending}
                 inputClassName="sk-figure"
@@ -158,7 +167,12 @@ export function AlertConfigPanel(): ReactElement | null {
                 <AsyncButton
                   type="submit"
                   variant="primary"
-                  labels={{ idle: 'Save', busy: 'Saving…', done: 'Saved', error: 'Not saved' }}
+                  labels={{
+                    idle: t('settingsStock.save'),
+                    busy: t('settingsStock.saving'),
+                    done: t('settingsStock.saved'),
+                    error: t('settingsStock.notSaved'),
+                  }}
                   state={run.phase}
                   disabled={!valid || !dirty || save.isPending}
                 />
@@ -172,16 +186,12 @@ export function AlertConfigPanel(): ReactElement | null {
                       setError(null);
                     }}
                   >
-                    Cancel
+                    {t('settingsStock.cancel')}
                   </Button>
                 )}
               </div>
             </div>
-            <p className="set-muted">
-              A SKU with its own threshold ignores this one — set that on the variant page. Leaving
-              this empty turns alerts off for everything else; zero still alerts, but only once the
-              SKU is completely out.
-            </p>
+            <p className="set-muted">{t('settingsStock.aSkuWithIts')}</p>
           </form>
         )}
       </div>

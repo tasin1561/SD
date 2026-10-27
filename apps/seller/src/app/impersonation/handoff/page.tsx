@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { SignInCard } from '@skydrop/ui/app/sign-in';
 import { HandoffPanel } from './_components/handoff-panel';
+import { getT } from '@/i18n/server';
 
 /**
  * Where a support session ARRIVES. The admin console sends the browser
@@ -16,11 +17,12 @@ import { HandoffPanel } from './_components/handoff-panel';
  * here should "helpfully" move the token into a query string to make
  * this page smarter, because that would undo the design.
  */
-export default function ImpersonationHandoffPage(): ReactElement {
+export default async function ImpersonationHandoffPage(): Promise<ReactElement> {
+  const { t } = await getT();
   return (
     <SignInCard
-      title="Opening the support session"
-      note="Spending the one-time link for a session inside the account. This takes a moment."
+      title={t('impersonation.openingTheSupportSession')}
+      note={t('impersonation.spendingTheOneTime')}
     >
       <HandoffPanel />
     </SignInCard>
