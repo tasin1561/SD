@@ -168,6 +168,9 @@ export const PROVISIONABLE_ORDER_SELECT = {
       productName: true,
       variantLabel: true,
       unitWeightGrams: true,
+      unitLengthCm: true,
+      unitWidthCm: true,
+      unitHeightCm: true,
       unitDeclaredValueInr: true,
       unitPriceInr: true,
     },
@@ -197,6 +200,9 @@ export interface ProvisionableOrder {
     readonly productName: string;
     readonly variantLabel: string | null;
     readonly unitWeightGrams: number | null;
+    readonly unitLengthCm: Prisma.Decimal | null;
+    readonly unitWidthCm: Prisma.Decimal | null;
+    readonly unitHeightCm: Prisma.Decimal | null;
     readonly unitDeclaredValueInr: Prisma.Decimal | null;
     readonly unitPriceInr: Prisma.Decimal | null;
   }>;
@@ -765,6 +771,9 @@ export class OrderPostCommitHooksService {
           productName: i.productName,
           variantLabel: i.variantLabel,
           unitWeightGrams: i.unitWeightGrams,
+          unitLengthCm: i.unitLengthCm === null ? null : i.unitLengthCm.toNumber(),
+          unitWidthCm: i.unitWidthCm === null ? null : i.unitWidthCm.toNumber(),
+          unitHeightCm: i.unitHeightCm === null ? null : i.unitHeightCm.toNumber(),
           unitDeclaredValueInr: i.unitDeclaredValueInr,
           unitPriceInr: i.unitPriceInr,
         })),

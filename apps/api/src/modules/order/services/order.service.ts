@@ -147,6 +147,9 @@ const ORDER_VIEW_INCLUDE = {
       imageUrl: true,
       quantity: true,
       unitWeightGrams: true,
+      unitLengthCm: true,
+      unitWidthCm: true,
+      unitHeightCm: true,
       unitDeclaredValueInr: true,
       unitPriceInr: true,
       qtyReserved: true,
@@ -310,6 +313,9 @@ interface ResolvedLine {
   imageUrl: string | null;
   quantity: number;
   unitWeightGrams: number | null;
+  unitLengthCm: Prisma.Decimal | null;
+  unitWidthCm: Prisma.Decimal | null;
+  unitHeightCm: Prisma.Decimal | null;
   unitDeclaredValueInr: Prisma.Decimal | null;
   unitPriceInr: Prisma.Decimal | null;
 }
@@ -705,6 +711,9 @@ export class OrderService {
                   imageUrl: l.imageUrl,
                   quantity: l.quantity,
                   unitWeightGrams: l.unitWeightGrams,
+                  unitLengthCm: l.unitLengthCm,
+                  unitWidthCm: l.unitWidthCm,
+                  unitHeightCm: l.unitHeightCm,
                   unitDeclaredValueInr: l.unitDeclaredValueInr,
                   unitPriceInr: terms?.retailUnitInr ?? l.unitPriceInr,
                   ...(terms === undefined
@@ -966,6 +975,12 @@ export class OrderService {
         imageUrl: v.imageUrl,
         quantity: item.quantity,
         unitWeightGrams: v.weightGrams,
+        // The box as sold. `CatalogReadService` has already resolved the
+        // product default behind a variant that states none, so this is
+        // the figure the courier should be told (ORD-6 snapshot).
+        unitLengthCm: v.lengthCm,
+        unitWidthCm: v.widthCm,
+        unitHeightCm: v.heightCm,
         unitDeclaredValueInr: v.declaredValueInr,
         unitPriceInr:
           item.unitPriceInr !== undefined ? new Prisma.Decimal(item.unitPriceInr) : null,
